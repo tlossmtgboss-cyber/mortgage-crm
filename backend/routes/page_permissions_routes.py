@@ -951,3 +951,258 @@ async def get_access_log(
     except Exception as e:
         logger.error(f"Error fetching access logs: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# MIGRATION ENDPOINT
+# ============================================================================
+
+@router.post("/admin/run-migration")
+async def run_page_permissions_migration(
+    admin_key: str = Query(..., description="Admin key for migration"),
+    db: Session = Depends(get_db),
+):
+    """
+    Run the page permissions migration on the production database.
+    Requires admin_key for authorization.
+    """
+    import os
+    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    if admin_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        results = {"tables_created": [], "data_seeded": [], "errors": []}
+
+        # Create page_categories table
+        try:
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS page_categories (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(100) NOT NULL UNIQUE,
+                    display_name VARCHAR(200) NOT NULL,
+                    description TEXT,
+                    icon VARCHAR(50),
+                    display_order INTEGER DEFAULT 0,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            results["tables_created"].append("page_categories")
+        except Exception as e:
+            if "already exists" not in str(e).lower():
+                results["errors"].append(f"page_categories: {str(e)}")
+
+        # Create pages table
+        try:
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS pages (
+                    id SERIAL PRIMARY KEY,
+                    category_id INTEGER REFERENCES page_categories(id),
+                    name VARCHAR(200) NOT NULL,
+                    path VARCHAR(500) NOT NULL UNIQUE,
+                    description TEXT,
+                    icon VARCHAR(50),
+                    display_order INTEGER DEFAULT 0,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    requires_feature_flag VARCHAR(100),
+                    parent_page_id INTEGER REFERENCES pages(id),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            results["tables_created"].append("pages")
+        except Exception as e:
+            if "already exists" not in str(e).lower():
+                results["errors"].append(f"pages: {str(e)}")
+
+        # Create page_permissions table
+        try:
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS page_permissions (
+                    id SERIAL PRIMARY KEY,
+                    page_id INTEGER NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+                    role VARCHAR(50) NOT NULL,
+                    can_view BOOLEAN DEFAULT FALSE,
+                    can_edit BOOLEAN DEFAULT FALSE,
+                    can_delete BOOLEAN DEFAULT FALSE,
+                    can_admin BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(page_id, role)
+                )
+            """))
+            results["tables_created"].append("page_permissions")
+        except Exception as e:
+            if "already exists" not in str(e).lower():
+                results["errors"].append(f"page_permissions: {str(e)}")
+
+        # Create user_page_overrides table
+        try:
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS user_page_overrides (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    page_id INTEGER NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+                    can_view BOOLEAN,
+                    can_edit BOOLEAN,
+                    can_delete BOOLEAN,
+                    can_admin BOOLEAN,
+                    override_reason TEXT,
+                    granted_by INTEGER,
+                    expires_at TIMESTAMP,
+                    is_pinned BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(user_id, page_id)
+                )
+            """))
+            results["tables_created"].append("user_page_overrides")
+        except Exception as e:
+            if "already exists" not in str(e).lower():
+                results["errors"].append(f"user_page_overrides: {str(e)}")
+
+        # Create page_access_log table
+        try:
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS page_access_log (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    page_id INTEGER REFERENCES pages(id),
+                    page_path VARCHAR(500),
+                    access_type VARCHAR(50) DEFAULT 'view',
+                    access_granted BOOLEAN NOT NULL,
+                    denial_reason TEXT,
+                    ip_address VARCHAR(45),
+                    user_agent TEXT,
+                    session_id VARCHAR(100),
+                    accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            results["tables_created"].append("page_access_log")
+        except Exception as e:
+            if "already exists" not in str(e).lower():
+                results["errors"].append(f"page_access_log: {str(e)}")
+
+        db.commit()
+
+        # Check if categories exist before seeding
+        category_count = db.execute(text("SELECT COUNT(*) FROM page_categories")).scalar()
+
+        if category_count == 0:
+            # Seed categories
+            categories = [
+                ("dashboard", "Dashboard", "Main dashboard and overview pages", "dashboard", 1),
+                ("crm", "CRM", "Customer relationship management", "users", 2),
+                ("pipeline", "Pipeline", "Loan pipeline management", "trending-up", 3),
+                ("documents", "Documents", "Document management", "file-text", 4),
+                ("communications", "Communications", "Email, SMS, and calls", "message-circle", 5),
+                ("settings", "Settings", "System settings and configuration", "settings", 6),
+                ("admin", "Administration", "Admin-only features", "shield", 7),
+                ("reports", "Reports", "Analytics and reporting", "bar-chart", 8),
+                ("marketing", "Marketing", "Marketing tools", "megaphone", 9),
+                ("integrations", "Integrations", "Third-party integrations", "link", 10),
+                ("team", "Team", "Team management", "users", 11),
+                ("ai", "AI Tools", "AI-powered features", "cpu", 12),
+            ]
+
+            for name, display_name, description, icon, order in categories:
+                try:
+                    db.execute(text("""
+                        INSERT INTO page_categories (name, display_name, description, icon, display_order)
+                        VALUES (:name, :display_name, :description, :icon, :order)
+                        ON CONFLICT (name) DO NOTHING
+                    """), {"name": name, "display_name": display_name, "description": description, "icon": icon, "order": order})
+                except:
+                    pass
+
+            results["data_seeded"].append(f"categories: {len(categories)}")
+            db.commit()
+
+        # Check if pages exist before seeding
+        page_count = db.execute(text("SELECT COUNT(*) FROM pages")).scalar()
+
+        if page_count == 0:
+            # Get category IDs
+            cat_result = db.execute(text("SELECT id, name FROM page_categories"))
+            category_map = {row[1]: row[0] for row in cat_result.fetchall()}
+
+            # Seed core pages
+            pages = [
+                (category_map.get("dashboard"), "Dashboard", "/dashboard", "Main dashboard", "home", 1),
+                (category_map.get("crm"), "Leads", "/leads", "Lead management", "user-plus", 1),
+                (category_map.get("crm"), "Clients", "/clients", "Client management", "users", 2),
+                (category_map.get("pipeline"), "Pipeline", "/pipeline", "Loan pipeline", "git-branch", 1),
+                (category_map.get("pipeline"), "Loans", "/loans", "Active loans", "briefcase", 2),
+                (category_map.get("documents"), "Smart Docs", "/smart-docs", "Document management", "file-text", 1),
+                (category_map.get("communications"), "Email", "/email", "Email inbox", "mail", 1),
+                (category_map.get("communications"), "SMS", "/sms", "SMS messaging", "message-square", 2),
+                (category_map.get("settings"), "Settings", "/settings", "User settings", "settings", 1),
+                (category_map.get("admin"), "Users", "/admin/users", "User management", "users", 1),
+                (category_map.get("admin"), "Roles", "/admin/roles", "Role management", "shield", 2),
+                (category_map.get("reports"), "Analytics", "/reports/analytics", "Analytics dashboard", "bar-chart-2", 1),
+                (category_map.get("ai"), "AI Assistant", "/ai-assistant", "AI-powered assistant", "cpu", 1),
+            ]
+
+            for cat_id, name, path, description, icon, order in pages:
+                if cat_id:
+                    try:
+                        db.execute(text("""
+                            INSERT INTO pages (category_id, name, path, description, icon, display_order)
+                            VALUES (:cat_id, :name, :path, :description, :icon, :order)
+                            ON CONFLICT (path) DO NOTHING
+                        """), {"cat_id": cat_id, "name": name, "path": path, "description": description, "icon": icon, "order": order})
+                    except:
+                        pass
+
+            results["data_seeded"].append(f"pages: {len(pages)}")
+            db.commit()
+
+            # Seed default permissions for admin role
+            page_result = db.execute(text("SELECT id FROM pages"))
+            page_ids = [row[0] for row in page_result.fetchall()]
+
+            for page_id in page_ids:
+                try:
+                    db.execute(text("""
+                        INSERT INTO page_permissions (page_id, role, can_view, can_edit, can_delete, can_admin)
+                        VALUES (:page_id, 'admin', TRUE, TRUE, TRUE, TRUE)
+                        ON CONFLICT (page_id, role) DO NOTHING
+                    """), {"page_id": page_id})
+                except:
+                    pass
+
+            results["data_seeded"].append(f"permissions: {len(page_ids)} pages x admin role")
+            db.commit()
+
+        # Create indexes
+        indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_pages_category ON pages(category_id)",
+            "CREATE INDEX IF NOT EXISTS idx_pages_path ON pages(path)",
+            "CREATE INDEX IF NOT EXISTS idx_page_permissions_page ON page_permissions(page_id)",
+            "CREATE INDEX IF NOT EXISTS idx_page_permissions_role ON page_permissions(role)",
+            "CREATE INDEX IF NOT EXISTS idx_user_page_overrides_user ON user_page_overrides(user_id)",
+            "CREATE INDEX IF NOT EXISTS idx_page_access_log_user ON page_access_log(user_id)",
+            "CREATE INDEX IF NOT EXISTS idx_page_access_log_accessed ON page_access_log(accessed_at)",
+        ]
+
+        for idx_sql in indexes:
+            try:
+                db.execute(text(idx_sql))
+            except:
+                pass
+
+        db.commit()
+        results["indexes_created"] = len(indexes)
+
+        return {
+            "success": len(results["errors"]) == 0,
+            "message": "Page permissions migration completed",
+            "results": results
+        }
+
+    except Exception as e:
+        logger.error(f"Migration error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
