@@ -1052,3 +1052,24 @@ async def run_avatar_migration(
         logger.error(f"Avatar migration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.post("/run-partner-recruiting-migration")
+async def run_partner_recruiting_migration(
+    admin: Any = Depends(verify_admin_access)
+):
+    """Run the Partner Recruiting tables migration."""
+    try:
+        from migrations.add_partner_recruiting_tables import run_migration
+
+        logger.info("Starting Partner Recruiting tables migration...")
+        result = run_migration()
+
+        return {
+            "status": "success",
+            "message": "Partner Recruiting tables created successfully",
+            "result": result
+        }
+
+    except Exception as e:
+        logger.error(f"Partner Recruiting migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

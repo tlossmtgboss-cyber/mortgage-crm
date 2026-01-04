@@ -38553,6 +38553,82 @@ async def debug_user_deletion_blockers(
     }
 
 
+@app.delete("/api/v1/debug/delete-user/{user_id}")
+async def debug_delete_user(
+    user_id: int,
+    admin_key: str = None,
+    db: Session = Depends(get_db)
+):
+    """Debug endpoint to delete user with admin_key protection"""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user_email = user.email
+
+    def safe_execute(query, params):
+        """Execute query using savepoint to handle errors without aborting transaction"""
+        try:
+            db.execute(text("SAVEPOINT safe_exec_sp"))
+            db.execute(text(query), params)
+            db.execute(text("RELEASE SAVEPOINT safe_exec_sp"))
+            return True
+        except Exception as e:
+            try:
+                db.execute(text("ROLLBACK TO SAVEPOINT safe_exec_sp"))
+            except:
+                pass
+            error_str = str(e).lower()
+            if "does not exist" not in error_str and "no such table" not in error_str:
+                logger.warning(f"User {user_id} cleanup query failed: {query[:80]}... - {str(e)[:200]}")
+            return False
+
+    try:
+        params = {"user_id": user_id}
+
+        # Delete from blocking tables
+        cleanup_queries = [
+            "DELETE FROM onboarding_user_profiles WHERE user_id = :user_id",
+            "DELETE FROM scheduler_resources WHERE user_id = :user_id",
+            "DELETE FROM user_settings WHERE user_id = :user_id",
+            "DELETE FROM user_preferences WHERE user_id = :user_id",
+            "DELETE FROM notifications WHERE user_id = :user_id",
+            "DELETE FROM user_sessions WHERE user_id = :user_id",
+        ]
+
+        for query in cleanup_queries:
+            safe_execute(query, params)
+
+        db.commit()
+
+        # Now delete the user
+        db.execute(text("DELETE FROM users WHERE id = :user_id"), params)
+        db.commit()
+
+        logger.info(f"Debug delete: User {user_id} ({user_email}) deleted successfully")
+        return {"success": True, "message": f"User {user_id} ({user_email}) deleted successfully"}
+
+    except Exception as e:
+        db.rollback()
+        error_msg = str(e)
+        logger.error(f"Debug delete failed for user {user_id}: {error_msg}")
+
+        # Try to extract constraint info
+        if "violates foreign key constraint" in error_msg:
+            import re
+            match = re.search(r'on table "(\w+)"', error_msg)
+            if match:
+                blocking_table = match.group(1)
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Cannot delete user: Still referenced by table '{blocking_table}'"
+                )
+        raise HTTPException(status_code=500, detail=f"Failed to delete user: {error_msg}")
+
+
 @app.get("/api/v1/admin/users/{user_id}/deletion-blockers")
 async def get_user_deletion_blockers(
     user_id: int,

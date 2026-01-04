@@ -129,6 +129,8 @@ const Marketing = lazy(() => import('./pages/Marketing'));
 const MasterManagerCapacity = lazy(() => import('./pages/MasterManager/CapacityCommandCenter'));
 const MasterManagerRecruiting = lazy(() => import('./pages/MasterManager/RecruitingDashboard'));
 const RecruitDetail = lazy(() => import('./pages/MasterManager/RecruitDetail'));
+const PartnerRecruitingDashboard = lazy(() => import('./pages/PartnerRecruiting/PartnerRecruitingDashboard'));
+const PartnerRecruitDetail = lazy(() => import('./pages/PartnerRecruiting/PartnerRecruitDetail'));
 const AgentGym = lazy(() => import('./pages/AgentGym'));
 const AgentGovernanceSettings = lazy(() => import('./pages/AgentGovernanceSettings'));
 const SmartSchedulerSettings = lazy(() => import('./pages/SmartSchedulerSettings'));
@@ -1329,6 +1331,50 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><RecruitDetail /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/partner-recruiting"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><PartnerRecruitingDashboard /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/partner-recruiting/:partnerId"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><PartnerRecruitDetail /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>

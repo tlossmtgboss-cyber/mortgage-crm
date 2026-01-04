@@ -135,6 +135,12 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
           >
             Recruiting
           </Link>
+          <Link
+            to="/partner-recruiting"
+            className={`nav-link ${isActive('/partner-recruiting') || location.pathname.startsWith('/partner-recruiting/') ? 'active' : ''}`}
+          >
+            Partner Recruiting
+          </Link>
         </div>
 
         <div className="nav-actions">
