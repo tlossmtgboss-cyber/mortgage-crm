@@ -94,7 +94,7 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
           </Link>
 
           {/* Compliance Dashboard - requires compliance.view or management role */}
-          {(hasPermission('compliance.view') || userRole === 'management') && (
+          {(hasPermission('compliance.view') || userRole === 'management' || userRole === 'admin') && (
             <Link
               to="/compliance"
               className={`nav-link ${isActive('/compliance') ? 'active' : ''}`}
@@ -115,8 +115,8 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
           >
             Market
           </Link>
-          {/* Profitability - requires reports.profitability or management role */}
-          {(hasPermission('reports.profitability') || userRole === 'management') && (
+          {/* Profitability - requires reports.profitability or management/admin role */}
+          {(hasPermission('reports.profitability') || userRole === 'management' || userRole === 'admin') && (
             <Link
               to="/profitability"
               className={`nav-link ${isActive('/profitability') ? 'active' : ''}`}
@@ -125,8 +125,8 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
             </Link>
           )}
 
-          {/* Master Manager - Capacity & Talent OS - requires team.view_all or management */}
-          {(hasAnyPermission(['team.view_all', 'team.manage_permissions', 'capacity.view']) || userRole === 'management') && (
+          {/* Master Manager - Capacity & Talent OS - requires team.view_all or management/admin */}
+          {(hasAnyPermission(['team.view_all', 'team.manage_permissions', 'capacity.view']) || userRole === 'management' || userRole === 'admin') && (
             <>
               <Link
                 to="/master-manager"
@@ -152,8 +152,8 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
 
         <div className="nav-actions">
           <NotificationBell />
-          {/* Team Members - requires team.view_all, team.view_team, or management role */}
-          {(hasAnyPermission(['team.view_all', 'team.view_team', 'team.manage_permissions']) || userRole === 'management') && (
+          {/* Team Members - requires team.view_all, team.view_team, or management/admin role */}
+          {(hasAnyPermission(['team.view_all', 'team.view_team', 'team.manage_permissions']) || userRole === 'management' || userRole === 'admin') && (
             <Link
               to="/team-members"
               className={`nav-link team-link ${isActive('/team-members') || location.pathname.startsWith('/team-members') ? 'active' : ''}`}
