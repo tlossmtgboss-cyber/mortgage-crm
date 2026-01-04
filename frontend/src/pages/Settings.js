@@ -491,6 +491,11 @@ function Settings() {
   });
   const [loadingSecurityData, setLoadingSecurityData] = useState(false);
 
+  // Security audit log state
+  const [securityAuditLogs, setSecurityAuditLogs] = useState([]);
+  const [loadingAuditLogs, setLoadingAuditLogs] = useState(false);
+  const [auditLogsError, setAuditLogsError] = useState(null);
+
   // Gmail integration state
   const [gmailStatus, setGmailStatus] = useState({
     connected: false,
@@ -696,6 +701,65 @@ function Settings() {
     console.log('Settings component mounted');
     console.log('showCalendlyModal initial state:', showCalendlyModal);
   }, []);
+
+  // Fetch security audit logs when account-management section is active
+  useEffect(() => {
+    if (activeSection === 'account-management') {
+      fetchSecurityAuditLogs();
+    }
+  }, [activeSection]);
+
+  // Function to fetch security audit logs from API
+  const fetchSecurityAuditLogs = async () => {
+    setLoadingAuditLogs(true);
+    setAuditLogsError(null);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/api/v1/admin/account-management/security-audit-log?limit=10`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.status === 'success' && data.data && data.data.logs) {
+          setSecurityAuditLogs(data.data.logs);
+        }
+      } else {
+        console.error('Failed to fetch security audit logs:', response.status);
+        setAuditLogsError('Failed to load security events');
+      }
+    } catch (error) {
+      console.error('Error fetching security audit logs:', error);
+      setAuditLogsError('Error loading security events');
+    } finally {
+      setLoadingAuditLogs(false);
+    }
+  };
+
+  // Helper function to get status badge style
+  const getStatusBadgeStyle = (status) => {
+    const styles = {
+      'Success': { background: '#dcfce7', color: '#166534' },
+      'Created': { background: '#dbeafe', color: '#1e40af' },
+      'Modified': { background: '#fef3c7', color: '#92400e' },
+      'Deleted': { background: '#fee2e2', color: '#991b1b' },
+      'Enabled': { background: '#dcfce7', color: '#166534' },
+      'Disabled': { background: '#fee2e2', color: '#991b1b' },
+      'Completed': { background: '#dbeafe', color: '#1e40af' },
+      'Sent': { background: '#e0e7ff', color: '#3730a3' },
+      'Reset': { background: '#fef3c7', color: '#92400e' },
+      'Changed': { background: '#fef3c7', color: '#92400e' },
+      'Revoked': { background: '#fee2e2', color: '#991b1b' },
+      'Suspended': { background: '#fee2e2', color: '#991b1b' },
+      'Reinstated': { background: '#dcfce7', color: '#166534' },
+      'Started': { background: '#e0e7ff', color: '#3730a3' },
+      'Ended': { background: '#f1f5f9', color: '#475569' },
+    };
+    return styles[status] || { background: '#f1f5f9', color: '#475569' };
+  };
 
   const toggleSection = (section) => {
     setExpandedSections({
@@ -5323,57 +5387,59 @@ const API_BASE_URL = isProduction
               <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', marginBottom: '24px' }}>
                 <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>Recent Security Events</h3>
-                  <button style={{ background: 'transparent', border: '1px solid #e2e8f0', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>View All</button>
+                  <button
+                    onClick={fetchSecurityAuditLogs}
+                    style={{ background: 'transparent', border: '1px solid #e2e8f0', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}
+                  >
+                    {loadingAuditLogs ? 'Loading...' : 'Refresh'}
+                  </button>
                 </div>
                 <div style={{ padding: '0' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ background: '#f8fafc' }}>
-                        <th style={{ textAlign: 'left', padding: '12px 20px', color: '#64748b', fontSize: '12px', fontWeight: '500', textTransform: 'uppercase' }}>Event</th>
-                        <th style={{ textAlign: 'left', padding: '12px 20px', color: '#64748b', fontSize: '12px', fontWeight: '500', textTransform: 'uppercase' }}>User</th>
-                        <th style={{ textAlign: 'left', padding: '12px 20px', color: '#64748b', fontSize: '12px', fontWeight: '500', textTransform: 'uppercase' }}>IP Address</th>
-                        <th style={{ textAlign: 'left', padding: '12px 20px', color: '#64748b', fontSize: '12px', fontWeight: '500', textTransform: 'uppercase' }}>Time</th>
-                        <th style={{ textAlign: 'left', padding: '12px 20px', color: '#64748b', fontSize: '12px', fontWeight: '500', textTransform: 'uppercase' }}>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '14px 20px', color: '#1e293b' }}>User Login</td>
-                        <td style={{ padding: '14px 20px', color: '#64748b' }}>admin@perenniaai.com</td>
-                        <td style={{ padding: '14px 20px', color: '#64748b', fontFamily: 'monospace', fontSize: '13px' }}>192.168.1.105</td>
-                        <td style={{ padding: '14px 20px', color: '#64748b' }}>2 min ago</td>
-                        <td style={{ padding: '14px 20px' }}><span style={{ background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}>Success</span></td>
-                      </tr>
-                      <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '14px 20px', color: '#1e293b' }}>Permission Changed</td>
-                        <td style={{ padding: '14px 20px', color: '#64748b' }}>john.smith@company.com</td>
-                        <td style={{ padding: '14px 20px', color: '#64748b', fontFamily: 'monospace', fontSize: '13px' }}>192.168.1.42</td>
-                        <td style={{ padding: '14px 20px', color: '#64748b' }}>15 min ago</td>
-                        <td style={{ padding: '14px 20px' }}><span style={{ background: '#fef3c7', color: '#92400e', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}>Modified</span></td>
-                      </tr>
-                      <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '14px 20px', color: '#1e293b' }}>API Key Generated</td>
-                        <td style={{ padding: '14px 20px', color: '#64748b' }}>admin@perenniaai.com</td>
-                        <td style={{ padding: '14px 20px', color: '#64748b', fontFamily: 'monospace', fontSize: '13px' }}>192.168.1.105</td>
-                        <td style={{ padding: '14px 20px', color: '#64748b' }}>1 hour ago</td>
-                        <td style={{ padding: '14px 20px' }}><span style={{ background: '#dbeafe', color: '#1e40af', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}>Created</span></td>
-                      </tr>
-                      <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '14px 20px', color: '#1e293b' }}>2FA Enabled</td>
-                        <td style={{ padding: '14px 20px', color: '#64748b' }}>sarah.jones@company.com</td>
-                        <td style={{ padding: '14px 20px', color: '#64748b', fontFamily: 'monospace', fontSize: '13px' }}>192.168.1.88</td>
-                        <td style={{ padding: '14px 20px', color: '#64748b' }}>3 hours ago</td>
-                        <td style={{ padding: '14px 20px' }}><span style={{ background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}>Enabled</span></td>
-                      </tr>
-                      <tr>
-                        <td style={{ padding: '14px 20px', color: '#1e293b' }}>Data Export</td>
-                        <td style={{ padding: '14px 20px', color: '#64748b' }}>admin@perenniaai.com</td>
-                        <td style={{ padding: '14px 20px', color: '#64748b', fontFamily: 'monospace', fontSize: '13px' }}>192.168.1.105</td>
-                        <td style={{ padding: '14px 20px', color: '#64748b' }}>Yesterday</td>
-                        <td style={{ padding: '14px 20px' }}><span style={{ background: '#dbeafe', color: '#1e40af', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}>Completed</span></td>
-                      </tr>
-                    </tbody>
-                  </table>
+                  {loadingAuditLogs ? (
+                    <div style={{ padding: '40px 20px', textAlign: 'center', color: '#64748b' }}>
+                      Loading security events...
+                    </div>
+                  ) : auditLogsError ? (
+                    <div style={{ padding: '40px 20px', textAlign: 'center', color: '#ef4444' }}>
+                      {auditLogsError}
+                    </div>
+                  ) : securityAuditLogs.length === 0 ? (
+                    <div style={{ padding: '40px 20px', textAlign: 'center', color: '#64748b' }}>
+                      No security events recorded yet
+                    </div>
+                  ) : (
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ background: '#f8fafc' }}>
+                          <th style={{ textAlign: 'left', padding: '12px 20px', color: '#64748b', fontSize: '12px', fontWeight: '500', textTransform: 'uppercase' }}>Event</th>
+                          <th style={{ textAlign: 'left', padding: '12px 20px', color: '#64748b', fontSize: '12px', fontWeight: '500', textTransform: 'uppercase' }}>User</th>
+                          <th style={{ textAlign: 'left', padding: '12px 20px', color: '#64748b', fontSize: '12px', fontWeight: '500', textTransform: 'uppercase' }}>IP Address</th>
+                          <th style={{ textAlign: 'left', padding: '12px 20px', color: '#64748b', fontSize: '12px', fontWeight: '500', textTransform: 'uppercase' }}>Time</th>
+                          <th style={{ textAlign: 'left', padding: '12px 20px', color: '#64748b', fontSize: '12px', fontWeight: '500', textTransform: 'uppercase' }}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {securityAuditLogs.map((log, index) => (
+                          <tr key={log.id || index} style={{ borderBottom: index < securityAuditLogs.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                            <td style={{ padding: '14px 20px', color: '#1e293b' }}>{log.event}</td>
+                            <td style={{ padding: '14px 20px', color: '#64748b' }}>{log.actorName || log.targetName || 'System'}</td>
+                            <td style={{ padding: '14px 20px', color: '#64748b', fontFamily: 'monospace', fontSize: '13px' }}>{log.ipAddress}</td>
+                            <td style={{ padding: '14px 20px', color: '#64748b' }}>{log.timeAgo}</td>
+                            <td style={{ padding: '14px 20px' }}>
+                              <span style={{
+                                ...getStatusBadgeStyle(log.status),
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                fontSize: '12px'
+                              }}>
+                                {log.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
               </div>
 

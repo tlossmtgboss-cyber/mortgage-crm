@@ -1824,3 +1824,156 @@ async def get_user_audit_log(
     except Exception as e:
         logger.error(f"Error getting audit log: {e}")
         raise DatabaseException(f"Failed to get audit log: {str(e)}")
+
+
+@router.get("/security-audit-log")
+async def get_security_audit_log(
+    request: Request,
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    action_type: str = Query(None, description="Filter by action type"),
+    db: Session = Depends(get_db)
+):
+    """Get general security audit log for the security dashboard"""
+    try:
+        current_user = await get_user_from_request(request, db)
+
+        # Build query with optional filter
+        query = """
+            SELECT id, actor_admin_id, actor_name, action_type, target_type, target_id,
+                   target_name, ip_address, old_values, new_values, reason, created_at
+            FROM admin_audit_log
+            WHERE 1=1
+        """
+        params = {'limit': limit, 'offset': (page - 1) * limit}
+
+        if action_type:
+            query += " AND action_type = :action_type"
+            params['action_type'] = action_type
+
+        query += " ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
+
+        logs = db.execute(text(query), params).fetchall()
+
+        # Get total count for pagination
+        count_query = "SELECT COUNT(*) FROM admin_audit_log"
+        if action_type:
+            count_query += " WHERE action_type = :action_type"
+        total = db.execute(text(count_query), {'action_type': action_type} if action_type else {}).scalar()
+
+        audit_list = []
+        for log in logs:
+            # Map action types to user-friendly event names
+            action_map = {
+                'user_login': 'User Login',
+                'user_logout': 'User Logout',
+                'user_created': 'User Created',
+                'user_updated': 'User Updated',
+                'user_deleted': 'User Deleted',
+                'user_disabled': 'User Disabled',
+                'user_enabled': 'User Enabled',
+                'permission_changed': 'Permission Changed',
+                'role_changed': 'Role Changed',
+                'password_reset': 'Password Reset',
+                'password_changed': 'Password Changed',
+                '2fa_enabled': '2FA Enabled',
+                '2fa_disabled': '2FA Disabled',
+                'api_key_created': 'API Key Generated',
+                'api_key_revoked': 'API Key Revoked',
+                'data_export': 'Data Export',
+                'data_import': 'Data Import',
+                'account_suspended': 'Account Suspended',
+                'account_reinstated': 'Account Reinstated',
+                'impersonation_started': 'Impersonation Started',
+                'impersonation_ended': 'Impersonation Ended',
+                'settings_changed': 'Settings Changed',
+                'invite_sent': 'Invite Sent',
+            }
+
+            # Map to status badges
+            status_map = {
+                'user_login': 'Success',
+                'user_logout': 'Success',
+                'user_created': 'Created',
+                'user_updated': 'Modified',
+                'user_deleted': 'Deleted',
+                'user_disabled': 'Disabled',
+                'user_enabled': 'Enabled',
+                'permission_changed': 'Modified',
+                'role_changed': 'Modified',
+                'password_reset': 'Reset',
+                'password_changed': 'Changed',
+                '2fa_enabled': 'Enabled',
+                '2fa_disabled': 'Disabled',
+                'api_key_created': 'Created',
+                'api_key_revoked': 'Revoked',
+                'data_export': 'Completed',
+                'data_import': 'Completed',
+                'account_suspended': 'Suspended',
+                'account_reinstated': 'Reinstated',
+                'impersonation_started': 'Started',
+                'impersonation_ended': 'Ended',
+                'settings_changed': 'Modified',
+                'invite_sent': 'Sent',
+            }
+
+            action_type_raw = log[3] or 'unknown'
+
+            audit_list.append({
+                'id': str(log[0]),
+                'actorId': log[1],
+                'actorName': log[2] or 'System',
+                'actionType': action_type_raw,
+                'event': action_map.get(action_type_raw, action_type_raw.replace('_', ' ').title()),
+                'targetType': log[4],
+                'targetId': log[5],
+                'targetName': log[6],
+                'ipAddress': log[7] or 'N/A',
+                'oldValues': log[8],
+                'newValues': log[9],
+                'reason': log[10],
+                'status': status_map.get(action_type_raw, 'Info'),
+                'timestamp': log[11].isoformat() if log[11] else None,
+                'timeAgo': _format_time_ago(log[11]) if log[11] else 'Unknown'
+            })
+
+        return success_response(
+            data={
+                'logs': audit_list,
+                'page': page,
+                'limit': limit,
+                'total': total,
+                'totalPages': (total + limit - 1) // limit if total else 0
+            },
+            message=f"Retrieved {len(audit_list)} security audit entries"
+        )
+    except PermissionException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting security audit log: {e}")
+        raise DatabaseException(f"Failed to get security audit log: {str(e)}")
+
+
+def _format_time_ago(dt):
+    """Format datetime as relative time string"""
+    from datetime import datetime, timezone
+    if not dt:
+        return 'Unknown'
+
+    now = datetime.now(timezone.utc) if dt.tzinfo else datetime.now()
+    diff = now - dt
+
+    seconds = diff.total_seconds()
+    if seconds < 60:
+        return 'Just now'
+    elif seconds < 3600:
+        mins = int(seconds // 60)
+        return f'{mins} min ago' if mins == 1 else f'{mins} mins ago'
+    elif seconds < 86400:
+        hours = int(seconds // 3600)
+        return f'{hours} hour ago' if hours == 1 else f'{hours} hours ago'
+    elif seconds < 604800:
+        days = int(seconds // 86400)
+        return f'{days} day ago' if days == 1 else f'{days} days ago'
+    else:
+        return dt.strftime('%b %d, %Y')
