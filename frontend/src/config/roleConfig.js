@@ -107,6 +107,26 @@ export const NAVIGATION_ITEMS = {
 // =============================================================================
 
 export const ROLE_NAVIGATION = {
+  // Admin - Full access to everything
+  admin: [
+    'dashboard',
+    'leads',
+    'activeLoans',
+    'portfolio',
+    'tasks',
+    'reconciliation',
+    'smartDocs',
+    'marketing',
+    'calendar',
+    'partners',
+    'aiUnderwriter',
+    'market',
+    'profitability',
+    'capacity',
+    'recruiting',
+    'partnerRecruiting'
+  ],
+
   // Loan Officer - Full sales navigation
   loan_officer: [
     'dashboard',
@@ -203,6 +223,19 @@ export const ROLE_NAVIGATION = {
 // =============================================================================
 
 export const ROLE_DASHBOARD_CONTAINERS = {
+  // Admin Dashboard - Full access to all containers
+  admin: [
+    'ai-alerts',           // AI Alerts (lead alerts, follow-ups)
+    'production-tracker',  // Monthly Production Tracker
+    'profitability',       // Profitability Intelligence
+    'efficiency',          // Pipeline Efficiency Monitor
+    'workflow-scorecards', // Workflow Scorecards
+    'ai-tasks',           // AI Prioritized Tasks
+    'pipeline',           // Live Loan Pipeline
+    'referrals',          // Referral Scoreboard
+    'team'                // Team Performance
+  ],
+
   // Loan Officer Dashboard - Full view with all sales-related containers
   loan_officer: [
     'ai-alerts',           // AI Alerts (lead alerts, follow-ups)
@@ -269,6 +302,7 @@ export const ROLE_DASHBOARD_CONTAINERS = {
 // =============================================================================
 
 export const ROLE_DEFAULT_ROUTES = {
+  admin: '/dashboard',
   loan_officer: '/dashboard',
   production_assistant: '/dashboard',
   processor: '/loans',      // No dashboard, land on Active Loans
@@ -331,6 +365,7 @@ export const getUserEffectiveRole = (permissionRole, legacyRole) => {
 
     switch (normalizedPermission) {
       case 'admin':
+        return 'admin';       // Admin gets full access
       case 'leadership':
         return 'executive';
       case 'management':
@@ -396,6 +431,7 @@ export const getDefaultRouteForRole = (effectiveRole) => {
 // =============================================================================
 
 export const PROFITABILITY_VIEW_TYPES = {
+  admin: 'company',              // Admin sees company-wide profitability
   loan_officer: 'personal',      // LO sees their own profitability
   manager: 'team',               // Manager sees team profitability
   executive: 'company'           // Executive sees company-wide profitability
