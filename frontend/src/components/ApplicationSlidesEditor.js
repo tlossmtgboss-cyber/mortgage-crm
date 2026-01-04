@@ -132,6 +132,9 @@ const ApplicationSlidesEditor = () => {
   // Preview mode: 'mobile' or 'web'
   const [previewMode, setPreviewMode] = useState('mobile');
 
+  // Nav tab: 'stages' or 'questions'
+  const [activeNavTab, setActiveNavTab] = useState('stages');
+
   // Get current stages and questions based on selected app type
   const stages = appType === 'purchase' ? purchaseStages : refinanceStages;
   const setStages = appType === 'purchase' ? setPurchaseStages : setRefinanceStages;
@@ -348,8 +351,9 @@ const ApplicationSlidesEditor = () => {
   // Update conditional logic
   const updateConditionalLogic = (field, values) => {
     if (!selectedData || selectedItem.type !== 'question') return;
-    if (field && values && values.length > 0) {
-      updateSelectedItem({ showIf: { field, values } });
+    if (field) {
+      // Allow setting field even with empty values (user selects question first, then values)
+      updateSelectedItem({ showIf: { field, values: values || [] } });
     } else {
       updateSelectedItem({ showIf: null });
     }
@@ -416,74 +420,79 @@ const ApplicationSlidesEditor = () => {
       <div className="flow-builder-content">
         {/* Left Panel - Navigation */}
         <div className="flow-builder-nav">
-          {/* Stages Section */}
-          <div className="nav-section">
-            <div className="nav-section-header" onClick={() => setExpandedSections(prev => ({ ...prev, stages: !prev.stages }))}>
-              <div className="nav-section-title">
-                <span className={`nav-section-toggle ${!expandedSections.stages ? 'collapsed' : ''}`}>▼</span>
-                Stages
-                <span className="nav-section-count">{stages.filter(s => s.enabled).length}/{stages.length}</span>
-              </div>
-            </div>
-            <div className={`nav-section-content ${!expandedSections.stages ? 'collapsed' : ''}`}>
-              {stages.map((stage, index) => (
-                <div
-                  key={stage.id}
-                  className={`nav-item ${!stage.enabled ? 'disabled' : ''} ${selectedItem.type === 'stage' && selectedItem.id === stage.id ? 'selected' : ''}`}
-                  onClick={() => setSelectedItem({ type: 'stage', id: stage.id })}
-                >
-                  <div className="nav-item-indicator" />
-                  <div className="nav-item-content">
-                    <div className="nav-item-label">{stage.label}</div>
-                    <div className="nav-item-meta">
-                      <span className="nav-item-id">{stage.id}</span>
-                    </div>
-                  </div>
-                  <div className="nav-item-icons">
-                    {stage.required && <span className="nav-item-icon required" title="Required">★</span>}
-                    {stage.hideFromProgress && <span className="nav-item-icon" title="Hidden">👁️</span>}
-                  </div>
-                </div>
-              ))}
-              <button className="nav-add-btn" onClick={() => addNewItem('stage')}>+ Add Stage</button>
-            </div>
+          {/* Nav Tabs */}
+          <div className="nav-tabs">
+            <button
+              className={`nav-tab ${activeNavTab === 'stages' ? 'active' : ''}`}
+              onClick={() => setActiveNavTab('stages')}
+            >
+              Stages
+              <span className="nav-tab-count">{stages.filter(s => s.enabled).length}/{stages.length}</span>
+            </button>
+            <button
+              className={`nav-tab ${activeNavTab === 'questions' ? 'active' : ''}`}
+              onClick={() => setActiveNavTab('questions')}
+            >
+              Questions
+              <span className="nav-tab-count">{questions.filter(q => q.enabled).length}/{questions.length}</span>
+            </button>
           </div>
 
-          {/* Questions Section */}
-          <div className="nav-section">
-            <div className="nav-section-header" onClick={() => setExpandedSections(prev => ({ ...prev, questions: !prev.questions }))}>
-              <div className="nav-section-title">
-                <span className={`nav-section-toggle ${!expandedSections.questions ? 'collapsed' : ''}`}>▼</span>
-                Questions
-                <span className="nav-section-count">{questions.filter(q => q.enabled).length}/{questions.length}</span>
-              </div>
-            </div>
-            <div className={`nav-section-content ${!expandedSections.questions ? 'collapsed' : ''}`}>
-              {questions.map((question, index) => {
-                // Support both stageId (new) and category (legacy)
-                const stage = stages.find(s => s.id === (question.stageId || question.category));
-                return (
+          {/* Tab Content */}
+          <div className="nav-tab-content">
+            {activeNavTab === 'stages' && (
+              <div className="nav-list">
+                {stages.map((stage, index) => (
                   <div
-                    key={question.id}
-                    className={`nav-item ${!question.enabled ? 'disabled' : ''} ${selectedItem.type === 'question' && selectedItem.id === question.id ? 'selected' : ''}`}
-                    onClick={() => setSelectedItem({ type: 'question', id: question.id })}
+                    key={stage.id}
+                    className={`nav-item ${!stage.enabled ? 'disabled' : ''} ${selectedItem.type === 'stage' && selectedItem.id === stage.id ? 'selected' : ''}`}
+                    onClick={() => setSelectedItem({ type: 'stage', id: stage.id })}
                   >
+                    <div className="nav-item-indicator" />
                     <div className="nav-item-content">
-                      <div className="nav-item-label">{question.question.substring(0, 30)}{question.question.length > 30 ? '...' : ''}</div>
+                      <div className="nav-item-label">{stage.label}</div>
                       <div className="nav-item-meta">
-                        <span className="nav-item-stage">{stage?.label || 'Unassigned'}</span>
-                        <span className="nav-item-type">{question.type}</span>
+                        <span className="nav-item-id">{stage.id}</span>
                       </div>
                     </div>
                     <div className="nav-item-icons">
-                      {question.required && <span className="nav-item-icon required" title="Required">★</span>}
-                      {question.showIf && <span className="nav-item-icon conditional" title="Has Conditional Logic">⚡</span>}
+                      {stage.required && <span className="nav-item-icon required" title="Required">★</span>}
+                      {stage.hideFromProgress && <span className="nav-item-icon" title="Hidden">👁️</span>}
                     </div>
                   </div>
-                );
-              })}
-              <button className="nav-add-btn" onClick={() => addNewItem('question')}>+ Add Question</button>
-            </div>
+                ))}
+                <button className="nav-add-btn" onClick={() => addNewItem('stage')}>+ Add Stage</button>
+              </div>
+            )}
+
+            {activeNavTab === 'questions' && (
+              <div className="nav-list">
+                {questions.map((question, index) => {
+                  // Support both stageId (new) and category (legacy)
+                  const stage = stages.find(s => s.id === (question.stageId || question.category));
+                  return (
+                    <div
+                      key={question.id}
+                      className={`nav-item ${!question.enabled ? 'disabled' : ''} ${selectedItem.type === 'question' && selectedItem.id === question.id ? 'selected' : ''}`}
+                      onClick={() => setSelectedItem({ type: 'question', id: question.id })}
+                    >
+                      <div className="nav-item-content">
+                        <div className="nav-item-label">{question.question.substring(0, 30)}{question.question.length > 30 ? '...' : ''}</div>
+                        <div className="nav-item-meta">
+                          <span className="nav-item-stage">{stage?.label || 'Unassigned'}</span>
+                          <span className="nav-item-type">{question.type}</span>
+                        </div>
+                      </div>
+                      <div className="nav-item-icons">
+                        {question.required && <span className="nav-item-icon required" title="Required">★</span>}
+                        {question.showIf && <span className="nav-item-icon conditional" title="Has Conditional Logic">⚡</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+                <button className="nav-add-btn" onClick={() => addNewItem('question')}>+ Add Question</button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -648,8 +657,11 @@ const ApplicationSlidesEditor = () => {
                         className="settings-input"
                         value={selectedData.id}
                         onChange={(e) => updateSelectedItem({ id: e.target.value.toLowerCase().replace(/\s+/g, '_') })}
-                        disabled={!selectedData.id.startsWith('new_')}
+                        disabled={selectedData.required}
                       />
+                      <small className="settings-hint">
+                        {selectedData.required ? 'Required stages cannot be renamed' : 'Lowercase, underscores only'}
+                      </small>
                     </div>
 
                     <div className="settings-group">
