@@ -1784,18 +1784,19 @@ export const ProductionAssistant2Dashboard = () => {
 // ROLE DASHBOARD SWITCHER (for Admin users)
 // ============================================================================
 export const RoleDashboardSwitcher = ({ currentView, onViewChange, isAdmin }) => {
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
 
   const roles = [
-    { id: 'default', label: 'My Dashboard', icon: '🏠' },
-    { id: 'loan_officer', label: 'Loan Officer View', icon: '👔' },
+    { id: 'administrator', label: 'Administrator', icon: '🏠', navigateTo: '/settings/account-management' },
+    { id: 'loan_officer', label: 'Loan Officer', icon: '👔' },
     { id: 'production_assistant_1', label: 'Production Assistant 1', icon: '📊' },
     { id: 'production_assistant_2', label: 'Production Assistant 2', icon: '📈' },
-    { id: 'processor', label: 'Processor View', icon: '📁' },
-    { id: 'underwriter', label: 'Underwriter View', icon: '🔍' },
-    { id: 'closer', label: 'Closer View', icon: '📅' },
-    { id: 'manager', label: 'Manager View', icon: '👥' },
-    { id: 'admin', label: 'Executive View', icon: '🏢' }
+    { id: 'processor', label: 'Processor', icon: '📁' },
+    { id: 'underwriter', label: 'Underwriter', icon: '🔍' },
+    { id: 'closer', label: 'Closer', icon: '📅' },
+    { id: 'manager', label: 'Manager', icon: '👥' },
+    { id: 'executive', label: 'Executive', icon: '🏢' }
   ];
 
   const currentRole = roles.find(r => r.id === currentView) || roles[0];
@@ -1820,7 +1821,11 @@ export const RoleDashboardSwitcher = ({ currentView, onViewChange, isAdmin }) =>
               key={role.id}
               className={`role-option ${currentView === role.id ? 'active' : ''}`}
               onClick={() => {
-                onViewChange(role.id);
+                if (role.navigateTo) {
+                  navigate(role.navigateTo);
+                } else {
+                  onViewChange(role.id);
+                }
                 setIsOpen(false);
               }}
             >
@@ -1840,6 +1845,8 @@ export const RoleDashboardSwitcher = ({ currentView, onViewChange, isAdmin }) =>
 // ============================================================================
 export const getDashboardByRole = (roleId) => {
   switch (roleId) {
+    case 'administrator':
+      return null; // Administrator navigates to account management
     case 'loan_officer':
     case 'sales':
       return LoanOfficerDashboard;
@@ -1858,6 +1865,7 @@ export const getDashboardByRole = (roleId) => {
     case 'manager':
     case 'management':
       return ManagerDashboard;
+    case 'executive':
     case 'admin':
       return AdminDashboard;
     default:

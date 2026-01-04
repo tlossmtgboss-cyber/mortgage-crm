@@ -46,8 +46,8 @@ async def submit_task_disposition(
     voice_note_audio: Optional[str] = None,
     follow_up_required: bool = False,
     referral_opportunity: bool = False,
-    db: Session = Depends(lambda: get_db()),
-    current_user = Depends(lambda: get_current_user())
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """
     Submit disposition for a dialer session task
@@ -207,8 +207,8 @@ async def submit_call_log_disposition(
     voice_note_audio: Optional[str] = None,
     follow_up_required: bool = False,
     referral_opportunity: bool = False,
-    db: Session = Depends(lambda: get_db()),
-    current_user = Depends(lambda: get_current_user())
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """
     Submit disposition for a click-to-dial call log

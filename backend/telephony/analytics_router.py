@@ -38,8 +38,8 @@ def set_dependencies(db_dependency, user_dependency):
 @router.get("/analytics/daily-summary")
 def get_daily_summary(
     target_date: Optional[date] = None,
-    db: Session = Depends(lambda: get_db()),
-    current_user = Depends(lambda: get_current_user())
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """
     Get daily call summary for the current agent
@@ -106,8 +106,8 @@ def get_daily_summary(
 def get_disposition_breakdown(
     start_date: date = Query(..., description="Start date for range"),
     end_date: date = Query(..., description="End date for range"),
-    db: Session = Depends(lambda: get_db()),
-    current_user = Depends(lambda: get_current_user())
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """
     Get disposition breakdown for a date range
@@ -164,8 +164,8 @@ def get_disposition_breakdown(
 def get_connect_rate_by_hour(
     start_date: date = Query(..., description="Start date for range"),
     end_date: date = Query(..., description="End date for range"),
-    db: Session = Depends(lambda: get_db()),
-    current_user = Depends(lambda: get_current_user())
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """
     Get connect rate by hour of day
@@ -230,8 +230,8 @@ def get_connect_rate_by_hour(
 @router.get("/analytics/performance")
 def get_agent_performance(
     date_range: str = Query('last_7_days', description="Preset date range"),
-    db: Session = Depends(lambda: get_db()),
-    current_user = Depends(lambda: get_current_user())
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """
     Get comprehensive agent performance metrics
@@ -332,8 +332,8 @@ def get_agent_performance(
 def get_session_analytics(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
-    db: Session = Depends(lambda: get_db()),
-    current_user = Depends(lambda: get_current_user())
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """
     Get analytics for dialer sessions
