@@ -2640,6 +2640,7 @@ const API_BASE_URL = isProduction
                   </button>
                   {expandedSections.organizational && (
                     <div className="sidebar-children">
+                      <button className={`sidebar-btn child ${activeSection === 'account-management' ? 'active' : ''}`} onClick={() => setActiveSection('account-management')}><span>Account Management</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'company-info' ? 'active' : ''}`} onClick={() => setActiveSection('company-info')}><span>Company Info</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'team-members' ? 'active' : ''}`} onClick={() => navigate('/team-members')}><span>Team Members</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'add-team-member' ? 'active' : ''}`} onClick={() => navigate('/users/create')}><span>Add Team Member</span></button>
@@ -5042,6 +5043,121 @@ const API_BASE_URL = isProduction
 
 
           {/* Organizational Settings Sections */}
+          {activeSection === 'account-management' && (
+            <div className="account-management-section">
+              <div className="section-header">
+                <div>
+                  <h2>Account Management</h2>
+                  <p className="section-description">
+                    Manage company accounts, users, and system settings
+                  </p>
+                </div>
+              </div>
+
+              {/* KPI Dashboard */}
+              <div className="account-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '24px' }}>
+                <div className="kpi-card" style={{ background: '#f8fafc', borderRadius: '12px', padding: '20px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '32px', fontWeight: '700', color: '#1e293b' }}>3</div>
+                  <div style={{ fontSize: '14px', color: '#64748b' }}>Active Accounts</div>
+                </div>
+                <div className="kpi-card" style={{ background: '#f8fafc', borderRadius: '12px', padding: '20px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '32px', fontWeight: '700', color: '#1e293b' }}>25</div>
+                  <div style={{ fontSize: '14px', color: '#64748b' }}>Total Users</div>
+                </div>
+                <div className="kpi-card" style={{ background: '#f8fafc', borderRadius: '12px', padding: '20px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '32px', fontWeight: '700', color: '#22c55e' }}>$12,450</div>
+                  <div style={{ fontSize: '14px', color: '#64748b' }}>Monthly Revenue</div>
+                </div>
+                <div className="kpi-card" style={{ background: '#f8fafc', borderRadius: '12px', padding: '20px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '32px', fontWeight: '700', color: '#3b82f6' }}>98%</div>
+                  <div style={{ fontSize: '14px', color: '#64748b' }}>System Health</div>
+                </div>
+              </div>
+
+              {/* Quick Actions */}
+              <div className="quick-actions" style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
+                <button className="btn-primary" onClick={() => navigate('/users/create')}>
+                  + Add New User
+                </button>
+                <button className="btn-secondary" onClick={() => navigate('/team-members')}>
+                  View Team Members
+                </button>
+                <button className="btn-secondary" onClick={() => setActiveSection('integration-marketplace')}>
+                  Manage Integrations
+                </button>
+              </div>
+
+              {/* Accounts List */}
+              <div className="accounts-section" style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', marginBottom: '24px' }}>
+                <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>Accounts</h3>
+                </div>
+                <div style={{ padding: '20px' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                        <th style={{ textAlign: 'left', padding: '12px 0', color: '#64748b', fontSize: '12px', fontWeight: '500', textTransform: 'uppercase' }}>Account</th>
+                        <th style={{ textAlign: 'left', padding: '12px 0', color: '#64748b', fontSize: '12px', fontWeight: '500', textTransform: 'uppercase' }}>Users</th>
+                        <th style={{ textAlign: 'left', padding: '12px 0', color: '#64748b', fontSize: '12px', fontWeight: '500', textTransform: 'uppercase' }}>Status</th>
+                        <th style={{ textAlign: 'left', padding: '12px 0', color: '#64748b', fontSize: '12px', fontWeight: '500', textTransform: 'uppercase' }}>Plan</th>
+                        <th style={{ textAlign: 'right', padding: '12px 0', color: '#64748b', fontSize: '12px', fontWeight: '500', textTransform: 'uppercase' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '16px 0' }}>
+                          <div style={{ fontWeight: '500', color: '#1e293b' }}>Primary Organization</div>
+                          <div style={{ fontSize: '13px', color: '#64748b' }}>admin@perenniaai.com</div>
+                        </td>
+                        <td style={{ padding: '16px 0', color: '#1e293b' }}>25</td>
+                        <td style={{ padding: '16px 0' }}>
+                          <span style={{ background: '#dcfce7', color: '#166534', padding: '4px 12px', borderRadius: '20px', fontSize: '13px' }}>Active</span>
+                        </td>
+                        <td style={{ padding: '16px 0', color: '#1e293b' }}>Enterprise</td>
+                        <td style={{ padding: '16px 0', textAlign: 'right' }}>
+                          <button style={{ background: 'transparent', border: '1px solid #e2e8f0', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', marginRight: '8px' }}>View</button>
+                          <button style={{ background: 'transparent', border: '1px solid #e2e8f0', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer' }}>Edit</button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Security Status */}
+              <div className="security-section" style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>Security Status</h3>
+                </div>
+                <div style={{ padding: '20px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <span style={{ color: '#22c55e', fontSize: '20px' }}>✓</span>
+                      <div>
+                        <div style={{ fontWeight: '500', color: '#1e293b' }}>SSL Certificate</div>
+                        <div style={{ fontSize: '13px', color: '#64748b' }}>Valid until Dec 2025</div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <span style={{ color: '#22c55e', fontSize: '20px' }}>✓</span>
+                      <div>
+                        <div style={{ fontWeight: '500', color: '#1e293b' }}>2FA Enabled</div>
+                        <div style={{ fontSize: '13px', color: '#64748b' }}>All admin accounts</div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <span style={{ color: '#22c55e', fontSize: '20px' }}>✓</span>
+                      <div>
+                        <div style={{ fontWeight: '500', color: '#1e293b' }}>Data Encryption</div>
+                        <div style={{ fontSize: '13px', color: '#64748b' }}>AES-256</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {activeSection === 'company-info' && (
             <div className="company-info-section">
               <h2>Company Information</h2>
