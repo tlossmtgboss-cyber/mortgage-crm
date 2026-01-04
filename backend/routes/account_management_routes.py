@@ -572,32 +572,37 @@ async def invite_subscriber(
         invitation_token = str(uuid.uuid4())
         expires_at = datetime.now(timezone.utc) + timedelta(days=7)
 
-        # Store invitation in database
-        db.execute(text("""
-            INSERT INTO subscription_events (
-                account_id, event_type, from_plan, to_plan,
-                actor_id, metadata, timestamp
-            ) VALUES (
-                NULL, 'invitation_sent', NULL, :plan,
-                :actor_id,
-                :metadata,
-                NOW()
-            )
-        """), {
-            'plan': invite.plan,
-            'actor_id': current_user.id,
-            'metadata': str({
-                'email': invite.email,
-                'company_name': invite.company_name,
-                'contact_name': invite.contact_name,
-                'seats': invite.seats,
+        # Log the invitation action in audit log
+        try:
+            db.execute(text("""
+                INSERT INTO admin_audit_log (
+                    action_type, actor_id, target_type, target_id,
+                    old_values, new_values, reason, ip_address
+                ) VALUES (
+                    'invitation_sent', :actor_id, 'invitation', :token,
+                    NULL,
+                    :details,
+                    :message,
+                    :ip
+                )
+            """), {
+                'actor_id': current_user.id,
                 'token': invitation_token,
-                'expires_at': expires_at.isoformat(),
-                'message': invite.message
+                'details': str({
+                    'email': invite.email,
+                    'company_name': invite.company_name,
+                    'contact_name': invite.contact_name,
+                    'plan': invite.plan,
+                    'seats': invite.seats,
+                    'expires_at': expires_at.isoformat()
+                }),
+                'message': invite.message or 'Subscription invitation',
+                'ip': request.client.host if request.client else 'unknown'
             })
-        })
-
-        db.commit()
+            db.commit()
+        except Exception as log_err:
+            logger.warning(f"Could not log invitation to audit: {log_err}")
+            # Continue anyway - logging failure shouldn't block invitation
 
         # Log the action
         logger.info(f"Subscription invitation sent to {invite.email} by {current_user.email}")
