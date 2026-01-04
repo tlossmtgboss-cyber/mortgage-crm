@@ -103,6 +103,15 @@ def require_master_admin(user):
         raise PermissionException("Master Administrator access required")
 
 
+async def get_user_from_request(request: Request, db: Session):
+    """Helper to extract token and get current user."""
+    auth_header = request.headers.get('Authorization', '')
+    if not auth_header.startswith('Bearer '):
+        raise HTTPException(status_code=401, detail="Missing authorization token")
+    token = auth_header.replace('Bearer ', '')
+    return await get_current_user(token, request, db)
+
+
 def log_admin_action(db: Session, admin_user, action_type: str, target_type: str,
                      target_id: str, target_name: str = None, reason: str = None,
                      old_values: dict = None, new_values: dict = None,
@@ -414,7 +423,7 @@ async def get_kpis(
 ):
     """Get account management KPIs"""
     try:
-        current_user = await get_current_user(request, db)
+        current_user = await get_user_from_request(request, db)
         require_master_admin(current_user)
 
         # Check if tenant_accounts table exists
@@ -543,7 +552,7 @@ async def list_accounts(
 ):
     """List accounts with filtering and pagination"""
     try:
-        current_user = await get_current_user(request, db)
+        current_user = await get_user_from_request(request, db)
         require_master_admin(current_user)
 
         # Check if table exists
@@ -657,7 +666,7 @@ async def get_account(
 ):
     """Get detailed account information"""
     try:
-        current_user = await get_current_user(request, db)
+        current_user = await get_user_from_request(request, db)
         require_master_admin(current_user)
 
         # Get account
@@ -716,7 +725,7 @@ async def suspend_account(
 ):
     """Suspend an account"""
     try:
-        current_user = await get_current_user(request, db)
+        current_user = await get_user_from_request(request, db)
         require_master_admin(current_user)
 
         # Get current account
@@ -777,7 +786,7 @@ async def reinstate_account(
 ):
     """Reinstate a suspended account"""
     try:
-        current_user = await get_current_user(request, db)
+        current_user = await get_user_from_request(request, db)
         require_master_admin(current_user)
 
         account = db.execute(text("""
@@ -834,7 +843,7 @@ async def cancel_account(
 ):
     """Cancel an account (soft cancel)"""
     try:
-        current_user = await get_current_user(request, db)
+        current_user = await get_user_from_request(request, db)
         require_master_admin(current_user)
 
         account = db.execute(text("""
@@ -891,7 +900,7 @@ async def update_notes(
 ):
     """Update internal notes for an account"""
     try:
-        current_user = await get_current_user(request, db)
+        current_user = await get_user_from_request(request, db)
         require_master_admin(current_user)
 
         result = db.execute(text("""
@@ -935,7 +944,7 @@ async def list_account_users(
 ):
     """List users for an account"""
     try:
-        current_user = await get_current_user(request, db)
+        current_user = await get_user_from_request(request, db)
         require_master_admin(current_user)
 
         # Verify account exists
@@ -1020,7 +1029,7 @@ async def get_user_detail(
 ):
     """Get detailed user information"""
     try:
-        current_user = await get_current_user(request, db)
+        current_user = await get_user_from_request(request, db)
         require_master_admin(current_user)
 
         user = db.execute(text("""
@@ -1091,7 +1100,7 @@ async def get_login_history(
 ):
     """Get user login history"""
     try:
-        current_user = await get_current_user(request, db)
+        current_user = await get_user_from_request(request, db)
         require_master_admin(current_user)
 
         where_clause = "user_id = :user_id"
@@ -1153,7 +1162,7 @@ async def disable_user(
 ):
     """Disable a user"""
     try:
-        current_user = await get_current_user(request, db)
+        current_user = await get_user_from_request(request, db)
         require_master_admin(current_user)
 
         user = db.execute(text("""
@@ -1197,7 +1206,7 @@ async def enable_user(
 ):
     """Enable a disabled user"""
     try:
-        current_user = await get_current_user(request, db)
+        current_user = await get_user_from_request(request, db)
         require_master_admin(current_user)
 
         user = db.execute(text("""
@@ -1242,7 +1251,7 @@ async def update_user_roles(
 ):
     """Update user roles"""
     try:
-        current_user = await get_current_user(request, db)
+        current_user = await get_user_from_request(request, db)
         require_master_admin(current_user)
 
         user = db.execute(text("""
@@ -1293,7 +1302,7 @@ async def start_impersonation(
 ):
     """Start impersonating a user"""
     try:
-        current_user = await get_current_user(request, db)
+        current_user = await get_user_from_request(request, db)
         require_master_admin(current_user)
 
         target_user = db.execute(text("""
@@ -1350,7 +1359,7 @@ async def stop_impersonation(
 ):
     """Stop impersonation session"""
     try:
-        current_user = await get_current_user(request, db)
+        current_user = await get_user_from_request(request, db)
         require_master_admin(current_user)
 
         # Find active session
@@ -1401,7 +1410,7 @@ async def get_account_invoices(
 ):
     """Get invoices for an account"""
     try:
-        current_user = await get_current_user(request, db)
+        current_user = await get_user_from_request(request, db)
         require_master_admin(current_user)
 
         invoices = db.execute(text("""
@@ -1456,7 +1465,7 @@ async def get_cost_breakdown(
 ):
     """Get cost breakdown for an account"""
     try:
-        current_user = await get_current_user(request, db)
+        current_user = await get_user_from_request(request, db)
         require_master_admin(current_user)
 
         if not month:
@@ -1515,7 +1524,7 @@ async def get_cost_trend(
 ):
     """Get cost trend for an account"""
     try:
-        current_user = await get_current_user(request, db)
+        current_user = await get_user_from_request(request, db)
         require_master_admin(current_user)
 
         trend = db.execute(text("""
@@ -1559,7 +1568,7 @@ async def get_subscription_timeline(
 ):
     """Get subscription event timeline for an account"""
     try:
-        current_user = await get_current_user(request, db)
+        current_user = await get_user_from_request(request, db)
         require_master_admin(current_user)
 
         events = db.execute(text("""
@@ -1611,7 +1620,7 @@ async def get_account_audit_log(
 ):
     """Get audit log for an account"""
     try:
-        current_user = await get_current_user(request, db)
+        current_user = await get_user_from_request(request, db)
         require_master_admin(current_user)
 
         logs = db.execute(text("""
@@ -1661,7 +1670,7 @@ async def get_user_audit_log(
 ):
     """Get audit log for a user"""
     try:
-        current_user = await get_current_user(request, db)
+        current_user = await get_user_from_request(request, db)
         require_master_admin(current_user)
 
         logs = db.execute(text("""
