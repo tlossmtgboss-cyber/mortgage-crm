@@ -1,11 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePermissions } from '../contexts/PermissionContext';
+import { getDashboardContainersForRole } from '../config/roleConfig';
 import PendingPermissionRequests from '../components/PendingPermissionRequests';
 import {
   RoleDashboardSwitcher,
   getDashboardByRole,
   LoanOfficerDashboard,
+  ProductionAssistant1Dashboard,
+  ProductionAssistant2Dashboard,
   ProcessorDashboard,
   UnderwriterDashboard,
   CloserDashboard,
@@ -16,7 +19,7 @@ import './Dashboard.css';
 
 function Dashboard() {
   const navigate = useNavigate();
-  const { hasPermission, userRole } = usePermissions();
+  const { hasPermission, userRole, effectiveRole } = usePermissions();
   const [loading, setLoading] = useState(true);
 
   // State for admin role view switcher
@@ -77,64 +80,60 @@ function Dashboard() {
 
   // Drag and drop state
   const [draggedIndex, setDraggedIndex] = useState(null);
-  const [containerOrder, setContainerOrder] = useState([
-    'ai-alerts',
-    'production-tracker',
-    'profitability',
-    'efficiency',
-    'workflow-scorecards',
-    'ai-tasks',
-    'pipeline',
-    'referrals',
-    'team'
-  ]);
+
+  // Get allowed containers for the current role
+  const allowedContainers = useMemo(() => {
+    return getDashboardContainersForRole(effectiveRole);
+  }, [effectiveRole]);
+
+  // Container order filtered by role
+  const [containerOrder, setContainerOrder] = useState(() => {
+    // Start with role-specific allowed containers
+    return getDashboardContainersForRole(effectiveRole || 'loan_officer');
+  });
   const [workflowScores, setWorkflowScores] = useState({ statuses: [], overallScore: 0 });
+
+  // Reload container order when role changes
+  useEffect(() => {
+    loadContainerOrder();
+  }, [effectiveRole]);
 
   useEffect(() => {
     loadDashboard();
-    loadContainerOrder();
   }, []);
 
-  // Load saved container order
+  // Load saved container order for the current role
   const loadContainerOrder = () => {
     try {
-      const defaultOrder = [
-        'ai-alerts',
-        'production-tracker',
-        'profitability',
-        'efficiency',
-        'workflow-scorecards',
-        'ai-tasks',
-        'pipeline',
-        'referrals',
-        'team'
-      ];
+      // Get the allowed containers for this role
+      const roleContainers = getDashboardContainersForRole(effectiveRole);
+      const storageKey = `dashboardOrder_${effectiveRole}`;
 
-      const saved = localStorage.getItem('dashboardOrder');
+      const saved = localStorage.getItem(storageKey);
       if (saved) {
         const savedOrder = JSON.parse(saved);
-        // Merge any new containers that don't exist in saved order
-        const missingContainers = defaultOrder.filter(c => !savedOrder.includes(c));
-        if (missingContainers.length > 0) {
-          // Add missing containers after 'production-tracker'
-          const trackerIndex = savedOrder.indexOf('production-tracker');
-          const newOrder = [...savedOrder];
-          newOrder.splice(trackerIndex + 1, 0, ...missingContainers);
-          setContainerOrder(newOrder);
-          saveContainerOrder(newOrder);
-        } else {
-          setContainerOrder(savedOrder);
-        }
+        // Filter to only include containers allowed for this role
+        const filteredSaved = savedOrder.filter(c => roleContainers.includes(c));
+        // Add any new containers from role config that weren't in saved order
+        const missingContainers = roleContainers.filter(c => !filteredSaved.includes(c));
+        const newOrder = [...filteredSaved, ...missingContainers];
+        setContainerOrder(newOrder);
+      } else {
+        // No saved order, use default from role config
+        setContainerOrder(roleContainers);
       }
     } catch (error) {
       console.error('Failed to load container order:', error);
+      // Fallback to role defaults
+      setContainerOrder(getDashboardContainersForRole(effectiveRole));
     }
   };
 
-  // Save container order
+  // Save container order for the current role
   const saveContainerOrder = (order) => {
     try {
-      localStorage.setItem('dashboardOrder', JSON.stringify(order));
+      const storageKey = `dashboardOrder_${effectiveRole}`;
+      localStorage.setItem(storageKey, JSON.stringify(order));
     } catch (error) {
       console.error('Failed to save container order:', error);
     }
@@ -1010,6 +1009,10 @@ function Dashboard() {
     switch (selectedDashboardView) {
       case 'loan_officer':
         return <LoanOfficerDashboard />;
+      case 'production_assistant_1':
+        return <ProductionAssistant1Dashboard />;
+      case 'production_assistant_2':
+        return <ProductionAssistant2Dashboard />;
       case 'processor':
         return <ProcessorDashboard />;
       case 'underwriter':
@@ -1019,6 +1022,7 @@ function Dashboard() {
       case 'manager':
         return <ManagerDashboard />;
       case 'admin':
+      case 'executive':
         return <AdminDashboard />;
       default:
         return null;

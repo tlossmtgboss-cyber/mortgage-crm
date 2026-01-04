@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { useImpersonation } from './ImpersonationContext';
 import { API_BASE_URL } from '../services/api';
+import { getUserEffectiveRole } from '../config/roleConfig';
 
 const PermissionContext = createContext();
 
@@ -23,9 +24,27 @@ export const PermissionProvider = ({ children }) => {
       return 'sales';
     }
   });
+  // Legacy role from user object (more specific role like processor, underwriter, closer)
+  const [legacyRole, setLegacyRole] = useState(() => {
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        return user.role || null;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  });
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState(null);
   const { isImpersonating, getImpersonatedUser } = useImpersonation();
+
+  // Compute effective role for UI purposes (combines permission_role + legacy role)
+  const effectiveRole = useMemo(() => {
+    return getUserEffectiveRole(userRole, legacyRole);
+  }, [userRole, legacyRole]);
 
   // Fetch permissions whenever impersonation state changes
   useEffect(() => {
@@ -90,6 +109,11 @@ export const PermissionProvider = ({ children }) => {
       setPermissions(data.permissions || {});
       const role = data.permission_role || 'sales';
       setUserRole(role);
+
+      // Extract legacy role from user object for more specific role detection
+      const userLegacyRole = user.role || data.role || null;
+      setLegacyRole(userLegacyRole);
+
       // Persist role to localStorage to prevent flicker on reload
       try {
         localStorage.setItem('userRole', role);
@@ -99,7 +123,9 @@ export const PermissionProvider = ({ children }) => {
 
       console.log('Permissions loaded:', {
         userId,
-        role: data.permission_role,
+        permissionRole: data.permission_role,
+        legacyRole: userLegacyRole,
+        effectiveRole: getUserEffectiveRole(role, userLegacyRole),
         permissionCount: Object.keys(data.permissions || {}).length,
         isImpersonating
       });
@@ -204,6 +230,8 @@ export const PermissionProvider = ({ children }) => {
   const value = {
     permissions,
     userRole,
+    legacyRole,
+    effectiveRole,  // Computed role for UI (combines permission_role + legacy role)
     loading,
     currentUserId,
     hasPermission,

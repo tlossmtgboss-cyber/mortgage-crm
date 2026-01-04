@@ -4,6 +4,7 @@ import { Capacitor } from '@capacitor/core';
 import { isAuthenticatedSync as isAuthenticated } from './utils/auth';
 import { ImpersonationProvider } from './contexts/ImpersonationContext';
 import { PermissionProvider } from './contexts/PermissionContext';
+import { getUserEffectiveRole, getDefaultRouteForRole } from './config/roleConfig';
 import Navigation from './components/Navigation';
 import AIAssistant from './components/AIAssistant';
 import CoachCorner from './components/CoachCorner';
@@ -193,6 +194,26 @@ function PrivateRoute({ children }) {
   return children;
 }
 
+// Role-based redirect component for authenticated users
+function RoleBasedRedirect() {
+  // Get user data from localStorage to determine role
+  try {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      const permissionRole = user.permission_role || 'sales';
+      const legacyRole = user.role || null;
+      const effectiveRole = getUserEffectiveRole(permissionRole, legacyRole);
+      const defaultRoute = getDefaultRouteForRole(effectiveRole);
+      return <Navigate to={defaultRoute} replace />;
+    }
+  } catch (error) {
+    console.error('Error determining role-based redirect:', error);
+  }
+  // Default to dashboard if something goes wrong
+  return <Navigate to="/dashboard" replace />;
+}
+
 // Wrapper to handle lazy-loaded pages with suspense
 function LazyPage({ children }) {
   return (
@@ -286,7 +307,7 @@ function App() {
           {/* Public routes - Mobile app skips landing page */}
           <Route path="/" element={
             Capacitor.isNativePlatform()
-              ? (isAuthenticated() ? <Navigate to="/dashboard" /> : <Navigate to="/login" />)
+              ? (isAuthenticated() ? <RoleBasedRedirect /> : <Navigate to="/login" />)
               : <LandingPage />
           } />
           <Route path="/apply" element={<BuyerIntake />} />

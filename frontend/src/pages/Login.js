@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { authAPI, API_BASE_URL } from '../services/api';
 import { setAuth } from '../utils/auth';
+import { getUserEffectiveRole, getDefaultRouteForRole } from '../config/roleConfig';
 import './Login.css';
 
 function Login() {
@@ -23,7 +24,14 @@ function Login() {
       const data = await authAPI.login(email, password);
       console.log('Login successful:', data);
       await setAuth(data.access_token, data.user);
-      navigate('/ai');
+
+      // Determine role-based default route
+      const permissionRole = data.user?.permission_role || 'sales';
+      const legacyRole = data.user?.role || null;
+      const effectiveRole = getUserEffectiveRole(permissionRole, legacyRole);
+      const defaultRoute = getDefaultRouteForRole(effectiveRole);
+      console.log('Role-based redirect:', { permissionRole, legacyRole, effectiveRole, defaultRoute });
+      navigate(defaultRoute);
     } catch (err) {
       console.error('Login error:', err);
       console.error('Error response:', err.response);

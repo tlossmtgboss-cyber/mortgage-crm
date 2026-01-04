@@ -1,0 +1,411 @@
+/**
+ * Role Configuration - Central source of truth for role-based navigation and dashboards
+ *
+ * This file defines:
+ * 1. Navigation items available in the system
+ * 2. Which navigation items each role can see
+ * 3. Which dashboard containers each role can see
+ * 4. Role detection logic
+ */
+
+// =============================================================================
+// NAVIGATION ITEMS - Master list of all navigation items
+// =============================================================================
+
+export const NAVIGATION_ITEMS = {
+  dashboard: {
+    path: '/dashboard',
+    label: 'Dashboard',
+    icon: null
+  },
+  leads: {
+    path: '/leads',
+    label: 'Leads',
+    badgeKey: 'leads'
+  },
+  activeLoans: {
+    path: '/loans',
+    label: 'Active Loans',
+    badgeKey: 'loans'
+  },
+  portfolio: {
+    path: '/portfolio',
+    label: 'Portfolio'
+  },
+  closedClients: {
+    path: '/portfolio',
+    label: 'Closed Clients'  // Same path as portfolio, different label for PA
+  },
+  closedLoans: {
+    path: '/portfolio',
+    label: 'Closed Loans'  // Same path as portfolio, different label for ops roles
+  },
+  tasks: {
+    path: '/tasks',
+    label: 'Tasks',
+    badgeKey: 'urgentTasks',
+    badgeClass: 'urgent'
+  },
+  reconciliation: {
+    path: '/reconciliation',
+    label: 'Reconciliation',
+    badgeKey: 'reconciliation'
+  },
+  smartDocs: {
+    path: '/smart-docs',
+    label: 'Smart Docs',
+    matchPaths: ['/smart-docs/', '/smart-docs']
+  },
+  marketing: {
+    path: '/marketing',
+    label: 'Marketing',
+    matchPaths: ['/marketing']
+  },
+  calendar: {
+    path: '/calendar',
+    label: 'Calendar'
+  },
+  scorecard: {
+    path: '/scorecard',
+    label: 'Scorecard'
+  },
+  partners: {
+    path: '/referral-partners',
+    label: 'Partners',
+    badgeKey: 'partners'
+  },
+  aiUnderwriter: {
+    path: '/ai-underwriter',
+    label: 'AI Underwriter'
+  },
+  market: {
+    path: '/market',
+    label: 'Market'
+  },
+  profitability: {
+    path: '/profitability',
+    label: 'Profitability'
+  },
+  capacity: {
+    path: '/master-manager',
+    label: 'Capacity'
+  },
+  recruiting: {
+    path: '/master-manager/recruiting',
+    label: 'Recruiting',
+    matchPaths: ['/master-manager/recruiting', '/master-manager']
+  },
+  partnerRecruiting: {
+    path: '/partner-recruiting',
+    label: 'Partner Recruiting',
+    matchPaths: ['/partner-recruiting/']
+  }
+};
+
+// =============================================================================
+// ROLE NAVIGATION - Which nav items each role sees (in display order)
+// =============================================================================
+
+export const ROLE_NAVIGATION = {
+  // Loan Officer - Full sales navigation
+  loan_officer: [
+    'dashboard',
+    'leads',
+    'activeLoans',
+    'portfolio',
+    'tasks',
+    'reconciliation',
+    'smartDocs',
+    'marketing',
+    'calendar',
+    'partners',
+    'aiUnderwriter',
+    'market',
+    'profitability',
+    'partnerRecruiting'
+  ],
+
+  // Production Assistant - Support role navigation
+  production_assistant: [
+    'dashboard',
+    'leads',
+    'activeLoans',
+    'closedClients',  // Portfolio with "Closed Clients" label
+    'tasks',
+    'reconciliation',
+    'smartDocs',
+    'calendar',
+    'aiUnderwriter'
+  ],
+
+  // Processor - Operations role, NO dashboard
+  processor: [
+    'activeLoans',
+    'closedLoans',  // Portfolio with "Closed Loans" label
+    'tasks',
+    'reconciliation',
+    'smartDocs',
+    'calendar',
+    'aiUnderwriter'
+  ],
+
+  // Underwriter - Operations role, NO dashboard
+  underwriter: [
+    'activeLoans',
+    'closedLoans',
+    'tasks',
+    'reconciliation',
+    'smartDocs',
+    'calendar',
+    'aiUnderwriter'
+  ],
+
+  // Closer - Operations role, NO dashboard
+  closer: [
+    'activeLoans',
+    'closedLoans',
+    'tasks',
+    'reconciliation',
+    'smartDocs',
+    'calendar',
+    'aiUnderwriter'
+  ],
+
+  // Manager - Management navigation
+  manager: [
+    'dashboard',
+    'leads',
+    'activeLoans',
+    'closedLoans',
+    'tasks',
+    'reconciliation',
+    'smartDocs',
+    'marketing',
+    'calendar',
+    'aiUnderwriter',
+    'market',
+    'recruiting'
+  ],
+
+  // Executive - Minimal high-level navigation
+  executive: [
+    'dashboard',
+    'tasks',
+    'reconciliation',
+    'calendar',
+    'recruiting'
+  ]
+};
+
+// =============================================================================
+// DASHBOARD CONTAINERS - Which containers each role sees on their dashboard
+// These IDs must match the container IDs in Dashboard.js renderDraggableContainer()
+// =============================================================================
+
+export const ROLE_DASHBOARD_CONTAINERS = {
+  // Loan Officer Dashboard - Full view with all sales-related containers
+  loan_officer: [
+    'ai-alerts',           // AI Alerts (lead alerts, follow-ups)
+    'production-tracker',  // Monthly Production Tracker
+    'profitability',       // Profitability Intelligence (LO view)
+    'efficiency',          // Pipeline Efficiency Monitor
+    'workflow-scorecards', // Workflow Scorecards (acts as scorecard)
+    'ai-tasks',           // AI Prioritized Tasks
+    'pipeline',           // Live Loan Pipeline
+    'referrals'           // Referral Scoreboard
+  ],
+
+  // Production Assistant Dashboard - Support role view
+  production_assistant: [
+    'efficiency',          // Pipeline Efficiency
+    'ai-alerts',           // AI Alerts (lead status alerts)
+    'ai-tasks',           // AI Prioritized Tasks
+    'pipeline'            // Live Loan Pipeline (shows active loans)
+  ],
+
+  // Processor Dashboard - Operations view, NO dashboard access but if they land here
+  processor: [
+    'efficiency',          // Pipeline Efficiency
+    'ai-tasks',           // AI Prioritized Tasks
+    'pipeline'            // Live Loan Pipeline (In Processing, In UW, Funded)
+  ],
+
+  // Underwriter Dashboard - Same as processor
+  underwriter: [
+    'efficiency',
+    'ai-tasks',
+    'pipeline'
+  ],
+
+  // Closer Dashboard - Same as processor
+  closer: [
+    'efficiency',
+    'ai-tasks',
+    'pipeline'
+  ],
+
+  // Manager Dashboard - Management view with team oversight
+  manager: [
+    'efficiency',          // Pipeline Efficiency (team view)
+    'production-tracker',  // Production Tracker
+    'profitability',       // Profitability (Manager/team view)
+    'ai-tasks',           // AI Prioritized Tasks
+    'pipeline',           // Live Loan Pipeline
+    'team'                // Team Performance
+  ],
+
+  // Executive Dashboard - High-level company view
+  executive: [
+    'efficiency',          // Pipeline Efficiency (company view)
+    'profitability',       // Profitability (Company view)
+    'ai-tasks',           // AI Prioritized Tasks
+    'pipeline',           // Live Loan Pipeline
+    'team'                // Team Performance
+  ]
+};
+
+// =============================================================================
+// DEFAULT ROUTES - Where each role lands after login
+// =============================================================================
+
+export const ROLE_DEFAULT_ROUTES = {
+  loan_officer: '/dashboard',
+  production_assistant: '/dashboard',
+  processor: '/loans',      // No dashboard, land on Active Loans
+  underwriter: '/loans',
+  closer: '/loans',
+  manager: '/dashboard',
+  executive: '/dashboard'
+};
+
+// =============================================================================
+// ROLE DETECTION - Determine effective role from user data
+// =============================================================================
+
+/**
+ * Determines the effective UI role based on user's permission_role and legacy role
+ * @param {string} permissionRole - The user's permission_role from backend (admin, leadership, management, sales, processing, operations)
+ * @param {string} legacyRole - The user's legacy role field (loan_officer, processor, underwriter, closer, manager, production_assistant)
+ * @returns {string} The effective role for UI purposes
+ */
+export const getUserEffectiveRole = (permissionRole, legacyRole) => {
+  // Check legacy role first for more specific role identification
+  if (legacyRole) {
+    const normalizedLegacy = legacyRole.toLowerCase().replace(/\s+/g, '_');
+
+    // Operations roles
+    if (['processor', 'loan_processor'].includes(normalizedLegacy)) {
+      return 'processor';
+    }
+    if (normalizedLegacy === 'underwriter') {
+      return 'underwriter';
+    }
+    if (['closer', 'funder'].includes(normalizedLegacy)) {
+      return 'closer';
+    }
+
+    // Production assistant
+    if (normalizedLegacy.includes('production_assistant') || normalizedLegacy === 'production_asst') {
+      return 'production_assistant';
+    }
+
+    // Loan officer
+    if (['loan_officer', 'senior_loan_officer', 'jr_lo', 'junior_loan_officer'].includes(normalizedLegacy)) {
+      return 'loan_officer';
+    }
+
+    // Manager
+    if (['manager', 'branch_manager', 'team_lead'].includes(normalizedLegacy)) {
+      return 'manager';
+    }
+
+    // Executive
+    if (['executive', 'ceo', 'cfo', 'coo', 'owner'].includes(normalizedLegacy)) {
+      return 'executive';
+    }
+  }
+
+  // Fall back to permission_role mapping
+  if (permissionRole) {
+    const normalizedPermission = permissionRole.toLowerCase();
+
+    switch (normalizedPermission) {
+      case 'admin':
+      case 'leadership':
+        return 'executive';
+      case 'management':
+        return 'manager';
+      case 'sales':
+        return 'loan_officer';
+      case 'processing':
+        return 'processor';
+      case 'operations':
+        return 'production_assistant';
+      default:
+        break;
+    }
+  }
+
+  // Default to loan officer
+  return 'loan_officer';
+};
+
+/**
+ * Check if a role has access to the dashboard page
+ * @param {string} effectiveRole - The effective role
+ * @returns {boolean} True if role has dashboard access
+ */
+export const roleHasDashboard = (effectiveRole) => {
+  const rolesWithoutDashboard = ['processor', 'underwriter', 'closer'];
+  return !rolesWithoutDashboard.includes(effectiveRole);
+};
+
+/**
+ * Get navigation items for a specific role
+ * @param {string} effectiveRole - The effective role
+ * @returns {Array} Array of navigation item objects
+ */
+export const getNavigationForRole = (effectiveRole) => {
+  const navKeys = ROLE_NAVIGATION[effectiveRole] || ROLE_NAVIGATION.loan_officer;
+  return navKeys.map(key => ({
+    ...NAVIGATION_ITEMS[key],
+    key
+  }));
+};
+
+/**
+ * Get dashboard containers for a specific role
+ * @param {string} effectiveRole - The effective role
+ * @returns {Array} Array of container IDs
+ */
+export const getDashboardContainersForRole = (effectiveRole) => {
+  return ROLE_DASHBOARD_CONTAINERS[effectiveRole] || ROLE_DASHBOARD_CONTAINERS.loan_officer;
+};
+
+/**
+ * Get the default route for a role after login
+ * @param {string} effectiveRole - The effective role
+ * @returns {string} The default route path
+ */
+export const getDefaultRouteForRole = (effectiveRole) => {
+  return ROLE_DEFAULT_ROUTES[effectiveRole] || '/dashboard';
+};
+
+// =============================================================================
+// PROFITABILITY VIEW TYPES - Different views based on role
+// =============================================================================
+
+export const PROFITABILITY_VIEW_TYPES = {
+  loan_officer: 'personal',      // LO sees their own profitability
+  manager: 'team',               // Manager sees team profitability
+  executive: 'company'           // Executive sees company-wide profitability
+};
+
+/**
+ * Get the profitability view type for a role
+ * @param {string} effectiveRole - The effective role
+ * @returns {string} The profitability view type
+ */
+export const getProfitabilityViewType = (effectiveRole) => {
+  return PROFITABILITY_VIEW_TYPES[effectiveRole] || 'personal';
+};
