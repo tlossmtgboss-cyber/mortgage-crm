@@ -159,7 +159,7 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
               className={`nav-link team-link ${isActive('/team-members') || location.pathname.startsWith('/team-members') ? 'active' : ''}`}
               title="Team Members"
             >
-              👥 Team
+              Team
             </Link>
           )}
           <Link

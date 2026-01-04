@@ -10,7 +10,7 @@ import { formatPhoneNumber } from '../utils/phoneUtils';
 import './TeamMemberProfile.css';
 
 function TeamMemberProfile() {
-  const { userId: id } = useParams();
+  const { id } = useParams();
   const navigate = useNavigate();
   const [member, setMember] = useState(null);
   const [loading, setLoading] = useState(true);
