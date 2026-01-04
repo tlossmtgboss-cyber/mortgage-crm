@@ -38579,6 +38579,8 @@ async def debug_delete_user(
         ("onboarding_wizard_sessions", "DELETE FROM onboarding_wizard_sessions WHERE user_profile_id IN (SELECT id FROM onboarding_user_profiles WHERE user_id = :user_id)"),
         # Then delete user profiles
         ("onboarding_user_profiles", "DELETE FROM onboarding_user_profiles WHERE user_id = :user_id"),
+        # Delete scheduler soft holds before scheduler resources
+        ("scheduler_soft_holds", "DELETE FROM scheduler_soft_holds WHERE resource_id IN (SELECT id FROM scheduler_resources WHERE user_id = :user_id)"),
         ("scheduler_resources", "DELETE FROM scheduler_resources WHERE user_id = :user_id"),
         ("user_settings", "DELETE FROM user_settings WHERE user_id = :user_id"),
         ("notifications", "DELETE FROM notifications WHERE user_id = :user_id"),
