@@ -6,7 +6,7 @@ import './Navigation.css';
 
 function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen, taskCounts = {} }) {
   const location = useLocation();
-  const { userRole } = usePermissions();
+  const { userRole, hasPermission, hasAnyPermission } = usePermissions();
 
   const isActive = (path) => location.pathname === path;
   const startsWithPath = (path) => location.pathname.startsWith(path);
@@ -93,8 +93,8 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
             Partners {renderBadge(taskCounts.partners)}
           </Link>
 
-          {/* Compliance Dashboard - Management/Admin only */}
-          {(userRole === 'management' || userRole === 'admin') && (
+          {/* Compliance Dashboard - requires compliance.view or management role */}
+          {(hasPermission('compliance.view') || userRole === 'management') && (
             <Link
               to="/compliance"
               className={`nav-link ${isActive('/compliance') ? 'active' : ''}`}
@@ -115,38 +115,45 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
           >
             Market
           </Link>
-          <Link
-            to="/profitability"
-            className={`nav-link ${isActive('/profitability') ? 'active' : ''}`}
-          >
-            Profitability
-          </Link>
+          {/* Profitability - requires reports.profitability or management role */}
+          {(hasPermission('reports.profitability') || userRole === 'management') && (
+            <Link
+              to="/profitability"
+              className={`nav-link ${isActive('/profitability') ? 'active' : ''}`}
+            >
+              Profitability
+            </Link>
+          )}
 
-          {/* Master Manager - Capacity & Talent OS */}
-          <Link
-            to="/master-manager"
-            className={`nav-link ${isActive('/master-manager') && !isActive('/master-manager/recruiting') ? 'active' : ''}`}
-          >
-            Capacity
-          </Link>
-          <Link
-            to="/master-manager/recruiting"
-            className={`nav-link ${isActive('/master-manager/recruiting') ? 'active' : ''}`}
-          >
-            Recruiting
-          </Link>
-          <Link
-            to="/partner-recruiting"
-            className={`nav-link ${isActive('/partner-recruiting') || location.pathname.startsWith('/partner-recruiting/') ? 'active' : ''}`}
-          >
-            Partner Recruiting
-          </Link>
+          {/* Master Manager - Capacity & Talent OS - requires team.view_all or management */}
+          {(hasAnyPermission(['team.view_all', 'team.manage_permissions', 'capacity.view']) || userRole === 'management') && (
+            <>
+              <Link
+                to="/master-manager"
+                className={`nav-link ${isActive('/master-manager') && !isActive('/master-manager/recruiting') ? 'active' : ''}`}
+              >
+                Capacity
+              </Link>
+              <Link
+                to="/master-manager/recruiting"
+                className={`nav-link ${isActive('/master-manager/recruiting') ? 'active' : ''}`}
+              >
+                Recruiting
+              </Link>
+              <Link
+                to="/partner-recruiting"
+                className={`nav-link ${isActive('/partner-recruiting') || location.pathname.startsWith('/partner-recruiting/') ? 'active' : ''}`}
+              >
+                Partner Recruiting
+              </Link>
+            </>
+          )}
         </div>
 
         <div className="nav-actions">
           <NotificationBell />
-          {/* My Profile and Permissions moved to Settings page */}
-          {(userRole === 'manager' || userRole === 'management') && (
+          {/* Team Members - requires team.view_all, team.view_team, or management role */}
+          {(hasAnyPermission(['team.view_all', 'team.view_team', 'team.manage_permissions']) || userRole === 'management') && (
             <Link
               to="/team-members"
               className={`nav-link team-link ${isActive('/team-members') || location.pathname.startsWith('/team-members') ? 'active' : ''}`}

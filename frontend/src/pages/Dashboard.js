@@ -333,9 +333,13 @@ function Dashboard() {
     }
 
     if (containerId === 'production-tracker') {
-      // PHASE 4: Only show for Sales and Management roles (NOT Operations)
+      // PHASE 4: Show for users with production.view permission or sales/management roles
       // Always show for demo user
-      if (userRole === 'operations' && !isDemoUser()) {
+      const canViewProduction = hasPermission('production.view') ||
+                                userRole === 'sales' ||
+                                userRole === 'management' ||
+                                isDemoUser();
+      if (!canViewProduction) {
         return null;
       }
 
@@ -842,9 +846,13 @@ function Dashboard() {
     }
 
     if (containerId === 'referrals') {
-      // PHASE 4: Only show for Sales and Management roles (NOT Operations)
+      // PHASE 4: Show for users with referrals.view permission or sales/management roles
       // Always show for demo user
-      if (userRole === 'operations' && !isDemoUser()) {
+      const canViewReferrals = hasPermission('referrals.view') ||
+                               userRole === 'sales' ||
+                               userRole === 'management' ||
+                               isDemoUser();
+      if (!canViewReferrals) {
         return null;
       }
 
@@ -913,9 +921,13 @@ function Dashboard() {
     }
 
     if (containerId === 'team' && teamStats.has_team) {
-      // PHASE 4: Only show for Sales and Management roles (NOT Operations for now)
+      // PHASE 4: Show for users with team.view_all/team.view_team permission or management roles
       // Always show for demo user
-      if (userRole === 'operations' && !isDemoUser()) {
+      const canViewTeam = hasPermission('team.view_all') ||
+                          hasPermission('team.view_team') ||
+                          userRole === 'management' ||
+                          isDemoUser();
+      if (!canViewTeam) {
         return null;
       }
 
@@ -1052,8 +1064,8 @@ function Dashboard() {
       {/* Default Dashboard Content (when not viewing a role-specific dashboard) */}
       {!showingRoleDashboard && (
         <>
-          {/* Permission Requests Widget - Managers Only */}
-          {(userRole === 'management' || userRole === 'manager') && (
+          {/* Permission Requests Widget - Users with team.manage_permissions or managers */}
+          {(hasPermission('team.manage_permissions') || userRole === 'management') && (
             <div style={{ marginBottom: '2rem' }}>
               <PendingPermissionRequests />
             </div>
