@@ -38568,49 +38568,43 @@ async def debug_delete_user(
         raise HTTPException(status_code=404, detail="User not found")
 
     user_email = user.email
+    params = {"user_id": user_id}
+    deleted_from = []
+    errors = []
 
-    def safe_execute(query, params):
-        """Execute query using savepoint to handle errors without aborting transaction"""
+    # Direct cleanup - each query in its own try/except
+    cleanup_queries = [
+        ("onboarding_user_profiles", "DELETE FROM onboarding_user_profiles WHERE user_id = :user_id"),
+        ("scheduler_resources", "DELETE FROM scheduler_resources WHERE user_id = :user_id"),
+        ("user_settings", "DELETE FROM user_settings WHERE user_id = :user_id"),
+        ("user_preferences", "DELETE FROM user_preferences WHERE user_id = :user_id"),
+        ("notifications", "DELETE FROM notifications WHERE user_id = :user_id"),
+        ("user_sessions", "DELETE FROM user_sessions WHERE user_id = :user_id"),
+    ]
+
+    for table_name, query in cleanup_queries:
         try:
-            db.execute(text("SAVEPOINT safe_exec_sp"))
-            db.execute(text(query), params)
-            db.execute(text("RELEASE SAVEPOINT safe_exec_sp"))
-            return True
+            result = db.execute(text(query), params)
+            if result.rowcount > 0:
+                deleted_from.append(f"{table_name}:{result.rowcount}")
+            db.commit()
         except Exception as e:
-            try:
-                db.execute(text("ROLLBACK TO SAVEPOINT safe_exec_sp"))
-            except:
-                pass
+            db.rollback()
             error_str = str(e).lower()
             if "does not exist" not in error_str and "no such table" not in error_str:
-                logger.warning(f"User {user_id} cleanup query failed: {query[:80]}... - {str(e)[:200]}")
-            return False
+                errors.append(f"{table_name}: {str(e)[:100]}")
 
+    # Now try to delete the user
     try:
-        params = {"user_id": user_id}
-
-        # Delete from blocking tables
-        cleanup_queries = [
-            "DELETE FROM onboarding_user_profiles WHERE user_id = :user_id",
-            "DELETE FROM scheduler_resources WHERE user_id = :user_id",
-            "DELETE FROM user_settings WHERE user_id = :user_id",
-            "DELETE FROM user_preferences WHERE user_id = :user_id",
-            "DELETE FROM notifications WHERE user_id = :user_id",
-            "DELETE FROM user_sessions WHERE user_id = :user_id",
-        ]
-
-        for query in cleanup_queries:
-            safe_execute(query, params)
-
-        db.commit()
-
-        # Now delete the user
         db.execute(text("DELETE FROM users WHERE id = :user_id"), params)
         db.commit()
-
-        logger.info(f"Debug delete: User {user_id} ({user_email}) deleted successfully")
-        return {"success": True, "message": f"User {user_id} ({user_email}) deleted successfully"}
-
+        logger.info(f"Debug delete: User {user_id} ({user_email}) deleted. Cleaned: {deleted_from}")
+        return {
+            "success": True,
+            "message": f"User {user_id} ({user_email}) deleted successfully",
+            "cleaned_tables": deleted_from,
+            "cleanup_errors": errors
+        }
     except Exception as e:
         db.rollback()
         error_msg = str(e)
@@ -38624,9 +38618,9 @@ async def debug_delete_user(
                 blocking_table = match.group(1)
                 raise HTTPException(
                     status_code=500,
-                    detail=f"Cannot delete user: Still referenced by table '{blocking_table}'"
+                    detail=f"Cannot delete user: Still referenced by table '{blocking_table}'. Cleaned: {deleted_from}. Errors: {errors}"
                 )
-        raise HTTPException(status_code=500, detail=f"Failed to delete user: {error_msg}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete user: {error_msg}. Cleaned: {deleted_from}. Errors: {errors}")
 
 
 @app.get("/api/v1/admin/users/{user_id}/deletion-blockers")
