@@ -51,51 +51,55 @@ def get_daily_summary(
     - Average call duration
     - Disposition breakdown
     """
-    from main import CallLog
+    try:
+        from main import CallLog
 
-    # Use today if not specified
-    if not target_date:
-        target_date = date.today()
+        # Use today if not specified
+        if not target_date:
+            target_date = date.today()
 
-    # Convert to datetime range
-    start_time = datetime.combine(target_date, datetime.min.time())
-    end_time = datetime.combine(target_date, datetime.max.time())
+        # Convert to datetime range
+        start_time = datetime.combine(target_date, datetime.min.time())
+        end_time = datetime.combine(target_date, datetime.max.time())
 
-    # Query calls for this date
-    calls = db.query(CallLog).filter(
-        and_(
-            CallLog.agent_id == current_user.id,
-            CallLog.start_time >= start_time,
-            CallLog.start_time <= end_time
-        )
-    ).all()
+        # Query calls for this date
+        calls = db.query(CallLog).filter(
+            and_(
+                CallLog.agent_id == current_user.id,
+                CallLog.start_time >= start_time,
+                CallLog.start_time <= end_time
+            )
+        ).all()
 
-    total_calls = len(calls)
-    total_duration = sum(call.duration_seconds or 0 for call in calls)
-    total_talk_time_minutes = total_duration // 60
+        total_calls = len(calls)
+        total_duration = sum(call.duration_seconds or 0 for call in calls)
+        total_talk_time_minutes = total_duration // 60
 
-    # Calculate connect rate (calls > 10 seconds / total calls)
-    connected_calls = sum(1 for call in calls if (call.duration_seconds or 0) > 10)
-    connect_rate = connected_calls / total_calls if total_calls > 0 else 0.0
+        # Calculate connect rate (calls > 10 seconds / total calls)
+        connected_calls = sum(1 for call in calls if (call.duration_seconds or 0) > 10)
+        connect_rate = connected_calls / total_calls if total_calls > 0 else 0.0
 
-    # Average call duration
-    avg_duration = total_duration // total_calls if total_calls > 0 else 0
+        # Average call duration
+        avg_duration = total_duration // total_calls if total_calls > 0 else 0
 
-    # Disposition breakdown
-    disposition_counts = {}
-    for call in calls:
-        if call.disposition:
-            disposition_counts[call.disposition] = disposition_counts.get(call.disposition, 0) + 1
+        # Disposition breakdown
+        disposition_counts = {}
+        for call in calls:
+            if call.disposition:
+                disposition_counts[call.disposition] = disposition_counts.get(call.disposition, 0) + 1
 
-    return {
-        "date": target_date.isoformat(),
-        "total_calls": total_calls,
-        "total_talk_time_minutes": total_talk_time_minutes,
-        "connect_rate": round(connect_rate, 2),
-        "average_call_duration_seconds": avg_duration,
-        "connected_calls": connected_calls,
-        "dispositions": disposition_counts
-    }
+        return {
+            "date": target_date.isoformat(),
+            "total_calls": total_calls,
+            "total_talk_time_minutes": total_talk_time_minutes,
+            "connect_rate": round(connect_rate, 2),
+            "average_call_duration_seconds": avg_duration,
+            "connected_calls": connected_calls,
+            "dispositions": disposition_counts
+        }
+    except Exception as e:
+        logger.exception(f"Error in get_daily_summary: {e}")
+        raise
 
 
 # =============================================================================
