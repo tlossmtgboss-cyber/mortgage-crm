@@ -1791,7 +1791,7 @@ async def start_impersonation(
             },
             message=f"Impersonation started for '{target_user[1] or target_user[2]}'"
         )
-    except (PermissionException, NotFoundException):
+    except (PermissionException, NotFoundException, HTTPException):
         raise
     except Exception as e:
         logger.error(f"Error starting impersonation: {e}")
