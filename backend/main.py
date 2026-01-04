@@ -60,7 +60,8 @@ from security_middleware import (
     SecurityHeadersMiddleware,
     IPBlockingMiddleware,
     RequestValidationMiddleware,
-    SecurityLoggingMiddleware
+    SecurityLoggingMiddleware,
+    security_stats,  # Shared security state for dashboard
 )
 
 # Import onboarding modules
@@ -37153,6 +37154,36 @@ async def setup_admin_user(db: Session = Depends(get_db)):
         db.rollback()
         logger.error(f"Setup admin error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================================
+# SECURITY DASHBOARD ENDPOINTS
+# ============================================================================
+
+@app.get("/api/v1/admin/security/dashboard")
+async def get_security_dashboard(current_user: User = Depends(get_current_user)):
+    """
+    Get security dashboard metrics including blocked IPs, rate limits, and failed logins.
+    Requires admin or management role.
+    """
+    if current_user.role not in ['admin', 'management']:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    return security_stats.get_dashboard_data()
+
+@app.post("/api/v1/admin/security/unblock-ip/{ip}")
+async def unblock_ip_address(ip: str, current_user: User = Depends(get_current_user)):
+    """
+    Unblock a blocked IP address.
+    Requires admin or management role.
+    """
+    if current_user.role not in ['admin', 'management']:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    if security_stats.unblock_ip(ip):
+        logger.info(f"IP {ip} unblocked by {current_user.email}")
+        return {"message": f"IP {ip} has been unblocked", "success": True}
+    else:
+        return {"message": f"IP {ip} was not blocked", "success": False}
 
 @app.get("/api/v1/users/me")
 async def get_current_user_info(current_user: User = Depends(get_current_user)):

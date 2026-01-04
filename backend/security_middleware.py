@@ -29,6 +29,104 @@ logger = logging.getLogger(__name__)
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 TEST_API_KEY = os.getenv("TEST_API_KEY", "")
 
+# ============================================================================
+# SHARED SECURITY STATE (Module-level for dashboard access)
+# ============================================================================
+
+class SecurityStats:
+    """Shared state for security metrics accessible by dashboard endpoint"""
+    def __init__(self):
+        self.blocked_ips: Set[str] = set()
+        self.failed_attempts: Dict[str, list] = defaultdict(list)
+        self.request_history: Dict[str, list] = defaultdict(list)
+        self.suspicious_requests: list = []
+        self.middleware_status: Dict[str, bool] = {
+            "ip_access_control": True,
+            "rate_limiting": True,
+            "ip_blocking": True,
+            "request_validation": True,
+            "security_headers": True,
+            "security_logging": True,
+        }
+
+    def get_dashboard_data(self) -> dict:
+        """Get security dashboard data"""
+        current_time = time.time()
+
+        # Clean old failed attempts (older than 15 minutes)
+        recent_failed = {}
+        for ip, attempts in self.failed_attempts.items():
+            recent = [ts for ts in attempts if current_time - ts < 900]
+            if recent:
+                recent_failed[ip] = len(recent)
+
+        # Get rate limit stats
+        active_rate_limits = 0
+        total_requests = 0
+        top_requesters = []
+        for key, history in self.request_history.items():
+            recent = [(ts, p) for ts, p in history if current_time - ts < 60]
+            if recent:
+                active_rate_limits += 1
+                total_requests += len(recent)
+                top_requesters.append({
+                    "key": key,
+                    "requests": len(recent),
+                    "last_request": max(ts for ts, _ in recent) if recent else 0
+                })
+
+        # Sort top requesters
+        top_requesters.sort(key=lambda x: x["requests"], reverse=True)
+
+        return {
+            "status": "active",
+            "environment": ENVIRONMENT,
+            "middleware_status": self.middleware_status,
+            "ip_blocking": {
+                "blocked_count": len(self.blocked_ips),
+                "blocked_ips": list(self.blocked_ips)[:50],  # Limit to 50 for display
+            },
+            "rate_limiting": {
+                "active_keys": active_rate_limits,
+                "total_requests_tracked": total_requests,
+                "top_requesters": top_requesters[:10],
+            },
+            "failed_logins": {
+                "recent_failed_attempts": sum(recent_failed.values()),
+                "unique_ips": len(recent_failed),
+                "top_offenders": [
+                    {"ip": ip, "attempts": count}
+                    for ip, count in sorted(recent_failed.items(), key=lambda x: x[1], reverse=True)[:10]
+                ],
+            },
+            "configuration": {
+                "environment": ENVIRONMENT,
+                "whitelisted_ips_configured": bool(WHITELISTED_IPS - {"127.0.0.1", "localhost"}),
+                "test_api_key_configured": bool(TEST_API_KEY),
+                "max_request_size_mb": 10,
+                "failed_login_threshold": 5,
+                "failed_login_window_minutes": 15,
+            },
+            "rate_limit_tiers": {
+                "admin": {"requests_per_minute": 200, "requests_per_hour": 5000},
+                "power_user": {"requests_per_minute": 100, "requests_per_hour": 2000},
+                "standard": {"requests_per_minute": 60, "requests_per_hour": 1000},
+                "anonymous": {"requests_per_minute": 30, "requests_per_hour": 300},
+            },
+        }
+
+    def unblock_ip(self, ip: str) -> bool:
+        """Unblock an IP address"""
+        if ip in self.blocked_ips:
+            self.blocked_ips.discard(ip)
+            if ip in self.failed_attempts:
+                del self.failed_attempts[ip]
+            return True
+        return False
+
+# Global instance for shared state
+security_stats = SecurityStats()
+
 # IP Whitelist Configuration
 WHITELISTED_IPS: Set[str] = set(filter(None, [
     os.getenv("ADMIN_IP_1", ""),
@@ -300,8 +398,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.base_requests_per_minute = requests_per_minute
         self.base_requests_per_hour = requests_per_hour
-        # Store: {rate_limit_key: [(timestamp, path), ...]}
-        self.request_history: Dict[str, list] = defaultdict(list)
+        # Use shared state for dashboard access
+        self.request_history = security_stats.request_history
         # Cache user roles to avoid repeated JWT decoding: {user_id: (role, expiry_time)}
         self.user_role_cache: Dict[int, Tuple[str, float]] = {}
         self.role_cache_ttl = 300  # Cache roles for 5 minutes
@@ -621,13 +719,14 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 class IPBlockingMiddleware(BaseHTTPMiddleware):
     """
     Block known malicious IPs and suspicious patterns
+    Uses shared security_stats for dashboard visibility
     """
 
     def __init__(self, app):
         super().__init__(app)
-        # Track failed login attempts per IP
-        self.failed_attempts: Dict[str, list] = defaultdict(list)
-        self.blocked_ips: set = set()
+        # Use shared state for dashboard access
+        self.failed_attempts = security_stats.failed_attempts
+        self.blocked_ips = security_stats.blocked_ips
 
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
