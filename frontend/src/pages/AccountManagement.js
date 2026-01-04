@@ -702,13 +702,32 @@ const InviteSubscriberModal = ({ isOpen, onClose, onSubmit, loading }) => {
   const [formData, setFormData] = useState({
     email: '',
     companyName: '',
-    contactName: '',
+    firstName: '',
+    lastName: '',
+    phone: '',
     plan: 'professional',
     seats: 5,
     message: ''
   });
 
+  const formatPhoneNumber = (value) => {
+    // Remove all non-digits
+    const digits = value.replace(/\D/g, '');
+
+    // Limit to 10 digits
+    const limitedDigits = digits.slice(0, 10);
+
+    // Format as (XXX) XXX-XXXX
+    if (limitedDigits.length === 0) return '';
+    if (limitedDigits.length <= 3) return `(${limitedDigits}`;
+    if (limitedDigits.length <= 6) return `(${limitedDigits.slice(0, 3)}) ${limitedDigits.slice(3)}`;
+    return `(${limitedDigits.slice(0, 3)}) ${limitedDigits.slice(3, 6)}-${limitedDigits.slice(6)}`;
+  };
+
   const handleChange = (field, value) => {
+    if (field === 'phone') {
+      value = formatPhoneNumber(value);
+    }
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
@@ -723,7 +742,9 @@ const InviteSubscriberModal = ({ isOpen, onClose, onSubmit, loading }) => {
     setFormData({
       email: '',
       companyName: '',
-      contactName: '',
+      firstName: '',
+      lastName: '',
+      phone: '',
       plan: 'professional',
       seats: 5,
       message: ''
@@ -758,34 +779,54 @@ const InviteSubscriberModal = ({ isOpen, onClose, onSubmit, loading }) => {
       <div className="invite-form">
         <div className="form-section">
           <h4>Contact Information</h4>
+          <div className="form-group">
+            <label>Company Name *</label>
+            <input
+              type="text"
+              value={formData.companyName}
+              onChange={e => handleChange('companyName', e.target.value)}
+              placeholder="Acme Mortgage Co."
+            />
+          </div>
           <div className="form-row">
             <div className="form-group">
-              <label>Company Name *</label>
+              <label>First Name</label>
               <input
                 type="text"
-                value={formData.companyName}
-                onChange={e => handleChange('companyName', e.target.value)}
-                placeholder="Acme Mortgage Co."
+                value={formData.firstName}
+                onChange={e => handleChange('firstName', e.target.value)}
+                placeholder="John"
               />
             </div>
             <div className="form-group">
-              <label>Contact Name</label>
+              <label>Last Name</label>
               <input
                 type="text"
-                value={formData.contactName}
-                onChange={e => handleChange('contactName', e.target.value)}
-                placeholder="John Smith"
+                value={formData.lastName}
+                onChange={e => handleChange('lastName', e.target.value)}
+                placeholder="Smith"
               />
             </div>
           </div>
-          <div className="form-group">
-            <label>Email Address *</label>
-            <input
-              type="email"
-              value={formData.email}
-              onChange={e => handleChange('email', e.target.value)}
-              placeholder="admin@company.com"
-            />
+          <div className="form-row">
+            <div className="form-group">
+              <label>Email Address *</label>
+              <input
+                type="email"
+                value={formData.email}
+                onChange={e => handleChange('email', e.target.value)}
+                placeholder="admin@company.com"
+              />
+            </div>
+            <div className="form-group">
+              <label>Phone Number</label>
+              <input
+                type="tel"
+                value={formData.phone}
+                onChange={e => handleChange('phone', e.target.value)}
+                placeholder="(555) 555-5555"
+              />
+            </div>
           </div>
         </div>
 
