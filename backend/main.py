@@ -1056,6 +1056,7 @@ class ReferralPartner(Base):
     reciprocity_score = Column(Float, default=0.0)
     status = Column(String, default="active")
     loyalty_tier = Column(String, default="bronze")
+    partner_category = Column(String, default="individual")  # 'individual' or 'team'
     last_interaction = Column(DateTime)
     notes = Column(Text)
     # Address fields
@@ -3945,6 +3946,7 @@ class ReferralPartnerCreate(BaseModel):
     type: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
+    partner_category: Optional[str] = "individual"  # 'individual' or 'team'
 
 class ReferralPartnerUpdate(BaseModel):
     name: Optional[str] = None
@@ -3963,6 +3965,7 @@ class ReferralPartnerUpdate(BaseModel):
     category: Optional[str] = None
     business_name: Optional[str] = None
     contact_name: Optional[str] = None
+    partner_category: Optional[str] = None  # 'individual' or 'team'
 
 class ReferralPartnerResponse(BaseModel):
     id: int
@@ -3973,6 +3976,7 @@ class ReferralPartnerResponse(BaseModel):
     closed_loans: int = 0
     volume: float = 0.0
     loyalty_tier: str = "bronze"
+    partner_category: str = "individual"  # 'individual' or 'team'
     email: Optional[str] = None
     phone: Optional[str] = None
     title: Optional[str] = None
@@ -56548,6 +56552,21 @@ async def startup_event():
                 db_temp.close()
             except Exception as slug_e:
                 logger.warning(f"⚠️ Slug column migration skipped: {slug_e}")
+
+            # Add partner_category column to referral_partners table for Individual vs Team filtering
+            try:
+                db_temp = SessionLocal()
+                result = db_temp.execute(text("""
+                    SELECT column_name FROM information_schema.columns
+                    WHERE table_name = 'referral_partners' AND column_name = 'partner_category'
+                """))
+                if not result.fetchone():
+                    db_temp.execute(text("ALTER TABLE referral_partners ADD COLUMN partner_category VARCHAR DEFAULT 'individual'"))
+                    db_temp.commit()
+                    logger.info("✅ Added 'partner_category' column to referral_partners table")
+                db_temp.close()
+            except Exception as pc_e:
+                logger.warning(f"⚠️ partner_category column migration skipped: {pc_e}")
 
             # Create custom_domains table for multi-tenant domain support
             try:
