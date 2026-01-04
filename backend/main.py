@@ -38553,6 +38553,49 @@ async def debug_user_deletion_blockers(
     }
 
 
+@app.post("/api/v1/debug/create-test-user")
+async def debug_create_test_user(
+    admin_key: str = None,
+    db: Session = Depends(get_db)
+):
+    """Debug endpoint to create a test user for deletion testing"""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    import random
+    import string
+    from passlib.context import CryptContext
+
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+    # Generate unique email
+    random_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
+    test_email = f"test-user-{random_suffix}@example.com"
+
+    # Create the user
+    new_user = User(
+        email=test_email,
+        full_name=f"Test User {random_suffix}",
+        hashed_password=pwd_context.hash("TestPassword123!"),
+        role="loan_officer",
+        is_active=True
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    return {
+        "success": True,
+        "message": f"Test user created with ID {new_user.id}",
+        "user": {
+            "id": new_user.id,
+            "email": new_user.email,
+            "full_name": new_user.full_name,
+            "role": new_user.role
+        }
+    }
+
+
 @app.delete("/api/v1/debug/delete-user/{user_id}")
 async def debug_delete_user(
     user_id: int,
