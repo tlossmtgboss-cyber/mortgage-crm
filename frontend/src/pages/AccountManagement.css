@@ -44,19 +44,19 @@
 }
 
 .breadcrumb .current {
-  color: var(--color-text-primary, #f1f5f9);
+  color: #1a1a1a;
 }
 
 .account-management-page h1 {
   font-size: 28px;
   font-weight: 600;
-  color: var(--color-text-primary, #f1f5f9);
+  color: #1a1a1a;
   margin: 0 0 8px;
 }
 
 .account-management-page .page-header > p {
   font-size: 14px;
-  color: var(--color-text-secondary, #94a3b8);
+  color: #64748b;
   margin: 0;
 }
 
@@ -1493,31 +1493,31 @@ button:disabled {
   display: block;
   font-size: 12px;
   font-weight: 500;
-  color: var(--color-text-secondary, #94a3b8);
+  color: #64748b;
   margin-bottom: 6px;
 }
 
 .invite-form input,
 .invite-form textarea {
   width: 100%;
-  background: rgba(15, 23, 42, 0.8);
-  border: 1px solid rgba(71, 85, 105, 0.5);
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
   border-radius: 6px;
   padding: 10px 12px;
   font-size: 14px;
-  color: var(--color-text-primary, #f1f5f9);
+  color: #1a1a1a;
   transition: border-color 0.2s;
 }
 
 .invite-form input:focus,
 .invite-form textarea:focus {
   outline: none;
-  border-color: var(--color-primary, #3b82f6);
+  border-color: #6366f1;
 }
 
 .invite-form input::placeholder,
 .invite-form textarea::placeholder {
-  color: var(--color-text-tertiary, #64748b);
+  color: #94a3b8;
 }
 
 /* Plan Selector */
@@ -1541,8 +1541,8 @@ button:disabled {
 }
 
 .plan-option {
-  background: rgba(15, 23, 42, 0.8);
-  border: 2px solid rgba(71, 85, 105, 0.5);
+  background: #ffffff;
+  border: 2px solid #e2e8f0;
   border-radius: 8px;
   padding: 12px;
   cursor: pointer;
@@ -1550,12 +1550,12 @@ button:disabled {
 }
 
 .plan-option:hover {
-  border-color: rgba(71, 85, 105, 0.8);
+  border-color: #cbd5e1;
 }
 
 .plan-option.selected {
-  border-color: var(--color-primary, #3b82f6);
-  background: rgba(59, 130, 246, 0.1);
+  border-color: #6366f1;
+  background: rgba(99, 102, 241, 0.08);
 }
 
 .plan-header {
@@ -1568,18 +1568,18 @@ button:disabled {
 .plan-name {
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-text-primary, #f1f5f9);
+  color: #1a1a1a;
 }
 
 .plan-price {
   font-size: 12px;
   font-weight: 500;
-  color: var(--color-primary, #3b82f6);
+  color: #6366f1;
 }
 
 .plan-desc {
   font-size: 11px;
-  color: var(--color-text-tertiary, #64748b);
+  color: #64748b;
   margin: 0;
 }
 
