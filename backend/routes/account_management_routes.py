@@ -1609,6 +1609,67 @@ async def update_user_permissions(
 
 
 # =============================================================================
+# Permissions Table Migration
+# =============================================================================
+
+@router.post("/migrate-permissions-table")
+async def migrate_permissions_table(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Migrate/recreate user_permissions table with correct schema"""
+    try:
+        current_user = await get_user_from_request(request, db)
+        require_master_admin(current_user)
+
+        # Check if table exists and its structure
+        table_info = db.execute(text("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'user_permissions'
+        """)).fetchall()
+
+        columns = [row[0] for row in table_info] if table_info else []
+
+        if 'page_id' not in columns:
+            # Table exists but with wrong structure - drop and recreate
+            db.execute(text("DROP TABLE IF EXISTS user_permissions CASCADE"))
+
+            # Create with correct schema
+            db.execute(text("""
+                CREATE TABLE user_permissions (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    page_id VARCHAR(100) NOT NULL,
+                    can_view BOOLEAN DEFAULT false,
+                    can_create BOOLEAN DEFAULT false,
+                    can_edit BOOLEAN DEFAULT false,
+                    can_delete BOOLEAN DEFAULT false,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW(),
+                    UNIQUE(user_id, page_id)
+                )
+            """))
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_user_permissions_user_id ON user_permissions(user_id)"))
+            db.commit()
+
+            return success_response(
+                data={'action': 'recreated', 'old_columns': columns},
+                message="User permissions table recreated with correct schema"
+            )
+        else:
+            return success_response(
+                data={'action': 'no_change', 'columns': columns},
+                message="User permissions table already has correct schema"
+            )
+    except (PermissionException, NotFoundException):
+        raise
+    except Exception as e:
+        logger.error(f"Error migrating permissions table: {e}")
+        db.rollback()
+        raise DatabaseException(f"Failed to migrate permissions table: {str(e)}")
+
+
+# =============================================================================
 # Impersonation
 # =============================================================================
 
