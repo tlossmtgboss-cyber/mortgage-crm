@@ -38585,14 +38585,11 @@ async def debug_delete_user(
     for table_name, query in cleanup_queries:
         try:
             result = db.execute(text(query), params)
-            if result.rowcount > 0:
-                deleted_from.append(f"{table_name}:{result.rowcount}")
+            deleted_from.append(f"{table_name}:{result.rowcount}")
             db.commit()
         except Exception as e:
             db.rollback()
-            error_str = str(e).lower()
-            if "does not exist" not in error_str and "no such table" not in error_str:
-                errors.append(f"{table_name}: {str(e)[:100]}")
+            errors.append(f"{table_name}: {str(e)[:150]}")
 
     # Now try to delete the user
     try:
@@ -38608,19 +38605,17 @@ async def debug_delete_user(
     except Exception as e:
         db.rollback()
         error_msg = str(e)
-        logger.error(f"Debug delete failed for user {user_id}: {error_msg}")
+        logger.error(f"Debug delete failed for user {user_id}: {error_msg}. Cleaned: {deleted_from}. Errors: {errors}")
 
-        # Try to extract constraint info
-        if "violates foreign key constraint" in error_msg:
-            import re
-            match = re.search(r'on table "(\w+)"', error_msg)
-            if match:
-                blocking_table = match.group(1)
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Cannot delete user: Still referenced by table '{blocking_table}'. Cleaned: {deleted_from}. Errors: {errors}"
-                )
-        raise HTTPException(status_code=500, detail=f"Failed to delete user: {error_msg}. Cleaned: {deleted_from}. Errors: {errors}")
+        # Return detailed error info
+        return {
+            "success": False,
+            "error": error_msg[:500],
+            "cleaned_tables": deleted_from,
+            "cleanup_errors": errors,
+            "user_id": user_id,
+            "user_email": user_email
+        }
 
 
 @app.get("/api/v1/admin/users/{user_id}/deletion-blockers")
