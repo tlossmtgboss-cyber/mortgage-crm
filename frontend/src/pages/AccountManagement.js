@@ -67,21 +67,49 @@ const getAuthHeaders = () => ({
   'Authorization': `Bearer ${localStorage.getItem('token')}`
 });
 
-// Demo/Sample Data for testing and development
-const DEMO_KPIS = {
-  totalActiveAccounts: 47,
-  totalSuspendedAccounts: 3,
-  totalCanceledAccounts: 8,
-  totalMRR: 156750,
-  totalARR: 1881000,
-  mrrGrowth: 8.4,
-  totalSeatsUsed: 312,
-  totalSeatsPurchased: 425,
-  avgCostPerUser: 35,
-  avgMarginPercent: 65.2,
-  accountsAtRisk: 4,
-  accountsNoActivity30d: 6,
-  churnRate: 2.3
+// Helper to calculate KPIs from accounts
+const calculateKpisFromAccounts = (activeAccounts, suspendedAccounts, canceledAccounts) => {
+  const active = activeAccounts || [];
+  const suspended = suspendedAccounts || [];
+  const canceled = canceledAccounts || [];
+
+  // Calculate totals from active accounts
+  const totalMRR = active.reduce((sum, a) => sum + (a.mrr || 0), 0);
+  const totalSeatsUsed = active.reduce((sum, a) => sum + (a.seatsUsed || 0), 0);
+  const totalSeatsPurchased = active.reduce((sum, a) => sum + (a.seatsPurchased || 0), 0);
+
+  // Calculate averages
+  const margins = active.filter(a => a.grossMarginPercent > 0).map(a => a.grossMarginPercent);
+  const avgMarginPercent = margins.length > 0 ? margins.reduce((s, m) => s + m, 0) / margins.length : 0;
+
+  const costs = active.filter(a => a.trueCostPerUser > 0).map(a => a.trueCostPerUser);
+  const avgCostPerUser = costs.length > 0 ? costs.reduce((s, c) => s + c, 0) / costs.length : 0;
+
+  // Count at-risk (churn risk > 50%)
+  const accountsAtRisk = active.filter(a => (a.churnRiskScore || 0) > 50).length;
+
+  // Count inactive (last activity > 30 days ago)
+  const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+  const accountsNoActivity30d = active.filter(a => {
+    if (!a.lastActivityAt) return true;
+    return new Date(a.lastActivityAt).getTime() < thirtyDaysAgo;
+  }).length;
+
+  return {
+    totalActiveAccounts: active.length,
+    totalSuspendedAccounts: suspended.length,
+    totalCanceledAccounts: canceled.length,
+    totalMRR,
+    totalARR: totalMRR * 12,
+    mrrGrowth: 8.4, // Simulated growth
+    totalSeatsUsed,
+    totalSeatsPurchased,
+    avgCostPerUser: Math.round(avgCostPerUser),
+    avgMarginPercent: Math.round(avgMarginPercent * 10) / 10,
+    accountsAtRisk,
+    accountsNoActivity30d,
+    churnRate: 2.5
+  };
 };
 
 const DEMO_ACCOUNTS = [
@@ -1634,19 +1662,20 @@ const AccountManagement = () => {
       if (response.ok) {
         const data = await response.json();
         // Use demo data if API returns empty/null
-        if (data.data && Object.keys(data.data).length > 0) {
+        if (data.data && Object.keys(data.data).length > 0 && data.data.totalActiveAccounts > 0) {
           setKpis(data.data);
         } else {
-          setKpis(DEMO_KPIS);
+          // Calculate KPIs from demo accounts
+          setKpis(calculateKpisFromAccounts(DEMO_ACCOUNTS, DEMO_SUSPENDED_ACCOUNTS, DEMO_CANCELED_ACCOUNTS));
         }
       } else {
-        // Use demo data on API error
-        setKpis(DEMO_KPIS);
+        // Use calculated demo KPIs on API error
+        setKpis(calculateKpisFromAccounts(DEMO_ACCOUNTS, DEMO_SUSPENDED_ACCOUNTS, DEMO_CANCELED_ACCOUNTS));
       }
     } catch (err) {
       console.error('Error fetching KPIs:', err);
-      // Use demo data on network error
-      setKpis(DEMO_KPIS);
+      // Use calculated demo KPIs on network error
+      setKpis(calculateKpisFromAccounts(DEMO_ACCOUNTS, DEMO_SUSPENDED_ACCOUNTS, DEMO_CANCELED_ACCOUNTS));
     }
   }, []);
 
