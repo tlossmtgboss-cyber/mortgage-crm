@@ -1697,17 +1697,22 @@ async def start_impersonation(
                     pass
             db.commit()
 
+        # Generate session token
+        import secrets
+        session_token = secrets.token_urlsafe(32)
+
         # Create impersonation session
         session_id = db.execute(text("""
             INSERT INTO impersonation_sessions
-            (admin_user_id, target_user_id, account_id, reason, is_active)
-            VALUES (:admin_id, :target_id, :account_id, :reason, true)
+            (admin_user_id, target_user_id, account_id, reason, is_active, session_token, manager_id, impersonated_user_id, mode, duration_minutes, expires_at)
+            VALUES (:admin_id, :target_id, :account_id, :reason, true, :session_token, :admin_id, :target_id, 'full_access', 60, NOW() + INTERVAL '60 minutes')
             RETURNING id
         """), {
             'admin_id': current_user.id,
             'target_id': int(target_user[0]),
             'account_id': str(target_user[3]) if target_user[3] else None,
-            'reason': imp_request.reason
+            'reason': imp_request.reason,
+            'session_token': session_token
         }).scalar()
 
         db.commit()
@@ -1719,6 +1724,7 @@ async def start_impersonation(
         return success_response(
             data={
                 'sessionId': str(session_id),
+                'sessionToken': session_token,
                 'targetUserId': str(target_user[0]),
                 'targetUserName': target_user[1] or target_user[2],
             },
