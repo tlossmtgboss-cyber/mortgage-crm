@@ -460,7 +460,8 @@ const ApplicationSlidesEditor = () => {
             </div>
             <div className={`nav-section-content ${!expandedSections.questions ? 'collapsed' : ''}`}>
               {questions.map((question, index) => {
-                const stage = stages.find(s => s.id === question.stageId);
+                // Support both stageId (new) and category (legacy)
+                const stage = stages.find(s => s.id === (question.stageId || question.category));
                 return (
                   <div
                     key={question.id}
