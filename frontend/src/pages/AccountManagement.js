@@ -295,10 +295,10 @@ const DEMO_CANCELED_ACCOUNTS = [
 
 const DEMO_USERS = [
   {
-    id: 'usr_001',
-    name: 'Sarah Johnson',
-    email: 'sarah@pinnaclemortgage.com',
-    roles: ['Admin', 'Loan Officer'],
+    id: '57',
+    name: 'Tim Loss',
+    email: 'admin@perenniaai.com',
+    roles: ['Admin', 'Master Admin'],
     status: 'active',
     lastLoginAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
     createdAt: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString(),
@@ -316,9 +316,9 @@ const DEMO_USERS = [
     aiActionsTriggered30d: 156
   },
   {
-    id: 'usr_002',
-    name: 'Marcus Thompson',
-    email: 'mthompson@pinnaclemortgage.com',
+    id: '102',
+    name: 'Sarah Johnson',
+    email: 'sarah@pinnaclemortgage.com',
     roles: ['Loan Officer'],
     status: 'active',
     lastLoginAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
@@ -337,7 +337,7 @@ const DEMO_USERS = [
     aiActionsTriggered30d: 89
   },
   {
-    id: 'usr_003',
+    id: '102',
     name: 'Emily Rodriguez',
     email: 'erodriguez@pinnaclemortgage.com',
     roles: ['Processor'],
@@ -358,7 +358,7 @@ const DEMO_USERS = [
     aiActionsTriggered30d: 234
   },
   {
-    id: 'usr_004',
+    id: '102',
     name: 'Kevin Park',
     email: 'kpark@pinnaclemortgage.com',
     roles: ['Loan Officer'],
