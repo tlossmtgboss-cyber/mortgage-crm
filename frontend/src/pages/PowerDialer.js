@@ -5,6 +5,20 @@ import './PowerDialer.css';
 
 const API_BASE = process.env.REACT_APP_API_URL || '';
 
+// Helper to safely extract error message from API responses
+const getErrorMessage = (err, fallback = 'An error occurred') => {
+  if (!err) return fallback;
+  if (typeof err === 'string') return err;
+  if (Array.isArray(err)) {
+    // FastAPI validation errors are arrays
+    return err.map(e => e.msg || e.message || JSON.stringify(e)).join(', ');
+  }
+  if (typeof err === 'object') {
+    return err.message || err.msg || err.detail || JSON.stringify(err);
+  }
+  return String(err);
+};
+
 // Dial Pad Component
 const DialPad = ({ onDigitPress, disabled }) => {
   const digits = [
@@ -253,11 +267,11 @@ const PowerDialer = () => {
           setSelectedTasks([]);
           await getNextTask(data.session_id);
         } else {
-          setError(data.error || 'Failed to start session');
+          setError(getErrorMessage(data.error, 'Failed to start session'));
         }
       } else {
         const err = await response.json();
-        setError(err.detail || err.error || 'Failed to start session');
+        setError(getErrorMessage(err.detail || err.error, 'Failed to start session'));
       }
     } catch (err) {
       setError('Error starting session: ' + err.message);
@@ -324,7 +338,7 @@ const PowerDialer = () => {
         }
       } else {
         const err = await response.json();
-        setError(err.detail || 'Failed to initiate call');
+        setError(getErrorMessage(err.detail, 'Failed to initiate call'));
         setCallStatus('idle');
       }
     } catch (err) {
@@ -395,7 +409,7 @@ const PowerDialer = () => {
         await fetchCallLogs();
       } else {
         const err = await response.json();
-        setError(err.detail || 'Failed to save disposition');
+        setError(getErrorMessage(err.detail, 'Failed to save disposition'));
       }
     } catch (err) {
       setError('Error saving disposition: ' + err.message);

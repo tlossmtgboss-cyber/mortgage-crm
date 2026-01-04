@@ -1200,7 +1200,7 @@ button:disabled {
 
 .ip-address {
   font-family: monospace;
-  color: var(--color-text-tertiary, #64748b);
+  color: #64748b;
 }
 
 /* Timeline */
@@ -1231,20 +1231,20 @@ button:disabled {
 .timeline-event {
   font-size: 14px;
   font-weight: 500;
-  color: var(--color-text-primary, #f1f5f9);
+  color: #1a1a1a;
   margin: 0;
   text-transform: capitalize;
 }
 
 .timeline-detail {
   font-size: 13px;
-  color: var(--color-text-secondary, #94a3b8);
+  color: #64748b;
   margin: 4px 0 0;
 }
 
 .timeline-meta {
   font-size: 12px;
-  color: var(--color-text-tertiary, #64748b);
+  color: #94a3b8;
   margin: 4px 0 0;
 }
 
@@ -1267,16 +1267,18 @@ button:disabled {
   align-items: center;
   gap: 12px;
   padding: 16px;
-  background: rgba(30, 41, 59, 0.5);
-  border: 1px solid rgba(71, 85, 105, 0.3);
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
   cursor: pointer;
-  transition: background 0.2s, border-color 0.2s;
+  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .action-card:hover {
-  background: rgba(71, 85, 105, 0.3);
-  border-color: rgba(71, 85, 105, 0.5);
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 }
 
 .action-icon {
@@ -1286,7 +1288,7 @@ button:disabled {
 .action-label {
   font-size: 14px;
   font-weight: 500;
-  color: var(--color-text-primary, #f1f5f9);
+  color: #1a1a1a;
 }
 
 .activity-grid {
@@ -1307,14 +1309,14 @@ button:disabled {
 
 .activity-label {
   font-size: 12px;
-  color: var(--color-text-tertiary, #64748b);
+  color: #64748b;
   margin: 0 0 4px;
 }
 
 .activity-value {
   font-size: 24px;
   font-weight: 600;
-  color: var(--color-text-primary, #f1f5f9);
+  color: #1a1a1a;
   margin: 0;
 }
 
@@ -1328,20 +1330,20 @@ button:disabled {
 
 .filter-tab {
   padding: 8px 16px;
-  background: rgba(51, 65, 85, 0.5);
+  background: #f1f5f9;
   border: none;
   border-radius: 6px;
   font-size: 14px;
   font-weight: 500;
-  color: var(--color-text-secondary, #94a3b8);
+  color: #64748b;
   cursor: pointer;
   text-transform: capitalize;
   transition: background 0.2s, color 0.2s;
 }
 
 .filter-tab:hover {
-  background: rgba(71, 85, 105, 0.5);
-  color: var(--color-text-primary, #f1f5f9);
+  background: #e2e8f0;
+  color: #1a1a1a;
 }
 
 .filter-tab.active {
@@ -1352,7 +1354,7 @@ button:disabled {
 .filter-count {
   margin-left: auto;
   font-size: 14px;
-  color: var(--color-text-tertiary, #64748b);
+  color: #64748b;
 }
 
 .login-result {
@@ -1402,10 +1404,11 @@ button:disabled {
 }
 
 .stat-card {
-  background: rgba(30, 41, 59, 0.5);
-  border: 1px solid rgba(71, 85, 105, 0.3);
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
   padding: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .stat-header {
@@ -1421,12 +1424,12 @@ button:disabled {
 .stat-value {
   font-size: 24px;
   font-weight: 600;
-  color: var(--color-text-primary, #f1f5f9);
+  color: #1a1a1a;
 }
 
 .stat-label {
   font-size: 12px;
-  color: var(--color-text-tertiary, #64748b);
+  color: #64748b;
   margin: 8px 0 0;
 }
 
@@ -1453,8 +1456,8 @@ button:disabled {
 }
 
 .invite-form .form-section {
-  background: rgba(30, 41, 59, 0.5);
-  border: 1px solid rgba(71, 85, 105, 0.3);
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
   padding: 16px;
 }
@@ -1462,7 +1465,7 @@ button:disabled {
 .invite-form .form-section h4 {
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-text-primary, #f1f5f9);
+  color: #1a1a1a;
   margin: 0 0 12px;
 }
 
