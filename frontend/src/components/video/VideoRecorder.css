@@ -1,11 +1,9 @@
 /* =============================================================================
-   VIDEO RECORDER COMPONENT STYLES
+   VIDEO RECORDER COMPONENT STYLES - Light Theme (matching CRM)
    ============================================================================= */
 
 .video-recorder {
   width: 100%;
-  max-width: 640px;
-  margin: 0 auto;
 }
 
 /* Loading State */
@@ -14,16 +12,18 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 20px;
-  background: #1e293b;
-  border-radius: 12px;
+  padding: 48px 20px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  min-height: 280px;
 }
 
 .recorder-loading .loading-spinner {
-  width: 48px;
-  height: 48px;
-  border: 4px solid rgba(255, 255, 255, 0.1);
-  border-top-color: #3b82f6;
+  width: 40px;
+  height: 40px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #6366f1;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -34,8 +34,8 @@
 
 .recorder-loading p {
   margin-top: 16px;
-  color: #94a3b8;
-  font-size: 0.9rem;
+  color: #64748b;
+  font-size: 14px;
 }
 
 /* Error State */
@@ -45,47 +45,52 @@
   align-items: center;
   justify-content: center;
   padding: 40px 20px;
-  background: #1e293b;
-  border-radius: 12px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
   text-align: center;
+  min-height: 280px;
 }
 
 .recorder-error .error-icon {
-  font-size: 3rem;
-  margin-bottom: 16px;
-  opacity: 0.5;
+  font-size: 48px;
+  margin-bottom: 12px;
+  opacity: 0.6;
 }
 
 .recorder-error p {
-  color: #f87171;
+  color: #ef4444;
   margin-bottom: 20px;
   max-width: 300px;
   line-height: 1.5;
+  font-size: 14px;
 }
 
-.retry-btn {
+.video-recorder .retry-btn {
   padding: 10px 24px;
-  background: #3b82f6;
+  background: #6366f1;
   color: white;
   border: none;
-  border-radius: 8px;
-  font-size: 0.9rem;
+  border-radius: 6px;
+  font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   transition: background 0.2s;
 }
 
-.retry-btn:hover {
-  background: #2563eb;
+.video-recorder .retry-btn:hover {
+  background: #4f46e5;
 }
 
 /* Video Container */
 .video-container {
   position: relative;
-  background: #0f172a;
-  border-radius: 12px;
+  background: #1a1a1a;
+  border-radius: 8px;
   overflow: hidden;
   aspect-ratio: 16/9;
+  min-height: 280px;
+  border: 1px solid #e2e8f0;
 }
 
 .live-video,
@@ -93,6 +98,8 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
+  background: #1a1a1a;
 }
 
 .live-video {
@@ -102,15 +109,14 @@
 /* Recording Indicator */
 .recording-indicator {
   position: absolute;
-  top: 16px;
-  left: 16px;
+  top: 12px;
+  left: 12px;
   display: flex;
   align-items: center;
   gap: 8px;
-  background: rgba(0, 0, 0, 0.7);
-  padding: 8px 14px;
+  background: rgba(0, 0, 0, 0.75);
+  padding: 6px 12px;
   border-radius: 20px;
-  backdrop-filter: blur(4px);
 }
 
 .rec-dot {
@@ -128,29 +134,29 @@
 
 .rec-time {
   color: white;
-  font-size: 0.9rem;
+  font-size: 14px;
   font-weight: 600;
-  font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+  font-variant-numeric: tabular-nums;
 }
 
 .rec-max {
   color: #94a3b8;
-  font-size: 0.8rem;
-  font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Duration Badge */
 .duration-badge {
   position: absolute;
-  bottom: 16px;
-  right: 16px;
-  background: rgba(0, 0, 0, 0.7);
+  bottom: 12px;
+  right: 12px;
+  background: rgba(0, 0, 0, 0.75);
   color: white;
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 0.85rem;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 13px;
   font-weight: 500;
-  font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Controls */
@@ -158,37 +164,36 @@
   display: flex;
   justify-content: center;
   gap: 12px;
-  margin-top: 20px;
+  margin-top: 16px;
 }
 
 .record-btn,
 .stop-btn,
 .confirm-btn,
 .discard-btn,
-.cancel-btn {
+.video-recorder .cancel-btn {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 12px 28px;
+  padding: 10px 24px;
   border: none;
-  border-radius: 10px;
-  font-size: 0.95rem;
-  font-weight: 600;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 /* Record Button */
 .record-btn {
-  background: linear-gradient(135deg, #ef4444, #dc2626);
+  background: #ef4444;
   color: white;
-  min-width: 180px;
+  min-width: 160px;
 }
 
 .record-btn:hover {
-  background: linear-gradient(135deg, #dc2626, #b91c1c);
-  transform: scale(1.02);
+  background: #dc2626;
 }
 
 .record-btn .rec-icon {
@@ -200,62 +205,59 @@
 
 /* Stop Button */
 .stop-btn {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-  color: white;
-  min-width: 180px;
-}
-
-.stop-btn:hover {
-  background: linear-gradient(135deg, #d97706, #b45309);
-}
-
-.stop-btn .stop-icon {
-  width: 14px;
-  height: 14px;
-  background: white;
-  border-radius: 3px;
-}
-
-/* Confirm Button */
-.confirm-btn {
-  background: linear-gradient(135deg, #10b981, #059669);
+  background: #f59e0b;
   color: white;
   min-width: 160px;
 }
 
+.stop-btn:hover {
+  background: #d97706;
+}
+
+.stop-btn .stop-icon {
+  width: 12px;
+  height: 12px;
+  background: white;
+  border-radius: 2px;
+}
+
+/* Confirm Button */
+.confirm-btn {
+  background: #10b981;
+  color: white;
+  min-width: 140px;
+}
+
 .confirm-btn:hover {
-  background: linear-gradient(135deg, #059669, #047857);
-  transform: scale(1.02);
+  background: #059669;
 }
 
 /* Discard Button */
 .discard-btn {
-  background: #374151;
-  color: white;
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0 !important;
 }
 
 .discard-btn:hover {
-  background: #4b5563;
+  background: #e2e8f0;
+  color: #475569;
 }
 
 /* Cancel Button */
-.cancel-btn {
-  background: transparent;
+.video-recorder .cancel-btn {
+  background: #f1f5f9;
   color: #64748b;
-  border: 1px solid #334155;
+  border: 1px solid #e2e8f0 !important;
 }
 
-.cancel-btn:hover {
-  background: #1e293b;
-  color: #94a3b8;
+.video-recorder .cancel-btn:hover {
+  background: #e2e8f0;
+  color: #475569;
 }
 
 /* Responsive */
 @media (max-width: 640px) {
-  .video-recorder {
-    max-width: 100%;
-  }
-
   .recorder-controls {
     flex-direction: column;
   }
@@ -264,7 +266,7 @@
   .stop-btn,
   .confirm-btn,
   .discard-btn,
-  .cancel-btn {
+  .video-recorder .cancel-btn {
     width: 100%;
     min-width: unset;
   }
