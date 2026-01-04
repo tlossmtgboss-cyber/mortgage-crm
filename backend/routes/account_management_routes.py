@@ -225,6 +225,185 @@ def format_account_response(account: dict, metrics: dict = None) -> dict:
 
 
 # =============================================================================
+# Migration Endpoint
+# =============================================================================
+
+@router.post("/run-migration")
+async def run_account_management_migration(
+    admin_key: str = None,
+    db: Session = Depends(get_db)
+):
+    """Run the account management tables migration."""
+    import os
+
+    # Verify admin key
+    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    if admin_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        # Check if tables already exist
+        table_check = db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'tenant_accounts'
+            )
+        """)).scalar()
+
+        if table_check:
+            return {"status": "success", "message": "Tables already exist"}
+
+        # Create all tables
+        migration_sql = """
+        -- 1. Tenant Accounts
+        CREATE TABLE IF NOT EXISTS tenant_accounts (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name VARCHAR(255) NOT NULL,
+            domain VARCHAR(255),
+            status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suspended', 'canceled')),
+            plan_id VARCHAR(100),
+            plan_name VARCHAR(100),
+            billing_interval VARCHAR(20) DEFAULT 'monthly' CHECK (billing_interval IN ('monthly', 'annually')),
+            seats_purchased INTEGER DEFAULT 1,
+            stripe_customer_id VARCHAR(255),
+            stripe_subscription_id VARCHAR(255),
+            owner_user_id INTEGER REFERENCES users(id),
+            internal_notes TEXT,
+            add_ons JSONB DEFAULT '[]',
+            settings JSONB DEFAULT '{}',
+            suspended_at TIMESTAMP,
+            suspended_reason TEXT,
+            canceled_at TIMESTAMP,
+            canceled_reason TEXT,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW(),
+            is_deleted BOOLEAN DEFAULT false
+        );
+        CREATE INDEX IF NOT EXISTS idx_tenant_accounts_status ON tenant_accounts(status);
+        CREATE INDEX IF NOT EXISTS idx_tenant_accounts_domain ON tenant_accounts(domain);
+
+        -- 2. Account Subscriptions
+        CREATE TABLE IF NOT EXISTS account_subscriptions (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            account_id UUID REFERENCES tenant_accounts(id) ON DELETE CASCADE,
+            provider VARCHAR(50) NOT NULL DEFAULT 'stripe',
+            provider_subscription_id VARCHAR(255),
+            status VARCHAR(30) NOT NULL DEFAULT 'active',
+            plan_id VARCHAR(100),
+            plan_name VARCHAR(100),
+            price_amount NUMERIC(10, 2),
+            price_currency VARCHAR(3) DEFAULT 'USD',
+            quantity INTEGER DEFAULT 1,
+            current_period_start TIMESTAMP,
+            current_period_end TIMESTAMP,
+            cancel_at_period_end BOOLEAN DEFAULT false,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        );
+
+        -- 3. Subscription Events
+        CREATE TABLE IF NOT EXISTS subscription_events (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            account_id UUID REFERENCES tenant_accounts(id) ON DELETE CASCADE,
+            event_type VARCHAR(50) NOT NULL,
+            from_plan VARCHAR(100),
+            to_plan VARCHAR(100),
+            amount NUMERIC(10, 2),
+            actor_id INTEGER REFERENCES users(id),
+            actor_name VARCHAR(255),
+            reason TEXT,
+            created_at TIMESTAMP DEFAULT NOW()
+        );
+
+        -- 4. Account Invoices
+        CREATE TABLE IF NOT EXISTS account_invoices (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            account_id UUID REFERENCES tenant_accounts(id) ON DELETE CASCADE,
+            stripe_invoice_id VARCHAR(255),
+            invoice_number VARCHAR(100),
+            amount NUMERIC(12, 2) NOT NULL,
+            status VARCHAR(30) NOT NULL DEFAULT 'draft',
+            period_start TIMESTAMP,
+            period_end TIMESTAMP,
+            due_date TIMESTAMP,
+            paid_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT NOW()
+        );
+
+        -- 5. Cost Ledger
+        CREATE TABLE IF NOT EXISTS cost_ledger_monthly (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            account_id UUID REFERENCES tenant_accounts(id) ON DELETE CASCADE,
+            month VARCHAR(7) NOT NULL,
+            cost_category VARCHAR(50) NOT NULL,
+            vendor VARCHAR(100),
+            amount NUMERIC(12, 4) NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT NOW()
+        );
+
+        -- 6. Login Events
+        CREATE TABLE IF NOT EXISTS login_events (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            account_id UUID REFERENCES tenant_accounts(id),
+            result VARCHAR(20) NOT NULL DEFAULT 'success',
+            ip_address VARCHAR(45),
+            user_agent TEXT,
+            created_at TIMESTAMP DEFAULT NOW()
+        );
+
+        -- 7. Admin Audit Log
+        CREATE TABLE IF NOT EXISTS admin_audit_log (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            actor_admin_id INTEGER NOT NULL REFERENCES users(id),
+            actor_name VARCHAR(255),
+            action_type VARCHAR(100) NOT NULL,
+            target_type VARCHAR(50) NOT NULL,
+            target_id VARCHAR(255),
+            target_name VARCHAR(255),
+            ip_address VARCHAR(45),
+            old_values JSONB,
+            new_values JSONB,
+            reason TEXT,
+            created_at TIMESTAMP DEFAULT NOW()
+        );
+
+        -- 8. Impersonation Sessions
+        CREATE TABLE IF NOT EXISTS impersonation_sessions (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            admin_user_id INTEGER NOT NULL REFERENCES users(id),
+            target_user_id INTEGER NOT NULL REFERENCES users(id),
+            account_id UUID REFERENCES tenant_accounts(id),
+            reason TEXT NOT NULL,
+            started_at TIMESTAMP DEFAULT NOW(),
+            ended_at TIMESTAMP,
+            is_active BOOLEAN DEFAULT true
+        );
+
+        -- Add tenant_account_id to users if not exists
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'tenant_account_id') THEN
+                ALTER TABLE users ADD COLUMN tenant_account_id UUID REFERENCES tenant_accounts(id);
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'last_activity_at') THEN
+                ALTER TABLE users ADD COLUMN last_activity_at TIMESTAMP;
+            END IF;
+        END $$;
+        """
+
+        db.execute(text(migration_sql))
+        db.commit()
+
+        return {"status": "success", "message": "Account management tables created successfully"}
+
+    except Exception as e:
+        logger.error(f"Migration failed: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
+# =============================================================================
 # KPI Endpoints
 # =============================================================================
 
