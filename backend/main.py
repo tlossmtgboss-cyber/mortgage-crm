@@ -39000,8 +39000,12 @@ async def delete_user(
             "DELETE FROM onboarding_audit_log WHERE performed_by = :user_id",
             "DELETE FROM onboarding_documents WHERE uploaded_by = :user_id",
             "DELETE FROM user_creation_requests WHERE created_by = :user_id",
+            # Delete wizard sessions before user profiles (FK cascade)
+            "DELETE FROM onboarding_wizard_sessions WHERE user_profile_id IN (SELECT id FROM onboarding_user_profiles WHERE user_id = :user_id)",
             "DELETE FROM onboarding_user_profiles WHERE user_id = :user_id",
-            # Scheduler resources (NOT NULL user_id)
+            # Scheduler resources and child tables (FK cascade)
+            "DELETE FROM scheduler_soft_holds WHERE resource_id IN (SELECT id FROM scheduler_resources WHERE user_id = :user_id)",
+            "DELETE FROM scheduler_group_sessions WHERE host_resource_id IN (SELECT id FROM scheduler_resources WHERE user_id = :user_id)",
             "DELETE FROM scheduler_resources WHERE user_id = :user_id",
             # Email response training tables (NOT NULL user_id)
             "DELETE FROM email_response_learning WHERE user_id = :user_id",
