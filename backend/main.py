@@ -57134,7 +57134,7 @@ async def startup_event():
                 )).fetchone()
 
                 # Hash password using bcrypt
-                admin_password_hash = pwd_context.hash("PerenniaAdmin2024!")
+                admin_password_hash = pwd_context.hash("demo123")
 
                 if not admin_exists:
                     db_admin.execute(text("""
