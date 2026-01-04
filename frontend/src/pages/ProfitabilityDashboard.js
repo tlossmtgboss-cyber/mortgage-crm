@@ -89,6 +89,9 @@ const ProfitabilityDashboard = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { hasPermission, userRole } = usePermissions();
 
+  // Permission check - require profitability/reports access
+  const canAccessProfitability = hasPermission('reports.profitability') || userRole === 'management' || userRole === 'admin';
+
   // Get metric from URL or default to null (show overview)
   const urlMetric = searchParams.get('metric');
 
@@ -278,6 +281,21 @@ const ProfitabilityDashboard = () => {
   useEffect(() => {
     loadSuggestedQuestions();
   }, []);
+
+  // Access denied if user doesn't have profitability permissions
+  if (!canAccessProfitability) {
+    return (
+      <div className="profitability-dashboard">
+        <div className="access-denied" style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <h2>Access Denied</h2>
+          <p>You don't have permission to view the Profitability Dashboard.</p>
+          <button className="btn-primary" onClick={() => navigate('/dashboard')}>
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

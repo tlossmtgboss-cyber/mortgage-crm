@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
+import { usePermissions } from '../contexts/PermissionContext';
 import { toast } from '../utils/toast';
 import './AccountManagement.css';
 
@@ -1906,6 +1908,12 @@ const UserDetailPage = ({ user, loginHistory, onBack, onAction }) => {
 
 // Main Account Management Page Component
 const AccountManagement = () => {
+  const navigate = useNavigate();
+  const { userRole, hasAnyPermission } = usePermissions();
+
+  // Permission check - require admin/account management access
+  const canAccessAccountMgmt = hasAnyPermission(['admin.manage', 'accounts.manage', 'accounts.view', 'system.admin']) || userRole === 'admin' || userRole === 'management';
+
   // State
   const [view, setView] = useState({ type: 'list' });
   const [activeTab, setActiveTab] = useState('active');
@@ -2346,6 +2354,21 @@ const AccountManagement = () => {
     suspended: kpis.totalSuspendedAccounts,
     canceled: kpis.totalCanceledAccounts
   } : {};
+
+  // Access denied if user doesn't have account management permissions
+  if (!canAccessAccountMgmt) {
+    return (
+      <div className="account-management-page">
+        <div className="access-denied" style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <h2>Access Denied</h2>
+          <p>You don't have permission to access Account Management.</p>
+          <button className="btn-primary" onClick={() => navigate('/dashboard')}>
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="account-management-page">

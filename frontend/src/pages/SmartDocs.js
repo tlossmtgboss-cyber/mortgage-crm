@@ -11,10 +11,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { smartDocsAPI } from '../services/smartDocsApi';
+import { usePermissions } from '../contexts/PermissionContext';
 import './SmartDocs.css';
 
 function SmartDocs() {
   const navigate = useNavigate();
+  const { userRole, hasAnyPermission } = usePermissions();
+
+  // Permission check - require documents/loans access
+  const canAccessSmartDocs = hasAnyPermission(['documents.view', 'documents.manage', 'loans.view', 'loans.manage']) || userRole === 'sales' || userRole === 'management' || userRole === 'admin';
+
   const [activeTab, setActiveTab] = useState('documents-owed');
   const [summary, setSummary] = useState(null);
   const [pendingReview, setPendingReview] = useState({ applicants: [], total: 0 });
@@ -419,6 +425,21 @@ function SmartDocs() {
       alert('Failed to create duplicate tasks');
     }
   };
+
+  // Access denied if user doesn't have documents permissions
+  if (!canAccessSmartDocs) {
+    return (
+      <div className="smart-docs-page">
+        <div className="access-denied" style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <h2>Access Denied</h2>
+          <p>You don't have permission to access Smart Docs.</p>
+          <button className="btn-primary" onClick={() => navigate('/dashboard')}>
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const filteredData = getFilteredData();
 

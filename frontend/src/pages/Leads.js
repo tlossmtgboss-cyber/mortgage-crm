@@ -10,7 +10,11 @@ import './Leads.css';
 
 function Leads() {
   const navigate = useNavigate();
-  const { canPerformAction, isReadOnlyMode } = usePermissions();
+  const { canPerformAction, isReadOnlyMode, hasAnyPermission, userRole } = usePermissions();
+
+  // Permission check - require leads access
+  const canAccessLeads = hasAnyPermission(['leads.view', 'leads.view_all', 'leads.manage']) || userRole === 'sales' || userRole === 'management' || userRole === 'admin';
+
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -616,6 +620,23 @@ function Leads() {
   const closeStatusDropdown = () => {
     setStatusDropdown({ show: false, leadId: null, position: { top: 0, left: 0 } });
   };
+
+  // Access denied if user doesn't have leads permissions
+  if (!canAccessLeads) {
+    return (
+      <div className="leads-page-wrapper">
+        <div className="leads-page">
+          <div className="access-denied" style={{ textAlign: 'center', padding: '60px 20px' }}>
+            <h2>Access Denied</h2>
+            <p>You don't have permission to view leads.</p>
+            <button className="btn-primary" onClick={() => navigate('/dashboard')}>
+              Return to Dashboard
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return <div className="loading">Loading leads...</div>;

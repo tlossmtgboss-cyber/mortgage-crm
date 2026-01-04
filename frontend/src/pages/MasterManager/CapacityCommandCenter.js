@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { usePermissions } from '../../contexts/PermissionContext';
 import {
   getCapacityOverview,
   getCapacityByRole,
@@ -12,6 +14,12 @@ import {
 import './MasterManager.css';
 
 const CapacityCommandCenter = () => {
+  const navigate = useNavigate();
+  const { userRole, hasAnyPermission } = usePermissions();
+
+  // Permission check - require capacity/team management access
+  const canAccessCapacity = hasAnyPermission(['team.view_all', 'team.manage_permissions', 'capacity.view', 'capacity.manage']) || userRole === 'management' || userRole === 'admin';
+
   const [overview, setOverview] = useState(null);
   const [byRole, setByRole] = useState([]);
   const [users, setUsers] = useState([]);
@@ -101,6 +109,21 @@ const CapacityCommandCenter = () => {
     if (pct >= 75) return '#f59e0b';
     return '#22c55e';
   };
+
+  // Access denied if user doesn't have capacity permissions
+  if (!canAccessCapacity) {
+    return (
+      <div className="mm-container">
+        <div className="access-denied" style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <h2>Access Denied</h2>
+          <p>You don't have permission to access the Capacity Command Center.</p>
+          <button className="mm-btn mm-btn-primary" onClick={() => navigate('/dashboard')}>
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (loading && !overview) {
     return (

@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { loansAPI } from '../services/api';
 import CalendarSidebar from '../components/CalendarSidebar';
 import PermissionGate from '../components/PermissionGate';
+import { usePermissions } from '../contexts/PermissionContext';
 import './Loans.css';
 
 // Map pipeline stage IDs to filter names
@@ -19,8 +20,12 @@ const stageIdToFilter = {
 function Loans() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { userRole, hasAnyPermission } = usePermissions();
   const stageParam = searchParams.get('stage');
   const initialFilter = stageParam ? stageIdToFilter[stageParam] || 'All' : 'All';
+
+  // Permission check - require loans access
+  const canAccessLoans = hasAnyPermission(['loans.view', 'loans.view_all', 'loans.manage']) || userRole === 'sales' || userRole === 'management' || userRole === 'admin';
 
   const [loans, setLoans] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -529,6 +534,23 @@ function Loans() {
       loan.property_address?.toLowerCase().includes(query) ||
       loan.loan_officer?.toLowerCase().includes(query) ||
       loan.amount?.toString().includes(query)
+    );
+  }
+
+  // Access denied if user doesn't have loans permissions
+  if (!canAccessLoans) {
+    return (
+      <div className="loans-page-wrapper">
+        <div className="loans-page">
+          <div className="access-denied" style={{ textAlign: 'center', padding: '60px 20px' }}>
+            <h2>Access Denied</h2>
+            <p>You don't have permission to view loans.</p>
+            <button className="btn-primary" onClick={() => navigate('/dashboard')}>
+              Return to Dashboard
+            </button>
+          </div>
+        </div>
+      </div>
     );
   }
 

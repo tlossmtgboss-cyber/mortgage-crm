@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import { usePermissions } from '../contexts/PermissionContext';
 import './AdminPanel.css';
 
 /**
@@ -16,6 +17,10 @@ import './AdminPanel.css';
 
 const AdminPanel = () => {
   const navigate = useNavigate();
+  const { userRole, hasPermission, hasAnyPermission } = usePermissions();
+
+  // Permission check - require admin access
+  const canAccessAdmin = hasAnyPermission(['admin.view', 'admin.manage', 'system.admin']) || userRole === 'admin' || userRole === 'management';
 
   // State
   const [loading, setLoading] = useState(true);
@@ -255,6 +260,21 @@ const AdminPanel = () => {
     const slug = user.slug || user.id;
     return `${window.location.origin}/lo/${slug}`;
   };
+
+  // Access denied if user doesn't have admin permissions
+  if (!canAccessAdmin) {
+    return (
+      <div className="admin-panel">
+        <div className="access-denied" style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <h2>Access Denied</h2>
+          <p>You don't have permission to access the Admin Panel.</p>
+          <button className="btn-primary" onClick={() => navigate('/dashboard')}>
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

@@ -1,11 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { teamAPI } from '../services/api';
+import { usePermissions } from '../contexts/PermissionContext';
 import './Settings.css';
 import './Leads.css';
 
 function TeamMembers() {
   const navigate = useNavigate();
+  const { userRole, hasAnyPermission } = usePermissions();
+
+  // Permission check - require team management access
+  const canViewTeam = hasAnyPermission(['team.view_all', 'team.view_team', 'team.manage_permissions']) || userRole === 'management' || userRole === 'admin';
+  const canEditTeam = hasAnyPermission(['team.manage', 'team.manage_permissions']) || userRole === 'management' || userRole === 'admin';
+
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -284,6 +291,21 @@ function TeamMembers() {
         member.role?.toLowerCase().includes(query) ||
         member.title?.toLowerCase().includes(query)
       )
+    );
+  }
+
+  // Access denied if user doesn't have team permissions
+  if (!canViewTeam) {
+    return (
+      <div className="leads-page">
+        <div className="access-denied" style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <h2>Access Denied</h2>
+          <p>You don't have permission to view team members.</p>
+          <button className="btn-primary" onClick={() => navigate('/dashboard')}>
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
     );
   }
 

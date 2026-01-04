@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { usePermissions } from '../../contexts/PermissionContext';
 import {
   getRecruitingDashboardStats,
   getRecruitingPipelineMetrics,
@@ -42,6 +43,10 @@ const PARTNER_STATUSES = [
 
 const RecruitingDashboard = () => {
   const navigate = useNavigate();
+  const { userRole, hasAnyPermission } = usePermissions();
+
+  // Permission check - require team management or recruiting access
+  const canAccessRecruiting = hasAnyPermission(['team.view_all', 'team.manage_permissions', 'recruiting.view', 'recruiting.manage', 'capacity.view']) || userRole === 'management' || userRole === 'admin';
 
   // Main tab: 'employee' or 'partner'
   const [mainTab, setMainTab] = useState('employee');
@@ -281,6 +286,21 @@ const RecruitingDashboard = () => {
       <div className="mm-loading">
         <div className="mm-spinner"></div>
         <p>Loading Recruiting Dashboard...</p>
+      </div>
+    );
+  }
+
+  // Access denied if user doesn't have recruiting permissions
+  if (!canAccessRecruiting) {
+    return (
+      <div className="mm-container">
+        <div className="access-denied" style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <h2>Access Denied</h2>
+          <p>You don't have permission to access the Recruiting Dashboard.</p>
+          <button className="mm-btn mm-btn-primary" onClick={() => navigate('/dashboard')}>
+            Return to Dashboard
+          </button>
+        </div>
       </div>
     );
   }

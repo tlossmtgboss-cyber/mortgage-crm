@@ -1,8 +1,16 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { complianceApi } from '../services/api';
+import { usePermissions } from '../contexts/PermissionContext';
 import './ComplianceDashboard.css';
 
 const ComplianceDashboard = () => {
+  const navigate = useNavigate();
+  const { userRole, hasPermission } = usePermissions();
+
+  // Permission check - require compliance access
+  const canViewCompliance = hasPermission('compliance.view') || userRole === 'management' || userRole === 'admin';
+
   const [overview, setOverview] = useState(null);
   const [departmentData, setDepartmentData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -45,6 +53,21 @@ const ComplianceDashboard = () => {
       console.error(err);
     }
   };
+
+  // Access denied if user doesn't have compliance permissions
+  if (!canViewCompliance) {
+    return (
+      <div className="compliance-dashboard">
+        <div className="access-denied" style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <h2>Access Denied</h2>
+          <p>You don't have permission to view the Compliance Dashboard.</p>
+          <button className="btn-primary" onClick={() => navigate('/dashboard')}>
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
