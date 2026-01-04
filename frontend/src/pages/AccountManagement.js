@@ -246,6 +246,139 @@ const ReasonModal = ({ isOpen, onClose, onSubmit, title, description, submitLabe
   );
 };
 
+// Invite Subscriber Modal Component
+const InviteSubscriberModal = ({ isOpen, onClose, onSubmit, loading }) => {
+  const [formData, setFormData] = useState({
+    email: '',
+    companyName: '',
+    contactName: '',
+    plan: 'professional',
+    seats: 5,
+    message: ''
+  });
+
+  const handleChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSubmit = () => {
+    if (!formData.email || !formData.companyName) {
+      return;
+    }
+    onSubmit(formData);
+  };
+
+  const handleClose = () => {
+    setFormData({
+      email: '',
+      companyName: '',
+      contactName: '',
+      plan: 'professional',
+      seats: 5,
+      message: ''
+    });
+    onClose();
+  };
+
+  const plans = [
+    { id: 'starter', name: 'Starter', price: '$49/user/mo', description: 'Basic CRM features' },
+    { id: 'professional', name: 'Professional', price: '$99/user/mo', description: 'Full CRM + AI features' },
+    { id: 'business', name: 'Business', price: '$149/user/mo', description: 'Advanced automation' },
+    { id: 'enterprise', name: 'Enterprise', price: 'Custom', description: 'Custom solutions' }
+  ];
+
+  return (
+    <Modal isOpen={isOpen} onClose={handleClose} title="Invite New Subscriber" size="large">
+      <div className="invite-form">
+        <div className="form-section">
+          <h4>Contact Information</h4>
+          <div className="form-row">
+            <div className="form-group">
+              <label>Company Name *</label>
+              <input
+                type="text"
+                value={formData.companyName}
+                onChange={e => handleChange('companyName', e.target.value)}
+                placeholder="Acme Mortgage Co."
+              />
+            </div>
+            <div className="form-group">
+              <label>Contact Name</label>
+              <input
+                type="text"
+                value={formData.contactName}
+                onChange={e => handleChange('contactName', e.target.value)}
+                placeholder="John Smith"
+              />
+            </div>
+          </div>
+          <div className="form-group">
+            <label>Email Address *</label>
+            <input
+              type="email"
+              value={formData.email}
+              onChange={e => handleChange('email', e.target.value)}
+              placeholder="admin@company.com"
+            />
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h4>Subscription Details</h4>
+          <div className="plan-selector">
+            {plans.map(plan => (
+              <div
+                key={plan.id}
+                className={`plan-option ${formData.plan === plan.id ? 'selected' : ''}`}
+                onClick={() => handleChange('plan', plan.id)}
+              >
+                <div className="plan-header">
+                  <span className="plan-name">{plan.name}</span>
+                  <span className="plan-price">{plan.price}</span>
+                </div>
+                <p className="plan-desc">{plan.description}</p>
+              </div>
+            ))}
+          </div>
+          <div className="form-group">
+            <label>Initial Seats</label>
+            <input
+              type="number"
+              min="1"
+              max="1000"
+              value={formData.seats}
+              onChange={e => handleChange('seats', parseInt(e.target.value) || 1)}
+            />
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h4>Personal Message (Optional)</h4>
+          <textarea
+            value={formData.message}
+            onChange={e => handleChange('message', e.target.value)}
+            placeholder="Add a personal note to include in the invitation email..."
+            rows={3}
+          />
+        </div>
+      </div>
+
+      <div className="modal-actions">
+        <button onClick={handleClose} disabled={loading} className="btn-secondary">
+          Cancel
+        </button>
+        <button
+          onClick={handleSubmit}
+          disabled={loading || !formData.email || !formData.companyName}
+          className="btn-primary"
+        >
+          {loading ? 'Sending...' : 'Send Invitation'}
+        </button>
+      </div>
+    </Modal>
+  );
+};
+
 // Impersonation Modal Component
 const ImpersonationModal = ({ isOpen, onClose, onSubmit, userName, loading }) => {
   const [reason, setReason] = useState('');
@@ -1349,6 +1482,39 @@ const AccountManagement = () => {
     }
   };
 
+  const handleInviteSubmit = async (formData) => {
+    setActionLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/admin/account-management/invite`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          email: formData.email,
+          company_name: formData.companyName,
+          contact_name: formData.contactName,
+          plan: formData.plan,
+          seats: formData.seats,
+          message: formData.message
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        toast.success(`Invitation sent to ${formData.email}`);
+        closeModal();
+        fetchKpis(); // Refresh stats
+      } else {
+        const error = await response.json();
+        toast.error(error.message || 'Failed to send invitation');
+      }
+    } catch (err) {
+      console.error('Invitation error:', err);
+      toast.error('Failed to send invitation');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // Tab counts
   const tabCounts = kpis ? {
     active: kpis.totalActiveAccounts,
@@ -1366,8 +1532,18 @@ const AccountManagement = () => {
           <span className="separator">&rsaquo;</span>
           <span className="current">Account Management</span>
         </div>
-        <h1>Account Management</h1>
-        <p>Manage all business accounts, users, subscriptions, and costs.</p>
+        <div className="header-row">
+          <div>
+            <h1>Account Management</h1>
+            <p>Manage all business accounts, users, subscriptions, and costs.</p>
+          </div>
+          <button
+            className="btn-primary invite-btn"
+            onClick={() => setModal({ type: 'invite' })}
+          >
+            + Invite Subscriber
+          </button>
+        </div>
       </div>
 
       {view.type === 'list' && (
@@ -1485,6 +1661,13 @@ const AccountManagement = () => {
         onClose={closeModal}
         onSubmit={handleImpersonationSubmit}
         userName={modal.user?.name || modal.user?.email || ''}
+        loading={actionLoading}
+      />
+
+      <InviteSubscriberModal
+        isOpen={modal.type === 'invite'}
+        onClose={closeModal}
+        onSubmit={handleInviteSubmit}
         loading={actionLoading}
       />
     </div>

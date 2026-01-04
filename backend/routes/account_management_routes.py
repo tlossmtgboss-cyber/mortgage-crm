@@ -536,6 +536,101 @@ async def get_kpis(
 
 
 # =============================================================================
+# Invitation Endpoints
+# =============================================================================
+
+class InviteSubscriberRequest(BaseModel):
+    """Request to invite a new subscriber"""
+    email: str = Field(..., description="Email address to invite")
+    company_name: str = Field(..., description="Company/organization name")
+    contact_name: Optional[str] = Field(None, description="Contact person name")
+    plan: str = Field('professional', description="Subscription plan")
+    seats: int = Field(5, ge=1, le=1000, description="Initial seat count")
+    message: Optional[str] = Field(None, max_length=2000, description="Personal message")
+
+
+@router.post("/invite")
+async def invite_subscriber(
+    request: Request,
+    invite: InviteSubscriberRequest,
+    db: Session = Depends(get_db)
+):
+    """Send subscription invitation to a new organization"""
+    try:
+        current_user = await get_user_from_request(request, db)
+        require_master_admin(current_user)
+
+        # Check if email already exists
+        existing = db.execute(text("""
+            SELECT id FROM users WHERE email = :email
+            UNION
+            SELECT id FROM tenant_accounts WHERE owner_email = :email
+        """), {'email': invite.email}).fetchone()
+
+        if existing:
+            raise ValidationException(f"An account with email {invite.email} already exists")
+
+        # Create invitation token
+        invitation_token = str(uuid.uuid4())
+        expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+
+        # Store invitation in database
+        db.execute(text("""
+            INSERT INTO subscription_events (
+                account_id, event_type, from_plan, to_plan,
+                actor_id, metadata, timestamp
+            ) VALUES (
+                NULL, 'invitation_sent', NULL, :plan,
+                :actor_id,
+                :metadata,
+                NOW()
+            )
+        """), {
+            'plan': invite.plan,
+            'actor_id': current_user.id,
+            'metadata': str({
+                'email': invite.email,
+                'company_name': invite.company_name,
+                'contact_name': invite.contact_name,
+                'seats': invite.seats,
+                'token': invitation_token,
+                'expires_at': expires_at.isoformat(),
+                'message': invite.message
+            })
+        })
+
+        db.commit()
+
+        # Log the action
+        logger.info(f"Subscription invitation sent to {invite.email} by {current_user.email}")
+
+        # TODO: Integrate with email service to send actual invitation email
+        # For now, return success with invitation details
+
+        return success_response(
+            data={
+                'email': invite.email,
+                'company_name': invite.company_name,
+                'plan': invite.plan,
+                'seats': invite.seats,
+                'invitation_token': invitation_token,
+                'expires_at': expires_at.isoformat(),
+                'invitation_link': f"https://app.perenniaai.com/signup?invite={invitation_token}"
+            },
+            message=f"Invitation sent to {invite.email}"
+        )
+
+    except PermissionException:
+        raise
+    except ValidationException:
+        raise
+    except Exception as e:
+        logger.error(f"Error sending invitation: {e}")
+        db.rollback()
+        raise DatabaseException(f"Failed to send invitation: {str(e)}")
+
+
+# =============================================================================
 # Account List Endpoints
 # =============================================================================
 

@@ -1788,15 +1788,15 @@ export const RoleDashboardSwitcher = ({ currentView, onViewChange, isAdmin }) =>
   const [isOpen, setIsOpen] = useState(false);
 
   const roles = [
-    { id: 'administrator', label: 'Administrator', navigateTo: '/settings/account-management' },
-    { id: 'loan_officer', label: 'Loan Officer' },
-    { id: 'production_assistant_1', label: 'Production Assistant 1' },
-    { id: 'production_assistant_2', label: 'Production Assistant 2' },
-    { id: 'processor', label: 'Processor' },
-    { id: 'underwriter', label: 'Underwriter' },
-    { id: 'closer', label: 'Closer' },
-    { id: 'manager', label: 'Manager' },
-    { id: 'executive', label: 'Executive' }
+    { id: 'administrator', label: 'Administrator', icon: '🏠', navigateTo: '/settings/account-management' },
+    { id: 'loan_officer', label: 'Loan Officer', icon: '👔' },
+    { id: 'production_assistant_1', label: 'Production Assistant 1', icon: '📊' },
+    { id: 'production_assistant_2', label: 'Production Assistant 2', icon: '📈' },
+    { id: 'processor', label: 'Processor', icon: '📁' },
+    { id: 'underwriter', label: 'Underwriter', icon: '🔍' },
+    { id: 'closer', label: 'Closer', icon: '📅' },
+    { id: 'manager', label: 'Manager', icon: '👥' },
+    { id: 'executive', label: 'Executive', icon: '🏢' }
   ];
 
   const currentRole = roles.find(r => r.id === currentView) || roles[0];
