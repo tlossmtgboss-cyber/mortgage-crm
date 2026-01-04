@@ -560,11 +560,9 @@ async def invite_subscriber(
         current_user = await get_user_from_request(request, db)
         require_master_admin(current_user)
 
-        # Check if email already exists
+        # Check if email already exists in users
         existing = db.execute(text("""
             SELECT id FROM users WHERE email = :email
-            UNION
-            SELECT id FROM tenant_accounts WHERE owner_email = :email
         """), {'email': invite.email}).fetchone()
 
         if existing:

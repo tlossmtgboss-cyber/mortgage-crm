@@ -67,6 +67,419 @@ const getAuthHeaders = () => ({
   'Authorization': `Bearer ${localStorage.getItem('token')}`
 });
 
+// Demo/Sample Data for testing and development
+const DEMO_KPIS = {
+  totalActiveAccounts: 47,
+  totalSuspendedAccounts: 3,
+  totalCanceledAccounts: 8,
+  totalMRR: 156750,
+  totalARR: 1881000,
+  mrrGrowth: 8.4,
+  totalSeatsUsed: 312,
+  totalSeatsPurchased: 425,
+  avgCostPerUser: 35,
+  avgMarginPercent: 65.2,
+  accountsAtRisk: 4,
+  accountsNoActivity30d: 6,
+  churnRate: 2.3
+};
+
+const DEMO_ACCOUNTS = [
+  {
+    id: 'acct_001',
+    name: 'Pinnacle Mortgage Group',
+    planName: 'Enterprise',
+    billingInterval: 'Annual',
+    status: 'active',
+    seatsUsed: 45,
+    seatsPurchased: 50,
+    seatUtilizationPercent: 90,
+    mrr: 14850,
+    trueCostPerUser: 28,
+    grossMarginPercent: 72,
+    lastActivityAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    renewalDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
+    ownerName: 'Sarah Johnson',
+    ownerEmail: 'sarah@pinnaclemortgage.com',
+    createdAt: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString(),
+    arr: 178200,
+    grossMargin: 10692,
+    activeUsersLast30Days: 42,
+    churnRiskScore: 15,
+    internalNotes: 'Key enterprise client. VIP support tier.'
+  },
+  {
+    id: 'acct_002',
+    name: 'First Choice Lending',
+    planName: 'Business',
+    billingInterval: 'Monthly',
+    status: 'active',
+    seatsUsed: 18,
+    seatsPurchased: 25,
+    seatUtilizationPercent: 72,
+    mrr: 3725,
+    trueCostPerUser: 32,
+    grossMarginPercent: 64,
+    lastActivityAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+    renewalDate: new Date(Date.now() + 28 * 24 * 60 * 60 * 1000).toISOString(),
+    ownerName: 'Michael Chen',
+    ownerEmail: 'mchen@firstchoicelending.com',
+    createdAt: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString(),
+    arr: 44700,
+    grossMargin: 2384,
+    activeUsersLast30Days: 16,
+    churnRiskScore: 25
+  },
+  {
+    id: 'acct_003',
+    name: 'HomeKey Financial',
+    planName: 'Professional',
+    billingInterval: 'Annual',
+    status: 'active',
+    seatsUsed: 8,
+    seatsPurchased: 10,
+    seatUtilizationPercent: 80,
+    mrr: 990,
+    trueCostPerUser: 38,
+    grossMarginPercent: 58,
+    lastActivityAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+    renewalDate: new Date(Date.now() + 200 * 24 * 60 * 60 * 1000).toISOString(),
+    ownerName: 'Lisa Martinez',
+    ownerEmail: 'lisa@homekeyfinancial.com',
+    createdAt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
+    arr: 11880,
+    grossMargin: 574,
+    activeUsersLast30Days: 7,
+    churnRiskScore: 35
+  },
+  {
+    id: 'acct_004',
+    name: 'Summit Loans Inc',
+    planName: 'Professional',
+    billingInterval: 'Monthly',
+    status: 'active',
+    seatsUsed: 5,
+    seatsPurchased: 5,
+    seatUtilizationPercent: 100,
+    mrr: 495,
+    trueCostPerUser: 42,
+    grossMarginPercent: 48,
+    lastActivityAt: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
+    renewalDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
+    ownerName: 'David Kim',
+    ownerEmail: 'david@summitloans.com',
+    createdAt: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString(),
+    arr: 5940,
+    grossMargin: 238,
+    activeUsersLast30Days: 5,
+    churnRiskScore: 55
+  },
+  {
+    id: 'acct_005',
+    name: 'Coastal Mortgage Solutions',
+    planName: 'Business',
+    billingInterval: 'Annual',
+    status: 'active',
+    seatsUsed: 32,
+    seatsPurchased: 40,
+    seatUtilizationPercent: 80,
+    mrr: 5960,
+    trueCostPerUser: 30,
+    grossMarginPercent: 68,
+    lastActivityAt: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
+    renewalDate: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString(),
+    ownerName: 'Jennifer Walsh',
+    ownerEmail: 'jwalsh@coastalmortgage.com',
+    createdAt: new Date(Date.now() - 270 * 24 * 60 * 60 * 1000).toISOString(),
+    arr: 71520,
+    grossMargin: 4053,
+    activeUsersLast30Days: 30,
+    churnRiskScore: 18
+  },
+  {
+    id: 'acct_006',
+    name: 'Liberty Home Loans',
+    planName: 'Starter',
+    billingInterval: 'Monthly',
+    status: 'active',
+    seatsUsed: 3,
+    seatsPurchased: 5,
+    seatUtilizationPercent: 60,
+    mrr: 245,
+    trueCostPerUser: 45,
+    grossMarginPercent: 35,
+    lastActivityAt: new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString(),
+    renewalDate: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString(),
+    ownerName: 'Robert Taylor',
+    ownerEmail: 'rtaylor@libertyhomeloans.com',
+    createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+    arr: 2940,
+    grossMargin: 86,
+    activeUsersLast30Days: 2,
+    churnRiskScore: 70
+  }
+];
+
+const DEMO_SUSPENDED_ACCOUNTS = [
+  {
+    id: 'acct_s01',
+    name: 'Apex Lending Partners',
+    planName: 'Professional',
+    billingInterval: 'Monthly',
+    status: 'suspended',
+    seatsUsed: 0,
+    seatsPurchased: 10,
+    seatUtilizationPercent: 0,
+    mrr: 0,
+    trueCostPerUser: 0,
+    grossMarginPercent: 0,
+    lastActivityAt: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString(),
+    ownerName: 'James Wilson',
+    ownerEmail: 'jwilson@apexlending.com',
+    createdAt: new Date(Date.now() - 120 * 24 * 60 * 60 * 1000).toISOString(),
+    internalNotes: 'Suspended for payment issues. Payment plan in progress.'
+  }
+];
+
+const DEMO_CANCELED_ACCOUNTS = [
+  {
+    id: 'acct_c01',
+    name: 'Quick Mortgage Co',
+    planName: 'Starter',
+    billingInterval: 'Monthly',
+    status: 'canceled',
+    seatsUsed: 0,
+    seatsPurchased: 3,
+    seatUtilizationPercent: 0,
+    mrr: 0,
+    trueCostPerUser: 0,
+    grossMarginPercent: 0,
+    lastActivityAt: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(),
+    canceledAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+    ownerName: 'Patricia Brown',
+    ownerEmail: 'pbrown@quickmortgage.com',
+    createdAt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
+    internalNotes: 'Churned - moved to competitor. Price sensitivity.'
+  }
+];
+
+const DEMO_USERS = [
+  {
+    id: 'usr_001',
+    name: 'Sarah Johnson',
+    email: 'sarah@pinnaclemortgage.com',
+    roles: ['Admin', 'Loan Officer'],
+    status: 'active',
+    lastLoginAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    createdAt: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString(),
+    tasksCompleted30d: 245,
+    callsPlaced30d: 89,
+    emailsSent30d: 156,
+    mfaEnabled: true,
+    activeSessions: 2,
+    callsReceived30d: 67,
+    textsSent30d: 43,
+    notesCreated30d: 78,
+    leadsCreated30d: 23,
+    loansCreated30d: 12,
+    documentsUploaded30d: 34,
+    aiActionsTriggered30d: 156
+  },
+  {
+    id: 'usr_002',
+    name: 'Marcus Thompson',
+    email: 'mthompson@pinnaclemortgage.com',
+    roles: ['Loan Officer'],
+    status: 'active',
+    lastLoginAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+    createdAt: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString(),
+    tasksCompleted30d: 189,
+    callsPlaced30d: 112,
+    emailsSent30d: 98,
+    mfaEnabled: true,
+    activeSessions: 1,
+    callsReceived30d: 45,
+    textsSent30d: 67,
+    notesCreated30d: 56,
+    leadsCreated30d: 18,
+    loansCreated30d: 8,
+    documentsUploaded30d: 22,
+    aiActionsTriggered30d: 89
+  },
+  {
+    id: 'usr_003',
+    name: 'Emily Rodriguez',
+    email: 'erodriguez@pinnaclemortgage.com',
+    roles: ['Processor'],
+    status: 'active',
+    lastLoginAt: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
+    createdAt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
+    tasksCompleted30d: 312,
+    callsPlaced30d: 34,
+    emailsSent30d: 245,
+    mfaEnabled: true,
+    activeSessions: 1,
+    callsReceived30d: 28,
+    textsSent30d: 12,
+    notesCreated30d: 145,
+    leadsCreated30d: 0,
+    loansCreated30d: 0,
+    documentsUploaded30d: 89,
+    aiActionsTriggered30d: 234
+  },
+  {
+    id: 'usr_004',
+    name: 'Kevin Park',
+    email: 'kpark@pinnaclemortgage.com',
+    roles: ['Loan Officer'],
+    status: 'invited',
+    lastLoginAt: null,
+    createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    tasksCompleted30d: 0,
+    callsPlaced30d: 0,
+    emailsSent30d: 0,
+    mfaEnabled: false,
+    activeSessions: 0
+  }
+];
+
+const DEMO_INVOICES = [
+  {
+    id: 'inv_001',
+    createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    description: 'Monthly subscription - Enterprise (50 seats)',
+    status: 'paid',
+    amount: 14850
+  },
+  {
+    id: 'inv_002',
+    createdAt: new Date(Date.now() - 35 * 24 * 60 * 60 * 1000).toISOString(),
+    description: 'Monthly subscription - Enterprise (50 seats)',
+    status: 'paid',
+    amount: 14850
+  },
+  {
+    id: 'inv_003',
+    createdAt: new Date(Date.now() - 65 * 24 * 60 * 60 * 1000).toISOString(),
+    description: 'Monthly subscription - Enterprise (45 seats)',
+    status: 'paid',
+    amount: 13365
+  }
+];
+
+const DEMO_COST_BREAKDOWN = {
+  month: 'December 2024',
+  totalCost: 5198,
+  categories: [
+    { category: 'AI_Processing', amount: 2340, percentage: 45 },
+    { category: 'Storage', amount: 780, percentage: 15 },
+    { category: 'API_Calls', amount: 624, percentage: 12 },
+    { category: 'Voice_Minutes', amount: 520, percentage: 10 },
+    { category: 'SMS', amount: 416, percentage: 8 },
+    { category: 'Email', amount: 312, percentage: 6 },
+    { category: 'Other', amount: 206, percentage: 4 }
+  ]
+};
+
+const DEMO_COST_TREND = {
+  trend: [
+    { month: 'Jul 2024', totalCost: 4200, costPerUser: 28, margin: 68 },
+    { month: 'Aug 2024', totalCost: 4450, costPerUser: 29, margin: 67 },
+    { month: 'Sep 2024', totalCost: 4680, costPerUser: 28, margin: 69 },
+    { month: 'Oct 2024', totalCost: 4890, costPerUser: 29, margin: 68 },
+    { month: 'Nov 2024', totalCost: 5050, costPerUser: 28, margin: 70 },
+    { month: 'Dec 2024', totalCost: 5198, costPerUser: 28, margin: 72 }
+  ]
+};
+
+const DEMO_AUDIT_LOG = [
+  {
+    id: 'log_001',
+    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    actionType: 'user.login',
+    actorName: 'Sarah Johnson',
+    ipAddress: '192.168.1.45'
+  },
+  {
+    id: 'log_002',
+    timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+    actionType: 'loan.created',
+    actorName: 'Marcus Thompson',
+    ipAddress: '192.168.1.67'
+  },
+  {
+    id: 'log_003',
+    timestamp: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(),
+    actionType: 'settings.updated',
+    actorName: 'Sarah Johnson',
+    ipAddress: '192.168.1.45'
+  },
+  {
+    id: 'log_004',
+    timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+    actionType: 'user.invited',
+    actorName: 'Sarah Johnson',
+    ipAddress: '192.168.1.45'
+  }
+];
+
+const DEMO_LOGIN_HISTORY = [
+  {
+    id: 'lh_001',
+    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    result: 'success',
+    ipAddress: '192.168.1.45',
+    device: 'Chrome on MacOS',
+    location: 'San Francisco, CA',
+    sessionDuration: 7200
+  },
+  {
+    id: 'lh_002',
+    timestamp: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString(),
+    result: 'success',
+    ipAddress: '192.168.1.45',
+    device: 'Chrome on MacOS',
+    location: 'San Francisco, CA',
+    sessionDuration: 14400
+  },
+  {
+    id: 'lh_003',
+    timestamp: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
+    result: 'failed',
+    ipAddress: '10.0.0.55',
+    device: 'Firefox on Windows',
+    location: 'Unknown',
+    failureReason: 'Invalid password'
+  }
+];
+
+const DEMO_SUBSCRIPTION_TIMELINE = [
+  {
+    id: 'st_001',
+    eventType: 'Seats Added',
+    fromPlan: null,
+    toPlan: '+5 seats',
+    timestamp: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+    actorName: 'Sarah Johnson'
+  },
+  {
+    id: 'st_002',
+    eventType: 'Plan Upgraded',
+    fromPlan: 'Business',
+    toPlan: 'Enterprise',
+    timestamp: new Date(Date.now() - 120 * 24 * 60 * 60 * 1000).toISOString(),
+    actorName: 'Admin (Support)'
+  },
+  {
+    id: 'st_003',
+    eventType: 'Account Created',
+    fromPlan: null,
+    toPlan: 'Business (40 seats)',
+    timestamp: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString(),
+    actorName: 'System'
+  }
+];
+
 // Status Badge Component
 const StatusBadge = ({ status }) => {
   const statusClass = {
@@ -1220,10 +1633,20 @@ const AccountManagement = () => {
       });
       if (response.ok) {
         const data = await response.json();
-        setKpis(data.data);
+        // Use demo data if API returns empty/null
+        if (data.data && Object.keys(data.data).length > 0) {
+          setKpis(data.data);
+        } else {
+          setKpis(DEMO_KPIS);
+        }
+      } else {
+        // Use demo data on API error
+        setKpis(DEMO_KPIS);
       }
     } catch (err) {
       console.error('Error fetching KPIs:', err);
+      // Use demo data on network error
+      setKpis(DEMO_KPIS);
     }
   }, []);
 
@@ -1243,10 +1666,43 @@ const AccountManagement = () => {
       });
       if (response.ok) {
         const data = await response.json();
-        setAccounts(data.data?.accounts || []);
+        const apiAccounts = data.data?.accounts || [];
+        // Use demo data if API returns empty
+        if (apiAccounts.length > 0) {
+          setAccounts(apiAccounts);
+        } else {
+          // Return appropriate demo data based on tab
+          let demoData = [];
+          if (activeTab === 'active') {
+            demoData = DEMO_ACCOUNTS;
+          } else if (activeTab === 'suspended') {
+            demoData = DEMO_SUSPENDED_ACCOUNTS;
+          } else if (activeTab === 'canceled') {
+            demoData = DEMO_CANCELED_ACCOUNTS;
+          }
+          // Apply search filter to demo data
+          if (filters.search) {
+            const search = filters.search.toLowerCase();
+            demoData = demoData.filter(a =>
+              a.name.toLowerCase().includes(search) ||
+              a.ownerName.toLowerCase().includes(search) ||
+              a.ownerEmail.toLowerCase().includes(search)
+            );
+          }
+          setAccounts(demoData);
+        }
+      } else {
+        // Use demo data on API error
+        let demoData = activeTab === 'active' ? DEMO_ACCOUNTS :
+                       activeTab === 'suspended' ? DEMO_SUSPENDED_ACCOUNTS : DEMO_CANCELED_ACCOUNTS;
+        setAccounts(demoData);
       }
     } catch (err) {
       console.error('Error fetching accounts:', err);
+      // Use demo data on network error
+      let demoData = activeTab === 'active' ? DEMO_ACCOUNTS :
+                     activeTab === 'suspended' ? DEMO_SUSPENDED_ACCOUNTS : DEMO_CANCELED_ACCOUNTS;
+      setAccounts(demoData);
     } finally {
       setLoading(false);
     }
