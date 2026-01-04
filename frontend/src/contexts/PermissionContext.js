@@ -37,14 +37,33 @@ export const PermissionProvider = ({ children }) => {
       return null;
     }
   });
+  // View-as role for admin role switching (affects navigation and dashboard containers)
+  const [viewAsRole, setViewAsRole] = useState(() => {
+    try {
+      const saved = localStorage.getItem('viewAsRole');
+      return saved || null;
+    } catch {
+      return null;
+    }
+  });
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState(null);
   const { isImpersonating, getImpersonatedUser } = useImpersonation();
 
   // Compute effective role for UI purposes (combines permission_role + legacy role)
+  // If viewAsRole is set and user is admin, use that instead
   const effectiveRole = useMemo(() => {
-    return getUserEffectiveRole(userRole, legacyRole);
-  }, [userRole, legacyRole]);
+    const baseRole = getUserEffectiveRole(userRole, legacyRole);
+    // If admin is viewing as another role, use that role for navigation
+    if (baseRole === 'admin' && viewAsRole && viewAsRole !== 'default' && viewAsRole !== 'admin') {
+      // Map production_assistant variants
+      if (viewAsRole === 'production_assistant_1' || viewAsRole === 'production_assistant_2') {
+        return 'production_assistant';
+      }
+      return viewAsRole;
+    }
+    return baseRole;
+  }, [userRole, legacyRole, viewAsRole]);
 
   // Fetch permissions whenever impersonation state changes
   useEffect(() => {
@@ -227,11 +246,32 @@ export const PermissionProvider = ({ children }) => {
     return 'own';
   };
 
+  // Update view-as role (for admin role switching)
+  const updateViewAsRole = (role) => {
+    setViewAsRole(role);
+    try {
+      if (role) {
+        localStorage.setItem('viewAsRole', role);
+      } else {
+        localStorage.removeItem('viewAsRole');
+      }
+    } catch (e) {
+      console.warn('Could not save viewAsRole to localStorage:', e);
+    }
+  };
+
+  // Check if user is an admin (can switch role views)
+  const isAdmin = useMemo(() => {
+    return getUserEffectiveRole(userRole, legacyRole) === 'admin';
+  }, [userRole, legacyRole]);
+
   const value = {
     permissions,
     userRole,
     legacyRole,
-    effectiveRole,  // Computed role for UI (combines permission_role + legacy role)
+    effectiveRole,  // Computed role for UI (combines permission_role + legacy role + viewAsRole)
+    viewAsRole,     // Current view-as role selection (for admin role switching)
+    isAdmin,        // Whether user is admin (can switch views)
     loading,
     currentUserId,
     hasPermission,
@@ -240,6 +280,7 @@ export const PermissionProvider = ({ children }) => {
     isReadOnlyMode,
     canPerformAction,
     getDataScope,
+    updateViewAsRole,  // Function to update view-as role
     refetchPermissions: fetchPermissions
   };
 

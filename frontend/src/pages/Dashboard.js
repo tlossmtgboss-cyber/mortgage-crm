@@ -19,14 +19,13 @@ import './Dashboard.css';
 
 function Dashboard() {
   const navigate = useNavigate();
-  const { hasPermission, userRole, effectiveRole } = usePermissions();
+  const { hasPermission, userRole, effectiveRole, updateViewAsRole, viewAsRole, isAdmin } = usePermissions();
   const [loading, setLoading] = useState(true);
 
-  // State for admin role view switcher
+  // State for admin role view switcher - sync with context viewAsRole
   const [selectedDashboardView, setSelectedDashboardView] = useState(() => {
-    // Load saved preference from localStorage
-    const saved = localStorage.getItem('adminDashboardView');
-    return saved || 'default';
+    // Use viewAsRole from context if available, otherwise localStorage
+    return viewAsRole || localStorage.getItem('adminDashboardView') || 'admin';
   });
 
   // Check if current user is admin/management (can switch views)
@@ -46,10 +45,12 @@ function Dashboard() {
     return userRole === 'management';
   };
 
-  // Handle view change
+  // Handle view change - updates both local state and context
   const handleViewChange = (viewId) => {
     setSelectedDashboardView(viewId);
     localStorage.setItem('adminDashboardView', viewId);
+    // Update context so Navigation also updates
+    updateViewAsRole(viewId);
   };
 
   // Check if current user is demo user
@@ -1021,16 +1022,19 @@ function Dashboard() {
         return <CloserDashboard />;
       case 'manager':
         return <ManagerDashboard />;
-      case 'admin':
       case 'executive':
         return <AdminDashboard />;
+      case 'admin':
+        // Admin view shows the full containerized dashboard (not a limited component)
+        return null;
       default:
         return null;
     }
   };
 
   // Check if showing a role-specific dashboard
-  const showingRoleDashboard = isAdminUser() && selectedDashboardView !== 'default';
+  // Admin view ('admin') shows the full containerized dashboard, not a role component
+  const showingRoleDashboard = isAdminUser() && selectedDashboardView !== 'default' && selectedDashboardView !== 'admin';
 
   return (
     <div className="dashboard">
