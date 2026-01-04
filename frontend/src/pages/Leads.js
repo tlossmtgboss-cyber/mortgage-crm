@@ -6,6 +6,7 @@ import SMSModal from '../components/SMSModal';
 import CalendarSidebar from '../components/CalendarSidebar';
 import PermissionGate from '../components/PermissionGate';
 import { usePermissions } from '../contexts/PermissionContext';
+import { formatPhoneNumber } from '../utils/phoneUtils';
 import './Leads.css';
 
 function Leads() {
@@ -950,7 +951,7 @@ function Leads() {
                   <input
                     type="tel"
                     value={currentBorrower.phone}
-                    onChange={(e) => updateBorrower(activeBorrower, 'phone', e.target.value)}
+                    onChange={(e) => updateBorrower(activeBorrower, 'phone', formatPhoneNumber(e.target.value))}
                   />
                 </div>
               </div>

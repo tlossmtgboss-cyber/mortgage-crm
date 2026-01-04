@@ -20549,7 +20549,8 @@ except Exception as e:
 
 # Security Monitoring routes (Admin Dashboard Security Tab)
 try:
-    from routes.security_monitoring_routes import router as security_monitoring_router
+    from routes.security_monitoring_routes import router as security_monitoring_router, set_dependencies as set_security_monitoring_deps
+    set_security_monitoring_deps(get_current_user)
     app.include_router(security_monitoring_router, tags=["Security Monitoring"])
     logger.info("✅ Security Monitoring routes loaded")
 except Exception as e:

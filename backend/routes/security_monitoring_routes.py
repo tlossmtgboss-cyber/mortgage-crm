@@ -17,14 +17,30 @@ import logging
 import os
 
 from database import get_db
-from utils.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/admin/security", tags=["Security Monitoring"])
 
+# Will be set by main.py
+get_current_user = None
 
-def require_admin(current_user=Depends(get_current_user)):
+
+def set_dependencies(current_user_func):
+    """Set dependencies from main.py to avoid circular imports."""
+    global get_current_user
+    get_current_user = current_user_func
+    logger.info("Security monitoring routes dependencies set")
+
+
+async def get_current_user_dependency(request: Request, db: Session = Depends(get_db)):
+    """Wrapper to call the injected get_current_user function."""
+    if get_current_user is None:
+        raise HTTPException(status_code=500, detail="Security routes not properly initialized")
+    return await get_current_user(request=request, db=db)
+
+
+def require_admin(current_user=Depends(get_current_user_dependency)):
     """Require admin role for security endpoints."""
     if not current_user:
         raise HTTPException(status_code=401, detail="Authentication required")

@@ -39,37 +39,37 @@ const DEFAULT_REFINANCE_STAGES = [
 
 // Default questions for Purchase application
 const DEFAULT_PURCHASE_QUESTIONS = [
-  { id: 'borrower_count', question: 'How many people will be on this loan?', category: 'Basic Info', required: true, type: 'choice', options: [{ value: '1', label: 'Just me' }, { value: '2', label: '2 people' }, { value: '3+', label: '3 or more' }] },
-  { id: 'co_borrower_relationship', question: 'What is your relationship to the other borrower(s)?', category: 'Basic Info', required: false, type: 'choice', options: [{ value: 'spouse', label: 'Spouse' }, { value: 'partner', label: 'Partner' }, { value: 'family', label: 'Family Member' }, { value: 'other', label: 'Other' }], showIf: { field: 'borrower_count', values: ['2', '3+'] } },
-  { id: 'citizenship_status', question: 'What is your citizenship status?', category: 'Basic Info', required: true, type: 'choice', options: [{ value: 'us_citizen', label: 'US Citizen' }, { value: 'permanent_resident', label: 'Permanent Resident' }, { value: 'visa', label: 'Visa Holder' }, { value: 'other', label: 'Other' }] },
-  { id: 'first_time_buyer', question: 'Is this your first home purchase?', category: 'Home History', required: true, type: 'choice', options: [{ value: 'yes', label: 'Yes, first time' }, { value: 'no', label: 'No, I\'ve owned before' }] },
-  { id: 'desired_state', question: 'What state are you looking to buy in?', category: 'Location', required: true, type: 'choice', options: [{ value: 'CA', label: 'California' }, { value: 'TX', label: 'Texas' }, { value: 'FL', label: 'Florida' }, { value: 'NY', label: 'New York' }, { value: 'other', label: 'Other' }] },
-  { id: 'desired_city', question: 'What city or area?', category: 'Location', required: false, type: 'text' },
-  { id: 'previous_home_status', question: 'What happened to your previous home?', category: 'Home History', required: false, type: 'choice', options: [{ value: 'sold', label: 'Sold it' }, { value: 'renting', label: 'Renting it out' }, { value: 'still_own', label: 'Still own it' }], showIf: { field: 'first_time_buyer', values: ['no'] } },
-  { id: 'marital_status', question: 'What is your marital status?', category: 'Personal', required: true, type: 'choice', options: [{ value: 'single', label: 'Single' }, { value: 'married', label: 'Married' }, { value: 'divorced', label: 'Divorced' }, { value: 'separated', label: 'Separated' }, { value: 'widowed', label: 'Widowed' }] },
-  { id: 'spouse_on_loan', question: 'Will your spouse be on the loan?', category: 'Personal', required: false, type: 'choice', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }], showIf: { field: 'marital_status', values: ['married'] } },
-  { id: 'military_status', question: 'Have you or your spouse served in the military?', category: 'Military', required: true, type: 'choice', options: [{ value: 'active', label: 'Active Duty' }, { value: 'veteran', label: 'Veteran' }, { value: 'reserve', label: 'Reserve/Guard' }, { value: 'spouse', label: 'Military Spouse' }, { value: 'none', label: 'No Military Service' }] },
-  { id: 'va_funding_fee', question: 'Are you exempt from the VA funding fee?', category: 'Military', required: false, type: 'choice', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }, { value: 'unsure', label: 'Not sure' }], showIf: { field: 'military_status', values: ['active', 'veteran', 'reserve', 'spouse'] } },
-  { id: 'self_employed', question: 'Are you self-employed?', category: 'Employment', required: true, type: 'choice', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] },
-  { id: 'employer_name', question: 'What is your employer\'s name?', category: 'Employment', required: true, type: 'text', showIf: { field: 'self_employed', values: ['no'] } },
-  { id: 'credit_score_range', question: 'What\'s your approximate credit score?', category: 'Credit', required: true, type: 'choice', options: [{ value: '760+', label: '760+' }, { value: '720-759', label: '720-759' }, { value: '680-719', label: '680-719' }, { value: '640-679', label: '640-679' }, { value: 'below_640', label: 'Below 640' }, { value: 'unsure', label: 'Not sure' }] },
-  { id: 'bankruptcy_history', question: 'Have you had a bankruptcy in the last 7 years?', category: 'Credit', required: true, type: 'choice', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] },
-  { id: 'gift_funds', question: 'Will you receive gift funds for down payment?', category: 'Assets', required: false, type: 'choice', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }, { value: 'maybe', label: 'Maybe' }] },
+  { id: 'borrower_count', question: 'How many people will be on this loan?', stageId: 'declarations', required: true, type: 'choice', options: [{ value: '1', label: 'Just me' }, { value: '2', label: '2 people' }, { value: '3+', label: '3 or more' }] },
+  { id: 'co_borrower_relationship', question: 'What is your relationship to the other borrower(s)?', stageId: 'declarations', required: false, type: 'choice', options: [{ value: 'spouse', label: 'Spouse' }, { value: 'partner', label: 'Partner' }, { value: 'family', label: 'Family Member' }, { value: 'other', label: 'Other' }], showIf: { field: 'borrower_count', values: ['2', '3+'] } },
+  { id: 'citizenship_status', question: 'What is your citizenship status?', stageId: 'declarations', required: true, type: 'choice', options: [{ value: 'us_citizen', label: 'US Citizen' }, { value: 'permanent_resident', label: 'Permanent Resident' }, { value: 'visa', label: 'Visa Holder' }, { value: 'other', label: 'Other' }] },
+  { id: 'first_time_buyer', question: 'Is this your first home purchase?', stageId: 'declarations', required: true, type: 'choice', options: [{ value: 'yes', label: 'Yes, first time' }, { value: 'no', label: 'No, I\'ve owned before' }] },
+  { id: 'previous_home_status', question: 'What happened to your previous home?', stageId: 'declarations', required: false, type: 'choice', options: [{ value: 'sold', label: 'Sold it' }, { value: 'renting', label: 'Renting it out' }, { value: 'still_own', label: 'Still own it' }], showIf: { field: 'first_time_buyer', values: ['no'] } },
+  { id: 'marital_status', question: 'What is your marital status?', stageId: 'profile', required: true, type: 'choice', options: [{ value: 'single', label: 'Single' }, { value: 'married', label: 'Married' }, { value: 'divorced', label: 'Divorced' }, { value: 'separated', label: 'Separated' }, { value: 'widowed', label: 'Widowed' }] },
+  { id: 'spouse_on_loan', question: 'Will your spouse be on the loan?', stageId: 'profile', required: false, type: 'choice', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }], showIf: { field: 'marital_status', values: ['married'] } },
+  { id: 'military_status', question: 'Have you or your spouse served in the military?', stageId: 'profile', required: true, type: 'choice', options: [{ value: 'active', label: 'Active Duty' }, { value: 'veteran', label: 'Veteran' }, { value: 'reserve', label: 'Reserve/Guard' }, { value: 'spouse', label: 'Military Spouse' }, { value: 'none', label: 'No Military Service' }] },
+  { id: 'va_funding_fee', question: 'Are you exempt from the VA funding fee?', stageId: 'profile', required: false, type: 'choice', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }, { value: 'unsure', label: 'Not sure' }], showIf: { field: 'military_status', values: ['active', 'veteran', 'reserve', 'spouse'] } },
+  { id: 'self_employed', question: 'Are you self-employed?', stageId: 'income', required: true, type: 'choice', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] },
+  { id: 'employer_name', question: 'What is your employer\'s name?', stageId: 'income', required: true, type: 'text', showIf: { field: 'self_employed', values: ['no'] } },
+  { id: 'credit_score_range', question: 'What\'s your approximate credit score?', stageId: 'profile', required: true, type: 'choice', options: [{ value: '760+', label: '760+' }, { value: '720-759', label: '720-759' }, { value: '680-719', label: '680-719' }, { value: '640-679', label: '640-679' }, { value: 'below_640', label: 'Below 640' }, { value: 'unsure', label: 'Not sure' }] },
+  { id: 'bankruptcy_history', question: 'Have you had a bankruptcy in the last 7 years?', stageId: 'profile', required: true, type: 'choice', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] },
+  { id: 'gift_funds', question: 'Will you receive gift funds for down payment?', stageId: 'assets', required: false, type: 'choice', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }, { value: 'maybe', label: 'Maybe' }] },
+  { id: 'desired_state', question: 'What state are you looking to buy in?', stageId: 'property', required: true, type: 'choice', options: [{ value: 'CA', label: 'California' }, { value: 'TX', label: 'Texas' }, { value: 'FL', label: 'Florida' }, { value: 'NY', label: 'New York' }, { value: 'other', label: 'Other' }] },
+  { id: 'desired_city', question: 'What city or area?', stageId: 'property', required: false, type: 'text' },
 ];
 
 // Default questions for Refinance application
 const DEFAULT_REFINANCE_QUESTIONS = [
-  { id: 'borrower_count', question: 'How many people will be on this loan?', category: 'Basic Info', required: true, type: 'choice', options: [{ value: '1', label: 'Just me' }, { value: '2', label: '2 people' }, { value: '3+', label: '3 or more' }] },
-  { id: 'refi_goal', question: 'What\'s your main goal for refinancing?', category: 'Goals', required: true, type: 'choice', options: [{ value: 'lower_rate', label: 'Lower my rate' }, { value: 'cash_out', label: 'Cash out equity' }, { value: 'shorter_term', label: 'Shorter term' }, { value: 'lower_payment', label: 'Lower payment' }] },
-  { id: 'cash_out_amount', question: 'Approximately how much cash do you need?', category: 'Goals', required: false, type: 'currency', showIf: { field: 'refi_goal', values: ['cash_out'] } },
-  { id: 'citizenship_status', question: 'What is your citizenship status?', category: 'Basic Info', required: true, type: 'choice', options: [{ value: 'us_citizen', label: 'US Citizen' }, { value: 'permanent_resident', label: 'Permanent Resident' }, { value: 'visa', label: 'Visa Holder' }] },
-  { id: 'marital_status', question: 'What is your marital status?', category: 'Personal', required: true, type: 'choice', options: [{ value: 'single', label: 'Single' }, { value: 'married', label: 'Married' }, { value: 'divorced', label: 'Divorced' }] },
-  { id: 'military_status', question: 'Have you served in the military?', category: 'Military', required: true, type: 'choice', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] },
-  { id: 'self_employed', question: 'Are you self-employed?', category: 'Employment', required: true, type: 'choice', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] },
-  { id: 'employer_name', question: 'What is your employer\'s name?', category: 'Employment', required: true, type: 'text', showIf: { field: 'self_employed', values: ['no'] } },
-  { id: 'credit_score_range', question: 'What\'s your approximate credit score?', category: 'Credit', required: true, type: 'choice', options: [{ value: '760+', label: '760+' }, { value: '720-759', label: '720-759' }, { value: '680-719', label: '680-719' }, { value: 'below_680', label: 'Below 680' }] },
-  { id: 'property_use', question: 'How do you use this property?', category: 'Property', required: true, type: 'choice', options: [{ value: 'primary', label: 'Primary Residence' }, { value: 'second_home', label: 'Second Home' }, { value: 'investment', label: 'Investment Property' }] },
-  { id: 'current_rate', question: 'What is your current interest rate?', category: 'Property', required: false, type: 'text' },
+  { id: 'borrower_count', question: 'How many people will be on this loan?', stageId: 'declarations', required: true, type: 'choice', options: [{ value: '1', label: 'Just me' }, { value: '2', label: '2 people' }, { value: '3+', label: '3 or more' }] },
+  { id: 'citizenship_status', question: 'What is your citizenship status?', stageId: 'declarations', required: true, type: 'choice', options: [{ value: 'us_citizen', label: 'US Citizen' }, { value: 'permanent_resident', label: 'Permanent Resident' }, { value: 'visa', label: 'Visa Holder' }] },
+  { id: 'refi_goal', question: 'What\'s your main goal for refinancing?', stageId: 'goals', required: true, type: 'choice', options: [{ value: 'lower_rate', label: 'Lower my rate' }, { value: 'cash_out', label: 'Cash out equity' }, { value: 'shorter_term', label: 'Shorter term' }, { value: 'lower_payment', label: 'Lower payment' }] },
+  { id: 'cash_out_amount', question: 'Approximately how much cash do you need?', stageId: 'goals', required: false, type: 'currency', showIf: { field: 'refi_goal', values: ['cash_out'] } },
+  { id: 'marital_status', question: 'What is your marital status?', stageId: 'profile', required: true, type: 'choice', options: [{ value: 'single', label: 'Single' }, { value: 'married', label: 'Married' }, { value: 'divorced', label: 'Divorced' }] },
+  { id: 'military_status', question: 'Have you served in the military?', stageId: 'profile', required: true, type: 'choice', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] },
+  { id: 'self_employed', question: 'Are you self-employed?', stageId: 'income', required: true, type: 'choice', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] },
+  { id: 'employer_name', question: 'What is your employer\'s name?', stageId: 'income', required: true, type: 'text', showIf: { field: 'self_employed', values: ['no'] } },
+  { id: 'credit_score_range', question: 'What\'s your approximate credit score?', stageId: 'profile', required: true, type: 'choice', options: [{ value: '760+', label: '760+' }, { value: '720-759', label: '720-759' }, { value: '680-719', label: '680-719' }, { value: 'below_680', label: 'Below 680' }] },
+  { id: 'property_use', question: 'How do you use this property?', stageId: 'property', required: true, type: 'choice', options: [{ value: 'primary', label: 'Primary Residence' }, { value: 'second_home', label: 'Second Home' }, { value: 'investment', label: 'Investment Property' }] },
+  { id: 'current_rate', question: 'What is your current interest rate?', stageId: 'property', required: false, type: 'text' },
 ];
 
 const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
@@ -128,6 +128,9 @@ const ApplicationSlidesEditor = () => {
 
   // Preview state for mock answers
   const [previewAnswers, setPreviewAnswers] = useState({});
+
+  // Preview mode: 'mobile' or 'web'
+  const [previewMode, setPreviewMode] = useState('mobile');
 
   // Get current stages and questions based on selected app type
   const stages = appType === 'purchase' ? purchaseStages : refinanceStages;
@@ -229,11 +232,20 @@ const ApplicationSlidesEditor = () => {
   const updateSelectedItem = (updates) => {
     if (!selectedItem.type || !selectedItem.id) return;
 
+    // If updating the ID, also update the selectedItem reference
+    const newId = updates.id || selectedItem.id;
+
     if (selectedItem.type === 'stage') {
       setStages(prev => prev.map(s => s.id === selectedItem.id ? { ...s, ...updates } : s));
     } else {
       setQuestions(prev => prev.map(q => q.id === selectedItem.id ? { ...q, ...updates } : q));
     }
+
+    // Update selectedItem if ID changed
+    if (updates.id && updates.id !== selectedItem.id) {
+      setSelectedItem({ type: selectedItem.type, id: updates.id });
+    }
+
     setHasChanges(true);
   };
 
@@ -447,26 +459,28 @@ const ApplicationSlidesEditor = () => {
               </div>
             </div>
             <div className={`nav-section-content ${!expandedSections.questions ? 'collapsed' : ''}`}>
-              {questions.map((question, index) => (
-                <div
-                  key={question.id}
-                  className={`nav-item ${!question.enabled ? 'disabled' : ''} ${selectedItem.type === 'question' && selectedItem.id === question.id ? 'selected' : ''}`}
-                  onClick={() => setSelectedItem({ type: 'question', id: question.id })}
-                >
-                  <div className="nav-category-badge" style={{ backgroundColor: getCategoryColor(question.category) }} />
-                  <div className="nav-item-content">
-                    <div className="nav-item-label">{question.question.substring(0, 30)}{question.question.length > 30 ? '...' : ''}</div>
-                    <div className="nav-item-meta">
-                      <span className="nav-item-id">{question.id}</span>
-                      <span className="nav-item-type">{question.type}</span>
+              {questions.map((question, index) => {
+                const stage = stages.find(s => s.id === question.stageId);
+                return (
+                  <div
+                    key={question.id}
+                    className={`nav-item ${!question.enabled ? 'disabled' : ''} ${selectedItem.type === 'question' && selectedItem.id === question.id ? 'selected' : ''}`}
+                    onClick={() => setSelectedItem({ type: 'question', id: question.id })}
+                  >
+                    <div className="nav-item-content">
+                      <div className="nav-item-label">{question.question.substring(0, 30)}{question.question.length > 30 ? '...' : ''}</div>
+                      <div className="nav-item-meta">
+                        <span className="nav-item-stage">{stage?.label || 'Unassigned'}</span>
+                        <span className="nav-item-type">{question.type}</span>
+                      </div>
+                    </div>
+                    <div className="nav-item-icons">
+                      {question.required && <span className="nav-item-icon required" title="Required">★</span>}
+                      {question.showIf && <span className="nav-item-icon conditional" title="Has Conditional Logic">⚡</span>}
                     </div>
                   </div>
-                  <div className="nav-item-icons">
-                    {question.required && <span className="nav-item-icon required" title="Required">★</span>}
-                    {question.showIf && <span className="nav-item-icon conditional" title="Has Conditional Logic">⚡</span>}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
               <button className="nav-add-btn" onClick={() => addNewItem('question')}>+ Add Question</button>
             </div>
           </div>
@@ -474,15 +488,33 @@ const ApplicationSlidesEditor = () => {
 
         {/* Center Panel - Preview */}
         <div className="flow-builder-preview">
+          {/* Preview Mode Toggle */}
+          <div className="preview-mode-toggle">
+            <button
+              className={`preview-mode-btn ${previewMode === 'mobile' ? 'active' : ''}`}
+              onClick={() => setPreviewMode('mobile')}
+              title="Mobile Preview"
+            >
+              📱 Mobile
+            </button>
+            <button
+              className={`preview-mode-btn ${previewMode === 'web' ? 'active' : ''}`}
+              onClick={() => setPreviewMode('web')}
+              title="Web Preview"
+            >
+              🖥️ Web
+            </button>
+          </div>
+
           {!selectedData ? (
             <div className="preview-empty-state">
               <h4>Select an item to preview</h4>
               <p>Click on a stage or question from the left panel</p>
             </div>
           ) : (
-            <div className="device-frame">
-              <div className="device-notch" />
-              <div className="device-screen">
+            <div className={`device-frame ${previewMode === 'web' ? 'web-frame' : ''}`}>
+              {previewMode === 'mobile' && <div className="device-notch" />}
+              <div className={`device-screen ${previewMode === 'web' ? 'web-screen' : ''}`}>
                 {selectedItem.type === 'stage' ? (
                   // Stage Preview
                   <div className="preview-stage">
@@ -727,14 +759,15 @@ const ApplicationSlidesEditor = () => {
                       </div>
 
                       <div className="settings-group">
-                        <label>Category</label>
+                        <label>Stage</label>
                         <select
                           className="settings-select"
-                          value={selectedData.category}
-                          onChange={(e) => updateSelectedItem({ category: e.target.value })}
+                          value={selectedData.stageId || selectedData.category || ''}
+                          onChange={(e) => updateSelectedItem({ stageId: e.target.value, category: e.target.value })}
                         >
-                          {CATEGORIES.map(cat => (
-                            <option key={cat} value={cat}>{cat}</option>
+                          <option value="">Select stage...</option>
+                          {stages.filter(s => s.enabled !== false).map(stage => (
+                            <option key={stage.id} value={stage.id}>{stage.label}</option>
                           ))}
                         </select>
                       </div>

@@ -4,6 +4,7 @@ import { loansAPI } from '../services/api';
 import CalendarSidebar from '../components/CalendarSidebar';
 import PermissionGate from '../components/PermissionGate';
 import { usePermissions } from '../contexts/PermissionContext';
+import { formatPhoneNumber } from '../utils/phoneUtils';
 import './Loans.css';
 
 // Map pipeline stage IDs to filter names
@@ -855,7 +856,7 @@ function Loans() {
                   <input
                     type="tel"
                     value={currentBorrower.phone}
-                    onChange={(e) => updateBorrower(activeBorrower, 'phone', e.target.value)}
+                    onChange={(e) => updateBorrower(activeBorrower, 'phone', formatPhoneNumber(e.target.value))}
                   />
                 </div>
               </div>
