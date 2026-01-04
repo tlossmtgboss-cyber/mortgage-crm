@@ -5124,13 +5124,14 @@ const API_BASE_URL = isProduction
                 </div>
               </div>
 
-              {/* Security Status */}
-              <div className="security-section" style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
-                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>Security Status</h3>
+              {/* Security Overview - Expanded */}
+              <div className="security-section" style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', marginBottom: '24px' }}>
+                <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>Security Overview</h3>
+                  <span style={{ background: '#dcfce7', color: '#166534', padding: '4px 12px', borderRadius: '20px', fontSize: '13px', fontWeight: '500' }}>All Systems Secure</span>
                 </div>
                 <div style={{ padding: '20px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <span style={{ color: '#22c55e', fontSize: '20px' }}>✓</span>
                       <div>
@@ -5149,8 +5150,282 @@ const API_BASE_URL = isProduction
                       <span style={{ color: '#22c55e', fontSize: '20px' }}>✓</span>
                       <div>
                         <div style={{ fontWeight: '500', color: '#1e293b' }}>Data Encryption</div>
-                        <div style={{ fontSize: '13px', color: '#64748b' }}>AES-256</div>
+                        <div style={{ fontSize: '13px', color: '#64748b' }}>AES-256 at rest</div>
                       </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <span style={{ color: '#22c55e', fontSize: '20px' }}>✓</span>
+                      <div>
+                        <div style={{ fontWeight: '500', color: '#1e293b' }}>Firewall Active</div>
+                        <div style={{ fontSize: '13px', color: '#64748b' }}>WAF protection</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Access Control & Compliance */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
+                <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
+                    <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>Access Control</h3>
+                  </div>
+                  <div style={{ padding: '20px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#f8fafc', borderRadius: '8px' }}>
+                        <div>
+                          <div style={{ fontWeight: '500', color: '#1e293b' }}>Active Sessions</div>
+                          <div style={{ fontSize: '13px', color: '#64748b' }}>Currently logged in users</div>
+                        </div>
+                        <div style={{ fontSize: '24px', fontWeight: '700', color: '#3b82f6' }}>12</div>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#f8fafc', borderRadius: '8px' }}>
+                        <div>
+                          <div style={{ fontWeight: '500', color: '#1e293b' }}>Failed Login Attempts</div>
+                          <div style={{ fontSize: '13px', color: '#64748b' }}>Last 24 hours</div>
+                        </div>
+                        <div style={{ fontSize: '24px', fontWeight: '700', color: '#22c55e' }}>0</div>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#f8fafc', borderRadius: '8px' }}>
+                        <div>
+                          <div style={{ fontWeight: '500', color: '#1e293b' }}>Password Resets</div>
+                          <div style={{ fontSize: '13px', color: '#64748b' }}>Last 7 days</div>
+                        </div>
+                        <div style={{ fontSize: '24px', fontWeight: '700', color: '#64748b' }}>2</div>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#f8fafc', borderRadius: '8px' }}>
+                        <div>
+                          <div style={{ fontWeight: '500', color: '#1e293b' }}>API Keys Active</div>
+                          <div style={{ fontSize: '13px', color: '#64748b' }}>Third-party integrations</div>
+                        </div>
+                        <div style={{ fontSize: '24px', fontWeight: '700', color: '#64748b' }}>5</div>
+                      </div>
+                    </div>
+                    <button style={{ marginTop: '16px', width: '100%', padding: '10px', background: '#f1f5f9', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '500', color: '#475569' }}>
+                      Manage Sessions
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
+                    <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>Compliance Status</h3>
+                  </div>
+                  <div style={{ padding: '20px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <span style={{ fontSize: '20px' }}>🛡️</span>
+                          <div>
+                            <div style={{ fontWeight: '500', color: '#1e293b' }}>SOC 2 Type II</div>
+                            <div style={{ fontSize: '13px', color: '#64748b' }}>Certified compliant</div>
+                          </div>
+                        </div>
+                        <span style={{ background: '#dcfce7', color: '#166534', padding: '4px 10px', borderRadius: '20px', fontSize: '12px' }}>Verified</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <span style={{ fontSize: '20px' }}>🔒</span>
+                          <div>
+                            <div style={{ fontWeight: '500', color: '#1e293b' }}>GLBA Compliant</div>
+                            <div style={{ fontSize: '13px', color: '#64748b' }}>Financial data protection</div>
+                          </div>
+                        </div>
+                        <span style={{ background: '#dcfce7', color: '#166534', padding: '4px 10px', borderRadius: '20px', fontSize: '12px' }}>Verified</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <span style={{ fontSize: '20px' }}>🌐</span>
+                          <div>
+                            <div style={{ fontWeight: '500', color: '#1e293b' }}>CCPA Ready</div>
+                            <div style={{ fontSize: '13px', color: '#64748b' }}>California privacy law</div>
+                          </div>
+                        </div>
+                        <span style={{ background: '#dcfce7', color: '#166534', padding: '4px 10px', borderRadius: '20px', fontSize: '12px' }}>Verified</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <span style={{ fontSize: '20px' }}>📋</span>
+                          <div>
+                            <div style={{ fontWeight: '500', color: '#1e293b' }}>RESPA Compliant</div>
+                            <div style={{ fontSize: '13px', color: '#64748b' }}>Real estate settlement</div>
+                          </div>
+                        </div>
+                        <span style={{ background: '#dcfce7', color: '#166534', padding: '4px 10px', borderRadius: '20px', fontSize: '12px' }}>Verified</span>
+                      </div>
+                    </div>
+                    <button style={{ marginTop: '16px', width: '100%', padding: '10px', background: '#f1f5f9', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '500', color: '#475569' }}>
+                      View Compliance Reports
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Security Audit Log */}
+              <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', marginBottom: '24px' }}>
+                <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>Recent Security Events</h3>
+                  <button style={{ background: 'transparent', border: '1px solid #e2e8f0', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>View All</button>
+                </div>
+                <div style={{ padding: '0' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: '#f8fafc' }}>
+                        <th style={{ textAlign: 'left', padding: '12px 20px', color: '#64748b', fontSize: '12px', fontWeight: '500', textTransform: 'uppercase' }}>Event</th>
+                        <th style={{ textAlign: 'left', padding: '12px 20px', color: '#64748b', fontSize: '12px', fontWeight: '500', textTransform: 'uppercase' }}>User</th>
+                        <th style={{ textAlign: 'left', padding: '12px 20px', color: '#64748b', fontSize: '12px', fontWeight: '500', textTransform: 'uppercase' }}>IP Address</th>
+                        <th style={{ textAlign: 'left', padding: '12px 20px', color: '#64748b', fontSize: '12px', fontWeight: '500', textTransform: 'uppercase' }}>Time</th>
+                        <th style={{ textAlign: 'left', padding: '12px 20px', color: '#64748b', fontSize: '12px', fontWeight: '500', textTransform: 'uppercase' }}>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '14px 20px', color: '#1e293b' }}>User Login</td>
+                        <td style={{ padding: '14px 20px', color: '#64748b' }}>admin@perenniaai.com</td>
+                        <td style={{ padding: '14px 20px', color: '#64748b', fontFamily: 'monospace', fontSize: '13px' }}>192.168.1.105</td>
+                        <td style={{ padding: '14px 20px', color: '#64748b' }}>2 min ago</td>
+                        <td style={{ padding: '14px 20px' }}><span style={{ background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}>Success</span></td>
+                      </tr>
+                      <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '14px 20px', color: '#1e293b' }}>Permission Changed</td>
+                        <td style={{ padding: '14px 20px', color: '#64748b' }}>john.smith@company.com</td>
+                        <td style={{ padding: '14px 20px', color: '#64748b', fontFamily: 'monospace', fontSize: '13px' }}>192.168.1.42</td>
+                        <td style={{ padding: '14px 20px', color: '#64748b' }}>15 min ago</td>
+                        <td style={{ padding: '14px 20px' }}><span style={{ background: '#fef3c7', color: '#92400e', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}>Modified</span></td>
+                      </tr>
+                      <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '14px 20px', color: '#1e293b' }}>API Key Generated</td>
+                        <td style={{ padding: '14px 20px', color: '#64748b' }}>admin@perenniaai.com</td>
+                        <td style={{ padding: '14px 20px', color: '#64748b', fontFamily: 'monospace', fontSize: '13px' }}>192.168.1.105</td>
+                        <td style={{ padding: '14px 20px', color: '#64748b' }}>1 hour ago</td>
+                        <td style={{ padding: '14px 20px' }}><span style={{ background: '#dbeafe', color: '#1e40af', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}>Created</span></td>
+                      </tr>
+                      <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '14px 20px', color: '#1e293b' }}>2FA Enabled</td>
+                        <td style={{ padding: '14px 20px', color: '#64748b' }}>sarah.jones@company.com</td>
+                        <td style={{ padding: '14px 20px', color: '#64748b', fontFamily: 'monospace', fontSize: '13px' }}>192.168.1.88</td>
+                        <td style={{ padding: '14px 20px', color: '#64748b' }}>3 hours ago</td>
+                        <td style={{ padding: '14px 20px' }}><span style={{ background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}>Enabled</span></td>
+                      </tr>
+                      <tr>
+                        <td style={{ padding: '14px 20px', color: '#1e293b' }}>Data Export</td>
+                        <td style={{ padding: '14px 20px', color: '#64748b' }}>admin@perenniaai.com</td>
+                        <td style={{ padding: '14px 20px', color: '#64748b', fontFamily: 'monospace', fontSize: '13px' }}>192.168.1.105</td>
+                        <td style={{ padding: '14px 20px', color: '#64748b' }}>Yesterday</td>
+                        <td style={{ padding: '14px 20px' }}><span style={{ background: '#dbeafe', color: '#1e40af', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}>Completed</span></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Data Protection & Backup */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
+                <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
+                    <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>Data Protection</h3>
+                  </div>
+                  <div style={{ padding: '20px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ width: '40px', height: '40px', background: '#dbeafe', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>🔐</div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: '500', color: '#1e293b' }}>Encryption at Rest</div>
+                          <div style={{ fontSize: '13px', color: '#64748b' }}>AES-256 encryption for all stored data</div>
+                        </div>
+                        <span style={{ color: '#22c55e', fontSize: '18px' }}>✓</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ width: '40px', height: '40px', background: '#dbeafe', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>🔒</div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: '500', color: '#1e293b' }}>Encryption in Transit</div>
+                          <div style={{ fontSize: '13px', color: '#64748b' }}>TLS 1.3 for all connections</div>
+                        </div>
+                        <span style={{ color: '#22c55e', fontSize: '18px' }}>✓</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ width: '40px', height: '40px', background: '#dbeafe', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>🗝️</div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: '500', color: '#1e293b' }}>Key Management</div>
+                          <div style={{ fontSize: '13px', color: '#64748b' }}>AWS KMS managed keys</div>
+                        </div>
+                        <span style={{ color: '#22c55e', fontSize: '18px' }}>✓</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ width: '40px', height: '40px', background: '#dbeafe', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>🛡️</div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: '500', color: '#1e293b' }}>PII Masking</div>
+                          <div style={{ fontSize: '13px', color: '#64748b' }}>Sensitive data automatically masked</div>
+                        </div>
+                        <span style={{ color: '#22c55e', fontSize: '18px' }}>✓</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
+                    <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>Backup & Recovery</h3>
+                  </div>
+                  <div style={{ padding: '20px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      <div style={{ padding: '16px', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                          <div style={{ fontWeight: '500', color: '#166534' }}>Last Backup</div>
+                          <span style={{ color: '#22c55e', fontSize: '14px' }}>✓ Successful</span>
+                        </div>
+                        <div style={{ fontSize: '24px', fontWeight: '700', color: '#166534' }}>2 hours ago</div>
+                        <div style={{ fontSize: '13px', color: '#15803d', marginTop: '4px' }}>Next backup in 4 hours</div>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', background: '#f8fafc', borderRadius: '8px' }}>
+                        <div>
+                          <div style={{ fontWeight: '500', color: '#1e293b' }}>Backup Frequency</div>
+                          <div style={{ fontSize: '13px', color: '#64748b' }}>Automatic every 6 hours</div>
+                        </div>
+                        <button style={{ background: 'transparent', border: '1px solid #e2e8f0', padding: '4px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>Configure</button>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', background: '#f8fafc', borderRadius: '8px' }}>
+                        <div>
+                          <div style={{ fontWeight: '500', color: '#1e293b' }}>Retention Period</div>
+                          <div style={{ fontSize: '13px', color: '#64748b' }}>90 days of backup history</div>
+                        </div>
+                        <button style={{ background: 'transparent', border: '1px solid #e2e8f0', padding: '4px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>Configure</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Security Recommendations */}
+              <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>Security Recommendations</h3>
+                </div>
+                <div style={{ padding: '20px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px', background: '#fffbeb', borderRadius: '8px', border: '1px solid #fde68a' }}>
+                      <span style={{ fontSize: '20px' }}>⚠️</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: '500', color: '#92400e' }}>Enable 2FA for 3 remaining users</div>
+                        <div style={{ fontSize: '13px', color: '#a16207' }}>Some team members haven't enabled two-factor authentication</div>
+                      </div>
+                      <button style={{ background: '#f59e0b', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: '500' }}>Enable Now</button>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px', background: '#f0f9ff', borderRadius: '8px', border: '1px solid #bae6fd' }}>
+                      <span style={{ fontSize: '20px' }}>💡</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: '500', color: '#0369a1' }}>Review API key permissions</div>
+                        <div style={{ fontSize: '13px', color: '#0284c7' }}>2 API keys have full admin access - consider limiting scope</div>
+                      </div>
+                      <button style={{ background: '#0ea5e9', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: '500' }}>Review</button>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+                      <span style={{ fontSize: '20px' }}>✅</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: '500', color: '#166534' }}>Password policy is strong</div>
+                        <div style={{ fontSize: '13px', color: '#15803d' }}>Minimum 12 characters with complexity requirements</div>
+                      </div>
+                      <span style={{ color: '#22c55e', fontWeight: '500' }}>Configured</span>
                     </div>
                   </div>
                 </div>

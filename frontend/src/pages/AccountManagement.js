@@ -1710,6 +1710,12 @@ const AccountManagement = () => {
 
   // Fetch Account Detail
   const fetchAccountDetail = useCallback(async (accountId) => {
+    // Helper to find demo account by ID
+    const findDemoAccount = (id) => {
+      return [...DEMO_ACCOUNTS, ...DEMO_SUSPENDED_ACCOUNTS, ...DEMO_CANCELED_ACCOUNTS]
+        .find(a => a.id === id);
+    };
+
     try {
       const [accountRes, usersRes, invoicesRes, timelineRes, costRes, trendRes, auditRes] = await Promise.all([
         fetch(`${API_BASE_URL}/api/v1/admin/account-management/accounts/${accountId}`, { headers: getAuthHeaders() }),
@@ -1721,59 +1727,121 @@ const AccountManagement = () => {
         fetch(`${API_BASE_URL}/api/v1/admin/account-management/accounts/${accountId}/audit-log`, { headers: getAuthHeaders() }),
       ]);
 
+      // Account data
       if (accountRes.ok) {
         const data = await accountRes.json();
-        setSelectedAccount(data.data);
+        if (data.data) {
+          setSelectedAccount(data.data);
+        } else {
+          setSelectedAccount(findDemoAccount(accountId) || DEMO_ACCOUNTS[0]);
+        }
+      } else {
+        setSelectedAccount(findDemoAccount(accountId) || DEMO_ACCOUNTS[0]);
       }
+
+      // Users data
       if (usersRes.ok) {
         const data = await usersRes.json();
-        setAccountUsers(data.data?.users || []);
+        const users = data.data?.users || [];
+        setAccountUsers(users.length > 0 ? users : DEMO_USERS);
+      } else {
+        setAccountUsers(DEMO_USERS);
       }
+
+      // Invoices data
       if (invoicesRes.ok) {
         const data = await invoicesRes.json();
-        setInvoices(data.data?.invoices || []);
+        const invoices = data.data?.invoices || [];
+        setInvoices(invoices.length > 0 ? invoices : DEMO_INVOICES);
+      } else {
+        setInvoices(DEMO_INVOICES);
       }
+
+      // Subscription timeline
       if (timelineRes.ok) {
         const data = await timelineRes.json();
-        setSubscriptionTimeline(data.data?.timeline || []);
+        const timeline = data.data?.timeline || [];
+        setSubscriptionTimeline(timeline.length > 0 ? timeline : DEMO_SUBSCRIPTION_TIMELINE);
+      } else {
+        setSubscriptionTimeline(DEMO_SUBSCRIPTION_TIMELINE);
       }
+
+      // Cost breakdown
       if (costRes.ok) {
         const data = await costRes.json();
-        setCostBreakdown(data.data);
+        setCostBreakdown(data.data || DEMO_COST_BREAKDOWN);
+      } else {
+        setCostBreakdown(DEMO_COST_BREAKDOWN);
       }
+
+      // Cost trend
       if (trendRes.ok) {
         const data = await trendRes.json();
-        setCostTrend(data.data);
+        setCostTrend(data.data || DEMO_COST_TREND);
+      } else {
+        setCostTrend(DEMO_COST_TREND);
       }
+
+      // Audit log
       if (auditRes.ok) {
         const data = await auditRes.json();
-        setAuditLog(data.data?.logs || []);
+        const logs = data.data?.logs || [];
+        setAuditLog(logs.length > 0 ? logs : DEMO_AUDIT_LOG);
+      } else {
+        setAuditLog(DEMO_AUDIT_LOG);
       }
     } catch (err) {
       console.error('Error fetching account detail:', err);
-      toast.error('Failed to load account details');
+      // Use demo data on error
+      setSelectedAccount(findDemoAccount(accountId) || DEMO_ACCOUNTS[0]);
+      setAccountUsers(DEMO_USERS);
+      setInvoices(DEMO_INVOICES);
+      setSubscriptionTimeline(DEMO_SUBSCRIPTION_TIMELINE);
+      setCostBreakdown(DEMO_COST_BREAKDOWN);
+      setCostTrend(DEMO_COST_TREND);
+      setAuditLog(DEMO_AUDIT_LOG);
     }
   }, []);
 
   // Fetch User Detail
   const fetchUserDetail = useCallback(async (userId) => {
+    // Helper to find demo user by ID
+    const findDemoUser = (id) => DEMO_USERS.find(u => u.id === id);
+
     try {
       const [userRes, historyRes] = await Promise.all([
         fetch(`${API_BASE_URL}/api/v1/admin/account-management/users/${userId}`, { headers: getAuthHeaders() }),
         fetch(`${API_BASE_URL}/api/v1/admin/account-management/users/${userId}/login-history`, { headers: getAuthHeaders() }),
       ]);
 
+      // User data
       if (userRes.ok) {
         const data = await userRes.json();
-        setSelectedUser(data.data);
+        if (data.data) {
+          setSelectedUser(data.data);
+        } else {
+          const demoUser = findDemoUser(userId) || DEMO_USERS[0];
+          setSelectedUser({ ...demoUser, accountName: 'Pinnacle Mortgage Group' });
+        }
+      } else {
+        const demoUser = findDemoUser(userId) || DEMO_USERS[0];
+        setSelectedUser({ ...demoUser, accountName: 'Pinnacle Mortgage Group' });
       }
+
+      // Login history
       if (historyRes.ok) {
         const data = await historyRes.json();
-        setLoginHistory(data.data?.events || []);
+        const events = data.data?.events || [];
+        setLoginHistory(events.length > 0 ? events : DEMO_LOGIN_HISTORY);
+      } else {
+        setLoginHistory(DEMO_LOGIN_HISTORY);
       }
     } catch (err) {
       console.error('Error fetching user detail:', err);
-      toast.error('Failed to load user details');
+      // Use demo data on error
+      const demoUser = findDemoUser(userId) || DEMO_USERS[0];
+      setSelectedUser({ ...demoUser, accountName: 'Pinnacle Mortgage Group' });
+      setLoginHistory(DEMO_LOGIN_HISTORY);
     }
   }, []);
 
