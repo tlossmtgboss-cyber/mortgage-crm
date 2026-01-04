@@ -154,7 +154,7 @@ def calculate_account_metrics(db: Session, account_id: str) -> dict:
             COUNT(CASE WHEN is_active = true THEN 1 END) as active_users,
             COUNT(CASE WHEN last_activity_at > NOW() - INTERVAL '30 days' THEN 1 END) as active_30d
         FROM users
-        WHERE tenant_account_id = :account_id AND is_deleted = false
+        WHERE tenant_account_id = :account_id
     """), {'account_id': account_id}).fetchone()
 
     # Get cost data for current month
@@ -492,7 +492,7 @@ async def get_kpis(
         users_result = db.execute(text("""
             SELECT COUNT(*) FROM users
             WHERE tenant_account_id IS NOT NULL
-            AND is_active = true AND is_deleted = false
+            AND is_active = true
         """)).scalar() or 0
 
         # Get at-risk accounts (no activity in 30 days)
@@ -968,14 +968,14 @@ async def list_account_users(
             FROM users u
             LEFT JOIN user_activity_stats s ON s.user_id = u.id
                 AND s.period = to_char(NOW(), 'YYYY-MM')
-            WHERE u.tenant_account_id = :account_id AND u.is_deleted = false
+            WHERE u.tenant_account_id = :account_id
             ORDER BY u.created_at DESC
             LIMIT :limit OFFSET :offset
         """), {'account_id': account_id, 'limit': limit, 'offset': (page - 1) * limit}).fetchall()
 
         total = db.execute(text("""
             SELECT COUNT(*) FROM users
-            WHERE tenant_account_id = :account_id AND is_deleted = false
+            WHERE tenant_account_id = :account_id
         """), {'account_id': account_id}).scalar() or 0
 
         user_list = []
@@ -1042,7 +1042,7 @@ async def get_user_detail(
             LEFT JOIN tenant_accounts ta ON ta.id = u.tenant_account_id
             LEFT JOIN user_activity_stats s ON s.user_id = u.id
                 AND s.period = to_char(NOW(), 'YYYY-MM')
-            WHERE u.id = :user_id AND u.is_deleted = false
+            WHERE u.id = :user_id
         """), {'user_id': user_id}).fetchone()
 
         if not user:
@@ -1167,7 +1167,7 @@ async def disable_user(
 
         user = db.execute(text("""
             SELECT id, full_name, email, is_active FROM users
-            WHERE id = :user_id AND is_deleted = false
+            WHERE id = :user_id
         """), {'user_id': user_id}).fetchone()
 
         if not user:
@@ -1211,7 +1211,7 @@ async def enable_user(
 
         user = db.execute(text("""
             SELECT id, full_name, email, is_active FROM users
-            WHERE id = :user_id AND is_deleted = false
+            WHERE id = :user_id
         """), {'user_id': user_id}).fetchone()
 
         if not user:
@@ -1256,7 +1256,7 @@ async def update_user_roles(
 
         user = db.execute(text("""
             SELECT id, full_name, email, role FROM users
-            WHERE id = :user_id AND is_deleted = false
+            WHERE id = :user_id
         """), {'user_id': user_id}).fetchone()
 
         if not user:
@@ -1307,7 +1307,7 @@ async def start_impersonation(
 
         target_user = db.execute(text("""
             SELECT id, full_name, email, tenant_account_id FROM users
-            WHERE id = :user_id AND is_deleted = false
+            WHERE id = :user_id
         """), {'user_id': imp_request.user_id}).fetchone()
 
         if not target_user:
