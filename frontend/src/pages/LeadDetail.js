@@ -320,6 +320,31 @@ function LeadDetail() {
     return found ? found.icon : '🤝';
   };
 
+  // Auto-load client portal workspace data on page load (for Record Video button)
+  const loadClientPortalData = async (leadId) => {
+    try {
+      const existingWorkspace = await purlAPI.getWorkspaceByLead(leadId);
+      if (existingWorkspace && existingWorkspace.workspace) {
+        const workspaceId = existingWorkspace.workspace.workspace_id || existingWorkspace.workspace.id;
+        const slug = existingWorkspace.workspace.workspace_slug || existingWorkspace.workspace.slug;
+
+        // Build portal URL (without token for display purposes)
+        const baseUrl = `${window.location.origin}/portal/${slug}`;
+
+        setClientPortalData({
+          workspace_id: workspaceId,
+          url: baseUrl,
+          borrower_name: existingWorkspace.workspace.display_name,
+          status: existingWorkspace.workspace.status,
+          exists: true
+        });
+      }
+    } catch (err) {
+      // Silently fail - workspace may not exist yet, which is fine
+      console.log('[Client Portal] No existing workspace for this lead');
+    }
+  };
+
   useEffect(() => {
     loadLeadData();
     loadEmails();
@@ -327,6 +352,7 @@ function LeadDetail() {
     markLeadAsViewed();
     loadLeadsList();
     loadReferralPartners();
+    loadClientPortalData(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -4765,7 +4791,7 @@ function LeadDetail() {
           <button className="action-btn voicemail" onClick={() => handleAction('voicemail')} disabled={!lead.phone} title="Drop voicemail">
             <span>Voicemail Drop</span>
           </button>
-          <button className="action-btn record-video" onClick={() => setShowSendVideoModal(true)} disabled={!clientPortalData?.workspace_id} title="Record and send a video message">
+          <button className="action-btn record-video" onClick={() => setShowSendVideoModal(true)} disabled={!clientPortalData?.workspace_id} title={clientPortalData?.workspace_id ? "Record and send a video message" : "Create a Client Portal first to enable video messaging"}>
             <span>Record Video</span>
           </button>
           <button className="action-btn application" onClick={() => handleAction('send_application')} disabled={applicationLoading} title="Send application link">
