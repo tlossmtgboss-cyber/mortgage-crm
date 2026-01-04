@@ -1431,16 +1431,82 @@ async def start_impersonation(
         if not target_user:
             raise NotFoundException(f"User {imp_request.user_id} not found")
 
+        # Ensure impersonation_sessions table exists with correct schema
+        table_exists = db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'impersonation_sessions'
+            )
+        """)).scalar()
+
+        if not table_exists:
+            # Create the table if it doesn't exist
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS impersonation_sessions (
+                    id SERIAL PRIMARY KEY,
+                    admin_user_id INTEGER NOT NULL REFERENCES users(id),
+                    target_user_id INTEGER NOT NULL REFERENCES users(id),
+                    account_id UUID,
+                    reason TEXT NOT NULL,
+                    started_at TIMESTAMP DEFAULT NOW(),
+                    ended_at TIMESTAMP,
+                    is_active BOOLEAN DEFAULT true
+                )
+            """))
+            db.commit()
+        else:
+            # Check if table has the expected columns (handle different migrations)
+            columns_result = db.execute(text("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_name = 'impersonation_sessions'
+            """))
+            existing_columns = {row[0] for row in columns_result}
+
+            # Add missing columns if needed
+            if 'admin_user_id' not in existing_columns:
+                try:
+                    db.execute(text("""
+                        ALTER TABLE impersonation_sessions
+                        ADD COLUMN IF NOT EXISTS admin_user_id INTEGER REFERENCES users(id)
+                    """))
+                except Exception:
+                    pass
+            if 'target_user_id' not in existing_columns:
+                try:
+                    db.execute(text("""
+                        ALTER TABLE impersonation_sessions
+                        ADD COLUMN IF NOT EXISTS target_user_id INTEGER REFERENCES users(id)
+                    """))
+                except Exception:
+                    pass
+            if 'account_id' not in existing_columns:
+                try:
+                    db.execute(text("""
+                        ALTER TABLE impersonation_sessions
+                        ADD COLUMN IF NOT EXISTS account_id UUID
+                    """))
+                except Exception:
+                    pass
+            if 'is_active' not in existing_columns:
+                try:
+                    db.execute(text("""
+                        ALTER TABLE impersonation_sessions
+                        ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true
+                    """))
+                except Exception:
+                    pass
+            db.commit()
+
         # Create impersonation session
         session_id = db.execute(text("""
             INSERT INTO impersonation_sessions
-            (admin_user_id, target_user_id, account_id, reason)
-            VALUES (:admin_id, :target_id, :account_id, :reason)
+            (admin_user_id, target_user_id, account_id, reason, is_active)
+            VALUES (:admin_id, :target_id, :account_id, :reason, true)
             RETURNING id
         """), {
             'admin_id': current_user.id,
-            'target_id': target_user[0],
-            'account_id': target_user[3],
+            'target_id': int(target_user[0]),
+            'account_id': str(target_user[3]) if target_user[3] else None,
             'reason': imp_request.reason
         }).scalar()
 
