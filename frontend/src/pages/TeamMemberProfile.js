@@ -6,6 +6,7 @@ import PermissionsTab from '../components/PermissionsTab';
 import AccessAuditTab from '../components/AccessAuditTab';
 import RolesResponsibilitiesTab from '../components/RolesResponsibilitiesTab';
 import WorkflowMilestonesTab from '../components/WorkflowMilestonesTab';
+import { formatPhoneNumber } from '../utils/phoneUtils';
 import './TeamMemberProfile.css';
 
 function TeamMemberProfile() {
@@ -428,7 +429,7 @@ function TeamMemberProfile() {
                 <input
                   type="tel"
                   value={formData.emergency_phone || ''}
-                  onChange={(e) => handleFieldChange('emergency_phone', e.target.value)}
+                  onChange={(e) => handleFieldChange('emergency_phone', formatPhoneNumber(e.target.value))}
                   disabled={!editing}
                 />
               </div>

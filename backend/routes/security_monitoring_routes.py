@@ -33,15 +33,20 @@ def set_dependencies(current_user_func):
     logger.info("Security monitoring routes dependencies set")
 
 
-async def get_current_user_dependency(request: Request, db: Session = Depends(get_db)):
-    """Wrapper to call the injected get_current_user function."""
+async def get_user_from_request(request: Request, db: Session):
+    """Helper to extract token and get current user."""
     if get_current_user is None:
         raise HTTPException(status_code=500, detail="Security routes not properly initialized")
-    return await get_current_user(request=request, db=db)
+    auth_header = request.headers.get('Authorization', '')
+    if not auth_header.startswith('Bearer '):
+        raise HTTPException(status_code=401, detail="Missing authorization token")
+    token = auth_header.replace('Bearer ', '')
+    return await get_current_user(token, request, db)
 
 
-def require_admin(current_user=Depends(get_current_user_dependency)):
+async def require_admin_dep(request: Request, db: Session = Depends(get_db)):
     """Require admin role for security endpoints."""
+    current_user = await get_user_from_request(request, db)
     if not current_user:
         raise HTTPException(status_code=401, detail="Authentication required")
 
@@ -56,7 +61,7 @@ def require_admin(current_user=Depends(get_current_user_dependency)):
 async def get_security_dashboard(
     request: Request,
     db: Session = Depends(get_db),
-    current_user=Depends(require_admin)
+    current_user=Depends(require_admin_dep)
 ):
     """
     Get comprehensive security dashboard data.
@@ -109,7 +114,7 @@ async def get_security_dashboard(
 @router.get("/rate-limits")
 async def get_rate_limit_details(
     request: Request,
-    current_user=Depends(require_admin)
+    current_user=Depends(require_admin_dep)
 ):
     """Get detailed rate limiting information."""
     try:
@@ -142,7 +147,7 @@ async def get_rate_limit_details(
 @router.get("/blocked-ips")
 async def get_blocked_ips(
     request: Request,
-    current_user=Depends(require_admin)
+    current_user=Depends(require_admin_dep)
 ):
     """Get list of currently blocked IPs."""
     try:
@@ -177,7 +182,7 @@ async def get_blocked_ips(
 async def unblock_ip(
     ip_address: str,
     request: Request,
-    current_user=Depends(require_admin)
+    current_user=Depends(require_admin_dep)
 ):
     """Manually unblock an IP address."""
     try:
@@ -207,7 +212,7 @@ async def unblock_ip(
 async def clear_rate_limit(
     identifier: str,
     request: Request,
-    current_user=Depends(require_admin)
+    current_user=Depends(require_admin_dep)
 ):
     """Clear rate limit for a specific user or IP."""
     try:
@@ -234,7 +239,7 @@ async def clear_rate_limit(
 @router.get("/events")
 async def get_security_events(
     db: Session = Depends(get_db),
-    current_user=Depends(require_admin),
+    current_user=Depends(require_admin_dep),
     limit: int = 100,
     event_type: Optional[str] = None
 ):
@@ -253,7 +258,7 @@ async def get_security_events(
 @router.get("/health")
 async def get_security_health(
     request: Request,
-    current_user=Depends(require_admin)
+    current_user=Depends(require_admin_dep)
 ):
     """Get overall security system health status."""
     try:

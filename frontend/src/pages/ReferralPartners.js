@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { partnersAPI } from '../services/api';
+import { formatPhoneNumber } from '../utils/phoneUtils';
 import './ReferralPartners.css';
 
 // Mock referral partners data
@@ -361,7 +362,7 @@ function AddPartnerModal({ onClose, onAdd, defaultCategory }) {
             <input
               type="tel"
               value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              onChange={(e) => setFormData({ ...formData, phone: formatPhoneNumber(e.target.value) })}
             />
           </div>
           <div className="form-actions">

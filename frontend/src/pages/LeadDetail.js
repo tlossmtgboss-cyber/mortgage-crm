@@ -23,6 +23,7 @@ import EmailComposerModal from '../components/EmailComposerModal';
 import CalendarSidebar from '../components/CalendarSidebar';
 import NeedsListView from '../components/smart-docs/NeedsListView';
 import SendVideoModal from '../components/video/SendVideoModal';
+import { formatPhoneNumber } from '../utils/phoneUtils';
 import './LeadDetail.css';
 
 // Mock lead data generator (same as Leads.js)
@@ -2328,7 +2329,7 @@ function LeadDetail() {
                 <input
                   type="tel"
                   value={formData.phone || ''}
-                  onChange={(e) => handleFieldChange('phone', e.target.value)}
+                  onChange={(e) => handleFieldChange('phone', formatPhoneNumber(e.target.value))}
                 />
               </div>
               <div className="info-field">
@@ -2856,7 +2857,7 @@ function LeadDetail() {
                       <input
                         type="tel"
                         value={formData.homeowner_insurance_phone || ''}
-                        onChange={(e) => handleFieldChange('homeowner_insurance_phone', e.target.value)}
+                        onChange={(e) => handleFieldChange('homeowner_insurance_phone', formatPhoneNumber(e.target.value))}
                         placeholder="(555) 555-5555"
                       />
                     </div>
@@ -2957,7 +2958,7 @@ function LeadDetail() {
                         <input
                           type="tel"
                           value={formData.flood_insurance_phone || ''}
-                          onChange={(e) => handleFieldChange('flood_insurance_phone', e.target.value)}
+                          onChange={(e) => handleFieldChange('flood_insurance_phone', formatPhoneNumber(e.target.value))}
                           placeholder="(555) 555-5555"
                         />
                       </div>
@@ -3095,7 +3096,7 @@ function LeadDetail() {
                       <input
                         type="tel"
                         value={formData.closing_phone || ''}
-                        onChange={(e) => handleFieldChange('closing_phone', e.target.value)}
+                        onChange={(e) => handleFieldChange('closing_phone', formatPhoneNumber(e.target.value))}
                         placeholder="(555) 555-5555"
                       />
                     </div>
@@ -3113,7 +3114,7 @@ function LeadDetail() {
                       <input
                         type="tel"
                         value={formData.closing_fax || ''}
-                        onChange={(e) => handleFieldChange('closing_fax', e.target.value)}
+                        onChange={(e) => handleFieldChange('closing_fax', formatPhoneNumber(e.target.value))}
                         placeholder="(555) 555-5555"
                       />
                     </div>
@@ -3812,7 +3813,7 @@ function LeadDetail() {
                         <input
                           type="tel"
                           value={circleForm.phone}
-                          onChange={e => setCircleForm({...circleForm, phone: e.target.value})}
+                          onChange={e => setCircleForm({...circleForm, phone: formatPhoneNumber(e.target.value)})}
                           className="form-control"
                           placeholder="Enter phone number"
                         />

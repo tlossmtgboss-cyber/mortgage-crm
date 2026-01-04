@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { formatPhoneNumber } from '../utils/phoneUtils';
 import './Users.css';
 
 // Use HTTPS Railway URL in production, localhost for development
@@ -336,7 +337,7 @@ function AddMemberModal({ onClose, onAdd, availableRoles }) {
             <input
               type="tel"
               value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              onChange={(e) => setFormData({ ...formData, phone: formatPhoneNumber(e.target.value) })}
             />
           </div>
           <div className="form-group">
@@ -415,7 +416,7 @@ function EditMemberModal({ member, onClose, onUpdate, onDelete, availableRoles }
             <input
               type="tel"
               value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              onChange={(e) => setFormData({ ...formData, phone: formatPhoneNumber(e.target.value) })}
             />
           </div>
           <div className="form-group">

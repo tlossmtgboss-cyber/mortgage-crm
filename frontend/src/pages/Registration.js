@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
+import { formatPhoneNumber } from '../utils/phoneUtils';
 import './Registration.css';
 
 // Use HTTPS Railway URL in production, localhost for development
@@ -311,7 +312,7 @@ function Registration() {
                     type="tel"
                     name="phone"
                     value={formData.phone}
-                    onChange={handleInputChange}
+                    onChange={(e) => setFormData(prev => ({ ...prev, phone: formatPhoneNumber(e.target.value) }))}
                     placeholder="(555) 123-4567"
                   />
                 </div>

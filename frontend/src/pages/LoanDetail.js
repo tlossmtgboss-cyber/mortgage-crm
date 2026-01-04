@@ -21,6 +21,7 @@ import IncomeCalculator from '../components/IncomeCalculator';
 import UnifiedIncomeCalculator from '../components/income/UnifiedIncomeCalculator';
 import PortalSelectorModal from '../components/PortalSelectorModal';
 import SendVideoModal from '../components/video/SendVideoModal';
+import { formatPhoneNumber } from '../utils/phoneUtils';
 import './LeadDetail.css';
 
 // Mock loans data (same as Loans.js)
@@ -1476,7 +1477,7 @@ function LoanDetail() {
                 <input
                   type="tel"
                   value={formData.borrower_phone || ''}
-                  onChange={(e) => handleFieldChange('borrower_phone', e.target.value)}
+                  onChange={(e) => handleFieldChange('borrower_phone', formatPhoneNumber(e.target.value))}
                 />
               </div>
               <div className="info-field">
@@ -1959,7 +1960,7 @@ function LoanDetail() {
                       <input
                         type="tel"
                         value={formData.homeowner_insurance_phone || ''}
-                        onChange={(e) => handleFieldChange('homeowner_insurance_phone', e.target.value)}
+                        onChange={(e) => handleFieldChange('homeowner_insurance_phone', formatPhoneNumber(e.target.value))}
                         placeholder="(555) 555-5555"
                       />
                     </div>
@@ -2063,7 +2064,7 @@ function LoanDetail() {
                         <input
                           type="tel"
                           value={formData.flood_insurance_phone || ''}
-                          onChange={(e) => handleFieldChange('flood_insurance_phone', e.target.value)}
+                          onChange={(e) => handleFieldChange('flood_insurance_phone', formatPhoneNumber(e.target.value))}
                           placeholder="(555) 555-5555"
                         />
                       </div>
@@ -2201,7 +2202,7 @@ function LoanDetail() {
                       <input
                         type="tel"
                         value={formData.closing_phone || ''}
-                        onChange={(e) => handleFieldChange('closing_phone', e.target.value)}
+                        onChange={(e) => handleFieldChange('closing_phone', formatPhoneNumber(e.target.value))}
                         placeholder="(555) 555-5555"
                       />
                     </div>
@@ -2219,7 +2220,7 @@ function LoanDetail() {
                       <input
                         type="tel"
                         value={formData.closing_fax || ''}
-                        onChange={(e) => handleFieldChange('closing_fax', e.target.value)}
+                        onChange={(e) => handleFieldChange('closing_fax', formatPhoneNumber(e.target.value))}
                         placeholder="(555) 555-5555"
                       />
                     </div>
@@ -3021,7 +3022,7 @@ function LoanDetail() {
                         <input
                           type="tel"
                           value={circleForm.phone}
-                          onChange={e => setCircleForm({...circleForm, phone: e.target.value})}
+                          onChange={e => setCircleForm({...circleForm, phone: formatPhoneNumber(e.target.value)})}
                           className="form-control"
                           placeholder="Enter phone number"
                         />
@@ -3774,7 +3775,7 @@ function LoanDetail() {
                 <input
                   type="tel"
                   value={teamMemberForm.phone}
-                  onChange={(e) => setTeamMemberForm({ ...teamMemberForm, phone: e.target.value })}
+                  onChange={(e) => setTeamMemberForm({ ...teamMemberForm, phone: formatPhoneNumber(e.target.value) })}
                   placeholder="(555) 123-4567"
                   style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '6px' }}
                 />

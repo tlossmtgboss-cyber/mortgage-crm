@@ -19,6 +19,7 @@ import PreApprovalLetterSettings from '../components/PreApprovalLetterSettings';
 import ApplicationSlidesEditor from '../components/ApplicationSlidesEditor';
 import BusinessOpsDashboard from './BusinessOpsDashboard';
 import IntegrationSettings from './IntegrationSettings';
+import { formatPhoneNumber } from '../utils/phoneUtils';
 import './Settings.css';
 
 // Use HTTPS Railway URL in production, localhost for development
@@ -195,7 +196,7 @@ const DialerSettingsSection = () => {
           <input
             type="tel"
             value={settings.cell_phone || ''}
-            onChange={(e) => setSettings({ ...settings, cell_phone: e.target.value })}
+            onChange={(e) => setSettings({ ...settings, cell_phone: formatPhoneNumber(e.target.value) })}
             placeholder="+1 (555) 123-4567"
           />
           <small>Your personal phone number for receiving calls</small>
@@ -224,7 +225,7 @@ const DialerSettingsSection = () => {
             <input
               type="tel"
               value={verifyPhone}
-              onChange={(e) => setVerifyPhone(e.target.value)}
+              onChange={(e) => setVerifyPhone(formatPhoneNumber(e.target.value))}
               placeholder="+1 (555) 123-4567"
             />
             <input
@@ -3582,7 +3583,7 @@ const API_BASE_URL = isProduction
                 <div className="test-form">
                   <div className="form-group">
                     <label>Test Phone Number</label>
-                    <input type="tel" className="form-input" placeholder="Enter phone number (e.g., 555-123-4567)" value={testPhoneNumber} onChange={(e) => setTestPhoneNumber(e.target.value)} />
+                    <input type="tel" className="form-input" placeholder="Enter phone number (e.g., 555-123-4567)" value={testPhoneNumber} onChange={(e) => setTestPhoneNumber(formatPhoneNumber(e.target.value))} />
                   </div>
                   <div className="test-actions">
                     <button className="btn-test sms" onClick={testSMS} disabled={!testPhoneNumber}>Test SMS</button>
@@ -4293,7 +4294,7 @@ const API_BASE_URL = isProduction
                       className="form-input"
                       placeholder="Enter phone number (e.g., 555-123-4567)"
                       value={testPhoneNumber}
-                      onChange={(e) => setTestPhoneNumber(e.target.value)}
+                      onChange={(e) => setTestPhoneNumber(formatPhoneNumber(e.target.value))}
                     />
                   </div>
 
@@ -4891,7 +4892,7 @@ const API_BASE_URL = isProduction
                     <input
                       type="tel"
                       value={userProfile.phone}
-                      onChange={(e) => setUserProfile({ ...userProfile, phone: e.target.value })}
+                      onChange={(e) => setUserProfile({ ...userProfile, phone: formatPhoneNumber(e.target.value) })}
                       placeholder="Enter your phone number"
                     />
                   </div>
