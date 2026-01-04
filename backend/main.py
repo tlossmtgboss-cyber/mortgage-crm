@@ -45397,6 +45397,7 @@ async def get_referral_partners(
             "closed_loans": actual_closed_loans,
             "volume": actual_volume,
             "loyalty_tier": partner.loyalty_tier,
+            "partner_category": partner.partner_category or "individual",
             "status": partner.status,
             "created_at": partner.created_at
         })
