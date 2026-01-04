@@ -12,25 +12,14 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-# =============================================================================
-# Dependency placeholders (to be set by main app)
-# =============================================================================
-
-def get_db():
-    """Database session dependency - must be overridden by main app"""
-    raise NotImplementedError("get_db must be overridden")
+# Import dependencies directly from main
+from main import get_db, get_current_user
 
 
-def get_current_user():
-    """Current user dependency - must be overridden by main app"""
-    raise NotImplementedError("get_current_user must be overridden")
-
-
+# Keep set_dependencies for backwards compatibility (no-op now)
 def set_dependencies(db_dependency, user_dependency):
-    """Set the dependency functions from the main app"""
-    global get_db, get_current_user
-    get_db = db_dependency
-    get_current_user = user_dependency
+    """Legacy function - dependencies now imported directly from main"""
+    pass
 
 
 # =============================================================================

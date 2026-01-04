@@ -9,30 +9,15 @@ import os
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# Database and auth dependencies - imported from main
-_get_db = None
-_get_current_user = None
+
+# Import dependencies directly from main
+from main import get_db, get_current_user
 
 
+# Keep set_dependencies for backwards compatibility (no-op now)
 def set_dependencies(db_func, user_func):
-    """Set dependencies from main app"""
-    global _get_db, _get_current_user
-    _get_db = db_func
-    _get_current_user = user_func
-
-
-def get_db_dep():
-    """Wrapper for db dependency"""
-    if _get_db is None:
-        raise RuntimeError("Dependencies not set")
-    return Depends(_get_db)
-
-
-def get_user_dep():
-    """Wrapper for user dependency"""
-    if _get_current_user is None:
-        raise RuntimeError("Dependencies not set")
-    return Depends(_get_current_user)
+    """Legacy function - dependencies now imported directly from main"""
+    pass
 
 
 # =============================================================================
@@ -41,8 +26,8 @@ def get_user_dep():
 
 @router.get("/admin/caller-ids")
 def list_caller_ids(
-    db: Session = Depends(lambda: next(_get_db()) if _get_db else None),
-    current_user = Depends(lambda: None)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """List all verified caller IDs for the organization"""
     try:
@@ -76,8 +61,8 @@ def list_caller_ids(
 def verify_caller_id(
     phone_number: str,
     friendly_name: str,
-    db: Session = Depends(lambda: None),
-    current_user = Depends(lambda: None)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """Start verification process for a new caller ID"""
     try:
