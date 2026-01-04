@@ -1428,6 +1428,258 @@ const AccountDetailPage = ({
   );
 };
 
+// User Permissions Tab Component
+const UserPermissionsTab = ({ user, onPermissionChange }) => {
+  const [permissions, setPermissions] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
+
+  // Permission categories and pages
+  const permissionCategories = [
+    {
+      name: 'Core CRM',
+      pages: [
+        { id: 'dashboard', label: 'Dashboard', description: 'Main dashboard access' },
+        { id: 'leads', label: 'Leads', description: 'Lead management' },
+        { id: 'active_loans', label: 'Active Loans', description: 'Loan pipeline' },
+        { id: 'portfolio', label: 'Portfolio', description: 'Loan portfolio management' },
+        { id: 'tasks', label: 'Tasks', description: 'Task management' },
+        { id: 'calendar', label: 'Calendar', description: 'Calendar and scheduling' },
+      ]
+    },
+    {
+      name: 'Communication',
+      pages: [
+        { id: 'marketing', label: 'Marketing', description: 'Marketing campaigns' },
+        { id: 'smart_docs', label: 'Smart Docs', description: 'Document management' },
+        { id: 'partners', label: 'Partners', description: 'Partner management' },
+      ]
+    },
+    {
+      name: 'Analytics',
+      pages: [
+        { id: 'scorecard', label: 'Scorecard', description: 'Performance metrics' },
+        { id: 'profitability', label: 'Profitability', description: 'Profitability analysis' },
+        { id: 'market', label: 'Market', description: 'Market data and trends' },
+      ]
+    },
+    {
+      name: 'AI Features',
+      pages: [
+        { id: 'ai_underwriter', label: 'AI Underwriter', description: 'AI underwriting tools' },
+        { id: 'ai_daily_blog', label: 'AI Daily Blog', description: 'AI content generation' },
+        { id: 'conversation_intelligence', label: 'Conversation Intelligence', description: 'Call analysis' },
+      ]
+    },
+    {
+      name: 'Administration',
+      pages: [
+        { id: 'settings', label: 'Settings', description: 'System settings' },
+        { id: 'team_management', label: 'Team Management', description: 'Manage team members' },
+        { id: 'recruiting', label: 'Recruiting', description: 'Recruitment tools' },
+        { id: 'capacity', label: 'Capacity', description: 'Capacity planning' },
+      ]
+    }
+  ];
+
+  // Load user permissions
+  useEffect(() => {
+    const loadPermissions = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/v1/admin/account-management/users/${user.id}/permissions`, {
+          headers: getAuthHeaders()
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setPermissions(data.data?.permissions || data.permissions || {});
+        } else {
+          // Default permissions based on roles
+          const defaultPerms = {};
+          permissionCategories.forEach(cat => {
+            cat.pages.forEach(page => {
+              // Admin gets everything, others get view by default
+              const isAdmin = user.roles?.includes('Admin');
+              defaultPerms[page.id] = {
+                view: true,
+                edit: isAdmin,
+                delete: isAdmin,
+                create: isAdmin
+              };
+            });
+          });
+          setPermissions(defaultPerms);
+        }
+      } catch (err) {
+        console.error('Error loading permissions:', err);
+        // Set default permissions on error
+        const defaultPerms = {};
+        permissionCategories.forEach(cat => {
+          cat.pages.forEach(page => {
+            defaultPerms[page.id] = { view: true, edit: false, delete: false, create: false };
+          });
+        });
+        setPermissions(defaultPerms);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadPermissions();
+  }, [user.id, user.roles]);
+
+  const handlePermissionToggle = (pageId, permType) => {
+    setPermissions(prev => ({
+      ...prev,
+      [pageId]: {
+        ...prev[pageId],
+        [permType]: !prev[pageId]?.[permType]
+      }
+    }));
+    setHasChanges(true);
+  };
+
+  const handleSavePermissions = async () => {
+    setSaving(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/admin/account-management/users/${user.id}/permissions`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ permissions })
+      });
+      if (response.ok) {
+        toast.success('Permissions saved successfully');
+        setHasChanges(false);
+        if (onPermissionChange) onPermissionChange(permissions);
+      } else {
+        toast.error('Failed to save permissions');
+      }
+    } catch (err) {
+      console.error('Error saving permissions:', err);
+      toast.error('Failed to save permissions');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSetAllInCategory = (category, permType, value) => {
+    const newPerms = { ...permissions };
+    category.pages.forEach(page => {
+      if (!newPerms[page.id]) newPerms[page.id] = {};
+      newPerms[page.id][permType] = value;
+    });
+    setPermissions(newPerms);
+    setHasChanges(true);
+  };
+
+  if (loading) {
+    return (
+      <div className="permissions-loading">
+        <div className="loading-spinner" />
+        <p>Loading permissions...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="permissions-tab">
+      <div className="permissions-header">
+        <div className="permissions-info">
+          <h3>Page Permissions</h3>
+          <p>Configure what pages and features this user can access</p>
+        </div>
+        {hasChanges && (
+          <button
+            className="btn-primary save-permissions-btn"
+            onClick={handleSavePermissions}
+            disabled={saving}
+          >
+            {saving ? 'Saving...' : 'Save Changes'}
+          </button>
+        )}
+      </div>
+
+      <div className="permissions-legend">
+        <span className="legend-item"><span className="perm-icon view">V</span> View</span>
+        <span className="legend-item"><span className="perm-icon create">C</span> Create</span>
+        <span className="legend-item"><span className="perm-icon edit">E</span> Edit</span>
+        <span className="legend-item"><span className="perm-icon delete">D</span> Delete</span>
+      </div>
+
+      {permissionCategories.map(category => (
+        <div key={category.name} className="permission-category">
+          <div className="category-header">
+            <h4>{category.name}</h4>
+            <div className="category-actions">
+              <button
+                className="category-toggle-btn"
+                onClick={() => handleSetAllInCategory(category, 'view', true)}
+                title="Enable View for all"
+              >
+                All View
+              </button>
+              <button
+                className="category-toggle-btn"
+                onClick={() => handleSetAllInCategory(category, 'edit', true)}
+                title="Enable Edit for all"
+              >
+                All Edit
+              </button>
+            </div>
+          </div>
+          <div className="permission-grid">
+            {category.pages.map(page => (
+              <div key={page.id} className="permission-row">
+                <div className="permission-page">
+                  <span className="page-name">{page.label}</span>
+                  <span className="page-description">{page.description}</span>
+                </div>
+                <div className="permission-toggles">
+                  <button
+                    className={`perm-toggle ${permissions[page.id]?.view ? 'active' : ''}`}
+                    onClick={() => handlePermissionToggle(page.id, 'view')}
+                    title="View"
+                  >
+                    V
+                  </button>
+                  <button
+                    className={`perm-toggle ${permissions[page.id]?.create ? 'active' : ''}`}
+                    onClick={() => handlePermissionToggle(page.id, 'create')}
+                    title="Create"
+                  >
+                    C
+                  </button>
+                  <button
+                    className={`perm-toggle ${permissions[page.id]?.edit ? 'active' : ''}`}
+                    onClick={() => handlePermissionToggle(page.id, 'edit')}
+                    title="Edit"
+                  >
+                    E
+                  </button>
+                  <button
+                    className={`perm-toggle ${permissions[page.id]?.delete ? 'active' : ''}`}
+                    onClick={() => handlePermissionToggle(page.id, 'delete')}
+                    title="Delete"
+                  >
+                    D
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      <div className="permissions-footer">
+        <p className="permissions-note">
+          Note: Role-based permissions may override individual page permissions.
+          Users with Admin role have full access by default.
+        </p>
+      </div>
+    </div>
+  );
+};
+
 // User Detail Page Component
 const UserDetailPage = ({ user, loginHistory, onBack, onAction }) => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -1515,6 +1767,9 @@ const UserDetailPage = ({ user, loginHistory, onBack, onAction }) => {
         </button>
         <button onClick={() => setActiveTab('stats')} className={`tab-btn ${activeTab === 'stats' ? 'active' : ''}`}>
           Activity Stats
+        </button>
+        <button onClick={() => setActiveTab('permissions')} className={`tab-btn ${activeTab === 'permissions' ? 'active' : ''}`}>
+          Permissions
         </button>
       </div>
 
@@ -1639,6 +1894,10 @@ const UserDetailPage = ({ user, loginHistory, onBack, onAction }) => {
               ))}
             </div>
           </div>
+        )}
+
+        {activeTab === 'permissions' && (
+          <UserPermissionsTab user={user} />
         )}
       </div>
     </div>

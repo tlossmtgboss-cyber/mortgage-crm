@@ -1409,6 +1409,206 @@ async def update_user_roles(
 
 
 # =============================================================================
+# User Permissions
+# =============================================================================
+
+class UserPermissionsRequest(BaseModel):
+    """Request to update user permissions"""
+    permissions: Dict[str, Dict[str, bool]] = Field(..., description="Page permissions map")
+
+
+@router.get("/users/{user_id}/permissions")
+async def get_user_permissions(
+    user_id: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Get page-level permissions for a user"""
+    try:
+        current_user = await get_user_from_request(request, db)
+        require_master_admin(current_user)
+
+        # Verify user exists
+        user = db.execute(text("""
+            SELECT id, full_name, email, role FROM users
+            WHERE id = :user_id
+        """), {'user_id': user_id}).fetchone()
+
+        if not user:
+            raise NotFoundException(f"User {user_id} not found")
+
+        # Ensure user_permissions table exists
+        table_exists = db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'user_permissions'
+            )
+        """)).scalar()
+
+        if not table_exists:
+            # Create the table
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS user_permissions (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    page_id VARCHAR(100) NOT NULL,
+                    can_view BOOLEAN DEFAULT false,
+                    can_create BOOLEAN DEFAULT false,
+                    can_edit BOOLEAN DEFAULT false,
+                    can_delete BOOLEAN DEFAULT false,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW(),
+                    UNIQUE(user_id, page_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_user_permissions_user_id ON user_permissions(user_id);
+            """))
+            db.commit()
+
+        # Get permissions
+        permissions_result = db.execute(text("""
+            SELECT page_id, can_view, can_create, can_edit, can_delete
+            FROM user_permissions
+            WHERE user_id = :user_id
+        """), {'user_id': user_id}).fetchall()
+
+        # Format as dict
+        permissions = {}
+        for row in permissions_result:
+            permissions[row[0]] = {
+                'view': row[1] or False,
+                'create': row[2] or False,
+                'edit': row[3] or False,
+                'delete': row[4] or False
+            }
+
+        # If no custom permissions, return default based on role
+        if not permissions:
+            is_admin = user[3] in ('admin', 'master_admin', 'Admin')
+            default_pages = [
+                'dashboard', 'leads', 'active_loans', 'portfolio', 'tasks', 'calendar',
+                'marketing', 'smart_docs', 'partners', 'scorecard', 'profitability',
+                'market', 'ai_underwriter', 'ai_daily_blog', 'conversation_intelligence',
+                'settings', 'team_management', 'recruiting', 'capacity'
+            ]
+            for page in default_pages:
+                permissions[page] = {
+                    'view': True,
+                    'create': is_admin,
+                    'edit': is_admin,
+                    'delete': is_admin
+                }
+
+        return success_response(
+            data={
+                'userId': user_id,
+                'userName': user[1] or user[2],
+                'role': user[3],
+                'permissions': permissions
+            },
+            message="Permissions retrieved successfully"
+        )
+    except (PermissionException, NotFoundException):
+        raise
+    except Exception as e:
+        logger.error(f"Error getting user permissions: {e}")
+        raise DatabaseException(f"Failed to get user permissions: {str(e)}")
+
+
+@router.put("/users/{user_id}/permissions")
+async def update_user_permissions(
+    user_id: str,
+    permissions_request: UserPermissionsRequest,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Update page-level permissions for a user"""
+    try:
+        current_user = await get_user_from_request(request, db)
+        require_master_admin(current_user)
+
+        # Verify user exists
+        user = db.execute(text("""
+            SELECT id, full_name, email FROM users
+            WHERE id = :user_id
+        """), {'user_id': user_id}).fetchone()
+
+        if not user:
+            raise NotFoundException(f"User {user_id} not found")
+
+        # Ensure table exists
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS user_permissions (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                page_id VARCHAR(100) NOT NULL,
+                can_view BOOLEAN DEFAULT false,
+                can_create BOOLEAN DEFAULT false,
+                can_edit BOOLEAN DEFAULT false,
+                can_delete BOOLEAN DEFAULT false,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(user_id, page_id)
+            )
+        """))
+
+        # Get old permissions for audit log
+        old_permissions = {}
+        old_result = db.execute(text("""
+            SELECT page_id, can_view, can_create, can_edit, can_delete
+            FROM user_permissions WHERE user_id = :user_id
+        """), {'user_id': user_id}).fetchall()
+        for row in old_result:
+            old_permissions[row[0]] = {
+                'view': row[1], 'create': row[2], 'edit': row[3], 'delete': row[4]
+            }
+
+        # Delete existing permissions
+        db.execute(text("""
+            DELETE FROM user_permissions WHERE user_id = :user_id
+        """), {'user_id': user_id})
+
+        # Insert new permissions
+        for page_id, perms in permissions_request.permissions.items():
+            db.execute(text("""
+                INSERT INTO user_permissions (user_id, page_id, can_view, can_create, can_edit, can_delete)
+                VALUES (:user_id, :page_id, :can_view, :can_create, :can_edit, :can_delete)
+            """), {
+                'user_id': user_id,
+                'page_id': page_id,
+                'can_view': perms.get('view', False),
+                'can_create': perms.get('create', False),
+                'can_edit': perms.get('edit', False),
+                'can_delete': perms.get('delete', False)
+            })
+
+        db.commit()
+
+        # Log the action
+        log_admin_action(
+            db, current_user, 'user.permissions_updated', 'user',
+            user_id, user[1] or user[2],
+            old_values={'permissions': old_permissions},
+            new_values={'permissions': permissions_request.permissions},
+            request=request
+        )
+
+        return success_response(
+            data={
+                'userId': user_id,
+                'permissions': permissions_request.permissions,
+                'pagesUpdated': len(permissions_request.permissions)
+            },
+            message=f"Permissions updated for '{user[1] or user[2]}'"
+        )
+    except (PermissionException, NotFoundException):
+        raise
+    except Exception as e:
+        logger.error(f"Error updating user permissions: {e}")
+        db.rollback()
+        raise DatabaseException(f"Failed to update user permissions: {str(e)}")
+
+
+# =============================================================================
 # Impersonation
 # =============================================================================
 
