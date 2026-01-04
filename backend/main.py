@@ -20547,6 +20547,14 @@ try:
 except Exception as e:
     logger.warning(f"Admin Onboarding routes not loaded: {e}")
 
+# Security Monitoring routes (Admin Dashboard Security Tab)
+try:
+    from routes.security_monitoring_routes import router as security_monitoring_router
+    app.include_router(security_monitoring_router, tags=["Security Monitoring"])
+    logger.info("✅ Security Monitoring routes loaded")
+except Exception as e:
+    logger.warning(f"Security Monitoring routes not loaded: {e}")
+
 # Document Upload Settings routes (Comprehensive error handling pattern)
 try:
     from routes.document_upload_settings_routes import router as document_upload_settings_router, set_dependencies as set_document_upload_deps

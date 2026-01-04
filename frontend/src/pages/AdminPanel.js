@@ -29,6 +29,10 @@ const AdminPanel = () => {
   const [aiMetrics, setAiMetrics] = useState(null);
   const [aiMetricsDays, setAiMetricsDays] = useState(7);
 
+  // Security monitoring state
+  const [securityData, setSecurityData] = useState(null);
+  const [securityLoading, setSecurityLoading] = useState(false);
+
   // Modal state
   const [showUserModal, setShowUserModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
@@ -104,6 +108,38 @@ const AdminPanel = () => {
       loadAiMetrics();
     }
   }, [activeTab, aiMetricsDays, loadAiMetrics]);
+
+  // Load Security Data
+  const loadSecurityData = useCallback(async () => {
+    try {
+      setSecurityLoading(true);
+      const response = await api.get('/api/v1/admin/security/dashboard');
+      setSecurityData(response.data);
+    } catch (err) {
+      console.error('Error loading security data:', err);
+      setSecurityData(null);
+    } finally {
+      setSecurityLoading(false);
+    }
+  }, []);
+
+  // Load security data when tab is active
+  useEffect(() => {
+    if (activeTab === 'security') {
+      loadSecurityData();
+    }
+  }, [activeTab, loadSecurityData]);
+
+  // Unblock IP
+  const handleUnblockIP = async (ip) => {
+    try {
+      await api.post(`/api/v1/admin/security/unblock-ip/${ip}`);
+      loadSecurityData();
+    } catch (err) {
+      console.error('Error unblocking IP:', err);
+      alert('Failed to unblock IP');
+    }
+  };
 
   // Filter users
   const filteredUsers = users.filter(user => {
@@ -275,6 +311,12 @@ const AdminPanel = () => {
           onClick={() => setActiveTab('ai_metrics')}
         >
           AI Metrics
+        </button>
+        <button
+          className={`tab ${activeTab === 'security' ? 'active' : ''}`}
+          onClick={() => setActiveTab('security')}
+        >
+          Security
         </button>
         <button
           className={`tab ${activeTab === 'settings' ? 'active' : ''}`}
@@ -943,6 +985,253 @@ const AdminPanel = () => {
               <div className="loading-metrics">
                 <div className="loading-spinner"></div>
                 <p>Loading AI metrics...</p>
+              </div>
+            )}
+          </section>
+        )}
+
+        {activeTab === 'security' && (
+          <section className="security-section">
+            <div className="section-header">
+              <h2>Security Monitoring</h2>
+              <div className="section-actions">
+                <button className="btn-secondary" onClick={loadSecurityData} disabled={securityLoading}>
+                  {securityLoading ? 'Refreshing...' : 'Refresh'}
+                </button>
+              </div>
+            </div>
+
+            {securityLoading && !securityData ? (
+              <div className="loading-metrics">
+                <div className="loading-spinner"></div>
+                <p>Loading security data...</p>
+              </div>
+            ) : securityData ? (
+              <>
+                {/* Security Status Overview */}
+                <div className="metrics-section">
+                  <h3>System Security Status</h3>
+                  <div className="metrics-grid">
+                    <div className={`metric-card ${securityData.status === 'active' ? 'success' : 'warning'}`}>
+                      <div className="metric-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        </svg>
+                      </div>
+                      <div className="metric-content">
+                        <span className="metric-value" style={{color: '#22c55e'}}>ACTIVE</span>
+                        <span className="metric-label">Security Status</span>
+                        <span className="metric-sublabel">{securityData.environment} environment</span>
+                      </div>
+                    </div>
+
+                    <div className="metric-card">
+                      <div className="metric-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="12" r="10"/>
+                          <line x1="12" y1="8" x2="12" y2="12"/>
+                          <line x1="12" y1="16" x2="12.01" y2="16"/>
+                        </svg>
+                      </div>
+                      <div className="metric-content">
+                        <span className="metric-value">{securityData.ip_blocking?.blocked_count || 0}</span>
+                        <span className="metric-label">Blocked IPs</span>
+                        <span className="metric-sublabel">Auto-blocked for violations</span>
+                      </div>
+                    </div>
+
+                    <div className="metric-card">
+                      <div className="metric-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                          <polyline points="22 4 12 14.01 9 11.01"/>
+                        </svg>
+                      </div>
+                      <div className="metric-content">
+                        <span className="metric-value">{securityData.rate_limiting?.active_keys || 0}</span>
+                        <span className="metric-label">Active Rate Limits</span>
+                        <span className="metric-sublabel">{securityData.rate_limiting?.total_requests_tracked || 0} requests tracked</span>
+                      </div>
+                    </div>
+
+                    <div className="metric-card">
+                      <div className="metric-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                        </svg>
+                      </div>
+                      <div className="metric-content">
+                        <span className="metric-value">{securityData.failed_logins?.recent_failed_attempts || 0}</span>
+                        <span className="metric-label">Failed Login Attempts</span>
+                        <span className="metric-sublabel">{securityData.failed_logins?.unique_ips || 0} unique IPs</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Middleware Status */}
+                <div className="metrics-section">
+                  <h3>Security Middleware Status</h3>
+                  <div className="middleware-grid">
+                    {Object.entries(securityData.middleware_status || {}).map(([name, active]) => (
+                      <div key={name} className={`middleware-item ${active ? 'active' : 'inactive'}`}>
+                        <span className={`status-dot ${active ? 'green' : 'red'}`}></span>
+                        <span className="middleware-name">{name.replace(/_/g, ' ')}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Blocked IPs */}
+                {securityData.ip_blocking?.blocked_ips?.length > 0 && (
+                  <div className="metrics-section">
+                    <h3>Blocked IP Addresses</h3>
+                    <div className="blocked-ips-list">
+                      {securityData.ip_blocking.blocked_ips.map((ip, index) => (
+                        <div key={index} className="blocked-ip-item">
+                          <span className="ip-address">{ip}</span>
+                          <button
+                            className="btn-small btn-danger"
+                            onClick={() => handleUnblockIP(ip)}
+                          >
+                            Unblock
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Top Rate Limit Offenders */}
+                {securityData.rate_limiting?.top_requesters?.length > 0 && (
+                  <div className="metrics-section">
+                    <h3>Top API Requesters</h3>
+                    <table className="security-table">
+                      <thead>
+                        <tr>
+                          <th>Identifier</th>
+                          <th>Requests</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {securityData.rate_limiting.top_requesters.slice(0, 10).map((item, index) => (
+                          <tr key={index}>
+                            <td>{item.key}</td>
+                            <td>{item.requests}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Failed Login Offenders */}
+                {securityData.failed_logins?.top_offenders?.length > 0 && (
+                  <div className="metrics-section">
+                    <h3>Failed Login Attempts by IP</h3>
+                    <table className="security-table">
+                      <thead>
+                        <tr>
+                          <th>IP Address</th>
+                          <th>Attempts</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {securityData.failed_logins.top_offenders.map((item, index) => (
+                          <tr key={index}>
+                            <td>{item.ip}</td>
+                            <td>{item.attempts}</td>
+                            <td>
+                              <span className={`status-badge ${item.attempts >= 5 ? 'blocked' : 'warning'}`}>
+                                {item.attempts >= 5 ? 'Blocked' : 'Warning'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Security Configuration */}
+                <div className="metrics-section">
+                  <h3>Security Configuration</h3>
+                  <div className="config-grid">
+                    <div className="config-item">
+                      <span className="config-label">Environment</span>
+                      <span className="config-value">{securityData.configuration?.environment || 'N/A'}</span>
+                    </div>
+                    <div className="config-item">
+                      <span className="config-label">Whitelisted IPs Configured</span>
+                      <span className={`config-value ${securityData.configuration?.whitelisted_ips_configured ? 'success' : 'warning'}`}>
+                        {securityData.configuration?.whitelisted_ips_configured ? 'Yes' : 'No'}
+                      </span>
+                    </div>
+                    <div className="config-item">
+                      <span className="config-label">Test API Key</span>
+                      <span className={`config-value ${securityData.configuration?.test_api_key_configured ? 'warning' : 'success'}`}>
+                        {securityData.configuration?.test_api_key_configured ? 'Configured' : 'Not Set'}
+                      </span>
+                    </div>
+                    <div className="config-item">
+                      <span className="config-label">Max Request Size</span>
+                      <span className="config-value">{securityData.configuration?.max_request_size_mb || 10} MB</span>
+                    </div>
+                    <div className="config-item">
+                      <span className="config-label">Failed Login Threshold</span>
+                      <span className="config-value">{securityData.configuration?.failed_login_threshold || 5} attempts</span>
+                    </div>
+                    <div className="config-item">
+                      <span className="config-label">Lockout Window</span>
+                      <span className="config-value">{securityData.configuration?.failed_login_window_minutes || 15} minutes</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Rate Limit Tiers */}
+                <div className="metrics-section">
+                  <h3>Rate Limit Tiers</h3>
+                  <table className="security-table">
+                    <thead>
+                      <tr>
+                        <th>Tier</th>
+                        <th>Requests/Minute</th>
+                        <th>Requests/Hour</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td><span className="tier-badge admin">Admin</span></td>
+                        <td>500</td>
+                        <td>20,000</td>
+                      </tr>
+                      <tr>
+                        <td><span className="tier-badge power">Power User</span></td>
+                        <td>300</td>
+                        <td>15,000</td>
+                      </tr>
+                      <tr>
+                        <td><span className="tier-badge standard">Standard</span></td>
+                        <td>120</td>
+                        <td>5,000</td>
+                      </tr>
+                      <tr>
+                        <td><span className="tier-badge anonymous">Anonymous</span></td>
+                        <td>60</td>
+                        <td>1,000</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : (
+              <div className="empty-state">
+                <p>Unable to load security data. Please try again.</p>
+                <button className="btn-primary" onClick={loadSecurityData}>
+                  Retry
+                </button>
               </div>
             )}
           </section>

@@ -1434,18 +1434,14 @@ async def start_impersonation(
         # Create impersonation session
         session_id = db.execute(text("""
             INSERT INTO impersonation_sessions
-            (admin_user_id, target_user_id, account_id, reason, acknowledgment_checked,
-             ip_address, user_agent)
-            VALUES (:admin_id, :target_id, :account_id, :reason, :ack, :ip, :ua)
+            (admin_user_id, target_user_id, account_id, reason)
+            VALUES (:admin_id, :target_id, :account_id, :reason)
             RETURNING id
         """), {
             'admin_id': current_user.id,
             'target_id': target_user[0],
             'account_id': target_user[3],
-            'reason': imp_request.reason,
-            'ack': imp_request.acknowledgment,
-            'ip': request.client.host,
-            'ua': request.headers.get('user-agent')
+            'reason': imp_request.reason
         }).scalar()
 
         db.commit()

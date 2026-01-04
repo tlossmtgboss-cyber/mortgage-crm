@@ -629,7 +629,7 @@ const KPIDashboard = ({ kpis, loading }) => {
 };
 
 // Modal Component
-const Modal = ({ isOpen, onClose, title, children, size = 'medium' }) => {
+const Modal = ({ isOpen, onClose, title, children, footer, size = 'medium' }) => {
   if (!isOpen) return null;
 
   return (
@@ -642,6 +642,11 @@ const Modal = ({ isOpen, onClose, title, children, size = 'medium' }) => {
         <div className="modal-body">
           {children}
         </div>
+        {footer && (
+          <div className="modal-actions">
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -661,8 +666,23 @@ const ReasonModal = ({ isOpen, onClose, onSubmit, title, description, submitLabe
     onClose();
   };
 
+  const footerContent = (
+    <>
+      <button onClick={handleClose} disabled={loading} className="btn-secondary">
+        Cancel
+      </button>
+      <button
+        onClick={handleSubmit}
+        disabled={loading || !reason.trim()}
+        className={`btn-${variant}`}
+      >
+        {loading ? 'Processing...' : submitLabel}
+      </button>
+    </>
+  );
+
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title={title}>
+    <Modal isOpen={isOpen} onClose={handleClose} title={title} footer={footerContent}>
       <p className="modal-description">{description}</p>
       <textarea
         value={reason}
@@ -671,18 +691,6 @@ const ReasonModal = ({ isOpen, onClose, onSubmit, title, description, submitLabe
         rows={3}
         className="modal-textarea"
       />
-      <div className="modal-actions">
-        <button onClick={handleClose} disabled={loading} className="btn-secondary">
-          Cancel
-        </button>
-        <button
-          onClick={handleSubmit}
-          disabled={loading || !reason.trim()}
-          className={`btn-${variant}`}
-        >
-          {loading ? 'Processing...' : submitLabel}
-        </button>
-      </div>
     </Modal>
   );
 };
@@ -728,8 +736,23 @@ const InviteSubscriberModal = ({ isOpen, onClose, onSubmit, loading }) => {
     { id: 'enterprise', name: 'Enterprise', price: 'Custom', description: 'Custom solutions' }
   ];
 
+  const footerContent = (
+    <>
+      <button onClick={handleClose} disabled={loading} className="btn-secondary">
+        Cancel
+      </button>
+      <button
+        onClick={handleSubmit}
+        disabled={loading || !formData.email || !formData.companyName}
+        className="btn-primary"
+      >
+        {loading ? 'Sending...' : 'Send Invitation'}
+      </button>
+    </>
+  );
+
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title="Invite New Subscriber" size="large">
+    <Modal isOpen={isOpen} onClose={handleClose} title="Invite New Subscriber" size="large" footer={footerContent}>
       <div className="invite-form">
         <div className="form-section">
           <h4>Contact Information</h4>
@@ -765,7 +788,7 @@ const InviteSubscriberModal = ({ isOpen, onClose, onSubmit, loading }) => {
         </div>
 
         <div className="form-section">
-          <h4>Subscription Details</h4>
+          <h4>Subscription Plan</h4>
           <div className="plan-selector">
             {plans.map(plan => (
               <div
@@ -803,19 +826,6 @@ const InviteSubscriberModal = ({ isOpen, onClose, onSubmit, loading }) => {
           />
         </div>
       </div>
-
-      <div className="modal-actions">
-        <button onClick={handleClose} disabled={loading} className="btn-secondary">
-          Cancel
-        </button>
-        <button
-          onClick={handleSubmit}
-          disabled={loading || !formData.email || !formData.companyName}
-          className="btn-primary"
-        >
-          {loading ? 'Sending...' : 'Send Invitation'}
-        </button>
-      </div>
     </Modal>
   );
 };
@@ -837,8 +847,23 @@ const ImpersonationModal = ({ isOpen, onClose, onSubmit, userName, loading }) =>
     onClose();
   };
 
+  const footerContent = (
+    <>
+      <button onClick={handleClose} disabled={loading} className="btn-secondary">
+        Cancel
+      </button>
+      <button
+        onClick={handleSubmit}
+        disabled={loading || !reason.trim() || !acknowledged}
+        className="btn-warning"
+      >
+        {loading ? 'Starting...' : 'Start Impersonation'}
+      </button>
+    </>
+  );
+
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title="Impersonate User">
+    <Modal isOpen={isOpen} onClose={handleClose} title="Impersonate User" footer={footerContent}>
       <div className="impersonation-warning">
         <span className="warning-icon">!</span>
         <p>You are about to impersonate <strong>{userName}</strong>. This action is fully audited.</p>
@@ -858,18 +883,6 @@ const ImpersonationModal = ({ isOpen, onClose, onSubmit, userName, loading }) =>
         />
         I understand that all actions will be logged and attributed to my admin account
       </label>
-      <div className="modal-actions">
-        <button onClick={handleClose} disabled={loading} className="btn-secondary">
-          Cancel
-        </button>
-        <button
-          onClick={handleSubmit}
-          disabled={loading || !reason.trim() || !acknowledged}
-          className="btn-warning"
-        >
-          {loading ? 'Starting...' : 'Start Impersonation'}
-        </button>
-      </div>
     </Modal>
   );
 };
