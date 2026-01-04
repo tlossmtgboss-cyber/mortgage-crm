@@ -4211,3 +4211,431 @@ textarea.text-input {
     flex: 1;
   }
 }
+
+/* ============================================
+   ACCOUNT MANAGEMENT - COLLAPSIBLE CARDS
+   ============================================ */
+
+.collapsible-cards-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+}
+
+.collapsible-card {
+  background: #1e293b;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  border: 1px solid #334155;
+}
+
+.collapsible-card:hover {
+  border-color: #475569;
+}
+
+.collapsible-card.expanded {
+  border-color: #3b82f6;
+}
+
+.collapsible-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.collapsible-card-header:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.card-header-left,
+.card-header-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.card-icon {
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  color: white;
+}
+
+.collapsible-card:nth-child(2) .card-icon {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.card-title-section h3,
+.card-header-content h3 {
+  margin: 0 0 4px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.card-title-section p,
+.card-header-content p {
+  margin: 0;
+  font-size: 14px;
+  color: #94a3b8;
+}
+
+.card-header-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.card-stats {
+  display: flex;
+  gap: 24px;
+}
+
+.stat-item {
+  text-align: center;
+}
+
+.stat-value {
+  display: block;
+  font-size: 24px;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.stat-label {
+  display: block;
+  font-size: 12px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.expand-icon,
+.expand-arrow {
+  font-size: 20px;
+  color: #64748b;
+  transition: transform 0.3s ease;
+}
+
+.collapsible-card.expanded .expand-icon,
+.collapsible-card.expanded .expand-arrow {
+  color: #3b82f6;
+}
+
+.card-stats .stat {
+  padding: 4px 12px;
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.collapsible-card-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease, padding 0.3s ease;
+  background: #0f172a;
+}
+
+.collapsible-card.expanded .collapsible-card-content {
+  max-height: 2000px;
+  padding: 24px;
+  border-top: 1px solid #334155;
+}
+
+/* Card Actions Bar */
+.card-actions-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #334155;
+}
+
+.card-actions-bar .search-input-container {
+  position: relative;
+  flex: 1;
+  max-width: 300px;
+}
+
+.card-actions-bar .search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #64748b;
+}
+
+.card-actions-bar .search-input {
+  width: 100%;
+  padding: 10px 12px 10px 40px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  color: #f8fafc;
+  font-size: 14px;
+}
+
+.card-actions-bar .search-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.card-actions-bar .search-input::placeholder {
+  color: #64748b;
+}
+
+.card-actions-bar .action-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+.card-actions-bar .btn-primary {
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.card-actions-bar .btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+/* Users Table in Card */
+.collapsible-card .users-table-container {
+  background: #1e293b;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.collapsible-card .users-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.collapsible-card .users-table th {
+  background: #0f172a;
+  padding: 14px 16px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #334155;
+}
+
+.collapsible-card .users-table td {
+  padding: 16px;
+  border-bottom: 1px solid #1e293b;
+  color: #f8fafc;
+  font-size: 14px;
+}
+
+.collapsible-card .users-table tr:hover td {
+  background: rgba(59, 130, 246, 0.05);
+}
+
+/* Security Monitoring Styles */
+.security-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.security-section {
+  background: #1e293b;
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.security-section h4 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #f8fafc;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.security-section h4 .section-icon {
+  font-size: 18px;
+}
+
+.sessions-list,
+.login-history-list,
+.audit-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.session-item,
+.login-item,
+.audit-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  background: #0f172a;
+  border-radius: 8px;
+  border: 1px solid #334155;
+}
+
+.session-info,
+.login-info,
+.audit-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.session-device,
+.login-method {
+  font-size: 14px;
+  font-weight: 500;
+  color: #f8fafc;
+}
+
+.session-location,
+.login-location,
+.audit-user {
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.session-time,
+.login-time,
+.audit-time {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.session-status,
+.login-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.session-status.active {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+.session-status.current {
+  background: rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
+}
+
+.login-status.success {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+.login-status.failed {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.audit-action {
+  padding: 6px 12px;
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Empty States for Security */
+.security-section .empty-state {
+  text-align: center;
+  padding: 32px;
+  color: #64748b;
+}
+
+.security-section .empty-state .empty-icon {
+  font-size: 32px;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+.security-section .empty-state p {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* Responsive for Account Management */
+@media (max-width: 768px) {
+  .collapsible-cards-container {
+    padding: 16px;
+  }
+
+  .collapsible-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 16px;
+  }
+
+  .card-header-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .card-stats {
+    gap: 16px;
+  }
+
+  .card-actions-bar {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .card-actions-bar .search-input-container {
+    max-width: 100%;
+  }
+
+  .card-actions-bar .action-buttons {
+    width: 100%;
+  }
+
+  .card-actions-bar .btn-primary {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .session-item,
+  .login-item,
+  .audit-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+}

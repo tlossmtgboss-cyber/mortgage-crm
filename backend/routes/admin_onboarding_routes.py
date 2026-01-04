@@ -1,0 +1,898 @@
+"""
+Admin Onboarding Routes
+Handles the onboarding flow for new administrators signing up via subscription invitation.
+"""
+
+from fastapi import APIRouter, Depends, Request, HTTPException
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from pydantic import BaseModel, Field, EmailStr, validator
+from typing import Optional, List
+from datetime import datetime, timezone, timedelta
+from decimal import Decimal
+import logging
+import uuid
+import json
+import os
+
+from database import get_db
+from utils.error_handling import (
+    ValidationException,
+    NotFoundException,
+    success_response
+)
+from email_service import email_service
+
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/api/v1/admin-onboarding", tags=["Admin Onboarding"])
+
+# Stripe integration
+try:
+    import stripe
+    stripe.api_key = os.getenv('STRIPE_SECRET_KEY', '')
+    STRIPE_AVAILABLE = bool(stripe.api_key)
+except ImportError:
+    STRIPE_AVAILABLE = False
+    logger.warning("Stripe not installed. Install with: pip install stripe")
+
+
+# =============================================================================
+# Pydantic Models
+# =============================================================================
+
+class StartOnboardingRequest(BaseModel):
+    """Request to start onboarding after validating invite"""
+    invite_token: str = Field(..., description="Invitation token from email")
+    email: EmailStr = Field(..., description="Admin email address")
+    password: str = Field(..., min_length=8, description="Account password")
+    accept_terms: bool = Field(..., description="Accept terms of service")
+
+    @validator('password')
+    def validate_password(cls, v):
+        if not any(c.isupper() for c in v):
+            raise ValueError('Password must contain at least one uppercase letter')
+        if not any(c.islower() for c in v):
+            raise ValueError('Password must contain at least one lowercase letter')
+        if not any(c.isdigit() for c in v):
+            raise ValueError('Password must contain at least one number')
+        return v
+
+    @validator('accept_terms')
+    def validate_terms(cls, v):
+        if not v:
+            raise ValueError('You must accept the terms of service')
+        return v
+
+
+class CompanyProfileRequest(BaseModel):
+    """Company profile setup"""
+    company_name: str = Field(..., min_length=2, max_length=255)
+    company_phone: Optional[str] = Field(None, max_length=20)
+    company_address: Optional[str] = Field(None, max_length=500)
+    industry: str = Field('mortgage_broker', description="Industry type")
+    logo_url: Optional[str] = Field(None, description="Company logo URL")
+
+
+class UserProfileRequest(BaseModel):
+    """Admin user profile setup"""
+    first_name: str = Field(..., min_length=1, max_length=100)
+    last_name: str = Field(..., min_length=1, max_length=100)
+    job_title: Optional[str] = Field(None, max_length=100)
+    phone: Optional[str] = Field(None, max_length=20)
+    nmls_number: Optional[str] = Field(None, max_length=20)
+    timezone: str = Field('America/New_York')
+    headshot_url: Optional[str] = Field(None)
+
+
+class TeamInvite(BaseModel):
+    """Single team member invite"""
+    email: EmailStr
+    role: str = Field('loan_officer', description="Role for the invitee")
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+
+
+class InviteTeamRequest(BaseModel):
+    """Request to queue team invites"""
+    invites: List[TeamInvite] = Field(default=[], max_items=50)
+    skip: bool = Field(False, description="Skip inviting team members")
+
+
+class PaymentRequest(BaseModel):
+    """Payment/subscription request"""
+    payment_method_id: str = Field(..., description="Stripe payment method ID")
+    billing_name: str = Field(..., min_length=2)
+    billing_address_line1: Optional[str] = None
+    billing_city: Optional[str] = None
+    billing_state: Optional[str] = None
+    billing_postal_code: Optional[str] = None
+    billing_country: str = Field('US')
+    promo_code: Optional[str] = None
+
+
+# =============================================================================
+# Plan Configuration
+# =============================================================================
+
+PLAN_PRICES = {
+    'starter': {
+        'name': 'Starter',
+        'monthly_price': 99,
+        'stripe_price_id': os.getenv('STRIPE_STARTER_PRICE_ID', 'price_starter'),
+    },
+    'professional': {
+        'name': 'Professional',
+        'monthly_price': 299,
+        'stripe_price_id': os.getenv('STRIPE_PROFESSIONAL_PRICE_ID', 'price_professional'),
+    },
+    'enterprise': {
+        'name': 'Enterprise',
+        'monthly_price': 499,
+        'stripe_price_id': os.getenv('STRIPE_ENTERPRISE_PRICE_ID', 'price_enterprise'),
+    },
+    'custom': {
+        'name': 'Custom',
+        'monthly_price': 0,  # Custom pricing
+        'stripe_price_id': None,
+    }
+}
+
+
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
+def get_invite_data(db: Session, token: str) -> Optional[dict]:
+    """Look up invitation data from audit log"""
+    result = db.execute(text("""
+        SELECT id, new_values, created_at, target_id
+        FROM admin_audit_log
+        WHERE action_type = 'invitation_sent'
+          AND target_id = :token
+        ORDER BY created_at DESC
+        LIMIT 1
+    """), {'token': token}).fetchone()
+
+    if not result:
+        return None
+
+    # Parse the stored data
+    try:
+        if isinstance(result.new_values, str):
+            data = eval(result.new_values)  # It was stored as str(dict)
+        else:
+            data = result.new_values
+    except:
+        return None
+
+    # Check expiration
+    expires_at_str = data.get('expires_at')
+    if expires_at_str:
+        try:
+            expires_at = datetime.fromisoformat(expires_at_str.replace('Z', '+00:00'))
+            if datetime.now(timezone.utc) > expires_at:
+                return {'expired': True, **data}
+        except:
+            pass
+
+    return {
+        'audit_id': result.id,
+        'created_at': result.created_at,
+        **data
+    }
+
+
+def check_invite_used(db: Session, email: str) -> bool:
+    """Check if email already has an account"""
+    result = db.execute(text("""
+        SELECT id FROM users WHERE email = :email LIMIT 1
+    """), {'email': email}).fetchone()
+    return result is not None
+
+
+def hash_password(password: str) -> str:
+    """Hash password using bcrypt"""
+    try:
+        import bcrypt
+        salt = bcrypt.gensalt()
+        return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
+    except ImportError:
+        # Fallback to simple hash if bcrypt not available
+        import hashlib
+        return hashlib.sha256(password.encode()).hexdigest()
+
+
+# =============================================================================
+# Endpoints
+# =============================================================================
+
+@router.get("/validate-invite/{token}")
+async def validate_invite(token: str, db: Session = Depends(get_db)):
+    """Validate a subscription invitation token"""
+    try:
+        invite_data = get_invite_data(db, token)
+
+        if not invite_data:
+            return success_response(
+                data={'valid': False, 'reason': 'invalid'},
+                message="Invalid invitation token"
+            )
+
+        if invite_data.get('expired'):
+            return success_response(
+                data={'valid': False, 'reason': 'expired'},
+                message="This invitation has expired"
+            )
+
+        # Check if already used
+        if check_invite_used(db, invite_data.get('email', '')):
+            return success_response(
+                data={'valid': False, 'reason': 'already_used'},
+                message="This invitation has already been accepted"
+            )
+
+        # Get plan details
+        plan_key = invite_data.get('plan', 'professional')
+        plan_info = PLAN_PRICES.get(plan_key, PLAN_PRICES['professional'])
+
+        return success_response(
+            data={
+                'valid': True,
+                'email': invite_data.get('email'),
+                'company_name': invite_data.get('company_name'),
+                'contact_name': invite_data.get('contact_name'),
+                'plan': plan_key,
+                'plan_name': plan_info['name'],
+                'seats': invite_data.get('seats', 5),
+                'monthly_price': plan_info['monthly_price']
+            },
+            message="Invitation is valid"
+        )
+
+    except Exception as e:
+        logger.error(f"Error validating invite: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/start")
+async def start_onboarding(
+    request: StartOnboardingRequest,
+    db: Session = Depends(get_db)
+):
+    """Start the onboarding process - create account and tenant"""
+    try:
+        # Validate invite token
+        invite_data = get_invite_data(db, request.invite_token)
+        if not invite_data or invite_data.get('expired'):
+            raise ValidationException("Invalid or expired invitation")
+
+        # Check if email matches invite
+        if invite_data.get('email', '').lower() != request.email.lower():
+            raise ValidationException("Email does not match invitation")
+
+        # Check if account already exists
+        if check_invite_used(db, request.email):
+            raise ValidationException("An account with this email already exists")
+
+        # Create tenant account
+        tenant_id = str(uuid.uuid4())
+        plan_key = invite_data.get('plan', 'professional')
+
+        db.execute(text("""
+            INSERT INTO tenant_accounts (
+                id, name, status, plan_id, plan_name, seats_purchased,
+                created_at, updated_at
+            ) VALUES (
+                :id, :name, 'active', :plan_id, :plan_name, :seats,
+                NOW(), NOW()
+            )
+        """), {
+            'id': tenant_id,
+            'name': invite_data.get('company_name', 'New Company'),
+            'plan_id': plan_key,
+            'plan_name': PLAN_PRICES.get(plan_key, {}).get('name', 'Professional'),
+            'seats': invite_data.get('seats', 5)
+        })
+
+        # Create admin user
+        hashed_password = hash_password(request.password)
+        contact_name = invite_data.get('contact_name', '')
+        name_parts = contact_name.split(' ', 1) if contact_name else ['', '']
+
+        user_result = db.execute(text("""
+            INSERT INTO users (
+                email, password, full_name, first_name, last_name,
+                role, is_active, tenant_account_id,
+                created_at, updated_at
+            ) VALUES (
+                :email, :password, :full_name, :first_name, :last_name,
+                'admin', true, :tenant_id,
+                NOW(), NOW()
+            )
+            RETURNING id
+        """), {
+            'email': request.email,
+            'password': hashed_password,
+            'full_name': contact_name or request.email.split('@')[0],
+            'first_name': name_parts[0] if len(name_parts) > 0 else '',
+            'last_name': name_parts[1] if len(name_parts) > 1 else '',
+            'tenant_id': tenant_id
+        })
+
+        user_id = user_result.fetchone()[0]
+
+        # Update tenant with owner
+        db.execute(text("""
+            UPDATE tenant_accounts SET owner_user_id = :user_id WHERE id = :tenant_id
+        """), {'user_id': user_id, 'tenant_id': tenant_id})
+
+        # Create onboarding session
+        session_id = str(uuid.uuid4())
+
+        db.commit()
+
+        # Generate auth token
+        try:
+            import jwt
+            token = jwt.encode(
+                {'sub': request.email, 'exp': datetime.utcnow() + timedelta(hours=24)},
+                os.getenv('JWT_SECRET', 'your-secret-key'),
+                algorithm='HS256'
+            )
+        except:
+            token = session_id  # Fallback
+
+        return success_response(
+            data={
+                'user_id': user_id,
+                'tenant_id': tenant_id,
+                'session_id': session_id,
+                'access_token': token,
+                'plan': plan_key,
+                'seats': invite_data.get('seats', 5),
+                'company_name': invite_data.get('company_name')
+            },
+            message="Account created successfully"
+        )
+
+    except ValidationException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error starting onboarding: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/company-profile")
+async def save_company_profile(
+    request: Request,
+    profile: CompanyProfileRequest,
+    db: Session = Depends(get_db)
+):
+    """Save company profile during onboarding"""
+    try:
+        # Get user from auth header
+        auth = request.headers.get('Authorization', '')
+        if not auth.startswith('Bearer '):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+
+        token = auth.split(' ')[1]
+
+        # Decode token to get user
+        try:
+            import jwt
+            payload = jwt.decode(token, os.getenv('JWT_SECRET', 'your-secret-key'), algorithms=['HS256'])
+            email = payload.get('sub')
+        except:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        # Get user and tenant
+        user = db.execute(text("""
+            SELECT id, tenant_account_id FROM users WHERE email = :email
+        """), {'email': email}).fetchone()
+
+        if not user or not user.tenant_account_id:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Update tenant account
+        db.execute(text("""
+            UPDATE tenant_accounts SET
+                name = :name,
+                settings = jsonb_set(
+                    COALESCE(settings, '{}'::jsonb),
+                    '{company}',
+                    :company_settings::jsonb
+                ),
+                updated_at = NOW()
+            WHERE id = :tenant_id
+        """), {
+            'name': profile.company_name,
+            'company_settings': json.dumps({
+                'phone': profile.company_phone,
+                'address': profile.company_address,
+                'industry': profile.industry,
+                'logo_url': profile.logo_url
+            }),
+            'tenant_id': str(user.tenant_account_id)
+        })
+
+        db.commit()
+
+        return success_response(
+            data={'saved': True},
+            message="Company profile saved"
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error saving company profile: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/user-profile")
+async def save_user_profile(
+    request: Request,
+    profile: UserProfileRequest,
+    db: Session = Depends(get_db)
+):
+    """Save admin user profile during onboarding"""
+    try:
+        auth = request.headers.get('Authorization', '')
+        if not auth.startswith('Bearer '):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+
+        token = auth.split(' ')[1]
+
+        try:
+            import jwt
+            payload = jwt.decode(token, os.getenv('JWT_SECRET', 'your-secret-key'), algorithms=['HS256'])
+            email = payload.get('sub')
+        except:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        # Update user profile
+        db.execute(text("""
+            UPDATE users SET
+                first_name = :first_name,
+                last_name = :last_name,
+                full_name = :full_name,
+                phone = :phone,
+                job_title = :job_title,
+                nmls_id = :nmls,
+                timezone = :timezone,
+                headshot_url = :headshot,
+                updated_at = NOW()
+            WHERE email = :email
+        """), {
+            'first_name': profile.first_name,
+            'last_name': profile.last_name,
+            'full_name': f"{profile.first_name} {profile.last_name}".strip(),
+            'phone': profile.phone,
+            'job_title': profile.job_title,
+            'nmls': profile.nmls_number,
+            'timezone': profile.timezone,
+            'headshot': profile.headshot_url,
+            'email': email
+        })
+
+        db.commit()
+
+        return success_response(
+            data={'saved': True},
+            message="Profile saved"
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error saving user profile: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/invite-team")
+async def queue_team_invites(
+    request: Request,
+    invites: InviteTeamRequest,
+    db: Session = Depends(get_db)
+):
+    """Queue team member invites (sent after payment)"""
+    try:
+        auth = request.headers.get('Authorization', '')
+        if not auth.startswith('Bearer '):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+
+        token = auth.split(' ')[1]
+
+        try:
+            import jwt
+            payload = jwt.decode(token, os.getenv('JWT_SECRET', 'your-secret-key'), algorithms=['HS256'])
+            email = payload.get('sub')
+        except:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        if invites.skip:
+            return success_response(
+                data={'queued': 0, 'skipped': True},
+                message="Team invites skipped"
+            )
+
+        # Get user and tenant
+        user = db.execute(text("""
+            SELECT u.id, u.tenant_account_id, t.seats_purchased
+            FROM users u
+            JOIN tenant_accounts t ON t.id = u.tenant_account_id
+            WHERE u.email = :email
+        """), {'email': email}).fetchone()
+
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Check seat limit
+        max_invites = (user.seats_purchased or 5) - 1  # Minus admin
+        if len(invites.invites) > max_invites:
+            raise ValidationException(f"You can only invite up to {max_invites} team members")
+
+        # Store pending invites in tenant settings
+        pending_invites = [
+            {
+                'email': inv.email,
+                'role': inv.role,
+                'first_name': inv.first_name,
+                'last_name': inv.last_name
+            }
+            for inv in invites.invites
+        ]
+
+        db.execute(text("""
+            UPDATE tenant_accounts SET
+                settings = jsonb_set(
+                    COALESCE(settings, '{}'::jsonb),
+                    '{pending_invites}',
+                    :invites::jsonb
+                ),
+                updated_at = NOW()
+            WHERE id = :tenant_id
+        """), {
+            'invites': json.dumps(pending_invites),
+            'tenant_id': str(user.tenant_account_id)
+        })
+
+        db.commit()
+
+        return success_response(
+            data={'queued': len(pending_invites)},
+            message=f"{len(pending_invites)} team invites queued"
+        )
+
+    except ValidationException:
+        raise
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error queueing team invites: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/create-subscription")
+async def create_subscription(
+    request: Request,
+    payment: PaymentRequest,
+    db: Session = Depends(get_db)
+):
+    """Process payment and create Stripe subscription"""
+    try:
+        auth = request.headers.get('Authorization', '')
+        if not auth.startswith('Bearer '):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+
+        token = auth.split(' ')[1]
+
+        try:
+            import jwt
+            payload = jwt.decode(token, os.getenv('JWT_SECRET', 'your-secret-key'), algorithms=['HS256'])
+            email = payload.get('sub')
+        except:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        # Get user and tenant
+        user = db.execute(text("""
+            SELECT u.id, u.tenant_account_id, u.full_name, t.plan_id, t.seats_purchased
+            FROM users u
+            JOIN tenant_accounts t ON t.id = u.tenant_account_id
+            WHERE u.email = :email
+        """), {'email': email}).fetchone()
+
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        plan_key = user.plan_id or 'professional'
+        plan_info = PLAN_PRICES.get(plan_key, PLAN_PRICES['professional'])
+
+        if not STRIPE_AVAILABLE:
+            # Demo mode - skip actual Stripe
+            logger.warning("Stripe not configured - running in demo mode")
+
+            db.execute(text("""
+                UPDATE tenant_accounts SET
+                    status = 'active',
+                    stripe_customer_id = :customer_id,
+                    stripe_subscription_id = :sub_id,
+                    updated_at = NOW()
+                WHERE id = :tenant_id
+            """), {
+                'customer_id': f'demo_cus_{uuid.uuid4().hex[:8]}',
+                'sub_id': f'demo_sub_{uuid.uuid4().hex[:8]}',
+                'tenant_id': str(user.tenant_account_id)
+            })
+
+            db.commit()
+
+            return success_response(
+                data={
+                    'success': True,
+                    'demo_mode': True,
+                    'subscription_id': f'demo_sub_{uuid.uuid4().hex[:8]}'
+                },
+                message="Subscription created (demo mode)"
+            )
+
+        # Create Stripe customer
+        customer = stripe.Customer.create(
+            email=email,
+            name=payment.billing_name,
+            payment_method=payment.payment_method_id,
+            invoice_settings={'default_payment_method': payment.payment_method_id},
+            address={
+                'line1': payment.billing_address_line1,
+                'city': payment.billing_city,
+                'state': payment.billing_state,
+                'postal_code': payment.billing_postal_code,
+                'country': payment.billing_country
+            },
+            metadata={
+                'tenant_id': str(user.tenant_account_id),
+                'user_id': str(user.id)
+            }
+        )
+
+        # Apply promo code if provided
+        coupon_id = None
+        if payment.promo_code:
+            try:
+                promo = stripe.PromotionCode.list(code=payment.promo_code, active=True, limit=1)
+                if promo.data:
+                    coupon_id = promo.data[0].coupon.id
+            except:
+                pass  # Ignore invalid promo codes
+
+        # Create subscription
+        subscription_params = {
+            'customer': customer.id,
+            'items': [{'price': plan_info['stripe_price_id'], 'quantity': user.seats_purchased or 1}],
+            'payment_behavior': 'error_if_incomplete',
+            'expand': ['latest_invoice.payment_intent']
+        }
+
+        if coupon_id:
+            subscription_params['coupon'] = coupon_id
+
+        subscription = stripe.Subscription.create(**subscription_params)
+
+        # Update tenant with Stripe IDs
+        db.execute(text("""
+            UPDATE tenant_accounts SET
+                status = 'active',
+                stripe_customer_id = :customer_id,
+                stripe_subscription_id = :sub_id,
+                updated_at = NOW()
+            WHERE id = :tenant_id
+        """), {
+            'customer_id': customer.id,
+            'sub_id': subscription.id,
+            'tenant_id': str(user.tenant_account_id)
+        })
+
+        # Create subscription record
+        db.execute(text("""
+            INSERT INTO account_subscriptions (
+                id, account_id, provider, provider_subscription_id,
+                status, plan_id, plan_name, price_amount, quantity,
+                current_period_start, current_period_end,
+                created_at, updated_at
+            ) VALUES (
+                :id, :account_id, 'stripe', :sub_id,
+                :status, :plan_id, :plan_name, :price, :quantity,
+                to_timestamp(:period_start), to_timestamp(:period_end),
+                NOW(), NOW()
+            )
+        """), {
+            'id': str(uuid.uuid4()),
+            'account_id': str(user.tenant_account_id),
+            'sub_id': subscription.id,
+            'status': subscription.status,
+            'plan_id': plan_key,
+            'plan_name': plan_info['name'],
+            'price': plan_info['monthly_price'],
+            'quantity': user.seats_purchased or 1,
+            'period_start': subscription.current_period_start,
+            'period_end': subscription.current_period_end
+        })
+
+        db.commit()
+
+        return success_response(
+            data={
+                'success': True,
+                'subscription_id': subscription.id,
+                'status': subscription.status
+            },
+            message="Subscription created successfully"
+        )
+
+    except stripe.error.CardError as e:
+        raise ValidationException(f"Card error: {e.user_message}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating subscription: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/complete")
+async def complete_onboarding(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Complete onboarding and send queued team invites"""
+    try:
+        auth = request.headers.get('Authorization', '')
+        if not auth.startswith('Bearer '):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+
+        token = auth.split(' ')[1]
+
+        try:
+            import jwt
+            payload = jwt.decode(token, os.getenv('JWT_SECRET', 'your-secret-key'), algorithms=['HS256'])
+            email = payload.get('sub')
+        except:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        # Get user and tenant with pending invites
+        user = db.execute(text("""
+            SELECT u.id, u.full_name, u.tenant_account_id, t.name as company_name, t.settings
+            FROM users u
+            JOIN tenant_accounts t ON t.id = u.tenant_account_id
+            WHERE u.email = :email
+        """), {'email': email}).fetchone()
+
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Mark onboarding complete
+        db.execute(text("""
+            UPDATE users SET onboarding_completed = true, updated_at = NOW()
+            WHERE id = :user_id
+        """), {'user_id': user.id})
+
+        # Send pending team invites
+        invites_sent = 0
+        settings = user.settings or {}
+        pending_invites = settings.get('pending_invites', [])
+
+        for invite in pending_invites:
+            try:
+                # Create invitation token
+                invite_token = str(uuid.uuid4())
+
+                # Store in user_invitations table
+                db.execute(text("""
+                    INSERT INTO user_invitations (
+                        id, email, first_name, last_name, permission_role,
+                        invited_by, organization_id, token, expires_at,
+                        created_at
+                    ) VALUES (
+                        :id, :email, :first_name, :last_name, :role,
+                        :invited_by, :org_id, :token,
+                        NOW() + INTERVAL '7 days', NOW()
+                    )
+                """), {
+                    'id': str(uuid.uuid4()),
+                    'email': invite['email'],
+                    'first_name': invite.get('first_name', ''),
+                    'last_name': invite.get('last_name', ''),
+                    'role': invite.get('role', 'loan_officer'),
+                    'invited_by': user.id,
+                    'org_id': str(user.tenant_account_id),
+                    'token': invite_token
+                })
+
+                # Send invite email
+                email_service.send_activation_email(
+                    to_email=invite['email'],
+                    user_name=invite.get('first_name', invite['email'].split('@')[0]),
+                    activation_token=invite_token
+                )
+
+                invites_sent += 1
+
+            except Exception as e:
+                logger.warning(f"Failed to send invite to {invite.get('email')}: {e}")
+
+        # Clear pending invites from settings
+        db.execute(text("""
+            UPDATE tenant_accounts SET
+                settings = settings - 'pending_invites',
+                updated_at = NOW()
+            WHERE id = :tenant_id
+        """), {'tenant_id': str(user.tenant_account_id)})
+
+        db.commit()
+
+        return success_response(
+            data={
+                'completed': True,
+                'invites_sent': invites_sent,
+                'company_name': user.company_name
+            },
+            message=f"Onboarding complete! {invites_sent} team invites sent."
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error completing onboarding: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/plan-pricing")
+async def get_plan_pricing():
+    """Get available plan pricing for display"""
+    return success_response(
+        data={
+            'plans': [
+                {
+                    'id': key,
+                    'name': plan['name'],
+                    'monthly_price': plan['monthly_price'],
+                    'features': get_plan_features(key)
+                }
+                for key, plan in PLAN_PRICES.items()
+                if key != 'custom'
+            ]
+        },
+        message="Plan pricing retrieved"
+    )
+
+
+def get_plan_features(plan_key: str) -> List[str]:
+    """Get features for a plan"""
+    features = {
+        'starter': [
+            'Up to 3 users',
+            'Basic CRM features',
+            'Lead management',
+            'Email support'
+        ],
+        'professional': [
+            'Up to 25 users',
+            'Full CRM suite',
+            'AI-powered automation',
+            'Document management',
+            'Priority support'
+        ],
+        'enterprise': [
+            'Unlimited users',
+            'Custom integrations',
+            'Dedicated success manager',
+            'SLA guarantee',
+            'Advanced analytics'
+        ]
+    }
+    return features.get(plan_key, features['professional'])

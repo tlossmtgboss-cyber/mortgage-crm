@@ -21,6 +21,7 @@ import Registration from './pages/Registration';
 import AccountVerification from './pages/AccountVerification';
 import EmailVerificationSent from './pages/EmailVerificationSent';
 import Login from './pages/Login';
+import AdminOnboarding from './pages/AdminOnboarding';
 import ApplicationSubmitted from './pages/ApplicationSubmitted';
 
 // Lazy load all other pages for instant navigation
@@ -297,6 +298,7 @@ function App() {
           <Route path="/verify-account" element={<AccountVerification />} />
           <Route path="/verify-email-sent" element={<EmailVerificationSent />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<AdminOnboarding />} />
           <Route path="/application-submitted" element={<ApplicationSubmitted />} />
           <Route path="/privacy-policy" element={<LazyPage><PrivacyPolicy /></LazyPage>} />
           <Route path="/terms-of-service" element={<LazyPage><TermsOfService /></LazyPage>} />

@@ -12,6 +12,8 @@
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^7.3.5",
     "@mui/material": "^7.3.5",
+    "@stripe/react-stripe-js": "^2.4.0",
+    "@stripe/stripe-js": "^2.3.0",
     "axios": "^1.6.2",
     "dompurify": "^3.3.0",
     "html2canvas": "^1.4.1",

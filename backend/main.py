@@ -20539,6 +20539,14 @@ try:
 except Exception as e:
     logger.warning(f"Account Management routes not loaded: {e}")
 
+# Admin Onboarding routes (Subscription signup wizard)
+try:
+    from routes.admin_onboarding_routes import router as admin_onboarding_router
+    app.include_router(admin_onboarding_router, tags=["Admin Onboarding"])
+    logger.info("✅ Admin Onboarding routes loaded")
+except Exception as e:
+    logger.warning(f"Admin Onboarding routes not loaded: {e}")
+
 # Document Upload Settings routes (Comprehensive error handling pattern)
 try:
     from routes.document_upload_settings_routes import router as document_upload_settings_router, set_dependencies as set_document_upload_deps
@@ -38726,7 +38734,7 @@ async def delete_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Delete user (admin only) - handles all foreign key constraints"""
+    """Delete user (admin only) - OPTIMIZED: only cleans tables with actual data"""
     # Prevent self-deletion
     if user_id == current_user.id:
         raise HTTPException(status_code=400, detail="Cannot delete your own account")
@@ -38735,33 +38743,16 @@ async def delete_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    def safe_execute(query, params):
-        """Execute query using savepoint to handle errors without aborting transaction"""
-        try:
-            # Use savepoint to isolate query failures
-            db.execute(text("SAVEPOINT safe_exec_sp"))
-            db.execute(text(query), params)
-            db.execute(text("RELEASE SAVEPOINT safe_exec_sp"))
-            return True
-        except Exception as e:
-            # Rollback to savepoint to keep transaction valid
-            try:
-                db.execute(text("ROLLBACK TO SAVEPOINT safe_exec_sp"))
-            except:
-                pass
-            error_str = str(e).lower()
-            if "does not exist" not in error_str and "no such table" not in error_str:
-                # Log the full error for debugging
-                logger.warning(f"User {user_id} cleanup query failed: {query[:80]}... - {str(e)[:200]}")
-            return False
+    user_email = user.email
+    params = {"user_id": user_id}
 
     try:
-        params = {"user_id": user_id}
-
-        # Pre-check: Find all tables with references to this user
-        blocking_tables = []
+        # =========================================================================
+        # STEP 1: Find all tables that actually reference this user
+        # =========================================================================
+        tables_with_data = []
         try:
-            fk_check_query = """
+            fk_query = """
                 SELECT tc.table_name, kcu.column_name
                 FROM information_schema.table_constraints tc
                 JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
@@ -38771,462 +38762,87 @@ async def delete_user(
                     AND tc.table_schema = 'public'
                     AND tc.table_name != 'users'
             """
-            result = db.execute(text(fk_check_query))
+            result = db.execute(text(fk_query))
             for table_name, column_name in result.fetchall():
                 try:
-                    count_result = db.execute(
+                    count = db.execute(
                         text(f"SELECT COUNT(*) FROM {table_name} WHERE {column_name} = :user_id"),
                         params
                     ).scalar()
-                    if count_result and count_result > 0:
-                        blocking_tables.append(f"{table_name}.{column_name}={count_result}")
+                    if count and count > 0:
+                        tables_with_data.append((table_name, column_name, count))
                 except:
                     pass
-            if blocking_tables:
-                logger.info(f"User {user_id} has references in: {', '.join(blocking_tables)}")
-        except Exception as pre_check_e:
-            logger.warning(f"Pre-check failed: {pre_check_e}")
+        except Exception as e:
+            logger.warning(f"FK scan failed: {e}")
+
+        logger.info(f"User {user_id} cleanup: {len(tables_with_data)} tables have data")
 
         # =========================================================================
-        # PHASE 1: SET NULL on nullable foreign key columns
+        # STEP 2: Handle tables with special cascade requirements (order matters)
         # =========================================================================
-        nullify_queries = [
-            # Core CRM tables
-            "UPDATE leads SET owner_id = NULL WHERE owner_id = :user_id",
-            "UPDATE leads SET created_by_id = NULL WHERE created_by_id = :user_id",
-            "UPDATE loans SET loan_officer_id = NULL WHERE loan_officer_id = :user_id",
-            "UPDATE tasks SET assigned_to_id = NULL WHERE assigned_to_id = :user_id",
-            "UPDATE tasks SET created_by_id = NULL WHERE created_by_id = :user_id",
-            "UPDATE contacts SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE contacts SET created_by = NULL WHERE created_by = :user_id",
-            "UPDATE team_members SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE team_members SET created_by = NULL WHERE created_by = :user_id",
-            # Documents
-            "UPDATE documents SET uploaded_by_user_id = NULL WHERE uploaded_by_user_id = :user_id",
-            "UPDATE documents SET classified_by_user_id = NULL WHERE classified_by_user_id = :user_id",
-            "UPDATE document_processing_queue SET processed_by_user_id = NULL WHERE processed_by_user_id = :user_id",
-            # Status tracking
-            "UPDATE lead_status_changes SET changed_by_id = NULL WHERE changed_by_id = :user_id",
-            "UPDATE lead_conditions SET created_by_id = NULL WHERE created_by_id = :user_id",
-            "UPDATE alerts SET resolved_by = NULL WHERE resolved_by = :user_id",
-            "UPDATE compliance_issues SET resolved_by = NULL WHERE resolved_by = :user_id",
-            # Workflow tables
-            "UPDATE workflow_templates SET created_by = NULL WHERE created_by = :user_id",
-            "UPDATE workflow_tasks SET assigned_to = NULL WHERE assigned_to = :user_id",
-            "UPDATE workflow_steps SET assigned_to = NULL WHERE assigned_to = :user_id",
-            "UPDATE workflow_config_tasks SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE workflow_config_tasks SET assigned_user_id = NULL WHERE assigned_user_id = :user_id",
-            "UPDATE workflow_config_escalations SET resolved_by_id = NULL WHERE resolved_by_id = :user_id",
-            # PURL/Portal tables
-            "UPDATE purl_workspaces SET owner_user_id = NULL WHERE owner_user_id = :user_id",
-            "UPDATE purl_sessions SET auth_user_id = NULL WHERE auth_user_id = :user_id",
-            "UPDATE purl_contacts SET auth_user_id = NULL WHERE auth_user_id = :user_id",
-            "UPDATE purl_access_tokens SET revoked_by = NULL WHERE revoked_by = :user_id",
-            "UPDATE purl_access_tokens SET created_by = NULL WHERE created_by = :user_id",
-            "UPDATE purl_documents SET uploaded_by_user_id = NULL WHERE uploaded_by_user_id = :user_id",
-            "UPDATE purl_documents SET reviewed_by = NULL WHERE reviewed_by = :user_id",
-            "UPDATE purl_loan_milestones SET assigned_to = NULL WHERE assigned_to = :user_id",
-            "UPDATE purl_tasks SET assigned_to_user_id = NULL WHERE assigned_to_user_id = :user_id",
-            "UPDATE purl_tasks SET completed_by_user_id = NULL WHERE completed_by_user_id = :user_id",
-            "UPDATE purl_messages SET sender_user_id = NULL WHERE sender_user_id = :user_id",
-            "UPDATE purl_document_requests SET requested_by = NULL WHERE requested_by = :user_id",
-            # Video/Meeting tables (nullable columns only - NOT NULL ones handled in DELETE phase)
-            "UPDATE video_clip_templates SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE video_clip_views SET viewer_user_id = NULL WHERE viewer_user_id = :user_id",
-            "UPDATE video_clip_analytics SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE video_meeting_recordings SET created_by = NULL WHERE created_by = :user_id",
-            "UPDATE video_meeting_participants SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE video_meeting_invites SET created_by = NULL WHERE created_by = :user_id",
-            "UPDATE video_meeting_transcripts SET created_by = NULL WHERE created_by = :user_id",
-            # AB Testing
-            "UPDATE ab_tests SET created_by_user_id = NULL WHERE created_by_user_id = :user_id",
-            "UPDATE ab_test_assignments SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE ab_test_conversions SET user_id = NULL WHERE user_id = :user_id",
-            # Scheduler tables (nullable columns only - NOT NULL ones handled in DELETE phase)
-            "UPDATE smart_appointment_slots SET assigned_user_id = NULL WHERE assigned_user_id = :user_id",
-            "UPDATE smart_appointment_slots SET created_by_user_id = NULL WHERE created_by_user_id = :user_id",
-            "UPDATE smart_appointment_slots SET status_changed_by = NULL WHERE status_changed_by = :user_id",
-            "UPDATE scheduler_analytics SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE scheduler_slot_exceptions SET created_by_id = NULL WHERE created_by_id = :user_id",
-            "UPDATE scheduler_calendar_sync SET user_id = NULL WHERE user_id = :user_id",
-            # Subscription/billing (NOT NULL admin_user_id handled in DELETE phase)
-            "UPDATE subscription_usage_alerts SET acknowledged_by = NULL WHERE acknowledged_by = :user_id",
-            # Profitability
-            "UPDATE lo_compensation_plans SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE commission_adjustments SET created_by = NULL WHERE created_by = :user_id",
-            "UPDATE margin_alerts SET acknowledged_by = NULL WHERE acknowledged_by = :user_id",
-            "UPDATE profitability_goals SET user_id = NULL WHERE user_id = :user_id",
-            # Onboarding (NOT NULL columns handled in DELETE phase)
-            "UPDATE onboarding_checklists SET created_by = NULL WHERE created_by = :user_id",
-            "UPDATE onboarding_steps SET created_by = NULL WHERE created_by = :user_id",
-            "UPDATE onboarding_audit_log SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE user_creation_requests SET user_id = NULL WHERE user_id = :user_id",
-            # VAPI/Telephony
-            "UPDATE vapi_calls SET assigned_to = NULL WHERE assigned_to = :user_id",
-            "UPDATE vapi_call_routes SET routed_to_user_id = NULL WHERE routed_to_user_id = :user_id",
-            "UPDATE telephony_user_settings SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE call_recordings SET agent_id = NULL WHERE agent_id = :user_id",
-            "UPDATE call_transcripts SET agent_id = NULL WHERE agent_id = :user_id",
-            "UPDATE phone_number_assignments SET agent_id = NULL WHERE agent_id = :user_id",
-            "UPDATE call_analytics SET agent_id = NULL WHERE agent_id = :user_id",
-            "UPDATE blocklist_entries SET added_by_id = NULL WHERE added_by_id = :user_id",
-            # Workflow SLA
-            "UPDATE workflow_sla_pauses SET cancelled_by_id = NULL WHERE cancelled_by_id = :user_id",
-            "UPDATE user_task_assignments SET assigned_by_id = NULL WHERE assigned_by_id = :user_id",
-            "UPDATE user_escalation_assignments SET assigned_by_id = NULL WHERE assigned_by_id = :user_id",
-            # Perennia docs
-            "UPDATE perennia_documents SET uploaded_by_user_id = NULL WHERE uploaded_by_user_id = :user_id",
-            "UPDATE perennia_share_links SET recipient_user_id = NULL WHERE recipient_user_id = :user_id",
-            # Other tables
-            "UPDATE email_templates SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE sms_templates SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE rate_locks SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE rate_lock_reversals SET reversed_by = NULL WHERE reversed_by = :user_id",
-            "UPDATE marketing_templates SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE integration_credentials SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE google_credentials SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE outlook_credentials SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE los_sync_mappings SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE sms_conversations SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE reporting_schedules SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE custom_dashboards SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE dashboard_widgets SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE saved_reports SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE email_campaigns SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE referral_partners SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE borrower_document_reviews SET reviewed_by = NULL WHERE reviewed_by = :user_id",
-            "UPDATE borrower_condition_waivers SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE loan_team_members SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE loan_team_members SET merged_by = NULL WHERE merged_by = :user_id",
-            "UPDATE user_availability SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE api_usage_logs SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE compliance_certifications SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE compliance_certifications SET approved_by_user_id = NULL WHERE approved_by_user_id = :user_id",
-            "UPDATE workspace_templates SET created_by = NULL WHERE created_by = :user_id",
-            "UPDATE lead_import_jobs SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE external_connections SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE webhook_subscriptions SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE pipeline_roles SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE pipeline_roles SET backup_user_id = NULL WHERE backup_user_id = :user_id",
-            "UPDATE pricing_exceptions SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE pricing_approval_history SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE compensation_adjustments SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE document_versions SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE role_change_history SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE role_change_history SET changed_by_id = NULL WHERE changed_by_id = :user_id",
-            "UPDATE user_api_tokens SET revoked_by_id = NULL WHERE revoked_by_id = :user_id",
-            "UPDATE user_compliance_training SET assessed_by_id = NULL WHERE assessed_by_id = :user_id",
-            "UPDATE user_license_certifications SET granted_by = NULL WHERE granted_by = :user_id",
-            "UPDATE user_background_checks SET decided_by_id = NULL WHERE decided_by_id = :user_id",
-            "UPDATE user_employment_history SET certified_by_id = NULL WHERE certified_by_id = :user_id",
-            "UPDATE workspace_access_grants SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE workspace_access_grants SET owner_id = NULL WHERE owner_id = :user_id",
-            "UPDATE lead_capture_submissions SET owner_id = NULL WHERE owner_id = :user_id",
-            "UPDATE lead_capture_submissions SET reviewed_by_id = NULL WHERE reviewed_by_id = :user_id",
-            "UPDATE purl_verification_requests SET verified_by_id = NULL WHERE verified_by_id = :user_id",
-            "UPDATE workspace_settings SET updated_by_id = NULL WHERE updated_by_id = :user_id",
-            "UPDATE team_invitations SET invited_by_user_id = NULL WHERE invited_by_user_id = :user_id",
-            "UPDATE team_invitations SET user_id = NULL WHERE user_id = :user_id",
-            # Master Manager tables (nullable columns)
-            "UPDATE mm_talent_state SET state_changed_by = NULL WHERE state_changed_by = :user_id",
-            "UPDATE mm_talent_state SET manager_user_id = NULL WHERE manager_user_id = :user_id",
-            "UPDATE mm_talent_state_history SET changed_by = NULL WHERE changed_by = :user_id",
-            "UPDATE mm_capacity_alerts SET acknowledged_by_user_id = NULL WHERE acknowledged_by_user_id = :user_id",
-            "UPDATE mm_candidates SET hired_as_user_id = NULL WHERE hired_as_user_id = :user_id",
-            "UPDATE mm_candidates SET referrer_user_id = NULL WHERE referrer_user_id = :user_id",
-            "UPDATE mm_job_postings SET hiring_manager_user_id = NULL WHERE hiring_manager_user_id = :user_id",
-            "UPDATE mm_interviews SET interviewer_user_id = NULL WHERE interviewer_user_id = :user_id",
-            "UPDATE mm_offers SET created_by_user_id = NULL WHERE created_by_user_id = :user_id",
-            # CI tables (nullable columns)
-            "UPDATE ci_call_recordings SET reviewer_user_id = NULL WHERE reviewer_user_id = :user_id",
-            "UPDATE ci_qa_scorecards SET scorer_user_id = NULL WHERE scorer_user_id = :user_id",
-            "UPDATE ci_coaching_assignments SET assigned_by_user_id = NULL WHERE assigned_by_user_id = :user_id",
-            "UPDATE ci_coaching_comments SET user_id = NULL WHERE user_id = :user_id",
-            # Video avatar profiles (nullable user_id)
-            "UPDATE video_avatar_profiles SET user_id = NULL WHERE user_id = :user_id",
-            # Blog tables (nullable user_id)
-            "UPDATE blog_posts SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE blog_topics SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE blog_voice_profiles SET user_id = NULL WHERE user_id = :user_id",
-            # Recruiting tables (nullable columns)
-            "UPDATE mm_recruiting_pipelines SET reports_to_user_id = NULL WHERE reports_to_user_id = :user_id",
+        cascade_order = [
+            # Child tables that must be deleted before their parents
+            ("onboarding_wizard_sessions", "user_profile_id", "SELECT id FROM onboarding_user_profiles WHERE user_id = :user_id"),
+            ("scheduler_soft_holds", "resource_id", "SELECT id FROM scheduler_resources WHERE user_id = :user_id"),
+            ("scheduler_group_sessions", "host_resource_id", "SELECT id FROM scheduler_resources WHERE user_id = :user_id"),
+            ("ci_realtime_suggestions", "session_id", "SELECT id FROM ci_realtime_sessions WHERE agent_user_id = :user_id"),
+            ("ci_call_analyses", "recording_id", "SELECT id FROM ci_call_recordings WHERE agent_user_id = :user_id"),
+            ("ci_transcription_segments", "transcription_id", "SELECT id FROM ci_call_transcriptions WHERE recording_id IN (SELECT id FROM ci_call_recordings WHERE agent_user_id = :user_id)"),
+            ("ci_call_transcriptions", "recording_id", "SELECT id FROM ci_call_recordings WHERE agent_user_id = :user_id"),
+            ("video_meeting_participants", "meeting_id", "SELECT id FROM video_meeting_recordings WHERE host_user_id = :user_id"),
+            ("video_project_scenes", "project_id", "SELECT id FROM video_projects WHERE user_id = :user_id"),
+            ("video_avatar_jobs", "avatar_id", "SELECT id FROM video_avatar_profiles WHERE user_id = :user_id"),
+            ("dialer_session_tasks", "session_id", "SELECT id FROM dialer_sessions WHERE agent_id = :user_id"),
         ]
 
-        for query in nullify_queries:
-            safe_execute(query, params)
-
-        # Commit Phase 1 changes
-        try:
-            db.commit()
-        except:
-            pass  # Ignore commit errors, continue with cleanup
-
-        # =========================================================================
-        # PHASE 2: DELETE user-owned records (tables with NOT NULL foreign keys)
-        # =========================================================================
-        delete_queries = [
-            # API keys and settings
-            "DELETE FROM api_keys WHERE user_id = :user_id",
-            "DELETE FROM user_settings WHERE user_id = :user_id",
-            # Core user data
-            "DELETE FROM onboarding_progress WHERE user_id = :user_id",
-            "DELETE FROM onboarding_errors WHERE user_id = :user_id",
-            "DELETE FROM verification_tokens WHERE user_id = :user_id",
-            "DELETE FROM subscriptions WHERE user_id = :user_id",
-            "DELETE FROM notifications WHERE user_id = :user_id",
-            "DELETE FROM calendar_events WHERE user_id = :user_id",
-            "DELETE FROM calendar_availability WHERE user_id = :user_id",
-            "DELETE FROM user_calendar_settings WHERE user_id = :user_id",
-            "DELETE FROM email_inboxes WHERE user_id = :user_id",
-            "DELETE FROM email_folder_subscriptions WHERE user_id = :user_id",
-            "DELETE FROM user_profiles WHERE user_id = :user_id",
-            "DELETE FROM user_permissions WHERE user_id = :user_id",
-            "DELETE FROM activity_logs WHERE user_id = :user_id",
-            "DELETE FROM ai_coaching_sessions WHERE user_id = :user_id",
-            "DELETE FROM impersonation_sessions WHERE manager_id = :user_id OR impersonated_user_id = :user_id",
-            "DELETE FROM user_kpis WHERE user_id = :user_id",
-            "DELETE FROM user_goals WHERE user_id = :user_id",
-            "DELETE FROM saved_filters WHERE user_id = :user_id",
-            "DELETE FROM email_signatures WHERE user_id = :user_id",
-            # Conversation memory
-            "DELETE FROM conversation_memory WHERE user_id = :user_id",
-            "DELETE FROM conversation_message_vectors WHERE user_id = :user_id",
-            "DELETE FROM ai_conversation_memory WHERE user_id = :user_id",
-            # VAPI
-            "DELETE FROM vapi_user_settings WHERE user_id = :user_id",
-            # Telephony/Dialer (NOT NULL agent_id)
-            "DELETE FROM agent_telephony_settings WHERE user_id = :user_id",
-            "DELETE FROM dialer_session_tasks WHERE session_id IN (SELECT id FROM dialer_sessions WHERE agent_id = :user_id)",
-            "DELETE FROM dialer_sessions WHERE agent_id = :user_id",
-            "DELETE FROM call_logs WHERE agent_id = :user_id",
-            "DELETE FROM active_calls WHERE agent_id = :user_id",
-            # Workflow SLA assignments (with CASCADE)
-            "DELETE FROM user_task_assignments WHERE assigned_user_id = :user_id",
-            "DELETE FROM user_escalation_assignments WHERE assigned_user_id = :user_id",
-            # PURL user tokens and workspace members
-            "DELETE FROM purl_user_tokens WHERE user_id = :user_id",
-            "DELETE FROM purl_workspace_members WHERE user_id = :user_id",
-            # Note: purl_contacts.auth_user_id is nullable - handled in Phase 1 (UPDATE to NULL)
-            # Note: purl_loan_milestones.assigned_to is nullable - handled in Phase 1 (UPDATE to NULL)
-            # Video clips (NOT NULL user_id)
-            "DELETE FROM video_clip_notifications WHERE recipient_id = :user_id",
-            "DELETE FROM video_clip_shares WHERE created_by_id = :user_id",
-            "DELETE FROM video_clips WHERE user_id = :user_id",
-            # Video meetings (NOT NULL host_user_id)
-            "DELETE FROM video_meeting_participants WHERE meeting_id IN (SELECT id FROM video_meeting_recordings WHERE host_user_id = :user_id)",
-            "DELETE FROM video_meeting_recordings WHERE host_user_id = :user_id",
-            # Role/compliance
-            "DELETE FROM role_change_history WHERE user_id = :user_id",
-            "DELETE FROM user_api_tokens WHERE user_id = :user_id",
-            "DELETE FROM user_api_key_revocations WHERE user_id = :user_id",
-            "DELETE FROM user_compliance_training WHERE user_id = :user_id",
-            "DELETE FROM user_license_certifications WHERE user_id = :user_id",
-            "DELETE FROM user_background_checks WHERE employee_id = :user_id",
-            "DELETE FROM user_compliance_acknowledgements WHERE user_id = :user_id",
-            "DELETE FROM user_employment_history WHERE employee_id = :user_id",
-            # Calendar sync
-            "DELETE FROM calendar_sync_settings WHERE user_id = :user_id",
-            # Scheduler
-            "DELETE FROM scheduler_user_configs WHERE user_id = :user_id",
-            "DELETE FROM scheduler_notification_preferences WHERE user_id = :user_id",
-            "DELETE FROM smart_scheduler_configs WHERE user_id = :user_id",
-            "DELETE FROM smart_availability_slots WHERE user_id = :user_id",
-            "DELETE FROM smart_appointment_slots WHERE assigned_user_id = :user_id",
-            "DELETE FROM smart_appointment_slots WHERE created_by_user_id = :user_id",
-            "DELETE FROM smart_booking_links WHERE user_id = :user_id",
-            "DELETE FROM blocked_times WHERE user_id = :user_id",
-            "DELETE FROM smart_blocked_times WHERE user_id = :user_id",
-            "DELETE FROM smart_appointment_types WHERE user_id = :user_id",
-            # Subscription admin overrides (NOT NULL admin_user_id)
-            "DELETE FROM subscription_admin_overrides WHERE admin_user_id = :user_id",
-            # Onboarding tables with NOT NULL foreign keys
-            "DELETE FROM onboarding_audit_log WHERE performed_by = :user_id",
-            "DELETE FROM onboarding_documents WHERE uploaded_by = :user_id",
-            "DELETE FROM user_creation_requests WHERE created_by = :user_id",
-            # Delete wizard sessions before user profiles (FK cascade)
-            "DELETE FROM onboarding_wizard_sessions WHERE user_profile_id IN (SELECT id FROM onboarding_user_profiles WHERE user_id = :user_id)",
-            "DELETE FROM onboarding_user_profiles WHERE user_id = :user_id",
-            # Scheduler resources and child tables (FK cascade)
-            "DELETE FROM scheduler_soft_holds WHERE resource_id IN (SELECT id FROM scheduler_resources WHERE user_id = :user_id)",
-            "DELETE FROM scheduler_group_sessions WHERE host_resource_id IN (SELECT id FROM scheduler_resources WHERE user_id = :user_id)",
-            "DELETE FROM scheduler_resources WHERE user_id = :user_id",
-            # Email response training tables (NOT NULL user_id)
-            "DELETE FROM email_response_learning WHERE user_id = :user_id",
-            "DELETE FROM email_response_patterns WHERE user_id = :user_id",
-            "DELETE FROM email_response_history WHERE user_id = :user_id",
-            # User job descriptions
-            "DELETE FROM user_job_descriptions WHERE user_id = :user_id",
-            # User stage access
-            "DELETE FROM user_stage_access WHERE user_id = :user_id",
-            # Morning checkin tables
-            "DELETE FROM morning_checkin_responses WHERE user_id = :user_id",
-            "DELETE FROM morning_checkin_followups WHERE user_id = :user_id",
-            "DELETE FROM morning_checkin_insights WHERE user_id = :user_id",
-            "DELETE FROM morning_checkin_goals WHERE user_id = :user_id",
-            "DELETE FROM morning_checkin_settings WHERE user_id = :user_id",
-            # Email identity tokens
-            "DELETE FROM email_identity_tokens WHERE user_id = :user_id",
-            "DELETE FROM email_thread_assignments WHERE user_id = :user_id",
-            # Permission requests
-            "DELETE FROM permission_requests WHERE employee_id = :user_id",
-            "DELETE FROM user_permission_overrides WHERE user_id = :user_id",
-            # Microsite themes
-            "DELETE FROM microsite_user_settings WHERE user_id = :user_id",
-            # Calendly integration
-            "DELETE FROM calendly_user_configs WHERE user_id = :user_id",
-            "DELETE FROM calendly_bookings WHERE user_id = :user_id",
-            # AI Feedback
-            "DELETE FROM ai_feedback_logs WHERE user_id = :user_id",
-            # Conversation Intelligence (NOT NULL agent_user_id)
-            "DELETE FROM ci_recordings WHERE agent_user_id = :user_id",
-            "DELETE FROM ci_coaching_sessions WHERE agent_user_id = :user_id",
-            "DELETE FROM ci_coaching_assignments WHERE agent_user_id = :user_id",
-            "DELETE FROM ci_agent_development_plans WHERE agent_user_id = :user_id",
-            "DELETE FROM ci_team_goals WHERE user_id = :user_id",
-            # Skills and responsibilities
-            "DELETE FROM user_skill_assessments WHERE user_id = :user_id",
-            "DELETE FROM user_responsibilities WHERE user_id = :user_id",
-            # User integrations
-            "DELETE FROM user_integrations WHERE user_id = :user_id",
-            # Guideline bookmarks
-            "DELETE FROM guideline_bookmarks WHERE user_id = :user_id",
-            # Master Manager tables (NOT NULL user_id without CASCADE in SQL version)
-            "DELETE FROM mm_talent_performance WHERE user_id = :user_id",
-            "DELETE FROM mm_talent_state_history WHERE user_id = :user_id",
-            "DELETE FROM mm_talent_state WHERE user_id = :user_id",
-            "DELETE FROM mm_talent_capacity WHERE user_id = :user_id",
-            "DELETE FROM mm_coverage_map WHERE primary_user_id = :user_id",
-            # Conversation Intelligence additional tables (NOT NULL agent_user_id without CASCADE)
-            "DELETE FROM ci_coaching_comments WHERE agent_user_id = :user_id",
-            "DELETE FROM ci_coaching_clips WHERE agent_user_id = :user_id",
-            "DELETE FROM ci_compliance_violations WHERE agent_user_id = :user_id",
-            "DELETE FROM ci_compliance_rules WHERE user_id = :user_id",
-            "DELETE FROM ci_agent_metrics WHERE agent_user_id = :user_id",
-            "DELETE FROM ci_audit_log WHERE user_id = :user_id",
-            "DELETE FROM ci_qa_scorecards WHERE agent_user_id = :user_id",
-            "DELETE FROM ci_realtime_suggestions WHERE session_id IN (SELECT id FROM ci_realtime_sessions WHERE agent_user_id = :user_id)",
-            "DELETE FROM ci_realtime_sessions WHERE agent_user_id = :user_id",
-            "DELETE FROM ci_call_analyses WHERE recording_id IN (SELECT id FROM ci_call_recordings WHERE agent_user_id = :user_id)",
-            "DELETE FROM ci_transcription_segments WHERE transcription_id IN (SELECT id FROM ci_call_transcriptions WHERE recording_id IN (SELECT id FROM ci_call_recordings WHERE agent_user_id = :user_id))",
-            "DELETE FROM ci_call_transcriptions WHERE recording_id IN (SELECT id FROM ci_call_recordings WHERE agent_user_id = :user_id)",
-            "DELETE FROM ci_call_recordings WHERE agent_user_id = :user_id",
-            # Page permissions (user_page_overrides - should have CASCADE but adding just in case)
-            "DELETE FROM page_access_log WHERE user_id = :user_id",
-            "DELETE FROM user_page_overrides WHERE user_id = :user_id",
-            # Video avatar profiles (nullable user_id - handled in Phase 1 but adding DELETE for safety)
-            "DELETE FROM video_avatar_jobs WHERE avatar_id IN (SELECT id FROM video_avatar_profiles WHERE user_id = :user_id)",
-            "DELETE FROM video_avatar_profiles WHERE user_id = :user_id",
-            # Video OS tables
-            "DELETE FROM video_project_scenes WHERE project_id IN (SELECT id FROM video_projects WHERE user_id = :user_id)",
-            "DELETE FROM video_projects WHERE user_id = :user_id",
-            # Recruiting/Candidates tables
-            "DELETE FROM mm_candidate_notes WHERE added_by_user_id = :user_id",
-            "DELETE FROM mm_candidate_activities WHERE user_id = :user_id",
-            "DELETE FROM mm_interviews WHERE created_by_user_id = :user_id",
-            # AI Daily Blog tables (nullable user_id but cleaning just in case)
-            "DELETE FROM blog_posts WHERE user_id = :user_id",
-            "DELETE FROM blog_topics WHERE user_id = :user_id",
-            "DELETE FROM blog_voice_profiles WHERE user_id = :user_id",
-        ]
-
-        for query in delete_queries:
-            safe_execute(query, params)
-
-        # Commit Phase 2 changes
-        try:
-            db.commit()
-        except:
-            pass  # Ignore commit errors, continue with cleanup
-
-        # =========================================================================
-        # PHASE 3: Handle any remaining foreign key constraints dynamically
-        # =========================================================================
-        # Query PostgreSQL for all tables referencing users and clean them up
-        try:
-            fk_query = """
-                SELECT
-                    tc.table_name,
-                    kcu.column_name
-                FROM information_schema.table_constraints tc
-                JOIN information_schema.key_column_usage kcu
-                    ON tc.constraint_name = kcu.constraint_name
-                JOIN information_schema.constraint_column_usage ccu
-                    ON ccu.constraint_name = tc.constraint_name
-                WHERE tc.constraint_type = 'FOREIGN KEY'
-                    AND ccu.table_name = 'users'
-                    AND tc.table_schema = 'public'
-            """
-            result = db.execute(text(fk_query))
-            fk_refs = result.fetchall()
-
-            cleaned_tables = []
-            for table_name, column_name in fk_refs:
-                # Skip the users table itself
-                if table_name == 'users':
-                    continue
-                # Try to either nullify or delete using savepoints
-                try:
-                    # Create a savepoint before attempting the UPDATE
-                    db.execute(text("SAVEPOINT fk_cleanup_sp"))
-                    # First try nullifying
-                    db.execute(text(f"UPDATE {table_name} SET {column_name} = NULL WHERE {column_name} = :user_id"), params)
-                    db.execute(text("RELEASE SAVEPOINT fk_cleanup_sp"))
-                    cleaned_tables.append(f"{table_name}.{column_name} (nullified)")
-                except Exception as update_e:
-                    # Rollback to savepoint to recover transaction state
-                    try:
-                        db.execute(text("ROLLBACK TO SAVEPOINT fk_cleanup_sp"))
-                    except:
-                        pass
-                    # If UPDATE fails (e.g., NOT NULL constraint), try deleting
-                    try:
-                        db.execute(text(f"DELETE FROM {table_name} WHERE {column_name} = :user_id"), params)
-                        cleaned_tables.append(f"{table_name}.{column_name} (deleted)")
-                    except Exception as del_e:
-                        logger.warning(f"Could not clean {table_name}.{column_name}: {del_e}")
-
-            if cleaned_tables:
-                logger.info(f"Dynamic FK cleanup for user {user_id}: {', '.join(cleaned_tables)}")
-
-            # Commit Phase 3 changes
+        for child_table, child_col, parent_subquery in cascade_order:
             try:
-                db.commit()
+                db.execute(text(f"DELETE FROM {child_table} WHERE {child_col} IN ({parent_subquery})"), params)
             except:
                 pass
-        except Exception as fk_e:
-            logger.warning(f"Could not query FK constraints: {fk_e}")
 
-        # Final attempt: direct SQL delete with explicit handling
-        try:
-            db.execute(text("DELETE FROM users WHERE id = :user_id"), params)
-            db.commit()
-            logger.info(f"User {user_id} ({user.email}) deleted by {current_user.email}")
-            return {"message": "User deleted successfully"}
-        except Exception as final_e:
-            db.rollback()
-            # Log the actual constraint error
-            error_msg = str(final_e)
-            logger.error(f"Final delete failed for user {user_id}: {error_msg}")
+        # =========================================================================
+        # STEP 3: Clean only tables that have data for this user
+        # =========================================================================
+        cleaned = 0
+        for table_name, column_name, count in tables_with_data:
+            try:
+                # Try UPDATE to NULL first (for nullable columns)
+                db.execute(text(f"UPDATE {table_name} SET {column_name} = NULL WHERE {column_name} = :user_id"), params)
+                cleaned += 1
+            except Exception as update_e:
+                # If UPDATE fails (NOT NULL constraint), try DELETE
+                try:
+                    db.execute(text(f"DELETE FROM {table_name} WHERE {column_name} = :user_id"), params)
+                    cleaned += 1
+                except Exception as del_e:
+                    logger.warning(f"Could not clean {table_name}.{column_name}: {del_e}")
 
-            # Try to extract the constraint name for better error message
-            if "violates foreign key constraint" in error_msg:
-                # Parse out the constraint and table info
-                import re
-                match = re.search(r'on table "(\w+)"', error_msg)
-                if match:
-                    blocking_table = match.group(1)
-                    raise HTTPException(
-                        status_code=500,
-                        detail=f"Cannot delete user: Referenced by table '{blocking_table}'. Please delete related records first."
-                    )
-            raise HTTPException(status_code=500, detail=f"Failed to delete user: {error_msg}")
+        # =========================================================================
+        # STEP 4: Delete the user
+        # =========================================================================
+        db.execute(text("DELETE FROM users WHERE id = :user_id"), params)
+        db.commit()
 
-    except HTTPException:
-        raise
+        logger.info(f"User {user_id} ({user_email}) deleted by {current_user.email} - cleaned {cleaned} tables")
+        return {"message": "User deleted successfully", "tables_cleaned": cleaned}
+
     except Exception as e:
         db.rollback()
-        logger.error(f"Failed to delete user {user_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to delete user: {str(e)}")
+        error_msg = str(e)
+        logger.error(f"Delete user {user_id} failed: {error_msg}")
+
+        # Extract blocking table from FK error
+        if "violates foreign key constraint" in error_msg:
+            import re
+            match = re.search(r'on table "(\w+)"', error_msg)
+            if match:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Cannot delete: still referenced by '{match.group(1)}'"
+                )
+        raise HTTPException(status_code=500, detail=f"Delete failed: {error_msg[:200]}")
 
 
 async def _get_deletion_blockers(user_id: int, db: Session):

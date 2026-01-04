@@ -363,6 +363,173 @@ export const verifyPhoneCode = async (phone, code) => {
   return response.json();
 };
 
+// ============== ADMIN SUBSCRIPTION ONBOARDING ==============
+
+/**
+ * Validate an admin subscription invitation token (public endpoint)
+ * @param {string} token - The subscription invitation token
+ */
+export const validateAdminInvite = async (token) => {
+  const response = await fetch(`${API_BASE}/api/v1/admin-onboarding/validate-invite/${token}`);
+
+  if (response.status === 404) {
+    return { valid: false, error: 'Invitation not found or expired' };
+  }
+
+  if (!response.ok) {
+    const data = await response.json();
+    return { valid: false, error: data.detail || 'Invalid invitation' };
+  }
+
+  const data = await response.json();
+  return { valid: true, ...data.data };
+};
+
+/**
+ * Start admin onboarding after validating invite (creates account)
+ * @param {Object} data - Start onboarding data
+ */
+export const startAdminOnboarding = async (data) => {
+  const response = await fetch(`${API_BASE}/api/v1/admin-onboarding/start`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to start onboarding');
+  }
+
+  return response.json();
+};
+
+/**
+ * Save company profile
+ * @param {Object} profile - Company profile data
+ */
+export const saveCompanyProfile = async (profile) => {
+  const token = localStorage.getItem('token');
+  const response = await fetch(`${API_BASE}/api/v1/admin-onboarding/company-profile`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify(profile)
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to save company profile');
+  }
+
+  return response.json();
+};
+
+/**
+ * Save admin user profile
+ * @param {Object} profile - User profile data
+ */
+export const saveAdminProfile = async (profile) => {
+  const token = localStorage.getItem('token');
+  const response = await fetch(`${API_BASE}/api/v1/admin-onboarding/user-profile`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify(profile)
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to save profile');
+  }
+
+  return response.json();
+};
+
+/**
+ * Queue team invites (sent after payment)
+ * @param {Object} data - Team invite data
+ */
+export const queueTeamInvites = async (data) => {
+  const token = localStorage.getItem('token');
+  const response = await fetch(`${API_BASE}/api/v1/admin-onboarding/invite-team`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify(data)
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to save team invites');
+  }
+
+  return response.json();
+};
+
+/**
+ * Create subscription (process payment)
+ * @param {Object} paymentData - Payment data including payment_method_id
+ */
+export const createAdminSubscription = async (paymentData) => {
+  const token = localStorage.getItem('token');
+  const response = await fetch(`${API_BASE}/api/v1/admin-onboarding/create-subscription`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify(paymentData)
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Payment failed');
+  }
+
+  return response.json();
+};
+
+/**
+ * Complete admin onboarding (finalize and send team invites)
+ */
+export const completeAdminOnboarding = async () => {
+  const token = localStorage.getItem('token');
+  const response = await fetch(`${API_BASE}/api/v1/admin-onboarding/complete`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    }
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to complete onboarding');
+  }
+
+  return response.json();
+};
+
+/**
+ * Get plan pricing information
+ */
+export const getAdminPlanPricing = async () => {
+  const response = await fetch(`${API_BASE}/api/v1/admin-onboarding/plan-pricing`);
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch plan pricing');
+  }
+
+  return response.json();
+};
+
 // ============== AI QUICK ACTIONS ==============
 
 /**
@@ -442,5 +609,14 @@ export default {
   getAvailableQuickActions,
   // User permissions
   getUserPagePermissions,
-  updateAIPreferences
+  updateAIPreferences,
+  // Admin subscription onboarding
+  validateAdminInvite,
+  startAdminOnboarding,
+  saveCompanyProfile,
+  saveAdminProfile,
+  queueTeamInvites,
+  createAdminSubscription,
+  completeAdminOnboarding,
+  getAdminPlanPricing
 };

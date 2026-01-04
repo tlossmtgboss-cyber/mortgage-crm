@@ -476,6 +476,21 @@ function Settings() {
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [deletingUsers, setDeletingUsers] = useState(false);
 
+  // Account Management expandable cards state
+  const [expandedCards, setExpandedCards] = useState({
+    userManagement: false,
+    securityMonitoring: false
+  });
+
+  // Security monitoring state
+  const [securityData, setSecurityData] = useState({
+    loginHistory: [],
+    activeSessions: [],
+    failedAttempts: [],
+    auditLog: []
+  });
+  const [loadingSecurityData, setLoadingSecurityData] = useState(false);
+
   // Gmail integration state
   const [gmailStatus, setGmailStatus] = useState({
     connected: false,
@@ -1404,7 +1419,7 @@ const API_BASE_URL = isProduction
     }
 
     const confirmDelete = window.confirm(
-      `Are you sure you want to delete ${selectedUsers.length} user(s)? This action cannot be undone.`
+      `Are you sure you want to delete ${selectedUsers.length} user(s)? This action cannot be undone.\n\nNote: Deletion may take a few seconds per user.`
     );
 
     if (!confirmDelete) return;
@@ -1414,29 +1429,72 @@ const API_BASE_URL = isProduction
       const token = localStorage.getItem('token');
       let successCount = 0;
       let failCount = 0;
-
       const errors = [];
+
       for (const userId of selectedUsers) {
         try {
+          // Use AbortController for timeout (60 seconds per user)
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 60000);
+
           const response = await fetch(`${API_BASE_URL}/api/v1/admin/users/${userId}`, {
             method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers: { 'Authorization': `Bearer ${token}` },
+            signal: controller.signal
           });
+
+          clearTimeout(timeoutId);
 
           if (response.ok) {
             successCount++;
           } else {
+            // Check if user was actually deleted despite error response
+            const checkResponse = await fetch(`${API_BASE_URL}/api/v1/admin/users`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (checkResponse.ok) {
+              const usersData = await checkResponse.json();
+              const userList = usersData.users || usersData || [];
+              const userStillExists = userList.some(u => u.id === userId);
+              if (!userStillExists) {
+                // User was deleted despite error response
+                successCount++;
+                continue;
+              }
+            }
+
             failCount++;
             try {
               const errorData = await response.json();
-              errors.push(`User ${userId}: ${errorData.detail || response.statusText}`);
+              errors.push(`User ${userId}: ${errorData.detail || response.statusText || 'Unknown error'}`);
             } catch {
-              errors.push(`User ${userId}: ${response.statusText}`);
+              errors.push(`User ${userId}: ${response.statusText || 'Unknown error'}`);
             }
           }
         } catch (err) {
-          failCount++;
-          errors.push(`User ${userId}: ${err.message}`);
+          // Check if it's a timeout
+          if (err.name === 'AbortError') {
+            // Request timed out - check if user was actually deleted
+            try {
+              const checkResponse = await fetch(`${API_BASE_URL}/api/v1/admin/users`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+              });
+              if (checkResponse.ok) {
+                const usersData = await checkResponse.json();
+                const userList = usersData.users || usersData || [];
+                const userStillExists = userList.some(u => u.id === userId);
+                if (!userStillExists) {
+                  successCount++;
+                  continue;
+                }
+              }
+            } catch {}
+            failCount++;
+            errors.push(`User ${userId}: Request timed out`);
+          } else {
+            failCount++;
+            errors.push(`User ${userId}: ${err.message || 'Network error'}`);
+          }
         }
       }
 
@@ -2640,7 +2698,7 @@ const API_BASE_URL = isProduction
                   </button>
                   {expandedSections.organizational && (
                     <div className="sidebar-children">
-                      <button className={`sidebar-btn child ${activeSection === 'account-management' ? 'active' : ''}`} onClick={() => setActiveSection('account-management')}><span>Account Management</span></button>
+                      <button className={`sidebar-btn child ${activeSection === 'account-mgmt' ? 'active' : ''}`} onClick={() => setActiveSection('account-mgmt')}><span>Account Management</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'company-info' ? 'active' : ''}`} onClick={() => setActiveSection('company-info')}><span>Company Info</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'team-members' ? 'active' : ''}`} onClick={() => navigate('/team-members')}><span>Team Members</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'add-team-member' ? 'active' : ''}`} onClick={() => navigate('/users/create')}><span>Add Team Member</span></button>
@@ -2734,7 +2792,7 @@ const API_BASE_URL = isProduction
                   </button>
                   {expandedSections.masterAdmin && (
                     <div className="sidebar-children">
-                      <button className={`sidebar-btn child ${activeSection === 'user-management' ? 'active' : ''}`} onClick={() => { setActiveSection('user-management'); loadUsers(); }}><span>User Management</span></button>
+                      <button className={`sidebar-btn child ${activeSection === 'account-mgmt' ? 'active' : ''}`} onClick={() => { setActiveSection('account-mgmt'); loadUsers(); }}><span>Account Management</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'integration-marketplace' ? 'active' : ''}`} onClick={() => setActiveSection('integration-marketplace')}><span>Integrations</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'clear-data' ? 'active' : ''}`} onClick={() => setActiveSection('clear-data')}><span>Clear Dummy Data</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'ai-feedback-log' ? 'active' : ''}`} onClick={() => setActiveSection('ai-feedback-log')}><span>AI Feedback Log</span></button>
@@ -5559,57 +5617,72 @@ const API_BASE_URL = isProduction
             <VideoMeetings />
           )}
 
-          {/* Master Administrator - User Management */}
-          {activeSection === 'user-management' && (
-            <div className="user-management-section">
+          {/* Master Administrator - Account Management */}
+          {activeSection === 'account-mgmt' && (
+            <div className="account-mgmt-section">
               <div className="page-header">
                 <div>
-                  <h2>User Management</h2>
+                  <h2>Account Management</h2>
                   <p className="section-description">
-                    Manage all registered users and their permissions
+                    Manage users, permissions, and security monitoring
                   </p>
-                </div>
-                <div className="header-actions" style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                  <button
-                    className="btn-primary"
-                    onClick={() => setShowAddUserModal(true)}
-                    style={{ padding: '10px 20px', background: '#4f46e5', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '500' }}
-                  >
-                    + Add User
-                  </button>
-                  {selectedUsers.length > 0 && (
-                    <button
-                      className="btn-danger"
-                      onClick={handleBulkDelete}
-                      disabled={deletingUsers}
-                      style={{ padding: '10px 20px', background: '#dc2626', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '500' }}
-                    >
-                      {deletingUsers ? 'Deleting...' : `Delete Selected (${selectedUsers.length})`}
-                    </button>
-                  )}
-                  <div className="header-stats">
-                    <div className="stat-box">
-                      <div className="stat-value">{users.length}</div>
-                      <div className="stat-label">Total Users</div>
-                    </div>
-                    <div className="stat-box">
-                      <div className="stat-value">{users.filter(u => u.is_active).length}</div>
-                      <div className="stat-label">Active</div>
-                    </div>
-                    <div className="stat-box">
-                      <div className="stat-value">{users.filter(u => u.email_verified).length}</div>
-                      <div className="stat-label">Verified</div>
-                    </div>
-                  </div>
                 </div>
               </div>
 
-              {usersError && <div className="error-message">{usersError}</div>}
+              {/* Collapsible Cards Container */}
+              <div className="collapsible-cards-container">
 
-              {loadingUsers ? (
-                <div className="loading">Loading users...</div>
-              ) : (
-                <div className="users-table-container">
+                {/* User Management Card */}
+                <div
+                  className={`collapsible-card ${expandedCards.userManagement ? 'expanded' : ''}`}
+                  onClick={() => !expandedCards.userManagement && setExpandedCards(prev => ({ ...prev, userManagement: true, securityMonitoring: false }))}
+                >
+                  <div
+                    className="collapsible-card-header"
+                    onClick={(e) => { e.stopPropagation(); setExpandedCards(prev => ({ ...prev, userManagement: !prev.userManagement })); }}
+                  >
+                    <div className="card-header-content">
+                      <div className="card-icon">👥</div>
+                      <div>
+                        <h3>User Management</h3>
+                        <p>Manage registered users and permissions</p>
+                      </div>
+                    </div>
+                    <div className="card-header-right">
+                      <div className="card-stats">
+                        <span className="stat">{users.length} users</span>
+                        <span className="stat">{users.filter(u => u.is_active).length} active</span>
+                      </div>
+                      <span className="expand-arrow">{expandedCards.userManagement ? '▼' : '▶'}</span>
+                    </div>
+                  </div>
+
+                  {expandedCards.userManagement && (
+                    <div className="collapsible-card-content" onClick={(e) => e.stopPropagation()}>
+                      <div className="card-actions-bar">
+                        <button
+                          className="btn-primary"
+                          onClick={() => setShowAddUserModal(true)}
+                        >
+                          + Add User
+                        </button>
+                        {selectedUsers.length > 0 && (
+                          <button
+                            className="btn-danger"
+                            onClick={handleBulkDelete}
+                            disabled={deletingUsers}
+                          >
+                            {deletingUsers ? 'Deleting...' : `Delete Selected (${selectedUsers.length})`}
+                          </button>
+                        )}
+                      </div>
+
+                      {usersError && <div className="error-message">{usersError}</div>}
+
+                      {loadingUsers ? (
+                        <div className="loading">Loading users...</div>
+                      ) : (
+                        <div className="users-table-container">
                   <table className="users-table">
                     <thead>
                       <tr>
@@ -5741,14 +5814,125 @@ const API_BASE_URL = isProduction
                   </table>
 
                   {users.length === 0 && (
-                    <div className="empty-state">
-                                            <p>No users found</p>
+                            <div className="empty-state">
+                              <p>No users found</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
-              )}
 
-              {/* Add User Modal */}
+                {/* Security Monitoring Card */}
+                <div
+                  className={`collapsible-card ${expandedCards.securityMonitoring ? 'expanded' : ''}`}
+                  onClick={() => !expandedCards.securityMonitoring && setExpandedCards(prev => ({ ...prev, securityMonitoring: true, userManagement: false }))}
+                >
+                  <div
+                    className="collapsible-card-header"
+                    onClick={(e) => { e.stopPropagation(); setExpandedCards(prev => ({ ...prev, securityMonitoring: !prev.securityMonitoring })); }}
+                  >
+                    <div className="card-header-content">
+                      <div className="card-icon">🔒</div>
+                      <div>
+                        <h3>Security Monitoring</h3>
+                        <p>Login history, sessions, and audit logs</p>
+                      </div>
+                    </div>
+                    <div className="card-header-right">
+                      <div className="card-stats">
+                        <span className="stat">{securityData.activeSessions?.length || 0} active sessions</span>
+                      </div>
+                      <span className="expand-arrow">{expandedCards.securityMonitoring ? '▼' : '▶'}</span>
+                    </div>
+                  </div>
+
+                  {expandedCards.securityMonitoring && (
+                    <div className="collapsible-card-content" onClick={(e) => e.stopPropagation()}>
+                      {loadingSecurityData ? (
+                        <div className="loading">Loading security data...</div>
+                      ) : (
+                        <div className="security-monitoring-content">
+                          {/* Active Sessions */}
+                          <div className="security-section">
+                            <h4>Active Sessions</h4>
+                            <div className="sessions-list">
+                              {securityData.activeSessions?.length > 0 ? (
+                                securityData.activeSessions.map((session, i) => (
+                                  <div key={i} className="session-item">
+                                    <div className="session-info">
+                                      <span className="session-device">{session.device || 'Unknown Device'}</span>
+                                      <span className="session-location">{session.location || 'Unknown'}</span>
+                                    </div>
+                                    <span className="session-time">{session.lastActive || 'Now'}</span>
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="empty-state-small">
+                                  <p>Current session is active</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Recent Login History */}
+                          <div className="security-section">
+                            <h4>Recent Login History</h4>
+                            <div className="login-history-list">
+                              {securityData.loginHistory?.length > 0 ? (
+                                securityData.loginHistory.slice(0, 5).map((login, i) => (
+                                  <div key={i} className={`login-item ${login.success ? 'success' : 'failed'}`}>
+                                    <div className="login-info">
+                                      <span className={`login-status ${login.success ? 'success' : 'failed'}`}>
+                                        {login.success ? '✓' : '✗'}
+                                      </span>
+                                      <span className="login-email">{login.email || 'Unknown'}</span>
+                                    </div>
+                                    <div className="login-meta">
+                                      <span className="login-ip">{login.ip || '-'}</span>
+                                      <span className="login-time">{login.timestamp || '-'}</span>
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="empty-state-small">
+                                  <p>No recent login activity</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Audit Log Preview */}
+                          <div className="security-section">
+                            <h4>Recent Audit Activity</h4>
+                            <div className="audit-log-list">
+                              {securityData.auditLog?.length > 0 ? (
+                                securityData.auditLog.slice(0, 5).map((log, i) => (
+                                  <div key={i} className="audit-item">
+                                    <div className="audit-info">
+                                      <span className="audit-action">{log.action}</span>
+                                      <span className="audit-user">{log.user || 'System'}</span>
+                                    </div>
+                                    <span className="audit-time">{log.timestamp || '-'}</span>
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="empty-state-small">
+                                  <p>No recent audit activity</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+
+              {/* Add User Modal - Outside collapsible cards */}
               {showAddUserModal && (
                 <div className="modal-overlay" style={{
                   position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
