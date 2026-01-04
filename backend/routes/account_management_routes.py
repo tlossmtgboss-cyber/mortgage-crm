@@ -21,6 +21,7 @@ from utils.error_handling import (
     DatabaseException,
     success_response
 )
+from email_service import send_subscription_invite_email
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/admin/account-management", tags=["Account Management"])
@@ -607,8 +608,26 @@ async def invite_subscriber(
         # Log the action
         logger.info(f"Subscription invitation sent to {invite.email} by {current_user.email}")
 
-        # TODO: Integrate with email service to send actual invitation email
-        # For now, return success with invitation details
+        # Send the invitation email
+        email_sent = False
+        try:
+            email_sent = await send_subscription_invite_email(
+                to_email=invite.email,
+                company_name=invite.company_name,
+                contact_name=invite.contact_name,
+                plan=invite.plan,
+                seats=invite.seats,
+                invitation_token=invitation_token,
+                personal_message=invite.message,
+                expires_days=7
+            )
+            if email_sent:
+                logger.info(f"Invitation email sent successfully to {invite.email}")
+            else:
+                logger.warning(f"Failed to send invitation email to {invite.email}")
+        except Exception as email_err:
+            logger.error(f"Error sending invitation email: {email_err}")
+            # Continue anyway - email failure shouldn't block the invitation creation
 
         return success_response(
             data={
@@ -618,9 +637,10 @@ async def invite_subscriber(
                 'seats': invite.seats,
                 'invitation_token': invitation_token,
                 'expires_at': expires_at.isoformat(),
-                'invitation_link': f"https://app.perenniaai.com/signup?invite={invitation_token}"
+                'invitation_link': f"https://perenniaai.com/signup?invite={invitation_token}",
+                'email_sent': email_sent
             },
-            message=f"Invitation sent to {invite.email}"
+            message=f"Invitation {'sent' if email_sent else 'created (email pending)'} to {invite.email}"
         )
 
     except PermissionException:

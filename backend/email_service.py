@@ -1038,6 +1038,238 @@ This notification was sent by Perennia AI CRM
 
         return self.send_html_email(to_email, subject, html_body, plain_text)
 
+    def format_subscription_invite_email(
+        self,
+        company_name: str,
+        contact_name: Optional[str],
+        plan: str,
+        seats: int,
+        signup_url: str,
+        personal_message: Optional[str] = None,
+        expires_days: int = 7
+    ) -> str:
+        """Format subscription invitation email as HTML"""
+        greeting = f"Hi {contact_name}" if contact_name else "Hello"
+
+        plan_features = {
+            'starter': ['Up to 3 users', 'Basic CRM features', 'Email support'],
+            'professional': ['Up to 25 users', 'Full CRM suite', 'AI-powered automation', 'Priority support'],
+            'enterprise': ['Unlimited users', 'Custom integrations', 'Dedicated success manager', 'SLA guarantee'],
+            'custom': ['Tailored to your needs', 'Volume pricing', 'Custom features', 'White-glove onboarding']
+        }
+
+        features = plan_features.get(plan, plan_features['professional'])
+        features_html = ''.join([f'<li>{f}</li>' for f in features])
+
+        personal_msg_html = f'''
+            <div style="margin: 24px 0; padding: 20px; background: #f0f9ff; border-left: 4px solid #3b82f6; border-radius: 4px;">
+                <p style="margin: 0; color: #1e40af; font-style: italic;">"{personal_message}"</p>
+            </div>
+        ''' if personal_message else ''
+
+        html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }}
+        .container {{
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }}
+        .logo {{
+            text-align: center;
+            margin-bottom: 30px;
+        }}
+        .logo h1 {{
+            color: #3b82f6;
+            font-size: 28px;
+            margin: 0;
+        }}
+        h2 {{
+            color: #1a1a2e;
+            margin-top: 0;
+        }}
+        p {{
+            color: #4b5563;
+            font-size: 16px;
+        }}
+        .plan-card {{
+            background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
+            color: white;
+            padding: 24px;
+            border-radius: 12px;
+            margin: 24px 0;
+            text-align: center;
+        }}
+        .plan-card h3 {{
+            margin: 0 0 8px 0;
+            font-size: 24px;
+            text-transform: capitalize;
+        }}
+        .plan-card .seats {{
+            font-size: 16px;
+            opacity: 0.9;
+        }}
+        .btn-signup {{
+            display: inline-block;
+            background: #10b981;
+            color: white !important;
+            padding: 16px 48px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 18px;
+            margin: 24px 0;
+        }}
+        .btn-signup:hover {{
+            background: #059669;
+        }}
+        .features {{
+            background: #f9fafb;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 24px 0;
+        }}
+        .features h4 {{
+            margin: 0 0 12px 0;
+            color: #374151;
+        }}
+        .features ul {{
+            margin: 0;
+            padding-left: 20px;
+        }}
+        .features li {{
+            margin: 8px 0;
+            color: #4b5563;
+        }}
+        .expires {{
+            font-size: 14px;
+            color: #6b7280;
+            background: #fef3c7;
+            padding: 12px 16px;
+            border-radius: 8px;
+            text-align: center;
+        }}
+        .footer {{
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid #e5e7eb;
+            text-align: center;
+            color: #9ca3af;
+            font-size: 13px;
+        }}
+        .footer a {{
+            color: #3b82f6;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <h1>Perennia AI</h1>
+        </div>
+
+        <h2>You're Invited to Join Perennia AI!</h2>
+
+        <p>{greeting},</p>
+
+        <p>You've been invited to set up <strong>{company_name}</strong> on Perennia AI, the intelligent CRM platform that helps mortgage professionals close more loans with AI-powered automation.</p>
+
+        {personal_msg_html}
+
+        <div class="plan-card">
+            <h3>{plan} Plan</h3>
+            <div class="seats">{seats} seats included</div>
+        </div>
+
+        <div style="text-align: center;">
+            <a href="{signup_url}" class="btn-signup">Accept Invitation</a>
+        </div>
+
+        <div class="features">
+            <h4>Your plan includes:</h4>
+            <ul>
+                {features_html}
+            </ul>
+        </div>
+
+        <div class="expires">
+            ⏰ This invitation expires in <strong>{expires_days} days</strong>
+        </div>
+
+        <p style="text-align: center; color: #6b7280; font-size: 14px; margin-top: 24px;">
+            Or copy this link:<br>
+            <a href="{signup_url}" style="color: #3b82f6;">{signup_url}</a>
+        </p>
+
+        <div class="footer">
+            <p>If you didn't expect this invitation, you can safely ignore this email.</p>
+            <p>This invitation was sent by Perennia AI</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+        return html
+
+    def send_subscription_invite(
+        self,
+        to_email: str,
+        company_name: str,
+        contact_name: Optional[str],
+        plan: str,
+        seats: int,
+        invitation_token: str,
+        personal_message: Optional[str] = None,
+        expires_days: int = 7,
+        base_url: str = None
+    ) -> bool:
+        """Send subscription invitation email"""
+        if not base_url:
+            base_url = os.getenv('FRONTEND_URL', 'https://perenniaai.com')
+
+        signup_url = f"{base_url}/signup?invite={invitation_token}"
+        subject = f"🎉 You're Invited to Join Perennia AI - {company_name}"
+        html_body = self.format_subscription_invite_email(
+            company_name, contact_name, plan, seats, signup_url, personal_message, expires_days
+        )
+
+        greeting = f"Hi {contact_name}" if contact_name else "Hello"
+        plain_text = f"""
+{greeting},
+
+You're Invited to Join Perennia AI!
+
+You've been invited to set up {company_name} on Perennia AI, the intelligent CRM platform that helps mortgage professionals close more loans with AI-powered automation.
+
+{f'Message: "{personal_message}"' if personal_message else ''}
+
+YOUR PLAN: {plan.upper()}
+SEATS: {seats}
+
+Click here to accept your invitation:
+{signup_url}
+
+This invitation expires in {expires_days} days.
+
+If you didn't expect this invitation, you can safely ignore this email.
+
+This invitation was sent by Perennia AI
+"""
+
+        return self.send_html_email(to_email, subject, html_body, plain_text)
+
 
 # Global instance
 email_service = EmailService()
@@ -1085,4 +1317,27 @@ async def send_lead_notification_email(
         source=source,
         message=message,
         lead_id=lead_id
+    )
+
+
+async def send_subscription_invite_email(
+    to_email: str,
+    company_name: str,
+    contact_name: Optional[str],
+    plan: str,
+    seats: int,
+    invitation_token: str,
+    personal_message: Optional[str] = None,
+    expires_days: int = 7
+) -> bool:
+    """Send subscription invitation email"""
+    return email_service.send_subscription_invite(
+        to_email=to_email,
+        company_name=company_name,
+        contact_name=contact_name,
+        plan=plan,
+        seats=seats,
+        invitation_token=invitation_token,
+        personal_message=personal_message,
+        expires_days=expires_days
     )
