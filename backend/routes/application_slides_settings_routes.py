@@ -287,11 +287,20 @@ async def save_application_slides_config(
         if app_type not in ["purchase", "refinance"]:
             app_type = "purchase"
 
-        config_data = json.dumps({
-            "stages": [s.dict() for s in config.stages],
-            "declarationQuestions": [q.dict() for q in config.declarationQuestions],
-            "profileFields": [f.dict() for f in config.profileFields]
-        })
+        # Use model_dump() for Pydantic v2 compatibility
+        try:
+            config_data = json.dumps({
+                "stages": [s.model_dump() for s in config.stages],
+                "declarationQuestions": [q.model_dump() for q in config.declarationQuestions],
+                "profileFields": [f.model_dump() for f in config.profileFields]
+            })
+        except AttributeError:
+            # Fall back to dict() for Pydantic v1
+            config_data = json.dumps({
+                "stages": [s.dict() for s in config.stages],
+                "declarationQuestions": [q.dict() for q in config.declarationQuestions],
+                "profileFields": [f.dict() for f in config.profileFields]
+            })
 
         # Ensure table exists with app_type column
         db.execute(text("""
@@ -353,7 +362,9 @@ async def save_application_slides_config(
         }
 
     except Exception as e:
+        import traceback
         logger.error(f"Error saving application slides config: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to save configuration: {str(e)}")
 
