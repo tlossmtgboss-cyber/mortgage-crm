@@ -99,6 +99,11 @@ export const NAVIGATION_ITEMS = {
     path: '/partner-recruiting',
     label: 'Partner Recruiting',
     matchPaths: ['/partner-recruiting/']
+  },
+  mortgageDecisionLab: {
+    path: '/decision-lab',
+    label: 'Mortgage Lab',
+    matchPaths: ['/decision-lab']
   }
 };
 
@@ -120,6 +125,7 @@ export const ROLE_NAVIGATION = {
     'calendar',
     'partners',
     'aiUnderwriter',
+    'mortgageDecisionLab',
     'market',
     'profitability',
     'capacity',
@@ -140,6 +146,7 @@ export const ROLE_NAVIGATION = {
     'calendar',
     'partners',
     'aiUnderwriter',
+    'mortgageDecisionLab',
     'market',
     'profitability',
     'partnerRecruiting'
