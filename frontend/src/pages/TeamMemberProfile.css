@@ -1,5 +1,5 @@
 .team-member-profile-page {
-  padding: 32px;
+  padding: 16px 24px;
   max-width: 1400px;
   margin: 0 auto;
   background: #ffffff;
@@ -10,16 +10,16 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
+  margin-bottom: 12px;
 }
 
 .btn-back {
-  padding: 8px 16px;
+  padding: 6px 12px;
   background: white;
   border: 1px solid #e0e0e0;
-  border-radius: 6px;
+  border-radius: 4px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
   color: #666;
   transition: all 0.2s;
 }
@@ -38,9 +38,9 @@
 .btn-edit-header,
 .btn-save,
 .btn-cancel {
-  padding: 8px 20px;
-  border-radius: 6px;
-  font-size: 14px;
+  padding: 6px 14px;
+  border-radius: 4px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
@@ -77,20 +77,20 @@
 /* Green Header Bar with Tabs */
 .profile-green-bar {
   background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
-  padding: 16px 32px;
-  margin-bottom: 24px;
+  padding: 10px 24px;
+  margin-bottom: 16px;
   box-shadow: 0 4px 12px rgba(33, 141, 141, 0.2);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
+  gap: 16px;
   color: white;
 }
 
 .profile-left-section {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 12px;
   flex-shrink: 0;
 }
 
@@ -106,17 +106,17 @@
 }
 
 .avatar-circle-new {
-  width: 80px;
-  height: 80px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
   background: white;
   color: #218D8D;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 32px;
+  font-size: 22px;
   font-weight: 700;
-  border: 3px solid rgba(255, 255, 255, 0.5);
+  border: 2px solid rgba(255, 255, 255, 0.5);
   overflow: hidden;
   position: relative;
   transition: all 0.3s ease;
@@ -163,14 +163,14 @@
 }
 
 .member-name-header {
-  font-size: 24px;
+  font-size: 18px;
   font-weight: 700;
   margin: 0;
   color: white;
 }
 
 .member-role-header {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 500;
   margin: 0;
   color: rgba(255, 255, 255, 0.9);
@@ -186,12 +186,12 @@
 }
 
 .profile-tabs-new .tab-btn {
-  padding: 10px 16px;
+  padding: 6px 12px;
   background: rgba(255, 255, 255, 0.1);
   border: none;
-  border-radius: 6px;
+  border-radius: 4px;
   color: rgba(255, 255, 255, 0.8);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
@@ -338,17 +338,17 @@
 /* Tab Content */
 .tab-content {
   background: white;
-  border-radius: 12px;
+  border-radius: 8px;
   border: 1px solid #e2e8f0;
-  padding: 32px;
+  padding: 20px;
 }
 
 .tab-panel h2 {
-  font-size: 24px;
+  font-size: 18px;
   font-weight: 700;
   color: #1a202c;
-  margin: 0 0 24px 0;
-  padding-bottom: 16px;
+  margin: 0 0 16px 0;
+  padding-bottom: 12px;
   border-bottom: 2px solid #e2e8f0;
 }
 
@@ -361,19 +361,19 @@
 
 .info-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 20px;
-  margin-bottom: 24px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
 }
 
 .info-field {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
 .info-field label {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 600;
   color: #64748b;
   text-transform: uppercase;
@@ -383,10 +383,10 @@
 .info-field input,
 .info-field textarea,
 .info-field select {
-  padding: 12px 16px;
-  border: 2px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 15px;
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 14px;
   font-family: inherit;
   transition: all 0.2s;
   background: white;
@@ -580,6 +580,10 @@
 
 /* Responsive */
 @media (max-width: 1200px) {
+  .info-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
   .kpi-grid,
   .disc-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -594,7 +598,7 @@
     width: 100%;
     justify-content: flex-start;
     overflow-x: auto;
-    padding-top: 12px;
+    padding-top: 8px;
     border-top: 1px solid rgba(255, 255, 255, 0.2);
   }
 }

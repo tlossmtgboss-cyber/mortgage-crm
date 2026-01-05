@@ -368,7 +368,7 @@ const AdminPanel = () => {
           className={`tab ${activeTab === 'realtors' ? 'active' : ''}`}
           onClick={() => setActiveTab('realtors')}
         >
-          Realtors
+          Partners
         </button>
         <button
           className={`tab ${activeTab === 'ai_metrics' ? 'active' : ''}`}
@@ -396,47 +396,6 @@ const AdminPanel = () => {
             {/* Stats Grid */}
             <section className="stats-section">
               <div className="stats-grid">
-                <div className="stat-card">
-                  <div className="stat-icon users">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                      <circle cx="9" cy="7" r="4"/>
-                      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                      <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                    </svg>
-                  </div>
-                  <div className="stat-content">
-                    <span className="stat-value">{stats?.total_users || 0}</span>
-                    <span className="stat-label">Total Users</span>
-                  </div>
-                </div>
-
-                <div className="stat-card">
-                  <div className="stat-icon los">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                      <circle cx="12" cy="7" r="4"/>
-                    </svg>
-                  </div>
-                  <div className="stat-content">
-                    <span className="stat-value">{stats?.total_los || loanOfficers.length}</span>
-                    <span className="stat-label">Loan Officers</span>
-                  </div>
-                </div>
-
-                <div className="stat-card">
-                  <div className="stat-icon realtors">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-                      <polyline points="9 22 9 12 15 12 15 22"/>
-                    </svg>
-                  </div>
-                  <div className="stat-content">
-                    <span className="stat-value">{stats?.total_realtors || realtors.length}</span>
-                    <span className="stat-label">Realtors</span>
-                  </div>
-                </div>
-
                 <div className="stat-card">
                   <div className="stat-icon leads">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -852,7 +811,7 @@ const AdminPanel = () => {
         {activeTab === 'realtors' && (
           <section className="realtors-section">
             <div className="section-header">
-              <h2>Realtor Partners</h2>
+              <h2>Partners</h2>
               <button
                 className="btn-primary"
                 onClick={() => {
@@ -860,7 +819,7 @@ const AdminPanel = () => {
                   openNewUserModal();
                 }}
               >
-                + Add Realtor
+                + Add Partner
               </button>
             </div>
 
@@ -906,7 +865,7 @@ const AdminPanel = () => {
 
             {realtors.length === 0 && (
               <div className="empty-state">
-                <p>No realtors yet</p>
+                <p>No partners yet</p>
                 <button
                   className="btn-primary"
                   onClick={() => {
@@ -914,7 +873,7 @@ const AdminPanel = () => {
                     openNewUserModal();
                   }}
                 >
-                  Add First Realtor
+                  Add First Partner
                 </button>
               </div>
             )}

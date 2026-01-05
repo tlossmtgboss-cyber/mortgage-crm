@@ -17,6 +17,7 @@ import EmploymentTab from '../components/EmploymentTab';
 import IncomeTab from '../components/income/IncomeTab';
 import UnifiedIncomeCalculator from '../components/income/UnifiedIncomeCalculator';
 import IncomeCalculator from '../components/IncomeCalculator';
+import CreditTab from '../components/CreditTab';
 import VideoMeetings from '../components/VideoMeetings';
 import VideoCallScheduleModal from '../components/VideoCallScheduleModal';
 import EmailComposerModal from '../components/EmailComposerModal';
@@ -436,11 +437,18 @@ function LeadDetail() {
         console.log(`Converting lead to ${newStatus} loan with data:`, loanData);
 
         try {
-          const newLoan = await loansAPI.create(loanData);
+          // Skip duplicate check when converting lead - user explicitly wants to create this loan
+          const newLoan = await loansAPI.create(loanData, true);
           console.log('Loan created:', newLoan);
 
-          // Update lead stage to indicate it's been converted
-          await leadsAPI.update(id, { stage: newStatus });
+          // Try to update lead stage - but don't fail the whole conversion if this errors
+          // (user might not have edit permission on the lead, but loan was created successfully)
+          try {
+            await leadsAPI.update(id, { stage: newStatus });
+          } catch (leadUpdateError) {
+            console.warn('Could not update lead stage (loan was created successfully):', leadUpdateError);
+            // Continue with navigation - the loan was created which is the important part
+          }
 
           // Clear caches
           localStorage.removeItem('leads_data');
@@ -1988,6 +1996,12 @@ function LeadDetail() {
           onClick={() => setActiveTab('income')}
         >
           Income
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'credit' ? 'active' : ''}`}
+          onClick={() => setActiveTab('credit')}
+        >
+          Credit
         </button>
         <button
           className={`tab-btn ${activeTab === 'documents' ? 'active' : ''}`}
@@ -3930,6 +3944,18 @@ function LeadDetail() {
                 }}
               />
             )}
+          </div>
+          )}
+
+          {/* Credit Tab */}
+          {activeTab === 'credit' && (
+          <div className="info-section">
+            <CreditTab
+              leadId={parseInt(id)}
+              loanId={null}
+              borrowerId={borrowers[activeBorrower]?.id || 1}
+              formData={formData}
+            />
           </div>
           )}
 
