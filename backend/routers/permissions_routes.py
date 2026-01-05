@@ -22,6 +22,42 @@ from auth import get_current_user
 
 router = APIRouter(prefix="/api/v1/permissions", tags=["permissions"])
 
+# Admin roles that bypass permission checks
+ADMIN_PERMISSION_ROLES = ['admin', 'leadership', 'management']
+ADMIN_LEGACY_ROLES = ['admin', 'manager']
+
+
+def is_admin_user(current_user: dict) -> bool:
+    """Check if user has admin-level permissions (Python-level check)."""
+    permission_role = current_user.get('permission_role', '')
+    legacy_role = current_user.get('role', '')
+
+    if permission_role and permission_role.lower() in [r.lower() for r in ADMIN_PERMISSION_ROLES]:
+        return True
+    if legacy_role and legacy_role.lower() in [r.lower() for r in ADMIN_LEGACY_ROLES]:
+        return True
+    return False
+
+
+def check_manage_permissions(current_user: dict, db: Session) -> bool:
+    """
+    Check if user can manage permissions.
+    Admin users bypass DB function check for reliability.
+    """
+    # Python-level admin check (fast path, always works)
+    if is_admin_user(current_user):
+        return True
+
+    # Fall back to database function for non-admin users
+    try:
+        result = db.execute(text("""
+            SELECT user_has_permission(:actor_id, 'team.manage_permissions')
+        """), {"actor_id": current_user["id"]})
+        return result.scalar() or False
+    except Exception:
+        # If DB function doesn't exist yet, only admins can manage
+        return False
+
 # ============================================================================
 # PYDANTIC MODELS
 # ============================================================================
@@ -432,10 +468,7 @@ async def get_user_permission_profile(
     # Check authorization
     if current_user["id"] != user_id:
         # Check if current user has permission to view others' permissions
-        has_perm = db.execute(text("""
-            SELECT user_has_permission(:actor_id, 'team.manage_permissions')
-        """), {"actor_id": current_user["id"]}).scalar()
-        if not has_perm:
+        if not check_manage_permissions(current_user, db):
             raise HTTPException(status_code=403, detail="Not authorized to view this user's permissions")
 
     # Get user info
@@ -551,10 +584,7 @@ async def grant_stage_access(
 ):
     """Grant stage access to a user."""
     # Check authorization
-    has_perm = db.execute(text("""
-        SELECT user_has_permission(:actor_id, 'team.manage_permissions')
-    """), {"actor_id": current_user["id"]}).scalar()
-    if not has_perm:
+    if not check_manage_permissions(current_user, db):
         raise HTTPException(status_code=403, detail="Not authorized to manage permissions")
 
     # Get template ID if code provided
@@ -609,10 +639,7 @@ async def revoke_stage_access(
 ):
     """Revoke stage access from a user."""
     # Check authorization
-    has_perm = db.execute(text("""
-        SELECT user_has_permission(:actor_id, 'team.manage_permissions')
-    """), {"actor_id": current_user["id"]}).scalar()
-    if not has_perm:
+    if not check_manage_permissions(current_user, db):
         raise HTTPException(status_code=403, detail="Not authorized to manage permissions")
 
     db.execute(text("""
@@ -636,10 +663,7 @@ async def apply_template_to_stage(
 ):
     """Apply a template to user's stage access."""
     # Check authorization
-    has_perm = db.execute(text("""
-        SELECT user_has_permission(:actor_id, 'team.manage_permissions')
-    """), {"actor_id": current_user["id"]}).scalar()
-    if not has_perm:
+    if not check_manage_permissions(current_user, db):
         raise HTTPException(status_code=403, detail="Not authorized to manage permissions")
 
     # Get the new template
@@ -735,10 +759,7 @@ async def add_override(
 ):
     """Add a permission override for a user."""
     # Check authorization
-    has_perm = db.execute(text("""
-        SELECT user_has_permission(:actor_id, 'team.manage_permissions')
-    """), {"actor_id": current_user["id"]}).scalar()
-    if not has_perm:
+    if not check_manage_permissions(current_user, db):
         raise HTTPException(status_code=403, detail="Not authorized to manage permissions")
 
     result = db.execute(text("""
@@ -784,10 +805,7 @@ async def remove_override(
 ):
     """Remove a permission override."""
     # Check authorization
-    has_perm = db.execute(text("""
-        SELECT user_has_permission(:actor_id, 'team.manage_permissions')
-    """), {"actor_id": current_user["id"]}).scalar()
-    if not has_perm:
+    if not check_manage_permissions(current_user, db):
         raise HTTPException(status_code=403, detail="Not authorized to manage permissions")
 
     db.execute(text("""
@@ -999,10 +1017,7 @@ async def get_pending_requests(
 ):
     """Get pending requests for review (for managers)."""
     # Check authorization
-    has_perm = db.execute(text("""
-        SELECT user_has_permission(:actor_id, 'team.manage_permissions')
-    """), {"actor_id": current_user["id"]}).scalar()
-    if not has_perm:
+    if not check_manage_permissions(current_user, db):
         raise HTTPException(status_code=403, detail="Not authorized to review requests")
 
     result = db.execute(text("""
@@ -1033,10 +1048,7 @@ async def approve_request(
 ):
     """Approve a permission request."""
     # Check authorization
-    has_perm = db.execute(text("""
-        SELECT user_has_permission(:actor_id, 'team.manage_permissions')
-    """), {"actor_id": current_user["id"]}).scalar()
-    if not has_perm:
+    if not check_manage_permissions(current_user, db):
         raise HTTPException(status_code=403, detail="Not authorized to approve requests")
 
     # Get request
@@ -1136,10 +1148,7 @@ async def deny_request(
 ):
     """Deny a permission request."""
     # Check authorization
-    has_perm = db.execute(text("""
-        SELECT user_has_permission(:actor_id, 'team.manage_permissions')
-    """), {"actor_id": current_user["id"]}).scalar()
-    if not has_perm:
+    if not check_manage_permissions(current_user, db):
         raise HTTPException(status_code=403, detail="Not authorized to deny requests")
 
     result = db.execute(text("""
