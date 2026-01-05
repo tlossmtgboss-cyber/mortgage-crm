@@ -168,8 +168,8 @@ const RecruitPortal = () => {
 
   if (loading) {
     return (
-      <div className="rp-loading">
-        <div className="rp-loading-spinner"></div>
+      <div className="recruit-portal-loading">
+        <div className="loading-spinner"></div>
         <p>Loading your personalized portal...</p>
       </div>
     );
@@ -177,8 +177,8 @@ const RecruitPortal = () => {
 
   if (error) {
     return (
-      <div className="rp-error">
-        <div className="rp-error-icon">⚠️</div>
+      <div className="recruit-portal-error">
+        <div className="error-icon">⚠️</div>
         <h2>Portal Access Error</h2>
         <p>{error}</p>
         <p>Please check your link or contact the recruiter.</p>
@@ -193,29 +193,31 @@ const RecruitPortal = () => {
   return (
     <div className="recruit-portal">
       {/* Hero Section */}
-      <section className="rp-hero">
-        <div className="rp-hero-content">
-          <div className="rp-hero-welcome">
+      <section className="portal-hero-section">
+        <div className="hero-container">
+          <div className="hero-welcome">
             <h1>Welcome, {firstName}!</h1>
-            <p className="rp-hero-subtitle">Your journey to success starts here.</p>
+            <p className="hero-subtitle">Your journey to success starts here.</p>
 
             {/* Pipeline Progress */}
-            <div className="rp-pipeline">
-              {PIPELINE_STAGES.map((stage, index) => (
-                <div
-                  key={stage.key}
-                  className={`rp-pipeline-stage ${index <= currentStage ? 'completed' : ''} ${index === currentStage ? 'current' : ''}`}
-                >
-                  <div className="rp-pipeline-dot">
-                    {index < currentStage ? '✓' : index + 1}
+            <div className="pipeline-progress">
+              <div className="progress-steps">
+                {PIPELINE_STAGES.map((stage, index) => (
+                  <div
+                    key={stage.key}
+                    className={`progress-step ${index <= currentStage ? 'completed' : ''} ${index === currentStage ? 'current' : ''}`}
+                  >
+                    <div className="step-number">
+                      {index < currentStage ? '✓' : index + 1}
+                    </div>
+                    <span className="step-label">{stage.label}</span>
                   </div>
-                  <span className="rp-pipeline-label">{stage.label}</span>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
 
             {portalData?.status_message && (
-              <div className="rp-status-message">
+              <div className="status-message">
                 <p>"{portalData.status_message}"</p>
               </div>
             )}
@@ -223,35 +225,35 @@ const RecruitPortal = () => {
 
           {/* Recruiter Card */}
           {portalData?.recruiter_name && (
-            <div className="rp-recruiter-card">
-              <div className="rp-recruiter-photo">
+            <div className="recruiter-card">
+              <div className="recruiter-photo">
                 {portalData.recruiter_photo ? (
                   <img src={portalData.recruiter_photo} alt={portalData.recruiter_name} />
                 ) : (
-                  <div className="rp-recruiter-initials">
+                  <div className="recruiter-initials">
                     {portalData.recruiter_name.split(' ').map(n => n[0]).join('')}
                   </div>
                 )}
               </div>
-              <div className="rp-recruiter-info">
-                <span className="rp-recruiter-label">Your Recruiter</span>
+              <div className="recruiter-info">
+                <span className="recruiter-label">Your Recruiter</span>
                 <h4>{portalData.recruiter_name}</h4>
                 {portalData.recruiter_title && (
-                  <p className="rp-recruiter-title">{portalData.recruiter_title}</p>
+                  <p className="recruiter-title">{portalData.recruiter_title}</p>
                 )}
                 {portalData.recruiter_phone && (
-                  <a href={`tel:${portalData.recruiter_phone}`} className="rp-recruiter-contact">
+                  <a href={`tel:${portalData.recruiter_phone}`} className="contact-item">
                     <span>📞</span> {portalData.recruiter_phone}
                   </a>
                 )}
                 {portalData.recruiter_email && (
-                  <a href={`mailto:${portalData.recruiter_email}`} className="rp-recruiter-contact">
+                  <a href={`mailto:${portalData.recruiter_email}`} className="contact-item">
                     <span>✉️</span> {portalData.recruiter_email}
                   </a>
                 )}
               </div>
               <button
-                className="rp-recruiter-cta"
+                className="cta-button"
                 onClick={() => document.getElementById('schedule-section')?.scrollIntoView({ behavior: 'smooth' })}
               >
                 Schedule a Call
@@ -263,13 +265,13 @@ const RecruitPortal = () => {
 
       {/* Personal Video Message */}
       {videos.length > 0 && (
-        <section className="rp-video-section">
-          <div className="rp-video-container">
-            <div className="rp-video-header">
+        <section className="video-section">
+          <div className="video-container">
+            <div className="video-header">
               <h3>A Personal Message for You</h3>
               <p>Your recruiter recorded this just for you</p>
             </div>
-            <div className="rp-video-player">
+            <div className="video-player">
               <video
                 controls
                 poster={videos[0].recruiter_photo || undefined}
@@ -286,7 +288,7 @@ const RecruitPortal = () => {
               </video>
             </div>
             {videos[0].message && (
-              <div className="rp-video-message">
+              <div className="video-message">
                 <p>"{videos[0].message}"</p>
                 <span>— {videos[0].recruiter_name}</span>
               </div>
@@ -296,51 +298,51 @@ const RecruitPortal = () => {
       )}
 
       {/* Quick Actions */}
-      <section className="rp-quick-actions">
-        <div className="rp-quick-action" onClick={() => setCalculatorExpanded(true)}>
-          <div className="rp-quick-action-icon calculator">💵</div>
-          <div className="rp-quick-action-content">
+      <section className="quick-actions-section">
+        <div className="quick-action" onClick={() => setCalculatorExpanded(true)}>
+          <div className="action-icon calculator">💵</div>
+          <div className="action-content">
             <h4>Calculate Your Earnings</h4>
             <p>See how much more you could make</p>
           </div>
-          <span className="rp-quick-action-arrow">→</span>
+          <span className="action-arrow">→</span>
         </div>
 
         <div
-          className="rp-quick-action"
+          className="quick-action"
           onClick={() => document.getElementById('schedule-section')?.scrollIntoView({ behavior: 'smooth' })}
         >
-          <div className="rp-quick-action-icon schedule">📅</div>
-          <div className="rp-quick-action-content">
+          <div className="action-icon schedule">📅</div>
+          <div className="action-content">
             <h4>Schedule a Call</h4>
             <p>Book time with your recruiter</p>
           </div>
-          <span className="rp-quick-action-arrow">→</span>
+          <span className="action-arrow">→</span>
         </div>
 
         <div
-          className="rp-quick-action"
+          className="quick-action"
           onClick={() => document.getElementById('chat-section')?.scrollIntoView({ behavior: 'smooth' })}
         >
-          <div className="rp-quick-action-icon chat">💬</div>
-          <div className="rp-quick-action-content">
+          <div className="action-icon chat">💬</div>
+          <div className="action-content">
             <h4>Chat with AI</h4>
             <p>Get instant answers to your questions</p>
           </div>
-          <span className="rp-quick-action-arrow">→</span>
+          <span className="action-arrow">→</span>
         </div>
       </section>
 
       {/* Value Propositions */}
-      <section className="rp-value-props">
-        <div className="rp-section-header">
+      <section className="value-props-section">
+        <div className="section-header">
           <h2>Why Top Producers Choose Perennia</h2>
           <p>Everything you need to take your career to the next level</p>
         </div>
-        <div className="rp-value-props-grid">
+        <div className="value-props-grid">
           {VALUE_PROPS.map((prop, index) => (
-            <div key={index} className="rp-value-prop-card">
-              <div className="rp-value-prop-icon">{prop.icon}</div>
+            <div key={index} className="value-prop-card">
+              <div className="value-prop-icon">{prop.icon}</div>
               <h4>{prop.title}</h4>
               <p>{prop.description}</p>
             </div>
@@ -349,12 +351,12 @@ const RecruitPortal = () => {
       </section>
 
       {/* Earnings Calculator */}
-      <section className={`rp-calculator-section ${calculatorExpanded ? 'expanded' : ''}`}>
-        <div className="rp-section-header">
+      <section className={`calculator-section ${calculatorExpanded ? 'expanded' : ''}`}>
+        <div className="section-header">
           <h2>Calculate Your Potential Earnings</h2>
           <p>See the difference Perennia can make</p>
         </div>
-        <div className="rp-calculator-wrapper">
+        <div className="calculator-wrapper">
           <ProductionCalculator
             slug={slug}
             calculatorConfig={portalData?.calculator_config}
@@ -362,7 +364,7 @@ const RecruitPortal = () => {
         </div>
         {!calculatorExpanded && (
           <button
-            className="rp-expand-calculator"
+            className="expand-calculator-btn"
             onClick={() => setCalculatorExpanded(true)}
           >
             View Full Calculator
@@ -372,30 +374,30 @@ const RecruitPortal = () => {
 
       {/* Company Culture / Updates */}
       {companyUpdates.length > 0 && (
-        <section className="rp-culture-section">
-          <div className="rp-section-header">
+        <section className="culture-section">
+          <div className="section-header">
             <h2>Life at Perennia</h2>
             <p>Stories, updates, and what makes us different</p>
           </div>
-          <div className="rp-updates-grid">
+          <div className="culture-grid">
             {companyUpdates.slice(0, 6).map((update, index) => (
               <div
                 key={update.id || index}
-                className={`rp-update-card ${index === 0 ? 'featured' : ''}`}
+                className={`culture-card ${index === 0 ? 'featured' : ''}`}
               >
                 {update.media_url && (
-                  <div className="rp-update-image">
+                  <div className="culture-image">
                     <img src={update.media_url} alt={update.title} />
                   </div>
                 )}
-                <div className="rp-update-content">
-                  <span className={`rp-update-category ${update.category}`}>
+                <div className="culture-content">
+                  <span className={`culture-category ${update.category}`}>
                     {update.category}
                   </span>
                   <h4>{update.title}</h4>
                   <p>{update.content}</p>
                   {update.published_at && (
-                    <span className="rp-update-date">
+                    <span className="culture-date">
                       {new Date(update.published_at).toLocaleDateString()}
                     </span>
                   )}
@@ -407,38 +409,38 @@ const RecruitPortal = () => {
       )}
 
       {/* Testimonials */}
-      <section className="rp-testimonials">
-        <div className="rp-section-header">
+      <section className="testimonials-section">
+        <div className="section-header">
           <h2>Hear from Our Team</h2>
           <p>Real stories from loan officers who made the switch</p>
         </div>
-        <div className="rp-testimonials-carousel">
-          <div className="rp-testimonial-card">
-            <div className="rp-testimonial-quote">
+        <div className="testimonials-carousel">
+          <div className="testimonial-card">
+            <div className="testimonial-quote">
               "{TESTIMONIALS[activeTestimonial].quote}"
             </div>
-            <div className="rp-testimonial-author">
-              <div className="rp-testimonial-avatar">
+            <div className="testimonial-author">
+              <div className="author-photo">
                 {TESTIMONIALS[activeTestimonial].avatar ? (
                   <img src={TESTIMONIALS[activeTestimonial].avatar} alt="" />
                 ) : (
-                  <span>{TESTIMONIALS[activeTestimonial].name.split(' ').map(n => n[0]).join('')}</span>
+                  <span className="author-photo-placeholder">{TESTIMONIALS[activeTestimonial].name.split(' ').map(n => n[0]).join('')}</span>
                 )}
               </div>
-              <div className="rp-testimonial-info">
+              <div className="author-info">
                 <h5>{TESTIMONIALS[activeTestimonial].name}</h5>
                 <p>{TESTIMONIALS[activeTestimonial].title}</p>
               </div>
-              <div className="rp-testimonial-metric">
+              <div className="testimonial-metric">
                 {TESTIMONIALS[activeTestimonial].metric}
               </div>
             </div>
           </div>
-          <div className="rp-testimonial-dots">
+          <div className="carousel-dots">
             {TESTIMONIALS.map((_, index) => (
               <button
                 key={index}
-                className={`rp-testimonial-dot ${index === activeTestimonial ? 'active' : ''}`}
+                className={`carousel-dot ${index === activeTestimonial ? 'active' : ''}`}
                 onClick={() => setActiveTestimonial(index)}
                 aria-label={`View testimonial ${index + 1}`}
               />
@@ -448,12 +450,12 @@ const RecruitPortal = () => {
       </section>
 
       {/* Schedule Section */}
-      <section id="schedule-section" className="rp-schedule-section">
-        <div className="rp-section-header">
+      <section id="schedule-section" className="schedule-section">
+        <div className="section-header">
           <h2>Let's Talk About Your Future</h2>
           <p>Schedule a time that works for you</p>
         </div>
-        <div className="rp-scheduler-wrapper">
+        <div className="scheduler-container">
           <PortalScheduler
             slug={slug}
             recruiterName={portalData?.recruiter_name}
@@ -462,12 +464,12 @@ const RecruitPortal = () => {
       </section>
 
       {/* Chat Section */}
-      <section id="chat-section" className="rp-chat-section">
-        <div className="rp-section-header">
+      <section id="chat-section" className="chat-section">
+        <div className="section-header">
           <h2>Have Questions?</h2>
           <p>Chat with our AI assistant for instant answers</p>
         </div>
-        <div className="rp-chat-wrapper">
+        <div className="chat-container">
           <PortalChat
             slug={slug}
             candidateName={portalData?.candidate_name}
@@ -477,13 +479,13 @@ const RecruitPortal = () => {
       </section>
 
       {/* Footer */}
-      <footer className="rp-footer">
-        <div className="rp-footer-content">
-          <div className="rp-footer-brand">
+      <footer className="portal-footer">
+        <div className="footer-content">
+          <div className="footer-logo">
             <h4>Perennia</h4>
-            <p>Empowering loan officers to achieve more.</p>
+            <p className="footer-tagline">Empowering loan officers to achieve more.</p>
           </div>
-          <div className="rp-footer-links">
+          <div className="footer-links">
             <a href="https://perenniaai.com" target="_blank" rel="noopener noreferrer">
               About Us
             </a>
@@ -494,7 +496,7 @@ const RecruitPortal = () => {
               Contact
             </a>
           </div>
-          <div className="rp-footer-social">
+          <div className="footer-social">
             <a href="#" aria-label="LinkedIn">
               <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
                 <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
@@ -512,9 +514,9 @@ const RecruitPortal = () => {
             </a>
           </div>
         </div>
-        <div className="rp-footer-bottom">
+        <div className="footer-bottom">
           <p>&copy; {new Date().getFullYear()} Perennia. All rights reserved.</p>
-          <p className="rp-footer-powered">Powered by Perennia AI</p>
+          <p className="footer-powered">Powered by Perennia AI</p>
         </div>
       </footer>
 
