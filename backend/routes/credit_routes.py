@@ -136,72 +136,90 @@ def ensure_tables():
     if _tables_created:
         return
 
-    User, Document, Lead, Loan, Base, engine, DocumentCategory = get_models()
+    try:
+        User, Document, Lead, Loan, Base, engine, DocumentCategory = get_models()
 
-    from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text, Enum as SQLEnum, inspect
-    from sqlalchemy.orm import relationship
-
-    # Check if tables exist
-    inspector = inspect(engine)
-    existing_tables = inspector.get_table_names()
-
-    if "credit_items" not in existing_tables:
-        # Create credit_items table
+        from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text, inspect, text
         from sqlalchemy import Table, MetaData
-        metadata = MetaData()
 
-        credit_items = Table(
-            "credit_items",
-            metadata,
-            Column("id", Integer, primary_key=True, index=True),
-            Column("loan_id", Integer, ForeignKey("loans.id"), nullable=True),
-            Column("lead_id", Integer, ForeignKey("leads.id"), nullable=True),
-            Column("document_id", Integer, ForeignKey("documents.id"), nullable=True),
-            Column("title", String, nullable=False),
-            Column("description", Text),
-            Column("category", String),
-            Column("severity", String, default="medium"),
-            Column("status", String, default="pending"),
-            Column("recommendation", Text),
-            Column("account_name", String),
-            Column("account_balance", Float),
-            Column("notes", Text),
-            Column("created_at", DateTime, default=datetime.now(timezone.utc)),
-            Column("updated_at", DateTime, default=datetime.now(timezone.utc)),
-        )
+        # Use raw SQL to create tables to avoid ORM conflicts
+        with engine.connect() as conn:
+            # Check if credit_items table exists
+            result = conn.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'credit_items'
+                )
+            """))
+            credit_items_exists = result.scalar()
 
-        credit_summaries = Table(
-            "credit_summaries",
-            metadata,
-            Column("id", Integer, primary_key=True, index=True),
-            Column("loan_id", Integer, ForeignKey("loans.id"), nullable=True),
-            Column("lead_id", Integer, ForeignKey("leads.id"), nullable=True),
-            Column("document_id", Integer, ForeignKey("documents.id"), nullable=True),
-            Column("credit_score", Integer),
-            Column("equifax_score", Integer),
-            Column("experian_score", Integer),
-            Column("transunion_score", Integer),
-            Column("bureau", String),
-            Column("report_date", DateTime),
-            Column("total_accounts", Integer),
-            Column("open_accounts", Integer),
-            Column("closed_accounts", Integer),
-            Column("total_debt", Float),
-            Column("total_credit_limit", Float),
-            Column("utilization", Float),
-            Column("late_payments_30", Integer, default=0),
-            Column("late_payments_60", Integer, default=0),
-            Column("late_payments_90", Integer, default=0),
-            Column("collections", Integer, default=0),
-            Column("bankruptcies", Integer, default=0),
-            Column("created_at", DateTime, default=datetime.now(timezone.utc)),
-            Column("updated_at", DateTime, default=datetime.now(timezone.utc)),
-        )
+            if not credit_items_exists:
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS credit_items (
+                        id SERIAL PRIMARY KEY,
+                        loan_id INTEGER REFERENCES loans(id),
+                        lead_id INTEGER REFERENCES leads(id),
+                        document_id INTEGER REFERENCES documents(id),
+                        title VARCHAR NOT NULL,
+                        description TEXT,
+                        category VARCHAR,
+                        severity VARCHAR DEFAULT 'medium',
+                        status VARCHAR DEFAULT 'pending',
+                        recommendation TEXT,
+                        account_name VARCHAR,
+                        account_balance FLOAT,
+                        notes TEXT,
+                        created_at TIMESTAMP DEFAULT NOW(),
+                        updated_at TIMESTAMP DEFAULT NOW()
+                    )
+                """))
+                conn.commit()
+                print("✅ credit_items table created")
 
-        metadata.create_all(engine)
-        print("✅ Credit tables created")
+            # Check if credit_summaries table exists
+            result = conn.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'credit_summaries'
+                )
+            """))
+            credit_summaries_exists = result.scalar()
 
-    _tables_created = True
+            if not credit_summaries_exists:
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS credit_summaries (
+                        id SERIAL PRIMARY KEY,
+                        loan_id INTEGER REFERENCES loans(id),
+                        lead_id INTEGER REFERENCES leads(id),
+                        document_id INTEGER REFERENCES documents(id),
+                        credit_score INTEGER,
+                        equifax_score INTEGER,
+                        experian_score INTEGER,
+                        transunion_score INTEGER,
+                        bureau VARCHAR,
+                        report_date TIMESTAMP,
+                        total_accounts INTEGER,
+                        open_accounts INTEGER,
+                        closed_accounts INTEGER,
+                        total_debt FLOAT,
+                        total_credit_limit FLOAT,
+                        utilization FLOAT,
+                        late_payments_30 INTEGER DEFAULT 0,
+                        late_payments_60 INTEGER DEFAULT 0,
+                        late_payments_90 INTEGER DEFAULT 0,
+                        collections INTEGER DEFAULT 0,
+                        bankruptcies INTEGER DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT NOW(),
+                        updated_at TIMESTAMP DEFAULT NOW()
+                    )
+                """))
+                conn.commit()
+                print("✅ credit_summaries table created")
+
+        _tables_created = True
+    except Exception as e:
+        print(f"⚠️ Could not ensure credit tables: {e}")
+        # Don't raise - allow routes to work with empty data
 
 
 # ============================================================================
@@ -247,60 +265,66 @@ async def get_loan_credit_reports(
 
     # Get credit items from database
     from sqlalchemy import text
-    items_result = db.execute(text("""
-        SELECT id, title, description, category, severity, status,
-               recommendation, account_name, account_balance, notes,
-               created_at, updated_at, document_id
-        FROM credit_items WHERE loan_id = :loan_id
-        ORDER BY CASE severity
-            WHEN 'critical' THEN 1
-            WHEN 'high' THEN 2
-            WHEN 'medium' THEN 3
-            WHEN 'low' THEN 4
-            ELSE 5 END,
-        created_at DESC
-    """), {"loan_id": loan_id}).fetchall()
-
     items = []
-    for row in items_result:
-        items.append({
-            "id": row[0],
-            "title": row[1],
-            "description": row[2],
-            "category": row[3],
-            "severity": row[4],
-            "status": row[5] or "pending",
-            "recommendation": row[6],
-            "account_name": row[7],
-            "account_balance": row[8],
-            "notes": row[9],
-            "created_at": row[10].isoformat() if row[10] else None,
-            "updated_at": row[11].isoformat() if row[11] else None,
-            "document_id": row[12]
-        })
+    try:
+        items_result = db.execute(text("""
+            SELECT id, title, description, category, severity, status,
+                   recommendation, account_name, account_balance, notes,
+                   created_at, updated_at, document_id
+            FROM credit_items WHERE loan_id = :loan_id
+            ORDER BY CASE severity
+                WHEN 'critical' THEN 1
+                WHEN 'high' THEN 2
+                WHEN 'medium' THEN 3
+                WHEN 'low' THEN 4
+                ELSE 5 END,
+            created_at DESC
+        """), {"loan_id": loan_id}).fetchall()
+
+        for row in items_result:
+            items.append({
+                "id": row[0],
+                "title": row[1],
+                "description": row[2],
+                "category": row[3],
+                "severity": row[4],
+                "status": row[5] or "pending",
+                "recommendation": row[6],
+                "account_name": row[7],
+                "account_balance": row[8],
+                "notes": row[9],
+                "created_at": row[10].isoformat() if row[10] else None,
+                "updated_at": row[11].isoformat() if row[11] else None,
+                "document_id": row[12]
+            })
+    except Exception as e:
+        print(f"Could not fetch credit items: {e}")
 
     # Get credit summary
-    summary_result = db.execute(text("""
-        SELECT credit_score, equifax_score, experian_score, transunion_score,
-               bureau, report_date, total_accounts, open_accounts, total_debt, utilization
-        FROM credit_summaries WHERE loan_id = :loan_id
-        ORDER BY created_at DESC LIMIT 1
-    """), {"loan_id": loan_id}).fetchone()
-
     summary = None
-    if summary_result:
-        summary = {
-            "credit_score": summary_result[0],
-            "equifax_score": summary_result[1],
-            "experian_score": summary_result[2],
-            "transunion_score": summary_result[3],
-            "bureau": summary_result[4],
-            "report_date": summary_result[5].isoformat() if summary_result[5] else None,
-            "total_accounts": summary_result[6],
-            "open_accounts": summary_result[7],
-            "total_debt": summary_result[8],
-            "utilization": summary_result[9]
-        }
+    try:
+        summary_result = db.execute(text("""
+            SELECT credit_score, equifax_score, experian_score, transunion_score,
+                   bureau, report_date, total_accounts, open_accounts, total_debt, utilization
+            FROM credit_summaries WHERE loan_id = :loan_id
+            ORDER BY created_at DESC LIMIT 1
+        """), {"loan_id": loan_id}).fetchone()
+
+        if summary_result:
+            summary = {
+                "credit_score": summary_result[0],
+                "equifax_score": summary_result[1],
+                "experian_score": summary_result[2],
+                "transunion_score": summary_result[3],
+                "bureau": summary_result[4],
+                "report_date": summary_result[5].isoformat() if summary_result[5] else None,
+                "total_accounts": summary_result[6],
+                "open_accounts": summary_result[7],
+                "total_debt": summary_result[8],
+                "utilization": summary_result[9]
+            }
+    except Exception as e:
+        print(f"Could not fetch credit summary: {e}")
 
     return {
         "reports": [
@@ -350,60 +374,66 @@ async def get_lead_credit_reports(
 
     # Get credit items from database
     from sqlalchemy import text
-    items_result = db.execute(text("""
-        SELECT id, title, description, category, severity, status,
-               recommendation, account_name, account_balance, notes,
-               created_at, updated_at, document_id
-        FROM credit_items WHERE lead_id = :lead_id
-        ORDER BY CASE severity
-            WHEN 'critical' THEN 1
-            WHEN 'high' THEN 2
-            WHEN 'medium' THEN 3
-            WHEN 'low' THEN 4
-            ELSE 5 END,
-        created_at DESC
-    """), {"lead_id": lead_id}).fetchall()
-
     items = []
-    for row in items_result:
-        items.append({
-            "id": row[0],
-            "title": row[1],
-            "description": row[2],
-            "category": row[3],
-            "severity": row[4],
-            "status": row[5] or "pending",
-            "recommendation": row[6],
-            "account_name": row[7],
-            "account_balance": row[8],
-            "notes": row[9],
-            "created_at": row[10].isoformat() if row[10] else None,
-            "updated_at": row[11].isoformat() if row[11] else None,
-            "document_id": row[12]
-        })
+    try:
+        items_result = db.execute(text("""
+            SELECT id, title, description, category, severity, status,
+                   recommendation, account_name, account_balance, notes,
+                   created_at, updated_at, document_id
+            FROM credit_items WHERE lead_id = :lead_id
+            ORDER BY CASE severity
+                WHEN 'critical' THEN 1
+                WHEN 'high' THEN 2
+                WHEN 'medium' THEN 3
+                WHEN 'low' THEN 4
+                ELSE 5 END,
+            created_at DESC
+        """), {"lead_id": lead_id}).fetchall()
+
+        for row in items_result:
+            items.append({
+                "id": row[0],
+                "title": row[1],
+                "description": row[2],
+                "category": row[3],
+                "severity": row[4],
+                "status": row[5] or "pending",
+                "recommendation": row[6],
+                "account_name": row[7],
+                "account_balance": row[8],
+                "notes": row[9],
+                "created_at": row[10].isoformat() if row[10] else None,
+                "updated_at": row[11].isoformat() if row[11] else None,
+                "document_id": row[12]
+            })
+    except Exception as e:
+        print(f"Could not fetch credit items for lead: {e}")
 
     # Get credit summary
-    summary_result = db.execute(text("""
-        SELECT credit_score, equifax_score, experian_score, transunion_score,
-               bureau, report_date, total_accounts, open_accounts, total_debt, utilization
-        FROM credit_summaries WHERE lead_id = :lead_id
-        ORDER BY created_at DESC LIMIT 1
-    """), {"lead_id": lead_id}).fetchone()
-
     summary = None
-    if summary_result:
-        summary = {
-            "credit_score": summary_result[0],
-            "equifax_score": summary_result[1],
-            "experian_score": summary_result[2],
-            "transunion_score": summary_result[3],
-            "bureau": summary_result[4],
-            "report_date": summary_result[5].isoformat() if summary_result[5] else None,
-            "total_accounts": summary_result[6],
-            "open_accounts": summary_result[7],
-            "total_debt": summary_result[8],
-            "utilization": summary_result[9]
-        }
+    try:
+        summary_result = db.execute(text("""
+            SELECT credit_score, equifax_score, experian_score, transunion_score,
+                   bureau, report_date, total_accounts, open_accounts, total_debt, utilization
+            FROM credit_summaries WHERE lead_id = :lead_id
+            ORDER BY created_at DESC LIMIT 1
+        """), {"lead_id": lead_id}).fetchone()
+
+        if summary_result:
+            summary = {
+                "credit_score": summary_result[0],
+                "equifax_score": summary_result[1],
+                "experian_score": summary_result[2],
+                "transunion_score": summary_result[3],
+                "bureau": summary_result[4],
+                "report_date": summary_result[5].isoformat() if summary_result[5] else None,
+                "total_accounts": summary_result[6],
+                "open_accounts": summary_result[7],
+                "total_debt": summary_result[8],
+                "utilization": summary_result[9]
+            }
+    except Exception as e:
+        print(f"Could not fetch credit summary for lead: {e}")
 
     return {
         "reports": [
