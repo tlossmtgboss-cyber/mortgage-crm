@@ -14,6 +14,7 @@ import EmploymentTab from '../components/EmploymentTab';
 import IncomeTab from '../components/income/IncomeTab';
 import ScheduleAppointmentModal from '../components/ScheduleAppointmentModal';
 import NeedsListView from '../components/smart-docs/NeedsListView';
+import CreditTab from '../components/CreditTab';
 import './LeadDetail.css';
 
 // Mock lead data generator (same as Leads.js)
@@ -889,6 +890,12 @@ function ClientProfile() {
           Smart Docs
         </button>
         <button
+          className={`tab-btn ${activeTab === 'credit' ? 'active' : ''}`}
+          onClick={() => setActiveTab('credit')}
+        >
+          Credit
+        </button>
+        <button
           className={`tab-btn ${activeTab === 'income' ? 'active' : ''}`}
           onClick={() => setActiveTab('income')}
         >
@@ -1020,6 +1027,18 @@ function ClientProfile() {
             <NeedsListView
               borrowerId={client?.id}
               loanId={client?.loan_id || client?.id}
+            />
+          </div>
+          )}
+
+          {/* Credit Tab */}
+          {activeTab === 'credit' && (
+          <div className="info-section">
+            <CreditTab
+              leadId={client?.lead_id || parseInt(id)}
+              loanId={client?.loan_id || parseInt(id)}
+              borrowerId={client?.id}
+              formData={formData}
             />
           </div>
           )}

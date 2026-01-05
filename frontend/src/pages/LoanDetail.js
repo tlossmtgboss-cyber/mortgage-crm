@@ -21,6 +21,7 @@ import IncomeCalculator from '../components/IncomeCalculator';
 import UnifiedIncomeCalculator from '../components/income/UnifiedIncomeCalculator';
 import PortalSelectorModal from '../components/PortalSelectorModal';
 import SendVideoModal from '../components/video/SendVideoModal';
+import CreditTab from '../components/CreditTab';
 import { formatPhoneNumber } from '../utils/phoneUtils';
 import './LeadDetail.css';
 
@@ -1119,6 +1120,12 @@ function LoanDetail() {
           onClick={() => setActiveTab('smart-docs')}
         >
           Smart Docs
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'credit' ? 'active' : ''}`}
+          onClick={() => setActiveTab('credit')}
+        >
+          Credit
         </button>
         <button
           className={`tab-btn ${activeTab === 'income' ? 'active' : ''}`}
@@ -3063,6 +3070,18 @@ function LoanDetail() {
               borrowerId={loan?.borrower_id}
               borrowerName={loan?.borrower_name || ''}
               coBorrowerName={loan?.coborrower_name || ''}
+            />
+          </div>
+        )}
+
+        {/* Credit Tab */}
+        {activeTab === 'credit' && (
+          <div className="info-section">
+            <CreditTab
+              leadId={loan?.lead_id}
+              loanId={parseInt(id)}
+              borrowerId={loan?.borrower_id}
+              formData={formData}
             />
           </div>
         )}
