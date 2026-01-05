@@ -504,7 +504,7 @@ def seed_initial_data(db: Session):
                     options, weight, display_order, dependencies, is_active
                 ) VALUES (
                     :code, :category, :subcategory, :question_text, :question_type,
-                    :options::jsonb, :weight, :display_order, :dependencies::jsonb, true
+                    CAST(:options AS jsonb), :weight, :display_order, CAST(:dependencies AS jsonb), true
                 ) ON CONFLICT (code) DO UPDATE SET
                     question_text = EXCLUDED.question_text,
                     options = EXCLUDED.options,
