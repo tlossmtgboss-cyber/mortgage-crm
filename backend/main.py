@@ -19620,6 +19620,14 @@ try:
 except Exception as e:
     logger.warning(f"Could not load borrower portal routes: {e}")
 
+# Include Decision Lab routes (Borrower Confidence Engine + Mortgage Decision Lab)
+try:
+    from routes.decision_lab_routes import router as decision_lab_router
+    app.include_router(decision_lab_router, tags=["Decision Lab"])
+    logger.info("✅ Decision Lab routes loaded")
+except Exception as e:
+    logger.warning(f"Could not load Decision Lab routes: {e}")
+
 # Include application analytics routes
 from analytics_routes import router as analytics_router
 app.include_router(analytics_router, tags=["Analytics"])
@@ -56576,6 +56584,23 @@ async def startup_event():
                 db_temp.close()
             except Exception as pc_e:
                 logger.warning(f"⚠️ partner_category column migration skipped: {pc_e}")
+
+            # Run Borrower Confidence Engine migration
+            try:
+                from migrations.add_borrower_confidence_engine import run_migration, seed_initial_data
+                db_temp = SessionLocal()
+                # Check if confidence_questions table exists
+                result = db_temp.execute(text("""
+                    SELECT table_name FROM information_schema.tables
+                    WHERE table_name = 'confidence_questions'
+                """))
+                if not result.fetchone():
+                    run_migration(db_temp)
+                    seed_initial_data(db_temp)
+                    logger.info("✅ Borrower Confidence Engine tables created")
+                db_temp.close()
+            except Exception as ce_e:
+                logger.warning(f"⚠️ Borrower Confidence Engine migration skipped: {ce_e}")
 
             # Create custom_domains table for multi-tenant domain support
             try:
