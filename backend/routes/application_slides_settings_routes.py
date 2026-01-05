@@ -216,8 +216,8 @@ def get_defaults_for_app_type(app_type: str):
 @router.get("/application-slides")
 async def get_application_slides_config(
     app_type: str = Query("purchase", description="Application type: 'purchase' or 'refinance'"),
-    current_user = Depends(lambda: _get_current_user()),
-    db: Session = Depends(lambda: _get_db())
+    current_user = Depends(_get_current_user),
+    db: Session = Depends(_get_db)
 ):
     """
     Get the current application slides configuration for the user's organization.
@@ -269,8 +269,8 @@ async def get_application_slides_config(
 async def save_application_slides_config(
     config: ApplicationSlidesConfig,
     app_type: str = Query("purchase", description="Application type: 'purchase' or 'refinance'"),
-    current_user = Depends(lambda: _get_current_user()),
-    db: Session = Depends(lambda: _get_db())
+    current_user = Depends(_get_current_user),
+    db: Session = Depends(_get_db)
 ):
     """
     Save application slides configuration for the user's organization.
@@ -372,8 +372,8 @@ async def save_application_slides_config(
 @router.post("/application-slides/reset")
 async def reset_application_slides_config(
     app_type: str = Query("purchase", description="Application type: 'purchase' or 'refinance'"),
-    current_user = Depends(lambda: _get_current_user()),
-    db: Session = Depends(lambda: _get_db())
+    current_user = Depends(_get_current_user),
+    db: Session = Depends(_get_db)
 ):
     """
     Reset application slides configuration to defaults.
