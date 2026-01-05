@@ -928,6 +928,42 @@ async def seed_questions(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/admin/debug-tables")
+async def debug_tables(
+    admin_key: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Debug endpoint to check table state (admin only)."""
+    import os
+
+    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    if admin_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        # Check if table exists and count rows
+        questions_count = db.execute(text(
+            "SELECT COUNT(*) FROM confidence_questions"
+        )).scalar()
+
+        overlays_count = db.execute(text(
+            "SELECT COUNT(*) FROM education_overlays"
+        )).scalar()
+
+        # Get first few questions
+        sample_questions = db.execute(text(
+            "SELECT id, code, question_text FROM confidence_questions LIMIT 3"
+        )).fetchall()
+
+        return {
+            "questions_count": questions_count,
+            "overlays_count": overlays_count,
+            "sample_questions": [{"id": q[0], "code": q[1], "text": q[2][:50]} for q in sample_questions]
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @router.post("/admin/run-migration")
 async def run_migration(
     admin_key: str = Query(...),
@@ -942,15 +978,30 @@ async def run_migration(
 
     try:
         from migrations.add_borrower_confidence_engine import run_migration as do_migration, seed_initial_data
+
+        # Run migration
+        logger.info("Running migration...")
         do_migration(db)
+        logger.info("Migration complete, running seed...")
+
+        # Run seeding
         seed_initial_data(db)
+        logger.info("Seeding complete")
+
+        # Verify counts
+        q_count = db.execute(text("SELECT COUNT(*) FROM confidence_questions")).scalar()
+        o_count = db.execute(text("SELECT COUNT(*) FROM education_overlays")).scalar()
 
         return {
             "success": True,
-            "message": "Migration and seeding completed"
+            "message": "Migration and seeding completed",
+            "questions_count": q_count,
+            "overlays_count": o_count
         }
     except Exception as e:
         logger.error(f"Migration error: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
