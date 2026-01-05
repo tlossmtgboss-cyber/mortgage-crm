@@ -79,7 +79,7 @@ const PartnerRecruitingDashboard = () => {
         search: searchQuery,
         limit: 100
       });
-      setPartners(data.partners || []);
+      setPartners(data.candidates || []);
     } catch (err) {
       console.error('Failed to load partners:', err);
     }
