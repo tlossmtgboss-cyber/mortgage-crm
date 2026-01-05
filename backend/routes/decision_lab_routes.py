@@ -624,6 +624,181 @@ async def get_education_overlay(
     return {"overlay": overlay}
 
 
+@router.get("/education/overlays")
+async def list_overlays(
+    db: Session = Depends(get_db)
+):
+    """List all education overlays."""
+    results = db.execute(text("""
+        SELECT id, title, content, trigger_type, trigger_value, category,
+               formula, example, tip, key_takeaway, is_active, display_order,
+               created_at, updated_at
+        FROM education_overlays
+        ORDER BY display_order, id
+    """)).fetchall()
+
+    overlays = []
+    for r in results:
+        overlays.append({
+            "id": r[0],
+            "title": r[1],
+            "content": r[2],
+            "trigger_type": r[3],
+            "trigger_value": r[4],
+            "category": r[5],
+            "formula": r[6],
+            "example": r[7],
+            "tip": r[8],
+            "key_takeaway": r[9],
+            "is_active": r[10],
+            "display_order": r[11],
+            "created_at": r[12].isoformat() if r[12] else None,
+            "updated_at": r[13].isoformat() if r[13] else None
+        })
+
+    return {"overlays": overlays, "count": len(overlays)}
+
+
+@router.get("/education/overlay/{overlay_id}")
+async def get_overlay_by_id(
+    overlay_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get a specific education overlay by ID."""
+    result = db.execute(text("""
+        SELECT id, title, content, trigger_type, trigger_value, category,
+               formula, example, tip, key_takeaway, is_active, display_order
+        FROM education_overlays
+        WHERE id = :overlay_id
+    """), {"overlay_id": overlay_id}).fetchone()
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Overlay not found")
+
+    return {
+        "id": result[0],
+        "title": result[1],
+        "content": result[2],
+        "trigger_type": result[3],
+        "trigger_value": result[4],
+        "category": result[5],
+        "formula": result[6],
+        "example": result[7],
+        "tip": result[8],
+        "key_takeaway": result[9],
+        "is_active": result[10],
+        "display_order": result[11]
+    }
+
+
+@router.post("/education/overlay")
+async def create_overlay(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Create a new education overlay."""
+    data = await request.json()
+
+    result = db.execute(text("""
+        INSERT INTO education_overlays
+        (title, content, trigger_type, trigger_value, category, formula,
+         example, tip, key_takeaway, is_active, display_order, created_at)
+        VALUES
+        (:title, :content, :trigger_type, :trigger_value, :category, :formula,
+         :example, :tip, :key_takeaway, :is_active, :display_order, NOW())
+        RETURNING id
+    """), {
+        "title": data.get("title"),
+        "content": data.get("content"),
+        "trigger_type": data.get("trigger_type", "question"),
+        "trigger_value": data.get("trigger_value"),
+        "category": data.get("category"),
+        "formula": data.get("formula"),
+        "example": data.get("example"),
+        "tip": data.get("tip"),
+        "key_takeaway": data.get("key_takeaway"),
+        "is_active": data.get("is_active", True),
+        "display_order": data.get("display_order", 0)
+    })
+    db.commit()
+
+    new_id = result.fetchone()[0]
+    return {"message": "Overlay created", "id": new_id}
+
+
+@router.put("/education/overlay/{overlay_id}")
+async def update_overlay(
+    overlay_id: int,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Update an existing education overlay."""
+    data = await request.json()
+
+    # Check if overlay exists
+    existing = db.execute(text(
+        "SELECT id FROM education_overlays WHERE id = :id"
+    ), {"id": overlay_id}).fetchone()
+
+    if not existing:
+        raise HTTPException(status_code=404, detail="Overlay not found")
+
+    db.execute(text("""
+        UPDATE education_overlays SET
+            title = :title,
+            content = :content,
+            trigger_type = :trigger_type,
+            trigger_value = :trigger_value,
+            category = :category,
+            formula = :formula,
+            example = :example,
+            tip = :tip,
+            key_takeaway = :key_takeaway,
+            is_active = :is_active,
+            display_order = :display_order,
+            updated_at = NOW()
+        WHERE id = :overlay_id
+    """), {
+        "overlay_id": overlay_id,
+        "title": data.get("title"),
+        "content": data.get("content"),
+        "trigger_type": data.get("trigger_type"),
+        "trigger_value": data.get("trigger_value"),
+        "category": data.get("category"),
+        "formula": data.get("formula"),
+        "example": data.get("example"),
+        "tip": data.get("tip"),
+        "key_takeaway": data.get("key_takeaway"),
+        "is_active": data.get("is_active", True),
+        "display_order": data.get("display_order", 0)
+    })
+    db.commit()
+
+    return {"message": "Overlay updated", "id": overlay_id}
+
+
+@router.delete("/education/overlay/{overlay_id}")
+async def delete_overlay(
+    overlay_id: int,
+    db: Session = Depends(get_db)
+):
+    """Delete an education overlay."""
+    # Check if overlay exists
+    existing = db.execute(text(
+        "SELECT id FROM education_overlays WHERE id = :id"
+    ), {"id": overlay_id}).fetchone()
+
+    if not existing:
+        raise HTTPException(status_code=404, detail="Overlay not found")
+
+    db.execute(text(
+        "DELETE FROM education_overlays WHERE id = :id"
+    ), {"id": overlay_id})
+    db.commit()
+
+    return {"message": "Overlay deleted", "id": overlay_id}
+
+
 @router.get("/education/lessons")
 async def list_lessons(
     category: Optional[str] = None,

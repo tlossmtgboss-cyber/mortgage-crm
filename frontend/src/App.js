@@ -83,6 +83,7 @@ const MorningCheckin = lazy(() => import('./pages/MorningCheckin'));
 const PartnerROIDashboard = lazy(() => import('./pages/PartnerROIDashboard'));
 const ProfitabilityDashboard = lazy(() => import('./pages/ProfitabilityDashboard'));
 const ScenarioModeling = lazy(() => import('./pages/ScenarioModeling'));
+const DecisionLab = lazy(() => import('./pages/DecisionLab'));
 const SLASettings = lazy(() => import('./pages/SLASettings'));
 const EmployeeOnboardingAdmin = lazy(() => import('./pages/EmployeeOnboardingAdmin'));
 const AcceptInvite = lazy(() => import('./pages/AcceptInvite'));
@@ -314,6 +315,7 @@ function App() {
           <Route path="/apply/preview" element={<LazyPage><ApplicationPreview /></LazyPage>} />
           <Route path="/mortgage-planner" element={<LazyPage><MortgagePlannerQuestionnaire /></LazyPage>} />
           <Route path="/questionnaire" element={<LazyPage><MortgagePlannerQuestionnaire /></LazyPage>} />
+          <Route path="/decision-lab" element={<LazyPage><DecisionLab /></LazyPage>} />
           <Route path="/estimate-comparison" element={<LazyPage><EstimateComparison /></LazyPage>} />
           <Route path="/register" element={<Registration />} />
           <Route path="/verify-account" element={<AccountVerification />} />
