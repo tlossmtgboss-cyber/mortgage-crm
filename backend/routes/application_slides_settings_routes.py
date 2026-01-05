@@ -64,6 +64,18 @@ class StageConfig(BaseModel):
     enabled: bool = True
 
 
+class QuestionOptionConfig(BaseModel):
+    """Configuration for a question answer option"""
+    value: str
+    label: str
+
+
+class QuestionShowIfConfig(BaseModel):
+    """Conditional logic for showing a question"""
+    field: str
+    values: List[str] = []
+
+
 class QuestionConfig(BaseModel):
     """Configuration for a declaration question"""
     id: str
@@ -71,6 +83,11 @@ class QuestionConfig(BaseModel):
     category: str
     required: bool = False
     enabled: bool = True
+    type: str = "choice"
+    stageId: Optional[str] = None
+    helpText: Optional[str] = None
+    options: Optional[List[QuestionOptionConfig]] = None
+    showIf: Optional[QuestionShowIfConfig] = None
 
 
 class FieldConfig(BaseModel):
