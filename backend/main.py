@@ -19628,6 +19628,14 @@ app.include_router(analytics_router, tags=["Analytics"])
 from ai_api_endpoints import router as ai_router
 app.include_router(ai_router, tags=["AI System"])
 
+# Include Credit Report routes
+try:
+    from routes.credit_routes import router as credit_router
+    app.include_router(credit_router, tags=["Credit Reports"])
+    logger.info("✅ Credit Report routes loaded")
+except Exception as e:
+    logger.warning(f"Could not load credit report routes: {e}")
+
 # Include Mission Control routes
 from mission_control_routes import router as mission_control_router
 app.include_router(mission_control_router, tags=["Mission Control"])
