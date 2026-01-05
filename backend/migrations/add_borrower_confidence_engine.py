@@ -352,6 +352,7 @@ def run_migration(db: Session):
 
 def seed_initial_data(db: Session):
     """Seed initial confidence questions and education content."""
+    import json
 
     logger.info("🌱 Seeding initial Borrower Confidence Engine data...")
 
@@ -494,25 +495,33 @@ def seed_initial_data(db: Session):
 
     for q in questions:
         try:
+            options_json = json.dumps(q["options"]) if q.get("options") else '{}'
+            deps_json = json.dumps(q.get("dependencies", [])) if q.get("dependencies") else '[]'
+
             db.execute(text("""
                 INSERT INTO confidence_questions (
                     code, category, subcategory, question_text, question_type,
                     options, weight, display_order, dependencies, is_active
                 ) VALUES (
                     :code, :category, :subcategory, :question_text, :question_type,
-                    :options, :weight, :display_order, :dependencies, true
-                ) ON CONFLICT (code) DO NOTHING
+                    :options::jsonb, :weight, :display_order, :dependencies::jsonb, true
+                ) ON CONFLICT (code) DO UPDATE SET
+                    question_text = EXCLUDED.question_text,
+                    options = EXCLUDED.options,
+                    weight = EXCLUDED.weight,
+                    display_order = EXCLUDED.display_order
             """), {
                 "code": q["code"],
                 "category": q["category"],
                 "subcategory": q.get("subcategory"),
                 "question_text": q["question_text"],
                 "question_type": q["question_type"],
-                "options": str(q["options"]).replace("'", '"') if q.get("options") else None,
+                "options": options_json,
                 "weight": q.get("weight", 1.0),
                 "display_order": q.get("display_order", 0),
-                "dependencies": str(q.get("dependencies", [])).replace("'", '"') if q.get("dependencies") else None
+                "dependencies": deps_json
             })
+            logger.info(f"✅ Inserted/updated question: {q['code']}")
         except Exception as e:
             logger.warning(f"Question insert warning ({q['code']}): {e}")
 
@@ -551,8 +560,14 @@ def seed_initial_data(db: Session):
                     code, trigger_context, title, content, content_type, display_position, is_active
                 ) VALUES (
                     :code, :trigger_context, :title, :content, :content_type, :display_position, true
-                ) ON CONFLICT (code) DO NOTHING
+                ) ON CONFLICT (code) DO UPDATE SET
+                    trigger_context = EXCLUDED.trigger_context,
+                    title = EXCLUDED.title,
+                    content = EXCLUDED.content,
+                    content_type = EXCLUDED.content_type,
+                    display_position = EXCLUDED.display_position
             """), o)
+            logger.info(f"✅ Inserted/updated overlay: {o['code']}")
         except Exception as e:
             logger.warning(f"Overlay insert warning ({o['code']}): {e}")
 
