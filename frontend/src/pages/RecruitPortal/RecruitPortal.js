@@ -207,7 +207,7 @@ const RecruitPortal = () => {
                     key={stage.key}
                     className={`progress-step ${index <= currentStage ? 'completed' : ''} ${index === currentStage ? 'current' : ''}`}
                   >
-                    <div className="step-number">
+                    <div className="step-indicator">
                       {index < currentStage ? '✓' : index + 1}
                     </div>
                     <span className="step-label">{stage.label}</span>
@@ -226,37 +226,41 @@ const RecruitPortal = () => {
           {/* Recruiter Card */}
           {portalData?.recruiter_name && (
             <div className="recruiter-card">
-              <div className="recruiter-photo">
-                {portalData.recruiter_photo ? (
-                  <img src={portalData.recruiter_photo} alt={portalData.recruiter_name} />
-                ) : (
-                  <div className="recruiter-initials">
-                    {portalData.recruiter_name.split(' ').map(n => n[0]).join('')}
-                  </div>
-                )}
+              <div className="recruiter-header">
+                <div className="recruiter-photo">
+                  {portalData.recruiter_photo ? (
+                    <img src={portalData.recruiter_photo} alt={portalData.recruiter_name} />
+                  ) : (
+                    <div className="photo-placeholder">
+                      {portalData.recruiter_name.split(' ').map(n => n[0]).join('')}
+                    </div>
+                  )}
+                </div>
+                <div className="recruiter-details">
+                  <h4>Your Recruiter</h4>
+                  <p className="recruiter-name">{portalData.recruiter_name}</p>
+                  {portalData.recruiter_title && (
+                    <p className="recruiter-title">{portalData.recruiter_title}</p>
+                  )}
+                </div>
               </div>
-              <div className="recruiter-info">
-                <span className="recruiter-label">Your Recruiter</span>
-                <h4>{portalData.recruiter_name}</h4>
-                {portalData.recruiter_title && (
-                  <p className="recruiter-title">{portalData.recruiter_title}</p>
-                )}
+              <div className="recruiter-contact-info">
                 {portalData.recruiter_phone && (
                   <a href={`tel:${portalData.recruiter_phone}`} className="contact-item">
-                    <span>📞</span> {portalData.recruiter_phone}
+                    <span className="icon">📞</span> {portalData.recruiter_phone}
                   </a>
                 )}
                 {portalData.recruiter_email && (
                   <a href={`mailto:${portalData.recruiter_email}`} className="contact-item">
-                    <span>✉️</span> {portalData.recruiter_email}
+                    <span className="icon">✉️</span> {portalData.recruiter_email}
                   </a>
                 )}
               </div>
               <button
-                className="cta-button"
+                className="schedule-call-btn"
                 onClick={() => document.getElementById('schedule-section')?.scrollIntoView({ behavior: 'smooth' })}
               >
-                Schedule a Call
+                📅 Schedule a Call
               </button>
             </div>
           )}
@@ -265,216 +269,242 @@ const RecruitPortal = () => {
 
       {/* Personal Video Message */}
       {videos.length > 0 && (
-        <section className="video-section">
-          <div className="video-container">
-            <div className="video-header">
-              <h3>A Personal Message for You</h3>
-              <p>Your recruiter recorded this just for you</p>
-            </div>
-            <div className="video-player">
-              <video
-                controls
-                poster={videos[0].recruiter_photo || undefined}
-                onPlay={() => {
-                  setPlayingVideoId(videos[0].id);
-                  if (videos[0].is_new) {
-                    markVideoViewed(videos[0].id);
-                  }
-                }}
-                onEnded={() => setPlayingVideoId(null)}
-              >
-                <source src={videos[0].video_url} type="video/webm" />
-                Your browser does not support video playback.
-              </video>
-            </div>
-            {videos[0].message && (
-              <div className="video-message">
-                <p>"{videos[0].message}"</p>
-                <span>— {videos[0].recruiter_name}</span>
+        <section className="video-message-section">
+          <div className="video-message-container">
+            <div className="video-message-card">
+              <div className="video-player-wrapper">
+                <video
+                  controls
+                  poster={videos[0].recruiter_photo || undefined}
+                  onPlay={() => {
+                    setPlayingVideoId(videos[0].id);
+                    if (videos[0].is_new) {
+                      markVideoViewed(videos[0].id);
+                    }
+                  }}
+                  onEnded={() => setPlayingVideoId(null)}
+                >
+                  <source src={videos[0].video_url} type="video/webm" />
+                  Your browser does not support video playback.
+                </video>
               </div>
-            )}
+              <div className="video-sidebar">
+                <div className="video-header">
+                  <h3>A Personal Message for You</h3>
+                  <p>Your recruiter recorded this just for you</p>
+                </div>
+                {videos[0].message && (
+                  <div className="video-chat-wrapper">
+                    <p style={{ padding: '1rem', fontStyle: 'italic' }}>"{videos[0].message}"</p>
+                    <span style={{ padding: '0 1rem', color: '#64748b' }}>— {videos[0].recruiter_name}</span>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </section>
       )}
 
       {/* Quick Actions */}
       <section className="quick-actions-section">
-        <div className="quick-action" onClick={() => setCalculatorExpanded(true)}>
-          <div className="action-icon calculator">💵</div>
-          <div className="action-content">
-            <h4>Calculate Your Earnings</h4>
-            <p>See how much more you could make</p>
-          </div>
-          <span className="action-arrow">→</span>
-        </div>
+        <div className="quick-actions-container">
+          <div className="quick-actions-grid">
+            <div className="quick-action-card calculator" onClick={() => setCalculatorExpanded(true)}>
+              <div className="action-icon">💵</div>
+              <div className="action-content">
+                <h3>Calculate Your Earnings</h3>
+                <p>See how much more you could make</p>
+              </div>
+              <span className="action-arrow">→</span>
+            </div>
 
-        <div
-          className="quick-action"
-          onClick={() => document.getElementById('schedule-section')?.scrollIntoView({ behavior: 'smooth' })}
-        >
-          <div className="action-icon schedule">📅</div>
-          <div className="action-content">
-            <h4>Schedule a Call</h4>
-            <p>Book time with your recruiter</p>
-          </div>
-          <span className="action-arrow">→</span>
-        </div>
+            <div
+              className="quick-action-card schedule"
+              onClick={() => document.getElementById('schedule-section')?.scrollIntoView({ behavior: 'smooth' })}
+            >
+              <div className="action-icon">📅</div>
+              <div className="action-content">
+                <h3>Schedule a Call</h3>
+                <p>Book time with your recruiter</p>
+              </div>
+              <span className="action-arrow">→</span>
+            </div>
 
-        <div
-          className="quick-action"
-          onClick={() => document.getElementById('chat-section')?.scrollIntoView({ behavior: 'smooth' })}
-        >
-          <div className="action-icon chat">💬</div>
-          <div className="action-content">
-            <h4>Chat with AI</h4>
-            <p>Get instant answers to your questions</p>
+            <div
+              className="quick-action-card chat"
+              onClick={() => document.getElementById('chat-section')?.scrollIntoView({ behavior: 'smooth' })}
+            >
+              <div className="action-icon">💬</div>
+              <div className="action-content">
+                <h3>Chat with AI</h3>
+                <p>Get instant answers to your questions</p>
+              </div>
+              <span className="action-arrow">→</span>
+            </div>
           </div>
-          <span className="action-arrow">→</span>
         </div>
       </section>
 
       {/* Value Propositions */}
       <section className="value-props-section">
-        <div className="section-header">
-          <h2>Why Top Producers Choose Perennia</h2>
-          <p>Everything you need to take your career to the next level</p>
-        </div>
-        <div className="value-props-grid">
-          {VALUE_PROPS.map((prop, index) => (
-            <div key={index} className="value-prop-card">
-              <div className="value-prop-icon">{prop.icon}</div>
-              <h4>{prop.title}</h4>
-              <p>{prop.description}</p>
-            </div>
-          ))}
+        <div className="value-props-container">
+          <div className="section-header">
+            <h2>Why Top Producers Choose Perennia</h2>
+            <p>Everything you need to take your career to the next level</p>
+          </div>
+          <div className="value-props-grid">
+            {VALUE_PROPS.map((prop, index) => (
+              <div key={index} className="value-prop-card">
+                <div className="prop-icon">{prop.icon}</div>
+                <h3>{prop.title}</h3>
+                <p>{prop.description}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
       {/* Earnings Calculator */}
       <section className={`calculator-section ${calculatorExpanded ? 'expanded' : ''}`}>
-        <div className="section-header">
-          <h2>Calculate Your Potential Earnings</h2>
-          <p>See the difference Perennia can make</p>
+        <div className="calculator-container">
+          <div className="section-header">
+            <h2>Calculate Your Potential Earnings</h2>
+            <p>See the difference Perennia can make</p>
+          </div>
+          <div className="production-calculator">
+            <ProductionCalculator
+              slug={slug}
+              calculatorConfig={portalData?.calculator_config}
+            />
+          </div>
+          {!calculatorExpanded && (
+            <button
+              className="cta-button"
+              onClick={() => setCalculatorExpanded(true)}
+            >
+              View Full Calculator
+            </button>
+          )}
         </div>
-        <div className="calculator-wrapper">
-          <ProductionCalculator
-            slug={slug}
-            calculatorConfig={portalData?.calculator_config}
-          />
-        </div>
-        {!calculatorExpanded && (
-          <button
-            className="expand-calculator-btn"
-            onClick={() => setCalculatorExpanded(true)}
-          >
-            View Full Calculator
-          </button>
-        )}
       </section>
 
       {/* Company Culture / Updates */}
       {companyUpdates.length > 0 && (
         <section className="culture-section">
-          <div className="section-header">
-            <h2>Life at Perennia</h2>
-            <p>Stories, updates, and what makes us different</p>
-          </div>
-          <div className="culture-grid">
-            {companyUpdates.slice(0, 6).map((update, index) => (
-              <div
-                key={update.id || index}
-                className={`culture-card ${index === 0 ? 'featured' : ''}`}
-              >
-                {update.media_url && (
-                  <div className="culture-image">
-                    <img src={update.media_url} alt={update.title} />
-                  </div>
-                )}
-                <div className="culture-content">
-                  <span className={`culture-category ${update.category}`}>
-                    {update.category}
-                  </span>
-                  <h4>{update.title}</h4>
-                  <p>{update.content}</p>
-                  {update.published_at && (
-                    <span className="culture-date">
-                      {new Date(update.published_at).toLocaleDateString()}
-                    </span>
+          <div className="culture-container">
+            <div className="section-header">
+              <h2>Life at Perennia</h2>
+              <p>Stories, updates, and what makes us different</p>
+            </div>
+            <div className="culture-grid">
+              {companyUpdates.slice(0, 6).map((update, index) => (
+                <div
+                  key={update.id || index}
+                  className={`culture-card ${index === 0 ? 'featured' : ''}`}
+                >
+                  {update.media_url ? (
+                    <div className="culture-image">
+                      <img src={update.media_url} alt={update.title} />
+                    </div>
+                  ) : (
+                    <div className="culture-image">
+                      <div className="culture-image-placeholder">🏢</div>
+                    </div>
                   )}
+                  <div className="culture-content">
+                    <span className="culture-category">
+                      {update.category}
+                    </span>
+                    <h3>{update.title}</h3>
+                    <p>{update.content}</p>
+                    {update.published_at && (
+                      <span className="culture-date">
+                        {new Date(update.published_at).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </section>
       )}
 
       {/* Testimonials */}
       <section className="testimonials-section">
-        <div className="section-header">
-          <h2>Hear from Our Team</h2>
-          <p>Real stories from loan officers who made the switch</p>
-        </div>
-        <div className="testimonials-carousel">
-          <div className="testimonial-card">
-            <div className="testimonial-quote">
-              "{TESTIMONIALS[activeTestimonial].quote}"
-            </div>
-            <div className="testimonial-author">
-              <div className="author-photo">
-                {TESTIMONIALS[activeTestimonial].avatar ? (
-                  <img src={TESTIMONIALS[activeTestimonial].avatar} alt="" />
-                ) : (
-                  <span className="author-photo-placeholder">{TESTIMONIALS[activeTestimonial].name.split(' ').map(n => n[0]).join('')}</span>
-                )}
-              </div>
-              <div className="author-info">
-                <h5>{TESTIMONIALS[activeTestimonial].name}</h5>
-                <p>{TESTIMONIALS[activeTestimonial].title}</p>
-              </div>
-              <div className="testimonial-metric">
-                {TESTIMONIALS[activeTestimonial].metric}
-              </div>
-            </div>
+        <div className="testimonials-container">
+          <div className="section-header">
+            <h2>Hear from Our Team</h2>
+            <p>Real stories from loan officers who made the switch</p>
           </div>
-          <div className="carousel-dots">
-            {TESTIMONIALS.map((_, index) => (
-              <button
-                key={index}
-                className={`carousel-dot ${index === activeTestimonial ? 'active' : ''}`}
-                onClick={() => setActiveTestimonial(index)}
-                aria-label={`View testimonial ${index + 1}`}
-              />
-            ))}
+          <div className="testimonials-carousel">
+            <div className="testimonials-track">
+              <div className="testimonial-card">
+                <p className="testimonial-quote">
+                  {TESTIMONIALS[activeTestimonial].quote}
+                </p>
+                <div className="testimonial-author">
+                  <div className="author-photo">
+                    {TESTIMONIALS[activeTestimonial].avatar ? (
+                      <img src={TESTIMONIALS[activeTestimonial].avatar} alt="" />
+                    ) : (
+                      <span className="author-photo-placeholder">{TESTIMONIALS[activeTestimonial].name.split(' ').map(n => n[0]).join('')}</span>
+                    )}
+                  </div>
+                  <div className="author-info">
+                    <h4>{TESTIMONIALS[activeTestimonial].name}</h4>
+                    <p>{TESTIMONIALS[activeTestimonial].title}</p>
+                    <span className="testimonial-metric">
+                      {TESTIMONIALS[activeTestimonial].metric}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="carousel-dots">
+              {TESTIMONIALS.map((_, index) => (
+                <button
+                  key={index}
+                  className={`carousel-dot ${index === activeTestimonial ? 'active' : ''}`}
+                  onClick={() => setActiveTestimonial(index)}
+                  aria-label={`View testimonial ${index + 1}`}
+                />
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
       {/* Schedule Section */}
-      <section id="schedule-section" className="schedule-section">
-        <div className="section-header">
-          <h2>Let's Talk About Your Future</h2>
-          <p>Schedule a time that works for you</p>
-        </div>
+      <section id="schedule-section" className="scheduler-section">
         <div className="scheduler-container">
-          <PortalScheduler
-            slug={slug}
-            recruiterName={portalData?.recruiter_name}
-          />
+          <div className="section-header">
+            <h2>Let's Talk About Your Future</h2>
+            <p>Schedule a time that works for you</p>
+          </div>
+          <div className="scheduler-card">
+            <PortalScheduler
+              slug={slug}
+              recruiterName={portalData?.recruiter_name}
+            />
+          </div>
         </div>
       </section>
 
       {/* Chat Section */}
-      <section id="chat-section" className="chat-section">
-        <div className="section-header">
-          <h2>Have Questions?</h2>
-          <p>Chat with our AI assistant for instant answers</p>
-        </div>
-        <div className="chat-container">
-          <PortalChat
-            slug={slug}
-            candidateName={portalData?.candidate_name}
-            inline={true}
-          />
+      <section id="chat-section" className="value-props-section">
+        <div className="value-props-container">
+          <div className="section-header">
+            <h2>Have Questions?</h2>
+            <p>Chat with our AI assistant for instant answers</p>
+          </div>
+          <div className="inline-chat-container">
+            <PortalChat
+              slug={slug}
+              candidateName={portalData?.candidate_name}
+              inline={true}
+            />
+          </div>
         </div>
       </section>
 
