@@ -572,6 +572,7 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  margin-top: 24px;
 }
 
 .preview-option {
@@ -611,6 +612,7 @@
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 12px;
+  margin-top: 24px;
 }
 
 .preview-visual-option {
@@ -652,6 +654,7 @@
 /* Preview Input */
 .preview-input-wrapper {
   position: relative;
+  margin-top: 24px;
 }
 
 .preview-input {
@@ -662,6 +665,11 @@
   border-radius: 12px;
   outline: none;
   transition: all 0.2s;
+  margin-top: 24px;
+}
+
+.preview-input-wrapper .preview-input {
+  margin-top: 0;
 }
 
 .preview-input:focus {
@@ -686,6 +694,7 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+  margin-top: 24px;
 }
 
 .preview-yes-no-btn {
@@ -1066,6 +1075,46 @@
 .conditional-add-value:hover {
   border-color: #8b5cf6;
   color: #8b5cf6;
+}
+
+/* Move Buttons */
+.settings-move-buttons {
+  background: #f9fafb;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.move-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.move-btn {
+  flex: 1;
+  padding: 8px 12px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.move-btn:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+.move-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* Settings Footer */

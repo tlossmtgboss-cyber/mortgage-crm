@@ -153,6 +153,22 @@ const ApplicationSlidesEditor = () => {
 
   const selectedData = getSelectedData();
 
+  // Merge loaded questions with defaults to preserve options
+  const mergeQuestionsWithDefaults = (loadedQuestions, defaultQuestions) => {
+    if (!loadedQuestions || loadedQuestions.length === 0) {
+      return defaultQuestions.map(q => ({ ...q, enabled: true }));
+    }
+
+    return loadedQuestions.map(lq => {
+      const defaultQ = defaultQuestions.find(dq => dq.id === lq.id);
+      // If loaded question doesn't have options but default does, use default options
+      if ((!lq.options || lq.options.length === 0) && defaultQ?.options) {
+        return { ...lq, options: defaultQ.options, enabled: lq.enabled !== false };
+      }
+      return { ...lq, enabled: lq.enabled !== false };
+    });
+  };
+
   // Load configuration from backend
   const loadConfiguration = useCallback(async () => {
     setLoading(true);
@@ -166,7 +182,7 @@ const ApplicationSlidesEditor = () => {
       if (purchaseRes.ok) {
         const data = await purchaseRes.json();
         setPurchaseStages(data.stages || DEFAULT_PURCHASE_STAGES.map(s => ({ ...s, enabled: true })));
-        setPurchaseQuestions(data.declarationQuestions || DEFAULT_PURCHASE_QUESTIONS.map(q => ({ ...q, enabled: true })));
+        setPurchaseQuestions(mergeQuestionsWithDefaults(data.declarationQuestions, DEFAULT_PURCHASE_QUESTIONS));
       } else {
         setPurchaseStages(DEFAULT_PURCHASE_STAGES.map(s => ({ ...s, enabled: true })));
         setPurchaseQuestions(DEFAULT_PURCHASE_QUESTIONS.map(q => ({ ...q, enabled: true })));
@@ -179,7 +195,7 @@ const ApplicationSlidesEditor = () => {
       if (refinanceRes.ok) {
         const data = await refinanceRes.json();
         setRefinanceStages(data.stages || DEFAULT_REFINANCE_STAGES.map(s => ({ ...s, enabled: true })));
-        setRefinanceQuestions(data.declarationQuestions || DEFAULT_REFINANCE_QUESTIONS.map(q => ({ ...q, enabled: true })));
+        setRefinanceQuestions(mergeQuestionsWithDefaults(data.declarationQuestions, DEFAULT_REFINANCE_QUESTIONS));
       } else {
         setRefinanceStages(DEFAULT_REFINANCE_STAGES.map(s => ({ ...s, enabled: true })));
         setRefinanceQuestions(DEFAULT_REFINANCE_QUESTIONS.map(q => ({ ...q, enabled: true })));
@@ -278,6 +294,38 @@ const ApplicationSlidesEditor = () => {
       setQuestions(prev => [...prev, newQuestion]);
       setSelectedItem({ type: 'question', id: newId });
     }
+    setHasChanges(true);
+  };
+
+  // Move stage up or down
+  const moveStage = (direction) => {
+    if (!selectedItem.type || selectedItem.type !== 'stage') return;
+    const currentIndex = stages.findIndex(s => s.id === selectedItem.id);
+    if (currentIndex === -1) return;
+
+    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (newIndex < 0 || newIndex >= stages.length) return;
+
+    const newStages = [...stages];
+    const [removed] = newStages.splice(currentIndex, 1);
+    newStages.splice(newIndex, 0, removed);
+    setStages(newStages);
+    setHasChanges(true);
+  };
+
+  // Move question up or down
+  const moveQuestion = (direction) => {
+    if (!selectedItem.type || selectedItem.type !== 'question') return;
+    const currentIndex = questions.findIndex(q => q.id === selectedItem.id);
+    if (currentIndex === -1) return;
+
+    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (newIndex < 0 || newIndex >= questions.length) return;
+
+    const newQuestions = [...questions];
+    const [removed] = newQuestions.splice(currentIndex, 1);
+    newQuestions.splice(newIndex, 0, removed);
+    setQuestions(newQuestions);
     setHasChanges(true);
   };
 
@@ -650,6 +698,31 @@ const ApplicationSlidesEditor = () => {
                 {selectedItem.type === 'stage' ? (
                   // Stage Settings
                   <>
+                    {/* Move Stage Buttons */}
+                    <div className="settings-group settings-move-buttons">
+                      <label>Reorder Stage</label>
+                      <div className="move-buttons">
+                        <button
+                          className="move-btn"
+                          onClick={() => moveStage('up')}
+                          disabled={stages.findIndex(s => s.id === selectedItem.id) === 0}
+                          title="Move Up"
+                        >
+                          ↑ Move Up
+                        </button>
+                        <button
+                          className="move-btn"
+                          onClick={() => moveStage('down')}
+                          disabled={stages.findIndex(s => s.id === selectedItem.id) === stages.length - 1}
+                          title="Move Down"
+                        >
+                          ↓ Move Down
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="settings-divider" />
+
                     <div className="settings-group">
                       <label>Stage ID</label>
                       <input
@@ -725,6 +798,31 @@ const ApplicationSlidesEditor = () => {
                 ) : (
                   // Question Settings
                   <>
+                    {/* Move Question Buttons */}
+                    <div className="settings-group settings-move-buttons">
+                      <label>Reorder Question</label>
+                      <div className="move-buttons">
+                        <button
+                          className="move-btn"
+                          onClick={() => moveQuestion('up')}
+                          disabled={questions.findIndex(q => q.id === selectedItem.id) === 0}
+                          title="Move Up"
+                        >
+                          ↑ Move Up
+                        </button>
+                        <button
+                          className="move-btn"
+                          onClick={() => moveQuestion('down')}
+                          disabled={questions.findIndex(q => q.id === selectedItem.id) === questions.length - 1}
+                          title="Move Down"
+                        >
+                          ↓ Move Down
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="settings-divider" />
+
                     <div className="settings-group">
                       <label>Question ID</label>
                       <input
