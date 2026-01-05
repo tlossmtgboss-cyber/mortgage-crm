@@ -97,10 +97,14 @@ function CreditTab({ leadId, loanId, borrowerId, formData = {} }) {
 
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('document_type', 'credit_report');
+      formData.append('doc_type', 'CREDIT_REPORT');
       if (loanId) formData.append('loan_id', loanId);
-      if (leadId) formData.append('lead_id', leadId);
-      if (borrowerId) formData.append('borrower_id', borrowerId);
+      // Backend uses borrower_id - use leadId as borrower_id if no separate borrowerId
+      if (borrowerId) {
+        formData.append('borrower_id', borrowerId);
+      } else if (leadId) {
+        formData.append('borrower_id', leadId);
+      }
 
       const token = localStorage.getItem('token');
       const xhr = new XMLHttpRequest();
