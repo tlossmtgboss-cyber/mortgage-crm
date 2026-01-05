@@ -189,19 +189,23 @@ function ConfidenceAssessment({ sessionId, onComplete, onBack }) {
 
             {currentQuestion.question_type === 'scale' && (
               <div className="scale-options">
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
-                  <button
-                    key={num}
-                    className={`scale-option ${selectedAnswer === String(num) ? 'selected' : ''}`}
-                    onClick={() => handleAnswerSelect(String(num))}
-                  >
-                    {num}
-                  </button>
-                ))}
-                <div className="scale-labels">
-                  <span>Low</span>
-                  <span>High</span>
-                </div>
+                {(() => {
+                  const min = currentQuestion.options?.min || 1;
+                  const max = currentQuestion.options?.max || 5;
+                  const labels = currentQuestion.options?.labels || [];
+                  const range = Array.from({ length: max - min + 1 }, (_, i) => min + i);
+                  return range.map((num, idx) => (
+                    <button
+                      key={num}
+                      className={`scale-option ${selectedAnswer === String(num) ? 'selected' : ''}`}
+                      onClick={() => handleAnswerSelect(String(num))}
+                      title={labels[idx] || ''}
+                    >
+                      <span className="scale-number">{num}</span>
+                      {labels[idx] && <span className="scale-label-text">{labels[idx]}</span>}
+                    </button>
+                  ));
+                })()}
               </div>
             )}
 
@@ -235,25 +239,27 @@ function ConfidenceAssessment({ sessionId, onComplete, onBack }) {
             )}
           </div>
 
-          {/* Confidence Level */}
-          <div className="confidence-selector">
-            <label className="confidence-label">
-              How confident are you in this answer?
-            </label>
-            <div className="confidence-options">
-              {CONFIDENCE_LEVELS.map((level) => (
-                <button
-                  key={level.value}
-                  className={`confidence-option ${confidenceLevel === level.value ? 'selected' : ''}`}
-                  onClick={() => setConfidenceLevel(level.value)}
-                  title={level.label}
-                >
-                  <span className="confidence-emoji">{level.emoji}</span>
-                  <span className="confidence-text">{level.label}</span>
-                </button>
-              ))}
+          {/* Confidence Level - Hidden for scale questions to avoid redundancy */}
+          {currentQuestion.question_type !== 'scale' && (
+            <div className="confidence-selector">
+              <label className="confidence-label">
+                How confident are you in this answer?
+              </label>
+              <div className="confidence-options">
+                {CONFIDENCE_LEVELS.map((level) => (
+                  <button
+                    key={level.value}
+                    className={`confidence-option ${confidenceLevel === level.value ? 'selected' : ''}`}
+                    onClick={() => setConfidenceLevel(level.value)}
+                    title={level.label}
+                  >
+                    <span className="confidence-emoji">{level.emoji}</span>
+                    <span className="confidence-text">{level.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Error Message */}
           {error && <p className="error-message">{error}</p>}

@@ -38,13 +38,13 @@ export const decisionLabAPI = {
   },
 
   submitResponse: async (sessionId, questionId, responseValue, confidenceLevel = 3) => {
-    const response = await fetch(`${API_BASE_URL}/api/v1/decision-lab/questions/respond`, {
+    // Backend expects session_id as query param and response_value as a dict
+    const response = await fetch(`${API_BASE_URL}/api/v1/decision-lab/questions/respond?session_id=${sessionId}`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({
-        session_id: sessionId,
         question_id: questionId,
-        response_value: responseValue,
+        response_value: { value: responseValue },
         confidence_level: confidenceLevel,
       }),
     });
