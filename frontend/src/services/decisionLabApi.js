@@ -11,17 +11,17 @@ const getAuthHeaders = () => {
 export const decisionLabAPI = {
   // Session Management
   startSession: async (borrowerId = null) => {
-    const response = await fetch(`${API_BASE_URL}/api/v1/decision-lab/session/start`, {
+    const response = await fetch(`${API_BASE_URL}/api/v1/decision-lab/sessions`, {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify({ borrower_id: borrowerId }),
+      body: JSON.stringify({ borrower_profile_id: borrowerId }),
     });
     if (!response.ok) throw new Error('Failed to start session');
     return response.json();
   },
 
   getProgress: async (sessionId) => {
-    const response = await fetch(`${API_BASE_URL}/api/v1/decision-lab/session/${sessionId}/progress`, {
+    const response = await fetch(`${API_BASE_URL}/api/v1/decision-lab/sessions/${sessionId}/progress`, {
       headers: getAuthHeaders(),
     });
     if (!response.ok) throw new Error('Failed to get progress');
@@ -30,7 +30,7 @@ export const decisionLabAPI = {
 
   // Confidence Questions
   getNextQuestion: async (sessionId) => {
-    const response = await fetch(`${API_BASE_URL}/api/v1/decision-lab/session/${sessionId}/next-question`, {
+    const response = await fetch(`${API_BASE_URL}/api/v1/decision-lab/questions/next?session_id=${sessionId}`, {
       headers: getAuthHeaders(),
     });
     if (!response.ok) throw new Error('Failed to get next question');
@@ -38,10 +38,11 @@ export const decisionLabAPI = {
   },
 
   submitResponse: async (sessionId, questionId, responseValue, confidenceLevel = 3) => {
-    const response = await fetch(`${API_BASE_URL}/api/v1/decision-lab/session/${sessionId}/response`, {
+    const response = await fetch(`${API_BASE_URL}/api/v1/decision-lab/questions/respond`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({
+        session_id: sessionId,
         question_id: questionId,
         response_value: responseValue,
         confidence_level: confidenceLevel,
@@ -53,27 +54,36 @@ export const decisionLabAPI = {
 
   // Confidence Scoring
   calculateScore: async (sessionId) => {
-    const response = await fetch(`${API_BASE_URL}/api/v1/decision-lab/session/${sessionId}/score`, {
+    const response = await fetch(`${API_BASE_URL}/api/v1/decision-lab/score`, {
       method: 'POST',
       headers: getAuthHeaders(),
+      body: JSON.stringify({ session_id: sessionId }),
     });
     if (!response.ok) throw new Error('Failed to calculate score');
     return response.json();
   },
 
+  getScore: async (sessionId) => {
+    const response = await fetch(`${API_BASE_URL}/api/v1/decision-lab/score/${sessionId}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to get score');
+    return response.json();
+  },
+
   // Loan Scenarios
   createScenario: async (sessionId, scenarioData) => {
-    const response = await fetch(`${API_BASE_URL}/api/v1/decision-lab/session/${sessionId}/scenario`, {
+    const response = await fetch(`${API_BASE_URL}/api/v1/decision-lab/scenarios`, {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify(scenarioData),
+      body: JSON.stringify({ session_id: sessionId, ...scenarioData }),
     });
     if (!response.ok) throw new Error('Failed to create scenario');
     return response.json();
   },
 
   calculateLoanOptions: async (scenarioId) => {
-    const response = await fetch(`${API_BASE_URL}/api/v1/decision-lab/scenario/${scenarioId}/calculate`, {
+    const response = await fetch(`${API_BASE_URL}/api/v1/decision-lab/scenarios/${scenarioId}/calculate`, {
       method: 'POST',
       headers: getAuthHeaders(),
     });
@@ -82,10 +92,18 @@ export const decisionLabAPI = {
   },
 
   getScenarios: async (sessionId) => {
-    const response = await fetch(`${API_BASE_URL}/api/v1/decision-lab/session/${sessionId}/scenarios`, {
+    const response = await fetch(`${API_BASE_URL}/api/v1/decision-lab/scenarios?session_id=${sessionId}`, {
       headers: getAuthHeaders(),
     });
     if (!response.ok) throw new Error('Failed to get scenarios');
+    return response.json();
+  },
+
+  getScenario: async (scenarioId) => {
+    const response = await fetch(`${API_BASE_URL}/api/v1/decision-lab/scenarios/${scenarioId}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to get scenario');
     return response.json();
   },
 
@@ -156,23 +174,37 @@ export const decisionLabAPI = {
     return response.json();
   },
 
+  getLesson: async (lessonId) => {
+    const response = await fetch(`${API_BASE_URL}/api/v1/decision-lab/education/lessons/${lessonId}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to get lesson');
+    return response.json();
+  },
+
   trackLessonProgress: async (sessionId, lessonId, completed = false) => {
-    const response = await fetch(`${API_BASE_URL}/api/v1/decision-lab/session/${sessionId}/lesson/${lessonId}/progress`, {
+    const response = await fetch(`${API_BASE_URL}/api/v1/decision-lab/track`, {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify({ completed }),
+      body: JSON.stringify({
+        session_id: sessionId,
+        lesson_id: lessonId,
+        completed
+      }),
     });
     if (!response.ok) throw new Error('Failed to track progress');
     return response.json();
   },
 
-  // Recommendations
+  // Recommendations - derived from score
   getRecommendations: async (sessionId) => {
-    const response = await fetch(`${API_BASE_URL}/api/v1/decision-lab/session/${sessionId}/recommendations`, {
+    // Get score which includes recommendations
+    const response = await fetch(`${API_BASE_URL}/api/v1/decision-lab/score/${sessionId}`, {
       headers: getAuthHeaders(),
     });
     if (!response.ok) throw new Error('Failed to get recommendations');
-    return response.json();
+    const data = await response.json();
+    return { recommendations: data.recommendations || [] };
   },
 
   // Admin
@@ -182,6 +214,15 @@ export const decisionLabAPI = {
       headers: getAuthHeaders(),
     });
     if (!response.ok) throw new Error('Failed to seed questions');
+    return response.json();
+  },
+
+  runMigration: async (adminKey) => {
+    const response = await fetch(`${API_BASE_URL}/api/v1/decision-lab/admin/run-migration?admin_key=${adminKey}`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to run migration');
     return response.json();
   },
 
