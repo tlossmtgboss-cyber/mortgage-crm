@@ -935,33 +935,65 @@ async def debug_tables(
 ):
     """Debug endpoint to check table state (admin only)."""
     import os
+    import json
 
     expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
     if admin_key != expected_key:
         raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    result = {"errors": []}
 
     try:
         # Check if table exists and count rows
         questions_count = db.execute(text(
             "SELECT COUNT(*) FROM confidence_questions"
         )).scalar()
+        result["questions_count"] = questions_count
 
         overlays_count = db.execute(text(
             "SELECT COUNT(*) FROM education_overlays"
         )).scalar()
+        result["overlays_count"] = overlays_count
 
         # Get first few questions
         sample_questions = db.execute(text(
             "SELECT id, code, question_text FROM confidence_questions LIMIT 3"
         )).fetchall()
+        result["sample_questions"] = [{"id": q[0], "code": q[1], "text": q[2][:50]} for q in sample_questions]
 
-        return {
-            "questions_count": questions_count,
-            "overlays_count": overlays_count,
-            "sample_questions": [{"id": q[0], "code": q[1], "text": q[2][:50]} for q in sample_questions]
-        }
     except Exception as e:
-        return {"error": str(e)}
+        result["errors"].append(f"Table query error: {str(e)}")
+
+    # Try to insert a test question directly
+    try:
+        test_options = json.dumps({"min": 1, "max": 5})
+        db.execute(text("""
+            INSERT INTO confidence_questions (
+                code, category, question_text, question_type, options, is_active
+            ) VALUES (
+                :code, :category, :question_text, :question_type, :options::jsonb, true
+            ) ON CONFLICT (code) DO UPDATE SET
+                question_text = EXCLUDED.question_text
+        """), {
+            "code": "TEST_QUESTION",
+            "category": "test",
+            "question_text": "This is a test question",
+            "question_type": "scale",
+            "options": test_options
+        })
+        db.commit()
+        result["test_insert"] = "success"
+
+        # Verify it was inserted
+        new_count = db.execute(text("SELECT COUNT(*) FROM confidence_questions")).scalar()
+        result["new_count"] = new_count
+
+    except Exception as e:
+        result["test_insert_error"] = str(e)
+        import traceback
+        result["traceback"] = traceback.format_exc()
+
+    return result
 
 
 @router.post("/admin/run-migration")
