@@ -156,7 +156,7 @@ function Portfolio() {
     <div className="portfolio-page-wrapper">
       <div className="portfolio-container">
         <div className="portfolio-header">
-          <h1 className="portfolio-title">Portfolio</h1>
+          <h1 className="portfolio-title">MUM Clients</h1>
         <div className="header-actions">
           <button className="btn-totals" onClick={() => navigate('/portfolio/year-over-year')}>
             Totals

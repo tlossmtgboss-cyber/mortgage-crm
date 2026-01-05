@@ -30,15 +30,15 @@ export const NAVIGATION_ITEMS = {
   },
   portfolio: {
     path: '/portfolio',
-    label: 'Portfolio'
+    label: 'MUM Clients'  // Mortgages Under Management - for Loan Officers
   },
   closedClients: {
     path: '/portfolio',
-    label: 'Closed Clients'  // Same path as portfolio, different label for PA
+    label: 'MUM Clients'  // Mortgages Under Management - same view for PA
   },
   closedLoans: {
     path: '/portfolio',
-    label: 'Closed Loans'  // Same path as portfolio, different label for ops roles
+    label: 'MUM Clients'  // Mortgages Under Management - same view for ops roles
   },
   tasks: {
     path: '/tasks',
