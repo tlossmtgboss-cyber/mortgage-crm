@@ -719,6 +719,66 @@ async def get_lesson(
 # ANALYTICS & TRACKING
 # =============================================================================
 
+# =============================================================================
+# ADMIN ENDPOINTS
+# =============================================================================
+
+@router.post("/admin/seed-questions")
+async def seed_questions(
+    admin_key: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Seed initial confidence questions and education content (admin only)."""
+    import os
+
+    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    if admin_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        from migrations.add_borrower_confidence_engine import seed_initial_data
+        seed_initial_data(db)
+
+        # Get counts
+        question_count = db.execute(text("SELECT COUNT(*) FROM confidence_questions")).scalar()
+        overlay_count = db.execute(text("SELECT COUNT(*) FROM education_overlays")).scalar()
+
+        return {
+            "success": True,
+            "questions_seeded": question_count,
+            "overlays_seeded": overlay_count
+        }
+    except Exception as e:
+        logger.error(f"Seed error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/admin/run-migration")
+async def run_migration(
+    admin_key: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Run the Borrower Confidence Engine migration (admin only)."""
+    import os
+
+    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    if admin_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        from migrations.add_borrower_confidence_engine import run_migration as do_migration, seed_initial_data
+        do_migration(db)
+        seed_initial_data(db)
+
+        return {
+            "success": True,
+            "message": "Migration and seeding completed"
+        }
+    except Exception as e:
+        logger.error(f"Migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/track")
 async def track_interaction(
     session_id: str,
