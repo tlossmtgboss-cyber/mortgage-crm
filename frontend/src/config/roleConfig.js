@@ -302,7 +302,7 @@ export const ROLE_DASHBOARD_CONTAINERS = {
 // =============================================================================
 
 export const ROLE_DEFAULT_ROUTES = {
-  admin: '/dashboard',
+  admin: '/admin',
   loan_officer: '/dashboard',
   production_assistant: '/dashboard',
   processor: '/loans',      // No dashboard, land on Active Loans
