@@ -1517,3 +1517,220 @@ async def run_salesforce_migration(
         "migrations": results,
         "message": f"Processed {len(results)} migrations"
     }
+
+
+@router.get("/admin/pull-recent")
+async def admin_pull_recent_loans(
+    admin_key: str = Query(..., description="Admin API key"),
+    limit: int = Query(10, ge=1, le=100, description="Number of loans to pull"),
+    db: Session = Depends(get_db)
+):
+    """
+    Admin endpoint to pull recent loans from Salesforce.
+    Uses the first connected Salesforce account found.
+    Protected by admin API key.
+    """
+    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    if admin_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    # Get the first connected Salesforce account
+    integration = db.execute(text("""
+        SELECT user_id, access_token, refresh_token, scopes
+        FROM user_integrations
+        WHERE provider = 'salesforce' AND access_token IS NOT NULL
+        ORDER BY updated_at DESC
+        LIMIT 1
+    """)).fetchone()
+
+    if not integration:
+        return {
+            "status": "error",
+            "message": "No Salesforce connection found. Please connect Salesforce first via the Settings page."
+        }
+
+    user_id = integration[0]
+    access_token = integration[1]
+
+    # Parse instance_url from scopes
+    instance_url = None
+    if integration[3] and "instance_url:" in integration[3]:
+        instance_url = integration[3].split("instance_url:")[1].split(",")[0]
+
+    if not instance_url:
+        return {
+            "status": "error",
+            "message": "Salesforce instance URL not found. Please reconnect Salesforce."
+        }
+
+    import requests
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json"
+    }
+
+    try:
+        # Query the most recent loans from Salesforce
+        sf_object = "MtgPlanner_CRM__Transaction_Property__c"
+
+        # Get object fields first
+        describe_response = requests.get(
+            f"{instance_url}/services/data/v58.0/sobjects/{sf_object}/describe/",
+            headers=headers,
+            timeout=30
+        )
+
+        if describe_response.status_code == 401:
+            return {
+                "status": "error",
+                "message": "Salesforce token expired. Please reconnect via Settings > Integrations."
+            }
+
+        describe_response.raise_for_status()
+        describe_data = describe_response.json()
+
+        # Build field list
+        queryable_fields = []
+        for field in describe_data.get('fields', []):
+            if field.get('type') not in ['base64', 'address', 'location']:
+                queryable_fields.append(field.get('name'))
+
+        field_list = ", ".join(queryable_fields[:40])
+        soql = f"SELECT {field_list} FROM {sf_object} ORDER BY LastModifiedDate DESC LIMIT {limit}"
+
+        logger.info(f"Executing SOQL: {soql[:200]}...")
+
+        query_response = requests.get(
+            f"{instance_url}/services/data/v58.0/query/",
+            headers=headers,
+            params={"q": soql},
+            timeout=30
+        )
+        query_response.raise_for_status()
+        query_data = query_response.json()
+
+        records = query_data.get('records', [])
+        logger.info(f"Found {len(records)} loans in Salesforce")
+
+        # Get user's organization
+        user_org = db.execute(text("SELECT organization_id FROM users WHERE id = :user_id"), {"user_id": user_id}).fetchone()
+        org_id = user_org[0] if user_org and user_org[0] else 1
+
+        # Import the records using the sync service
+        from services.salesforce_sync_service import get_salesforce_sync_service, DEFAULT_FIELD_MAPPING
+
+        results = {
+            "imported": 0,
+            "updated": 0,
+            "skipped": 0,
+            "errors": [],
+            "loans": []
+        }
+
+        for record in records:
+            try:
+                sf_id = record.get('Id')
+
+                # Check if already imported
+                existing = db.execute(text(
+                    "SELECT id, loan_number FROM loans WHERE salesforce_id = :sf_id"
+                ), {"sf_id": sf_id}).fetchone()
+
+                # Map fields using DEFAULT_FIELD_MAPPING
+                loan_data = {
+                    'salesforce_id': sf_id,
+                    'organization_id': org_id,
+                    'created_by_user_id': user_id,
+                    'salesforce_sync_status': 'synced',
+                    'salesforce_last_synced_at': datetime.utcnow(),
+                }
+
+                for sf_field, (crm_field, transform) in DEFAULT_FIELD_MAPPING.items():
+                    if sf_field in record and record[sf_field] is not None:
+                        value = record[sf_field]
+
+                        # Apply transforms
+                        if transform == "decimal" and value:
+                            try:
+                                value = float(value)
+                            except:
+                                pass
+                        elif transform == "date" and value:
+                            try:
+                                from datetime import datetime as dt
+                                value = dt.fromisoformat(value.replace('Z', '+00:00')).date()
+                            except:
+                                pass
+
+                        loan_data[crm_field] = value
+
+                # Generate loan number if missing
+                if not loan_data.get('loan_number'):
+                    loan_data['loan_number'] = f"SF-{sf_id[-8:]}"
+
+                if existing:
+                    # Update existing loan
+                    update_fields = ", ".join([f"{k} = :{k}" for k in loan_data.keys() if k != 'salesforce_id'])
+                    db.execute(text(f"""
+                        UPDATE loans SET {update_fields}, updated_at = CURRENT_TIMESTAMP
+                        WHERE salesforce_id = :salesforce_id
+                    """), loan_data)
+                    results['updated'] += 1
+                    action = 'updated'
+                else:
+                    # Insert new loan
+                    columns = ", ".join(loan_data.keys())
+                    placeholders = ", ".join([f":{k}" for k in loan_data.keys()])
+                    db.execute(text(f"""
+                        INSERT INTO loans ({columns}, created_at, updated_at)
+                        VALUES ({placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    """), loan_data)
+                    results['imported'] += 1
+                    action = 'imported'
+
+                results['loans'].append({
+                    'salesforce_id': sf_id,
+                    'loan_number': loan_data.get('loan_number'),
+                    'borrower_name': loan_data.get('borrower_name'),
+                    'amount': loan_data.get('amount') or loan_data.get('loan_amount'),
+                    'action': action
+                })
+
+            except Exception as e:
+                logger.error(f"Error importing loan {record.get('Id')}: {e}")
+                results['errors'].append({
+                    'salesforce_id': record.get('Id'),
+                    'error': str(e)
+                })
+                results['skipped'] += 1
+
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": f"Pulled {len(records)} loans: {results['imported']} imported, {results['updated']} updated",
+            "instance_url": instance_url,
+            "salesforce_object": sf_object,
+            "total_found": len(records),
+            "results": results
+        }
+
+    except requests.exceptions.HTTPError as e:
+        logger.error(f"Salesforce API error: {e}")
+        error_detail = str(e)
+        try:
+            error_detail = e.response.json()
+        except:
+            pass
+        return {
+            "status": "error",
+            "message": f"Salesforce API error: {error_detail}"
+        }
+    except Exception as e:
+        logger.error(f"Pull failed: {e}")
+        db.rollback()
+        return {
+            "status": "error",
+            "message": str(e)
+        }
