@@ -577,10 +577,10 @@ async def invite_subscriber(
         try:
             db.execute(text("""
                 INSERT INTO admin_audit_log (
-                    action_type, actor_id, target_type, target_id,
+                    action_type, actor_admin_id, actor_name, target_type, target_id,
                     old_values, new_values, reason, ip_address
                 ) VALUES (
-                    'invitation_sent', :actor_id, 'invitation', :token,
+                    'invitation_sent', :actor_id, :actor_name, 'invitation', :token,
                     NULL,
                     :details,
                     :message,
@@ -588,6 +588,7 @@ async def invite_subscriber(
                 )
             """), {
                 'actor_id': current_user.id,
+                'actor_name': getattr(current_user, 'full_name', current_user.email),
                 'token': invitation_token,
                 'details': str({
                     'email': invite.email,
@@ -601,8 +602,9 @@ async def invite_subscriber(
                 'ip': request.client.host if request.client else 'unknown'
             })
             db.commit()
+            logger.info(f"Invitation logged to audit with token: {invitation_token}")
         except Exception as log_err:
-            logger.warning(f"Could not log invitation to audit: {log_err}")
+            logger.error(f"Could not log invitation to audit: {log_err}")
             # Continue anyway - logging failure shouldn't block invitation
 
         # Log the action
