@@ -287,23 +287,34 @@ async def calculate_score(
     - Readiness level
     - Personalized recommendations
     """
-    engine = get_confidence_engine(db)
+    import logging
+    logger = logging.getLogger(__name__)
 
-    score = engine.calculate_confidence_score(
-        session_id=session_id,
-        borrower_profile_id=borrower_profile_id,
-        application_id=application_id
-    )
+    try:
+        engine = get_confidence_engine(db)
 
-    return {
-        "session_id": session_id,
-        "overall_score": score.overall_score,
-        "category_scores": score.category_scores,
-        "readiness_level": score.readiness_level.value,
-        "key_strengths": score.key_strengths,
-        "areas_for_improvement": score.areas_for_improvement,
-        "recommended_actions": score.recommended_actions
-    }
+        score = engine.calculate_confidence_score(
+            session_id=session_id,
+            borrower_profile_id=borrower_profile_id,
+            application_id=application_id
+        )
+
+        return {
+            "session_id": session_id,
+            "overall_score": score.overall_score,
+            "category_scores": score.category_scores,
+            "readiness_level": score.readiness_level.value,
+            "key_strengths": score.key_strengths,
+            "areas_for_improvement": score.areas_for_improvement,
+            "recommended_actions": score.recommended_actions
+        }
+    except Exception as e:
+        logger.error(f"Score calculation error for session {session_id}: {str(e)}")
+        # Re-raise with more details for debugging
+        raise HTTPException(
+            status_code=500,
+            detail=f"Score calculation failed: {str(e)}"
+        )
 
 
 @router.get("/score/{session_id}")
