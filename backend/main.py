@@ -37106,6 +37106,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
                 "email": user.email,
                 "full_name": user.full_name,
                 "role": user.role,
+                "permission_role": user.permission_role,
                 "onboarding_completed": user.onboarding_completed
             }
         }
@@ -38511,22 +38512,36 @@ async def create_user(
     current_user: User = Depends(get_current_user)
 ):
     """Create a new user (admin only)"""
+    import secrets
     from passlib.context import CryptContext
     pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
     email = user_data.get('email')
     password = user_data.get('password')
+
+    # Handle both full_name and first_name/last_name formats
     full_name = user_data.get('full_name', '')
+    if not full_name:
+        first_name = user_data.get('first_name', '')
+        last_name = user_data.get('last_name', '')
+        full_name = f"{first_name} {last_name}".strip()
+
     role = user_data.get('role', 'loan_officer')
     is_active = user_data.get('is_active', True)
+    phone = user_data.get('phone', '')
+    nmls_id = user_data.get('nmls_id', '')
 
-    if not email or not password:
-        raise HTTPException(status_code=400, detail="Email and password are required")
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
 
     # Check if email already exists
     existing_user = db.query(User).filter(User.email == email).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already in use")
+
+    # Generate temporary password if not provided
+    if not password:
+        password = secrets.token_urlsafe(12)
 
     # Hash the password
     hashed_password = pwd_context.hash(password)
@@ -38540,8 +38555,16 @@ async def create_user(
         is_active=is_active,
         email_verified=False,
         onboarding_completed=False,
-        organization_id=current_user.organization_id
+        organization_id=current_user.organization_id,
+        phone=phone if hasattr(User, 'phone') else None,
+        nmls_id=nmls_id if hasattr(User, 'nmls_id') else None
     )
+
+    # Set phone and nmls_id if columns exist
+    if phone and hasattr(new_user, 'phone'):
+        new_user.phone = phone
+    if nmls_id and hasattr(new_user, 'nmls_id'):
+        new_user.nmls_id = nmls_id
 
     db.add(new_user)
     db.commit()
@@ -38555,7 +38578,8 @@ async def create_user(
         "is_active": new_user.is_active,
         "email_verified": new_user.email_verified,
         "onboarding_completed": new_user.onboarding_completed,
-        "created_at": new_user.created_at.isoformat() if new_user.created_at else None
+        "created_at": new_user.created_at.isoformat() if new_user.created_at else None,
+        "temp_password": password if not user_data.get('password') else None  # Return temp password for admin to share
     }
 
 @app.get("/api/v1/debug/user-deletion-blockers/{user_id}")

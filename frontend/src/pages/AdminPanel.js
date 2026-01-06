@@ -265,14 +265,20 @@ const AdminPanel = () => {
     try {
       if (selectedUser) {
         await api.put(`/api/v1/admin/users/${selectedUser.id}`, userForm);
+        setShowUserModal(false);
       } else {
-        await api.post('/api/v1/admin/users', userForm);
+        const response = await api.post('/api/v1/admin/users', userForm);
+        setShowUserModal(false);
+        // Show temp password if one was generated
+        if (response.data?.temp_password) {
+          alert(`User created successfully!\n\nTemporary Password: ${response.data.temp_password}\n\nPlease share this password with the user securely. They will need to change it on first login.`);
+        }
       }
-      setShowUserModal(false);
       loadDashboard();
     } catch (err) {
       console.error('Save user error:', err);
-      alert('Failed to save user. Please try again.');
+      const errorMsg = err.response?.data?.detail || 'Failed to save user. Please try again.';
+      alert(errorMsg);
     } finally {
       setSaving(false);
     }
@@ -1040,8 +1046,17 @@ const AdminPanel = () => {
         {activeTab === 'ai_metrics' && (
           <section className="ai-metrics-section">
             <div className="section-header">
-              <h2>AI Agent Metrics</h2>
+              <div className="header-title-group">
+                <h2>AI Agent Metrics</h2>
+                {aiMetricsLastUpdate && (
+                  <span className="last-update-text">
+                    Last updated: {aiMetricsLastUpdate.toLocaleTimeString()}
+                    {aiMetricsLoading && <span className="refresh-indicator"> • Refreshing...</span>}
+                  </span>
+                )}
+              </div>
               <div className="section-actions">
+                <span className="auto-refresh-badge">Auto-refresh: 30s</span>
                 <select
                   value={aiMetricsDays}
                   onChange={(e) => setAiMetricsDays(parseInt(e.target.value))}
@@ -1052,8 +1067,12 @@ const AdminPanel = () => {
                   <option value="30">Last 30 days</option>
                   <option value="90">Last 90 days</option>
                 </select>
-                <button className="btn-secondary" onClick={loadAiMetrics}>
-                  Refresh
+                <button
+                  className={`btn-secondary ${aiMetricsLoading ? 'loading' : ''}`}
+                  onClick={loadAiMetrics}
+                  disabled={aiMetricsLoading}
+                >
+                  {aiMetricsLoading ? 'Refreshing...' : 'Refresh'}
                 </button>
               </div>
             </div>
