@@ -1,12 +1,32 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { portfolioAPI, mumAPI } from '../services/api';
 import CalendarSidebar from '../components/CalendarSidebar';
+import { getUserEffectiveRole } from '../config/roleConfig';
 import './Portfolio.css';
 
 function Portfolio() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('mum-dashboard');
+
+  // Determine user's effective role to show/hide MUM Dashboard tab
+  const userRole = useMemo(() => {
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        return getUserEffectiveRole(user.permission_role, user.role);
+      }
+    } catch (e) {
+      console.error('Error parsing user from localStorage:', e);
+    }
+    return 'loan_officer'; // Default fallback
+  }, []);
+
+  // Only loan officers and admins see the MUM Dashboard tab
+  const showDashboardTab = userRole === 'loan_officer' || userRole === 'admin';
+
+  // Default to 'mum' (clients list) if user doesn't have dashboard access
+  const [activeTab, setActiveTab] = useState(showDashboardTab ? 'mum-dashboard' : 'mum');
   const [portfolioData, setPortfolioData] = useState({
     totalLoans: 0,
     totalVolume: 0,
@@ -169,20 +189,23 @@ function Portfolio() {
         </div>
       </div>
 
-      <div className="portfolio-tabs">
-        <button
-          className={activeTab === 'mum-dashboard' ? 'active' : ''}
-          onClick={() => setActiveTab('mum-dashboard')}
-        >
-          MUM Dashboard
-        </button>
-        <button
-          className={activeTab === 'mum' ? 'active' : ''}
-          onClick={() => setActiveTab('mum')}
-        >
-          MUM Clients ({mumClients.length})
-        </button>
-      </div>
+      {/* Only show tabs if user has access to dashboard; otherwise just show clients list */}
+      {showDashboardTab ? (
+        <div className="portfolio-tabs">
+          <button
+            className={activeTab === 'mum-dashboard' ? 'active' : ''}
+            onClick={() => setActiveTab('mum-dashboard')}
+          >
+            MUM Dashboard
+          </button>
+          <button
+            className={activeTab === 'mum' ? 'active' : ''}
+            onClick={() => setActiveTab('mum')}
+          >
+            MUM Clients ({mumClients.length})
+          </button>
+        </div>
+      ) : null}
 
       {activeTab === 'mum-dashboard' && (
         <div className="mum-dashboard">
