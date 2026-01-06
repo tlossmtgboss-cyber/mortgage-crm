@@ -62,8 +62,8 @@ export const PermissionProvider = ({ children }) => {
 
     // If user can switch views and has a viewAsRole set, use that for navigation
     if (canSwitchViews && viewAsRole && viewAsRole !== 'default' && viewAsRole !== 'admin') {
-      // Map production_assistant variants to production_assistant
-      if (viewAsRole === 'production_assistant_1' || viewAsRole === 'production_assistant_2') {
+      // Map production_assistant variants and concierge to production_assistant
+      if (viewAsRole === 'production_assistant_1' || viewAsRole === 'production_assistant_2' || viewAsRole === 'concierge') {
         return 'production_assistant';
       }
       // Map site_admin to admin for navigation purposes

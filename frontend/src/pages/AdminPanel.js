@@ -135,9 +135,9 @@ const AdminPanel = () => {
     }
   }, []);
 
-  // Load security data when tab is active
+  // Load security data when tab is active (overview or security)
   useEffect(() => {
-    if (activeTab === 'security') {
+    if (activeTab === 'security' || activeTab === 'overview') {
       loadSecurityData();
     }
   }, [activeTab, loadSecurityData]);
@@ -434,6 +434,169 @@ const AdminPanel = () => {
                   </div>
                 </div>
               </div>
+            </section>
+
+            {/* Security Summary */}
+            <section className="security-summary-section">
+              <div className="section-header">
+                <h2>Security Overview</h2>
+                <button onClick={() => setActiveTab('security')} className="btn-secondary btn-sm">
+                  View Full Security Dashboard →
+                </button>
+              </div>
+
+              {securityLoading && !securityData ? (
+                <div className="loading-placeholder">Loading security data...</div>
+              ) : securityData ? (
+                <>
+                  {/* Security Alerts */}
+                  {((securityData.ip_blocking?.blocked_count || 0) > 0 ||
+                    (securityData.failed_logins?.recent_failed_attempts || 0) >= 5) && (
+                    <div className="security-alerts">
+                      {(securityData.ip_blocking?.blocked_count || 0) > 0 && (
+                        <div className="security-alert warning">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="12" y1="8" x2="12" y2="12"/>
+                            <line x1="12" y1="16" x2="12.01" y2="16"/>
+                          </svg>
+                          <span><strong>{securityData.ip_blocking.blocked_count} IP(s) blocked</strong> for security violations</span>
+                        </div>
+                      )}
+                      {(securityData.failed_logins?.recent_failed_attempts || 0) >= 5 && (
+                        <div className="security-alert danger">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                            <line x1="12" y1="9" x2="12" y2="13"/>
+                            <line x1="12" y1="17" x2="12.01" y2="17"/>
+                          </svg>
+                          <span><strong>{securityData.failed_logins.recent_failed_attempts} failed login attempts</strong> detected recently</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="security-metrics-grid">
+                    <div className={`security-metric-card ${securityData.status === 'active' ? 'status-good' : 'status-warning'}`}>
+                      <div className="metric-icon-sm">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        </svg>
+                      </div>
+                      <div className="metric-info">
+                        <span className="metric-value-sm">{securityData.status === 'active' ? 'SECURE' : 'CHECK'}</span>
+                        <span className="metric-label-sm">System Status</span>
+                      </div>
+                    </div>
+
+                    <div className={`security-metric-card ${(securityData.ip_blocking?.blocked_count || 0) > 0 ? 'status-warning' : 'status-good'}`}>
+                      <div className="metric-icon-sm">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="12" r="10"/>
+                          <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+                        </svg>
+                      </div>
+                      <div className="metric-info">
+                        <span className="metric-value-sm">{securityData.ip_blocking?.blocked_count || 0}</span>
+                        <span className="metric-label-sm">Blocked IPs</span>
+                      </div>
+                    </div>
+
+                    <div className={`security-metric-card ${(securityData.failed_logins?.recent_failed_attempts || 0) >= 5 ? 'status-danger' : (securityData.failed_logins?.recent_failed_attempts || 0) > 0 ? 'status-warning' : 'status-good'}`}>
+                      <div className="metric-icon-sm">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                        </svg>
+                      </div>
+                      <div className="metric-info">
+                        <span className="metric-value-sm">{securityData.failed_logins?.recent_failed_attempts || 0}</span>
+                        <span className="metric-label-sm">Failed Logins</span>
+                      </div>
+                    </div>
+
+                    <div className="security-metric-card status-info">
+                      <div className="metric-icon-sm">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                        </svg>
+                      </div>
+                      <div className="metric-info">
+                        <span className="metric-value-sm">{securityData.rate_limiting?.active_keys || 0}</span>
+                        <span className="metric-label-sm">Rate Limits Active</span>
+                      </div>
+                    </div>
+
+                    <div className="security-metric-card status-info">
+                      <div className="metric-icon-sm">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                          <polyline points="14 2 14 8 20 8"/>
+                          <line x1="16" y1="13" x2="8" y2="13"/>
+                          <line x1="16" y1="17" x2="8" y2="17"/>
+                        </svg>
+                      </div>
+                      <div className="metric-info">
+                        <span className="metric-value-sm">{securityData.rate_limiting?.total_requests_tracked || 0}</span>
+                        <span className="metric-label-sm">Requests Tracked</span>
+                      </div>
+                    </div>
+
+                    <div className="security-metric-card status-good">
+                      <div className="metric-icon-sm">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                          <polyline points="22 4 12 14.01 9 11.01"/>
+                        </svg>
+                      </div>
+                      <div className="metric-info">
+                        <span className="metric-value-sm">{Object.values(securityData.middleware_status || {}).filter(Boolean).length}</span>
+                        <span className="metric-label-sm">Middleware Active</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Recent Blocked IPs */}
+                  {securityData.ip_blocking?.blocked_ips?.length > 0 && (
+                    <div className="security-blocked-preview">
+                      <h4>Recently Blocked IPs</h4>
+                      <div className="blocked-ips-compact">
+                        {securityData.ip_blocking.blocked_ips.slice(0, 3).map((ip, idx) => (
+                          <span key={idx} className="blocked-ip-tag">
+                            {ip}
+                            <button onClick={() => handleUnblockIP(ip)} className="unblock-btn" title="Unblock">×</button>
+                          </span>
+                        ))}
+                        {securityData.ip_blocking.blocked_ips.length > 3 && (
+                          <span className="more-ips">+{securityData.ip_blocking.blocked_ips.length - 3} more</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Top Failed Login Attempts */}
+                  {securityData.failed_logins?.top_offenders?.length > 0 && (
+                    <div className="security-offenders-preview">
+                      <h4>Top Failed Login Attempts</h4>
+                      <div className="offenders-compact">
+                        {securityData.failed_logins.top_offenders.slice(0, 3).map((item, idx) => (
+                          <div key={idx} className="offender-item">
+                            <span className="offender-ip">{item.ip}</span>
+                            <span className={`offender-attempts ${item.attempts >= 5 ? 'danger' : 'warning'}`}>
+                              {item.attempts} attempts
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="security-unavailable">
+                  <p>Security monitoring data unavailable</p>
+                  <button onClick={loadSecurityData} className="btn-secondary btn-sm">Retry</button>
+                </div>
+              )}
             </section>
 
             {/* Account Management */}

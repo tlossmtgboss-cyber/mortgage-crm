@@ -1945,6 +1945,7 @@ export const RoleDashboardSwitcher = ({ currentView, onViewChange, isAdmin }) =>
     { id: 'loan_officer', label: 'Loan Officer', icon: '👔' },
     { id: 'production_assistant_1', label: 'Production Assistant 1', icon: '📊' },
     { id: 'production_assistant_2', label: 'Production Assistant 2', icon: '📈' },
+    { id: 'concierge', label: 'Concierge', icon: '🛎️' },
     { id: 'processor', label: 'Processor', icon: '📁' },
     { id: 'underwriter', label: 'Underwriter', icon: '🔍' },
     { id: 'closer', label: 'Closer', icon: '📅' },
@@ -2003,6 +2004,8 @@ export const getDashboardByRole = (roleId) => {
     case 'production_assistant_2':
     case 'pa2':
       return ProductionAssistant2Dashboard;
+    case 'concierge':
+      return ProductionAssistant1Dashboard; // Concierge has same permissions as Production Assistants
     case 'processor':
       return ProcessorDashboard;
     case 'underwriter':
