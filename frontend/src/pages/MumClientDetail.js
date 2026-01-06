@@ -621,11 +621,18 @@ function MumClientDetail() {
         }
         break;
       case 'client_portal':
-        // Open client portal for this MUM client
-        if (client.workspace_slug) {
-          window.open(`${window.location.origin}/portal/${client.workspace_slug}`, '_blank');
-        } else {
-          alert('No client portal found. Please create one from the client details.');
+        // Open or create client portal for this MUM client
+        try {
+          const portalData = await mumAPI.getOrCreatePortal(client.id);
+          if (portalData.portal_url) {
+            window.open(portalData.portal_url, '_blank');
+          } else if (portalData.slug) {
+            // Uses /portal/ route which auto-routes to MUMPortal based on workspace status
+            window.open(`${window.location.origin}/portal/${portalData.slug}`, '_blank');
+          }
+        } catch (error) {
+          console.error('Failed to open client portal:', error);
+          alert('Failed to open client portal. Please try again.');
         }
         break;
       case 'escalation':

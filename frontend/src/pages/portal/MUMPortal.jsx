@@ -11,9 +11,12 @@
  * - Annual review scheduling
  * - Loan servicing information
  * - Resource center for homeowners
+ * - Video messages from loan officer
+ * - Document repository for important files
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { mumPortalAPI } from '../../services/api';
 import ScheduleAppointmentModal from '../../components/ScheduleAppointmentModal';
 import './MUMPortal.css';
 
@@ -387,6 +390,62 @@ export default function MUMPortal({ data, slug, onRefresh }) {
   const [activeTab, setActiveTab] = useState('overview');
   const [showScheduleModal, setShowScheduleModal] = useState(false);
 
+  // Messages, Videos, Documents state
+  const [videos, setVideos] = useState([]);
+  const [documents, setDocuments] = useState([]);
+  const [messages, setMessages] = useState([]);
+  const [loadingMedia, setLoadingMedia] = useState(false);
+
+  // Fetch videos, documents, and messages
+  useEffect(() => {
+    const fetchMediaContent = async () => {
+      if (!slug) return;
+
+      setLoadingMedia(true);
+      try {
+        const [videosRes, docsRes, msgsRes] = await Promise.all([
+          mumPortalAPI.getVideos(slug).catch(() => ({ videos: [] })),
+          mumPortalAPI.getDocuments(slug).catch(() => ({ documents: [] })),
+          mumPortalAPI.getMessages(slug).catch(() => ({ messages: [] })),
+        ]);
+
+        setVideos(videosRes.videos || []);
+        setDocuments(docsRes.documents || []);
+        setMessages(msgsRes.messages || []);
+      } catch (error) {
+        console.error('Error fetching MUM portal content:', error);
+      } finally {
+        setLoadingMedia(false);
+      }
+    };
+
+    fetchMediaContent();
+  }, [slug]);
+
+  // Handle video viewed
+  const handleVideoViewed = async (videoId) => {
+    try {
+      await mumPortalAPI.markVideoViewed(slug, videoId);
+      setVideos(prev => prev.map(v =>
+        v.id === videoId ? { ...v, is_viewed: true, viewed_at: new Date().toISOString() } : v
+      ));
+    } catch (error) {
+      console.error('Error marking video viewed:', error);
+    }
+  };
+
+  // Handle message read
+  const handleMessageRead = async (messageId) => {
+    try {
+      await mumPortalAPI.markMessageRead(slug, messageId);
+      setMessages(prev => prev.map(m =>
+        m.id === messageId ? { ...m, is_read: true } : m
+      ));
+    } catch (error) {
+      console.error('Error marking message read:', error);
+    }
+  };
+
   // Extract data
   const workspace = data?.workspace;
   const loan = data?.loan;
@@ -454,6 +513,22 @@ export default function MUMPortal({ data, slug, onRefresh }) {
           onClick={() => setActiveTab('loan')}
         >
           Loan Details
+        </button>
+        <button
+          className={`nav-btn ${activeTab === 'messages' ? 'active' : ''}`}
+          onClick={() => setActiveTab('messages')}
+        >
+          Messages
+          {(videos.length + messages.length) > 0 && (
+            <span className="nav-badge">{videos.length + messages.length}</span>
+          )}
+        </button>
+        <button
+          className={`nav-btn ${activeTab === 'documents' ? 'active' : ''}`}
+          onClick={() => setActiveTab('documents')}
+        >
+          Documents
+          {documents.length > 0 && <span className="nav-badge">{documents.length}</span>}
         </button>
       </nav>
 
@@ -658,6 +733,195 @@ export default function MUMPortal({ data, slug, onRefresh }) {
                 <button type="button" className="doc-link" onClick={() => alert('Document access coming soon!')}>
                   <span>📄</span> Title Insurance Policy
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Messages Tab - Videos and Text Messages from LO */}
+        {activeTab === 'messages' && (
+          <div className="messages-tab">
+            <div className="messages-header">
+              <h2>Messages From Your Loan Officer</h2>
+              <p>Stay connected with personalized video and text updates from your team.</p>
+            </div>
+
+            {loadingMedia ? (
+              <div className="messages-loading">
+                <div className="spinner"></div>
+                <p>Loading messages...</p>
+              </div>
+            ) : (
+              <>
+                {/* Video Messages Section */}
+                {videos.length > 0 && (
+                  <div className="video-messages-section">
+                    <h3>Video Messages</h3>
+                    <div className="video-grid">
+                      {videos.map((video) => (
+                        <div key={video.id} className={`video-card ${video.is_viewed ? 'viewed' : 'unviewed'}`}>
+                          <div className="video-thumbnail" onClick={() => handleVideoViewed(video.id)}>
+                            {video.thumbnail_url ? (
+                              <img src={video.thumbnail_url} alt={video.title} />
+                            ) : (
+                              <div className="video-placeholder">
+                                <span className="play-icon">▶</span>
+                              </div>
+                            )}
+                            {!video.is_viewed && <span className="new-badge">NEW</span>}
+                            {video.duration_seconds && (
+                              <span className="video-duration">
+                                {Math.floor(video.duration_seconds / 60)}:{String(video.duration_seconds % 60).padStart(2, '0')}
+                              </span>
+                            )}
+                          </div>
+                          <div className="video-info">
+                            <h4>{video.title || 'Video Message'}</h4>
+                            {video.description && <p>{video.description}</p>}
+                            <div className="video-meta">
+                              <span className="sender">{video.sender_name || loanOfficer?.name || 'Your Loan Officer'}</span>
+                              <span className="date">{formatDate(video.created_at)}</span>
+                            </div>
+                          </div>
+                          {video.video_url && (
+                            <a
+                              href={video.video_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="watch-btn"
+                              onClick={() => handleVideoViewed(video.id)}
+                            >
+                              Watch Video
+                            </a>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Text Messages Section */}
+                {messages.length > 0 && (
+                  <div className="text-messages-section">
+                    <h3>Updates & Announcements</h3>
+                    <div className="messages-list">
+                      {messages.map((message) => (
+                        <div
+                          key={message.id}
+                          className={`message-card ${message.is_read ? 'read' : 'unread'}`}
+                          onClick={() => !message.is_read && handleMessageRead(message.id)}
+                        >
+                          <div className="message-icon">
+                            {message.message_type === 'update' ? '📢' :
+                             message.message_type === 'alert' ? '⚠️' :
+                             message.message_type === 'announcement' ? '📣' : '💬'}
+                          </div>
+                          <div className="message-content">
+                            <p>{message.content}</p>
+                            <span className="message-date">{formatDate(message.created_at)}</span>
+                          </div>
+                          {!message.is_read && <span className="unread-dot"></span>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Empty State */}
+                {videos.length === 0 && messages.length === 0 && (
+                  <div className="no-messages">
+                    <div className="no-messages-icon">💬</div>
+                    <h3>No Messages Yet</h3>
+                    <p>Your loan officer will share video messages and updates here.</p>
+                    <p className="hint">Check back soon for personalized content!</p>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Documents Tab */}
+        {activeTab === 'documents' && (
+          <div className="documents-tab">
+            <div className="documents-header">
+              <h2>Your Documents</h2>
+              <p>Access your important mortgage documents anytime.</p>
+            </div>
+
+            {loadingMedia ? (
+              <div className="documents-loading">
+                <div className="spinner"></div>
+                <p>Loading documents...</p>
+              </div>
+            ) : documents.length > 0 ? (
+              <div className="documents-grid">
+                {documents.map((doc) => (
+                  <div key={doc.id} className="document-card">
+                    <div className="doc-icon">
+                      {doc.doc_category === 'closing' ? '📋' :
+                       doc.doc_category === 'tax' ? '📊' :
+                       doc.doc_category === 'insurance' ? '🛡️' :
+                       doc.doc_category === 'legal' ? '⚖️' : '📄'}
+                    </div>
+                    <div className="doc-info">
+                      <h4>{doc.file_name || doc.doc_type}</h4>
+                      <p className="doc-type">{doc.doc_type?.replace(/_/g, ' ')}</p>
+                      <span className="doc-date">Added {formatDate(doc.created_at)}</span>
+                      {doc.size_bytes && (
+                        <span className="doc-size">
+                          {(doc.size_bytes / 1024 / 1024).toFixed(1)} MB
+                        </span>
+                      )}
+                    </div>
+                    <button className="download-btn" onClick={() => alert('Document download coming soon!')}>
+                      Download
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="no-documents">
+                <div className="no-docs-icon">📂</div>
+                <h3>No Documents Available</h3>
+                <p>Your important mortgage documents will appear here.</p>
+                <p className="hint">Contact your loan officer if you need specific documents.</p>
+              </div>
+            )}
+
+            {/* Standard Documents Section */}
+            <div className="standard-documents">
+              <h3>Common Mortgage Documents</h3>
+              <p>Looking for specific closing documents? Contact your loan officer:</p>
+              <div className="standard-doc-list">
+                <div className="standard-doc">
+                  <span>📄</span>
+                  <div>
+                    <strong>Closing Disclosure</strong>
+                    <p>Final loan terms and closing costs</p>
+                  </div>
+                </div>
+                <div className="standard-doc">
+                  <span>📄</span>
+                  <div>
+                    <strong>Promissory Note</strong>
+                    <p>Your promise to repay the loan</p>
+                  </div>
+                </div>
+                <div className="standard-doc">
+                  <span>📄</span>
+                  <div>
+                    <strong>Deed of Trust</strong>
+                    <p>Security instrument for your loan</p>
+                  </div>
+                </div>
+                <div className="standard-doc">
+                  <span>📄</span>
+                  <div>
+                    <strong>Title Insurance Policy</strong>
+                    <p>Protection against title defects</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

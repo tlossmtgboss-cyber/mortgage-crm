@@ -346,6 +346,59 @@ export const mumAPI = {
   delete: async (id) => {
     await api.delete(`/api/v1/mum-clients/${id}`);
   },
+
+  // Portal management
+  getOrCreatePortal: async (clientId) => {
+    const response = await api.post(`/api/v1/mum-clients/${clientId}/portal`);
+    return response.data;
+  },
+  getPortalInfo: async (clientId) => {
+    const response = await api.get(`/api/v1/mum-clients/${clientId}/portal`);
+    return response.data;
+  },
+  postPortalMessage: async (clientId, content, messageType = 'update') => {
+    const response = await api.post(`/api/v1/mum-clients/${clientId}/portal/message`, {
+      content,
+      message_type: messageType,
+    });
+    return response.data;
+  },
+};
+
+// MUM Portal Public API (for client-facing portal)
+export const mumPortalAPI = {
+  getPortal: async (slug, token = null) => {
+    const params = token ? { token } : {};
+    const response = await api.get(`/api/v1/mum-portal/${slug}`, { params });
+    return response.data;
+  },
+  getVideos: async (slug, token = null) => {
+    const params = token ? { token } : {};
+    const response = await api.get(`/api/v1/mum-portal/${slug}/videos`, { params });
+    return response.data;
+  },
+  getDocuments: async (slug, token = null) => {
+    const params = token ? { token } : {};
+    const response = await api.get(`/api/v1/mum-portal/${slug}/documents`, { params });
+    return response.data;
+  },
+  getMessages: async (slug, token = null, limit = 50) => {
+    const params = { limit, ...(token ? { token } : {}) };
+    const response = await api.get(`/api/v1/mum-portal/${slug}/messages`, { params });
+    return response.data;
+  },
+  sendHeartbeat: async (slug, page = 'home', token = null) => {
+    const response = await api.post(`/api/v1/mum-portal/${slug}/heartbeat`, { page, token });
+    return response.data;
+  },
+  markMessageRead: async (slug, messageId, token = null) => {
+    const response = await api.post(`/api/v1/mum-portal/${slug}/messages/${messageId}/read`, { token });
+    return response.data;
+  },
+  markVideoViewed: async (slug, videoId, token = null) => {
+    const response = await api.post(`/api/v1/mum-portal/${slug}/videos/${videoId}/viewed`, { token });
+    return response.data;
+  },
 };
 
 // Activities
