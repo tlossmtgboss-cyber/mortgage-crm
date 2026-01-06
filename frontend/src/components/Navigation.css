@@ -43,6 +43,45 @@
   color: var(--color-bg-base);
 }
 
+/* Locked navigation item - module not enabled */
+.nav-link.locked {
+  opacity: 0.6;
+  cursor: pointer;
+  background: none;
+  border: none;
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nav-link.locked:hover {
+  opacity: 0.8;
+  background: var(--color-bg-secondary);
+}
+
+/* Upgrade badge for locked items */
+.upgrade-badge {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: white;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  animation: upgradePulse 3s ease-in-out infinite;
+}
+
+@keyframes upgradePulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0);
+  }
+}
+
 .nav-badge {
   color: #ef4444;
   font-weight: var(--weight-bold);

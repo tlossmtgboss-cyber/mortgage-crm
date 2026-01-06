@@ -19621,6 +19621,14 @@ try:
 except Exception as e:
     logger.warning(f"Could not load Decision Lab routes: {e}")
 
+# Include MUM Portal routes (public client portal for post-close clients)
+try:
+    from routes.mum_portal_routes import router as mum_portal_router
+    app.include_router(mum_portal_router, tags=["MUM Portal (Public)"])
+    logger.info("✅ MUM Portal routes loaded")
+except Exception as e:
+    logger.warning(f"Could not load MUM Portal routes: {e}")
+
 # Include application analytics routes
 from analytics_routes import router as analytics_router
 app.include_router(analytics_router, tags=["Analytics"])
@@ -19689,6 +19697,15 @@ app.include_router(ai_command_router, tags=["AI Commands"])
 # Include Subscription routes for Perennia AI
 from subscription_routes import router as subscription_router
 app.include_router(subscription_router, tags=["Subscriptions"])
+
+# Include Module Subscription routes for modular a-la-carte pricing
+try:
+    from routes.module_routes import router as module_router, set_dependencies as set_module_deps
+    set_module_deps(get_db, get_current_user)
+    app.include_router(module_router, tags=["Modules"])
+    logger.info("Module Subscription routes loaded")
+except Exception as e:
+    logger.warning(f"Could not load Module Subscription routes: {e}")
 
 # Include Custom Domain routes for multi-tenant domain support
 try:
@@ -46306,6 +46323,119 @@ async def delete_mum_client(client_id: int, db: Session = Depends(get_db), curre
     logger.info(f"MUM client deleted: {client.name}")
     return None
 
+
+# ============================================================================
+# MUM CLIENT PORTAL ENDPOINTS
+# ============================================================================
+
+@app.post("/api/v1/mum-clients/{client_id}/portal")
+async def create_mum_client_portal(
+    client_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Create or get the portal workspace for a MUM client.
+    Returns the portal URL that can be shared with the client.
+    """
+    from services.mum_portal_service import get_mum_portal_service
+
+    # Get the MUM client
+    client = db.query(MUMClient).filter(MUMClient.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="MUM client not found")
+
+    # Get organization ID from current user
+    organization_id = getattr(current_user, 'organization_id', 1) or 1
+
+    # Create or get the portal
+    service = get_mum_portal_service(db)
+    result = service.get_or_create_portal(
+        mum_client_id=str(client_id),
+        organization_id=organization_id,
+        owner_user_id=current_user.id
+    )
+
+    logger.info(f"MUM portal {'created' if result.get('created') else 'retrieved'} for client {client_id}")
+    return result
+
+
+@app.get("/api/v1/mum-clients/{client_id}/portal")
+async def get_mum_client_portal(
+    client_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get the portal info for a MUM client.
+    Returns None if no portal exists.
+    """
+    from services.mum_portal_service import get_mum_portal_service
+
+    # Get the MUM client
+    client = db.query(MUMClient).filter(MUMClient.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="MUM client not found")
+
+    # Get organization ID from current user
+    organization_id = getattr(current_user, 'organization_id', 1) or 1
+
+    # Get the portal info
+    service = get_mum_portal_service(db)
+    result = service.get_portal_by_mum_client(
+        mum_client_id=str(client_id),
+        organization_id=organization_id
+    )
+
+    if not result:
+        return {"exists": False, "portal_url": None}
+
+    return {"exists": True, **result}
+
+
+@app.post("/api/v1/mum-clients/{client_id}/portal/message")
+async def post_mum_portal_message(
+    client_id: int,
+    content: str = Body(..., embed=True),
+    message_type: str = Body("text", embed=True),
+    metadata: Optional[Dict] = Body(None, embed=True),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Post a message to a MUM client's portal.
+    message_type can be 'text' or 'video'.
+    """
+    from services.mum_portal_service import get_mum_portal_service
+
+    # Get the MUM client
+    client = db.query(MUMClient).filter(MUMClient.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="MUM client not found")
+
+    organization_id = getattr(current_user, 'organization_id', 1) or 1
+
+    service = get_mum_portal_service(db)
+
+    # Get or create portal first
+    portal_info = service.get_or_create_portal(
+        mum_client_id=str(client_id),
+        organization_id=organization_id,
+        owner_user_id=current_user.id
+    )
+
+    # Post the message
+    message = service.post_message(
+        workspace_id=portal_info["workspace_id"],
+        content=content,
+        sender_user_id=current_user.id,
+        message_type=message_type,
+        metadata=metadata
+    )
+
+    return message
+
+
 # ============================================================================
 # ACTIVITIES CRUD
 # ============================================================================
@@ -67261,7 +67391,7 @@ async def get_lo_dashboard_stats(
         func.sum(BorrowerApplication.prequalification_amount).label("volume")
     ).filter(
         BorrowerApplication.owner_id == current_user.id,
-        BorrowerApplication.status.notin_([ApplicationStatus.FUNDED, ApplicationStatus.DENIED, ApplicationStatus.WITHDRAWN])
+        BorrowerApplication.status.notin_([ApplicationStatus.APPROVED, ApplicationStatus.DENIED, ApplicationStatus.EXPIRED])
     ).first()
 
     # Get pending review count
@@ -67420,6 +67550,330 @@ async def get_social_schedule_suggestions(
         }
 
     return {"suggestions": suggestions}
+
+
+# === LO Application Detail Endpoints ===
+
+@app.get("/api/v1/lo/applications/{application_id}")
+async def get_lo_application_detail(
+    application_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get detailed application information for LO view"""
+    application = db.query(BorrowerApplication).filter(
+        BorrowerApplication.id == application_id,
+        BorrowerApplication.owner_id == current_user.id
+    ).first()
+
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    # Extract data from step_data
+    step_data = application.step_data or {}
+    property_data = step_data.get('property', {})
+    employment_data = step_data.get('employment', {})
+    assets_data = step_data.get('assets', {})
+
+    # Get documents count
+    doc_count = db.execute(text("""
+        SELECT COUNT(*) FROM application_documents WHERE application_id = :app_id
+    """), {"app_id": application_id}).scalar() or 0
+
+    # Get notes
+    notes = []
+    try:
+        notes_result = db.execute(text("""
+            SELECT id, note, created_at, created_by FROM application_notes
+            WHERE application_id = :app_id ORDER BY created_at DESC
+        """), {"app_id": application_id}).fetchall()
+        notes = [{"id": n[0], "note": n[1], "created_at": n[2].isoformat() if n[2] else None, "created_by": n[3]} for n in notes_result]
+    except Exception:
+        pass  # Notes table may not exist
+
+    return {
+        "id": application.id,
+        "borrower_first_name": application.borrower_first_name,
+        "borrower_last_name": application.borrower_last_name,
+        "borrower_email": application.borrower_email,
+        "borrower_phone": application.borrower_phone,
+        "coborrower_first_name": application.coborrower_first_name,
+        "coborrower_last_name": application.coborrower_last_name,
+        "coborrower_email": application.coborrower_email,
+        "has_coborrower": application.has_coborrower,
+        "loan_amount": float(application.prequalification_amount or 0),
+        "loan_purpose": property_data.get('loan_purpose', 'Purchase'),
+        "property_type": property_data.get('property_type'),
+        "property_address": property_data.get('address'),
+        "property_city": property_data.get('city'),
+        "property_state": property_data.get('state'),
+        "property_zip": property_data.get('zip_code'),
+        "occupancy_type": property_data.get('occupancy_type'),
+        "status": application.status.value if hasattr(application.status, 'value') else str(application.status),
+        "current_step": application.current_step,
+        "progress_percentage": application.progress_percentage,
+        "employment": employment_data,
+        "assets_summary": {
+            "total_assets": assets_data.get('total_assets', 0),
+            "checking": assets_data.get('checking', 0),
+            "savings": assets_data.get('savings', 0),
+            "retirement": assets_data.get('retirement', 0),
+        },
+        "document_count": doc_count,
+        "notes": notes,
+        "created_at": application.created_at.isoformat() if application.created_at else None,
+        "updated_at": application.updated_at.isoformat() if application.updated_at else None,
+        "submitted_at": application.submitted_at.isoformat() if application.submitted_at else None,
+        "timeline": [
+            {"event": "Application Created", "date": application.created_at.isoformat() if application.created_at else None},
+            {"event": "Last Updated", "date": application.updated_at.isoformat() if application.updated_at else None},
+            {"event": "Submitted", "date": application.submitted_at.isoformat() if application.submitted_at else None},
+        ],
+    }
+
+
+class ApplicationStatusUpdate(BaseModel):
+    status: str
+
+
+@app.put("/api/v1/lo/applications/{application_id}/status")
+async def update_lo_application_status(
+    application_id: int,
+    data: ApplicationStatusUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update application status"""
+    application = db.query(BorrowerApplication).filter(
+        BorrowerApplication.id == application_id,
+        BorrowerApplication.owner_id == current_user.id
+    ).first()
+
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    try:
+        new_status = ApplicationStatus(data.status)
+        application.status = new_status
+        application.updated_at = datetime.now(timezone.utc)
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": f"Application status updated to {new_status.value}",
+            "application_id": application_id,
+            "new_status": new_status.value,
+        }
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid status: {data.status}")
+
+
+class ApplicationNoteCreate(BaseModel):
+    note: str
+
+
+@app.post("/api/v1/lo/applications/{application_id}/notes")
+async def add_lo_application_note(
+    application_id: int,
+    data: ApplicationNoteCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Add a note to an application"""
+    application = db.query(BorrowerApplication).filter(
+        BorrowerApplication.id == application_id,
+        BorrowerApplication.owner_id == current_user.id
+    ).first()
+
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    # Ensure notes table exists
+    try:
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS application_notes (
+                id SERIAL PRIMARY KEY,
+                application_id INTEGER REFERENCES borrower_applications(id),
+                note TEXT NOT NULL,
+                created_by INTEGER REFERENCES users(id),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        db.commit()
+    except Exception:
+        db.rollback()
+
+    # Insert note
+    try:
+        result = db.execute(text("""
+            INSERT INTO application_notes (application_id, note, created_by, created_at)
+            VALUES (:app_id, :note, :user_id, :now)
+            RETURNING id
+        """), {
+            "app_id": application_id,
+            "note": data.note,
+            "user_id": current_user.id,
+            "now": datetime.now(timezone.utc)
+        })
+        db.commit()
+        note_id = result.scalar()
+
+        return {
+            "status": "success",
+            "note_id": note_id,
+            "message": "Note added successfully",
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to add note: {e}")
+        raise HTTPException(status_code=500, detail="Failed to add note")
+
+
+@app.get("/api/v1/lo/applications/{application_id}/documents")
+async def get_lo_application_documents(
+    application_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get documents for an application"""
+    application = db.query(BorrowerApplication).filter(
+        BorrowerApplication.id == application_id,
+        BorrowerApplication.owner_id == current_user.id
+    ).first()
+
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    try:
+        docs = db.execute(text("""
+            SELECT id, document_type, file_name, file_url, status, uploaded_at, verified_at
+            FROM application_documents
+            WHERE application_id = :app_id
+            ORDER BY uploaded_at DESC
+        """), {"app_id": application_id}).fetchall()
+
+        return {
+            "documents": [
+                {
+                    "id": d[0],
+                    "document_type": d[1],
+                    "file_name": d[2],
+                    "file_url": d[3],
+                    "status": d[4],
+                    "uploaded_at": d[5].isoformat() if d[5] else None,
+                    "verified_at": d[6].isoformat() if d[6] else None,
+                }
+                for d in docs
+            ],
+            "total": len(docs),
+        }
+    except Exception as e:
+        logger.error(f"Error fetching documents: {e}")
+        return {"documents": [], "total": 0}
+
+
+@app.get("/api/v1/lo/applications/{application_id}/export/mismo")
+async def export_application_mismo(
+    application_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Export application in MISMO 3.4 XML format"""
+    from fastapi.responses import Response
+
+    application = db.query(BorrowerApplication).filter(
+        BorrowerApplication.id == application_id,
+        BorrowerApplication.owner_id == current_user.id
+    ).first()
+
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    step_data = application.step_data or {}
+    property_data = step_data.get('property', {})
+    employment_data = step_data.get('employment', {})
+
+    # Generate MISMO 3.4 XML
+    mismo_xml = f'''<?xml version="1.0" encoding="UTF-8"?>
+<MESSAGE xmlns="http://www.mismo.org/residential/2009/schemas" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <ABOUT_VERSIONS>
+        <ABOUT_VERSION>
+            <DataVersionIdentifier>3.4</DataVersionIdentifier>
+        </ABOUT_VERSION>
+    </ABOUT_VERSIONS>
+    <DEAL_SETS>
+        <DEAL_SET>
+            <DEALS>
+                <DEAL>
+                    <PARTIES>
+                        <PARTY>
+                            <INDIVIDUAL>
+                                <NAME>
+                                    <FirstName>{application.borrower_first_name or ''}</FirstName>
+                                    <LastName>{application.borrower_last_name or ''}</LastName>
+                                </NAME>
+                            </INDIVIDUAL>
+                            <ROLES>
+                                <ROLE>
+                                    <BORROWER>
+                                        <BORROWER_DETAIL>
+                                            <BorrowerClassificationType>Primary</BorrowerClassificationType>
+                                        </BORROWER_DETAIL>
+                                    </BORROWER>
+                                </ROLE>
+                            </ROLES>
+                            <CONTACT_POINTS>
+                                <CONTACT_POINT>
+                                    <CONTACT_POINT_EMAIL>
+                                        <ContactPointEmailValue>{application.borrower_email or ''}</ContactPointEmailValue>
+                                    </CONTACT_POINT_EMAIL>
+                                </CONTACT_POINT>
+                                <CONTACT_POINT>
+                                    <CONTACT_POINT_TELEPHONE>
+                                        <ContactPointTelephoneValue>{application.borrower_phone or ''}</ContactPointTelephoneValue>
+                                    </CONTACT_POINT_TELEPHONE>
+                                </CONTACT_POINT>
+                            </CONTACT_POINTS>
+                        </PARTY>
+                    </PARTIES>
+                    <LOANS>
+                        <LOAN>
+                            <LOAN_DETAIL>
+                                <LoanPurposeType>{property_data.get('loan_purpose', 'Purchase')}</LoanPurposeType>
+                            </LOAN_DETAIL>
+                            <TERMS_OF_LOAN>
+                                <BaseLoanAmount>{application.prequalification_amount or 0}</BaseLoanAmount>
+                            </TERMS_OF_LOAN>
+                        </LOAN>
+                    </LOANS>
+                    <COLLATERALS>
+                        <COLLATERAL>
+                            <SUBJECT_PROPERTY>
+                                <ADDRESS>
+                                    <AddressLineText>{property_data.get('address', '')}</AddressLineText>
+                                    <CityName>{property_data.get('city', '')}</CityName>
+                                    <StateCode>{property_data.get('state', '')}</StateCode>
+                                    <PostalCode>{property_data.get('zip_code', '')}</PostalCode>
+                                </ADDRESS>
+                                <PROPERTY_DETAIL>
+                                    <PropertyUsageType>{property_data.get('occupancy_type', 'PrimaryResidence')}</PropertyUsageType>
+                                </PROPERTY_DETAIL>
+                            </SUBJECT_PROPERTY>
+                        </COLLATERAL>
+                    </COLLATERALS>
+                </DEAL>
+            </DEALS>
+        </DEAL_SET>
+    </DEAL_SETS>
+</MESSAGE>'''
+
+    return Response(
+        content=mismo_xml,
+        media_type="application/xml",
+        headers={
+            "Content-Disposition": f"attachment; filename=application_{application_id}_mismo.xml"
+        }
+    )
 
 
 # === Co-borrower invitation endpoints ===

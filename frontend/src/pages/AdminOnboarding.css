@@ -582,6 +582,236 @@
   color: #6b7280;
 }
 
+/* Module Selection Step */
+.modules-step {
+  max-width: 800px;
+}
+
+.base-package {
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  border: 2px solid #10b981;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.base-package .package-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.base-package .package-badge {
+  background: #10b981;
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.base-package h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #1e293b;
+  flex: 1;
+}
+
+.base-package .package-price {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #10b981;
+}
+
+.base-package .package-price span {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #6b7280;
+}
+
+.base-package .package-features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.base-package .package-features span {
+  background: white;
+  padding: 0.375rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  color: #374151;
+  border: 1px solid #d1fae5;
+}
+
+.modules-section {
+  margin-bottom: 2rem;
+}
+
+.modules-section h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 0.25rem 0;
+}
+
+.modules-hint {
+  color: #64748b;
+  font-size: 0.875rem;
+  margin: 0 0 1rem 0;
+}
+
+.modules-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem;
+  color: #64748b;
+}
+
+.modules-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+.module-card {
+  position: relative;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 1.25rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.module-card:hover {
+  border-color: #a5b4fc;
+  background: #fafbff;
+}
+
+.module-card.selected {
+  border-color: #6366f1;
+  background: #eef2ff;
+}
+
+.module-checkbox {
+  width: 24px;
+  height: 24px;
+  border: 2px solid #d1d5db;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: white;
+  transition: all 0.2s;
+}
+
+.module-card.selected .module-checkbox {
+  background: #6366f1;
+  border-color: #6366f1;
+}
+
+.module-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.module-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.module-info h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 0.25rem 0;
+}
+
+.module-info p {
+  font-size: 0.8125rem;
+  color: #64748b;
+  margin: 0 0 0.5rem 0;
+  line-height: 1.4;
+}
+
+.module-features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.feature-tag {
+  background: #f1f5f9;
+  padding: 0.125rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  color: #64748b;
+  text-transform: capitalize;
+}
+
+.module-price {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #6366f1;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.module-price span {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #9ca3af;
+}
+
+.pricing-summary {
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.pricing-summary .summary-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  font-size: 0.9375rem;
+  color: #4b5563;
+}
+
+.pricing-summary .summary-row.total {
+  border-top: 1px solid #e5e7eb;
+  margin-top: 0.5rem;
+  padding-top: 1rem;
+  font-weight: 700;
+  font-size: 1.125rem;
+  color: #1e293b;
+}
+
+/* Order Summary Additions */
+.summary-divider {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.75rem 0 0.25rem 0;
+  border-top: 1px dashed #e5e7eb;
+  margin-top: 0.5rem;
+}
+
+.summary-line.module-line {
+  font-size: 0.8125rem;
+  padding: 0.375rem 0;
+}
+
 /* Payment Step */
 .payment-layout {
   display: grid;
@@ -908,5 +1138,19 @@
 
   .button-row {
     flex-wrap: wrap;
+  }
+
+  .modules-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .module-card {
+    flex-wrap: wrap;
+  }
+
+  .module-price {
+    width: 100%;
+    text-align: right;
+    margin-top: 0.5rem;
   }
 }

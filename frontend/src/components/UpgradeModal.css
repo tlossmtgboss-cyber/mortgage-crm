@@ -1,0 +1,230 @@
+/* Upgrade Modal Overlay */
+.upgrade-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Modal Container */
+.upgrade-modal {
+  background: var(--color-bg-surface, #ffffff);
+  border-radius: 16px;
+  padding: 32px;
+  max-width: 440px;
+  width: 90%;
+  position: relative;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: slideUp 0.3s ease;
+  text-align: center;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Close Button */
+.modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: var(--color-text-secondary, #6b7280);
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.modal-close:hover {
+  background: var(--color-bg-secondary, #f3f4f6);
+  color: var(--color-text-primary, #1f2937);
+}
+
+/* Icon */
+.modal-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  animation: bounce 1s ease infinite;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+/* Title */
+.modal-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--color-text-primary, #1f2937);
+  margin: 0 0 12px 0;
+}
+
+/* Description */
+.modal-description {
+  font-size: 15px;
+  color: var(--color-text-secondary, #6b7280);
+  margin: 0 0 24px 0;
+  line-height: 1.5;
+}
+
+/* Features List */
+.features-list {
+  text-align: left;
+  background: var(--color-bg-secondary, #f9fafb);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+}
+
+.features-list h4 {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 12px 0;
+}
+
+.features-list ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.features-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 14px;
+  color: var(--color-text-primary, #374151);
+}
+
+.feature-check {
+  color: #10b981;
+  font-weight: 700;
+}
+
+/* Pricing Section */
+.pricing-section {
+  margin-bottom: 24px;
+}
+
+.price-display {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+}
+
+.price-amount {
+  font-size: 40px;
+  font-weight: 800;
+  color: var(--color-primary, #218D8D);
+}
+
+.price-period {
+  font-size: 16px;
+  color: var(--color-text-secondary, #6b7280);
+}
+
+.annual-price {
+  font-size: 13px;
+  color: var(--color-text-secondary, #6b7280);
+  margin: 8px 0 0 0;
+}
+
+/* Action Buttons */
+.modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.trial-btn {
+  width: 100%;
+  padding: 14px 24px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.trial-btn:hover {
+  background: linear-gradient(135deg, #059669, #047857);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+}
+
+.upgrade-btn {
+  width: 100%;
+  padding: 14px 24px;
+  background: linear-gradient(135deg, var(--color-primary, #218D8D), #1a7070);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.upgrade-btn:hover {
+  background: linear-gradient(135deg, #1a7070, #155e5e);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(33, 141, 141, 0.4);
+}
+
+/* Footer */
+.modal-footer {
+  font-size: 12px;
+  color: var(--color-text-secondary, #9ca3af);
+  margin: 16px 0 0 0;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .upgrade-modal {
+    padding: 24px;
+    margin: 16px;
+  }
+
+  .modal-title {
+    font-size: 20px;
+  }
+
+  .price-amount {
+    font-size: 32px;
+  }
+}

@@ -93,13 +93,64 @@ function AdminOnboarding() {
   const [teamInvites, setTeamInvites] = useState([]);
   const [newInvite, setNewInvite] = useState({ email: '', role: 'loan_officer', first_name: '', last_name: '' });
 
-  // Step 5: Payment
+  // Step 5: Module Selection
+  const [availableModules, setAvailableModules] = useState([]);
+  const [selectedModules, setSelectedModules] = useState([]);
+  const [modulesLoading, setModulesLoading] = useState(false);
+
+  // Fetch available modules when entering step 4
+  const fetchModules = useCallback(async () => {
+    setModulesLoading(true);
+    try {
+      const response = await fetch('/api/v1/modules/public/list');
+      if (response.ok) {
+        const modules = await response.json();
+        setAvailableModules(modules);
+      }
+    } catch (err) {
+      console.error('Failed to fetch modules:', err);
+      // Fallback module data
+      setAvailableModules([
+        { module_key: 'ai_assistant', module_name: 'AI Assistant', description: 'AI-powered underwriting, chat, and email assistance', monthly_price: 149, icon: '🤖', included_features: ['ai_underwriter', 'ai_chat', 'email_training'] },
+        { module_key: 'partner_portals', module_name: 'Partner Portals', description: 'Realtor portal, listing portal, and personalized URLs', monthly_price: 99, icon: '🤝', included_features: ['realtor_portal', 'listing_portal', 'purl'] },
+        { module_key: 'video_os', module_name: 'Video OS', description: 'Create personalized videos with AI avatars', monthly_price: 79, icon: '🎬', included_features: ['video_creation', 'ai_avatars', 'templates'] },
+        { module_key: 'recruiting_suite', module_name: 'Recruiting Suite', description: 'Full recruiting pipeline with DISC assessments', monthly_price: 199, icon: '👥', included_features: ['candidates', 'disc_assessment', 'onboarding'] },
+        { module_key: 'conversation_intelligence', module_name: 'Conversation Intelligence', description: 'Call recording, transcription, and QA scoring', monthly_price: 129, icon: '📞', included_features: ['call_recording', 'transcription', 'qa_scoring'] },
+        { module_key: 'advanced_analytics', module_name: 'Advanced Analytics', description: 'Decision lab, profitability analysis, and market insights', monthly_price: 149, icon: '📊', included_features: ['decision_lab', 'profitability', 'market_data'] },
+        { module_key: 'integrations', module_name: 'Integrations', description: 'Connect to Salesforce, HubSpot, Encompass and more', monthly_price: 79, icon: '🔗', included_features: ['salesforce', 'hubspot', 'encompass'] },
+      ]);
+    } finally {
+      setModulesLoading(false);
+    }
+  }, []);
+
+  // Toggle module selection
+  const toggleModule = (moduleKey) => {
+    setSelectedModules(prev => {
+      if (prev.includes(moduleKey)) {
+        return prev.filter(k => k !== moduleKey);
+      }
+      return [...prev, moduleKey];
+    });
+  };
+
+  // Calculate module pricing
+  const calculateModuleTotal = useCallback(() => {
+    const basePrice = 99; // Base package
+    const modulePrice = selectedModules.reduce((total, key) => {
+      const mod = availableModules.find(m => m.module_key === key);
+      return total + (mod?.monthly_price || 0);
+    }, 0);
+    return { basePrice, modulePrice, total: basePrice + modulePrice };
+  }, [selectedModules, availableModules]);
+
+  // Step 6: Payment
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [paymentComplete, setPaymentComplete] = useState(false);
   const [billingAddress, setBillingAddress] = useState({ line1: '', city: '', state: '', postal_code: '' });
   const [promoCode, setPromoCode] = useState('');
 
-  // Step 6: Complete
+  // Step 7: Complete
   const [completionData, setCompletionData] = useState(null);
 
   const STEPS = [
@@ -107,8 +158,9 @@ function AdminOnboarding() {
     { id: 1, name: 'Company', title: 'Company Profile' },
     { id: 2, name: 'Profile', title: 'Your Profile' },
     { id: 3, name: 'Team', title: 'Invite Your Team' },
-    { id: 4, name: 'Payment', title: 'Payment' },
-    { id: 5, name: 'Complete', title: 'Setup Complete!' }
+    { id: 4, name: 'Modules', title: 'Choose Your Modules' },
+    { id: 5, name: 'Payment', title: 'Payment' },
+    { id: 6, name: 'Complete', title: 'Setup Complete!' }
   ];
 
   // Validate invitation on mount
@@ -297,6 +349,8 @@ function AdminOnboarding() {
         })),
         skip: skip
       });
+      // Fetch modules before moving to module selection step
+      fetchModules();
       setCurrentStep(4);
     } catch (err) {
       setError(err.message || 'Failed to save team invites');
@@ -305,8 +359,14 @@ function AdminOnboarding() {
     }
   };
 
+  // Handle module selection step submit
+  const handleStep5Submit = () => {
+    // Move to payment step - modules are already saved in state
+    setCurrentStep(5);
+  };
+
   const handleGoBack = () => {
-    if (currentStep > 0 && currentStep < 5) {
+    if (currentStep > 0 && currentStep < 6) {
       setCurrentStep(currentStep - 1);
     }
   };
@@ -347,7 +407,7 @@ function AdminOnboarding() {
           <span className="logo-text">Perennia</span>
           <span className="logo-ai">AI</span>
         </div>
-        {currentStep < 5 && (
+        {currentStep < 6 && (
           <div className="progress-bar">
             <div
               className="progress-fill"
@@ -358,7 +418,7 @@ function AdminOnboarding() {
       </header>
 
       {/* Steps indicator */}
-      {currentStep < 5 && (
+      {currentStep < 6 && (
         <nav className="steps-nav">
           {STEPS.slice(0, -1).map((step, index) => (
             <div
@@ -376,7 +436,7 @@ function AdminOnboarding() {
 
       {/* Step content */}
       <main className="step-content">
-        {error && currentStep < 5 && (
+        {error && currentStep < 6 && (
           <div className="error-banner">
             {error}
             <button onClick={() => setError('')} className="dismiss">×</button>
@@ -725,12 +785,112 @@ function AdminOnboarding() {
           </div>
         )}
 
-        {/* Step 5: Payment */}
+        {/* Step 5: Module Selection */}
         {currentStep === 4 && (
+          <div className="step-panel modules-step">
+            <div className="step-header">
+              <h1>Choose Your Modules</h1>
+              <p>Start with the essentials and add premium features as needed.</p>
+            </div>
+
+            {/* Base Package - Always Included */}
+            <div className="base-package">
+              <div className="package-header">
+                <div className="package-badge included">Included</div>
+                <h3>Core CRM</h3>
+                <div className="package-price">$99<span>/month</span></div>
+              </div>
+              <div className="package-features">
+                <span>Lead Management</span>
+                <span>Active Loans</span>
+                <span>Portfolio</span>
+                <span>Tasks</span>
+                <span>Smart Docs</span>
+                <span>Calendar</span>
+              </div>
+            </div>
+
+            {/* Premium Modules */}
+            <div className="modules-section">
+              <h3>Premium Add-Ons</h3>
+              <p className="modules-hint">Select modules to customize your experience</p>
+
+              {modulesLoading ? (
+                <div className="modules-loading">
+                  <div className="loading-spinner"></div>
+                  <p>Loading available modules...</p>
+                </div>
+              ) : (
+                <div className="modules-grid">
+                  {availableModules.filter(m => m.module_key !== 'base').map(module => (
+                    <div
+                      key={module.module_key}
+                      className={`module-card ${selectedModules.includes(module.module_key) ? 'selected' : ''}`}
+                      onClick={() => toggleModule(module.module_key)}
+                    >
+                      <div className="module-checkbox">
+                        {selectedModules.includes(module.module_key) ? '✓' : ''}
+                      </div>
+                      <div className="module-icon">{module.icon}</div>
+                      <div className="module-info">
+                        <h4>{module.module_name}</h4>
+                        <p>{module.description}</p>
+                        <div className="module-features">
+                          {module.included_features?.slice(0, 3).map((f, i) => (
+                            <span key={i} className="feature-tag">{f.replace(/_/g, ' ')}</span>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="module-price">
+                        +${module.monthly_price}<span>/mo</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Pricing Summary */}
+            <div className="pricing-summary">
+              <div className="summary-row">
+                <span>Core CRM (base)</span>
+                <span>${calculateModuleTotal().basePrice}/mo</span>
+              </div>
+              {selectedModules.length > 0 && (
+                <div className="summary-row">
+                  <span>Premium Modules ({selectedModules.length})</span>
+                  <span>+${calculateModuleTotal().modulePrice}/mo</span>
+                </div>
+              )}
+              <div className="summary-row total">
+                <span>Total</span>
+                <span>${calculateModuleTotal().total}/month</span>
+              </div>
+            </div>
+
+            <div className="button-row">
+              <button type="button" className="btn-secondary" onClick={handleGoBack}>
+                Back
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={handleStep5Submit}
+              >
+                Continue to Payment
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 6: Payment */}
+        {currentStep === 5 && (
           <Elements stripe={stripePromise}>
             <PaymentStep
               invitation={invitation}
               teamInvites={teamInvites}
+              selectedModules={selectedModules}
+              availableModules={availableModules}
               billingAddress={billingAddress}
               setBillingAddress={setBillingAddress}
               promoCode={promoCode}
@@ -739,15 +899,15 @@ function AdminOnboarding() {
               onComplete={(data) => {
                 setPaymentComplete(true);
                 setCompletionData(data);
-                setCurrentStep(5);
+                setCurrentStep(6);
               }}
               onError={setError}
             />
           </Elements>
         )}
 
-        {/* Step 6: Complete */}
-        {currentStep === 5 && (
+        {/* Step 7: Complete */}
+        {currentStep === 6 && (
           <div className="step-panel complete-step">
             <div className="success-animation">
               <div className="checkmark">✓</div>
@@ -813,6 +973,8 @@ function AdminOnboarding() {
 function PaymentStep({
   invitation,
   teamInvites,
+  selectedModules = [],
+  availableModules = [],
   billingAddress,
   setBillingAddress,
   promoCode,
@@ -826,15 +988,13 @@ function PaymentStep({
   const [processing, setProcessing] = useState(false);
   const [cardComplete, setCardComplete] = useState(false);
 
-  // Calculate pricing
-  const planPrices = {
-    starter: { monthly: 99, annually: 990 },
-    professional: { monthly: 299, annually: 2990 },
-    enterprise: { monthly: 499, annually: 4990 }
-  };
-
-  const planKey = (invitation?.plan || 'professional').toLowerCase();
-  const price = planPrices[planKey]?.monthly || 299;
+  // Calculate pricing based on base + selected modules
+  const basePrice = 99; // Core CRM base price
+  const modulesPrice = selectedModules.reduce((total, key) => {
+    const mod = availableModules.find(m => m.module_key === key);
+    return total + (mod?.monthly_price || 0);
+  }, 0);
+  const totalPrice = basePrice + modulesPrice;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -870,11 +1030,12 @@ function PaymentStep({
         return;
       }
 
-      // Create subscription
+      // Create subscription with selected modules
       const result = await createAdminSubscription({
         payment_method_id: paymentMethod.id,
         billing_address: billingAddress,
-        promo_code: promoCode || null
+        promo_code: promoCode || null,
+        selected_modules: selectedModules
       });
 
       // Complete onboarding
@@ -895,7 +1056,8 @@ function PaymentStep({
       await createAdminSubscription({
         payment_method_id: 'demo_mode',
         billing_address: {},
-        promo_code: null
+        promo_code: null,
+        selected_modules: selectedModules
       });
       await completeAdminOnboarding();
       onComplete({ demo: true });
@@ -996,7 +1158,7 @@ function PaymentStep({
                 className="btn-primary btn-pay"
                 disabled={processing || !stripe || !cardComplete}
               >
-                {processing ? 'Processing...' : `Pay $${price}/month`}
+                {processing ? 'Processing...' : `Pay $${totalPrice}/month`}
               </button>
             </div>
           </form>
@@ -1020,9 +1182,23 @@ function PaymentStep({
         <div className="order-summary">
           <h3>Order Summary</h3>
           <div className="summary-line">
-            <span>{invitation?.plan || 'Professional'} Plan</span>
-            <span>${price}/mo</span>
+            <span>Core CRM (Base)</span>
+            <span>${basePrice}/mo</span>
           </div>
+          {selectedModules.length > 0 && (
+            <>
+              <div className="summary-divider">Premium Modules</div>
+              {selectedModules.map(key => {
+                const mod = availableModules.find(m => m.module_key === key);
+                return mod ? (
+                  <div key={key} className="summary-line module-line">
+                    <span>{mod.module_name}</span>
+                    <span>+${mod.monthly_price}/mo</span>
+                  </div>
+                ) : null;
+              })}
+            </>
+          )}
           <div className="summary-line">
             <span>Seats</span>
             <span>{invitation?.seats || 10}</span>
@@ -1035,7 +1211,7 @@ function PaymentStep({
           )}
           <div className="summary-total">
             <span>Total</span>
-            <span>${price}/month</span>
+            <span>${totalPrice}/month</span>
           </div>
           <div className="secure-badge">
             <span>🔒 Secure checkout</span>

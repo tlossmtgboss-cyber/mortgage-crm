@@ -5,6 +5,7 @@ import { Capacitor } from '@capacitor/core';
 import { isAuthenticatedSync as isAuthenticated } from './utils/auth';
 import { ImpersonationProvider } from './contexts/ImpersonationContext';
 import { PermissionProvider } from './contexts/PermissionContext';
+import { ModuleProvider } from './contexts/ModuleContext';
 import { getUserEffectiveRole, getDefaultRouteForRole } from './config/roleConfig';
 import Navigation from './components/Navigation';
 import AIAssistant from './components/AIAssistant';
@@ -314,6 +315,7 @@ function App() {
       <ErrorBoundary>
         <ImpersonationProvider>
         <PermissionProvider>
+        <ModuleProvider>
           <Router>
             <GlobalLayoutFix />
             <EmailDropZone>
@@ -2832,6 +2834,7 @@ function App() {
         </div>
             </EmailDropZone>
       </Router>
+        </ModuleProvider>
         </PermissionProvider>
         </ImpersonationProvider>
       </ErrorBoundary>

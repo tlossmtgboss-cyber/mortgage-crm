@@ -16,89 +16,126 @@ export const NAVIGATION_ITEMS = {
   dashboard: {
     path: '/dashboard',
     label: 'Dashboard',
-    icon: null
+    icon: null,
+    module: 'base'  // Base package - always available
   },
   leads: {
     path: '/leads',
     label: 'Leads',
-    badgeKey: 'leads'
+    badgeKey: 'leads',
+    module: 'base'
   },
   activeLoans: {
     path: '/loans',
     label: 'Active Loans',
-    badgeKey: 'loans'
+    badgeKey: 'loans',
+    module: 'base'
   },
   portfolio: {
     path: '/portfolio',
-    label: 'MUM Clients'  // Mortgages Under Management - for Loan Officers
+    label: 'MUM Clients',  // Mortgages Under Management - for Loan Officers
+    module: 'base'
   },
   closedClients: {
     path: '/portfolio',
-    label: 'MUM Clients'  // Mortgages Under Management - same view for PA
+    label: 'MUM Clients',  // Mortgages Under Management - same view for PA
+    module: 'base'
   },
   closedLoans: {
     path: '/portfolio',
-    label: 'MUM Clients'  // Mortgages Under Management - same view for ops roles
+    label: 'MUM Clients',  // Mortgages Under Management - same view for ops roles
+    module: 'base'
   },
   tasks: {
     path: '/tasks',
     label: 'Tasks',
     badgeKey: 'urgentTasks',
-    badgeClass: 'urgent'
+    badgeClass: 'urgent',
+    module: 'base'
   },
   reconciliation: {
     path: '/reconciliation',
     label: 'Reconciliation',
-    badgeKey: 'reconciliation'
+    badgeKey: 'reconciliation',
+    module: 'base'
   },
   smartDocs: {
     path: '/smart-docs',
     label: 'Smart Docs',
-    matchPaths: ['/smart-docs/', '/smart-docs']
+    matchPaths: ['/smart-docs/', '/smart-docs'],
+    module: 'base'
   },
   marketing: {
     path: '/marketing',
     label: 'Marketing',
-    matchPaths: ['/marketing']
+    matchPaths: ['/marketing'],
+    module: 'base'
   },
   calendar: {
     path: '/calendar',
-    label: 'Calendar'
+    label: 'Calendar',
+    module: 'base'
   },
   scorecard: {
     path: '/scorecard',
-    label: 'Scorecard'
+    label: 'Scorecard',
+    module: 'base'
   },
   partners: {
     path: '/referral-partners',
     label: 'Partners',
-    badgeKey: 'partners'
+    badgeKey: 'partners',
+    module: 'partner_portals'  // Premium: Partner Portals module
   },
   aiUnderwriter: {
     path: '/ai-underwriter',
-    label: 'AI Underwriter'
+    label: 'AI Underwriter',
+    module: 'ai_assistant'  // Premium: AI Assistant module
   },
   market: {
     path: '/market',
-    label: 'Market'
+    label: 'Market',
+    module: 'advanced_analytics'  // Premium: Advanced Analytics module
   },
   profitability: {
     path: '/profitability',
-    label: 'Profitability'
+    label: 'Profitability',
+    module: 'advanced_analytics'  // Premium: Advanced Analytics module
   },
   capacity: {
     path: '/master-manager',
-    label: 'Capacity'
+    label: 'Capacity',
+    module: 'recruiting_suite'  // Premium: Recruiting Suite module
   },
   recruiting: {
     path: '/master-manager/recruiting',
     label: 'Recruiting',
-    matchPaths: ['/master-manager/recruiting', '/master-manager']
+    matchPaths: ['/master-manager/recruiting', '/master-manager'],
+    module: 'recruiting_suite'  // Premium: Recruiting Suite module
   },
   partnerRecruiting: {
     path: '/partner-recruiting',
     label: 'Partner Recruiting',
-    matchPaths: ['/partner-recruiting/']
+    matchPaths: ['/partner-recruiting/'],
+    module: 'recruiting_suite'  // Premium: Recruiting Suite module
+  },
+  conversationIntelligence: {
+    path: '/conversation-intelligence',
+    label: 'Call Intelligence',
+    matchPaths: ['/conversation-intelligence'],
+    module: 'conversation_intelligence'  // Premium: Conversation Intelligence module
+  },
+  videoOs: {
+    path: '/video-os',
+    label: 'Video OS',
+    matchPaths: ['/video-os'],
+    module: 'video_os'  // Premium: Video OS module
+  },
+  integrations: {
+    path: '/integrations',
+    label: 'Integrations',
+    matchPaths: ['/integrations'],
+    module: 'integrations'  // Premium: Integrations module
   }
 };
 
