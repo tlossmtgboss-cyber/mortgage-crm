@@ -1112,6 +1112,9 @@ async def repair_workflow_tables(
             ("organization_id", "INTEGER"),  # For multi-tenancy
             ("is_system_template", "BOOLEAN DEFAULT FALSE"),  # True for system-wide templates
             ("is_active", "BOOLEAN DEFAULT TRUE"),
+            ("entity_type", "VARCHAR(50) DEFAULT 'loan'"),  # 'lead' or 'loan'
+            ("trigger_type", "VARCHAR(50)"),  # 'status_change', 'salesforce_date', etc.
+            ("trigger_field", "VARCHAR(100)"),  # Field that triggers workflow (e.g. 'closing_date')
         ],
         "workflow_instances": [
             ("organization_id", "INTEGER NOT NULL DEFAULT 1"),
