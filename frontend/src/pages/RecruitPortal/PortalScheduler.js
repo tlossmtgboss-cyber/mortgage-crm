@@ -13,17 +13,21 @@ const PortalScheduler = ({ slug, recruiterName, compact = false }) => {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState(null);
 
-  // Generate next 14 days as available dates
+  // Generate next 5 weekdays (one week)
   const getAvailableDates = () => {
     const dates = [];
     const today = new Date();
-    for (let i = 1; i <= 14; i++) {
+    let daysAdded = 0;
+    let i = 1;
+    while (daysAdded < 5) {
       const date = new Date(today);
       date.setDate(today.getDate() + i);
       // Skip weekends
       if (date.getDay() !== 0 && date.getDay() !== 6) {
         dates.push(date.toISOString().split('T')[0]);
+        daysAdded++;
       }
+      i++;
     }
     return dates;
   };
