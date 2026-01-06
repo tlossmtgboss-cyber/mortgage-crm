@@ -2019,6 +2019,13 @@ async def get_candidate_full_profile(
         FROM mm_candidate_activities WHERE candidate_id = :id ORDER BY created_at DESC LIMIT 20
     """), {"id": candidate_id}).fetchall()
 
+    # Get portal workspace info
+    portal_workspace = db.execute(text("""
+        SELECT id, slug, is_active, created_at
+        FROM recruit_portal_workspaces
+        WHERE candidate_id = :id AND is_active = true
+    """), {"id": candidate_id}).fetchone()
+
     return {
         "id": result.id,
         "name": f"{result.first_name} {result.last_name}",
@@ -2131,6 +2138,14 @@ async def get_candidate_full_profile(
 
         "created_at": result.created_at.isoformat() if result.created_at else None,
         "updated_at": result.updated_at.isoformat() if result.updated_at else None,
+
+        # Portal workspace info
+        "portal": {
+            "workspace_id": portal_workspace.id if portal_workspace else None,
+            "slug": portal_workspace.slug if portal_workspace else None,
+            "is_active": portal_workspace.is_active if portal_workspace else False,
+            "has_portal": portal_workspace is not None,
+        } if True else None,
     }
 
 
@@ -2201,6 +2216,40 @@ async def update_candidate_production(
         "company": current_company,
         "title": current_title,
         "states": json.dumps(license_states) if license_states else None,
+    }).fetchone()
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    db.commit()
+    return {"id": candidate_id, "status": "updated"}
+
+
+@router.put("/candidates/{candidate_id}/basic-info")
+async def update_candidate_basic_info(
+    candidate_id: int,
+    first_name: Optional[str] = None,
+    last_name: Optional[str] = None,
+    email: Optional[str] = None,
+    phone: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Update candidate basic information (name, email, phone)."""
+    result = db.execute(text("""
+        UPDATE mm_candidates
+        SET first_name = COALESCE(:first_name, first_name),
+            last_name = COALESCE(:last_name, last_name),
+            email = COALESCE(:email, email),
+            phone = COALESCE(:phone, phone),
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = :id
+        RETURNING id
+    """), {
+        "id": candidate_id,
+        "first_name": first_name,
+        "last_name": last_name,
+        "email": email,
+        "phone": phone,
     }).fetchone()
 
     if not result:

@@ -477,12 +477,54 @@ export const updateCandidateProduction = async (candidateId, productionData) => 
   return response.json();
 };
 
+export const updateCandidateBasicInfo = async (candidateId, basicData) => {
+  const params = new URLSearchParams();
+  if (basicData.first_name) params.append('first_name', basicData.first_name);
+  if (basicData.last_name) params.append('last_name', basicData.last_name);
+  if (basicData.email) params.append('email', basicData.email);
+  if (basicData.phone) params.append('phone', basicData.phone);
+
+  const response = await fetch(`${API_URL}/api/v1/recruiting/candidates/${candidateId}/basic-info?${params}`, {
+    method: 'PUT',
+    headers: getAuthHeaders()
+  });
+  if (!response.ok) throw new Error('Failed to update basic info');
+  return response.json();
+};
+
 export const runSocialProductionMigration = async () => {
   const response = await fetch(`${API_URL}/api/v1/recruiting/admin/add-social-production-fields?admin_key=perennia-admin-2024`, {
     method: 'POST',
     headers: getAuthHeaders()
   });
   if (!response.ok) throw new Error('Failed to run migration');
+  return response.json();
+};
+
+// =============================================================================
+// RECRUIT PORTAL ENDPOINTS
+// =============================================================================
+
+export const createCandidatePortalWorkspace = async (candidateId, slug = null) => {
+  const params = new URLSearchParams();
+  params.append('candidate_id', candidateId);
+  params.append('admin_key', 'perennia-admin-2024');
+  if (slug) params.append('slug', slug);
+
+  const response = await fetch(`${API_URL}/api/v1/recruit-portal/admin/workspaces?${params}`, {
+    method: 'POST',
+    headers: getAuthHeaders()
+  });
+  if (!response.ok) throw new Error('Failed to create portal workspace');
+  return response.json();
+};
+
+export const getCandidatePortalWorkspace = async (candidateId) => {
+  const response = await fetch(`${API_URL}/api/v1/recruit-portal/admin/workspaces/by-candidate/${candidateId}?admin_key=perennia-admin-2024`, {
+    headers: getAuthHeaders()
+  });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error('Failed to fetch portal workspace');
   return response.json();
 };
 
@@ -533,5 +575,8 @@ export default {
   getCandidateFullProfile,
   updateCandidateSocialMedia,
   updateCandidateProduction,
-  runSocialProductionMigration
+  runSocialProductionMigration,
+  // Recruit Portal
+  createCandidatePortalWorkspace,
+  getCandidatePortalWorkspace
 };

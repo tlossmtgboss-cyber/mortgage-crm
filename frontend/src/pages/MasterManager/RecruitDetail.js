@@ -4,8 +4,10 @@ import {
   getCandidateFullProfile,
   updateCandidateStatus,
   updateCandidateProduction,
+  updateCandidateBasicInfo,
   addCandidateNote,
-  scheduleInterview
+  scheduleInterview,
+  createCandidatePortalWorkspace
 } from '../../services/masterManagerApi';
 import {
   getCandidateAssessment,
@@ -95,7 +97,11 @@ const RecruitDetail = () => {
   const [showVideoRecorder, setShowVideoRecorder] = useState(false);
 
   // Edit form states
-  const [productionForm, setProductionForm] = useState({
+  const [recruitForm, setRecruitForm] = useState({
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
     annual_volume: '',
     annual_units: '',
     nmls_id: '',
@@ -110,7 +116,11 @@ const RecruitDetail = () => {
       setCandidate(data);
 
       // Initialize form states
-      setProductionForm({
+      setRecruitForm({
+        first_name: data.first_name || '',
+        last_name: data.last_name || '',
+        email: data.email || '',
+        phone: data.phone || '',
         annual_volume: data.production?.annual_volume || '',
         annual_units: data.production?.annual_units || '',
         nmls_id: data.production?.nmls_id || '',
@@ -405,9 +415,23 @@ const RecruitDetail = () => {
     }
   };
 
-  const handleSaveProduction = async () => {
+  const handleSaveRecruit = async () => {
     try {
-      await updateCandidateProduction(candidateId, productionForm);
+      // Update basic info
+      await updateCandidateBasicInfo(candidateId, {
+        first_name: recruitForm.first_name,
+        last_name: recruitForm.last_name,
+        email: recruitForm.email,
+        phone: recruitForm.phone
+      });
+      // Update production data
+      await updateCandidateProduction(candidateId, {
+        annual_volume: recruitForm.annual_volume,
+        annual_units: recruitForm.annual_units,
+        nmls_id: recruitForm.nmls_id,
+        current_company: recruitForm.current_company,
+        current_title: recruitForm.current_title
+      });
       await loadCandidate();
       setShowEditProduction(false);
     } catch (err) {
@@ -526,7 +550,7 @@ const RecruitDetail = () => {
         </div>
         <div className="mm-header-actions">
           <button className="mm-btn mm-btn-secondary" onClick={() => setShowEditProduction(true)}>
-            Edit Production
+            Edit Recruit
           </button>
           <select
             value={candidate.status}
@@ -1053,10 +1077,29 @@ const RecruitDetail = () => {
               </button>
               <button
                 className="recruit-quick-action-btn"
-                onClick={() => {
-                  const slug = candidate.purl_slug ||
-                    `${candidate.first_name}-${candidate.last_name}`.toLowerCase().replace(/\s+/g, '-');
-                  window.open(`/join/${slug}`, '_blank');
+                onClick={async () => {
+                  // Use the portal slug from the API if available
+                  let portalSlug = candidate.portal?.slug;
+
+                  if (!portalSlug) {
+                    // No portal exists - create one automatically
+                    try {
+                      const suggestedSlug = `${candidate.first_name}-${candidate.last_name}`.toLowerCase().replace(/\s+/g, '-');
+                      const workspace = await createCandidatePortalWorkspace(candidate.id, suggestedSlug);
+                      portalSlug = workspace.slug;
+                      // Refresh candidate data to get the new portal info
+                      const refreshed = await getCandidateFullProfile(candidate.id);
+                      setCandidate(refreshed);
+                    } catch (err) {
+                      console.error('Failed to create portal workspace:', err);
+                      alert('Failed to create portal. Please try again.');
+                      return;
+                    }
+                  }
+
+                  if (portalSlug) {
+                    window.open(`/join/${portalSlug}`, '_blank');
+                  }
                 }}
               >
                 View Portal
@@ -1610,70 +1653,125 @@ const RecruitDetail = () => {
         </div>
       )}
 
-      {/* Edit Production Modal */}
+      {/* Edit Recruit Modal */}
       {showEditProduction && (
         <div className="mm-modal-overlay">
-          <div className="mm-modal">
-            <h3>Edit Production Data</h3>
-            <div className="mm-form-row">
-              <div className="mm-form-group">
-                <label>Annual Volume ($)</label>
-                <input
-                  type="number"
-                  value={productionForm.annual_volume}
-                  onChange={(e) => setProductionForm({ ...productionForm, annual_volume: e.target.value })}
-                  className="mm-input"
-                  placeholder="50000000"
-                />
+          <div className="mm-modal" style={{ maxWidth: '600px' }}>
+            <h3>Edit Recruit</h3>
+
+            {/* Basic Information Section */}
+            <div className="mm-form-section">
+              <h4 style={{ marginBottom: '12px', color: '#374151', fontSize: '14px', fontWeight: 600 }}>Basic Information</h4>
+              <div className="mm-form-row">
+                <div className="mm-form-group">
+                  <label>First Name</label>
+                  <input
+                    type="text"
+                    value={recruitForm.first_name}
+                    onChange={(e) => setRecruitForm({ ...recruitForm, first_name: e.target.value })}
+                    className="mm-input"
+                    placeholder="John"
+                  />
+                </div>
+                <div className="mm-form-group">
+                  <label>Last Name</label>
+                  <input
+                    type="text"
+                    value={recruitForm.last_name}
+                    onChange={(e) => setRecruitForm({ ...recruitForm, last_name: e.target.value })}
+                    className="mm-input"
+                    placeholder="Doe"
+                  />
+                </div>
               </div>
-              <div className="mm-form-group">
-                <label>Annual Units</label>
-                <input
-                  type="number"
-                  value={productionForm.annual_units}
-                  onChange={(e) => setProductionForm({ ...productionForm, annual_units: e.target.value })}
-                  className="mm-input"
-                  placeholder="100"
-                />
+              <div className="mm-form-row">
+                <div className="mm-form-group">
+                  <label>Email</label>
+                  <input
+                    type="email"
+                    value={recruitForm.email}
+                    onChange={(e) => setRecruitForm({ ...recruitForm, email: e.target.value })}
+                    className="mm-input"
+                    placeholder="john@example.com"
+                  />
+                </div>
+                <div className="mm-form-group">
+                  <label>Phone</label>
+                  <input
+                    type="tel"
+                    value={recruitForm.phone}
+                    onChange={(e) => setRecruitForm({ ...recruitForm, phone: e.target.value })}
+                    className="mm-input"
+                    placeholder="(555) 123-4567"
+                  />
+                </div>
               </div>
             </div>
-            <div className="mm-form-group">
-              <label>NMLS ID</label>
-              <input
-                type="text"
-                value={productionForm.nmls_id}
-                onChange={(e) => setProductionForm({ ...productionForm, nmls_id: e.target.value })}
-                className="mm-input"
-                placeholder="12345678"
-              />
-            </div>
-            <div className="mm-form-row">
+
+            {/* Production Information Section */}
+            <div className="mm-form-section" style={{ marginTop: '20px' }}>
+              <h4 style={{ marginBottom: '12px', color: '#374151', fontSize: '14px', fontWeight: 600 }}>Production Information</h4>
+              <div className="mm-form-row">
+                <div className="mm-form-group">
+                  <label>Annual Volume ($)</label>
+                  <input
+                    type="number"
+                    value={recruitForm.annual_volume}
+                    onChange={(e) => setRecruitForm({ ...recruitForm, annual_volume: e.target.value })}
+                    className="mm-input"
+                    placeholder="50000000"
+                  />
+                </div>
+                <div className="mm-form-group">
+                  <label>Annual Units</label>
+                  <input
+                    type="number"
+                    value={recruitForm.annual_units}
+                    onChange={(e) => setRecruitForm({ ...recruitForm, annual_units: e.target.value })}
+                    className="mm-input"
+                    placeholder="100"
+                  />
+                </div>
+              </div>
               <div className="mm-form-group">
-                <label>Current Company</label>
+                <label>NMLS ID</label>
                 <input
                   type="text"
-                  value={productionForm.current_company}
-                  onChange={(e) => setProductionForm({ ...productionForm, current_company: e.target.value })}
+                  value={recruitForm.nmls_id}
+                  onChange={(e) => setRecruitForm({ ...recruitForm, nmls_id: e.target.value })}
                   className="mm-input"
-                  placeholder="Premier Mortgage"
+                  placeholder="12345678"
                 />
               </div>
-              <div className="mm-form-group">
-                <label>Current Title</label>
-                <input
-                  type="text"
-                  value={productionForm.current_title}
-                  onChange={(e) => setProductionForm({ ...productionForm, current_title: e.target.value })}
-                  className="mm-input"
-                  placeholder="Senior Loan Officer"
-                />
+              <div className="mm-form-row">
+                <div className="mm-form-group">
+                  <label>Current Company</label>
+                  <input
+                    type="text"
+                    value={recruitForm.current_company}
+                    onChange={(e) => setRecruitForm({ ...recruitForm, current_company: e.target.value })}
+                    className="mm-input"
+                    placeholder="Premier Mortgage"
+                  />
+                </div>
+                <div className="mm-form-group">
+                  <label>Current Title</label>
+                  <input
+                    type="text"
+                    value={recruitForm.current_title}
+                    onChange={(e) => setRecruitForm({ ...recruitForm, current_title: e.target.value })}
+                    className="mm-input"
+                    placeholder="Senior Loan Officer"
+                  />
+                </div>
               </div>
             </div>
+
             <div className="mm-modal-actions">
               <button className="mm-btn mm-btn-secondary" onClick={() => setShowEditProduction(false)}>
                 Cancel
               </button>
-              <button className="mm-btn mm-btn-primary" onClick={handleSaveProduction}>
+              <button className="mm-btn mm-btn-primary" onClick={handleSaveRecruit}>
                 Save
               </button>
             </div>
