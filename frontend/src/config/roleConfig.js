@@ -158,6 +158,19 @@ export const ROLE_NAVIGATION = {
     'aiUnderwriter'
   ],
 
+  // Concierge - Same permissions as Production Assistant
+  concierge: [
+    'dashboard',
+    'leads',
+    'activeLoans',
+    'closedClients',  // Portfolio with "Closed Clients" label
+    'tasks',
+    'reconciliation',
+    'smartDocs',
+    'calendar',
+    'aiUnderwriter'
+  ],
+
   // Processor - Operations role, NO dashboard
   processor: [
     'activeLoans',
@@ -256,6 +269,14 @@ export const ROLE_DASHBOARD_CONTAINERS = {
     'pipeline'            // Live Loan Pipeline (shows active loans)
   ],
 
+  // Concierge Dashboard - Same as Production Assistant
+  concierge: [
+    'efficiency',          // Pipeline Efficiency
+    'ai-alerts',           // AI Alerts (lead status alerts)
+    'ai-tasks',           // AI Prioritized Tasks
+    'pipeline'            // Live Loan Pipeline (shows active loans)
+  ],
+
   // Processor Dashboard - Operations view, NO dashboard access but if they land here
   processor: [
     'efficiency',          // Pipeline Efficiency
@@ -305,6 +326,7 @@ export const ROLE_DEFAULT_ROUTES = {
   admin: '/admin',
   loan_officer: '/dashboard',
   production_assistant: '/dashboard',
+  concierge: '/dashboard',  // Same as Production Assistant
   processor: '/loans',      // No dashboard, land on Active Loans
   underwriter: '/loans',
   closer: '/loans',
@@ -341,6 +363,11 @@ export const getUserEffectiveRole = (permissionRole, legacyRole) => {
     // Production assistant
     if (normalizedLegacy.includes('production_assistant') || normalizedLegacy === 'production_asst') {
       return 'production_assistant';
+    }
+
+    // Concierge - same permissions as production_assistant
+    if (normalizedLegacy === 'concierge') {
+      return 'concierge';
     }
 
     // Loan officer
