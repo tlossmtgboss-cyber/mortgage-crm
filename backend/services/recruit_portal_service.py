@@ -135,14 +135,14 @@ class RecruitPortalService:
             with SessionLocal() as conn:
                 recruiter_result = conn.execute(
                     text("""
-                        SELECT name, photo_url, phone, email
+                        SELECT full_name, photo_url, phone, email
                         FROM users WHERE id = :user_id
                     """),
                     {"user_id": row.referrer_user_id}
                 )
                 recruiter = recruiter_result.fetchone()
                 if recruiter:
-                    recruiter_name = recruiter.name
+                    recruiter_name = recruiter.full_name
                     recruiter_photo = recruiter.photo_url
                     recruiter_phone = recruiter.phone
                     recruiter_email = recruiter.email
