@@ -2726,3 +2726,185 @@ async def verify_unified_tasks_for_user(
     except Exception as e:
         import traceback
         return {"error": str(e), "traceback": traceback.format_exc()}
+
+
+# =============================================================================
+# ADMIN - SALESFORCE SLA MIGRATION
+# =============================================================================
+
+@router.post("/admin/seed-salesforce-sla-workflows")
+async def seed_salesforce_sla_workflows(
+    admin_key: str = Query(..., description="Admin API key for authentication"),
+    db: Session = Depends(get_db)
+):
+    """
+    Seed Salesforce SLA workflow configurations.
+
+    Creates workflow configurations for:
+    - Closing countdown
+    - Rate lock monitoring
+    - Lock expiration alerts
+    - Disclosure follow-up
+
+    Requires admin_key for authentication.
+    """
+    import os
+
+    # Verify admin key
+    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    if admin_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        from datetime import timezone
+        now = datetime.now(timezone.utc)
+
+        # Salesforce-triggered workflow configurations
+        SALESFORCE_WORKFLOWS = [
+            {
+                "workflow_key": "closing",
+                "workflow_name": "Closing Countdown",
+                "description": "Tasks triggered when closing date is set from Salesforce.",
+                "entity_type": "loan",
+                "trigger_type": "salesforce_date",
+                "trigger_field": "closing_date",
+                "days": [
+                    {"day_value": -14, "day_label": "14 Days to Closing", "phone_enabled": True, "email_enabled": True, "text_enabled": False, "task_description": "Review file for closing readiness."},
+                    {"day_value": -7, "day_label": "7 Days to Closing", "phone_enabled": True, "email_enabled": True, "text_enabled": True, "task_description": "Confirm borrower has scheduled closing."},
+                    {"day_value": -3, "day_label": "3 Days to Closing", "phone_enabled": True, "email_enabled": True, "text_enabled": True, "task_description": "Final closing confirmation."},
+                    {"day_value": -1, "day_label": "1 Day to Closing", "phone_enabled": True, "email_enabled": False, "text_enabled": True, "task_description": "Day before closing confirmation."},
+                    {"day_value": 0, "day_label": "Closing Day", "phone_enabled": True, "email_enabled": True, "text_enabled": False, "task_description": "Congratulate borrower."}
+                ]
+            },
+            {
+                "workflow_key": "rate_lock",
+                "workflow_name": "Rate Lock Monitoring",
+                "description": "Tasks triggered when rate is locked.",
+                "entity_type": "loan",
+                "trigger_type": "salesforce_date",
+                "trigger_field": "lock_date",
+                "days": [
+                    {"day_value": 0, "day_label": "Rate Lock Confirmation", "phone_enabled": False, "email_enabled": True, "text_enabled": False, "task_description": "Send rate lock confirmation."},
+                    {"day_value": 1, "day_label": "Rate Lock Follow-up", "phone_enabled": True, "email_enabled": False, "text_enabled": False, "task_description": "Confirm borrower received lock confirmation."}
+                ]
+            },
+            {
+                "workflow_key": "lock_expiration",
+                "workflow_name": "Lock Expiration Countdown",
+                "description": "Urgent countdown tasks before rate lock expires.",
+                "entity_type": "loan",
+                "trigger_type": "salesforce_date",
+                "trigger_field": "lock_expiration_date",
+                "days": [
+                    {"day_value": -7, "day_label": "7 Days to Lock Expiration", "phone_enabled": True, "email_enabled": True, "text_enabled": False, "task_description": "ALERT: Lock expires in 7 days."},
+                    {"day_value": -3, "day_label": "3 Days to Lock Expiration", "phone_enabled": True, "email_enabled": True, "text_enabled": True, "task_description": "URGENT: Lock expires in 3 days."},
+                    {"day_value": -1, "day_label": "1 Day to Lock Expiration", "phone_enabled": True, "email_enabled": True, "text_enabled": True, "task_description": "CRITICAL: Lock expires tomorrow."}
+                ]
+            },
+            {
+                "workflow_key": "disclosure_sent",
+                "workflow_name": "Post-Disclosure Follow-up",
+                "description": "Follow-up sequence after initial disclosure is sent.",
+                "entity_type": "loan",
+                "trigger_type": "salesforce_date",
+                "trigger_field": "disclosure_sent_date",
+                "days": [
+                    {"day_value": 1, "day_label": "Disclosure Follow-up", "phone_enabled": True, "email_enabled": True, "text_enabled": False, "task_description": "Follow up on disclosure receipt."},
+                    {"day_value": 3, "day_label": "Disclosure Reminder", "phone_enabled": True, "email_enabled": True, "text_enabled": True, "task_description": "Reminder to sign disclosure."}
+                ]
+            }
+        ]
+
+        results = {"created": [], "skipped": [], "errors": []}
+
+        from sqlalchemy import text
+
+        for workflow in SALESFORCE_WORKFLOWS:
+            try:
+                # Check if workflow already exists
+                existing = db.execute(text("""
+                    SELECT id FROM workflow_configurations
+                    WHERE workflow_key = :key
+                """), {"key": workflow["workflow_key"]}).fetchone()
+
+                if existing:
+                    results["skipped"].append(workflow["workflow_key"])
+                    continue
+
+                # Create workflow configuration
+                result = db.execute(text("""
+                    INSERT INTO workflow_configurations (
+                        workflow_key, workflow_name, description,
+                        entity_type, trigger_type, trigger_field,
+                        is_active, is_system_template,
+                        created_at, updated_at
+                    ) VALUES (
+                        :workflow_key, :workflow_name, :description,
+                        :entity_type, :trigger_type, :trigger_field,
+                        true, true,
+                        :now, :now
+                    )
+                    RETURNING id
+                """), {
+                    "workflow_key": workflow["workflow_key"],
+                    "workflow_name": workflow["workflow_name"],
+                    "description": workflow["description"],
+                    "entity_type": workflow.get("entity_type", "loan"),
+                    "trigger_type": workflow.get("trigger_type", "salesforce_date"),
+                    "trigger_field": workflow.get("trigger_field"),
+                    "now": now
+                })
+                workflow_id = result.fetchone()[0]
+
+                # Create day configurations
+                for day_config in workflow.get("days", []):
+                    db.execute(text("""
+                        INSERT INTO workflow_day_configs (
+                            workflow_id, day_value, day_label,
+                            phone_enabled, email_enabled, text_enabled,
+                            task_description, is_active,
+                            created_at, updated_at
+                        ) VALUES (
+                            :workflow_id, :day_value, :day_label,
+                            :phone_enabled, :email_enabled, :text_enabled,
+                            :task_description, true,
+                            :now, :now
+                        )
+                    """), {
+                        "workflow_id": workflow_id,
+                        "day_value": day_config["day_value"],
+                        "day_label": day_config["day_label"],
+                        "phone_enabled": day_config.get("phone_enabled", False),
+                        "email_enabled": day_config.get("email_enabled", True),
+                        "text_enabled": day_config.get("text_enabled", False),
+                        "task_description": day_config.get("task_description", ""),
+                        "now": now
+                    })
+
+                results["created"].append({
+                    "workflow_key": workflow["workflow_key"],
+                    "workflow_id": workflow_id,
+                    "days_created": len(workflow.get("days", []))
+                })
+
+            except Exception as e:
+                results["errors"].append({
+                    "workflow_key": workflow["workflow_key"],
+                    "error": str(e)
+                })
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": f"Created {len(results['created'])} workflows, skipped {len(results['skipped'])}",
+            "results": results
+        }
+
+    except Exception as e:
+        db.rollback()
+        import traceback
+        raise HTTPException(
+            status_code=500,
+            detail=f"Migration failed: {str(e)}\n{traceback.format_exc()}"
+        )

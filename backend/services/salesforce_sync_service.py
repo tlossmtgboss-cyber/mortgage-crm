@@ -16,6 +16,19 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
+# Import SLA trigger service (lazy loaded to avoid circular imports)
+_sla_trigger_service = None
+
+def get_sla_trigger_service(db: Session):
+    """Get SLA trigger service instance."""
+    global _sla_trigger_service
+    try:
+        from services.salesforce_sla_trigger_service import SalesforceSLATriggerService
+        return SalesforceSLATriggerService(db)
+    except ImportError:
+        logger.warning("SLA trigger service not available")
+        return None
+
 
 class SyncStatus(str, Enum):
     SUCCESS = "success"
@@ -315,12 +328,25 @@ class SalesforceSyncService:
             return None, "error"
 
         try:
-            # Check if loan exists
+            # Check if loan exists and get current data for comparison
             existing = self.db.execute(text("""
-                SELECT id FROM loans WHERE salesforce_id = :sf_id
+                SELECT id, closing_date, lock_date, lock_expiration_date,
+                       application_date, contract_received_date, status
+                FROM loans WHERE salesforce_id = :sf_id
             """), {"sf_id": salesforce_id}).fetchone()
 
+            old_data = {}
             if existing:
+                # Capture old data for SLA trigger comparison
+                old_data = {
+                    "closing_date": existing[1],
+                    "lock_date": existing[2],
+                    "lock_expiration_date": existing[3],
+                    "application_date": existing[4],
+                    "contract_received_date": existing[5],
+                    "status": existing[6]
+                }
+
                 # Update existing loan
                 loan_id = existing[0]
                 update_fields = []
@@ -340,6 +366,10 @@ class SalesforceSyncService:
                     self.db.commit()
 
                 logger.info(f"Updated loan {loan_id} from Salesforce {salesforce_id}")
+
+                # Trigger SLA workflows based on changed date fields
+                self._trigger_sla_workflows(loan_id, old_data, loan_data)
+
                 return loan_id, "updated"
             else:
                 # Create new loan
@@ -367,12 +397,54 @@ class SalesforceSyncService:
 
                 loan_id = result.fetchone()[0]
                 logger.info(f"Created loan {loan_id} from Salesforce {salesforce_id}")
+
+                # Trigger SLA workflows for new loans
+                self._trigger_sla_workflows(loan_id, {}, loan_data)
+
                 return loan_id, "created"
 
         except Exception as e:
             logger.error(f"Error upserting loan from Salesforce {salesforce_id}: {e}")
             self.db.rollback()
             return None, "error"
+
+    def _trigger_sla_workflows(
+        self,
+        loan_id: int,
+        old_data: Dict[str, Any],
+        new_data: Dict[str, Any]
+    ):
+        """
+        Trigger SLA workflows based on changed date fields from Salesforce sync.
+
+        This is the post-sync hook that connects Salesforce updates to SLA task generation.
+        """
+        try:
+            sla_service = get_sla_trigger_service(self.db)
+            if not sla_service:
+                return
+
+            result = sla_service.process_sync_result(
+                entity_type="loan",
+                entity_id=loan_id,
+                old_data=old_data,
+                new_data=new_data,
+                sync_source="salesforce"
+            )
+
+            if result.get("workflows_triggered"):
+                logger.info(
+                    f"Salesforce sync triggered {len(result['workflows_triggered'])} "
+                    f"SLA workflows for loan {loan_id}"
+                )
+
+            if result.get("errors"):
+                for error in result["errors"]:
+                    logger.warning(f"SLA trigger warning for loan {loan_id}: {error}")
+
+        except Exception as e:
+            # Don't fail the sync if SLA trigger fails
+            logger.error(f"Error triggering SLA workflows for loan {loan_id}: {e}")
 
     def process_webhook(self, payload: Dict[str, Any]) -> SyncResult:
         """
