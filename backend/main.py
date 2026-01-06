@@ -3292,7 +3292,7 @@ class ApplicationDocument(Base):
     original_filename = Column(String, nullable=False)
     file_size = Column(Integer)  # Bytes
     mime_type = Column(String)
-    category = Column(SQLEnum(DocumentCategory), default=DocumentCategory.OTHER)
+    category = Column(SQLEnum(DocumentCategory), default=DocumentCategory.MISC)
     description = Column(String)
 
     # Storage info
@@ -66709,7 +66709,7 @@ async def upload_document(
         original_filename=file.filename,
         file_size=len(contents),
         mime_type=file.content_type,
-        category=DocumentCategory(category) if category in [e.value for e in DocumentCategory] else DocumentCategory.OTHER,
+        category=DocumentCategory(category) if category in [e.value for e in DocumentCategory] else DocumentCategory.MISC,
         description=description,
         storage_key=str(storage_path),
         uploaded_by="borrower",
@@ -67753,3 +67753,4 @@ if __name__ == "__main__":
 
 # Forced rebuild v3
 # force redeploy Sun Dec 21 10:53:37 EST 2025
+
