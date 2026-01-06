@@ -505,6 +505,338 @@
 }
 
 /* =============================================================================
+   PORTAL SCHEDULER COMPONENT
+============================================================================= */
+.scheduler-section {
+  padding: 1.5rem;
+}
+
+.scheduler-section h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--rp-text-primary);
+  margin: 0 0 0.5rem;
+}
+
+.scheduler-section.compact h3 {
+  font-size: 1rem;
+  margin-bottom: 0.25rem;
+}
+
+.scheduler-intro {
+  font-size: 0.9rem;
+  color: var(--rp-text-secondary);
+  margin: 0 0 1.25rem;
+  line-height: 1.5;
+}
+
+.scheduler-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.scheduler-section .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.scheduler-section .form-group > label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--rp-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Appointment Type Buttons */
+.appointment-types {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+}
+
+.type-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.875rem 0.5rem;
+  background: var(--rp-bg-secondary);
+  border: 2px solid var(--rp-border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.type-btn:hover {
+  border-color: var(--rp-primary-light);
+  background: var(--rp-bg-tertiary);
+}
+
+.type-btn.active {
+  border-color: var(--rp-primary);
+  background: var(--rp-primary-light);
+}
+
+.type-icon {
+  font-size: 1.25rem;
+}
+
+.type-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--rp-text-primary);
+  text-align: center;
+  line-height: 1.2;
+}
+
+.type-duration {
+  font-size: 0.7rem;
+  color: var(--rp-text-muted);
+}
+
+.type-btn.active .type-label {
+  color: var(--rp-primary-dark);
+}
+
+/* Date Grid */
+.date-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+  gap: 0.5rem;
+}
+
+.date-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.6rem 0.5rem;
+  background: var(--rp-bg-secondary);
+  border: 2px solid var(--rp-border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.date-btn:hover {
+  border-color: var(--rp-primary-light);
+  background: var(--rp-bg-tertiary);
+}
+
+.date-btn.active {
+  border-color: var(--rp-primary);
+  background: var(--rp-primary-light);
+}
+
+.date-day {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--rp-text-secondary);
+  text-transform: uppercase;
+}
+
+.date-num {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--rp-text-primary);
+}
+
+.date-btn.active .date-day,
+.date-btn.active .date-num {
+  color: var(--rp-primary-dark);
+}
+
+/* Time Grid */
+.time-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 0.5rem;
+}
+
+.time-btn {
+  padding: 0.6rem 0.75rem;
+  background: var(--rp-bg-secondary);
+  border: 2px solid var(--rp-border);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--rp-text-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.time-btn:hover {
+  border-color: var(--rp-primary-light);
+  background: var(--rp-bg-tertiary);
+}
+
+.time-btn.active {
+  border-color: var(--rp-primary);
+  background: var(--rp-primary);
+  color: white;
+}
+
+.loading-slots,
+.no-slots {
+  padding: 1rem;
+  text-align: center;
+  color: var(--rp-text-muted);
+  font-size: 0.9rem;
+  background: var(--rp-bg-secondary);
+  border-radius: 8px;
+}
+
+/* Notes Textarea */
+.scheduler-section textarea {
+  padding: 0.75rem;
+  border: 1px solid var(--rp-border);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 80px;
+}
+
+.scheduler-section textarea:focus {
+  outline: none;
+  border-color: var(--rp-primary);
+  box-shadow: 0 0 0 3px var(--rp-primary-light);
+}
+
+/* Booking Summary */
+.booking-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  background: var(--rp-bg-tertiary);
+  border-radius: 10px;
+}
+
+.summary-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.summary-date {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--rp-text-primary);
+  margin: 0;
+}
+
+.summary-time {
+  font-size: 0.85rem;
+  color: var(--rp-text-secondary);
+  margin: 0;
+}
+
+.book-btn {
+  padding: 0.75rem 1.5rem;
+  background: var(--rp-primary);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.book-btn:hover:not(:disabled) {
+  background: var(--rp-primary-dark);
+}
+
+.book-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Booking Error */
+.booking-error {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #dc2626;
+  font-size: 0.85rem;
+}
+
+/* Booking Success */
+.booking-success {
+  text-align: center;
+  padding: 2rem 1rem;
+}
+
+.success-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.booking-success h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--rp-text-primary);
+  margin: 0 0 0.5rem;
+}
+
+.booking-success > p {
+  font-size: 0.9rem;
+  color: var(--rp-text-secondary);
+  margin: 0 0 1rem;
+}
+
+.booking-details {
+  background: var(--rp-bg-secondary);
+  padding: 1rem;
+  border-radius: 10px;
+  margin-bottom: 1rem;
+}
+
+.booking-date {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--rp-text-primary);
+  margin: 0 0 0.25rem;
+}
+
+.booking-time {
+  font-size: 0.9rem;
+  color: var(--rp-primary);
+  font-weight: 600;
+  margin: 0;
+}
+
+.booking-note {
+  font-size: 0.85rem;
+  color: var(--rp-text-muted);
+  margin: 0 0 1rem;
+}
+
+.book-another-btn {
+  padding: 0.6rem 1.25rem;
+  background: var(--rp-bg-secondary);
+  border: 1px solid var(--rp-border);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--rp-text-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.book-another-btn:hover {
+  background: var(--rp-bg-tertiary);
+}
+
+/* =============================================================================
    RESPONSIVE
 ============================================================================= */
 @media (max-width: 900px) {
@@ -524,9 +856,34 @@
   .tab-cards-grid {
     grid-template-columns: 1fr;
   }
+
+  .appointment-types {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 600px) {
+  .scheduler-section {
+    padding: 1rem;
+  }
+
+  .date-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+
+  .time-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .booking-summary {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .book-btn {
+    width: 100%;
+  }
+
   .portal-hero-section.compact {
     padding: 1.5rem 1rem;
   }
