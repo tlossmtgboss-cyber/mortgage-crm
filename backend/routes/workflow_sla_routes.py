@@ -1081,13 +1081,16 @@ async def run_workflow_migrations(
 
 @router.post("/init/repair-tables")
 async def repair_workflow_tables(
-    current_user: Any = Depends(get_current_user),
+    admin_key: str = None,
     db: Session = Depends(get_db)
 ):
     """
     Repair workflow tables by adding any missing columns.
     Safe to run multiple times - skips existing columns.
+    Requires admin_key query parameter for access.
     """
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=401, detail="Unauthorized - admin_key required")
     from sqlalchemy import text
 
     results = {
