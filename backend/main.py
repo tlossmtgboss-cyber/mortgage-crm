@@ -3175,15 +3175,8 @@ class ApplicationStep(str, enum.Enum):
     REVIEW = "review"
 
 
-class DocumentCategory(str, enum.Enum):
-    """Categories for uploaded documents"""
-    INCOME = "income"
-    ASSETS = "assets"
-    PROPERTY = "property"
-    IDENTITY = "identity"
-    TAX_RETURNS = "tax_returns"
-    BANK_STATEMENTS = "bank_statements"
-    OTHER = "other"
+# NOTE: DocumentCategory is defined earlier in this file (line ~348)
+# Do NOT redefine it here - the original has correct values matching the DB
 
 
 class BorrowerApplication(Base):
@@ -41760,7 +41753,7 @@ async def get_loans(
             FROM loans
             WHERE {where_sql}
             ORDER BY updated_at DESC
-            OFFSET :skip LIMIT :limit
+            LIMIT :limit OFFSET :skip
         """
 
         results = db.execute(text(sql), params).fetchall()
