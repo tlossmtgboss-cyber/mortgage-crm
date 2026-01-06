@@ -828,6 +828,41 @@
   margin-bottom: 24px;
 }
 
+.header-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.header-title-group h2 {
+  margin: 0;
+}
+
+.last-update-text {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 400;
+}
+
+.refresh-indicator {
+  color: #0d9488;
+  font-weight: 500;
+}
+
+.auto-refresh-badge {
+  font-size: 11px;
+  color: #059669;
+  background: #d1fae5;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+.btn-secondary.loading {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
 .days-select {
   padding: 8px 12px;
   border: 1px solid #d1d5db;
@@ -852,19 +887,20 @@
 
 .metrics-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 16px;
 }
 
 .metric-card {
   display: flex;
   align-items: flex-start;
-  gap: 16px;
-  padding: 20px;
+  gap: 12px;
+  padding: 16px;
   background: #f8fafc;
   border-radius: 12px;
   border: 1px solid #e5e7eb;
   transition: border-color 0.2s, box-shadow 0.2s;
+  min-width: 0;
 }
 
 .metric-card:hover {
@@ -893,12 +929,12 @@
 }
 
 .metric-icon {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
+  border-radius: 10px;
   background: rgba(255, 255, 255, 0.8);
   flex-shrink: 0;
 }
@@ -928,7 +964,7 @@
 }
 
 .metric-value {
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 700;
   color: #111827;
   line-height: 1.2;
@@ -1042,6 +1078,10 @@
     grid-template-columns: 1fr 1fr;
   }
 
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
   .section-actions {
     flex-wrap: wrap;
   }
@@ -1067,6 +1107,10 @@
 
 @media (max-width: 480px) {
   .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .metrics-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1775,6 +1819,20 @@
 .security-metric-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.security-metric-card.clickable {
+  cursor: pointer;
+}
+
+.security-metric-card.clickable:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+.security-metric-card.clickable:active {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .security-metric-card.status-good {
