@@ -2863,15 +2863,15 @@ async def seed_salesforce_sla_workflows(
                 workflow_id = result.fetchone()[0]
 
                 # Create day configurations
-                for day_config in workflow.get("days", []):
+                for day_idx, day_config in enumerate(workflow.get("days", []), start=1):
                     db.execute(text("""
                         INSERT INTO workflow_day_configs (
-                            workflow_id, day_value, day_label,
+                            workflow_id, day_value, day_label, day_order,
                             phone_enabled, email_enabled, text_enabled,
                             task_description, is_active,
                             created_at, updated_at
                         ) VALUES (
-                            :workflow_id, :day_value, :day_label,
+                            :workflow_id, :day_value, :day_label, :day_order,
                             :phone_enabled, :email_enabled, :text_enabled,
                             :task_description, true,
                             :now, :now
@@ -2880,6 +2880,7 @@ async def seed_salesforce_sla_workflows(
                         "workflow_id": workflow_id,
                         "day_value": day_config["day_value"],
                         "day_label": day_config["day_label"],
+                        "day_order": day_idx,
                         "phone_enabled": day_config.get("phone_enabled", False),
                         "email_enabled": day_config.get("email_enabled", True),
                         "text_enabled": day_config.get("text_enabled", False),
