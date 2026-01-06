@@ -211,27 +211,19 @@ const RecruitPortal = () => {
       {/* Hero Section - Compact */}
       <section className="portal-hero-section compact">
         <div className="hero-container">
-          <div className="hero-welcome">
-            <h1>Welcome, {firstName}!</h1>
-            <p className="hero-subtitle">Discover your future at Perennia</p>
+          {/* Company Logo */}
+          <div className="company-logo-section">
+            {portalData?.company_logo ? (
+              <img src={portalData.company_logo} alt={portalData.company_name || 'Company'} className="company-logo" />
+            ) : (
+              <h2 className="company-name-text">{portalData?.company_name || 'Perennia'}</h2>
+            )}
           </div>
 
-          {/* Recruiter Info - Compact */}
-          {portalData?.recruiter_name && (
-            <div className="recruiter-info-compact">
-              <div className="recruiter-avatar">
-                {portalData.recruiter_photo ? (
-                  <img src={portalData.recruiter_photo} alt={portalData.recruiter_name} />
-                ) : (
-                  <span>{portalData.recruiter_name.split(' ').map(n => n[0]).join('')}</span>
-                )}
-              </div>
-              <div className="recruiter-text">
-                <span className="recruiter-label">Your Recruiter</span>
-                <span className="recruiter-name">{portalData.recruiter_name}</span>
-              </div>
-            </div>
-          )}
+          <div className="hero-welcome">
+            <h1>Welcome, {firstName}!</h1>
+            <p className="hero-subtitle">Discover your future at {portalData?.company_name || 'Perennia'}</p>
+          </div>
         </div>
       </section>
 
