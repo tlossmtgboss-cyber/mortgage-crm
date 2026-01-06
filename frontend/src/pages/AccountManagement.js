@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
 import { usePermissions } from '../contexts/PermissionContext';
 import { toast } from '../utils/toast';
@@ -1950,6 +1950,7 @@ const UserDetailPage = ({ user, loginHistory, onBack, onAction }) => {
 // Main Account Management Page Component
 const AccountManagement = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { userRole, hasAnyPermission } = usePermissions();
 
   // Permission check - require admin/account management access
@@ -1973,6 +1974,17 @@ const AccountManagement = () => {
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState({ type: 'none' });
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Handle URL actions (e.g., ?action=invite)
+  useEffect(() => {
+    const action = searchParams.get('action');
+    if (action === 'invite') {
+      setModal({ type: 'invite' });
+      // Remove the action param from URL
+      searchParams.delete('action');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   // Fetch KPIs
   const fetchKpis = useCallback(async () => {

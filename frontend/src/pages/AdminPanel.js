@@ -33,6 +33,8 @@ const AdminPanel = () => {
   const [roleFilter, setRoleFilter] = useState('all');
   const [aiMetrics, setAiMetrics] = useState(null);
   const [aiMetricsDays, setAiMetricsDays] = useState(7);
+  const [aiMetricsLoading, setAiMetricsLoading] = useState(false);
+  const [aiMetricsLastUpdate, setAiMetricsLastUpdate] = useState(null);
 
   // Security monitoring state
   const [securityData, setSecurityData] = useState(null);
@@ -106,18 +108,29 @@ const AdminPanel = () => {
   // Load AI Metrics
   const loadAiMetrics = useCallback(async () => {
     try {
+      setAiMetricsLoading(true);
       const response = await api.get(`/api/v1/ai-metrics/dashboard?days=${aiMetricsDays}`);
       setAiMetrics(response.data);
+      setAiMetricsLastUpdate(new Date());
     } catch (err) {
       console.error('Error loading AI metrics:', err);
       setAiMetrics(null);
+    } finally {
+      setAiMetricsLoading(false);
     }
   }, [aiMetricsDays]);
 
-  // Load AI metrics when tab is active or days change
+  // Load AI metrics when tab is active or days change, with auto-refresh
   useEffect(() => {
     if (activeTab === 'ai_metrics') {
       loadAiMetrics();
+
+      // Auto-refresh every 30 seconds for real-time data
+      const interval = setInterval(() => {
+        loadAiMetrics();
+      }, 30000);
+
+      return () => clearInterval(interval);
     }
   }, [activeTab, aiMetricsDays, loadAiMetrics]);
 
@@ -393,49 +406,6 @@ const AdminPanel = () => {
       <main className="admin-content">
         {activeTab === 'overview' && (
           <>
-            {/* Stats Grid */}
-            <section className="stats-section">
-              <div className="stats-grid">
-                <div className="stat-card">
-                  <div className="stat-icon leads">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-                    </svg>
-                  </div>
-                  <div className="stat-content">
-                    <span className="stat-value">{stats?.total_leads || 0}</span>
-                    <span className="stat-label">Total Leads</span>
-                  </div>
-                </div>
-
-                <div className="stat-card">
-                  <div className="stat-icon loans">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-                      <line x1="8" y1="21" x2="16" y2="21"/>
-                      <line x1="12" y1="17" x2="12" y2="21"/>
-                    </svg>
-                  </div>
-                  <div className="stat-content">
-                    <span className="stat-value">{stats?.total_loans || 0}</span>
-                    <span className="stat-label">Total Loans</span>
-                  </div>
-                </div>
-
-                <div className="stat-card">
-                  <div className="stat-icon volume">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-                    </svg>
-                  </div>
-                  <div className="stat-content">
-                    <span className="stat-value">{formatCurrency(stats?.mtd_volume)}</span>
-                    <span className="stat-label">MTD Volume</span>
-                  </div>
-                </div>
-              </div>
-            </section>
-
             {/* Security Summary */}
             <section className="security-summary-section">
               <div className="section-header">
@@ -477,7 +447,11 @@ const AdminPanel = () => {
                   )}
 
                   <div className="security-metrics-grid">
-                    <div className={`security-metric-card ${securityData.status === 'active' ? 'status-good' : 'status-warning'}`}>
+                    <div
+                      className={`security-metric-card clickable ${securityData.status === 'active' ? 'status-good' : 'status-warning'}`}
+                      onClick={() => setActiveTab('security')}
+                      title="View System Status Details"
+                    >
                       <div className="metric-icon-sm">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
@@ -489,7 +463,11 @@ const AdminPanel = () => {
                       </div>
                     </div>
 
-                    <div className={`security-metric-card ${(securityData.ip_blocking?.blocked_count || 0) > 0 ? 'status-warning' : 'status-good'}`}>
+                    <div
+                      className={`security-metric-card clickable ${(securityData.ip_blocking?.blocked_count || 0) > 0 ? 'status-warning' : 'status-good'}`}
+                      onClick={() => setActiveTab('security')}
+                      title="View Blocked IPs Details"
+                    >
                       <div className="metric-icon-sm">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <circle cx="12" cy="12" r="10"/>
@@ -502,7 +480,11 @@ const AdminPanel = () => {
                       </div>
                     </div>
 
-                    <div className={`security-metric-card ${(securityData.failed_logins?.recent_failed_attempts || 0) >= 5 ? 'status-danger' : (securityData.failed_logins?.recent_failed_attempts || 0) > 0 ? 'status-warning' : 'status-good'}`}>
+                    <div
+                      className={`security-metric-card clickable ${(securityData.failed_logins?.recent_failed_attempts || 0) >= 5 ? 'status-danger' : (securityData.failed_logins?.recent_failed_attempts || 0) > 0 ? 'status-warning' : 'status-good'}`}
+                      onClick={() => setActiveTab('security')}
+                      title="View Failed Logins Details"
+                    >
                       <div className="metric-icon-sm">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
@@ -515,7 +497,11 @@ const AdminPanel = () => {
                       </div>
                     </div>
 
-                    <div className="security-metric-card status-info">
+                    <div
+                      className="security-metric-card clickable status-info"
+                      onClick={() => setActiveTab('security')}
+                      title="View Rate Limits Details"
+                    >
                       <div className="metric-icon-sm">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
@@ -527,7 +513,11 @@ const AdminPanel = () => {
                       </div>
                     </div>
 
-                    <div className="security-metric-card status-info">
+                    <div
+                      className="security-metric-card clickable status-info"
+                      onClick={() => setActiveTab('security')}
+                      title="View Requests Tracking Details"
+                    >
                       <div className="metric-icon-sm">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -542,7 +532,11 @@ const AdminPanel = () => {
                       </div>
                     </div>
 
-                    <div className="security-metric-card status-good">
+                    <div
+                      className="security-metric-card clickable status-good"
+                      onClick={() => setActiveTab('security')}
+                      title="View Middleware Status Details"
+                    >
                       <div className="metric-icon-sm">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
@@ -603,7 +597,7 @@ const AdminPanel = () => {
             <section className="account-management-section">
               <div className="section-header">
                 <h2>Account Management</h2>
-                <button onClick={() => navigate('/account-management')} className="btn-primary btn-sm">
+                <button onClick={() => navigate('/settings/account-management?action=invite')} className="btn-primary btn-sm">
                   + Invite Subscriber
                 </button>
               </div>
@@ -704,7 +698,7 @@ const AdminPanel = () => {
                         </thead>
                         <tbody>
                           {accounts.slice(0, 5).map(account => (
-                            <tr key={account.id} onClick={() => navigate(`/account-management/accounts/${account.id}`)}>
+                            <tr key={account.id} onClick={() => navigate(`/settings/account-management?account=${account.id}`)}>
                               <td>
                                 <div className="account-name">{account.company_name || account.name}</div>
                                 <div className="account-domain">{account.domain}</div>
@@ -718,7 +712,7 @@ const AdminPanel = () => {
                         </tbody>
                       </table>
                       {accounts.length > 5 && (
-                        <button className="btn-link view-all" onClick={() => navigate('/account-management')}>
+                        <button className="btn-link view-all" onClick={() => navigate('/settings/account-management')}>
                           View all {accounts.length} accounts →
                         </button>
                       )}
