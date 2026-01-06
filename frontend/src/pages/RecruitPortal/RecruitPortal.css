@@ -396,6 +396,195 @@
 }
 
 /* =============================================================================
+   VIDEO + CALENDAR SIDE BY SIDE (Top Section)
+============================================================================= */
+.video-calendar-section {
+  padding: 2rem;
+  background: var(--rp-bg-secondary);
+}
+
+.video-calendar-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  align-items: start;
+}
+
+.video-column,
+.calendar-column {
+  min-height: 400px;
+}
+
+.video-column .video-message-card {
+  background: var(--rp-bg-primary);
+  border: 1px solid var(--rp-border);
+  border-radius: var(--rp-radius-lg);
+  overflow: hidden;
+  box-shadow: var(--rp-shadow-lg);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.video-column .video-header {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--rp-border);
+  background: var(--rp-bg-primary);
+}
+
+.video-column .video-header h3 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--rp-text-primary);
+}
+
+.video-column .video-player-wrapper {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  flex-shrink: 0;
+}
+
+.video-column .video-player-wrapper video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.video-column .video-message-text {
+  padding: 1.25rem 1.5rem;
+  background: var(--rp-bg-tertiary);
+  flex-grow: 1;
+}
+
+.video-column .video-message-text p {
+  margin: 0 0 0.5rem;
+  font-style: italic;
+  color: var(--rp-text-primary);
+  line-height: 1.6;
+}
+
+.video-column .video-sender {
+  display: block;
+  color: var(--rp-text-secondary);
+  font-size: 0.875rem;
+}
+
+.video-column .video-placeholder {
+  display: flex;
+  flex-direction: column;
+}
+
+.video-column .placeholder-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  text-align: center;
+  background: var(--rp-bg-tertiary);
+}
+
+.video-column .placeholder-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.video-column .placeholder-content p {
+  margin: 0;
+  color: var(--rp-text-secondary);
+}
+
+.calendar-column .scheduler-card {
+  background: var(--rp-bg-primary);
+  border: 1px solid var(--rp-border);
+  border-radius: var(--rp-radius-lg);
+  overflow: hidden;
+  box-shadow: var(--rp-shadow-lg);
+  height: 100%;
+}
+
+.calendar-column .scheduler-header {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--rp-border);
+  background: var(--rp-bg-primary);
+}
+
+.calendar-column .scheduler-header h3 {
+  margin: 0 0 0.25rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--rp-text-primary);
+}
+
+.calendar-column .scheduler-header p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--rp-text-secondary);
+}
+
+/* Responsive: Stack on mobile */
+@media (max-width: 900px) {
+  .video-calendar-container {
+    grid-template-columns: 1fr;
+  }
+
+  .video-column,
+  .calendar-column {
+    min-height: auto;
+  }
+}
+
+/* =============================================================================
+   SCHEDULER CTA SECTION (Bottom)
+============================================================================= */
+.scheduler-section-cta {
+  padding: 4rem 2rem;
+  background: linear-gradient(135deg, var(--rp-primary) 0%, var(--rp-primary-dark) 100%);
+  text-align: center;
+}
+
+.scheduler-cta-container {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.scheduler-section-cta .section-header h2 {
+  color: white;
+  margin-bottom: 0.5rem;
+}
+
+.scheduler-section-cta .section-header p {
+  color: rgba(255, 255, 255, 0.8);
+  margin-bottom: 2rem;
+}
+
+.cta-button.primary {
+  background: white;
+  color: var(--rp-primary);
+  padding: 1rem 2.5rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--rp-radius);
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.cta-button.primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+}
+
+/* =============================================================================
    QUICK ACTIONS
 ============================================================================= */
 .quick-actions-section {

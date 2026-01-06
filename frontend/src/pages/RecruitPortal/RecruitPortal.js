@@ -267,43 +267,68 @@ const RecruitPortal = () => {
         </div>
       </section>
 
-      {/* Personal Video Message */}
-      {videos.length > 0 && (
-        <section className="video-message-section">
-          <div className="video-message-container">
-            <div className="video-message-card">
-              <div className="video-player-wrapper">
-                <video
-                  controls
-                  poster={videos[0].recruiter_photo || undefined}
-                  onPlay={() => {
-                    setPlayingVideoId(videos[0].id);
-                    if (videos[0].is_new) {
-                      markVideoViewed(videos[0].id);
-                    }
-                  }}
-                  onEnded={() => setPlayingVideoId(null)}
-                >
-                  <source src={videos[0].video_url} type="video/webm" />
-                  Your browser does not support video playback.
-                </video>
-              </div>
-              <div className="video-sidebar">
+      {/* Video + Calendar Side by Side - Top Section */}
+      <section className="video-calendar-section">
+        <div className="video-calendar-container">
+          {/* Video Column */}
+          <div className="video-column">
+            {videos.length > 0 ? (
+              <div className="video-message-card">
                 <div className="video-header">
                   <h3>A Personal Message for You</h3>
-                  <p>Your recruiter recorded this just for you</p>
+                </div>
+                <div className="video-player-wrapper">
+                  <video
+                    controls
+                    poster={videos[0].recruiter_photo || undefined}
+                    onPlay={() => {
+                      setPlayingVideoId(videos[0].id);
+                      if (videos[0].is_new) {
+                        markVideoViewed(videos[0].id);
+                      }
+                    }}
+                    onEnded={() => setPlayingVideoId(null)}
+                  >
+                    <source src={videos[0].video_url} type="video/webm" />
+                    Your browser does not support video playback.
+                  </video>
                 </div>
                 {videos[0].message && (
-                  <div className="video-chat-wrapper">
-                    <p style={{ padding: '1rem', fontStyle: 'italic' }}>"{videos[0].message}"</p>
-                    <span style={{ padding: '0 1rem', color: '#64748b' }}>— {videos[0].recruiter_name}</span>
+                  <div className="video-message-text">
+                    <p>"{videos[0].message}"</p>
+                    <span className="video-sender">— {videos[0].recruiter_name}</span>
                   </div>
                 )}
               </div>
+            ) : (
+              <div className="video-message-card video-placeholder">
+                <div className="video-header">
+                  <h3>Personal Message Coming Soon</h3>
+                </div>
+                <div className="placeholder-content">
+                  <span className="placeholder-icon">🎥</span>
+                  <p>Your recruiter will send you a personal video message</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Calendar Column */}
+          <div className="calendar-column">
+            <div className="scheduler-card">
+              <div className="scheduler-header">
+                <h3>Schedule a Call</h3>
+                <p>Pick a time that works for you</p>
+              </div>
+              <PortalScheduler
+                slug={slug}
+                recruiterName={portalData?.recruiter_name}
+                compact={true}
+              />
             </div>
           </div>
-        </section>
-      )}
+        </div>
+      </section>
 
       {/* Quick Actions */}
       <section className="quick-actions-section">
@@ -475,19 +500,19 @@ const RecruitPortal = () => {
         </div>
       </section>
 
-      {/* Schedule Section */}
-      <section id="schedule-section" className="scheduler-section">
-        <div className="scheduler-container">
+      {/* Schedule Section - Anchor for scroll */}
+      <section id="schedule-section" className="scheduler-section-cta">
+        <div className="scheduler-cta-container">
           <div className="section-header">
-            <h2>Let's Talk About Your Future</h2>
-            <p>Schedule a time that works for you</p>
+            <h2>Ready to Take the Next Step?</h2>
+            <p>Schedule a call to discuss your future with Perennia</p>
           </div>
-          <div className="scheduler-card">
-            <PortalScheduler
-              slug={slug}
-              recruiterName={portalData?.recruiter_name}
-            />
-          </div>
+          <button
+            className="cta-button primary"
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          >
+            📅 Schedule Your Call Now
+          </button>
         </div>
       </section>
 
