@@ -347,23 +347,9 @@ class ConfidenceEngineService:
         for r in responses:
             category = r[0]
             weight = float(r[1]) if r[1] else 1.0
-            # Parse response_value - could be dict, str (JSON), or None
-            raw_response = r[2]
-            if isinstance(raw_response, dict):
-                response_value = raw_response
-            elif isinstance(raw_response, str):
-                response_value = json.loads(raw_response)
-            else:
-                response_value = {}
+            response_value = r[2] if isinstance(r[2], dict) else json.loads(r[2]) if r[2] else {}
             confidence = r[3] or 3
-            # Parse options - could be dict, list, str (JSON), or None
-            raw_options = r[4]
-            if isinstance(raw_options, (dict, list)):
-                options = raw_options
-            elif isinstance(raw_options, str):
-                options = json.loads(raw_options)
-            else:
-                options = {}
+            options = r[4] if isinstance(r[4], dict) else json.loads(r[4]) if r[4] else {}
 
             # Calculate score from response
             score = self._calculate_response_score(response_value, options)
