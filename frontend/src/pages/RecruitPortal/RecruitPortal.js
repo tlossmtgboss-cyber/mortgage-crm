@@ -276,9 +276,6 @@ const RecruitPortal = () => {
           {/* Scheduler Column - Compact */}
           <div className="scheduler-column-compact">
             <div className="scheduler-card-compact">
-              <div className="scheduler-header-compact">
-                <h3>📅 Schedule a Call</h3>
-              </div>
               <div className="scheduler-body-compact">
                 <PortalScheduler
                   slug={slug}
