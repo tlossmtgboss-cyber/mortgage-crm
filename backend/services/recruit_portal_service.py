@@ -133,9 +133,10 @@ class RecruitPortalService:
 
         if row.referrer_user_id:
             with SessionLocal() as conn:
+                # Use only columns that are guaranteed to exist
                 recruiter_result = conn.execute(
                     text("""
-                        SELECT full_name, photo_url, phone, email
+                        SELECT full_name, email
                         FROM users WHERE id = :user_id
                     """),
                     {"user_id": row.referrer_user_id}
@@ -143,9 +144,10 @@ class RecruitPortalService:
                 recruiter = recruiter_result.fetchone()
                 if recruiter:
                     recruiter_name = recruiter.full_name
-                    recruiter_photo = recruiter.photo_url
-                    recruiter_phone = recruiter.phone
                     recruiter_email = recruiter.email
+                    # Photo and phone may not be in users table
+                    recruiter_photo = None
+                    recruiter_phone = None
 
         # Get calculator config
         calc_config = self.get_calculator_config()
