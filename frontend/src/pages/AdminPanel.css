@@ -1655,3 +1655,336 @@
     gap: 8px;
   }
 }
+
+/* =========================================
+   Security Summary Section (Overview Tab)
+   ========================================= */
+
+.security-summary-section {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+}
+
+.security-summary-section .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.security-summary-section h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.security-summary-section h2::before {
+  content: '';
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2322c55e' stroke-width='2'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E") no-repeat center;
+  background-size: contain;
+}
+
+.btn-secondary.btn-sm {
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-secondary.btn-sm:hover {
+  background: #e5e7eb;
+  border-color: #9ca3af;
+}
+
+/* Security Alerts */
+.security-alerts {
+  margin-bottom: 20px;
+}
+
+.security-alert {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+
+.security-alert svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.security-alert.warning {
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+}
+
+.security-alert.warning svg {
+  stroke: #d97706;
+}
+
+.security-alert.danger {
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  color: #991b1b;
+}
+
+.security-alert.danger svg {
+  stroke: #dc2626;
+}
+
+/* Security Metrics Grid */
+.security-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.security-metric-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 8px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.security-metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.security-metric-card.status-good {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+
+.security-metric-card.status-good .metric-icon-sm svg {
+  stroke: #22c55e;
+}
+
+.security-metric-card.status-warning {
+  background: #fef3c7;
+  border-color: #fcd34d;
+}
+
+.security-metric-card.status-warning .metric-icon-sm svg {
+  stroke: #d97706;
+}
+
+.security-metric-card.status-danger {
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.security-metric-card.status-danger .metric-icon-sm svg {
+  stroke: #dc2626;
+}
+
+.security-metric-card.status-info {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.security-metric-card.status-info .metric-icon-sm svg {
+  stroke: #3b82f6;
+}
+
+.metric-icon-sm {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.metric-icon-sm svg {
+  width: 20px;
+  height: 20px;
+}
+
+.metric-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.metric-value-sm {
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.2;
+}
+
+.metric-label-sm {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+/* Security Blocked IPs Preview */
+.security-blocked-preview,
+.security-offenders-preview {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.security-blocked-preview h4,
+.security-offenders-preview h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 12px 0;
+}
+
+.blocked-ips-compact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.blocked-ip-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fee2e2;
+  color: #991b1b;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+}
+
+.unblock-btn {
+  background: none;
+  border: none;
+  color: #991b1b;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.unblock-btn:hover {
+  opacity: 1;
+}
+
+.more-ips {
+  font-size: 13px;
+  color: #6b7280;
+  font-style: italic;
+}
+
+/* Offenders Preview */
+.offenders-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.offender-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.offender-ip {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+  font-size: 13px;
+  color: #374151;
+}
+
+.offender-attempts {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.offender-attempts.warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.offender-attempts.danger {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* Security Unavailable State */
+.security-unavailable {
+  text-align: center;
+  padding: 40px;
+  color: #6b7280;
+}
+
+.security-unavailable p {
+  margin: 0 0 16px 0;
+}
+
+/* Responsive Security Summary */
+@media (max-width: 1400px) {
+  .security-metrics-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .security-metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .security-summary-section .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .security-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .security-alert {
+    flex-direction: column;
+    text-align: center;
+  }
+}

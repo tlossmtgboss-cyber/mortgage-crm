@@ -928,6 +928,8 @@ function Dashboard() {
         return <ProductionAssistant1Dashboard />;
       case 'production_assistant_2':
         return <ProductionAssistant2Dashboard />;
+      case 'concierge':
+        return <ProductionAssistant1Dashboard />; // Concierge has same permissions as Production Assistants
       case 'processor':
         return <ProcessorDashboard />;
       case 'underwriter':
