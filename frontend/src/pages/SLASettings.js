@@ -9,8 +9,9 @@ const SLASettings = () => {
   const navigate = useNavigate();
   const { userRole, hasAnyPermission } = usePermissions();
 
-  // Permission check - require SLA/settings management access
-  const canAccessSLA = hasAnyPermission(['settings.sla', 'settings.manage', 'admin.manage']) || userRole === 'management' || userRole === 'admin';
+  // Permission check - allow SLA access to managers, admins, and loan officers
+  const canAccessSLA = hasAnyPermission(['settings.sla', 'settings.manage', 'admin.manage', 'sla.view', 'sla.manage']) ||
+    ['management', 'admin', 'loan_officer', 'sales', 'processor', 'underwriter'].includes(userRole);
 
   const [activeTab, setActiveTab] = useState('dashboard');
   const [loading, setLoading] = useState(true);

@@ -167,7 +167,7 @@ const NotificationBell = () => {
           {notifications.length > 0 && (
             <div className="notification-dropdown-footer">
               <button onClick={() => {
-                navigate('/notifications');
+                navigate('/tasks');
                 setShowDropdown(false);
               }} className="view-all-btn">
                 View all notifications

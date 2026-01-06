@@ -93,14 +93,19 @@ function WorkflowStatusDetail() {
     const currentScore = mockScores[statusId] || { score: 75, loans: 18, tasks: '36/48' };
     const health = currentScore.score >= 80 ? 'healthy' : currentScore.score >= 65 ? 'warning' : 'critical';
 
+    // Safely parse tasks string (e.g., "36/48") with bounds checking
+    const taskParts = (currentScore.tasks || '0/0').split('/');
+    const tasksCompleted = parseInt(taskParts[0]) || 0;
+    const tasksDue = parseInt(taskParts[1] || '0') || 0;
+
     setStatusData({
       id: statusId,
       name: statusNames[statusId] || statusId,
       score: currentScore.score,
       health: health,
       activeLoans: currentScore.loans,
-      tasksCompleted: parseInt(currentScore.tasks.split('/')[0]),
-      tasksDue: parseInt(currentScore.tasks.split('/')[1]),
+      tasksCompleted,
+      tasksDue,
       avgDaysInStatus: 4.2,
       conversionRate: 68
     });

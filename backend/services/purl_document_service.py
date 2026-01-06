@@ -307,7 +307,7 @@ class PURLDocumentService:
             logger.warning(f"S3 verification skipped: {e}")
 
         # Auto-categorize based on document type
-        if doc_category and doc_category != DocumentCategory.OTHER:
+        if doc_category and doc_category != DocumentCategory.MISC:
             doc_category_value = doc_category.value
         else:
             doc_category_value = self._auto_categorize(actual_doc_type)
@@ -648,7 +648,7 @@ class PURLDocumentService:
             if key in doc_type_lower:
                 return category
 
-        return DocumentCategory.OTHER.value
+        return DocumentCategory.MISC.value
 
     def _check_document_requests(
         self,

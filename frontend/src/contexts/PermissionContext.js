@@ -51,14 +51,24 @@ export const PermissionProvider = ({ children }) => {
   const { isImpersonating, getImpersonatedUser } = useImpersonation();
 
   // Compute effective role for UI purposes (combines permission_role + legacy role)
-  // If viewAsRole is set and user is admin, use that instead
+  // If viewAsRole is set and user can switch views (admin or manager), use that instead
   const effectiveRole = useMemo(() => {
     const baseRole = getUserEffectiveRole(userRole, legacyRole);
-    // If admin is viewing as another role, use that role for navigation
-    if (baseRole === 'admin' && viewAsRole && viewAsRole !== 'default' && viewAsRole !== 'admin') {
-      // Map production_assistant variants
+    // Check if user can switch role views (admin or management/manager)
+    const canSwitchViews = baseRole === 'admin' ||
+                           baseRole === 'manager' ||
+                           userRole === 'admin' ||
+                           userRole === 'management';
+
+    // If user can switch views and has a viewAsRole set, use that for navigation
+    if (canSwitchViews && viewAsRole && viewAsRole !== 'default' && viewAsRole !== 'admin') {
+      // Map production_assistant variants to production_assistant
       if (viewAsRole === 'production_assistant_1' || viewAsRole === 'production_assistant_2') {
         return 'production_assistant';
+      }
+      // Map site_admin to admin for navigation purposes
+      if (viewAsRole === 'site_admin') {
+        return 'admin';
       }
       return viewAsRole;
     }
@@ -260,9 +270,13 @@ export const PermissionProvider = ({ children }) => {
     }
   };
 
-  // Check if user is an admin (can switch role views)
+  // Check if user can switch role views (admin or management)
   const isAdmin = useMemo(() => {
-    return getUserEffectiveRole(userRole, legacyRole) === 'admin';
+    const baseRole = getUserEffectiveRole(userRole, legacyRole);
+    return baseRole === 'admin' ||
+           baseRole === 'manager' ||
+           userRole === 'admin' ||
+           userRole === 'management';
   }, [userRole, legacyRole]);
 
   const value = {

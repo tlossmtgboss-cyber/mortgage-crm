@@ -54,10 +54,9 @@ export const decisionLabAPI = {
 
   // Confidence Scoring
   calculateScore: async (sessionId) => {
-    const response = await fetch(`${API_BASE_URL}/api/v1/decision-lab/score`, {
+    const response = await fetch(`${API_BASE_URL}/api/v1/decision-lab/score?session_id=${sessionId}`, {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify({ session_id: sessionId }),
     });
     if (!response.ok) throw new Error('Failed to calculate score');
     return response.json();

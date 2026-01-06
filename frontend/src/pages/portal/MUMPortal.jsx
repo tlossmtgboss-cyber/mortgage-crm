@@ -355,22 +355,22 @@ const HomeownerResources = () => (
   <div className="homeowner-resources">
     <h3>Homeowner Resources</h3>
     <div className="resources-grid">
-      <a href="#" className="resource-link">
+      <button type="button" className="resource-link" onClick={() => window.open('https://www.houselogic.com/organize-maintain/home-maintenance-tips/', '_blank')}>
         <span className="resource-icon">🔧</span>
         <span>Home Maintenance Tips</span>
-      </a>
-      <a href="#" className="resource-link">
+      </button>
+      <button type="button" className="resource-link" onClick={() => window.open('https://www.irs.gov/credits-deductions/individuals', '_blank')}>
         <span className="resource-icon">📋</span>
         <span>Tax Deduction Guide</span>
-      </a>
-      <a href="#" className="resource-link">
+      </button>
+      <button type="button" className="resource-link" onClick={() => alert('Insurance review coming soon!')}>
         <span className="resource-icon">🛡️</span>
         <span>Insurance Review</span>
-      </a>
-      <a href="#" className="resource-link">
+      </button>
+      <button type="button" className="resource-link" onClick={() => alert('Renovation calculator coming soon!')}>
         <span className="resource-icon">🏗️</span>
         <span>Renovation ROI Calculator</span>
-      </a>
+      </button>
     </div>
   </div>
 );
@@ -646,18 +646,18 @@ export default function MUMPortal({ data, slug, onRefresh }) {
             <div className="documents-section">
               <h3>Important Documents</h3>
               <div className="document-links">
-                <a href="#" className="doc-link">
+                <button type="button" className="doc-link" onClick={() => alert('Document access coming soon!')}>
                   <span>📄</span> Closing Disclosure
-                </a>
-                <a href="#" className="doc-link">
+                </button>
+                <button type="button" className="doc-link" onClick={() => alert('Document access coming soon!')}>
                   <span>📄</span> Promissory Note
-                </a>
-                <a href="#" className="doc-link">
+                </button>
+                <button type="button" className="doc-link" onClick={() => alert('Document access coming soon!')}>
                   <span>📄</span> Deed of Trust
-                </a>
-                <a href="#" className="doc-link">
+                </button>
+                <button type="button" className="doc-link" onClick={() => alert('Document access coming soon!')}>
                   <span>📄</span> Title Insurance Policy
-                </a>
+                </button>
               </div>
             </div>
           </div>

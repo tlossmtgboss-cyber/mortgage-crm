@@ -9,7 +9,7 @@ const InviteManagementTable = ({ onInviteNew }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [actionLoading, setActionLoading] = useState(null);
 
-  const API_BASE = 'https://api.perenniaai.com/api';
+  const API_BASE = (process.env.REACT_APP_API_URL || 'https://api.perenniaai.com') + '/api';
 
   useEffect(() => {
     loadInvites();

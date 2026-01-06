@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePermissions } from '../contexts/PermissionContext';
+import { useDashboard } from '../hooks/useQueries';
 import { getDashboardContainersForRole } from '../config/roleConfig';
 import PendingPermissionRequests from '../components/PendingPermissionRequests';
 import {
@@ -20,7 +21,9 @@ import './Dashboard.css';
 function Dashboard() {
   const navigate = useNavigate();
   const { hasPermission, userRole, effectiveRole, updateViewAsRole, viewAsRole, isAdmin } = usePermissions();
-  const [loading, setLoading] = useState(true);
+
+  // Use React Query for cached dashboard data - instant on revisit!
+  const { data: dashboardData, isLoading: loading, refetch: refetchDashboard } = useDashboard();
 
   // State for admin role view switcher - sync with context viewAsRole
   const [selectedDashboardView, setSelectedDashboardView] = useState(() => {
@@ -67,17 +70,17 @@ function Dashboard() {
     return false;
   };
 
-  // Dashboard data states
-  const [prioritizedTasks, setPrioritizedTasks] = useState([]);
-  const [pipelineStats, setPipelineStats] = useState([]);
-  const [production, setProduction] = useState({});
-  const [leadMetrics, setLeadMetrics] = useState({});
-  const [loanIssues, setLoanIssues] = useState([]);
-  const [aiTasks, setAiTasks] = useState({ pending: [], waiting: [] });
-  const [referralStats, setReferralStats] = useState({});
-  const [teamStats, setTeamStats] = useState({});
-  const [messages, setMessages] = useState([]);
-  const [efficiency, setEfficiency] = useState({});
+  // Dashboard data derived from React Query cache (instant on revisit!)
+  const prioritizedTasks = dashboardData?.prioritized_tasks || [];
+  const pipelineStats = dashboardData?.pipeline_stats || [];
+  const production = dashboardData?.production || {};
+  const leadMetrics = dashboardData?.lead_metrics || {};
+  const loanIssues = dashboardData?.loan_issues || [];
+  const aiTasks = dashboardData?.ai_tasks || { pending: [], waiting: [] };
+  const referralStats = dashboardData?.referral_stats || {};
+  const teamStats = dashboardData?.team_stats || {};
+  const messages = dashboardData?.messages || [];
+  const efficiency = dashboardData?.efficiency || {};
 
   // Drag and drop state
   const [draggedIndex, setDraggedIndex] = useState(null);
@@ -92,16 +95,14 @@ function Dashboard() {
     // Start with role-specific allowed containers
     return getDashboardContainersForRole(effectiveRole || 'loan_officer');
   });
-  const [workflowScores, setWorkflowScores] = useState({ statuses: [], overallScore: 0 });
+  const workflowScores = dashboardData?.workflow_scores || { statuses: [], overallScore: 0 };
 
   // Reload container order when role changes
   useEffect(() => {
     loadContainerOrder();
   }, [effectiveRole]);
 
-  useEffect(() => {
-    loadDashboard();
-  }, []);
+  // React Query handles data fetching automatically - no useEffect needed!
 
   // Load saved container order for the current role
   const loadContainerOrder = () => {
@@ -165,96 +166,9 @@ function Dashboard() {
     return { annualGoal: 222, monthlyGoal: 18.5, weeklyGoal: 5, dailyGoal: 1 };
   };
 
-  const loadDashboard = async () => {
-    try {
-      setLoading(true);
-
-      // OPTIMIZED: Check cache first (cache for 30 seconds)
-      const cacheKey = 'dashboard_data';
-      const cacheTimeKey = 'dashboard_data_time';
-      const cacheVersionKey = 'dashboard_cache_version';
-      const currentCacheVersion = '2'; // Increment when data structure changes
-
-      // Invalidate old cache if version changed
-      const cachedVersion = localStorage.getItem(cacheVersionKey);
-      if (cachedVersion !== currentCacheVersion) {
-        localStorage.removeItem(cacheKey);
-        localStorage.removeItem(cacheTimeKey);
-        localStorage.setItem(cacheVersionKey, currentCacheVersion);
-      }
-
-      const cachedData = localStorage.getItem(cacheKey);
-      const cachedTime = localStorage.getItem(cacheTimeKey);
-      const now = Date.now();
-
-      if (cachedData && cachedTime && (now - parseInt(cachedTime)) < 30000) {
-        // Use cached data
-        const data = JSON.parse(cachedData);
-        setPrioritizedTasks(data.prioritized_tasks || []);
-        setPipelineStats(data.pipeline_stats || []);
-        setProduction(data.production || {});
-        setLeadMetrics(data.lead_metrics || {});
-        setLoanIssues(data.loan_issues || []);
-        setAiTasks(data.ai_tasks || { pending: [], waiting: [] });
-        setReferralStats(data.referral_stats || {});
-        setTeamStats(data.team_stats || {});
-        setMessages(data.messages || []);
-        setEfficiency(data.efficiency || {});
-        setWorkflowScores(data.workflow_scores || { statuses: [], overallScore: 0 });
-        setLoading(false);
-        return;
-      }
-
-      // Fetch real data from backend
-      const API_URL = process.env.REACT_APP_API_URL || '';
-      const response = await fetch(`${API_URL}/api/v1/dashboard`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch dashboard data');
-      }
-
-      const data = await response.json();
-
-      // Cache the response
-      localStorage.setItem(cacheKey, JSON.stringify(data));
-      localStorage.setItem(cacheTimeKey, now.toString());
-
-      // Set all data from backend
-      setPrioritizedTasks(data.prioritized_tasks || []);
-      setPipelineStats(data.pipeline_stats || []);
-      setProduction(data.production || {});
-      setLeadMetrics(data.lead_metrics || {});
-      setLoanIssues(data.loan_issues || []);
-      setAiTasks(data.ai_tasks || { pending: [], waiting: [] });
-      setReferralStats(data.referral_stats || {});
-      setTeamStats(data.team_stats || {});
-      setMessages(data.messages || []);
-      setEfficiency(data.efficiency || {});
-      setWorkflowScores(data.workflow_scores || { statuses: [], overallScore: 0 });
-
-    } catch (error) {
-      console.error('Failed to load dashboard:', error);
-      // Show empty states on error - no mock data for new users
-      const goals = loadGoalTrackerData();
-      setPrioritizedTasks([]);
-      setPipelineStats([]);
-      setProduction({ annualGoal: goals.annualGoal || 0, monthlyGoal: goals.monthlyGoal || 0, weeklyGoal: goals.weeklyGoal || 0, dailyGoal: goals.dailyGoal || 0, annualActual: 0, monthlyActual: 0, weeklyActual: 0, dailyActual: 0 });
-      setLeadMetrics({ total: 0, new: 0, hot: 0, conversion_rate: 0 });
-      setLoanIssues([]);
-      setAiTasks({ pending: [], waiting: [] });
-      setReferralStats({ total_partners: 0, active_partners: 0, total_referrals: 0 });
-      setTeamStats({ total_members: 0, active_today: 0 });
-      setMessages([]);
-      setEfficiency({ overallScore: 0, stages: [], team: [], bottlenecks: [] });
-      setWorkflowScores({ statuses: [], overallScore: 0 });
-    } finally {
-      setLoading(false);
-    }
+  // Refresh dashboard data - React Query handles caching automatically
+  const loadDashboard = () => {
+    refetchDashboard();
   };
 
   // Drag handlers

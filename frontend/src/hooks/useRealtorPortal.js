@@ -14,8 +14,8 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 // API CONFIGURATION
 // =============================================================================
 
-const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-const WS_BASE = process.env.REACT_APP_WS_URL || 'ws://localhost:8000';
+const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
+const WS_BASE = process.env.REACT_APP_WS_URL || 'wss://api.perenniaai.com';
 const REALTOR_API = `${API_BASE}/api/v1/realtor-portal`;
 
 // =============================================================================

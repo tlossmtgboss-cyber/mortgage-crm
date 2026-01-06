@@ -72,7 +72,7 @@ export default function ActiveLoanPortalComplete() {
 
   // WebSocket connection
   const connectWebSocket = useCallback(() => {
-    const wsUrl = process.env.REACT_APP_WS_URL || 'ws://localhost:8000';
+    const wsUrl = process.env.REACT_APP_WS_URL || 'wss://api.perenniaai.com';
     const enableWs = process.env.REACT_APP_ENABLE_WEBSOCKET !== 'false';
 
     if (!enableWs) {

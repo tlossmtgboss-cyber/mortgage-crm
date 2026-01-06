@@ -47,6 +47,23 @@ const CANDIDATE_STATUSES = [
 // Pipeline stages in order (excluding terminal states)
 const PIPELINE_STAGES = ['new', 'screening', 'phone_screen', 'interview', 'assessment', 'offer', 'hired'];
 
+// Safe helper to get user ID from JWT token
+const getUserIdFromToken = () => {
+  try {
+    const token = localStorage.getItem('token');
+    if (token) {
+      const parts = token.split('.');
+      if (parts.length === 3) {
+        const payload = JSON.parse(atob(parts[1]));
+        return payload.user_id || 1;
+      }
+    }
+  } catch (e) {
+    console.error('Error parsing token:', e);
+  }
+  return 1; // Default fallback
+};
+
 const RecruitDetail = () => {
   const { candidateId } = useParams();
   const navigate = useNavigate();
@@ -242,7 +259,7 @@ const RecruitDetail = () => {
 
         // Create workflow tasks for the new disposition
         const token = localStorage.getItem('token');
-        const userId = JSON.parse(atob(token.split('.')[1])).user_id || 1;
+        const userId = getUserIdFromToken();
         const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
         try {
@@ -338,7 +355,7 @@ const RecruitDetail = () => {
 
     setIsCallInProgress(true);
     const token = localStorage.getItem('token');
-    const userId = JSON.parse(atob(token.split('.')[1])).user_id || 1;
+    const userId = getUserIdFromToken();
     const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
     try {
@@ -388,7 +405,7 @@ const RecruitDetail = () => {
     if (!activeCallId) return;
 
     const token = localStorage.getItem('token');
-    const userId = JSON.parse(atob(token.split('.')[1])).user_id || 1;
+    const userId = getUserIdFromToken();
     const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
     try {

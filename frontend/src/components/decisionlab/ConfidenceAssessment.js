@@ -18,7 +18,7 @@ function ConfidenceAssessment({ sessionId, onComplete, onBack }) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [progress, setProgress] = useState({ answered: 0, total: 13 });
+  const [progress, setProgress] = useState({ answered: 0, total: 8 });
   const [showOverlay, setShowOverlay] = useState(false);
   const [overlay, setOverlay] = useState(null);
   const [isComplete, setIsComplete] = useState(false);
@@ -30,11 +30,18 @@ function ConfidenceAssessment({ sessionId, onComplete, onBack }) {
     try {
       const data = await decisionLabAPI.getNextQuestion(sessionId);
 
-      if (data.complete) {
+      // Check if assessment is complete (question is null)
+      if (data.complete || !data.question) {
         // Assessment complete - calculate score
         setIsComplete(true);
-        const score = await decisionLabAPI.calculateScore(sessionId);
-        onComplete(score);
+        try {
+          const score = await decisionLabAPI.calculateScore(sessionId);
+          onComplete(score);
+        } catch (scoreErr) {
+          console.error('Score calculation failed:', scoreErr);
+          // Still call onComplete with partial data
+          onComplete({ overall_score: 0, message: 'Score calculation in progress' });
+        }
         return;
       }
 
@@ -43,19 +50,20 @@ function ConfidenceAssessment({ sessionId, onComplete, onBack }) {
       setConfidenceLevel(3);
 
       // Check for education overlay
-      if (data.overlay) {
-        setOverlay(data.overlay);
+      if (data.education_overlay) {
+        setOverlay(data.education_overlay);
         setShowOverlay(true);
       } else {
         setOverlay(null);
         setShowOverlay(false);
       }
 
-      // Update progress
-      if (data.progress) {
+      // Update progress from API response
+      const progressData = await decisionLabAPI.getProgress(sessionId).catch(() => null);
+      if (progressData) {
         setProgress({
-          answered: data.progress.answered || 0,
-          total: data.progress.total || 13,
+          answered: progressData.answered || 0,
+          total: progressData.total || 8,
         });
       }
     } catch (err) {
@@ -169,7 +177,7 @@ function ConfidenceAssessment({ sessionId, onComplete, onBack }) {
 
           {/* Answer Options */}
           <div className="answer-options">
-            {currentQuestion.question_type === 'multiple_choice' && currentQuestion.options && (
+            {(currentQuestion.question_type === 'multiple_choice' || currentQuestion.question_type === 'single_choice') && currentQuestion.options && Array.isArray(currentQuestion.options) && (
               currentQuestion.options.map((option, index) => (
                 <button
                   key={index}

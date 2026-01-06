@@ -7,7 +7,7 @@ import CallDetailPanel from './shared/CallDetailPanel';
 import { TASK_EVENTS, emitTaskCompleted, subscribeToTaskEvent } from '../utils/taskEvents';
 import './ActionSidebar.css';
 
-const API_BASE = process.env.REACT_APP_API_URL || '';
+const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
 const ActionSidebar = ({ onTaskSelect, onClose }) => {
   const navigate = useNavigate();

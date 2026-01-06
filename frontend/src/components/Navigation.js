@@ -1,7 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { usePermissions } from '../contexts/PermissionContext';
 import { getNavigationForRole, roleHasDashboard } from '../config/roleConfig';
+import { usePrefetch } from '../hooks/useQueries';
 import NotificationBell from './NotificationBell';
 import './Navigation.css';
 
@@ -12,6 +13,27 @@ import './Navigation.css';
 function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen, taskCounts = {} }) {
   const location = useLocation();
   const { effectiveRole, userRole, hasAnyPermission } = usePermissions();
+
+  // Prefetch utilities for instant navigation
+  const { prefetchLeads, prefetchLoans, prefetchDashboard, prefetchTasks, prefetchPortfolio, prefetchPartners } = usePrefetch();
+
+  // Map paths to prefetch functions for instant data loading on hover
+  const prefetchMap = useMemo(() => ({
+    '/leads': prefetchLeads,
+    '/loans': prefetchLoans,
+    '/dashboard': prefetchDashboard,
+    '/tasks': prefetchTasks,
+    '/portfolio': prefetchPortfolio,
+    '/referral-partners': prefetchPartners,
+  }), [prefetchLeads, prefetchLoans, prefetchDashboard, prefetchTasks, prefetchPortfolio, prefetchPartners]);
+
+  // Prefetch data when hovering over nav links (instant navigation!)
+  const handleMouseEnter = useCallback((path) => {
+    const prefetchFn = prefetchMap[path];
+    if (prefetchFn) {
+      prefetchFn();
+    }
+  }, [prefetchMap]);
 
   // Get navigation items for the current role
   const navItems = useMemo(() => {
@@ -59,6 +81,7 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
               key={item.key}
               to={item.path}
               className={`nav-link ${isNavItemActive(item) ? 'active' : ''}`}
+              onMouseEnter={() => handleMouseEnter(item.path)}
             >
               {item.label}
               {renderBadge(item)}

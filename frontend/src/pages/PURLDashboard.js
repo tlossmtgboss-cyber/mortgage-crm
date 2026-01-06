@@ -144,7 +144,7 @@ function PURLDashboard() {
             </svg>
             Bulk Resend
           </button>
-          <Link to="/leads/new" className="btn-primary">
+          <Link to="/leads" className="btn-primary">
             + Create New Portal
           </Link>
         </div>

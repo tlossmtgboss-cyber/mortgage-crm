@@ -1786,7 +1786,7 @@ async def get_smart_docs_loans(
             FROM loans
             WHERE {where_sql}
             ORDER BY created_at DESC
-            OFFSET :skip LIMIT :limit
+            LIMIT :limit OFFSET :skip
         """
 
         results = db.execute(text(sql), params).fetchall()

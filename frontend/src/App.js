@@ -1,5 +1,6 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Capacitor } from '@capacitor/core';
 import { isAuthenticatedSync as isAuthenticated } from './utils/auth';
 import { ImpersonationProvider } from './contexts/ImpersonationContext';
@@ -167,6 +168,19 @@ const PartnerPortalView = lazy(() => import('./components/portal/PartnerPortalVi
 const PerenniaClientPortalUltimate = lazy(() => import('./components/portal/PerenniaClientPortalUltimate'));
 const TotalCostAnalysis = lazy(() => import('./components/portal/TotalCostAnalysis'));
 
+// Create a client with optimized defaults for instant navigation
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // Data is fresh for 5 minutes
+      gcTime: 1000 * 60 * 30, // Cache persists for 30 minutes (formerly cacheTime)
+      refetchOnWindowFocus: false, // Don't refetch on tab focus
+      refetchOnMount: false, // Use cached data on mount
+      retry: 1, // Only retry once on failure
+    },
+  },
+});
+
 // Simple loading component
 const PageLoader = () => (
   <div style={{
@@ -296,8 +310,9 @@ function App() {
   }, []);
 
   return (
-    <ErrorBoundary>
-      <ImpersonationProvider>
+    <QueryClientProvider client={queryClient}>
+      <ErrorBoundary>
+        <ImpersonationProvider>
         <PermissionProvider>
           <Router>
             <GlobalLayoutFix />
@@ -2818,8 +2833,9 @@ function App() {
             </EmailDropZone>
       </Router>
         </PermissionProvider>
-      </ImpersonationProvider>
-    </ErrorBoundary>
+        </ImpersonationProvider>
+      </ErrorBoundary>
+    </QueryClientProvider>
   );
 }
 

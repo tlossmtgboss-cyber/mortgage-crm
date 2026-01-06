@@ -58,7 +58,7 @@ export default function PartnerPortalView() {
   const connectWebSocket = useCallback(() => {
     if (!portalData?.loan_id) return;
 
-    const wsUrl = process.env.REACT_APP_WS_URL || 'ws://localhost:8000';
+    const wsUrl = process.env.REACT_APP_WS_URL || 'wss://api.perenniaai.com';
     const enableWs = process.env.REACT_APP_ENABLE_WEBSOCKET !== 'false';
 
     if (!enableWs) return;

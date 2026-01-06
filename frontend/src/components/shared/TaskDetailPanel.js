@@ -515,13 +515,13 @@ const TaskDetailPanel = ({
 
   const handleNavigateToSource = () => {
     if (task.source === 'Workflow') {
-      navigate('/workflow-dashboard');
+      navigate('/workflow');
     } else if (task.source === 'AI Engine') {
-      navigate('/ai-landing');
+      navigate('/ai');
     } else if (task.source === 'Messages') {
-      navigate('/messages');
+      navigate('/dashboard'); // Messages integrated into dashboard
     } else if (task.source === 'Client for Life' || task.source === 'MUM') {
-      navigate('/mum');
+      navigate('/portfolio');
     } else if (task.source === 'Milestone Risk') {
       const loanId = task.loan_id || task.loanId || task.entity_id;
       if (loanId) navigate(`/loans/${loanId}`);

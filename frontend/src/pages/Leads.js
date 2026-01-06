@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { leadsAPI } from '../services/api';
+import { useLeads } from '../hooks/useQueries';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import SMSModal from '../components/SMSModal';
 import CalendarSidebar from '../components/CalendarSidebar';
@@ -16,8 +17,10 @@ function Leads() {
   // Permission check - require leads access
   const canAccessLeads = hasAnyPermission(['leads.view', 'leads.view_all', 'leads.manage']) || userRole === 'sales' || userRole === 'management' || userRole === 'admin';
 
-  const [leads, setLeads] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // Use React Query for cached data fetching - instant on revisit!
+  const { data: leadsData, isLoading: loading, refetch: refetchLeads } = useLeads();
+  const leads = leadsData || [];
+
   const [showModal, setShowModal] = useState(false);
   const [editingLead, setEditingLead] = useState(null);
   const [activeFilter, setActiveFilter] = useState('New');
@@ -96,9 +99,8 @@ function Leads() {
     'Does Not Qualify',
   ];
 
+  // Check if master user on mount
   useEffect(() => {
-    loadLeads();
-    // Check if master user (user ID 1)
     const checkMasterUser = () => {
       const token = localStorage.getItem('token');
       if (token) {
@@ -112,43 +114,18 @@ function Leads() {
       }
     };
     checkMasterUser();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const loadLeads = async () => {
-    try {
-      // OPTIMIZED: Check cache first (cache for 30 seconds)
-      const cacheKey = 'leads_data';
-      const cacheTimeKey = 'leads_data_time';
-      const cachedData = localStorage.getItem(cacheKey);
-      const cachedTime = localStorage.getItem(cacheTimeKey);
-      const now = Date.now();
-
-      if (cachedData && cachedTime && (now - parseInt(cachedTime)) < 30000) {
-        const data = JSON.parse(cachedData);
-        setLeads(data);
-        detectDuplicates(data);
-        setLoading(false);
-        return;
-      }
-
-      const data = await leadsAPI.getAll();
-      // Use API data if available
-      if (Array.isArray(data)) {
-        setLeads(data);
-        detectDuplicates(data);
-        // Cache the response
-        localStorage.setItem(cacheKey, JSON.stringify(data));
-        localStorage.setItem(cacheTimeKey, now.toString());
-      } else {
-        setLeads([]);
-      }
-    } catch (err) {
-      console.error('Failed to load leads:', err);
-      setLeads([]);
-    } finally {
-      setLoading(false);
+  // Detect duplicates when leads data changes (memoized for performance)
+  useEffect(() => {
+    if (leads && leads.length > 0) {
+      detectDuplicates(leads);
     }
+  }, [leads]);
+
+  // Refresh leads data - React Query handles caching automatically
+  const loadLeads = () => {
+    refetchLeads();
   };
 
   // Detect duplicates based on email
@@ -605,10 +582,8 @@ function Leads() {
 
     try {
       await leadsAPI.update(leadId, { stage: newStatus });
-      // Update local state
-      setLeads(leads.map(lead =>
-        lead.id === leadId ? { ...lead, stage: newStatus } : lead
-      ));
+      // Refresh data via React Query
+      refetchLeads();
       // Clear cache
       localStorage.removeItem('leads_data');
       localStorage.removeItem('leads_data_time');
