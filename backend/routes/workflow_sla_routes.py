@@ -2915,3 +2915,118 @@ async def seed_salesforce_sla_workflows(
             status_code=500,
             detail=f"Migration failed: {str(e)}\n{traceback.format_exc()}"
         )
+
+
+@router.post("/admin/fix-salesforce-sla-day-configs")
+async def fix_salesforce_sla_day_configs(
+    admin_key: str = Query(..., description="Admin API key for authentication"),
+    db: Session = Depends(get_db)
+):
+    """
+    Add day configurations to existing Salesforce SLA workflows that are missing them.
+
+    This fixes workflows that were created but failed to get day configs due to
+    the day_order NOT NULL constraint.
+    """
+    import os
+    from sqlalchemy import text
+    from datetime import timezone
+
+    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    if admin_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    now = datetime.now(timezone.utc)
+
+    # Day configs for each workflow
+    WORKFLOW_DAYS = {
+        "closing": [
+            {"day_value": -14, "day_label": "14 Days to Closing", "phone_enabled": True, "email_enabled": True, "text_enabled": False, "task_description": "Review file for closing readiness."},
+            {"day_value": -7, "day_label": "7 Days to Closing", "phone_enabled": True, "email_enabled": True, "text_enabled": True, "task_description": "Confirm borrower has scheduled closing."},
+            {"day_value": -3, "day_label": "3 Days to Closing", "phone_enabled": True, "email_enabled": True, "text_enabled": True, "task_description": "Final closing confirmation."},
+            {"day_value": -1, "day_label": "1 Day to Closing", "phone_enabled": True, "email_enabled": False, "text_enabled": True, "task_description": "Day before closing confirmation."},
+            {"day_value": 0, "day_label": "Closing Day", "phone_enabled": True, "email_enabled": True, "text_enabled": False, "task_description": "Congratulate borrower."}
+        ],
+        "rate_lock": [
+            {"day_value": 0, "day_label": "Rate Lock Confirmation", "phone_enabled": False, "email_enabled": True, "text_enabled": False, "task_description": "Send rate lock confirmation."},
+            {"day_value": 1, "day_label": "Rate Lock Follow-up", "phone_enabled": True, "email_enabled": False, "text_enabled": False, "task_description": "Confirm borrower received lock confirmation."}
+        ],
+        "lock_expiration": [
+            {"day_value": -7, "day_label": "7 Days to Lock Expiration", "phone_enabled": True, "email_enabled": True, "text_enabled": False, "task_description": "ALERT: Lock expires in 7 days."},
+            {"day_value": -3, "day_label": "3 Days to Lock Expiration", "phone_enabled": True, "email_enabled": True, "text_enabled": True, "task_description": "URGENT: Lock expires in 3 days."},
+            {"day_value": -1, "day_label": "1 Day to Lock Expiration", "phone_enabled": True, "email_enabled": True, "text_enabled": True, "task_description": "CRITICAL: Lock expires tomorrow."}
+        ],
+        "disclosure_sent": [
+            {"day_value": 1, "day_label": "Disclosure Follow-up", "phone_enabled": True, "email_enabled": True, "text_enabled": False, "task_description": "Follow up on disclosure receipt."},
+            {"day_value": 3, "day_label": "Disclosure Reminder", "phone_enabled": True, "email_enabled": True, "text_enabled": True, "task_description": "Reminder to sign disclosure."}
+        ]
+    }
+
+    results = {"fixed": [], "skipped": [], "errors": []}
+
+    for workflow_key, days in WORKFLOW_DAYS.items():
+        try:
+            # Get workflow ID
+            workflow = db.execute(text("""
+                SELECT id FROM workflow_configurations
+                WHERE workflow_key = :key
+            """), {"key": workflow_key}).fetchone()
+
+            if not workflow:
+                results["skipped"].append({"workflow_key": workflow_key, "reason": "workflow not found"})
+                continue
+
+            workflow_id = workflow[0]
+
+            # Check if day configs already exist
+            existing_days = db.execute(text("""
+                SELECT COUNT(*) FROM workflow_day_configs
+                WHERE workflow_id = :workflow_id
+            """), {"workflow_id": workflow_id}).fetchone()[0]
+
+            if existing_days > 0:
+                results["skipped"].append({"workflow_key": workflow_key, "reason": f"already has {existing_days} day configs"})
+                continue
+
+            # Create day configurations
+            for day_idx, day_config in enumerate(days, start=1):
+                db.execute(text("""
+                    INSERT INTO workflow_day_configs (
+                        workflow_id, day_value, day_label, day_order,
+                        phone_enabled, email_enabled, text_enabled,
+                        task_description, is_active,
+                        created_at, updated_at
+                    ) VALUES (
+                        :workflow_id, :day_value, :day_label, :day_order,
+                        :phone_enabled, :email_enabled, :text_enabled,
+                        :task_description, true,
+                        :now, :now
+                    )
+                """), {
+                    "workflow_id": workflow_id,
+                    "day_value": day_config["day_value"],
+                    "day_label": day_config["day_label"],
+                    "day_order": day_idx,
+                    "phone_enabled": day_config.get("phone_enabled", False),
+                    "email_enabled": day_config.get("email_enabled", True),
+                    "text_enabled": day_config.get("text_enabled", False),
+                    "task_description": day_config.get("task_description", ""),
+                    "now": now
+                })
+
+            results["fixed"].append({
+                "workflow_key": workflow_key,
+                "workflow_id": workflow_id,
+                "days_created": len(days)
+            })
+
+        except Exception as e:
+            results["errors"].append({"workflow_key": workflow_key, "error": str(e)})
+
+    db.commit()
+
+    return {
+        "success": len(results["errors"]) == 0,
+        "message": f"Fixed {len(results['fixed'])} workflows, skipped {len(results['skipped'])}",
+        "results": results
+    }
