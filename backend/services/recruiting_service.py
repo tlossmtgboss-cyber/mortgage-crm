@@ -426,6 +426,9 @@ class RecruitingService:
             RETURNING id
         """)
 
+        # Use created_by as referrer if not explicitly provided (the recruiter who creates the candidate)
+        referrer_id = data.get("referrer_user_id") or created_by
+
         result = self.db.execute(query, {
             "org_id": organization_id,
             "first_name": data.get("first_name"),
@@ -433,7 +436,7 @@ class RecruitingService:
             "email": data.get("email"),
             "phone": data.get("phone"),
             "source": data.get("source", "direct"),
-            "referrer_id": data.get("referrer_user_id"),
+            "referrer_id": referrer_id,
             "role_id": data.get("target_role_id"),
             "role_name": data.get("target_role_name"),
             "years_exp": data.get("years_experience"),
@@ -454,9 +457,17 @@ class RecruitingService:
             organization_id=organization_id
         )
 
+        # Auto-create recruit portal workspace for the candidate
+        portal_result = await self._create_portal_workspace(candidate_id, data.get("first_name"), data.get("last_name"))
+
         self.db.commit()
 
-        return {"id": candidate_id, "status": "new"}
+        return {
+            "id": candidate_id,
+            "status": "new",
+            "portal_slug": portal_result.get("slug"),
+            "portal_url": portal_result.get("portal_url")
+        }
 
     async def update_candidate_status(
         self,
@@ -1010,6 +1021,68 @@ class RecruitingService:
             SET last_activity_at = CURRENT_TIMESTAMP
             WHERE id = :id
         """), {"id": candidate_id})
+
+    async def _create_portal_workspace(
+        self,
+        candidate_id: int,
+        first_name: str,
+        last_name: str
+    ) -> Dict[str, Any]:
+        """Auto-create recruit portal workspace for a candidate."""
+        import re
+        import secrets
+
+        try:
+            # Generate slug from name
+            base_slug = f"{first_name.lower()}-{last_name.lower()}" if first_name and last_name else f"candidate-{candidate_id}"
+            base_slug = re.sub(r'[^a-z0-9-]', '', base_slug)
+            slug = base_slug
+
+            # Check for uniqueness
+            count = 1
+            while True:
+                result = self.db.execute(
+                    text("SELECT id FROM recruit_portal_workspaces WHERE slug = :slug"),
+                    {"slug": slug}
+                )
+                if not result.fetchone():
+                    break
+                slug = f"{base_slug}-{count}"
+                count += 1
+
+            # Create workspace
+            result = self.db.execute(
+                text("""
+                    INSERT INTO recruit_portal_workspaces (candidate_id, slug, is_active, created_at)
+                    VALUES (:candidate_id, :slug, true, NOW())
+                    RETURNING id
+                """),
+                {"candidate_id": candidate_id, "slug": slug}
+            )
+            workspace_id = result.fetchone().id
+
+            # Generate access token
+            token = f"recruit_{secrets.token_hex(32)}"
+            self.db.execute(
+                text("""
+                    INSERT INTO recruit_portal_tokens (workspace_id, token, scope, created_at)
+                    VALUES (:workspace_id, :token, 'full', NOW())
+                """),
+                {"workspace_id": workspace_id, "token": token}
+            )
+
+            logger.info(f"Created portal workspace for candidate {candidate_id}: slug={slug}")
+
+            return {
+                "workspace_id": workspace_id,
+                "slug": slug,
+                "token": token,
+                "portal_url": f"/join/{slug}"
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to create portal workspace for candidate {candidate_id}: {e}")
+            return {}
 
 
 # =========================================================================

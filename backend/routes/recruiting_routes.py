@@ -642,6 +642,131 @@ async def create_candidate(
         )
 
 
+class CandidateUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    referrer_user_id: Optional[int] = None
+    target_role_name: Optional[str] = None
+    years_experience: Optional[int] = None
+    has_mortgage_experience: Optional[bool] = None
+
+
+@router.put("/candidates/{candidate_id}")
+async def update_candidate(
+    candidate_id: int,
+    data: CandidateUpdate,
+    db: Session = Depends(get_db)
+):
+    """Update candidate details."""
+    # Build SET clause dynamically from provided fields
+    updates = []
+    params = {"id": candidate_id}
+
+    for field, value in data.model_dump(exclude_none=True).items():
+        if value is not None:
+            updates.append(f"{field} = :{field}")
+            params[field] = value
+
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    updates.append("updated_at = NOW()")
+    query = f"UPDATE mm_candidates SET {', '.join(updates)} WHERE id = :id RETURNING id"
+
+    result = db.execute(text(query), params).fetchone()
+    if not result:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    db.commit()
+    return {"id": candidate_id, "updated": True}
+
+
+@router.post("/admin/fix-candidate-portals")
+async def fix_candidate_portals(
+    admin_key: str = Query(..., description="Admin API key"),
+    default_recruiter_id: int = Query(57, description="Default recruiter user ID"),
+    db: Session = Depends(get_db)
+):
+    """
+    Admin endpoint to fix existing candidates without portal workspaces.
+    Creates workspaces and assigns default recruiter if missing.
+    """
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    import secrets
+    import re
+
+    # Find candidates without portal workspaces
+    candidates = db.execute(text("""
+        SELECT c.id, c.first_name, c.last_name, c.referrer_user_id
+        FROM mm_candidates c
+        LEFT JOIN recruit_portal_workspaces w ON w.candidate_id = c.id
+        WHERE w.id IS NULL
+    """)).fetchall()
+
+    fixed = []
+    for c in candidates:
+        # Generate slug
+        first = c.first_name or "candidate"
+        last = c.last_name or str(c.id)
+        base_slug = f"{first.lower()}-{last.lower()}"
+        base_slug = re.sub(r'[^a-z0-9-]', '', base_slug)
+        slug = base_slug
+
+        # Ensure unique slug
+        count = 1
+        while True:
+            existing = db.execute(
+                text("SELECT id FROM recruit_portal_workspaces WHERE slug = :slug"),
+                {"slug": slug}
+            ).fetchone()
+            if not existing:
+                break
+            slug = f"{base_slug}-{count}"
+            count += 1
+
+        # Create workspace
+        result = db.execute(text("""
+            INSERT INTO recruit_portal_workspaces (candidate_id, slug, is_active, created_at)
+            VALUES (:candidate_id, :slug, true, NOW())
+            RETURNING id
+        """), {"candidate_id": c.id, "slug": slug})
+        workspace_id = result.fetchone().id
+
+        # Create token
+        token = f"recruit_{secrets.token_hex(32)}"
+        db.execute(text("""
+            INSERT INTO recruit_portal_tokens (workspace_id, token, scope, created_at)
+            VALUES (:workspace_id, :token, 'full', NOW())
+        """), {"workspace_id": workspace_id, "token": token})
+
+        # Update referrer if missing
+        if not c.referrer_user_id:
+            db.execute(text("""
+                UPDATE mm_candidates SET referrer_user_id = :recruiter WHERE id = :id
+            """), {"recruiter": default_recruiter_id, "id": c.id})
+
+        fixed.append({"candidate_id": c.id, "slug": slug, "portal_url": f"/join/{slug}"})
+
+    # Also update any candidates with missing referrer but existing workspace
+    db.execute(text("""
+        UPDATE mm_candidates
+        SET referrer_user_id = :recruiter
+        WHERE referrer_user_id IS NULL
+    """), {"recruiter": default_recruiter_id})
+
+    db.commit()
+
+    return {
+        "message": f"Fixed {len(fixed)} candidates without portals",
+        "default_recruiter_assigned": default_recruiter_id,
+        "fixed_candidates": fixed
+    }
+
+
 @router.patch("/candidates/{candidate_id}/status")
 async def update_candidate_status(
     candidate_id: int,
