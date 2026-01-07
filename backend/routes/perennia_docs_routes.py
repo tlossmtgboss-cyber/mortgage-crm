@@ -1171,15 +1171,42 @@ async def get_upload_presigned_url(
         document_id = result.fetchone()[0]
         db.commit()
 
-        # In production, generate actual presigned URL from S3
-        # For now, return placeholder
-        presigned_url = f"https://s3.amazonaws.com/perennia-docs/{storage_key}?presigned=true"
+        # Generate actual presigned URL from S3
+        try:
+            from services.perennia_s3_service import get_s3_service
+            s3_service = get_s3_service()
 
+            # Use PUT method for simpler client-side upload
+            presigned_result = s3_service.get_presigned_put_url(
+                storage_key=storage_key,
+                content_type=content_type
+            )
+
+            if presigned_result.get("success"):
+                return {
+                    "document_id": document_id,
+                    "presigned_url": presigned_result["presigned_url"],
+                    "storage_key": storage_key,
+                    "expires_in": presigned_result.get("expires_in", 3600),
+                    "method": "PUT",
+                    "headers": presigned_result.get("headers", {"Content-Type": content_type})
+                }
+            else:
+                # Log error but still return document ID
+                logger.warning(f"S3 presigned URL generation failed: {presigned_result.get('error')}")
+
+        except Exception as s3_error:
+            logger.warning(f"S3 service error (using fallback): {s3_error}")
+
+        # Fallback for development/testing without S3
+        presigned_url = f"https://s3.amazonaws.com/perennia-docs/{storage_key}?presigned=placeholder"
         return {
             "document_id": document_id,
             "presigned_url": presigned_url,
             "storage_key": storage_key,
-            "expires_in": 3600
+            "expires_in": 3600,
+            "method": "PUT",
+            "note": "S3 not configured - using placeholder URL"
         }
 
     except Exception as e:

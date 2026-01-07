@@ -359,11 +359,110 @@ class RecruitSocialService:
         current_company: Optional[str] = None,
         access_token: str = None
     ) -> List[Dict]:
-        """Search LinkedIn for people (requires Sales Navigator or Recruiter API)."""
-        # Note: LinkedIn's people search API is restricted and requires special access
-        # This is a placeholder for the implementation
-        logger.info(f"LinkedIn people search requested: {keywords}")
-        return []
+        """
+        Search LinkedIn for people using Proxycurl or Apollo enrichment APIs.
+        LinkedIn's native people search API requires Sales Navigator/Recruiter access.
+        """
+        logger.info(f"LinkedIn people search requested: {keywords}, location={location}, company={current_company}")
+
+        proxycurl_key = os.getenv("PROXYCURL_API_KEY", "")
+        apollo_key = os.getenv("APOLLO_API_KEY", "")
+
+        results = []
+
+        # Try Proxycurl Person Search API first
+        if proxycurl_key:
+            try:
+                async with httpx.AsyncClient(timeout=30) as client:
+                    # Proxycurl Person Search Endpoint
+                    params = {
+                        "api_key": proxycurl_key,
+                        "first_name": keywords.split()[0] if keywords else "",
+                        "last_name": keywords.split()[-1] if len(keywords.split()) > 1 else "",
+                        "enrich_profile": "skip",  # Just search, don't enrich yet
+                        "page_size": 10
+                    }
+                    if location:
+                        params["location"] = location
+                    if current_company:
+                        params["current_company_name"] = current_company
+
+                    response = await client.get(
+                        "https://nubela.co/proxycurl/api/search/person/",
+                        params=params
+                    )
+
+                    if response.status_code == 200:
+                        data = response.json()
+                        for person in data.get("results", []):
+                            results.append({
+                                "platform": "linkedin",
+                                "profile_url": person.get("linkedin_profile_url"),
+                                "name": person.get("name", ""),
+                                "headline": person.get("headline"),
+                                "location": person.get("location"),
+                                "current_company": person.get("current_company"),
+                                "profile_picture": person.get("profile_picture"),
+                                "source": "proxycurl"
+                            })
+                        return results
+                    elif response.status_code == 401:
+                        logger.warning("Proxycurl API key invalid or expired")
+                    elif response.status_code == 429:
+                        logger.warning("Proxycurl rate limit reached")
+            except Exception as e:
+                logger.error(f"Proxycurl search failed: {e}")
+
+        # Fallback to Apollo.io People Search
+        if apollo_key:
+            try:
+                async with httpx.AsyncClient(timeout=30) as client:
+                    payload = {
+                        "api_key": apollo_key,
+                        "q_keywords": keywords,
+                        "per_page": 10,
+                        "page": 1
+                    }
+                    if location:
+                        payload["person_locations"] = [location]
+                    if current_company:
+                        payload["q_organization_name"] = current_company
+
+                    response = await client.post(
+                        "https://api.apollo.io/v1/mixed_people/search",
+                        json=payload
+                    )
+
+                    if response.status_code == 200:
+                        data = response.json()
+                        for person in data.get("people", []):
+                            results.append({
+                                "platform": "linkedin",
+                                "profile_url": person.get("linkedin_url"),
+                                "name": f"{person.get('first_name', '')} {person.get('last_name', '')}".strip(),
+                                "headline": person.get("title"),
+                                "location": f"{person.get('city', '')}, {person.get('state', '')}".strip(", "),
+                                "current_company": person.get("organization", {}).get("name"),
+                                "email": person.get("email"),
+                                "phone": person.get("phone_numbers", [{}])[0].get("sanitized_number") if person.get("phone_numbers") else None,
+                                "source": "apollo"
+                            })
+                        return results
+            except Exception as e:
+                logger.error(f"Apollo search failed: {e}")
+
+        # If no API keys configured, return helpful message
+        if not proxycurl_key and not apollo_key:
+            logger.warning("No LinkedIn enrichment API configured (PROXYCURL_API_KEY or APOLLO_API_KEY)")
+            return [{
+                "status": "not_configured",
+                "message": "LinkedIn search requires PROXYCURL_API_KEY or APOLLO_API_KEY. Configure in environment.",
+                "search_query": keywords,
+                "location": location,
+                "company": current_company
+            }]
+
+        return results
 
     # =========================================================================
     # OAUTH FLOW HELPERS
@@ -449,24 +548,156 @@ class RecruitSocialService:
         linkedin_url: str
     ) -> Optional[Dict]:
         """
-        Enrich candidate data from LinkedIn profile URL.
-        Note: This requires LinkedIn API access or web scraping.
-        For compliance, we'll use the official API when available.
+        Enrich candidate data from LinkedIn profile URL using Proxycurl API.
+        Returns profile data including name, headline, experience, education.
         """
         # Parse the LinkedIn URL to extract profile identifier
-        if "/in/" in linkedin_url:
-            profile_slug = linkedin_url.split("/in/")[1].split("/")[0].split("?")[0]
-        else:
-            return None
+        if "/in/" not in linkedin_url:
+            return {"error": "Invalid LinkedIn URL format", "linkedin_url": linkedin_url}
 
-        # In production, this would use LinkedIn's API with proper permissions
-        # For now, return a placeholder indicating manual enrichment is needed
-        return {
-            "linkedin_url": linkedin_url,
-            "profile_slug": profile_slug,
-            "status": "manual_review_required",
-            "message": "LinkedIn profile enrichment requires API access. Please review manually."
-        }
+        profile_slug = linkedin_url.split("/in/")[1].split("/")[0].split("?")[0]
+        proxycurl_key = os.getenv("PROXYCURL_API_KEY", "")
+
+        if not proxycurl_key:
+            logger.warning("PROXYCURL_API_KEY not configured for LinkedIn enrichment")
+            return {
+                "linkedin_url": linkedin_url,
+                "profile_slug": profile_slug,
+                "status": "not_configured",
+                "message": "LinkedIn enrichment requires PROXYCURL_API_KEY environment variable"
+            }
+
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                # Proxycurl Profile Lookup API
+                response = await client.get(
+                    "https://nubela.co/proxycurl/api/v2/linkedin",
+                    params={
+                        "url": linkedin_url,
+                        "fallback_to_cache": "on-error",
+                        "use_cache": "if-present",
+                        "skills": "include",
+                        "inferred_salary": "include",
+                        "personal_email": "include",
+                        "personal_contact_number": "include",
+                    },
+                    headers={"Authorization": f"Bearer {proxycurl_key}"}
+                )
+
+                if response.status_code == 200:
+                    data = response.json()
+
+                    # Extract key information
+                    enriched = {
+                        "linkedin_url": linkedin_url,
+                        "profile_slug": profile_slug,
+                        "status": "enriched",
+                        "source": "proxycurl",
+
+                        # Basic info
+                        "first_name": data.get("first_name"),
+                        "last_name": data.get("last_name"),
+                        "full_name": data.get("full_name"),
+                        "headline": data.get("headline"),
+                        "summary": data.get("summary"),
+                        "location": data.get("city"),
+                        "state": data.get("state"),
+                        "country": data.get("country_full_name"),
+                        "profile_picture": data.get("profile_pic_url"),
+                        "background_cover": data.get("background_cover_image_url"),
+
+                        # Contact (if available)
+                        "personal_emails": data.get("personal_emails", []),
+                        "personal_numbers": data.get("personal_numbers", []),
+
+                        # Current position
+                        "current_company": None,
+                        "current_title": None,
+                        "current_company_linkedin": None,
+
+                        # Experience summary
+                        "experience": [],
+                        "education": [],
+                        "skills": data.get("skills", []),
+
+                        # Inferred data
+                        "inferred_salary": data.get("inferred_salary"),
+                        "connections": data.get("connections"),
+                        "followers": data.get("follower_count"),
+                    }
+
+                    # Parse current experience
+                    experiences = data.get("experiences", [])
+                    if experiences:
+                        current_exp = experiences[0]
+                        enriched["current_company"] = current_exp.get("company")
+                        enriched["current_title"] = current_exp.get("title")
+                        enriched["current_company_linkedin"] = current_exp.get("company_linkedin_profile_url")
+
+                        for exp in experiences[:5]:  # Last 5 positions
+                            enriched["experience"].append({
+                                "company": exp.get("company"),
+                                "title": exp.get("title"),
+                                "starts_at": exp.get("starts_at"),
+                                "ends_at": exp.get("ends_at"),
+                                "location": exp.get("location"),
+                                "description": exp.get("description")
+                            })
+
+                    # Parse education
+                    education = data.get("education", [])
+                    for edu in education[:3]:  # Top 3 education entries
+                        enriched["education"].append({
+                            "school": edu.get("school"),
+                            "degree": edu.get("degree_name"),
+                            "field": edu.get("field_of_study"),
+                            "starts_at": edu.get("starts_at"),
+                            "ends_at": edu.get("ends_at")
+                        })
+
+                    return enriched
+
+                elif response.status_code == 404:
+                    return {
+                        "linkedin_url": linkedin_url,
+                        "profile_slug": profile_slug,
+                        "status": "not_found",
+                        "message": "LinkedIn profile not found or is private"
+                    }
+                elif response.status_code == 401:
+                    logger.error("Proxycurl API key invalid")
+                    return {
+                        "linkedin_url": linkedin_url,
+                        "status": "auth_error",
+                        "message": "Proxycurl API key is invalid or expired"
+                    }
+                elif response.status_code == 429:
+                    return {
+                        "linkedin_url": linkedin_url,
+                        "status": "rate_limited",
+                        "message": "Proxycurl rate limit reached. Try again later."
+                    }
+                else:
+                    logger.warning(f"Proxycurl returned status {response.status_code}: {response.text}")
+                    return {
+                        "linkedin_url": linkedin_url,
+                        "status": "error",
+                        "message": f"Enrichment failed with status {response.status_code}"
+                    }
+
+        except httpx.TimeoutException:
+            return {
+                "linkedin_url": linkedin_url,
+                "status": "timeout",
+                "message": "Request timed out. LinkedIn may be slow to respond."
+            }
+        except Exception as e:
+            logger.error(f"LinkedIn enrichment error: {e}")
+            return {
+                "linkedin_url": linkedin_url,
+                "status": "error",
+                "message": str(e)
+            }
 
     async def enrich_candidate_from_facebook(
         self,
@@ -545,6 +776,90 @@ class RecruitSocialService:
     # ANALYTICS
     # =========================================================================
 
+    async def get_linkedin_post_analytics(self, share_urn: str, access_token: str = None) -> Dict[str, Any]:
+        """Get analytics for a LinkedIn share/post."""
+        token = access_token or self.linkedin_access_token
+        if not token:
+            return {"status": "not_configured", "message": "LinkedIn access token not set"}
+
+        try:
+            async with httpx.AsyncClient() as client:
+                # LinkedIn Share Statistics API
+                response = await client.get(
+                    f"{self.linkedin_api_url}/socialActions/{share_urn}",
+                    headers={"Authorization": f"Bearer {token}"}
+                )
+
+                if response.status_code == 200:
+                    data = response.json()
+                    return {
+                        "likes": data.get("likesSummary", {}).get("totalLikes", 0),
+                        "comments": data.get("commentsSummary", {}).get("totalFirstLevelComments", 0),
+                        "shares": data.get("shareCount", 0),
+                        "impressions": data.get("impressionCount", 0),
+                        "clicks": data.get("clickCount", 0),
+                        "engagement_rate": data.get("engagementRate", 0),
+                    }
+                elif response.status_code == 401:
+                    return {"status": "auth_error", "message": "LinkedIn token expired or invalid"}
+                else:
+                    return {"status": "error", "message": f"HTTP {response.status_code}"}
+        except Exception as e:
+            logger.error(f"LinkedIn analytics error: {e}")
+            return {"status": "error", "message": str(e)}
+
+    async def get_instagram_post_analytics(self, media_id: str) -> Dict[str, Any]:
+        """Get analytics for an Instagram post via Graph API."""
+        if not self.fb_access_token:
+            return {"status": "not_configured", "message": "Facebook access token not set"}
+
+        try:
+            async with httpx.AsyncClient() as client:
+                # Instagram Insights API
+                response = await client.get(
+                    f"{self.fb_graph_url}/{media_id}/insights",
+                    params={
+                        "access_token": self.fb_access_token,
+                        "metric": "impressions,reach,engagement,saved,comments,likes,shares"
+                    }
+                )
+
+                if response.status_code == 200:
+                    data = response.json()
+                    metrics = {}
+                    for item in data.get("data", []):
+                        metrics[item["name"]] = item.get("values", [{}])[0].get("value", 0)
+                    return {
+                        "impressions": metrics.get("impressions", 0),
+                        "reach": metrics.get("reach", 0),
+                        "engagement": metrics.get("engagement", 0),
+                        "saves": metrics.get("saved", 0),
+                        "comments": metrics.get("comments", 0),
+                        "likes": metrics.get("likes", 0),
+                        "shares": metrics.get("shares", 0),
+                    }
+                elif response.status_code == 400:
+                    # Fall back to basic metrics
+                    basic_response = await client.get(
+                        f"{self.fb_graph_url}/{media_id}",
+                        params={
+                            "access_token": self.fb_access_token,
+                            "fields": "like_count,comments_count"
+                        }
+                    )
+                    if basic_response.status_code == 200:
+                        basic_data = basic_response.json()
+                        return {
+                            "likes": basic_data.get("like_count", 0),
+                            "comments": basic_data.get("comments_count", 0),
+                        }
+                    return {"status": "limited_access", "message": "Insights not available for this media"}
+                else:
+                    return {"status": "error", "message": f"HTTP {response.status_code}"}
+        except Exception as e:
+            logger.error(f"Instagram analytics error: {e}")
+            return {"status": "error", "message": str(e)}
+
     async def get_recruiting_post_analytics(
         self,
         post_ids: Dict[str, str]  # platform -> post_id mapping
@@ -556,11 +871,9 @@ class RecruitSocialService:
             if platform == "facebook":
                 analytics[platform] = await self.get_facebook_post_engagement(post_id)
             elif platform == "linkedin":
-                # LinkedIn analytics would go here
-                analytics[platform] = {"status": "not_implemented"}
+                analytics[platform] = await self.get_linkedin_post_analytics(post_id)
             elif platform == "instagram":
-                # Instagram analytics via Graph API
-                analytics[platform] = {"status": "not_implemented"}
+                analytics[platform] = await self.get_instagram_post_analytics(post_id)
 
         return analytics
 

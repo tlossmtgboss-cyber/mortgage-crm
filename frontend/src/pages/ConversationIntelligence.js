@@ -9,7 +9,7 @@
  * - Compliance monitoring
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   useTeamDashboard,
@@ -19,7 +19,7 @@ import {
   useComplianceDashboard,
   useQARubrics,
 } from '../hooks/useConversationIntelligence';
-import { exportApi } from '../services/conversationIntelligenceApi';
+import { exportApi, summaryApi } from '../services/conversationIntelligenceApi';
 import './ConversationIntelligence.css';
 
 function ConversationIntelligence() {
@@ -56,6 +56,55 @@ function ConversationIntelligence() {
     endDate: dateRange.endDate,
   });
   const { rubrics } = useQARubrics();
+
+  // Summaries state
+  const [summaryFeed, setSummaryFeed] = useState([]);
+  const [summaryStats, setSummaryStats] = useState(null);
+  const [summariesLoading, setSummariesLoading] = useState(false);
+  const [summaryFilter, setSummaryFilter] = useState({ outcome: '', sentiment: '' });
+  const [processingPending, setProcessingPending] = useState(false);
+
+  // Fetch summaries when tab is active
+  const fetchSummaries = useCallback(async () => {
+    setSummariesLoading(true);
+    try {
+      const [feedRes, statsRes] = await Promise.all([
+        summaryApi.getFeed({
+          outcome: summaryFilter.outcome || undefined,
+          sentiment: summaryFilter.sentiment || undefined,
+          limit: 30,
+        }),
+        summaryApi.getStats({ days: 30 }),
+      ]);
+      setSummaryFeed(feedRes.feed || []);
+      setSummaryStats(statsRes);
+    } catch (error) {
+      console.error('Failed to fetch summaries:', error);
+    } finally {
+      setSummariesLoading(false);
+    }
+  }, [summaryFilter]);
+
+  useEffect(() => {
+    if (activeTab === 'summaries') {
+      fetchSummaries();
+    }
+  }, [activeTab, fetchSummaries]);
+
+  // Handle processing pending summaries
+  const handleProcessPending = async () => {
+    setProcessingPending(true);
+    try {
+      const result = await summaryApi.processPending({ limit: 50 });
+      alert(`Processed ${result.processed} summaries. ${result.errors?.length || 0} errors.`);
+      fetchSummaries();
+    } catch (error) {
+      console.error('Failed to process pending:', error);
+      alert('Failed to process pending summaries');
+    } finally {
+      setProcessingPending(false);
+    }
+  };
 
   // Update URL when tab changes
   useEffect(() => {
@@ -553,6 +602,208 @@ function ConversationIntelligence() {
     </div>
   );
 
+  // Render summaries tab
+  const renderSummaries = () => {
+    const getSentimentIcon = (sentiment) => {
+      switch (sentiment) {
+        case 'positive': return { icon: 'fas fa-smile', color: '#22c55e' };
+        case 'negative': return { icon: 'fas fa-frown', color: '#ef4444' };
+        case 'mixed': return { icon: 'fas fa-meh', color: '#f59e0b' };
+        default: return { icon: 'fas fa-meh-blank', color: '#6b7280' };
+      }
+    };
+
+    const getOutcomeIcon = (outcome) => {
+      switch (outcome) {
+        case 'successful': return { icon: 'fas fa-check-circle', color: '#22c55e' };
+        case 'callback_needed': return { icon: 'fas fa-phone-alt', color: '#f59e0b' };
+        case 'escalation': return { icon: 'fas fa-exclamation-triangle', color: '#ef4444' };
+        case 'no_answer': return { icon: 'fas fa-phone-slash', color: '#6b7280' };
+        default: return { icon: 'fas fa-question-circle', color: '#6b7280' };
+      }
+    };
+
+    const getUrgencyBadge = (urgency) => {
+      const colors = {
+        urgent: '#ef4444',
+        normal: '#3b82f6',
+        low: '#6b7280',
+      };
+      return colors[urgency] || colors.normal;
+    };
+
+    return (
+      <div className="ci-summaries">
+        {/* Summary Stats */}
+        <div className="ci-summary-stats">
+          <div className="ci-summary-stat-card">
+            <div className="ci-stat-icon" style={{ backgroundColor: '#3b82f6' }}>
+              <i className="fas fa-phone-volume"></i>
+            </div>
+            <div className="ci-stat-content">
+              <span className="ci-stat-value">{summaryStats?.total_calls || 0}</span>
+              <span className="ci-stat-label">Calls Summarized</span>
+            </div>
+          </div>
+          <div className="ci-summary-stat-card">
+            <div className="ci-stat-icon" style={{ backgroundColor: '#22c55e' }}>
+              <i className="fas fa-check-circle"></i>
+            </div>
+            <div className="ci-stat-content">
+              <span className="ci-stat-value">{summaryStats?.successful_rate || 0}%</span>
+              <span className="ci-stat-label">Successful Calls</span>
+            </div>
+          </div>
+          <div className="ci-summary-stat-card">
+            <div className="ci-stat-icon" style={{ backgroundColor: '#22c55e' }}>
+              <i className="fas fa-smile"></i>
+            </div>
+            <div className="ci-stat-content">
+              <span className="ci-stat-value">{summaryStats?.positive_sentiment_rate || 0}%</span>
+              <span className="ci-stat-label">Positive Sentiment</span>
+            </div>
+          </div>
+          <div className="ci-summary-stat-card">
+            <div className="ci-stat-icon" style={{ backgroundColor: '#f59e0b' }}>
+              <i className="fas fa-phone-alt"></i>
+            </div>
+            <div className="ci-stat-content">
+              <span className="ci-stat-value">{summaryStats?.callbacks_needed || 0}</span>
+              <span className="ci-stat-label">Callbacks Needed</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Filters and Actions */}
+        <div className="ci-summary-controls">
+          <div className="ci-summary-filters">
+            <select
+              value={summaryFilter.outcome}
+              onChange={(e) => setSummaryFilter({ ...summaryFilter, outcome: e.target.value })}
+            >
+              <option value="">All Outcomes</option>
+              <option value="successful">Successful</option>
+              <option value="callback_needed">Callback Needed</option>
+              <option value="escalation">Escalation</option>
+              <option value="no_answer">No Answer</option>
+            </select>
+            <select
+              value={summaryFilter.sentiment}
+              onChange={(e) => setSummaryFilter({ ...summaryFilter, sentiment: e.target.value })}
+            >
+              <option value="">All Sentiment</option>
+              <option value="positive">Positive</option>
+              <option value="neutral">Neutral</option>
+              <option value="negative">Negative</option>
+              <option value="mixed">Mixed</option>
+            </select>
+          </div>
+          <div className="ci-summary-actions">
+            <button
+              className="ci-btn ci-btn-secondary"
+              onClick={handleProcessPending}
+              disabled={processingPending}
+            >
+              {processingPending ? (
+                <><i className="fas fa-spinner fa-spin"></i> Processing...</>
+              ) : (
+                <><i className="fas fa-magic"></i> Generate Pending</>
+              )}
+            </button>
+            <button className="ci-btn ci-btn-primary" onClick={fetchSummaries}>
+              <i className="fas fa-sync-alt"></i> Refresh
+            </button>
+          </div>
+        </div>
+
+        {/* Summary Feed */}
+        <div className="ci-summary-feed">
+          {summariesLoading ? (
+            <div className="ci-loading-full">
+              <i className="fas fa-spinner fa-spin"></i>
+              <span>Loading summaries...</span>
+            </div>
+          ) : summaryFeed.length === 0 ? (
+            <div className="ci-empty-state">
+              <i className="fas fa-file-alt"></i>
+              <h3>No Summaries Yet</h3>
+              <p>Click "Generate Pending" to create AI summaries for recorded calls</p>
+            </div>
+          ) : (
+            summaryFeed.map((summary) => {
+              const sentiment = getSentimentIcon(summary.customer_sentiment);
+              const outcome = getOutcomeIcon(summary.call_outcome);
+              return (
+                <div
+                  key={summary.id}
+                  className="ci-summary-card"
+                  onClick={() => navigate(`/conversation-intelligence/recordings/${summary.recording_id}`)}
+                >
+                  <div className="ci-summary-header">
+                    <div className="ci-summary-agent">
+                      <div className="ci-agent-avatar">
+                        {summary.agent?.name?.charAt(0) || 'A'}
+                      </div>
+                      <div className="ci-agent-info">
+                        <span className="ci-agent-name">{summary.agent?.name || 'Unknown Agent'}</span>
+                        <span className="ci-call-time">
+                          {formatDate(summary.generated_at)} • {formatDuration(summary.duration_seconds)}
+                          <span className="ci-call-direction">
+                            <i className={summary.direction === 'inbound' ? 'fas fa-arrow-down' : 'fas fa-arrow-up'}></i>
+                            {summary.direction}
+                          </span>
+                        </span>
+                      </div>
+                    </div>
+                    <div className="ci-summary-badges">
+                      <span
+                        className="ci-sentiment-badge"
+                        style={{ color: sentiment.color }}
+                        title={`Sentiment: ${summary.customer_sentiment}`}
+                      >
+                        <i className={sentiment.icon}></i>
+                      </span>
+                      <span
+                        className="ci-outcome-badge"
+                        style={{ backgroundColor: outcome.color }}
+                        title={`Outcome: ${summary.call_outcome}`}
+                      >
+                        <i className={outcome.icon}></i>
+                        {summary.call_outcome?.replace('_', ' ')}
+                      </span>
+                      {summary.customer_urgency && summary.customer_urgency !== 'normal' && (
+                        <span
+                          className="ci-urgency-badge"
+                          style={{ backgroundColor: getUrgencyBadge(summary.customer_urgency) }}
+                        >
+                          {summary.customer_urgency}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {summary.customer_name && (
+                    <div className="ci-summary-customer">
+                      <i className="fas fa-user"></i>
+                      <span>{summary.customer_name}</span>
+                    </div>
+                  )}
+                  <div className="ci-summary-content">
+                    <p className="ci-one-liner">{summary.one_liner}</p>
+                  </div>
+                  <div className="ci-summary-footer">
+                    <span className="ci-view-details">
+                      View full summary <i className="fas fa-arrow-right"></i>
+                    </span>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    );
+  };
+
   // Render settings tab
   const renderSettings = () => (
     <div className="ci-settings">
@@ -652,6 +903,7 @@ function ConversationIntelligence() {
       <div className="ci-tabs">
         {[
           { id: 'overview', label: 'Overview', icon: 'fas fa-chart-pie' },
+          { id: 'summaries', label: 'AI Summaries', icon: 'fas fa-magic' },
           { id: 'recordings', label: 'Recordings', icon: 'fas fa-record-vinyl' },
           { id: 'coaching', label: 'Coaching', icon: 'fas fa-graduation-cap' },
           { id: 'compliance', label: 'Compliance', icon: 'fas fa-shield-alt' },
@@ -678,6 +930,7 @@ function ConversationIntelligence() {
         ) : (
           <>
             {activeTab === 'overview' && renderOverview()}
+            {activeTab === 'summaries' && renderSummaries()}
             {activeTab === 'recordings' && renderRecordings()}
             {activeTab === 'coaching' && renderCoaching()}
             {activeTab === 'compliance' && renderCompliance()}

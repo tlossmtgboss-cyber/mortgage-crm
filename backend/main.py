@@ -19694,6 +19694,15 @@ app.include_router(circle_of_cashflow_router, tags=["Circle of Cashflow"])
 from ai_command_routes import router as ai_command_router
 app.include_router(ai_command_router, tags=["AI Commands"])
 
+# Include AI Smart File Analysis routes for loan file analysis
+try:
+    from routes.ai_file_analysis_routes import router as ai_file_analysis_router, set_dependencies as set_ai_file_deps
+    set_ai_file_deps(get_db, get_current_user)
+    app.include_router(ai_file_analysis_router, tags=["AI File Analysis"])
+    logger.info("✅ AI Smart File Analysis routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load AI Smart File Analysis routes: {e}")
+
 # Include Subscription routes for Perennia AI
 from subscription_routes import router as subscription_router
 app.include_router(subscription_router, tags=["Subscriptions"])
@@ -19739,6 +19748,30 @@ try:
     logger.info("✅ CI Voice routes loaded")
 except Exception as e:
     logger.warning(f"⚠️ Could not load CI Voice routes: {e}")
+
+# Include Live Call Whisper routes (real-time AI coaching during calls)
+try:
+    from routes.live_call_whisper_routes import router as live_call_whisper_router
+    app.include_router(live_call_whisper_router, tags=["Live Call Whisper"])
+    logger.info("✅ Live Call Whisper routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load Live Call Whisper routes: {e}")
+
+# Include Production Predictor routes (AI-powered production forecasting)
+try:
+    from routes.production_predictor_routes import router as production_predictor_router
+    app.include_router(production_predictor_router, tags=["Production Predictor"])
+    logger.info("✅ Production Predictor routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load Production Predictor routes: {e}")
+
+# Include Deal Alerts routes (proactive pipeline monitoring and alerting)
+try:
+    from routes.deal_alerts_routes import router as deal_alerts_router
+    app.include_router(deal_alerts_router, tags=["Deal Alerts"])
+    logger.info("✅ Deal Alerts routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load Deal Alerts routes: {e}")
 
 # Include Realtor Portal routes
 try:
@@ -20056,6 +20089,14 @@ app.include_router(integration_router, tags=["Integrations"])
 # Include Profitability Intelligence routes
 from profitability_routes import router as profitability_router
 app.include_router(profitability_router, tags=["Profitability"])
+
+# Include Pipeline Probability routes (Advanced Analytics)
+try:
+    from routes.pipeline_probability_routes import router as pipeline_probability_router
+    app.include_router(pipeline_probability_router, tags=["Pipeline Probability"])
+    logger.info("✅ Pipeline Probability routes loaded")
+except Exception as e:
+    logger.warning(f"Could not load Pipeline Probability routes: {e}")
 
 # Include AI Insights routes for profitability
 from ai_insights_routes import router as ai_insights_router
@@ -20720,6 +20761,14 @@ try:
     logger.info("✅ Estimate Parser routes loaded")
 except Exception as e:
     logger.warning(f"⚠️ Estimate Parser routes not loaded: {e}")
+
+# Call Routing routes (Intelligent Vapi call routing based on CRM stage)
+try:
+    from routes.call_routing_routes import router as call_routing_router
+    app.include_router(call_routing_router, tags=["Call Routing"])
+    logger.info("✅ Call Routing routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Call Routing routes not loaded: {e}")
 
 # Chat State Machine routes (Phase-based microsite chat)
 try:
@@ -67512,7 +67561,7 @@ async def generate_social_content(
         content = await social_content_service.generate_content(
             content_type=data.type,
             platform=data.platform,
-            lo_name=current_user.name,
+            lo_name=current_user.full_name or current_user.email.split("@")[0],
             company_name=None,  # Could get from user profile
         )
 

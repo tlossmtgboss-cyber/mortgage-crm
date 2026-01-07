@@ -364,7 +364,8 @@ function Settings() {
     { id: 'data-management', label: 'Data Management', type: 'standalone', section: 'data-management', navigate: '/data-upload' },
     { id: 'master-admin', label: 'Master Administrator', type: 'parent', section: 'masterAdmin' },
     { id: 'admin-settings', label: 'Admin Settings', type: 'standalone', section: 'admin-settings', navigate: '/admin/settings', adminOnly: true },
-    { id: 'custom-domains', label: 'Custom Domains', type: 'standalone', section: 'custom-domains', navigate: '/admin/domains', adminOnly: true }
+    { id: 'custom-domains', label: 'Custom Domains', type: 'standalone', section: 'custom-domains', navigate: '/admin/domains', adminOnly: true },
+    { id: 'call-routing', label: 'Call Routing', type: 'standalone', section: 'call-routing', navigate: '/call-routing-config', adminOnly: true }
   ];
 
   // Load sidebar order from localStorage or use defaults

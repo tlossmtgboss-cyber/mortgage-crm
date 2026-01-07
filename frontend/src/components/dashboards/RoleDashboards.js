@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { PipelineProbabilityWidget } from '../PipelineProbability';
 import './RoleDashboards.css';
 
 const API_URL = process.env.REACT_APP_API_URL || '';
@@ -263,6 +264,11 @@ export const LoanOfficerDashboard = () => {
         <button className="btn-view-full" onClick={() => navigate('/dashboard/efficiency')}>
           View Full Efficiency Report →
         </button>
+      </div>
+
+      {/* Pipeline Probability Scores */}
+      <div className="lo-section probability-section">
+        <PipelineProbabilityWidget compact={true} />
       </div>
 
       {/* AI Prioritized Tasks */}
@@ -1100,6 +1106,11 @@ export const ManagerDashboard = () => {
             </div>
           </div>
         </div>
+
+        {/* Pipeline Probability Scores */}
+        <div className="section probability-section">
+          <PipelineProbabilityWidget compact={true} />
+        </div>
       </div>
     </div>
   );
@@ -1248,6 +1259,11 @@ export const AdminDashboard = () => {
               <span className="link-label">Scorecards</span>
             </button>
           </div>
+        </div>
+
+        {/* Pipeline Probability Scores */}
+        <div className="section probability-section">
+          <PipelineProbabilityWidget compact={false} />
         </div>
       </div>
     </div>

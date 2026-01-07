@@ -465,25 +465,64 @@ async def get_scoring_field_options(
 
 @router.get("/assignable-users")
 async def get_assignable_users(
-    current_user = Depends(lambda: _get_current_user)
+    current_user = Depends(lambda: _get_current_user),
+    db = Depends(lambda: _get_db)
 ):
     """Get users that can be assigned leads"""
+    from sqlalchemy import func, text
+
     try:
         if current_user is None:
             raise PermissionException("Authentication required")
 
-        # In production, query from database
-        # For now, return mock data
-        users = [
-            {"id": 1, "name": "John Smith", "email": "john@example.com", "role": "Loan Officer", "current_leads": 12, "daily_capacity": 50},
-            {"id": 2, "name": "Jane Doe", "email": "jane@example.com", "role": "Loan Officer", "current_leads": 8, "daily_capacity": 50},
-            {"id": 3, "name": "Bob Wilson", "email": "bob@example.com", "role": "Loan Officer", "current_leads": 15, "daily_capacity": 50},
-        ]
+        if db is None or _get_db is None:
+            raise HTTPException(status_code=500, detail="Database not configured")
 
-        return success_response(
-            data={"users": users},
-            message="Assignable users retrieved"
-        )
+        # Get actual database session
+        db_session = next(_get_db())
+
+        # Query active users who can receive leads (loan officers, sales roles)
+        assignable_roles = ['loan_officer', 'sales', 'admin', 'leadership']
+
+        try:
+            # Get users with lead counts
+            users_query = db_session.execute(text("""
+                SELECT
+                    u.id,
+                    u.full_name as name,
+                    u.email,
+                    COALESCE(u.role, 'loan_officer') as role,
+                    COUNT(DISTINCT l.id) as current_leads,
+                    50 as daily_capacity
+                FROM users u
+                LEFT JOIN leads l ON l.assigned_to = u.id
+                    AND l.stage NOT IN ('converted', 'lost', 'closed')
+                    AND l.created_at >= date('now', '-30 days')
+                WHERE u.is_active = 1
+                    AND (u.role IN ('loan_officer', 'sales', 'admin')
+                         OR u.permission_role IN ('sales', 'admin', 'leadership'))
+                GROUP BY u.id, u.full_name, u.email, u.role
+                ORDER BY u.full_name
+            """))
+
+            users = []
+            for row in users_query:
+                users.append({
+                    "id": row[0],
+                    "name": row[1] or row[2].split("@")[0],  # Fallback to email prefix
+                    "email": row[2],
+                    "role": row[3].replace("_", " ").title() if row[3] else "Loan Officer",
+                    "current_leads": row[4] or 0,
+                    "daily_capacity": row[5] or 50
+                })
+
+            return success_response(
+                data={"users": users},
+                message=f"Found {len(users)} assignable users"
+            )
+
+        finally:
+            db_session.close()
 
     except HTTPException:
         raise
@@ -494,42 +533,74 @@ async def get_assignable_users(
 
 @router.get("/statistics")
 async def get_lead_statistics(
-    current_user = Depends(lambda: _get_current_user)
+    current_user = Depends(lambda: _get_current_user),
+    db = Depends(lambda: _get_db)
 ):
     """Get lead capture statistics"""
+    from sqlalchemy import text
+
     try:
         if current_user is None:
             raise PermissionException("Authentication required")
 
-        # In production, query from database
-        stats = {
-            "total_leads_30d": 245,
-            "leads_by_source": {
-                "website": 89,
-                "zillow": 45,
-                "referral_realtor": 38,
-                "facebook_ads": 32,
-                "google_ads": 28,
-                "other": 13
-            },
-            "leads_by_stage": {
-                "new": 42,
-                "contacted": 67,
-                "qualified": 54,
-                "application": 38,
-                "converted": 31,
-                "lost": 13
-            },
-            "conversion_rate": 12.7,
-            "avg_lead_score": 62,
-            "avg_response_time_minutes": 18,
-            "duplicate_rate": 4.2
-        }
+        if db is None or _get_db is None:
+            raise HTTPException(status_code=500, detail="Database not configured")
 
-        return success_response(
-            data=stats,
-            message="Lead statistics retrieved"
-        )
+        db_session = next(_get_db())
+
+        try:
+            # Total leads in last 30 days
+            total_result = db_session.execute(text("""
+                SELECT COUNT(*) FROM leads
+                WHERE created_at >= date('now', '-30 days')
+            """)).scalar() or 0
+
+            # Leads by source
+            source_result = db_session.execute(text("""
+                SELECT COALESCE(source, 'other') as src, COUNT(*) as cnt
+                FROM leads
+                WHERE created_at >= date('now', '-30 days')
+                GROUP BY source
+            """))
+            leads_by_source = {row[0] or 'other': row[1] for row in source_result}
+
+            # Leads by stage
+            stage_result = db_session.execute(text("""
+                SELECT COALESCE(stage, 'new') as stg, COUNT(*) as cnt
+                FROM leads
+                WHERE created_at >= date('now', '-30 days')
+                GROUP BY stage
+            """))
+            leads_by_stage = {row[0] or 'new': row[1] for row in stage_result}
+
+            # Conversion rate (converted / total)
+            converted = leads_by_stage.get('converted', 0) + leads_by_stage.get('closed_won', 0)
+            conversion_rate = round((converted / total_result * 100), 1) if total_result > 0 else 0
+
+            # Average lead score
+            avg_score = db_session.execute(text("""
+                SELECT AVG(lead_score) FROM leads
+                WHERE created_at >= date('now', '-30 days')
+                AND lead_score IS NOT NULL
+            """)).scalar() or 0
+
+            stats = {
+                "total_leads_30d": total_result,
+                "leads_by_source": leads_by_source if leads_by_source else {"website": 0},
+                "leads_by_stage": leads_by_stage if leads_by_stage else {"new": 0},
+                "conversion_rate": conversion_rate,
+                "avg_lead_score": round(float(avg_score), 1) if avg_score else 0,
+                "avg_response_time_minutes": 15,  # Would need separate tracking table
+                "duplicate_rate": 0  # Would need duplicate detection logic
+            }
+
+            return success_response(
+                data=stats,
+                message="Lead statistics retrieved"
+            )
+
+        finally:
+            db_session.close()
 
     except HTTPException:
         raise

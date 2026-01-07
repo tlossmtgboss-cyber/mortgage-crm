@@ -1,9 +1,15 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { aiAPI } from '../services/api';
 import GuidelineUpdatesSidebar from '../components/GuidelineUpdatesSidebar';
 import GuidelineNotificationBadge from '../components/GuidelineNotificationBadge';
 import EscalationPanel from '../components/EscalationPanel';
 import './AIUnderwriter.css';
+
+// View modes
+const VIEW_MODES = [
+  { id: 'chat', label: 'AI Chat', icon: '💬' },
+  { id: 'file-analysis', label: 'Smart File Analysis', icon: '📁' },
+];
 
 // Guideline categories
 const GUIDELINE_CATEGORIES = [
@@ -17,6 +23,20 @@ const GUIDELINE_CATEGORIES = [
 ];
 
 function AIUnderwriter() {
+  // View mode state
+  const [viewMode, setViewMode] = useState('chat');
+
+  // File analysis state
+  const [loanSearchQuery, setLoanSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [selectedLoan, setSelectedLoan] = useState(null);
+  const [fileAnalysis, setFileAnalysis] = useState(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [pipelineReadiness, setPipelineReadiness] = useState(null);
+  const [isLoadingPipeline, setIsLoadingPipeline] = useState(false);
+
+  // Chat state
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
@@ -49,6 +69,100 @@ function AIUnderwriter() {
   });
   const messagesEndRef = useRef(null);
   const recognitionRef = useRef(null);
+
+  // File Analysis Functions
+  const searchLoans = useCallback(async () => {
+    if (!loanSearchQuery.trim()) return;
+    setIsSearching(true);
+    try {
+      const response = await fetch(`/api/v1/loans/search?q=${encodeURIComponent(loanSearchQuery)}&limit=10`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSearchResults(data.loans || data || []);
+      }
+    } catch (error) {
+      console.error('Error searching loans:', error);
+    } finally {
+      setIsSearching(false);
+    }
+  }, [loanSearchQuery]);
+
+  const analyzeFile = useCallback(async (loanId) => {
+    setIsAnalyzing(true);
+    setFileAnalysis(null);
+    try {
+      const response = await fetch(`/api/v1/ai-file-analysis/analyze/${loanId}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setFileAnalysis(data);
+      }
+    } catch (error) {
+      console.error('Error analyzing file:', error);
+      setFileAnalysis({ error: 'Failed to analyze loan file. Please try again.' });
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }, []);
+
+  const loadPipelineReadiness = useCallback(async () => {
+    setIsLoadingPipeline(true);
+    try {
+      const response = await fetch('/api/v1/ai-file-analysis/pipeline-readiness?limit=15', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setPipelineReadiness(data);
+      }
+    } catch (error) {
+      console.error('Error loading pipeline readiness:', error);
+    } finally {
+      setIsLoadingPipeline(false);
+    }
+  }, []);
+
+  // Load pipeline readiness when switching to file analysis mode
+  useEffect(() => {
+    if (viewMode === 'file-analysis' && !pipelineReadiness) {
+      loadPipelineReadiness();
+    }
+  }, [viewMode, pipelineReadiness, loadPipelineReadiness]);
+
+  const handleLoanSelect = (loan) => {
+    setSelectedLoan(loan);
+    setFileAnalysis(null);
+    analyzeFile(loan.id);
+  };
+
+  const getGradeColor = (grade) => {
+    switch (grade) {
+      case 'A': return '#10b981';
+      case 'B': return '#3b82f6';
+      case 'C': return '#f59e0b';
+      case 'D': return '#ef4444';
+      case 'F': return '#dc2626';
+      default: return '#6b7280';
+    }
+  };
+
+  const getSeverityColor = (severity) => {
+    switch (severity) {
+      case 'critical': return '#dc2626';
+      case 'high': return '#ef4444';
+      case 'medium': return '#f59e0b';
+      default: return '#6b7280';
+    }
+  };
 
   // Initialize speech recognition
   useEffect(() => {
@@ -319,8 +433,12 @@ function AIUnderwriter() {
             🧠 Smart AI Underwriter
             <GuidelineNotificationBadge userId={currentUserId || 1} />
           </h1>
-          <p className="subtitle">Ask any mortgage lending question and get answers with sources</p>
-          {memoryStats && (
+          <p className="subtitle">
+            {viewMode === 'chat'
+              ? 'Ask any mortgage lending question and get answers with sources'
+              : 'AI-powered loan file analysis to catch issues before submission'}
+          </p>
+          {viewMode === 'chat' && memoryStats && (
             <div className="memory-stats-badge">
               💾 {memoryStats.total_memories} conversations remembered
             </div>
@@ -328,27 +446,46 @@ function AIUnderwriter() {
         </div>
       </div>
 
-      {/* Category Tabs */}
-      <div className="category-tabs-container">
-        <div className="category-tabs">
-          {GUIDELINE_CATEGORIES.map((category) => (
+      {/* View Mode Toggle */}
+      <div className="view-mode-container">
+        <div className="view-mode-tabs">
+          {VIEW_MODES.map((mode) => (
             <button
-              key={category.id}
-              className={`category-tab ${selectedCategory === category.id ? 'active' : ''}`}
-              onClick={() => setSelectedCategory(category.id)}
+              key={mode.id}
+              className={`view-mode-tab ${viewMode === mode.id ? 'active' : ''}`}
+              onClick={() => setViewMode(mode.id)}
             >
-              <span className="category-icon">{category.icon}</span>
-              <span className="category-label">{category.label}</span>
+              <span className="mode-icon">{mode.icon}</span>
+              <span className="mode-label">{mode.label}</span>
             </button>
           ))}
         </div>
-        <button
-          className="scenario-builder-toggle"
-          onClick={() => setShowScenarioBuilder(!showScenarioBuilder)}
-        >
-          {showScenarioBuilder ? '✕ Close' : '📝 Scenario Builder'}
-        </button>
       </div>
+
+      {/* Chat View */}
+      {viewMode === 'chat' && (
+        <>
+          {/* Category Tabs */}
+          <div className="category-tabs-container">
+            <div className="category-tabs">
+              {GUIDELINE_CATEGORIES.map((category) => (
+                <button
+                  key={category.id}
+                  className={`category-tab ${selectedCategory === category.id ? 'active' : ''}`}
+                  onClick={() => setSelectedCategory(category.id)}
+                >
+                  <span className="category-icon">{category.icon}</span>
+                  <span className="category-label">{category.label}</span>
+                </button>
+              ))}
+            </div>
+            <button
+              className="scenario-builder-toggle"
+              onClick={() => setShowScenarioBuilder(!showScenarioBuilder)}
+            >
+              {showScenarioBuilder ? '✕ Close' : '📝 Scenario Builder'}
+            </button>
+          </div>
 
       {/* Scenario Builder Modal */}
       {showScenarioBuilder && (
@@ -733,6 +870,261 @@ function AIUnderwriter() {
           <EscalationPanel />
         </div>
       </div>
+        </>
+      )}
+
+      {/* File Analysis View */}
+      {viewMode === 'file-analysis' && (
+        <div className="file-analysis-container">
+          <div className="file-analysis-main">
+            {/* Search and Select Loan */}
+            <div className="loan-search-section">
+              <h3>Search for a Loan to Analyze</h3>
+              <div className="loan-search-form">
+                <input
+                  type="text"
+                  placeholder="Enter loan number or borrower name..."
+                  value={loanSearchQuery}
+                  onChange={(e) => setLoanSearchQuery(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && searchLoans()}
+                  className="loan-search-input"
+                />
+                <button
+                  onClick={searchLoans}
+                  disabled={isSearching}
+                  className="loan-search-btn"
+                >
+                  {isSearching ? 'Searching...' : 'Search'}
+                </button>
+              </div>
+
+              {searchResults.length > 0 && (
+                <div className="search-results">
+                  {searchResults.map((loan) => (
+                    <div
+                      key={loan.id}
+                      className={`search-result-item ${selectedLoan?.id === loan.id ? 'selected' : ''}`}
+                      onClick={() => handleLoanSelect(loan)}
+                    >
+                      <div className="result-loan-number">{loan.loan_number || `Loan #${loan.id}`}</div>
+                      <div className="result-details">
+                        <span>{loan.borrower_name || loan.property_address}</span>
+                        <span className="result-amount">${(loan.amount || 0).toLocaleString()}</span>
+                      </div>
+                      <div className="result-stage">{loan.stage}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Analysis Results */}
+            {isAnalyzing && (
+              <div className="analysis-loading">
+                <div className="analysis-spinner"></div>
+                <p>Analyzing loan file with AI...</p>
+                <p className="analysis-loading-sub">This may take a few moments</p>
+              </div>
+            )}
+
+            {fileAnalysis && !fileAnalysis.error && (
+              <div className="analysis-results">
+                {/* Readiness Score */}
+                <div className="readiness-header">
+                  <div className="readiness-score-container">
+                    <div
+                      className="readiness-score"
+                      style={{ borderColor: getGradeColor(fileAnalysis.readiness_grade) }}
+                    >
+                      <span className="score-value">{fileAnalysis.readiness_score}</span>
+                      <span className="score-label">/ 100</span>
+                    </div>
+                    <div
+                      className="readiness-grade"
+                      style={{ backgroundColor: getGradeColor(fileAnalysis.readiness_grade) }}
+                    >
+                      Grade {fileAnalysis.readiness_grade}
+                    </div>
+                  </div>
+                  <div className="readiness-summary">
+                    <h2>File Analysis for {fileAnalysis.loan_number || `Loan #${fileAnalysis.loan_id}`}</h2>
+                    <p className="loan-type-badge">{fileAnalysis.loan_type?.toUpperCase() || 'CONVENTIONAL'}</p>
+                    <p className="summary-text">{fileAnalysis.summary}</p>
+                  </div>
+                </div>
+
+                {/* Quick Stats */}
+                <div className="analysis-stats">
+                  <div className="stat-card">
+                    <span className="stat-value">{fileAnalysis.documents_collected}</span>
+                    <span className="stat-label">Docs Collected</span>
+                  </div>
+                  <div className="stat-card warning">
+                    <span className="stat-value">{fileAnalysis.missing_documents?.length || 0}</span>
+                    <span className="stat-label">Missing Docs</span>
+                  </div>
+                  <div className="stat-card error">
+                    <span className="stat-value">{fileAnalysis.red_flags?.length || 0}</span>
+                    <span className="stat-label">Red Flags</span>
+                  </div>
+                  <div className="stat-card">
+                    <span className="stat-value">{fileAnalysis.open_conditions}</span>
+                    <span className="stat-label">Open Conditions</span>
+                  </div>
+                </div>
+
+                {/* Red Flags */}
+                {fileAnalysis.red_flags?.length > 0 && (
+                  <div className="analysis-section red-flags-section">
+                    <h3>Red Flags</h3>
+                    <div className="red-flags-list">
+                      {fileAnalysis.red_flags.map((flag, index) => (
+                        <div
+                          key={index}
+                          className="red-flag-item"
+                          style={{ borderLeftColor: getSeverityColor(flag.severity) }}
+                        >
+                          <span className="flag-severity" style={{ backgroundColor: getSeverityColor(flag.severity) }}>
+                            {flag.severity}
+                          </span>
+                          <span className="flag-issue">{flag.issue}</span>
+                          {flag.recommendation && (
+                            <p className="flag-recommendation">{flag.recommendation}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Missing Documents */}
+                {fileAnalysis.missing_documents?.length > 0 && (
+                  <div className="analysis-section missing-docs-section">
+                    <h3>Missing Documents</h3>
+                    <div className="missing-docs-grid">
+                      {fileAnalysis.missing_documents.map((doc, index) => (
+                        <div key={index} className={`missing-doc-item priority-${doc.priority}`}>
+                          <span className="doc-category">{doc.category}</span>
+                          <span className="doc-name">{doc.document}</span>
+                          <span className={`doc-priority priority-${doc.priority}`}>{doc.priority}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Compliance Issues */}
+                {fileAnalysis.compliance_issues?.length > 0 && (
+                  <div className="analysis-section compliance-section">
+                    <h3>Compliance Issues</h3>
+                    <div className="compliance-list">
+                      {fileAnalysis.compliance_issues.map((issue, index) => (
+                        <div key={index} className={`compliance-item severity-${issue.severity}`}>
+                          <span className="compliance-type">{issue.type}</span>
+                          <span className="compliance-message">{issue.message}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Recommendations */}
+                {fileAnalysis.recommendations?.length > 0 && (
+                  <div className="analysis-section recommendations-section">
+                    <h3>Recommendations</h3>
+                    <ul className="recommendations-list">
+                      {fileAnalysis.recommendations.map((rec, index) => (
+                        <li key={index}>{rec}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Next Steps */}
+                {fileAnalysis.next_steps?.length > 0 && (
+                  <div className="analysis-section next-steps-section">
+                    <h3>Immediate Next Steps</h3>
+                    <ol className="next-steps-list">
+                      {fileAnalysis.next_steps.map((step, index) => (
+                        <li key={index}>{step}</li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {fileAnalysis?.error && (
+              <div className="analysis-error">
+                <p>{fileAnalysis.error}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Pipeline Readiness Sidebar */}
+          <div className="pipeline-readiness-sidebar">
+            <h3>Pipeline Readiness</h3>
+            <button
+              onClick={loadPipelineReadiness}
+              disabled={isLoadingPipeline}
+              className="refresh-pipeline-btn"
+            >
+              {isLoadingPipeline ? 'Loading...' : 'Refresh'}
+            </button>
+
+            {pipelineReadiness && (
+              <>
+                <div className="pipeline-summary">
+                  <div className="pipeline-stat ready">
+                    <span className="count">{pipelineReadiness.summary?.ready || 0}</span>
+                    <span className="label">Ready</span>
+                  </div>
+                  <div className="pipeline-stat almost">
+                    <span className="count">{pipelineReadiness.summary?.almost_ready || 0}</span>
+                    <span className="label">Almost</span>
+                  </div>
+                  <div className="pipeline-stat needs-work">
+                    <span className="count">{pipelineReadiness.summary?.needs_work || 0}</span>
+                    <span className="label">Needs Work</span>
+                  </div>
+                  <div className="pipeline-stat critical">
+                    <span className="count">{pipelineReadiness.summary?.critical || 0}</span>
+                    <span className="label">Critical</span>
+                  </div>
+                </div>
+
+                <div className="pipeline-loans">
+                  <h4>Needs Attention</h4>
+                  {[...(pipelineReadiness.by_status?.critical || []), ...(pipelineReadiness.by_status?.needs_work || [])].slice(0, 5).map((loan) => (
+                    <div
+                      key={loan.loan_id}
+                      className="pipeline-loan-item"
+                      onClick={() => {
+                        setSelectedLoan({ id: loan.loan_id, loan_number: loan.loan_number });
+                        analyzeFile(loan.loan_id);
+                      }}
+                    >
+                      <div className="loan-info">
+                        <span className="loan-num">{loan.loan_number || `#${loan.loan_id}`}</span>
+                        <span className="loan-score" style={{ color: getGradeColor(loan.readiness_grade) }}>
+                          {loan.readiness_score}
+                        </span>
+                      </div>
+                      {loan.quick_issues?.length > 0 && (
+                        <div className="loan-issues">
+                          {loan.quick_issues.slice(0, 2).map((issue, i) => (
+                            <span key={i} className="issue-chip">{issue}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

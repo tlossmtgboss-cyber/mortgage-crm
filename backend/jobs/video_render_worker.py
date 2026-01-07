@@ -524,11 +524,13 @@ class VideoRenderWorker:
         height: int,
         style: str = "professional"
     ) -> Path:
-        """Generate image using local diffusion model."""
+        """Generate image using local diffusion model or OpenAI DALL-E fallback."""
         import requests
+        import os
 
         enhanced_prompt = f"{style} style, {prompt}, high quality, 4k, professional photography"
 
+        # Try local Stable Diffusion first
         try:
             response = requests.post(
                 f"{LOCAL_DIFFUSION_URL}/sdapi/v1/txt2img",
@@ -551,10 +553,70 @@ class VideoRenderWorker:
             with open(output_path, "wb") as f:
                 f.write(image_data)
 
+            logger.info(f"Generated image with local diffusion for: {prompt[:50]}...")
             return output_path
+
         except Exception as e:
-            logger.warning(f"Image generation failed: {e}")
-            return self._create_placeholder_image(output_path, width, height, {})
+            logger.warning(f"Local diffusion failed: {e}, trying OpenAI DALL-E...")
+
+        # Fallback to OpenAI DALL-E
+        openai_key = os.getenv("OPENAI_API_KEY", "")
+        if openai_key:
+            try:
+                # Determine DALL-E size (must be 1024x1024, 1024x1792, or 1792x1024 for dall-e-3)
+                if width > height:
+                    dalle_size = "1792x1024"  # landscape
+                elif height > width:
+                    dalle_size = "1024x1792"  # portrait
+                else:
+                    dalle_size = "1024x1024"  # square
+
+                response = requests.post(
+                    "https://api.openai.com/v1/images/generations",
+                    headers={
+                        "Authorization": f"Bearer {openai_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": "dall-e-3",
+                        "prompt": f"{enhanced_prompt}. Professional mortgage and real estate marketing image.",
+                        "n": 1,
+                        "size": dalle_size,
+                        "quality": "standard",
+                        "response_format": "b64_json"
+                    },
+                    timeout=90
+                )
+                response.raise_for_status()
+
+                import base64
+                data = response.json()
+                image_data = base64.b64decode(data["data"][0]["b64_json"])
+
+                with open(output_path, "wb") as f:
+                    f.write(image_data)
+
+                # Resize to exact dimensions if needed using PIL
+                try:
+                    from PIL import Image
+                    img = Image.open(output_path)
+                    if img.size != (width, height):
+                        img = img.resize((width, height), Image.Resampling.LANCZOS)
+                        img.save(output_path)
+                except ImportError:
+                    logger.warning("PIL not available, using DALL-E output dimensions")
+
+                logger.info(f"Generated image with DALL-E for: {prompt[:50]}...")
+                return output_path
+
+            except Exception as dalle_error:
+                logger.warning(f"DALL-E generation failed: {dalle_error}")
+        else:
+            logger.warning("OPENAI_API_KEY not set, cannot use DALL-E fallback")
+
+        # Final fallback to placeholder
+        logger.info(f"Using placeholder image for: {prompt[:50]}...")
+        return self._create_placeholder_image(output_path, width, height, {})
 
     def _create_placeholder_image(
         self,

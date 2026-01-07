@@ -47,6 +47,11 @@ const AdminPanel = () => {
   const [accountsLoading, setAccountsLoading] = useState(false);
   const [accountFilter, setAccountFilter] = useState('active');
 
+  // Mission Control state
+  const [missionControlData, setMissionControlData] = useState(null);
+  const [missionControlLoading, setMissionControlLoading] = useState(false);
+  const [missionControlRefreshing, setMissionControlRefreshing] = useState(false);
+
   // Modal state
   const [showUserModal, setShowUserModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
@@ -154,6 +159,44 @@ const AdminPanel = () => {
       loadSecurityData();
     }
   }, [activeTab, loadSecurityData]);
+
+  // Load Mission Control data
+  const loadMissionControl = useCallback(async () => {
+    try {
+      setMissionControlLoading(true);
+      const response = await api.get('/api/v1/mission-control/integrations');
+      setMissionControlData(response.data);
+    } catch (err) {
+      console.error('Error loading Mission Control:', err);
+      setMissionControlData(null);
+    } finally {
+      setMissionControlLoading(false);
+    }
+  }, []);
+
+  // Refresh Mission Control (trigger health checks)
+  const refreshMissionControl = useCallback(async () => {
+    try {
+      setMissionControlRefreshing(true);
+      const response = await api.post('/api/v1/mission-control/refresh');
+      // After refresh, reload the data
+      if (response.data?.status === 'success') {
+        await loadMissionControl();
+      }
+    } catch (err) {
+      console.error('Error refreshing Mission Control:', err);
+      alert('Failed to refresh system health checks');
+    } finally {
+      setMissionControlRefreshing(false);
+    }
+  }, [loadMissionControl]);
+
+  // Load Mission Control when settings tab is active
+  useEffect(() => {
+    if (activeTab === 'settings') {
+      loadMissionControl();
+    }
+  }, [activeTab, loadMissionControl]);
 
   // Load Account Management KPIs
   const loadAccountKpis = useCallback(async () => {
@@ -1501,6 +1544,93 @@ const AdminPanel = () => {
           <section className="settings-section">
             <div className="section-header">
               <h2>System Settings</h2>
+            </div>
+
+            {/* Mission Control - System Health */}
+            <div className="mission-control-section">
+              <div className="section-header" style={{marginBottom: '16px'}}>
+                <h3>Mission Control - System Health</h3>
+                <button
+                  className={`btn-secondary ${missionControlRefreshing ? 'loading' : ''}`}
+                  onClick={refreshMissionControl}
+                  disabled={missionControlRefreshing || missionControlLoading}
+                >
+                  {missionControlRefreshing ? 'Running Health Checks...' : 'Run Health Check'}
+                </button>
+              </div>
+
+              {missionControlLoading && !missionControlData ? (
+                <div className="loading-placeholder">Loading system health data...</div>
+              ) : missionControlData?.integrations ? (
+                <div className="integration-health-grid">
+                  {missionControlData.integrations.map((integration) => (
+                    <div
+                      key={integration.name}
+                      className={`integration-health-card ${
+                        integration.status === 'healthy' ? 'status-healthy' :
+                        integration.status === 'degraded' ? 'status-degraded' :
+                        integration.status === 'unhealthy' ? 'status-unhealthy' :
+                        'status-unknown'
+                      }`}
+                    >
+                      <div className="integration-header">
+                        <span className={`status-indicator ${integration.status}`}></span>
+                        <span className="integration-name">
+                          {integration.name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                        </span>
+                      </div>
+                      <div className="integration-details">
+                        <div className="integration-status">
+                          <span className={`status-badge ${integration.status}`}>
+                            {integration.status?.toUpperCase() || 'UNKNOWN'}
+                          </span>
+                        </div>
+                        {integration.latency_ms !== null && integration.latency_ms !== undefined && (
+                          <div className="integration-latency">
+                            <span className="latency-label">Latency:</span>
+                            <span className={`latency-value ${
+                              integration.latency_ms < 200 ? 'fast' :
+                              integration.latency_ms < 500 ? 'normal' :
+                              'slow'
+                            }`}>
+                              {integration.latency_ms}ms
+                            </span>
+                          </div>
+                        )}
+                        {integration.error && (
+                          <div className="integration-error">
+                            <span className="error-label">Error:</span>
+                            <span className="error-message">{integration.error}</span>
+                          </div>
+                        )}
+                        {integration.last_check && (
+                          <div className="integration-last-check">
+                            <span className="last-check-label">Last check:</span>
+                            <span className="last-check-value">
+                              {new Date(integration.last_check).toLocaleTimeString()}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-state">
+                  <p>Unable to load system health data</p>
+                  <button className="btn-primary" onClick={loadMissionControl}>
+                    Retry
+                  </button>
+                </div>
+              )}
+
+              {missionControlData?.last_refresh && (
+                <div className="mission-control-footer">
+                  <span className="last-refresh">
+                    Last full refresh: {new Date(missionControlData.last_refresh).toLocaleString()}
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="settings-grid">

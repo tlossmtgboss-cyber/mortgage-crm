@@ -379,6 +379,82 @@ export const healthApi = {
 };
 
 // =============================================================================
+// AUTOMATED CALL SUMMARIES API
+// =============================================================================
+
+export const summaryApi = {
+  /**
+   * Generate summary for a recording
+   */
+  generate: async (recordingId, data = {}) => {
+    const response = await api.post(`${BASE_PATH}/recordings/${recordingId}/summary`, {
+      summary_type: data.summaryType || 'standard',
+      auto_create_tasks: data.autoCreateTasks !== false,
+    });
+    return response.data;
+  },
+
+  /**
+   * Get existing summary for a recording
+   */
+  get: async (recordingId) => {
+    const response = await api.get(`${BASE_PATH}/recordings/${recordingId}/summary`);
+    return response.data;
+  },
+
+  /**
+   * Get recent summaries with filters
+   */
+  getRecent: async (filters = {}) => {
+    const params = new URLSearchParams();
+    if (filters.agentId) params.append('agent_id', filters.agentId.toString());
+    if (filters.days) params.append('days', filters.days.toString());
+    if (filters.limit) params.append('limit', filters.limit.toString());
+
+    const response = await api.get(`${BASE_PATH}/summaries/recent?${params.toString()}`);
+    return response.data;
+  },
+
+  /**
+   * Get summary statistics
+   */
+  getStats: async (filters = {}) => {
+    const params = new URLSearchParams();
+    if (filters.agentId) params.append('agent_id', filters.agentId.toString());
+    if (filters.days) params.append('days', filters.days.toString());
+
+    const response = await api.get(`${BASE_PATH}/summaries/stats?${params.toString()}`);
+    return response.data;
+  },
+
+  /**
+   * Get summary feed for dashboard
+   */
+  getFeed: async (filters = {}) => {
+    const params = new URLSearchParams();
+    if (filters.teamId) params.append('team_id', filters.teamId.toString());
+    if (filters.outcome) params.append('outcome', filters.outcome);
+    if (filters.sentiment) params.append('sentiment', filters.sentiment);
+    if (filters.limit) params.append('limit', filters.limit.toString());
+    if (filters.offset) params.append('offset', filters.offset.toString());
+
+    const response = await api.get(`${BASE_PATH}/summaries/feed?${params.toString()}`);
+    return response.data;
+  },
+
+  /**
+   * Process pending summaries (batch generate)
+   */
+  processPending: async (options = {}) => {
+    const params = new URLSearchParams();
+    if (options.limit) params.append('limit', options.limit.toString());
+
+    const response = await api.post(`${BASE_PATH}/summaries/process-pending?${params.toString()}`);
+    return response.data;
+  },
+};
+
+// =============================================================================
 // COMBINED API EXPORT
 // =============================================================================
 
@@ -392,6 +468,7 @@ export const conversationIntelligenceApi = {
   dashboard: dashboardApi,
   export: exportApi,
   health: healthApi,
+  summary: summaryApi,
 };
 
 export default conversationIntelligenceApi;

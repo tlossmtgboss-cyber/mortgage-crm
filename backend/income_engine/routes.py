@@ -163,26 +163,98 @@ async def recalculate_with_override(
     Use this when an underwriter needs to adjust calculated amounts
     based on additional information or manual analysis.
     """
+    from sqlalchemy import text
+
     try:
-        orchestrator = IncomeOrchestrator(db_session=db)
+        # Look up the most recent income calculation for this loan/borrower
+        calc_result = db.execute(text("""
+            SELECT id, calculation_data, streams_data, total_qualifying_monthly
+            FROM income_calculations
+            WHERE loan_id = :loan_id
+            AND borrower_id = :borrower_id
+            ORDER BY created_at DESC
+            LIMIT 1
+        """), {"loan_id": request.loan_id, "borrower_id": request.borrower_id}).fetchone()
 
-        # Get existing calculation or create new one
-        # For now, we'll need the original document facts
-        # In production, these would be fetched from database
+        if calc_result:
+            # We have a previous calculation - apply overrides to it
+            import json
+            streams_data = json.loads(calc_result[2]) if isinstance(calc_result[2], str) else (calc_result[2] or [])
+            total_monthly = float(calc_result[3] or 0)
 
-        # Convert overrides to Decimal
-        override_streams = {
-            name: Decimal(str(amount))
-            for name, amount in request.overrides.items()
-        }
+            # Apply overrides to streams
+            updated_streams = []
+            override_adjustments = Decimal("0")
 
-        # This would need the original calculation request
-        # For now, return error indicating we need document facts
-        raise HTTPException(
-            status_code=400,
-            detail="Override requires original document facts. "
-                   "Use /calculate endpoint with document_ids parameter."
-        )
+            for stream in streams_data:
+                stream_name = stream.get("stream_name", "")
+                if stream_name in request.overrides:
+                    # Override this stream
+                    original_amount = Decimal(str(stream.get("monthly_income", 0)))
+                    override_amount = Decimal(str(request.overrides[stream_name]))
+                    override_adjustments += (override_amount - original_amount)
+
+                    updated_streams.append({
+                        **stream,
+                        "monthly_income": float(override_amount),
+                        "annual_income": float(override_amount * 12),
+                        "is_override": True,
+                        "original_monthly": float(original_amount),
+                    })
+                else:
+                    updated_streams.append(stream)
+
+            # Calculate new total
+            new_total = Decimal(str(total_monthly)) + override_adjustments
+
+            # Save the override calculation
+            db.execute(text("""
+                INSERT INTO income_calculations (
+                    loan_id, borrower_id, total_qualifying_monthly, total_qualifying_annual,
+                    streams_data, is_override, override_source_id, created_at
+                ) VALUES (
+                    :loan_id, :borrower_id, :monthly, :annual,
+                    :streams, 1, :source_id, CURRENT_TIMESTAMP
+                )
+            """), {
+                "loan_id": request.loan_id,
+                "borrower_id": request.borrower_id,
+                "monthly": float(new_total),
+                "annual": float(new_total * 12),
+                "streams": json.dumps(updated_streams),
+                "source_id": calc_result[0]
+            })
+            db.commit()
+
+            return IncomeCalculationResponse(
+                total_qualifying_monthly=float(new_total),
+                total_qualifying_annual=float(new_total * 12),
+                streams=[IncomeStreamSummary(**s) for s in updated_streams if "stream_type" in s],
+                flags=[],
+                calculation_notes=f"Override applied. Adjustments: ${float(override_adjustments):,.2f}/month"
+            )
+
+        else:
+            # No previous calculation - create a new one with just the overrides
+            total_monthly = sum(Decimal(str(v)) for v in request.overrides.values())
+
+            streams = [
+                IncomeStreamSummary(
+                    stream_type="override",
+                    stream_name=name,
+                    monthly_income=amount,
+                    annual_income=amount * 12
+                )
+                for name, amount in request.overrides.items()
+            ]
+
+            return IncomeCalculationResponse(
+                total_qualifying_monthly=float(total_monthly),
+                total_qualifying_annual=float(total_monthly * 12),
+                streams=streams,
+                flags=[],
+                calculation_notes="Manual override entry - no previous calculation found"
+            )
 
     except HTTPException:
         raise

@@ -2106,3 +2106,277 @@ async def diagnostic_admin_user(db: Session = Depends(get_db)):
             "status": "error",
             "error": str(e)
         }
+
+
+# =============================================================================
+# AUTOMATED CALL SUMMARY ENDPOINTS
+# =============================================================================
+
+class SummaryGenerateRequest(BaseModel):
+    """Request to generate call summary."""
+    summary_type: str = Field(default="standard", description="quick, standard, executive, or coaching")
+    auto_create_tasks: bool = True
+
+
+class SummaryResponse(BaseModel):
+    """Response for call summary."""
+    recording_id: str
+    summary_type: str
+    one_liner: str
+    executive_summary: str
+    key_points: List[str]
+    call_outcome: str
+    customer_sentiment: str
+    insights: List[Dict[str, Any]]
+    follow_up_tasks: List[Dict[str, Any]]
+    generated_at: str
+
+
+@router.post("/recordings/{recording_id}/summary", response_model=SummaryResponse)
+async def generate_call_summary(
+    recording_id: str,
+    request: SummaryGenerateRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Generate an AI-powered summary for a call recording.
+
+    Summary types:
+    - quick: 30-second read, 3-5 bullets
+    - standard: Full analysis with action items
+    - executive: Manager-focused with metrics
+    - coaching: Training-focused with improvement areas
+    """
+    try:
+        from services.call_summary_service import CallSummaryService, SummaryType
+
+        service = CallSummaryService(db)
+
+        # Map string to enum
+        type_map = {
+            "quick": SummaryType.QUICK,
+            "standard": SummaryType.STANDARD,
+            "executive": SummaryType.EXECUTIVE,
+            "coaching": SummaryType.COACHING
+        }
+        summary_type = type_map.get(request.summary_type, SummaryType.STANDARD)
+
+        # Generate summary
+        summary = await service.generate_summary(
+            recording_id=recording_id,
+            summary_type=summary_type,
+            auto_create_tasks=request.auto_create_tasks
+        )
+
+        return SummaryResponse(
+            recording_id=summary.recording_id,
+            summary_type=summary.summary_type,
+            one_liner=summary.one_liner,
+            executive_summary=summary.executive_summary,
+            key_points=summary.key_points,
+            call_outcome=summary.call_outcome,
+            customer_sentiment=summary.customer_sentiment,
+            insights=[i.__dict__ if hasattr(i, '__dict__') else i for i in summary.insights],
+            follow_up_tasks=[t.__dict__ if hasattr(t, '__dict__') else t for t in summary.follow_up_tasks],
+            generated_at=summary.generated_at
+        )
+
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error generating summary: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/recordings/{recording_id}/summary")
+async def get_call_summary(
+    recording_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Get existing summary for a recording."""
+    try:
+        from services.call_summary_service import CallSummaryService
+
+        service = CallSummaryService(db)
+        summary = service.get_summary(recording_id)
+
+        if not summary:
+            raise HTTPException(status_code=404, detail="Summary not found")
+
+        return summary.to_dict()
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting summary: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/summaries/recent")
+async def get_recent_summaries(
+    agent_id: Optional[int] = None,
+    days: int = Query(default=7, le=90),
+    limit: int = Query(default=50, le=200),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Get recent call summaries with filters."""
+    try:
+        from services.call_summary_service import CallSummaryService
+
+        service = CallSummaryService(db)
+        summaries = service.get_recent_summaries(
+            agent_id=agent_id,
+            days=days,
+            limit=limit
+        )
+
+        return {
+            "summaries": summaries,
+            "count": len(summaries),
+            "filters": {
+                "agent_id": agent_id,
+                "days": days
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting recent summaries: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/summaries/stats")
+async def get_summary_statistics(
+    agent_id: Optional[int] = None,
+    days: int = Query(default=30, le=365),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Get aggregate summary statistics."""
+    try:
+        from services.call_summary_service import CallSummaryService
+
+        service = CallSummaryService(db)
+        stats = service.get_summary_stats(agent_id=agent_id, days=days)
+
+        return {
+            "period_days": days,
+            "agent_id": agent_id,
+            **stats
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting summary stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/summaries/process-pending")
+async def process_pending_summaries(
+    limit: int = Query(default=50, le=200),
+    background_tasks: BackgroundTasks = None,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Process all recordings that don't have summaries yet.
+    Useful for batch processing or catching up on missed calls.
+    """
+    try:
+        from services.call_summary_service import CallSummaryService
+
+        service = CallSummaryService(db)
+        result = await service.process_pending_summaries(limit=limit)
+
+        return {
+            "status": "completed",
+            **result
+        }
+
+    except Exception as e:
+        logger.error(f"Error processing pending summaries: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/summaries/feed")
+async def get_summary_feed(
+    team_id: Optional[int] = None,
+    outcome: Optional[str] = None,
+    sentiment: Optional[str] = None,
+    limit: int = Query(default=20, le=100),
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get a feed of call summaries for the dashboard.
+    Shows the most recent calls with one-liner summaries.
+    """
+    try:
+        filters = ["1=1"]
+        params = {"limit": limit, "offset": offset}
+
+        if team_id:
+            filters.append("u.team_id = :team_id")
+            params["team_id"] = team_id
+        if outcome:
+            filters.append("s.call_outcome = :outcome")
+            params["outcome"] = outcome
+        if sentiment:
+            filters.append("s.customer_sentiment = :sentiment")
+            params["sentiment"] = sentiment
+
+        where_clause = " AND ".join(filters)
+
+        result = db.execute(text(f"""
+            SELECT
+                s.id, s.recording_id, s.one_liner, s.call_outcome,
+                s.customer_sentiment, s.customer_urgency, s.generated_at,
+                r.direction, r.duration_seconds,
+                u.id as agent_id, u.full_name as agent_name,
+                COALESCE(l.borrower_name, ld.first_name || ' ' || ld.last_name) as customer_name
+            FROM ci_call_summaries s
+            JOIN ci_call_recordings r ON r.id = s.recording_id
+            LEFT JOIN users u ON u.id = r.agent_user_id
+            LEFT JOIN loans l ON l.id = s.loan_id
+            LEFT JOIN leads ld ON ld.id = s.lead_id
+            WHERE {where_clause}
+            ORDER BY s.generated_at DESC
+            LIMIT :limit OFFSET :offset
+        """), params)
+
+        feed = []
+        for row in result.fetchall():
+            generated_at = row[6]
+            if generated_at and hasattr(generated_at, 'isoformat'):
+                generated_at = generated_at.isoformat()
+
+            feed.append({
+                "id": str(row[0]),
+                "recording_id": str(row[1]),
+                "one_liner": row[2],
+                "call_outcome": row[3],
+                "customer_sentiment": row[4],
+                "customer_urgency": row[5],
+                "generated_at": generated_at,
+                "direction": row[7],
+                "duration_seconds": row[8],
+                "agent": {
+                    "id": row[9],
+                    "name": row[10]
+                },
+                "customer_name": row[11]
+            })
+
+        return {
+            "feed": feed,
+            "count": len(feed),
+            "offset": offset,
+            "limit": limit
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting summary feed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

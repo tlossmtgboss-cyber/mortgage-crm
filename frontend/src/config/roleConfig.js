@@ -136,6 +136,24 @@ export const NAVIGATION_ITEMS = {
     label: 'Integrations',
     matchPaths: ['/integrations'],
     module: 'integrations'  // Premium: Integrations module
+  },
+  liveCallWhisper: {
+    path: '/live-call-whisper',
+    label: 'Live Call Whisper',
+    matchPaths: ['/live-call-whisper'],
+    module: 'conversation_intelligence'  // Premium: Conversation Intelligence module
+  },
+  productionPredictor: {
+    path: '/production-predictor',
+    label: 'Production Predictor',
+    matchPaths: ['/production-predictor'],
+    module: 'advanced_analytics'  // Premium: Advanced Analytics module
+  },
+  dealAlerts: {
+    path: '/deal-alerts',
+    label: 'Deal Alerts',
+    matchPaths: ['/deal-alerts'],
+    module: 'advanced_analytics'  // Premium: Advanced Analytics module
   }
 };
 
@@ -161,7 +179,11 @@ export const ROLE_NAVIGATION = {
     'profitability',
     'capacity',
     'recruiting',
-    'partnerRecruiting'
+    'partnerRecruiting',
+    'conversationIntelligence',
+    'liveCallWhisper',
+    'productionPredictor',
+    'dealAlerts'
   ],
 
   // Loan Officer - Full sales navigation
@@ -179,7 +201,11 @@ export const ROLE_NAVIGATION = {
     'aiUnderwriter',
     'market',
     'profitability',
-    'partnerRecruiting'
+    'partnerRecruiting',
+    'conversationIntelligence',
+    'liveCallWhisper',
+    'productionPredictor',
+    'dealAlerts'
   ],
 
   // Production Assistant - Support role navigation

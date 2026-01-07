@@ -263,21 +263,70 @@ async def get_team_metrics(
     current_user = Depends(get_current_user)
 ):
     """Get team performance metrics"""
-    from main import Lead, Loan, User, LoanTeamMember
+    from sqlalchemy import text
 
     start_date = get_date_filter(time_range)
-
-    # For now, return empty team metrics since we need proper team structure
-    # This would be populated based on the organization's team setup
-
     team_metrics = []
 
-    # Check if user is a manager with team members
-    # This is simplified - real implementation would check org structure
+    try:
+        # Get team members - check if current user is a manager/admin
+        # or get all users in the same organization
+        team_query = db.execute(text("""
+            SELECT
+                u.id,
+                u.full_name,
+                u.email,
+                u.role,
+                COUNT(DISTINCT l.id) as lead_count,
+                COUNT(DISTINCT CASE WHEN l.stage IN ('converted', 'closed_won') THEN l.id END) as converted_count,
+                COUNT(DISTINCT lo.id) as loan_count,
+                COUNT(DISTINCT CASE WHEN lo.status = 'funded' THEN lo.id END) as funded_count,
+                COALESCE(SUM(CASE WHEN lo.status = 'funded' THEN lo.loan_amount ELSE 0 END), 0) as funded_volume
+            FROM users u
+            LEFT JOIN leads l ON l.assigned_to = u.id
+                AND l.created_at >= :start_date
+            LEFT JOIN loans lo ON lo.loan_officer_id = u.id
+                AND lo.created_at >= :start_date
+            WHERE u.is_active = 1
+                AND (u.organization_id = :org_id OR :org_id IS NULL)
+                AND u.role IN ('loan_officer', 'sales', 'admin')
+            GROUP BY u.id, u.full_name, u.email, u.role
+            HAVING COUNT(DISTINCT l.id) > 0 OR COUNT(DISTINCT lo.id) > 0
+            ORDER BY funded_volume DESC
+            LIMIT 20
+        """), {
+            "start_date": start_date.isoformat(),
+            "org_id": getattr(current_user, 'organization_id', None)
+        })
+
+        for row in team_query:
+            conversion_rate = 0
+            if row[4] > 0:  # lead_count
+                conversion_rate = round((row[5] / row[4]) * 100, 1)  # converted_count / lead_count
+
+            team_metrics.append({
+                "id": row[0],
+                "name": row[1] or row[2].split("@")[0],
+                "email": row[2],
+                "role": (row[3] or "loan_officer").replace("_", " ").title(),
+                "leads": row[4] or 0,
+                "conversions": row[5] or 0,
+                "conversionRate": conversion_rate,
+                "loans": row[6] or 0,
+                "funded": row[7] or 0,
+                "volume": float(row[8] or 0),
+                "volumeFormatted": f"${float(row[8] or 0):,.0f}"
+            })
+
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Team metrics query failed: {e}")
+        # Return empty but valid response
 
     return {
         "hasData": len(team_metrics) > 0,
-        "teamMetrics": team_metrics
+        "teamMetrics": team_metrics,
+        "timeRange": time_range.value
     }
 
 

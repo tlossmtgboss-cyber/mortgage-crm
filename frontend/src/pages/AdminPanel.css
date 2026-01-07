@@ -2046,3 +2046,241 @@
     text-align: center;
   }
 }
+
+/* ========================================
+   Mission Control - System Health
+   ======================================== */
+
+.mission-control-section {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.mission-control-section .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.mission-control-section h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.integration-health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.integration-health-card {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px;
+  transition: all 0.2s ease;
+}
+
+.integration-health-card:hover {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+}
+
+.integration-health-card.status-healthy {
+  border-left: 4px solid #22c55e;
+}
+
+.integration-health-card.status-degraded {
+  border-left: 4px solid #f59e0b;
+  background: #fffbeb;
+}
+
+.integration-health-card.status-unhealthy {
+  border-left: 4px solid #ef4444;
+  background: #fef2f2;
+}
+
+.integration-health-card.status-unknown {
+  border-left: 4px solid #9ca3af;
+}
+
+.integration-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.status-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-indicator.healthy {
+  background: #22c55e;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.5);
+}
+
+.status-indicator.degraded {
+  background: #f59e0b;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.5);
+}
+
+.status-indicator.unhealthy {
+  background: #ef4444;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.5);
+}
+
+.status-indicator.unknown {
+  background: #9ca3af;
+}
+
+.integration-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.integration-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.integration-status .status-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.integration-status .status-badge.healthy {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.integration-status .status-badge.degraded {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.integration-status .status-badge.unhealthy {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.integration-status .status-badge.unknown {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.integration-latency,
+.integration-last-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.latency-label,
+.last-check-label {
+  color: #6b7280;
+}
+
+.latency-value {
+  font-weight: 600;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+}
+
+.latency-value.fast {
+  color: #22c55e;
+}
+
+.latency-value.normal {
+  color: #f59e0b;
+}
+
+.latency-value.slow {
+  color: #ef4444;
+}
+
+.last-check-value {
+  color: #374151;
+}
+
+.integration-error {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.error-label {
+  font-size: 12px;
+  color: #991b1b;
+  font-weight: 500;
+}
+
+.error-message {
+  font-size: 12px;
+  color: #b91c1c;
+  background: #fee2e2;
+  padding: 6px 8px;
+  border-radius: 4px;
+  word-break: break-word;
+}
+
+.mission-control-footer {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+  text-align: right;
+}
+
+.last-refresh {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+/* Loading state for button */
+.btn-secondary.loading {
+  position: relative;
+  color: transparent;
+}
+
+.btn-secondary.loading::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin-left: -8px;
+  margin-top: -8px;
+  border: 2px solid #d1d5db;
+  border-top-color: #374151;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* Responsive Mission Control */
+@media (max-width: 768px) {
+  .integration-health-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mission-control-section .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+}

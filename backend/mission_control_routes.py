@@ -406,15 +406,218 @@ async def get_ai_changelog(days: int = 7, db: Session = Depends(get_db)):
 
 @router.post("/refresh")
 async def refresh_system_check(db: Session = Depends(get_db)):
-    """Manually trigger system health check"""
+    """Manually trigger system health check and update integration statuses"""
+    import httpx
+    import os
+    from datetime import datetime
+
+    results = {
+        "checked_at": datetime.utcnow().isoformat(),
+        "integrations": {},
+        "jobs_checked": 0,
+        "total_checks": 0
+    }
+
     try:
-        # This would trigger background jobs to check all integrations
-        # For now, just return success
-        return {
-            "message": "System check initiated",
-            "status": "running",
-            "estimated_completion": "2-3 minutes"
+        # Define integrations to check
+        integrations_config = [
+            {
+                "name": "anthropic_api",
+                "type": "api",
+                "url": "https://api.anthropic.com/v1/messages",
+                "headers": {"x-api-key": os.getenv("ANTHROPIC_API_KEY", ""), "anthropic-version": "2023-06-01"},
+                "method": "health_check"
+            },
+            {
+                "name": "openai_api",
+                "type": "api",
+                "url": "https://api.openai.com/v1/models",
+                "headers": {"Authorization": f"Bearer {os.getenv('OPENAI_API_KEY', '')}"},
+                "method": "get"
+            },
+            {
+                "name": "twilio_sms",
+                "type": "api",
+                "url": "https://api.twilio.com/2010-04-01/Accounts",
+                "auth": (os.getenv("TWILIO_ACCOUNT_SID", ""), os.getenv("TWILIO_AUTH_TOKEN", "")),
+                "method": "get"
+            },
+            {
+                "name": "sendgrid_email",
+                "type": "api",
+                "url": "https://api.sendgrid.com/v3/user/account",
+                "headers": {"Authorization": f"Bearer {os.getenv('SENDGRID_API_KEY', '')}"},
+                "method": "get"
+            },
+            {
+                "name": "aws_s3",
+                "type": "s3",
+                "bucket": os.getenv("AWS_S3_BUCKET", ""),
+                "region": os.getenv("AWS_REGION", "us-east-1")
+            },
+            {
+                "name": "database",
+                "type": "database",
+                "query": "SELECT 1"
+            },
+            {
+                "name": "redis_cache",
+                "type": "redis",
+                "url": os.getenv("REDIS_URL", "")
+            }
+        ]
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            for integration in integrations_config:
+                name = integration["name"]
+                results["total_checks"] += 1
+                start_time = datetime.utcnow()
+
+                try:
+                    status = "healthy"
+                    latency_ms = None
+                    error_msg = None
+
+                    if integration["type"] == "api":
+                        # Skip if no API key configured
+                        headers = integration.get("headers", {})
+                        auth = integration.get("auth")
+
+                        # Check if credentials are configured
+                        has_creds = True
+                        if headers:
+                            for v in headers.values():
+                                if not v or v.endswith("Bearer "):
+                                    has_creds = False
+                                    break
+                        if auth and (not auth[0] or not auth[1]):
+                            has_creds = False
+
+                        if not has_creds:
+                            status = "not_configured"
+                            error_msg = "API credentials not configured"
+                        else:
+                            try:
+                                if auth:
+                                    response = await client.get(integration["url"], auth=auth)
+                                else:
+                                    response = await client.get(integration["url"], headers=headers)
+
+                                latency_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+
+                                if response.status_code < 400:
+                                    status = "healthy"
+                                elif response.status_code == 401:
+                                    status = "auth_error"
+                                    error_msg = "Authentication failed"
+                                elif response.status_code == 429:
+                                    status = "rate_limited"
+                                    error_msg = "Rate limited"
+                                else:
+                                    status = "degraded"
+                                    error_msg = f"HTTP {response.status_code}"
+                            except httpx.TimeoutException:
+                                status = "timeout"
+                                error_msg = "Request timed out"
+                            except httpx.ConnectError:
+                                status = "down"
+                                error_msg = "Connection failed"
+
+                    elif integration["type"] == "database":
+                        try:
+                            db.execute(text(integration["query"]))
+                            latency_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+                            status = "healthy"
+                        except Exception as e:
+                            status = "down"
+                            error_msg = str(e)[:200]
+
+                    elif integration["type"] == "s3":
+                        bucket = integration.get("bucket")
+                        if not bucket:
+                            status = "not_configured"
+                            error_msg = "S3 bucket not configured"
+                        else:
+                            try:
+                                import boto3
+                                s3 = boto3.client('s3', region_name=integration.get("region", "us-east-1"))
+                                s3.head_bucket(Bucket=bucket)
+                                latency_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+                                status = "healthy"
+                            except Exception as e:
+                                status = "degraded" if "NoSuchBucket" not in str(e) else "not_configured"
+                                error_msg = str(e)[:200]
+
+                    elif integration["type"] == "redis":
+                        redis_url = integration.get("url")
+                        if not redis_url:
+                            status = "not_configured"
+                            error_msg = "Redis URL not configured"
+                        else:
+                            try:
+                                import redis
+                                r = redis.from_url(redis_url, socket_timeout=5)
+                                r.ping()
+                                latency_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+                                status = "healthy"
+                            except Exception as e:
+                                status = "down"
+                                error_msg = str(e)[:200]
+
+                    results["integrations"][name] = {
+                        "status": status,
+                        "latency_ms": latency_ms,
+                        "error": error_msg,
+                        "checked_at": datetime.utcnow().isoformat()
+                    }
+
+                    # Update database with integration status
+                    try:
+                        upsert_query = text("""
+                            INSERT INTO integration_status_log
+                            (integration_name, status, latency_ms, last_error_message, checked_at, last_success_at, error_count_24h)
+                            VALUES (:name, :status, :latency, :error, NOW(),
+                                    CASE WHEN :status = 'healthy' THEN NOW() ELSE NULL END,
+                                    CASE WHEN :status != 'healthy' THEN 1 ELSE 0 END)
+                            ON CONFLICT (integration_name) DO UPDATE SET
+                                status = :status,
+                                latency_ms = :latency,
+                                last_error_message = :error,
+                                checked_at = NOW(),
+                                last_success_at = CASE WHEN :status = 'healthy' THEN NOW() ELSE integration_status_log.last_success_at END,
+                                error_count_24h = CASE WHEN :status != 'healthy'
+                                    THEN COALESCE(integration_status_log.error_count_24h, 0) + 1
+                                    ELSE 0 END
+                        """)
+                        db.execute(upsert_query, {"name": name, "status": status, "latency": latency_ms, "error": error_msg})
+                    except Exception:
+                        # Table may not exist or have different schema - just log result
+                        pass
+
+                except Exception as e:
+                    results["integrations"][name] = {
+                        "status": "error",
+                        "error": str(e)[:200],
+                        "checked_at": datetime.utcnow().isoformat()
+                    }
+
+        db.commit()
+
+        # Count statuses
+        healthy = len([i for i in results["integrations"].values() if i["status"] == "healthy"])
+        degraded = len([i for i in results["integrations"].values() if i["status"] in ["degraded", "rate_limited"]])
+        down = len([i for i in results["integrations"].values() if i["status"] in ["down", "error", "timeout"]])
+
+        results["summary"] = {
+            "healthy": healthy,
+            "degraded": degraded,
+            "down": down,
+            "not_configured": len([i for i in results["integrations"].values() if i["status"] in ["not_configured", "auth_error"]])
         }
+        results["status"] = "completed"
+        results["message"] = f"System check completed: {healthy} healthy, {degraded} degraded, {down} down"
+
+        return results
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to trigger system check: {str(e)}")
