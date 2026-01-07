@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { usePermissions } from '../contexts/PermissionContext';
+import { RoleDashboardSwitcher } from '../components/dashboards/RoleDashboards';
 import './AdminPanel.css';
 
 /**
@@ -44,6 +45,18 @@ const AdminPanel = () => {
   const [accounts, setAccounts] = useState([]);
   const [accountsLoading, setAccountsLoading] = useState(false);
   const [accountFilter, setAccountFilter] = useState('active');
+
+  // Role switcher state
+  const [selectedDashboardView, setSelectedDashboardView] = useState('admin');
+
+  // Handle role view change
+  const handleViewChange = (roleId) => {
+    setSelectedDashboardView(roleId);
+    // Navigate to dashboard if selecting a non-admin role to see that role's view
+    if (roleId !== 'admin' && roleId !== 'site_admin') {
+      navigate('/dashboard');
+    }
+  };
 
   // Modal state
   const [showUserModal, setShowUserModal] = useState(false);
@@ -338,6 +351,11 @@ const AdminPanel = () => {
           <p>Manage users, loan officers, and system settings</p>
         </div>
         <div className="header-right">
+          <RoleDashboardSwitcher
+            currentView={selectedDashboardView}
+            onViewChange={handleViewChange}
+            isAdmin={true}
+          />
           <button className="btn-primary" onClick={openNewUserModal}>
             + Add User
           </button>
