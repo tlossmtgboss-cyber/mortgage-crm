@@ -467,17 +467,16 @@ async def test_loan_query(
         from datetime import date, timedelta
         today = date.today()
 
-        # Run the exact query from _get_sample_loans()
+        # Run the exact query from _get_sample_loans() - fixed columns
         result = db.execute(text("""
             SELECT
                 l.id,
                 COALESCE(l.loan_number, 'LOAN-' || l.id) as loan_number,
-                COALESCE(le.first_name || ' ' || le.last_name, l.borrower_name, 'Unknown') as borrower_name,
+                COALESCE(l.borrower_name, 'Unknown') as borrower_name,
                 COALESCE(l.stage::text, 'processing') as status,
                 COALESCE(l.days_in_stage, EXTRACT(DAY FROM (CURRENT_TIMESTAMP - l.updated_at))::integer, 0) as days_in_stage,
-                l.loan_amount
+                l.amount as loan_amount
             FROM loans l
-            LEFT JOIN leads le ON l.lead_id = le.id
             WHERE l.stage IS NULL
                OR UPPER(l.stage::text) NOT IN ('FUNDED', 'CANCELLED', 'DENIED', 'CLOSED')
             ORDER BY l.updated_at ASC
