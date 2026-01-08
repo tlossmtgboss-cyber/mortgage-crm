@@ -36,6 +36,10 @@ const AdminPanel = () => {
   const [aiMetricsLoading, setAiMetricsLoading] = useState(false);
   const [aiMetricsLastUpdate, setAiMetricsLastUpdate] = useState(null);
 
+  // User impersonation state
+  const [selectedViewUser, setSelectedViewUser] = useState(null);
+  const [impersonating, setImpersonating] = useState(false);
+
   // Security monitoring state
   const [securityData, setSecurityData] = useState(null);
   const [securityLoading, setSecurityLoading] = useState(false);
@@ -400,6 +404,56 @@ const AdminPanel = () => {
           <p>Manage users, loan officers, and system settings</p>
         </div>
         <div className="header-right">
+          {/* User selector for viewing/impersonation */}
+          <div className="user-selector-wrapper">
+            <label className="user-selector-label">View as:</label>
+            <select
+              className="user-selector"
+              value={selectedViewUser?.id || ''}
+              onChange={(e) => {
+                const userId = e.target.value;
+                if (userId === '') {
+                  setSelectedViewUser(null);
+                  setImpersonating(false);
+                } else {
+                  const user = users.find(u => u.id.toString() === userId);
+                  setSelectedViewUser(user);
+                }
+              }}
+            >
+              <option value="">Admin (Default)</option>
+              {users.map(user => (
+                <option key={user.id} value={user.id}>
+                  {user.first_name} {user.last_name} ({user.role?.replace('_', ' ')})
+                </option>
+              ))}
+            </select>
+            {selectedViewUser && !impersonating && (
+              <button
+                className="btn-impersonate"
+                onClick={async () => {
+                  try {
+                    setImpersonating(true);
+                    const response = await api.post(`/api/v1/admin/impersonate/${selectedViewUser.id}`);
+                    if (response.data?.token) {
+                      // Store original token and set impersonation token
+                      localStorage.setItem('original_token', localStorage.getItem('token'));
+                      localStorage.setItem('token', response.data.token);
+                      localStorage.setItem('impersonating_user', JSON.stringify(selectedViewUser));
+                      window.location.href = '/dashboard';
+                    }
+                  } catch (err) {
+                    console.error('Impersonation failed:', err);
+                    alert('Failed to impersonate user: ' + (err.response?.data?.detail || err.message));
+                    setImpersonating(false);
+                  }
+                }}
+                disabled={impersonating}
+              >
+                {impersonating ? 'Switching...' : 'Switch User'}
+              </button>
+            )}
+          </div>
           <button className="btn-primary" onClick={openNewUserModal}>
             + Add User
           </button>
@@ -432,6 +486,7 @@ const AdminPanel = () => {
         >
           Partners
         </button>
+        {/* Show all tabs for admin users */}
         <button
           className={`tab ${activeTab === 'ai_metrics' ? 'active' : ''}`}
           onClick={() => setActiveTab('ai_metrics')}
@@ -1673,6 +1728,79 @@ const AdminPanel = () => {
                 <div className="integration-item">
                   <span>Stripe (Payments)</span>
                   <span className="status inactive">Not Connected</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Upgrades Section */}
+            <div className="upgrades-section">
+              <div className="section-header" style={{marginBottom: '16px'}}>
+                <h3>Subscription & Upgrades</h3>
+              </div>
+              <div className="upgrade-plans-grid">
+                <div className="upgrade-plan-card current">
+                  <div className="plan-badge">Current Plan</div>
+                  <h4>Professional</h4>
+                  <div className="plan-price">$299<span>/month</span></div>
+                  <ul className="plan-features">
+                    <li>Up to 10 users</li>
+                    <li>Unlimited leads</li>
+                    <li>AI Chat Assistant</li>
+                    <li>Document Management</li>
+                    <li>Email & SMS Automation</li>
+                  </ul>
+                  <button className="btn-secondary" disabled>Current Plan</button>
+                </div>
+
+                <div className="upgrade-plan-card featured">
+                  <div className="plan-badge recommended">Recommended</div>
+                  <h4>Enterprise</h4>
+                  <div className="plan-price">$599<span>/month</span></div>
+                  <ul className="plan-features">
+                    <li>Unlimited users</li>
+                    <li>Everything in Professional</li>
+                    <li>Advanced Analytics</li>
+                    <li>Custom Integrations</li>
+                    <li>Priority Support</li>
+                    <li>White-label Options</li>
+                  </ul>
+                  <button className="btn-primary" onClick={() => window.open('mailto:sales@perenniaai.com?subject=Enterprise%20Upgrade%20Inquiry', '_blank')}>
+                    Contact Sales
+                  </button>
+                </div>
+
+                <div className="upgrade-plan-card">
+                  <h4>Add-Ons</h4>
+                  <div className="addon-list">
+                    <div className="addon-item">
+                      <div className="addon-info">
+                        <span className="addon-name">Additional Users</span>
+                        <span className="addon-price">$25/user/mo</span>
+                      </div>
+                      <button className="btn-sm btn-outline">Add</button>
+                    </div>
+                    <div className="addon-item">
+                      <div className="addon-info">
+                        <span className="addon-name">AI Video Generation</span>
+                        <span className="addon-price">$99/mo</span>
+                      </div>
+                      <button className="btn-sm btn-outline">Add</button>
+                    </div>
+                    <div className="addon-item">
+                      <div className="addon-info">
+                        <span className="addon-name">Advanced Recruiting</span>
+                        <span className="addon-price">$149/mo</span>
+                      </div>
+                      <button className="btn-sm btn-outline">Add</button>
+                    </div>
+                    <div className="addon-item">
+                      <div className="addon-info">
+                        <span className="addon-name">Conversation Intelligence</span>
+                        <span className="addon-price">$199/mo</span>
+                      </div>
+                      <button className="btn-sm btn-outline">Add</button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

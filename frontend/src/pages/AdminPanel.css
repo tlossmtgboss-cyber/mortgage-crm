@@ -50,6 +50,68 @@
   margin: 4px 0 0;
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* User Selector */
+.user-selector-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.user-selector-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.user-selector {
+  padding: 6px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #374151;
+  background: #f9fafb;
+  min-width: 200px;
+  cursor: pointer;
+}
+
+.user-selector:focus {
+  outline: none;
+  border-color: #0d9488;
+  box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.1);
+}
+
+.btn-impersonate {
+  padding: 6px 12px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-impersonate:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.btn-impersonate:disabled {
+  background: #93c5fd;
+  cursor: not-allowed;
+}
+
 /* Buttons */
 .btn-primary {
   padding: 12px 24px;
@@ -230,6 +292,22 @@
   font-size: 14px;
   background: white;
   cursor: pointer;
+  min-width: 150px;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+
+.section-actions select:focus {
+  outline: none;
+  border-color: #0d9488;
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.1);
+}
+
+.section-actions select:hover {
+  border-color: #9ca3af;
 }
 
 /* Quick Actions */
@@ -2282,5 +2360,193 @@
     flex-direction: column;
     align-items: flex-start;
     gap: 12px;
+  }
+}
+
+/* ========================================
+   Upgrades Section
+   ======================================== */
+
+.upgrades-section {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  margin-top: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.upgrades-section h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.upgrade-plans-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.upgrade-plan-card {
+  background: #f9fafb;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.upgrade-plan-card.current {
+  border-color: #0d9488;
+  background: #f0fdfa;
+}
+
+.upgrade-plan-card.featured {
+  border-color: #0d9488;
+  background: linear-gradient(to bottom, #f0fdfa, #ffffff);
+  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.15);
+}
+
+.plan-badge {
+  position: absolute;
+  top: -12px;
+  left: 20px;
+  background: #0d9488;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.plan-badge.recommended {
+  background: linear-gradient(135deg, #0d9488, #14b8a6);
+}
+
+.upgrade-plan-card h4 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #111827;
+  margin: 8px 0 12px;
+}
+
+.plan-price {
+  font-size: 32px;
+  font-weight: 700;
+  color: #0d9488;
+  margin-bottom: 16px;
+}
+
+.plan-price span {
+  font-size: 14px;
+  font-weight: 500;
+  color: #6b7280;
+}
+
+.plan-features {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 20px;
+  flex-grow: 1;
+}
+
+.plan-features li {
+  padding: 8px 0;
+  font-size: 14px;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.plan-features li::before {
+  content: '✓';
+  color: #0d9488;
+  font-weight: 600;
+}
+
+.upgrade-plan-card .btn-primary,
+.upgrade-plan-card .btn-secondary {
+  width: 100%;
+  justify-content: center;
+}
+
+/* Add-ons card */
+.addon-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.addon-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.addon-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.addon-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #111827;
+}
+
+.addon-price {
+  font-size: 13px;
+  color: #0d9488;
+  font-weight: 600;
+}
+
+.btn-sm {
+  padding: 6px 14px;
+  font-size: 13px;
+  border-radius: 6px;
+}
+
+.btn-outline {
+  background: white;
+  border: 1px solid #0d9488;
+  color: #0d9488;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-outline:hover {
+  background: #0d9488;
+  color: white;
+}
+
+/* Responsive Upgrades */
+@media (max-width: 1024px) {
+  .upgrade-plans-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .upgrade-plan-card.featured {
+    order: -1;
+  }
+}
+
+@media (max-width: 480px) {
+  .upgrade-plan-card {
+    padding: 20px;
+  }
+
+  .plan-price {
+    font-size: 28px;
   }
 }
