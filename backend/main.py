@@ -42294,6 +42294,19 @@ async def get_loan(loan_id: int, db: Session = Depends(get_db), current_user: Us
                 raise HTTPException(status_code=403, detail="You don't have access to this loan")
             raise HTTPException(status_code=404, detail="Loan not found")
 
+        # Normalize stage to enum FIRST (before building response dict)
+        valid_stages = {s.name for s in LoanStage}
+        stage_val = loan.stage
+        if stage_val:
+            stage_str = stage_val.value if hasattr(stage_val, 'value') else str(stage_val)
+            stage_upper = stage_str.upper()
+            if stage_upper in valid_stages:
+                normalized_stage = LoanStage[stage_upper]
+            else:
+                normalized_stage = LoanStage.PROCESSING
+        else:
+            normalized_stage = LoanStage.PROCESSING
+
         # Build response dict to match LoanResponse model
         row_dict = {
             "id": loan.id,
@@ -42303,7 +42316,7 @@ async def get_loan(loan_id: int, db: Session = Depends(get_db), current_user: Us
             "borrower_phone": loan.borrower_phone,
             "coborrower_name": loan.coborrower_name,
             "co_borrower_email": loan.co_borrower_email,
-            "stage": loan.stage,
+            "stage": normalized_stage,
             "program": loan.program,
             "amount": loan.amount,
             "rate": loan.rate,
@@ -42320,19 +42333,6 @@ async def get_loan(loan_id: int, db: Session = Depends(get_db), current_user: Us
             "closer": loan.closer,
             "closer_email": loan.closer_email,
         }
-
-        # Normalize stage to enum
-        valid_stages = {s.name for s in LoanStage}
-        stage_val = row_dict.get('stage')
-        if stage_val:
-            stage_str = stage_val.value if hasattr(stage_val, 'value') else str(stage_val)
-            stage_upper = stage_str.upper()
-            if stage_upper in valid_stages:
-                row_dict['stage'] = LoanStage[stage_upper]
-            else:
-                row_dict['stage'] = LoanStage.PROCESSING
-        else:
-            row_dict['stage'] = LoanStage.PROCESSING
 
         return row_dict
     except HTTPException:
