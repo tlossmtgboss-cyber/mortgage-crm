@@ -210,6 +210,53 @@ async def get_priority_actions(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/types")
+async def get_alert_types():
+    """
+    Get list of all alert types.
+    """
+    return {
+        "alert_types": [t.value for t in AlertType],
+        "priorities": [p.value for p in AlertPriority],
+        "statuses": [s.value for s in AlertStatus],
+    }
+
+
+@router.get("/health")
+async def alerts_health(db: Session = Depends(get_db)):
+    """Health check for the deal alerts service."""
+    service = get_deal_alerts_service(db_session=db)
+    summary = service.get_summary()
+
+    return {
+        "status": "healthy",
+        "service": "deal-alerts",
+        "active_alerts": summary.total_alerts,
+        "critical_alerts": summary.critical_count,
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
+@router.get("/loan/{loan_id}")
+async def get_alerts_for_loan(loan_id: str, db: Session = Depends(get_db)):
+    """
+    Get all alerts for a specific loan.
+    """
+    try:
+        service = get_deal_alerts_service(db_session=db)
+        alerts = service.get_alerts_for_loan(loan_id)
+
+        return {
+            "loan_id": loan_id,
+            "alert_count": len(alerts),
+            "alerts": [alert.to_dict() for alert in alerts],
+        }
+    except Exception as e:
+        logger.error(f"Error getting loan alerts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Dynamic routes with {alert_id} path parameter MUST be after all static routes
 @router.get("/{alert_id}", response_model=AlertResponse)
 async def get_alert(alert_id: str, db: Session = Depends(get_db)):
     """
@@ -340,49 +387,3 @@ async def bulk_acknowledge(request: BulkAcknowledgeRequest, db: Session = Depend
     except Exception as e:
         logger.error(f"Error bulk acknowledging: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/loan/{loan_id}")
-async def get_alerts_for_loan(loan_id: str, db: Session = Depends(get_db)):
-    """
-    Get all alerts for a specific loan.
-    """
-    try:
-        service = get_deal_alerts_service(db_session=db)
-        alerts = service.get_alerts_for_loan(loan_id)
-
-        return {
-            "loan_id": loan_id,
-            "alert_count": len(alerts),
-            "alerts": [alert.to_dict() for alert in alerts],
-        }
-    except Exception as e:
-        logger.error(f"Error getting loan alerts: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/types")
-async def get_alert_types():
-    """
-    Get list of all alert types.
-    """
-    return {
-        "alert_types": [t.value for t in AlertType],
-        "priorities": [p.value for p in AlertPriority],
-        "statuses": [s.value for s in AlertStatus],
-    }
-
-
-@router.get("/health")
-async def alerts_health(db: Session = Depends(get_db)):
-    """Health check for the deal alerts service."""
-    service = get_deal_alerts_service(db_session=db)
-    summary = service.get_summary()
-
-    return {
-        "status": "healthy",
-        "service": "deal-alerts",
-        "active_alerts": summary.total_alerts,
-        "critical_alerts": summary.critical_count,
-        "timestamp": datetime.now().isoformat(),
-    }
