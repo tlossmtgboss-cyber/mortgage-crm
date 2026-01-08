@@ -72,10 +72,22 @@ export const decisionLabAPI = {
 
   // Loan Scenarios
   createScenario: async (sessionId, scenarioData) => {
-    const response = await fetch(`${API_BASE_URL}/api/v1/decision-lab/scenarios`, {
+    // Map frontend field names to backend expected names
+    const backendData = {
+      loan_amount: scenarioData.loan_amount,
+      purchase_price: scenarioData.purchase_price,
+      down_payment: scenarioData.down_payment,
+      property_type: scenarioData.property_type,
+      occupancy_type: scenarioData.occupancy,  // frontend uses 'occupancy'
+      property_state: scenarioData.state,       // frontend uses 'state'
+      credit_score: scenarioData.credit_score,
+      is_baseline: false,
+    };
+    // session_id must be a query parameter
+    const response = await fetch(`${API_BASE_URL}/api/v1/decision-lab/scenarios?session_id=${sessionId}`, {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify({ session_id: sessionId, ...scenarioData }),
+      body: JSON.stringify(backendData),
     });
     if (!response.ok) throw new Error('Failed to create scenario');
     return response.json();
