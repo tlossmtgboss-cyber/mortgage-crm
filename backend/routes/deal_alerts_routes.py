@@ -496,6 +496,50 @@ async def test_funded_loans(
         return {"status": "error", "error": str(e), "traceback": traceback.format_exc()}
 
 
+@router.get("/admin/test-predictor-query")
+async def test_predictor_query(
+    entity_id: str = "57",
+    db: Session = Depends(get_db),
+):
+    """Test the exact production predictor query."""
+    try:
+        from sqlalchemy import text
+
+        # Same query as production predictor service
+        result = db.execute(text("""
+            SELECT
+                DATE_TRUNC('month', l.funded_date) as month,
+                COUNT(*) as units,
+                COALESCE(SUM(l.amount), 0) as volume
+            FROM loans l
+            LEFT JOIN users u ON l.loan_officer_id = u.id
+            WHERE l.funded_date >= CURRENT_DATE - INTERVAL '12 months'
+                AND UPPER(l.stage::text) = 'FUNDED'
+                AND l.loan_officer_id = :entity_id
+            GROUP BY DATE_TRUNC('month', l.funded_date)
+            ORDER BY month ASC
+        """), {"entity_id": entity_id})
+
+        rows = result.fetchall()
+        data = []
+        for row in rows:
+            data.append({
+                "month": str(row[0]) if row[0] else None,
+                "units": row[1],
+                "volume": float(row[2]) if row[2] else 0
+            })
+
+        return {
+            "status": "success",
+            "entity_id": entity_id,
+            "months_found": len(data),
+            "data": data
+        }
+    except Exception as e:
+        import traceback
+        return {"status": "error", "error": str(e), "traceback": traceback.format_exc()}
+
+
 @router.get("/admin/test-query")
 async def test_loan_query(
     db: Session = Depends(get_db),
