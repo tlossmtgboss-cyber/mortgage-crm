@@ -344,48 +344,71 @@ class DuplicateDetectionService:
         Returns:
             Summary of scan results
         """
+        import traceback
+
         results = {
             'lead_duplicates_found': 0,
             'loan_duplicates_found': 0,
             'tasks_created': 0,
             'tasks_existing': 0,
-            'duplicates': []
+            'duplicates': [],
+            'errors': []
         }
 
         # Scan leads
-        lead_duplicates = self.find_duplicate_leads()
-        results['lead_duplicates_found'] = len(lead_duplicates)
+        try:
+            lead_duplicates = self.find_duplicate_leads()
+            results['lead_duplicates_found'] = len(lead_duplicates)
+            logger.info(f"Found {len(lead_duplicates)} lead duplicates")
+        except Exception as e:
+            logger.error(f"Error finding lead duplicates: {e}\n{traceback.format_exc()}")
+            lead_duplicates = []
+            results['errors'].append(f"Lead scan error: {str(e)}")
 
         for dup in lead_duplicates:
-            task_result = self.create_merge_task(dup, assigned_to_user_id)
-            if task_result['status'] == 'created':
-                results['tasks_created'] += 1
-            else:
-                results['tasks_existing'] += 1
-            results['duplicates'].append({
-                **dup,
-                'task': task_result
-            })
+            try:
+                task_result = self.create_merge_task(dup, assigned_to_user_id)
+                if task_result['status'] == 'created':
+                    results['tasks_created'] += 1
+                else:
+                    results['tasks_existing'] += 1
+                results['duplicates'].append({
+                    **dup,
+                    'task': task_result
+                })
+            except Exception as e:
+                logger.error(f"Error creating task for lead duplicate: {e}\n{traceback.format_exc()}")
+                results['errors'].append(f"Task creation error: {str(e)}")
 
         # Scan loans
-        loan_duplicates = self.find_duplicate_loans()
-        results['loan_duplicates_found'] = len(loan_duplicates)
+        try:
+            loan_duplicates = self.find_duplicate_loans()
+            results['loan_duplicates_found'] = len(loan_duplicates)
+            logger.info(f"Found {len(loan_duplicates)} loan duplicates")
+        except Exception as e:
+            logger.error(f"Error finding loan duplicates: {e}\n{traceback.format_exc()}")
+            loan_duplicates = []
+            results['errors'].append(f"Loan scan error: {str(e)}")
 
         for dup in loan_duplicates:
-            task_result = self.create_merge_task(dup, assigned_to_user_id)
-            if task_result['status'] == 'created':
-                results['tasks_created'] += 1
-            else:
-                results['tasks_existing'] += 1
-            results['duplicates'].append({
-                **dup,
-                'task': task_result
-            })
+            try:
+                task_result = self.create_merge_task(dup, assigned_to_user_id)
+                if task_result['status'] == 'created':
+                    results['tasks_created'] += 1
+                else:
+                    results['tasks_existing'] += 1
+                results['duplicates'].append({
+                    **dup,
+                    'task': task_result
+                })
+            except Exception as e:
+                logger.error(f"Error creating task for loan duplicate: {e}\n{traceback.format_exc()}")
+                results['errors'].append(f"Task creation error: {str(e)}")
 
         logger.info(
             f"Duplicate scan complete: {results['lead_duplicates_found']} lead duplicates, "
             f"{results['loan_duplicates_found']} loan duplicates, "
-            f"{results['tasks_created']} tasks created"
+            f"{results['tasks_created']} tasks created, {len(results['errors'])} errors"
         )
 
         return results

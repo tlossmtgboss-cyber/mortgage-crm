@@ -58029,9 +58029,11 @@ async def create_duplicate_merge_tasks(
     Scan for duplicates and create tasks for each duplicate pair.
     Tasks are assigned to the current user.
     """
+    import traceback
     from services.duplicate_detection_service import get_duplicate_detection_service
 
     try:
+        logger.info(f"Starting duplicate scan for user {current_user.id}")
         service = get_duplicate_detection_service(db)
         results = service.scan_and_create_tasks(assigned_to_user_id=current_user.id)
 
@@ -58040,11 +58042,13 @@ async def create_duplicate_merge_tasks(
             "message": f"Found {results['lead_duplicates_found']} lead duplicates and {results['loan_duplicates_found']} loan duplicates",
             "tasks_created": results['tasks_created'],
             "tasks_existing": results['tasks_existing'],
-            "duplicates": results['duplicates']
+            "duplicates": results['duplicates'],
+            "errors": results.get('errors', [])
         }
     except Exception as e:
-        logger.error(f"Error creating duplicate tasks: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        error_traceback = traceback.format_exc()
+        logger.error(f"Error creating duplicate tasks: {e}\n{error_traceback}")
+        raise HTTPException(status_code=500, detail=f"{str(e)} - Check server logs for details")
 
 
 @app.get("/api/v1/duplicates/check/{record_type}/{record_id}")
