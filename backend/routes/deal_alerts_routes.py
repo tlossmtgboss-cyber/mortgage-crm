@@ -393,6 +393,55 @@ async def bulk_acknowledge(request: BulkAcknowledgeRequest, db: Session = Depend
 # Admin Migration Endpoint
 # =============================================================================
 
+@router.get("/admin/debug-loans")
+async def debug_loans_data(
+    db: Session = Depends(get_db),
+):
+    """Debug endpoint to check loans data status."""
+    try:
+        from sqlalchemy import text
+
+        # Check loan count by status
+        result = db.execute(text("""
+            SELECT status, COUNT(*) as count
+            FROM loans
+            GROUP BY status
+            ORDER BY count DESC
+        """))
+        status_counts = [{"status": row[0], "count": row[1]} for row in result.fetchall()]
+
+        # Check active loans
+        active_result = db.execute(text("""
+            SELECT COUNT(*) as count
+            FROM loans
+            WHERE status NOT IN ('funded', 'cancelled', 'denied', 'closed')
+        """))
+        active_count = active_result.scalar()
+
+        # Check columns in loans table
+        columns_result = db.execute(text("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = 'loans'
+            ORDER BY ordinal_position
+        """))
+        columns = [row[0] for row in columns_result.fetchall()]
+
+        return {
+            "status": "success",
+            "total_by_status": status_counts,
+            "active_loans_count": active_count,
+            "loans_table_columns": columns[:20],  # First 20 columns
+            "database_connected": True
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "database_connected": False
+        }
+
+
 @router.get("/admin/run-migration")
 async def run_deal_alerts_migration(
     admin_key: str = Query(..., description="Admin API key"),
