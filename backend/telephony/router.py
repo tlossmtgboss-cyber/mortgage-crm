@@ -576,7 +576,7 @@ async def setup_demo_caller_id(
             }
 
         # Create a demo verified caller ID
-        demo_phone = "+18326482297"  # Demo Twilio number
+        demo_phone = "+18434169589"  # Demo Twilio number
         caller_id = VerifiedCallerId(
             user_id=current_user.id,
             phone_number=demo_phone,

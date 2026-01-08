@@ -235,7 +235,7 @@ To see function calling in action:
   ```bash
   curl -X POST https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/get-lead-info \
     -H "Content-Type: application/json" \
-    -d '{"phone_number": "+18326482297"}'
+    -d '{"phone_number": "+18434169589"}'
   ```
 
 **Sam not recognizing existing leads?**
