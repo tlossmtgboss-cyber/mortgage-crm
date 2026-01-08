@@ -23,6 +23,7 @@ import ApplicantTasks from '../../components/portal/ApplicantTasks';
 import PortalDocumentRequirements from '../../components/portal/PortalDocumentRequirements';
 import TotalCostAnalysis from '../../components/portal/TotalCostAnalysis';
 import PortalVideoMessages from '../../components/portal/PortalVideoMessages';
+import VideoLightbox from '../../components/portal/VideoLightbox';
 import '../PURLPortal.css';
 
 // Tab components - Arrow/chevron style with notification dots or count badges
@@ -1101,6 +1102,7 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
   // UI state
   const [activeTab, setActiveTab] = useState('overview');
   const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [showVideoLightbox, setShowVideoLightbox] = useState(true); // Auto-show on load
   const [newMessage, setNewMessage] = useState({ subject: '', body: '' });
 
   // Check for submission success message
@@ -2057,6 +2059,19 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
           phone: borrower.phone,
         } : null}
       />
+
+      {/* Video Lightbox - Auto-opens when user has unwatched videos */}
+      {showVideoLightbox && slug && (
+        <VideoLightbox
+          portalType="client"
+          identifier={slug}
+          onClose={() => setShowVideoLightbox(false)}
+          onVideoWatched={() => {
+            // Video was watched and deleted, refresh the portal video list
+            setShowVideoLightbox(false);
+          }}
+        />
+      )}
 
       {/* Footer */}
       <footer className="portal-footer">
