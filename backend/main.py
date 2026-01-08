@@ -58159,6 +58159,39 @@ async def test_duplicate_task_creation(db: Session = Depends(get_db)):
         }
 
 
+@app.get("/admin/check-user-permissions/{user_id}")
+async def check_user_permissions_debug(user_id: int, db: Session = Depends(get_db)):
+    """Debug endpoint to check a user's permissions without auth."""
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return {"status": "error", "message": f"User {user_id} not found"}
+
+        # Get user permissions
+        user_perms = db.execute(text("""
+            SELECT up.permission_key, up.granted
+            FROM user_permissions up
+            WHERE up.user_id = :user_id
+        """), {"user_id": user_id}).fetchall()
+
+        permissions = {p[0]: p[1] for p in user_perms}
+
+        return {
+            "status": "success",
+            "user_id": user.id,
+            "email": user.email,
+            "role": user.role,
+            "permission_role": user.permission_role,
+            "permissions_count": len(permissions),
+            "permissions": permissions,
+            "has_admin_view": permissions.get('admin.view', False),
+            "has_admin_manage": permissions.get('admin.manage', False),
+            "has_system_admin": permissions.get('system.admin', False),
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
 @app.post("/admin/fix-user-permission-role")
 async def fix_user_permission_role(request: dict, db: Session = Depends(get_db)):
     """Admin endpoint to fix a user's permission_role.
