@@ -1440,13 +1440,15 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
                 {/* Contact Your Loan Officer - Now at the top */}
                 <ContactLOCard onSchedule={() => setShowScheduleModal(true)} />
 
-                {/* Video Messages from Loan Officer */}
-                <PortalVideoMessages
-                  key={`video-messages-${videoListKey}`}
-                  portalType="client"
-                  identifier={slug}
-                  title="Messages from Your Loan Officer"
-                />
+                {/* Video Messages from Loan Officer - Hidden when lightbox is open */}
+                {!showVideoLightbox && (
+                  <PortalVideoMessages
+                    key={`video-messages-${videoListKey}`}
+                    portalType="client"
+                    identifier={slug}
+                    title="Messages from Your Loan Officer"
+                  />
+                )}
 
                 {/* Applicant Tasks Section - Your Action Items */}
                 <ApplicantTasks
