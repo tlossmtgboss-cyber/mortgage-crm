@@ -92,8 +92,8 @@ const VideoLightbox = ({
   }
 
   return (
-    <div className="video-lightbox-overlay" onClick={handleClose}>
-      <div className="video-lightbox-container" onClick={e => e.stopPropagation()}>
+    <div className="video-lightbox-overlay">
+      <div className="video-lightbox-container">
         <button className="lightbox-close-btn" onClick={handleClose}>
           ×
         </button>
