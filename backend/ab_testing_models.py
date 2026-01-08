@@ -38,8 +38,9 @@ class Experiment(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)  # "Lead Qualification Prompt Test"
     description = Column(Text)  # Detailed explanation
-    experiment_type = Column(SQLEnum(ExperimentType), nullable=False)
-    status = Column(SQLEnum(ExperimentStatus), default=ExperimentStatus.DRAFT, nullable=False)
+    # Use native_enum=False to store as VARCHAR (matches migration schema)
+    experiment_type = Column(SQLEnum(ExperimentType, native_enum=False), nullable=False)
+    status = Column(SQLEnum(ExperimentStatus, native_enum=False), default=ExperimentStatus.DRAFT, nullable=False)
 
     # Targeting
     target_percentage = Column(Float, default=100.0)  # % of traffic to include (100 = everyone)
