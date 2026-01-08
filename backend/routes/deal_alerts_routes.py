@@ -432,13 +432,13 @@ async def debug_loans_data(
         """))
         enum_values = [row[0] for row in enum_result.fetchall()]
 
-        # Get sample loans
+        # Get sample loans - only use columns we know exist
         sample = db.execute(text("""
-            SELECT id, loan_number, stage::text, lock_expiration_date, target_close_date
+            SELECT id, loan_number, stage::text, updated_at
             FROM loans
             LIMIT 3
         """))
-        sample_loans = [dict(zip(['id', 'loan_number', 'stage', 'lock_expiration', 'target_close'], row)) for row in sample.fetchall()]
+        sample_loans = [dict(zip(['id', 'loan_number', 'stage', 'updated_at'], row)) for row in sample.fetchall()]
 
         return {
             "status": "success",
