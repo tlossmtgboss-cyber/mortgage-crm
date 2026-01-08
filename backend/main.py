@@ -36731,9 +36731,22 @@ async def add_coborrower_columns(db: Session = Depends(get_db)):
 
 @app.post("/admin/add-task-related-columns")
 async def add_task_related_columns(db: Session = Depends(get_db)):
-    """Admin endpoint to add related_type and related_contact_name columns to tasks table.
-    These columns are required for duplicate merge task creation."""
+    """Admin endpoint to add all required columns to tasks table.
+    These columns are required for task creation including duplicate merge tasks."""
     try:
+        # Add owner_id column (for task ownership)
+        db.execute(text("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='tasks' AND column_name='owner_id'
+                ) THEN
+                    ALTER TABLE tasks ADD COLUMN owner_id INTEGER REFERENCES users(id);
+                END IF;
+            END $$;
+        """))
+
         # Add related_type column
         db.execute(text("""
             DO $$
@@ -36760,18 +36773,47 @@ async def add_task_related_columns(db: Session = Depends(get_db)):
             END $$;
         """))
 
-        # Create index for related_type
+        # Add lead_id column if missing
+        db.execute(text("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='tasks' AND column_name='lead_id'
+                ) THEN
+                    ALTER TABLE tasks ADD COLUMN lead_id INTEGER REFERENCES leads(id);
+                END IF;
+            END $$;
+        """))
+
+        # Add loan_id column if missing
+        db.execute(text("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='tasks' AND column_name='loan_id'
+                ) THEN
+                    ALTER TABLE tasks ADD COLUMN loan_id INTEGER REFERENCES loans(id);
+                END IF;
+            END $$;
+        """))
+
+        # Create indexes
         db.execute(text("""
             CREATE INDEX IF NOT EXISTS ix_tasks_related_type ON tasks(related_type);
+        """))
+        db.execute(text("""
+            CREATE INDEX IF NOT EXISTS ix_tasks_owner_id ON tasks(owner_id);
         """))
 
         db.commit()
 
-        logger.info("✅ Task related columns added successfully")
-        return {"status": "success", "message": "Task related columns (related_type, related_contact_name) added"}
+        logger.info("✅ Task columns added successfully")
+        return {"status": "success", "message": "Task columns (owner_id, related_type, related_contact_name, lead_id, loan_id) added"}
     except Exception as e:
         db.rollback()
-        logger.error(f"❌ Failed to add task related columns: {e}")
+        logger.error(f"❌ Failed to add task columns: {e}")
         return JSONResponse(
             status_code=500,
             content={"status": "error", "message": str(e)}
