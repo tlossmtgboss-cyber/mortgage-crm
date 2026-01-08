@@ -281,7 +281,7 @@ def run_migration(engine):
                      annual_price, included_features, gated_routes, sort_order)
                     VALUES
                     (:module_key, :module_name, :description, :category, :monthly_price,
-                     :annual_price, :included_features::jsonb, :gated_routes::jsonb, :sort_order)
+                     :annual_price, CAST(:included_features AS jsonb), CAST(:gated_routes AS jsonb), :sort_order)
                 """), {
                     "module_key": module["module_key"],
                     "module_name": module["module_name"],
