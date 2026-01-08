@@ -403,7 +403,10 @@ function SmartDocs() {
   const handleCreateDuplicateTasks = async () => {
     try {
       const token = localStorage.getItem('token');
-      const API_BASE = process.env.REACT_APP_API_URL || '';
+      const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+      const API_BASE = isProduction
+        ? 'https://api.perenniaai.com'
+        : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
       const response = await fetch(`${API_BASE}/api/v1/duplicates/create-tasks`, {
         method: 'POST',
         headers: {
