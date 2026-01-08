@@ -87,10 +87,12 @@ export const PermissionProvider = ({ children }) => {
       // Get the current user from localStorage
       const userStr = localStorage.getItem('user');
       if (!userStr) {
-        console.warn('No user found in localStorage');
+        console.warn('PermissionContext: No user found in localStorage - setting default sales role');
+        setUserRole('sales');
         setLoading(false);
         return;
       }
+      console.log('PermissionContext: User from localStorage:', userStr?.substring(0, 100));
 
       const user = JSON.parse(userStr);
       let userId = user.id;
@@ -160,8 +162,9 @@ export const PermissionProvider = ({ children }) => {
       });
 
     } catch (error) {
-      console.error('Error fetching permissions:', error);
-      // Set default permissions on error
+      console.error('PermissionContext: Error fetching permissions:', error);
+      console.error('PermissionContext: Error details:', error.message, error.stack);
+      // Set default permissions on error - this causes Access Denied on admin pages
       setPermissions({});
       setUserRole('sales');
       // Clear cached role on error
