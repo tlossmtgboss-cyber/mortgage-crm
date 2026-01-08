@@ -216,9 +216,12 @@ class ExperimentService:
             return experiment
 
         except Exception as e:
-            logger.error(f"Error creating experiment: {e}")
+            import traceback
+            error_detail = f"{str(e)}\n{traceback.format_exc()}"
+            logger.error(f"Error creating experiment: {error_detail}")
             self.db.rollback()
-            return None
+            # Re-raise to let the caller see the actual error
+            raise
 
     def start_experiment(self, experiment_id: int) -> bool:
         """Start an experiment"""

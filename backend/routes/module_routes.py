@@ -403,3 +403,69 @@ async def debug_modules(
             }
     except Exception as e:
         return {"error": str(e)}
+
+
+@router.post("/admin/enable-all")
+async def enable_all_modules(
+    organization_id: int = Query(None, description="Organization ID (defaults to 1)"),
+    admin_key: str = Query(..., description="Admin API key"),
+):
+    """
+    Enable all premium modules for an organization.
+    Removes all UPGRADE badges by enabling every module.
+    """
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    org_id = organization_id or 1
+
+    try:
+        from database import engine
+        from sqlalchemy import text
+        from datetime import datetime
+
+        # All premium module keys
+        premium_modules = [
+            'ai_assistant',
+            'partner_portals',
+            'video_os',
+            'recruiting_suite',
+            'conversation_intelligence',
+            'advanced_analytics',
+            'integrations'
+        ]
+
+        enabled = []
+        errors = []
+
+        with engine.connect() as conn:
+            for module_key in premium_modules:
+                try:
+                    # Upsert the module for the organization
+                    conn.execute(text("""
+                        INSERT INTO organization_modules
+                        (organization_id, module_key, is_enabled, enabled_at, is_trial, created_at, updated_at)
+                        VALUES (:org_id, :module_key, true, NOW(), false, NOW(), NOW())
+                        ON CONFLICT (organization_id, module_key)
+                        DO UPDATE SET
+                            is_enabled = true,
+                            enabled_at = NOW(),
+                            is_trial = false,
+                            disabled_at = NULL,
+                            updated_at = NOW()
+                    """), {"org_id": org_id, "module_key": module_key})
+                    enabled.append(module_key)
+                except Exception as e:
+                    errors.append({"module": module_key, "error": str(e)})
+
+            conn.commit()
+
+        return {
+            "success": True,
+            "organization_id": org_id,
+            "enabled_modules": enabled,
+            "errors": errors if errors else None,
+            "message": f"All {len(enabled)} premium modules enabled for organization {org_id}"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to enable modules: {str(e)}")

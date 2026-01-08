@@ -117,6 +117,8 @@ async def create_experiment(
         # Convert variants to dict format
         variants = [v.dict() for v in experiment_data.variants]
 
+        logger.info(f"Creating experiment: name={experiment_data.name}, type={exp_type}, variants={len(variants)}")
+
         experiment = service.create_experiment(
             name=experiment_data.name,
             description=experiment_data.description,
@@ -130,7 +132,8 @@ async def create_experiment(
         )
 
         if not experiment:
-            raise HTTPException(status_code=500, detail="Failed to create experiment")
+            logger.error("ExperimentService.create_experiment returned None - check service logs for details")
+            raise HTTPException(status_code=500, detail="Failed to create experiment - service returned None")
 
         return {
             "id": experiment.id,
@@ -142,7 +145,9 @@ async def create_experiment(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error creating experiment: {e}")
+        import traceback
+        error_detail = f"{str(e)}\n{traceback.format_exc()}"
+        logger.error(f"Error creating experiment: {error_detail}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
