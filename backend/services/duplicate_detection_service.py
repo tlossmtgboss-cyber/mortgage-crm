@@ -40,113 +40,97 @@ class DuplicateDetectionService:
         Returns:
             List of duplicate groups with confidence scores.
         """
-        from models.lead_profile import LeadProfile
+        # Try to use the Lead model from main (the one used by the frontend)
+        try:
+            from main import Lead
+            using_lead_model = True
+        except ImportError:
+            from models.lead_profile import LeadProfile as Lead
+            using_lead_model = False
 
         # Get leads to check
         if lead_id:
-            leads = self.db.query(LeadProfile).filter(LeadProfile.id == lead_id).all()
+            if using_lead_model:
+                leads = self.db.query(Lead).filter(Lead.id == lead_id).all()
+            else:
+                leads = self.db.query(Lead).filter(Lead.id == lead_id).all()
         else:
-            leads = self.db.query(LeadProfile).filter(
-                LeadProfile.status != 'archived'
-            ).all()
+            if using_lead_model:
+                # For Lead model, filter by stage instead of status
+                leads = self.db.query(Lead).all()
+            else:
+                leads = self.db.query(Lead).filter(
+                    Lead.status != 'archived'
+                ).all()
+
+        logger.info(f"Found {len(leads)} leads to scan for duplicates (using_lead_model={using_lead_model})")
+
+        # Group leads by email (simple approach like frontend)
+        email_groups = {}
+        for lead in leads:
+            if lead.email:
+                email_lower = lead.email.lower()
+                if email_lower not in email_groups:
+                    email_groups[email_lower] = []
+                email_groups[email_lower].append(lead)
 
         duplicates = []
         checked_pairs = set()
 
-        for lead in leads:
-            # Find potential matches
-            potential_matches = self._find_potential_lead_matches(lead)
+        # Find groups with duplicates
+        for email, lead_group in email_groups.items():
+            if len(lead_group) < 2:
+                continue
 
-            for match, score, reasons in potential_matches:
-                # Avoid duplicate pairs
-                pair_key = tuple(sorted([str(lead.id), str(match.id)]))
-                if pair_key in checked_pairs:
-                    continue
-                checked_pairs.add(pair_key)
+            # Create duplicate entries for each pair
+            for i, lead1 in enumerate(lead_group):
+                for lead2 in lead_group[i+1:]:
+                    # Avoid duplicate pairs
+                    pair_key = tuple(sorted([str(lead1.id), str(lead2.id)]))
+                    if pair_key in checked_pairs:
+                        continue
+                    checked_pairs.add(pair_key)
 
-                if score >= self.DUPLICATE_THRESHOLD:
+                    # Get name - handle both Lead model (has 'name') and LeadProfile (has first/last)
+                    name1 = getattr(lead1, 'name', None) or f"{getattr(lead1, 'first_name', '') or ''} {getattr(lead1, 'last_name', '') or ''}".strip() or 'Unknown'
+                    name2 = getattr(lead2, 'name', None) or f"{getattr(lead2, 'first_name', '') or ''} {getattr(lead2, 'last_name', '') or ''}".strip() or 'Unknown'
+
+                    # Get created_at - handle different field names
+                    created1 = getattr(lead1, 'created_at', None) or getattr(lead1, 'lead_created_date', None)
+                    created2 = getattr(lead2, 'created_at', None) or getattr(lead2, 'lead_created_date', None)
+
+                    # Get stage - convert enum to string if needed
+                    stage1 = str(lead1.stage.value) if hasattr(lead1.stage, 'value') else str(lead1.stage) if lead1.stage else None
+                    stage2 = str(lead2.stage.value) if hasattr(lead2.stage, 'value') else str(lead2.stage) if lead2.stage else None
+
                     duplicates.append({
                         'type': 'lead',
                         'record_1': {
-                            'id': str(lead.id),
-                            'name': f"{lead.first_name or ''} {lead.last_name or ''}".strip(),
-                            'email': lead.email,
-                            'phone': lead.phone,
-                            'loan_number': lead.loan_number,
-                            'created_at': lead.lead_created_date.isoformat() if lead.lead_created_date else None,
-                            'stage': lead.stage,
-                            'status': lead.status
+                            'id': str(lead1.id),
+                            'name': name1,
+                            'email': lead1.email,
+                            'phone': getattr(lead1, 'phone', None),
+                            'loan_number': getattr(lead1, 'loan_number', None),
+                            'created_at': created1.isoformat() if created1 else None,
+                            'stage': stage1,
+                            'status': getattr(lead1, 'status', None)
                         },
                         'record_2': {
-                            'id': str(match.id),
-                            'name': f"{match.first_name or ''} {match.last_name or ''}".strip(),
-                            'email': match.email,
-                            'phone': match.phone,
-                            'loan_number': match.loan_number,
-                            'created_at': match.lead_created_date.isoformat() if match.lead_created_date else None,
-                            'stage': match.stage,
-                            'status': match.status
+                            'id': str(lead2.id),
+                            'name': name2,
+                            'email': lead2.email,
+                            'phone': getattr(lead2, 'phone', None),
+                            'loan_number': getattr(lead2, 'loan_number', None),
+                            'created_at': created2.isoformat() if created2 else None,
+                            'stage': stage2,
+                            'status': getattr(lead2, 'status', None)
                         },
-                        'confidence_score': score,
-                        'match_reasons': reasons
+                        'confidence_score': self.EMAIL_MATCH_WEIGHT,  # 100% for email match
+                        'match_reasons': [f"Same email: {email}"]
                     })
 
+        logger.info(f"Found {len(duplicates)} duplicate pairs")
         return duplicates
-
-    def _find_potential_lead_matches(self, lead) -> List[Tuple]:
-        """Find potential duplicate matches for a lead."""
-        from models.lead_profile import LeadProfile
-
-        matches = []
-
-        # Build query for potential matches
-        conditions = []
-
-        # Email match (strongest signal)
-        if lead.email:
-            conditions.append(
-                and_(
-                    LeadProfile.email == lead.email,
-                    LeadProfile.id != lead.id
-                )
-            )
-
-        # Phone match
-        if lead.phone:
-            normalized_phone = self._normalize_phone(lead.phone)
-            if normalized_phone:
-                conditions.append(
-                    and_(
-                        func.regexp_replace(LeadProfile.phone, '[^0-9]', '', 'g') == normalized_phone,
-                        LeadProfile.id != lead.id
-                    )
-                )
-
-        # Name match (first + last)
-        if lead.first_name and lead.last_name:
-            conditions.append(
-                and_(
-                    func.lower(LeadProfile.first_name) == lead.first_name.lower(),
-                    func.lower(LeadProfile.last_name) == lead.last_name.lower(),
-                    LeadProfile.id != lead.id
-                )
-            )
-
-        if not conditions:
-            return []
-
-        potential_matches = self.db.query(LeadProfile).filter(
-            LeadProfile.status != 'archived',
-            or_(*conditions)
-        ).all()
-
-        # Score each match
-        for match in potential_matches:
-            score, reasons = self._calculate_match_score(lead, match)
-            if score > 0:
-                matches.append((match, score, reasons))
-
-        return matches
 
     def _calculate_match_score(self, lead1, lead2) -> Tuple[int, List[str]]:
         """Calculate duplicate confidence score between two leads."""
