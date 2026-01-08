@@ -58051,6 +58051,48 @@ async def create_duplicate_merge_tasks(
         raise HTTPException(status_code=500, detail=f"{str(e)} - Check server logs for details")
 
 
+@app.post("/admin/test-duplicate-task-creation")
+async def test_duplicate_task_creation(db: Session = Depends(get_db)):
+    """Debug endpoint to test duplicate task creation without auth."""
+    import traceback
+    from services.duplicate_detection_service import get_duplicate_detection_service
+
+    try:
+        # Check if tasks table exists and has required columns
+        columns_check = db.execute(text("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'tasks'
+            ORDER BY ordinal_position
+        """)).fetchall()
+
+        column_names = [c[0] for c in columns_check]
+
+        # Try to create a simple test task
+        test_result = {
+            "tasks_table_exists": len(column_names) > 0,
+            "columns": column_names,
+            "has_owner_id": "owner_id" in column_names,
+            "has_related_type": "related_type" in column_names,
+            "has_related_contact_name": "related_contact_name" in column_names,
+        }
+
+        # Test the service
+        service = get_duplicate_detection_service(db)
+
+        # Just scan without creating tasks to test the scan
+        lead_duplicates = service.find_duplicate_leads()
+        test_result["lead_duplicates_found"] = len(lead_duplicates)
+
+        return {"status": "success", "debug_info": test_result}
+    except Exception as e:
+        error_traceback = traceback.format_exc()
+        return {
+            "status": "error",
+            "error": str(e),
+            "traceback": error_traceback
+        }
+
+
 @app.get("/api/v1/duplicates/check/{record_type}/{record_id}")
 async def check_single_record_duplicates(
     record_type: str,
