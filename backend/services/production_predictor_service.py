@@ -171,19 +171,19 @@ class ProductionPredictorService:
                 else:
                     entity_filter = ""  # Company-wide
 
-                # Query monthly aggregations
+                # Query monthly aggregations - use correct column names (amount, stage, funded_date)
                 result = self.db.execute(text(f"""
                     SELECT
-                        DATE_TRUNC('month', l.funded_at) as month,
+                        DATE_TRUNC('month', l.funded_date) as month,
                         COUNT(*) as units,
-                        COALESCE(SUM(l.loan_amount), 0) as volume,
-                        COUNT(CASE WHEN l.application_date IS NOT NULL THEN 1 END) as applications
+                        COALESCE(SUM(l.amount), 0) as volume,
+                        COUNT(*) as applications
                     FROM loans l
                     LEFT JOIN users u ON l.loan_officer_id = u.id
-                    WHERE l.funded_at >= CURRENT_DATE - INTERVAL ':months months'
-                        AND l.status = 'funded'
+                    WHERE l.funded_date >= CURRENT_DATE - INTERVAL ':months months'
+                        AND UPPER(l.stage::text) = 'FUNDED'
                         {entity_filter}
-                    GROUP BY DATE_TRUNC('month', l.funded_at)
+                    GROUP BY DATE_TRUNC('month', l.funded_date)
                     ORDER BY month ASC
                 """.replace(':months', str(months))), {"entity_id": entity_id})
 

@@ -56,7 +56,7 @@ ASSISTANT_CONFIG = {
     }
 }
 
-PHONE_NUMBER_ID = "633423b3-dd7d-416f-abe4-2c195e3e641c"
+PHONE_NUMBER_ID = "6adaf897-34d7-42d5-bc34-f1a17162a453"
 VAPI_API_KEY = os.getenv("VAPI_API_KEY", "13af9bfd-8639-4a4a-90d9-fe5fdd8ec886")
 
 
