@@ -312,14 +312,14 @@ class ProactiveDealAlertsService:
                     SELECT
                         l.id,
                         COALESCE(l.loan_number, 'LOAN-' || l.id) as loan_number,
-                        COALESCE(le.first_name || ' ' || le.last_name, 'Unknown') as borrower_name,
+                        COALESCE(le.first_name || ' ' || le.last_name, l.borrower_name, 'Unknown') as borrower_name,
                         COALESCE(l.stage::text, 'processing') as status,
-                        COALESCE(EXTRACT(DAY FROM (CURRENT_TIMESTAMP - l.updated_at)), 0) as days_in_stage,
+                        COALESCE(l.days_in_stage, EXTRACT(DAY FROM (CURRENT_TIMESTAMP - l.updated_at))::integer, 0) as days_in_stage,
                         l.loan_amount
                     FROM loans l
                     LEFT JOIN leads le ON l.lead_id = le.id
                     WHERE l.stage IS NULL
-                       OR l.stage::text NOT IN ('Funded', 'Cancelled', 'Denied', 'funded', 'cancelled', 'denied')
+                       OR UPPER(l.stage::text) NOT IN ('FUNDED', 'CANCELLED', 'DENIED', 'CLOSED')
                     ORDER BY l.updated_at ASC
                     LIMIT 100
                 """))
