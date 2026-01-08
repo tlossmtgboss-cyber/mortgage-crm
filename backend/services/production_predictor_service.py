@@ -176,8 +176,7 @@ class ProductionPredictorService:
                     SELECT
                         DATE_TRUNC('month', l.funded_date) as month,
                         COUNT(*) as units,
-                        COALESCE(SUM(l.amount), 0) as volume,
-                        COUNT(*) as applications
+                        COALESCE(SUM(l.amount), 0) as volume
                     FROM loans l
                     LEFT JOIN users u ON l.loan_officer_id = u.id
                     WHERE l.funded_date >= CURRENT_DATE - INTERVAL ':months months'
@@ -194,7 +193,8 @@ class ProductionPredictorService:
                         month_date = row[0].date() if hasattr(row[0], 'date') else row[0]
                         units = int(row[1] or 0)
                         volume = float(row[2] or 0)
-                        applications = int(row[3] or 0)
+                        # Use units as proxy for applications since we don't track application_date
+                        applications = units
 
                         history.append(ProductionDataPoint(
                             date=month_date,
