@@ -315,16 +315,17 @@ class ProactiveDealAlertsService:
                         COALESCE(l.borrower_first_name || ' ' || l.borrower_last_name,
                                  le.first_name || ' ' || le.last_name,
                                  'Unknown') as borrower_name,
-                        l.status,
-                        EXTRACT(DAY FROM (CURRENT_TIMESTAMP - l.status_changed_at)) as days_in_stage,
+                        COALESCE(l.stage, 'processing') as status,
+                        COALESCE(EXTRACT(DAY FROM (CURRENT_TIMESTAMP - l.stage_changed_at)),
+                                 EXTRACT(DAY FROM (CURRENT_TIMESTAMP - l.updated_at)), 0) as days_in_stage,
                         l.lock_expiration_date as lock_expiration,
                         l.target_close_date as expected_close,
                         l.last_contact_date,
                         l.loan_amount
                     FROM loans l
                     LEFT JOIN leads le ON l.lead_id = le.id
-                    WHERE l.status NOT IN ('funded', 'cancelled', 'denied', 'closed')
-                    ORDER BY l.status_changed_at ASC
+                    WHERE (l.stage IS NULL OR l.stage NOT IN ('funded', 'cancelled', 'denied', 'closed'))
+                    ORDER BY l.updated_at ASC
                     LIMIT 100
                 """))
 

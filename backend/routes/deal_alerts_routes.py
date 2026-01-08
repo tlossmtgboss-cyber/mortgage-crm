@@ -401,20 +401,21 @@ async def debug_loans_data(
     try:
         from sqlalchemy import text
 
-        # Check loan count by status
+        # Check loan count by stage
         result = db.execute(text("""
-            SELECT status, COUNT(*) as count
+            SELECT stage, COUNT(*) as count
             FROM loans
-            GROUP BY status
+            GROUP BY stage
             ORDER BY count DESC
         """))
-        status_counts = [{"status": row[0], "count": row[1]} for row in result.fetchall()]
+        stage_counts = [{"stage": row[0], "count": row[1]} for row in result.fetchall()]
 
-        # Check active loans
+        # Check active loans (exclude funded, cancelled, denied, closed)
         active_result = db.execute(text("""
             SELECT COUNT(*) as count
             FROM loans
-            WHERE status NOT IN ('funded', 'cancelled', 'denied', 'closed')
+            WHERE stage NOT IN ('funded', 'cancelled', 'denied', 'closed')
+                OR stage IS NULL
         """))
         active_count = active_result.scalar()
 
@@ -427,11 +428,22 @@ async def debug_loans_data(
         """))
         columns = [row[0] for row in columns_result.fetchall()]
 
+        # Get a sample active loan
+        sample = db.execute(text("""
+            SELECT id, loan_number, stage, lock_expiration_date, target_close_date
+            FROM loans
+            WHERE stage NOT IN ('funded', 'cancelled', 'denied', 'closed')
+                OR stage IS NULL
+            LIMIT 1
+        """))
+        sample_loan = sample.fetchone()
+
         return {
             "status": "success",
-            "total_by_status": status_counts,
+            "total_by_stage": stage_counts,
             "active_loans_count": active_count,
-            "loans_table_columns": columns[:20],  # First 20 columns
+            "loans_table_columns": columns[:30],
+            "sample_loan": dict(sample_loan._asdict()) if sample_loan and hasattr(sample_loan, '_asdict') else None,
             "database_connected": True
         }
     except Exception as e:
