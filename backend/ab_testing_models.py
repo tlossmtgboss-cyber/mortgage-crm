@@ -62,7 +62,9 @@ class Experiment(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     started_at = Column(DateTime(timezone=True))
     ended_at = Column(DateTime(timezone=True))
-    created_by_user_id = Column(Integer, ForeignKey("users.id"))
+    # Note: FK constraint exists in database, but we don't define it here to avoid
+    # SQLAlchemy model load order issues with User model
+    created_by_user_id = Column(Integer, nullable=True)
 
     # Metadata
     experiment_metadata = Column(JSON)  # Additional configuration (renamed from 'metadata' to avoid SQLAlchemy reserved word)
@@ -118,7 +120,8 @@ class ExperimentAssignment(Base):
     variant_id = Column(Integer, ForeignKey("ab_variants.id"), nullable=False)
 
     # Assignment target (at least one must be set)
-    user_id = Column(Integer, ForeignKey("users.id"), index=True)  # For logged-in users
+    # Note: FK constraint exists in database, but we don't define it here
+    user_id = Column(Integer, index=True)  # For logged-in users
     session_id = Column(String(255), index=True)  # For anonymous sessions
 
     # Assignment details
@@ -142,7 +145,8 @@ class ExperimentResult(Base):
     variant_id = Column(Integer, ForeignKey("ab_variants.id"), nullable=False, index=True)
 
     # Who/what generated this result
-    user_id = Column(Integer, ForeignKey("users.id"))
+    # Note: FK constraint exists in database, but we don't define it here
+    user_id = Column(Integer)
     session_id = Column(String(255))
 
     # Metrics (store all metrics, query by metric_name)
