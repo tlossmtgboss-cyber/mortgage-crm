@@ -369,6 +369,7 @@ async def debug_modules(
     enable_all: bool = Query(False, description="Enable all modules for org 1"),
     org_id: int = Query(1, description="Organization ID"),
     set_admin_user: int = Query(None, description="User ID to set as admin"),
+    check_user: int = Query(None, description="Check user info by ID"),
 ):
     """Debug endpoint to check module data and optionally enable all modules."""
     if admin_key != "perennia-admin-2024":
@@ -380,6 +381,31 @@ async def debug_modules(
 
         with engine.connect() as conn:
             results = {}
+
+            # Check user info if requested
+            if check_user:
+                user_result = conn.execute(text("""
+                    SELECT id, email, role, permission_role, organization_id
+                    FROM users WHERE id = :user_id
+                """), {"user_id": check_user})
+                user_row = user_result.fetchone()
+                if user_row:
+                    results["user_info"] = {
+                        "id": user_row[0],
+                        "email": user_row[1],
+                        "role": user_row[2],
+                        "permission_role": user_row[3],
+                        "organization_id": user_row[4]
+                    }
+                    # Also check enabled modules for user's org
+                    if user_row[4]:
+                        org_modules = conn.execute(text("""
+                            SELECT module_key, is_enabled FROM organization_modules
+                            WHERE organization_id = :org_id
+                        """), {"org_id": user_row[4]})
+                        results["user_org_modules"] = [
+                            {"key": r[0], "enabled": r[1]} for r in org_modules.fetchall()
+                        ]
 
             # Enable all modules if requested
             if enable_all:
