@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { api } from '../utils/api/client';
 import './CreateTaskModal.css';
 
 function CreateTaskModal({ isOpen, onClose, lead, onTaskCreated }) {
@@ -21,27 +22,19 @@ function CreateTaskModal({ isOpen, onClose, lead, onTaskCreated }) {
     setError('');
 
     try {
-      const response = await fetch('/api/v1/tasks', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          title: title.trim(),
-          description: description.trim(),
-          due_date: dueDate || null,
-          priority,
-          lead_id: lead?.id,
-          status: 'pending',
-        }),
-      });
+      const taskData = {
+        title: title.trim(),
+        description: description.trim() || null,
+        priority,
+        lead_id: lead?.id || null,
+      };
 
-      if (!response.ok) {
-        throw new Error('Failed to create task');
+      // Only include due_date if provided (backend expects datetime format)
+      if (dueDate) {
+        taskData.due_date = new Date(dueDate).toISOString();
       }
 
-      const data = await response.json();
+      const data = await api.post('/api/v1/tasks', taskData);
 
       // Reset form
       setTitle('');
@@ -57,7 +50,8 @@ function CreateTaskModal({ isOpen, onClose, lead, onTaskCreated }) {
       onClose();
     } catch (err) {
       console.error('Error creating task:', err);
-      setError('Failed to create task. Please try again.');
+      const errorMessage = err.message || 'Failed to create task. Please try again.';
+      setError(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
