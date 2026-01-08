@@ -189,7 +189,16 @@ function Leads() {
       if (response.ok) {
         const data = await response.json();
         setDuplicateTasksCreated(true);
-        alert(`Created ${data.tasks_created} tasks to review duplicate records.`);
+
+        // Show detailed results
+        let message = `Created ${data.tasks_created} new task(s).`;
+        if (data.tasks_existing > 0) {
+          message += `\n${data.tasks_existing} task(s) already existed.`;
+        }
+        if (data.errors && data.errors.length > 0) {
+          message += `\n\nErrors:\n${data.errors.join('\n')}`;
+        }
+        alert(message);
       } else {
         const error = await response.json();
         alert(`Error: ${error.detail || 'Failed to create tasks'}`);

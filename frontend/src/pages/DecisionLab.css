@@ -84,17 +84,19 @@
 .step-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
+  gap: 10px;
+  padding: 10px 20px;
   border-radius: 24px;
   background: #f9fafb;
   cursor: pointer;
   transition: all 0.2s ease;
+  border: 1px solid #e5e7eb;
 }
 
 .step-item.active {
   background: #217F8D;
   color: white;
+  border-color: #217F8D;
 }
 
 .step-item.completed {
@@ -130,6 +132,11 @@
 .step-label {
   font-size: 14px;
   font-weight: 500;
+  color: #4b5563;
+}
+
+.step-item.active .step-label {
+  color: white;
 }
 
 /* Content Area */

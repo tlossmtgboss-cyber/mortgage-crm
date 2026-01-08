@@ -3,18 +3,9 @@ import { decisionLabAPI } from '../../services/decisionLabApi';
 import EducationOverlay from './EducationOverlay';
 import './ConfidenceAssessment.css';
 
-const CONFIDENCE_LEVELS = [
-  { value: 1, label: 'Very unsure', emoji: '1' },
-  { value: 2, label: 'Somewhat unsure', emoji: '2' },
-  { value: 3, label: 'Neutral', emoji: '3' },
-  { value: 4, label: 'Fairly confident', emoji: '4' },
-  { value: 5, label: 'Very confident', emoji: '5' },
-];
-
 function ConfidenceAssessment({ sessionId, onComplete, onBack }) {
   const [currentQuestion, setCurrentQuestion] = useState(null);
   const [selectedAnswer, setSelectedAnswer] = useState('');
-  const [confidenceLevel, setConfidenceLevel] = useState(3);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -47,7 +38,6 @@ function ConfidenceAssessment({ sessionId, onComplete, onBack }) {
 
       setCurrentQuestion(data.question);
       setSelectedAnswer('');
-      setConfidenceLevel(3);
 
       // Check for education overlay
       if (data.education_overlay) {
@@ -100,7 +90,7 @@ function ConfidenceAssessment({ sessionId, onComplete, onBack }) {
         sessionId,
         currentQuestion.id,
         selectedAnswer,
-        confidenceLevel
+        3 // Default confidence level
       );
 
       // Fetch next question
@@ -247,27 +237,6 @@ function ConfidenceAssessment({ sessionId, onComplete, onBack }) {
             )}
           </div>
 
-          {/* Confidence Level - Hidden for scale questions to avoid redundancy */}
-          {currentQuestion.question_type !== 'scale' && (
-            <div className="confidence-selector">
-              <label className="confidence-label">
-                How confident are you in this answer?
-              </label>
-              <div className="confidence-options">
-                {CONFIDENCE_LEVELS.map((level) => (
-                  <button
-                    key={level.value}
-                    className={`confidence-option ${confidenceLevel === level.value ? 'selected' : ''}`}
-                    onClick={() => setConfidenceLevel(level.value)}
-                    title={level.label}
-                  >
-                    <span className="confidence-emoji">{level.emoji}</span>
-                    <span className="confidence-text">{level.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* Error Message */}
           {error && <p className="error-message">{error}</p>}

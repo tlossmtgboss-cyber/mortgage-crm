@@ -282,12 +282,14 @@ class DuplicateDetectionService:
 """
 
         # Check if task already exists for this duplicate pair
+        logger.info(f"Checking for existing task with title: {title}")
         existing_task = self.db.query(Task).filter(
             Task.title == title,
             Task.status != 'completed'
         ).first()
 
         if existing_task:
+            logger.info(f"Task already exists: {existing_task.id} - {existing_task.title}")
             return {
                 'task_id': existing_task.id,
                 'status': 'existing',
