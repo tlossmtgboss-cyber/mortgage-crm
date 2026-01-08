@@ -59933,6 +59933,63 @@ async def enable_all_modules_main(
     }
 
 
+@app.post("/api/v1/admin/enable-all-modules-key")
+async def enable_all_modules_with_key(
+    organization_id: int = Query(1, description="Organization ID"),
+    admin_key: str = Query(..., description="Admin API key"),
+    db: Session = Depends(get_db)
+):
+    """
+    Enable all premium modules for an organization using admin key.
+    No JWT required - uses admin API key for authentication.
+    """
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    org_id = organization_id
+
+    premium_modules = [
+        'ai_assistant',
+        'partner_portals',
+        'video_os',
+        'recruiting_suite',
+        'conversation_intelligence',
+        'advanced_analytics',
+        'integrations'
+    ]
+
+    enabled = []
+    errors = []
+
+    for module_key in premium_modules:
+        try:
+            db.execute(text("""
+                INSERT INTO organization_modules
+                (organization_id, module_key, is_enabled, enabled_at, is_trial, created_at, updated_at)
+                VALUES (:org_id, :module_key, true, NOW(), false, NOW(), NOW())
+                ON CONFLICT (organization_id, module_key)
+                DO UPDATE SET
+                    is_enabled = true,
+                    enabled_at = NOW(),
+                    is_trial = false,
+                    disabled_at = NULL,
+                    updated_at = NOW()
+            """), {"org_id": org_id, "module_key": module_key})
+            enabled.append(module_key)
+        except Exception as e:
+            errors.append({"module": module_key, "error": str(e)})
+
+    db.commit()
+
+    return {
+        "success": True,
+        "organization_id": org_id,
+        "enabled_modules": enabled,
+        "errors": errors if errors else None,
+        "message": f"All {len(enabled)} premium modules enabled for organization {org_id}"
+    }
+
+
 @app.post("/api/v1/migrations/run-phase2-permissions", response_model=None)
 async def run_phase2_permission_migration_endpoint(
     migration_key: str = "",
