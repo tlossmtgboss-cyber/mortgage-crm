@@ -27,6 +27,15 @@ const VideoRecorder = ({
   const chunksRef = useRef([]);
   const timerRef = useRef(null);
 
+  // Callback ref to attach stream when video element mounts
+  const setVideoRef = useCallback((node) => {
+    videoRef.current = node;
+    if (node && streamRef.current) {
+      node.srcObject = streamRef.current;
+      node.play().catch(err => console.error('Video play error:', err));
+    }
+  }, []);
+
   // Request camera access
   const requestCamera = useCallback(async () => {
     setStatus('requesting');
@@ -46,6 +55,10 @@ const VideoRecorder = ({
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        // Explicitly play the video - autoPlay doesn't always work with MediaStream
+        videoRef.current.play().catch(err => {
+          console.error('Video play error:', err);
+        });
       }
 
       setStatus('ready');
@@ -176,6 +189,18 @@ const VideoRecorder = ({
     requestCamera();
   }, [requestCamera]);
 
+  // Ensure video element plays when stream is available
+  useEffect(() => {
+    if (streamRef.current && videoRef.current && (status === 'ready' || status === 'recording')) {
+      if (!videoRef.current.srcObject) {
+        videoRef.current.srcObject = streamRef.current;
+      }
+      videoRef.current.play().catch(err => {
+        console.error('Video play error:', err);
+      });
+    }
+  }, [status]);
+
   // Format time as MM:SS
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -210,11 +235,15 @@ const VideoRecorder = ({
         <div className="recorder-live">
           <div className="video-container">
             <video
-              ref={videoRef}
+              ref={setVideoRef}
               autoPlay
               playsInline
               muted
               className="live-video"
+              onLoadedMetadata={(e) => {
+                // Ensure video plays when metadata is loaded
+                e.target.play().catch(err => console.error('Play on metadata error:', err));
+              }}
             />
 
             {status === 'recording' && (
