@@ -401,49 +401,52 @@ async def debug_loans_data(
     try:
         from sqlalchemy import text
 
-        # Check loan count by stage
+        # Check loan count by stage (cast to text to handle enum)
         result = db.execute(text("""
-            SELECT stage, COUNT(*) as count
+            SELECT stage::text as stage_name, COUNT(*) as count
             FROM loans
             GROUP BY stage
             ORDER BY count DESC
         """))
         stage_counts = [{"stage": row[0], "count": row[1]} for row in result.fetchall()]
 
-        # Check active loans (exclude funded, cancelled, denied, closed)
-        active_result = db.execute(text("""
-            SELECT COUNT(*) as count
-            FROM loans
-            WHERE stage NOT IN ('funded', 'cancelled', 'denied', 'closed')
-                OR stage IS NULL
-        """))
-        active_count = active_result.scalar()
+        # Get total loan count
+        total_result = db.execute(text("SELECT COUNT(*) FROM loans"))
+        total_count = total_result.scalar()
 
         # Check columns in loans table
         columns_result = db.execute(text("""
-            SELECT column_name
+            SELECT column_name, data_type
             FROM information_schema.columns
             WHERE table_name = 'loans'
             ORDER BY ordinal_position
         """))
-        columns = [row[0] for row in columns_result.fetchall()]
+        columns = [{"name": row[0], "type": row[1]} for row in columns_result.fetchall()]
 
-        # Get a sample active loan
-        sample = db.execute(text("""
-            SELECT id, loan_number, stage, lock_expiration_date, target_close_date
-            FROM loans
-            WHERE stage NOT IN ('funded', 'cancelled', 'denied', 'closed')
-                OR stage IS NULL
-            LIMIT 1
+        # Get enum values if stage is an enum
+        enum_result = db.execute(text("""
+            SELECT e.enumlabel
+            FROM pg_enum e
+            JOIN pg_type t ON e.enumtypid = t.oid
+            WHERE t.typname = 'loanstage'
         """))
-        sample_loan = sample.fetchone()
+        enum_values = [row[0] for row in enum_result.fetchall()]
+
+        # Get sample loans
+        sample = db.execute(text("""
+            SELECT id, loan_number, stage::text, lock_expiration_date, target_close_date
+            FROM loans
+            LIMIT 3
+        """))
+        sample_loans = [dict(zip(['id', 'loan_number', 'stage', 'lock_expiration', 'target_close'], row)) for row in sample.fetchall()]
 
         return {
             "status": "success",
+            "total_loans": total_count,
             "total_by_stage": stage_counts,
-            "active_loans_count": active_count,
             "loans_table_columns": columns[:30],
-            "sample_loan": dict(sample_loan._asdict()) if sample_loan and hasattr(sample_loan, '_asdict') else None,
+            "stage_enum_values": enum_values,
+            "sample_loans": sample_loans,
             "database_connected": True
         }
     except Exception as e:
