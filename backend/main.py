@@ -36729,6 +36729,54 @@ async def add_coborrower_columns(db: Session = Depends(get_db)):
             content={"status": "error", "message": str(e)}
         )
 
+@app.post("/admin/add-task-related-columns")
+async def add_task_related_columns(db: Session = Depends(get_db)):
+    """Admin endpoint to add related_type and related_contact_name columns to tasks table.
+    These columns are required for duplicate merge task creation."""
+    try:
+        # Add related_type column
+        db.execute(text("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='tasks' AND column_name='related_type'
+                ) THEN
+                    ALTER TABLE tasks ADD COLUMN related_type VARCHAR(100);
+                END IF;
+            END $$;
+        """))
+
+        # Add related_contact_name column
+        db.execute(text("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='tasks' AND column_name='related_contact_name'
+                ) THEN
+                    ALTER TABLE tasks ADD COLUMN related_contact_name VARCHAR(255);
+                END IF;
+            END $$;
+        """))
+
+        # Create index for related_type
+        db.execute(text("""
+            CREATE INDEX IF NOT EXISTS ix_tasks_related_type ON tasks(related_type);
+        """))
+
+        db.commit()
+
+        logger.info("✅ Task related columns added successfully")
+        return {"status": "success", "message": "Task related columns (related_type, related_contact_name) added"}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Failed to add task related columns: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
+
 @app.post("/admin/add-dre-columns")
 async def add_dre_columns(db: Session = Depends(get_db)):
     """Admin endpoint to add missing columns to extracted_data table"""
@@ -42280,59 +42328,70 @@ async def scheduled_daily_duplicate_check():
 
 @app.get("/api/v1/loans/{loan_id}", response_model=LoanResponse)
 async def get_loan(loan_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
-    """Get single loan with permission-based filtering (PHASE 5: supports impersonation)"""
-    try:
-        # PHASE 5: Use ORM with permission filtering for consistent behavior
-        query = db.query(Loan).filter(Loan.id == loan_id)
-        query = filter_loans_by_permissions(query, current_user, db)
-        loan = query.first()
+    """Get single loan with permission-based filtering (PHASE 5: supports impersonation)
 
-        if not loan:
+    Uses raw SQL to avoid PostgreSQL enum deserialization issues while still
+    enforcing permission-based access control.
+    """
+    try:
+        # Build WHERE clause based on permissions (PHASE 5: permission filtering)
+        where_clauses = ["id = :loan_id"]
+        params = {"loan_id": loan_id, "user_id": current_user.id}
+
+        # Check permissions - if not view_all, filter by loan_officer_id
+        if not has_permission(current_user.id, 'loans.view_all', db):
+            # Check for team-based access
+            if has_permission(current_user.id, 'loans.view_team', db):
+                team_id = getattr(current_user, 'team_id', None)
+                if team_id:
+                    team_result = db.execute(text(
+                        "SELECT id FROM users WHERE team_id = :team_id"
+                    ), {"team_id": team_id}).fetchall()
+                    team_ids = [r[0] for r in team_result]
+                    if team_ids:
+                        where_clauses.append(f"loan_officer_id IN ({','.join(map(str, team_ids))})")
+                    else:
+                        where_clauses.append("loan_officer_id = :user_id")
+                else:
+                    where_clauses.append("loan_officer_id = :user_id")
+            else:
+                # Default: only see own loans (or loans with no LO assigned)
+                where_clauses.append("(loan_officer_id = :user_id OR loan_officer_id IS NULL)")
+
+        where_sql = " AND ".join(where_clauses)
+
+        sql = f"""
+            SELECT id, loan_number, borrower_name, borrower_email, borrower_phone,
+                   coborrower_name, co_borrower_email,
+                   stage, program, amount, rate,
+                   closing_date, days_in_stage, sla_status, created_at,
+                   loan_officer_name, loan_officer_email, processor, processor_email,
+                   underwriter, underwriter_email, closer, closer_email
+            FROM loans
+            WHERE {where_sql}
+        """
+        result = db.execute(text(sql), params).first()
+
+        if not result:
             # Check if loan exists but user doesn't have access
-            any_loan = db.query(Loan).filter(Loan.id == loan_id).first()
-            if any_loan:
+            exists = db.execute(text("SELECT 1 FROM loans WHERE id = :loan_id"), {"loan_id": loan_id}).first()
+            if exists:
                 raise HTTPException(status_code=403, detail="You don't have access to this loan")
             raise HTTPException(status_code=404, detail="Loan not found")
 
-        # Normalize stage to enum FIRST (before building response dict)
-        valid_stages = {s.name for s in LoanStage}
-        stage_val = loan.stage
-        if stage_val:
-            stage_str = stage_val.value if hasattr(stage_val, 'value') else str(stage_val)
-            stage_upper = stage_str.upper()
-            if stage_upper in valid_stages:
-                normalized_stage = LoanStage[stage_upper]
-            else:
-                normalized_stage = LoanStage.PROCESSING
-        else:
-            normalized_stage = LoanStage.PROCESSING
+        row_dict = dict(result._mapping)
 
-        # Build response dict to match LoanResponse model
-        row_dict = {
-            "id": loan.id,
-            "loan_number": loan.loan_number,
-            "borrower_name": loan.borrower_name,
-            "borrower_email": loan.borrower_email,
-            "borrower_phone": loan.borrower_phone,
-            "coborrower_name": loan.coborrower_name,
-            "co_borrower_email": loan.co_borrower_email,
-            "stage": normalized_stage,
-            "program": loan.program,
-            "amount": loan.amount,
-            "rate": loan.rate,
-            "closing_date": loan.closing_date,
-            "days_in_stage": loan.days_in_stage,
-            "sla_status": loan.sla_status,
-            "created_at": loan.created_at,
-            "loan_officer_name": loan.loan_officer_name,
-            "loan_officer_email": loan.loan_officer_email,
-            "processor": loan.processor,
-            "processor_email": loan.processor_email,
-            "underwriter": loan.underwriter,
-            "underwriter_email": loan.underwriter_email,
-            "closer": loan.closer,
-            "closer_email": loan.closer_email,
-        }
+        # Normalize stage to enum
+        valid_stages = {s.name for s in LoanStage}
+        stage_val = row_dict.get('stage')
+        if stage_val:
+            stage_upper = str(stage_val).upper()
+            if stage_upper in valid_stages:
+                row_dict['stage'] = LoanStage[stage_upper]
+            else:
+                row_dict['stage'] = LoanStage.PROCESSING
+        else:
+            row_dict['stage'] = LoanStage.PROCESSING
 
         return row_dict
     except HTTPException:
