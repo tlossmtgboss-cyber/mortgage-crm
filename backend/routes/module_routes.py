@@ -366,8 +366,11 @@ async def run_module_migration(
 @router.get("/admin/debug")
 async def debug_modules(
     admin_key: str = Query(..., description="Admin API key"),
+    enable_all: bool = Query(False, description="Enable all modules for org 1"),
+    org_id: int = Query(1, description="Organization ID"),
+    set_admin_user: int = Query(None, description="User ID to set as admin"),
 ):
-    """Debug endpoint to check module data."""
+    """Debug endpoint to check module data and optionally enable all modules."""
     if admin_key != "perennia-admin-2024":
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
@@ -376,6 +379,43 @@ async def debug_modules(
         from sqlalchemy import text
 
         with engine.connect() as conn:
+            results = {}
+
+            # Enable all modules if requested
+            if enable_all:
+                premium_modules = [
+                    'ai_assistant', 'partner_portals', 'video_os',
+                    'recruiting_suite', 'conversation_intelligence',
+                    'advanced_analytics', 'integrations'
+                ]
+                enabled = []
+                for module_key in premium_modules:
+                    try:
+                        conn.execute(text("""
+                            INSERT INTO organization_modules
+                            (organization_id, module_key, is_enabled, enabled_at, is_trial, created_at, updated_at)
+                            VALUES (:org_id, :module_key, true, NOW(), false, NOW(), NOW())
+                            ON CONFLICT (organization_id, module_key)
+                            DO UPDATE SET is_enabled = true, enabled_at = NOW(), is_trial = false, disabled_at = NULL, updated_at = NOW()
+                        """), {"org_id": org_id, "module_key": module_key})
+                        enabled.append(module_key)
+                    except Exception as e:
+                        pass
+                conn.commit()
+                results["enabled_modules"] = enabled
+                results["enable_message"] = f"Enabled {len(enabled)} modules for org {org_id}"
+
+            # Set user as admin if requested
+            if set_admin_user:
+                try:
+                    conn.execute(text("""
+                        UPDATE users SET permission_role = 'admin', role = 'admin' WHERE id = :user_id
+                    """), {"user_id": set_admin_user})
+                    conn.commit()
+                    results["admin_set"] = f"User {set_admin_user} set as admin"
+                except Exception as e:
+                    results["admin_error"] = str(e)
+
             # Check if table exists
             result = conn.execute(text("""
                 SELECT EXISTS (
@@ -386,7 +426,7 @@ async def debug_modules(
             table_exists = result.scalar()
 
             if not table_exists:
-                return {"table_exists": False, "modules": [], "count": 0}
+                return {"table_exists": False, "modules": [], "count": 0, **results}
 
             # Get count
             result = conn.execute(text("SELECT COUNT(*) FROM subscription_modules"))
@@ -399,7 +439,8 @@ async def debug_modules(
             return {
                 "table_exists": table_exists,
                 "count": count,
-                "modules": modules
+                "modules": modules,
+                **results
             }
     except Exception as e:
         return {"error": str(e)}
