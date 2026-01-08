@@ -17,10 +17,13 @@ import './AdminPanel.css';
 
 const AdminPanel = () => {
   const navigate = useNavigate();
-  const { userRole, hasPermission, hasAnyPermission } = usePermissions();
+  const { userRole, hasPermission, hasAnyPermission, loading: permissionsLoading } = usePermissions();
 
   // Permission check - require admin access
   const canAccessAdmin = hasAnyPermission(['admin.view', 'admin.manage', 'system.admin']) || userRole === 'admin' || userRole === 'management';
+
+  // Debug logging
+  console.log('AdminPanel permissions:', { userRole, canAccessAdmin, permissionsLoading });
 
   // State
   const [loading, setLoading] = useState(true);
@@ -371,6 +374,16 @@ const AdminPanel = () => {
     return `${window.location.origin}/lo/${slug}`;
   };
 
+  // Wait for permissions to load before checking access
+  if (permissionsLoading) {
+    return (
+      <div className="admin-panel-loading">
+        <div className="loading-spinner"></div>
+        <p>Loading permissions...</p>
+      </div>
+    );
+  }
+
   // Access denied if user doesn't have admin permissions
   if (!canAccessAdmin) {
     return (
@@ -378,6 +391,9 @@ const AdminPanel = () => {
         <div className="access-denied" style={{ textAlign: 'center', padding: '60px 20px' }}>
           <h2>Access Denied</h2>
           <p>You don't have permission to access the Admin Panel.</p>
+          <p style={{ fontSize: '12px', color: '#666', marginTop: '10px' }}>
+            Debug: userRole={userRole}, canAccessAdmin={String(canAccessAdmin)}
+          </p>
           <button className="btn-primary" onClick={() => navigate('/dashboard')}>
             Return to Dashboard
           </button>
@@ -422,11 +438,14 @@ const AdminPanel = () => {
               }}
             >
               <option value="">Admin (Default)</option>
-              {users.map(user => (
-                <option key={user.id} value={user.id}>
-                  {user.first_name} {user.last_name} ({user.role?.replace('_', ' ')})
-                </option>
-              ))}
+              {users.map(user => {
+                const displayName = user.full_name?.trim() || user.email || `User #${user.id}`;
+                return (
+                  <option key={user.id} value={user.id}>
+                    {displayName} ({user.role?.replace('_', ' ') || 'user'})
+                  </option>
+                );
+              })}
             </select>
             {selectedViewUser && !impersonating && (
               <button
@@ -438,16 +457,27 @@ const AdminPanel = () => {
                       user_id: selectedViewUser.id,
                       reason: 'Admin panel impersonation'
                     });
-                    if (response.data?.token) {
+                    const sessionToken = response.data?.data?.sessionToken || response.data?.sessionToken || response.data?.token;
+                    if (sessionToken) {
                       // Store original token and set impersonation token
                       localStorage.setItem('original_token', localStorage.getItem('token'));
-                      localStorage.setItem('token', response.data.token);
+                      localStorage.setItem('impersonation_session', JSON.stringify({
+                        session_token: sessionToken,
+                        impersonated_user: selectedViewUser,
+                        started_at: new Date().toISOString()
+                      }));
                       localStorage.setItem('impersonating_user', JSON.stringify(selectedViewUser));
                       window.location.href = '/dashboard';
+                    } else {
+                      throw new Error('No session token returned from server');
                     }
                   } catch (err) {
                     console.error('Impersonation failed:', err);
-                    alert('Failed to impersonate user: ' + (err.response?.data?.detail || err.message));
+                    const errorDetail = err.response?.data?.detail;
+                    const errorMessage = typeof errorDetail === 'string'
+                      ? errorDetail
+                      : (errorDetail?.message || err.message || 'Unknown error');
+                    alert('Failed to impersonate user: ' + errorMessage);
                     setImpersonating(false);
                   }
                 }}

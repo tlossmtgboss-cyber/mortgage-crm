@@ -58167,17 +58167,26 @@ async def check_user_permissions_debug(user_id: int, db: Session = Depends(get_d
         if not user:
             return {"status": "error", "message": f"User {user_id} not found"}
 
-        # Get user permissions using ORM
-        user_perms = db.query(UserPermission).filter(UserPermission.user_id == user_id).all()
-        permissions = {p.permission_key: p.granted for p in user_perms}
+        # Check actual table schema
+        columns = db.execute(text("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'user_permissions'
+            ORDER BY ordinal_position
+        """)).fetchall()
+        column_names = [c[0] for c in columns]
 
-        # Check if user_permissions table exists
-        table_check = db.execute(text("""
-            SELECT EXISTS (
-                SELECT FROM information_schema.tables
-                WHERE table_name = 'user_permissions'
-            )
-        """)).scalar()
+        # Try to get permissions with actual column names
+        permissions = {}
+        if 'permission_key' in column_names:
+            rows = db.execute(text("""
+                SELECT permission_key, granted FROM user_permissions WHERE user_id = :user_id
+            """), {"user_id": user_id}).fetchall()
+            permissions = {r[0]: r[1] for r in rows}
+        elif 'key' in column_names:
+            rows = db.execute(text("""
+                SELECT key, granted FROM user_permissions WHERE user_id = :user_id
+            """), {"user_id": user_id}).fetchall()
+            permissions = {r[0]: r[1] for r in rows}
 
         return {
             "status": "success",
@@ -58185,7 +58194,7 @@ async def check_user_permissions_debug(user_id: int, db: Session = Depends(get_d
             "email": user.email,
             "role": user.role,
             "permission_role": user.permission_role,
-            "permissions_table_exists": table_check,
+            "user_permissions_columns": column_names,
             "permissions_count": len(permissions),
             "permissions": permissions,
             "has_admin_view": permissions.get('admin.view', False),

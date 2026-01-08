@@ -94,8 +94,9 @@ def check_master_admin(user) -> bool:
     if not user:
         return False
     role = getattr(user, 'role', None)
+    permission_role = getattr(user, 'permission_role', None)
     is_master = getattr(user, 'is_master_admin', False)
-    return role == 'master_admin' or is_master or role == 'admin'
+    return role == 'master_admin' or is_master or role == 'admin' or permission_role == 'admin'
 
 
 def require_master_admin(user):
@@ -1764,11 +1765,21 @@ async def start_impersonation(
         import secrets
         session_token = secrets.token_urlsafe(32)
 
+        # Ensure session_token column exists
+        try:
+            db.execute(text("""
+                ALTER TABLE impersonation_sessions
+                ADD COLUMN IF NOT EXISTS session_token VARCHAR(255)
+            """))
+            db.commit()
+        except Exception:
+            db.rollback()
+
         # Create impersonation session
         session_id = db.execute(text("""
             INSERT INTO impersonation_sessions
-            (admin_user_id, target_user_id, account_id, reason, is_active, session_token, manager_id, impersonated_user_id, mode, duration_minutes, expires_at)
-            VALUES (:admin_id, :target_id, :account_id, :reason, true, :session_token, :admin_id, :target_id, 'full_access', 60, NOW() + INTERVAL '60 minutes')
+            (admin_user_id, target_user_id, account_id, reason, is_active, session_token)
+            VALUES (:admin_id, :target_id, :account_id, :reason, true, :session_token)
             RETURNING id
         """), {
             'admin_id': current_user.id,
