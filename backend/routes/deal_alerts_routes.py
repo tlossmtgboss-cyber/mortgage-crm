@@ -85,6 +85,7 @@ class ResolveRequest(BaseModel):
 async def scan_pipeline(
     user_id: Optional[str] = Query(default=None),
     branch_id: Optional[str] = Query(default=None),
+    db: Session = Depends(get_db),
 ):
     """
     Scan the pipeline and generate new alerts.
@@ -93,7 +94,7 @@ async def scan_pipeline(
     potential issues and generate proactive alerts.
     """
     try:
-        service = get_deal_alerts_service()
+        service = get_deal_alerts_service(db_session=db)
         alerts = service.scan_pipeline(user_id=user_id, branch_id=branch_id)
 
         return {
@@ -110,6 +111,7 @@ async def scan_pipeline(
 @router.get("/summary", response_model=AlertSummaryResponse)
 async def get_alert_summary(
     user_id: Optional[str] = Query(default=None),
+    db: Session = Depends(get_db),
 ):
     """
     Get summary of current alerts.
@@ -117,7 +119,7 @@ async def get_alert_summary(
     Returns counts by priority and type.
     """
     try:
-        service = get_deal_alerts_service()
+        service = get_deal_alerts_service(db_session=db)
         summary = service.get_summary(user_id=user_id)
 
         return AlertSummaryResponse(
@@ -143,12 +145,13 @@ async def get_alerts(
     alert_type: Optional[str] = Query(default=None, description="Filter by type"),
     loan_id: Optional[str] = Query(default=None, description="Filter by loan"),
     limit: int = Query(default=50, ge=1, le=200),
+    db: Session = Depends(get_db),
 ):
     """
     Get list of alerts with optional filters.
     """
     try:
-        service = get_deal_alerts_service()
+        service = get_deal_alerts_service(db_session=db)
 
         # Convert string filters to enums
         status_enum = AlertStatus(status) if status else None
@@ -191,6 +194,7 @@ async def get_alerts(
 @router.get("/priority-actions")
 async def get_priority_actions(
     limit: int = Query(default=5, ge=1, le=20),
+    db: Session = Depends(get_db),
 ):
     """
     Get top priority actions that need immediate attention.
@@ -198,7 +202,7 @@ async def get_priority_actions(
     Returns a list of the most critical actions to take.
     """
     try:
-        service = get_deal_alerts_service()
+        service = get_deal_alerts_service(db_session=db)
         actions = service.get_priority_actions(limit=limit)
         return {"priority_actions": actions}
     except Exception as e:
@@ -207,12 +211,12 @@ async def get_priority_actions(
 
 
 @router.get("/{alert_id}", response_model=AlertResponse)
-async def get_alert(alert_id: str):
+async def get_alert(alert_id: str, db: Session = Depends(get_db)):
     """
     Get a specific alert by ID.
     """
     try:
-        service = get_deal_alerts_service()
+        service = get_deal_alerts_service(db_session=db)
         alert = service.get_alert(alert_id)
 
         if not alert:
@@ -242,14 +246,14 @@ async def get_alert(alert_id: str):
 
 
 @router.post("/{alert_id}/acknowledge")
-async def acknowledge_alert(alert_id: str):
+async def acknowledge_alert(alert_id: str, db: Session = Depends(get_db)):
     """
     Acknowledge an alert.
 
     Indicates the user has seen the alert and is aware of the issue.
     """
     try:
-        service = get_deal_alerts_service()
+        service = get_deal_alerts_service(db_session=db)
         alert = service.acknowledge_alert(alert_id)
 
         if not alert:
@@ -268,14 +272,14 @@ async def acknowledge_alert(alert_id: str):
 
 
 @router.post("/{alert_id}/resolve")
-async def resolve_alert(alert_id: str, request: ResolveRequest):
+async def resolve_alert(alert_id: str, request: ResolveRequest, db: Session = Depends(get_db)):
     """
     Resolve an alert.
 
     Indicates the underlying issue has been addressed.
     """
     try:
-        service = get_deal_alerts_service()
+        service = get_deal_alerts_service(db_session=db)
         alert = service.resolve_alert(alert_id, request.resolution_note)
 
         if not alert:
@@ -294,14 +298,14 @@ async def resolve_alert(alert_id: str, request: ResolveRequest):
 
 
 @router.post("/{alert_id}/snooze")
-async def snooze_alert(alert_id: str, request: SnoozeRequest):
+async def snooze_alert(alert_id: str, request: SnoozeRequest, db: Session = Depends(get_db)):
     """
     Snooze an alert for a specified duration.
 
     The alert will reappear after the snooze period.
     """
     try:
-        service = get_deal_alerts_service()
+        service = get_deal_alerts_service(db_session=db)
         alert = service.snooze_alert(alert_id, request.snooze_hours)
 
         if not alert:
@@ -320,12 +324,12 @@ async def snooze_alert(alert_id: str, request: SnoozeRequest):
 
 
 @router.post("/bulk-acknowledge")
-async def bulk_acknowledge(request: BulkAcknowledgeRequest):
+async def bulk_acknowledge(request: BulkAcknowledgeRequest, db: Session = Depends(get_db)):
     """
     Acknowledge multiple alerts at once.
     """
     try:
-        service = get_deal_alerts_service()
+        service = get_deal_alerts_service(db_session=db)
         count = service.bulk_acknowledge(request.alert_ids)
 
         return {
@@ -339,12 +343,12 @@ async def bulk_acknowledge(request: BulkAcknowledgeRequest):
 
 
 @router.get("/loan/{loan_id}")
-async def get_alerts_for_loan(loan_id: str):
+async def get_alerts_for_loan(loan_id: str, db: Session = Depends(get_db)):
     """
     Get all alerts for a specific loan.
     """
     try:
-        service = get_deal_alerts_service()
+        service = get_deal_alerts_service(db_session=db)
         alerts = service.get_alerts_for_loan(loan_id)
 
         return {
@@ -370,9 +374,9 @@ async def get_alert_types():
 
 
 @router.get("/health")
-async def alerts_health():
+async def alerts_health(db: Session = Depends(get_db)):
     """Health check for the deal alerts service."""
-    service = get_deal_alerts_service()
+    service = get_deal_alerts_service(db_session=db)
     summary = service.get_summary()
 
     return {

@@ -150,13 +150,67 @@ class ProductionPredictorService:
         """
         Get historical production data.
 
-        In production, this would query the database.
-        For now, returns sample data for demonstration.
+        Queries real loan data from database if available,
+        otherwise returns sample data for demonstration.
         """
-        # Sample historical data (would be from DB in production)
         today = date.today()
         history = []
 
+        # Try to get real data from database
+        if self.db:
+            try:
+                from sqlalchemy import text
+
+                # Build entity filter based on type
+                if entity_type == "lo":
+                    entity_filter = "AND l.loan_officer_id = :entity_id"
+                elif entity_type == "team":
+                    entity_filter = "AND u.team_id = :entity_id"
+                elif entity_type == "branch":
+                    entity_filter = "AND l.branch_id = :entity_id"
+                else:
+                    entity_filter = ""  # Company-wide
+
+                # Query monthly aggregations
+                result = self.db.execute(text(f"""
+                    SELECT
+                        DATE_TRUNC('month', l.funded_at) as month,
+                        COUNT(*) as units,
+                        COALESCE(SUM(l.loan_amount), 0) as volume,
+                        COUNT(CASE WHEN l.application_date IS NOT NULL THEN 1 END) as applications
+                    FROM loans l
+                    LEFT JOIN users u ON l.loan_officer_id = u.id
+                    WHERE l.funded_at >= CURRENT_DATE - INTERVAL ':months months'
+                        AND l.status = 'funded'
+                        {entity_filter}
+                    GROUP BY DATE_TRUNC('month', l.funded_at)
+                    ORDER BY month ASC
+                """.replace(':months', str(months))), {"entity_id": entity_id})
+
+                rows = result.fetchall()
+
+                if rows:
+                    for row in rows:
+                        month_date = row[0].date() if hasattr(row[0], 'date') else row[0]
+                        units = int(row[1] or 0)
+                        volume = float(row[2] or 0)
+                        applications = int(row[3] or 0)
+
+                        history.append(ProductionDataPoint(
+                            date=month_date,
+                            units=units,
+                            volume=volume,
+                            applications=applications,
+                            pull_through_rate=units / applications if applications > 0 else 0,
+                        ))
+
+                    logger.info(f"Retrieved {len(history)} months of production data for {entity_type} {entity_id}")
+                    return history
+
+            except Exception as e:
+                logger.warning(f"Could not fetch production history from database, using demo data: {e}")
+
+        # Fallback to sample historical data for demo
         for i in range(months):
             month_date = today.replace(day=1) - timedelta(days=30 * i)
             # Simulate production with seasonality
@@ -710,9 +764,12 @@ class ProductionPredictorService:
 _predictor_service = None
 
 
-def get_production_predictor() -> ProductionPredictorService:
+def get_production_predictor(db_session=None) -> ProductionPredictorService:
     """Get or create the production predictor service instance."""
     global _predictor_service
     if _predictor_service is None:
-        _predictor_service = ProductionPredictorService()
+        _predictor_service = ProductionPredictorService(db_session=db_session)
+    elif db_session is not None:
+        # Update db session for existing instance
+        _predictor_service.db = db_session
     return _predictor_service

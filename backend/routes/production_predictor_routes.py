@@ -11,7 +11,9 @@ from datetime import datetime, date, timedelta
 
 from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
+from database import get_db
 from services.production_predictor_service import (
     ProductionPredictorService,
     get_production_predictor,
@@ -113,6 +115,7 @@ class ConversionAnalysisResponse(BaseModel):
 async def get_production_summary(
     entity_id: str,
     entity_type: str = Query(default="lo", description="lo, team, or branch"),
+    db: Session = Depends(get_db),
 ):
     """
     Get comprehensive production summary with forecasts.
@@ -120,7 +123,7 @@ async def get_production_summary(
     Returns current production, trends, and multi-period forecasts.
     """
     try:
-        predictor = get_production_predictor()
+        predictor = get_production_predictor(db_session=db)
         summary = predictor.get_production_summary(entity_id, entity_type)
         return summary
     except Exception as e:
@@ -129,14 +132,14 @@ async def get_production_summary(
 
 
 @router.post("/forecast", response_model=ForecastResponse)
-async def get_forecast(request: ForecastRequest):
+async def get_forecast(request: ForecastRequest, db: Session = Depends(get_db)):
     """
     Get production forecast for a specific period.
 
     Uses historical data, seasonality, and pipeline to predict future production.
     """
     try:
-        predictor = get_production_predictor()
+        predictor = get_production_predictor(db_session=db)
 
         # Get historical data
         history = predictor.get_production_history(
@@ -186,6 +189,7 @@ async def get_trend_analysis(
     entity_id: str,
     entity_type: str = Query(default="lo"),
     months: int = Query(default=12, ge=3, le=24),
+    db: Session = Depends(get_db),
 ):
     """
     Get trend analysis for an entity.
@@ -193,7 +197,7 @@ async def get_trend_analysis(
     Analyzes historical production patterns, seasonality, and momentum.
     """
     try:
-        predictor = get_production_predictor()
+        predictor = get_production_predictor(db_session=db)
         history = predictor.get_production_history(entity_id, entity_type, months)
         trend = predictor.analyze_trend(history)
 
@@ -213,7 +217,7 @@ async def get_trend_analysis(
 
 
 @router.post("/goal-attainment", response_model=GoalAttainmentResponse)
-async def predict_goal_attainment(request: GoalAttainmentRequest):
+async def predict_goal_attainment(request: GoalAttainmentRequest, db: Session = Depends(get_db)):
     """
     Predict likelihood of achieving production goals.
 
@@ -221,7 +225,7 @@ async def predict_goal_attainment(request: GoalAttainmentRequest):
     provides risk assessment with recommendations.
     """
     try:
-        predictor = get_production_predictor()
+        predictor = get_production_predictor(db_session=db)
 
         attainment = predictor.predict_goal_attainment(
             entity_id=request.entity_id,
@@ -254,14 +258,14 @@ async def predict_goal_attainment(request: GoalAttainmentRequest):
 
 
 @router.post("/team-forecast")
-async def get_team_forecast(request: TeamForecastRequest):
+async def get_team_forecast(request: TeamForecastRequest, db: Session = Depends(get_db)):
     """
     Get aggregated forecast for a team.
 
     Includes individual member forecasts and team totals.
     """
     try:
-        predictor = get_production_predictor()
+        predictor = get_production_predictor(db_session=db)
         forecast = predictor.get_team_forecast(
             request.team_members,
             request.forecast_days,
@@ -276,6 +280,7 @@ async def get_team_forecast(request: TeamForecastRequest):
 async def get_conversion_analysis(
     entity_id: str,
     days: int = Query(default=90, ge=30, le=365),
+    db: Session = Depends(get_db),
 ):
     """
     Analyze conversion rates at each pipeline stage.
@@ -283,7 +288,7 @@ async def get_conversion_analysis(
     Identifies weak spots and provides recommendations for improvement.
     """
     try:
-        predictor = get_production_predictor()
+        predictor = get_production_predictor(db_session=db)
         analysis = predictor.get_conversion_analysis(entity_id, days)
 
         return ConversionAnalysisResponse(
@@ -304,6 +309,7 @@ async def get_production_history(
     entity_id: str,
     entity_type: str = Query(default="lo"),
     months: int = Query(default=12, ge=1, le=24),
+    db: Session = Depends(get_db),
 ):
     """
     Get historical production data.
@@ -311,7 +317,7 @@ async def get_production_history(
     Returns monthly production metrics for trend analysis.
     """
     try:
-        predictor = get_production_predictor()
+        predictor = get_production_predictor(db_session=db)
         history = predictor.get_production_history(entity_id, entity_type, months)
 
         return {
@@ -340,6 +346,7 @@ async def get_production_leaderboard(
     entity_type: str = Query(default="lo", description="lo, team, or branch"),
     period: str = Query(default="mtd", description="mtd, qtd, ytd, or 30d"),
     limit: int = Query(default=10, ge=1, le=50),
+    db: Session = Depends(get_db),
 ):
     """
     Get production leaderboard with rankings.
@@ -347,7 +354,7 @@ async def get_production_leaderboard(
     Ranks entities by production with forecast comparison.
     """
     try:
-        predictor = get_production_predictor()
+        predictor = get_production_predictor(db_session=db)
 
         # In production, this would query actual data and rank
         # For demo, return sample leaderboard
