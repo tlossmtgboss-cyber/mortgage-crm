@@ -361,3 +361,45 @@ async def run_module_migration(
         raise HTTPException(status_code=500, detail=f"Migration import failed: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
+@router.get("/admin/debug")
+async def debug_modules(
+    admin_key: str = Query(..., description="Admin API key"),
+):
+    """Debug endpoint to check module data."""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        from database import engine
+        from sqlalchemy import text
+
+        with engine.connect() as conn:
+            # Check if table exists
+            result = conn.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'subscription_modules'
+                )
+            """))
+            table_exists = result.scalar()
+
+            if not table_exists:
+                return {"table_exists": False, "modules": [], "count": 0}
+
+            # Get count
+            result = conn.execute(text("SELECT COUNT(*) FROM subscription_modules"))
+            count = result.scalar()
+
+            # Get modules
+            result = conn.execute(text("SELECT module_key, module_name, is_active FROM subscription_modules"))
+            modules = [{"key": row[0], "name": row[1], "active": row[2]} for row in result.fetchall()]
+
+            return {
+                "table_exists": table_exists,
+                "count": count,
+                "modules": modules
+            }
+    except Exception as e:
+        return {"error": str(e)}
