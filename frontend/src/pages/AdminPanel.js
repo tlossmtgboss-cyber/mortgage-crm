@@ -434,7 +434,10 @@ const AdminPanel = () => {
                 onClick={async () => {
                   try {
                     setImpersonating(true);
-                    const response = await api.post(`/api/v1/admin/impersonate/${selectedViewUser.id}`);
+                    const response = await api.post('/api/v1/admin/account-management/impersonate/start', {
+                      user_id: selectedViewUser.id,
+                      reason: 'Admin panel impersonation'
+                    });
                     if (response.data?.token) {
                       // Store original token and set impersonation token
                       localStorage.setItem('original_token', localStorage.getItem('token'));
