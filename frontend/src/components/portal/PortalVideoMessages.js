@@ -67,10 +67,9 @@ const PortalVideoMessages = ({
 
       await fetch(endpoint, { method: 'POST' });
 
-      // Update local state
-      setVideos(prev => prev.map(v =>
-        v.id === videoId ? { ...v, is_new: false } : v
-      ));
+      // Remove video from local state (it's been deleted from the system)
+      setVideos(prev => prev.filter(v => v.id !== videoId));
+      setPlayingVideoId(null);
     } catch (err) {
       console.error('Error marking video viewed:', err);
     }
@@ -124,13 +123,8 @@ const PortalVideoMessages = ({
                   <video
                     controls
                     poster={video.sender_photo || undefined}
-                    onPlay={() => {
-                      setPlayingVideoId(video.id);
-                      if (video.is_new) {
-                        markVideoViewed(video.id);
-                      }
-                    }}
-                    onEnded={() => setPlayingVideoId(null)}
+                    onPlay={() => setPlayingVideoId(video.id)}
+                    onEnded={() => markVideoViewed(video.id)}
                   >
                     <source src={video.video_url} type="video/webm" />
                     <source src={video.video_url} type="video/mp4" />

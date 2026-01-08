@@ -332,19 +332,42 @@ async def mark_client_video_viewed(
     video_id: int,
     db=Depends(get_db)
 ):
-    """Mark a client portal video as viewed."""
+    """Mark a client portal video as viewed and delete it from the system."""
     try:
+        # Get video details before deletion
+        video_result = db.execute(text("""
+            SELECT id, video_key FROM portal_video_messages
+            WHERE id = :video_id
+        """), {"video_id": video_id})
+        video = video_result.fetchone()
+
+        if not video:
+            return {"success": True, "message": "Video not found or already deleted"}
+
+        # Delete from S3 if video_key exists
+        if video.video_key:
+            try:
+                s3_service = get_s3_service()
+                s3_service.s3_client.delete_object(
+                    Bucket=s3_service.bucket_name,
+                    Key=video.video_key
+                )
+                logger.info(f"Deleted video from S3: {video.video_key}")
+            except Exception as s3_err:
+                logger.error(f"Failed to delete video from S3: {s3_err}")
+
+        # Delete from database
         db.execute(text("""
-            UPDATE portal_video_messages
-            SET viewed_at = NOW()
-            WHERE id = :video_id AND viewed_at IS NULL
+            DELETE FROM portal_video_messages
+            WHERE id = :video_id
         """), {"video_id": video_id})
         db.commit()
 
-        return {"success": True}
+        logger.info(f"Video {video_id} viewed and deleted from system")
+        return {"success": True, "message": "Video viewed and removed"}
 
     except Exception as e:
-        logger.error(f"Failed to mark video viewed: {e}")
+        logger.error(f"Failed to process video view: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -428,19 +451,42 @@ async def mark_realtor_video_viewed(
     video_id: int,
     db=Depends(get_db)
 ):
-    """Mark a realtor portal video as viewed."""
+    """Mark a realtor portal video as viewed and delete it from the system."""
     try:
+        # Get video details before deletion
+        video_result = db.execute(text("""
+            SELECT id, video_key FROM portal_video_messages
+            WHERE id = :video_id
+        """), {"video_id": video_id})
+        video = video_result.fetchone()
+
+        if not video:
+            return {"success": True, "message": "Video not found or already deleted"}
+
+        # Delete from S3 if video_key exists
+        if video.video_key:
+            try:
+                s3_service = get_s3_service()
+                s3_service.s3_client.delete_object(
+                    Bucket=s3_service.bucket_name,
+                    Key=video.video_key
+                )
+                logger.info(f"Deleted video from S3: {video.video_key}")
+            except Exception as s3_err:
+                logger.error(f"Failed to delete video from S3: {s3_err}")
+
+        # Delete from database
         db.execute(text("""
-            UPDATE portal_video_messages
-            SET viewed_at = NOW()
-            WHERE id = :video_id AND viewed_at IS NULL
+            DELETE FROM portal_video_messages
+            WHERE id = :video_id
         """), {"video_id": video_id})
         db.commit()
 
-        return {"success": True}
+        logger.info(f"Video {video_id} viewed and deleted from system")
+        return {"success": True, "message": "Video viewed and removed"}
 
     except Exception as e:
-        logger.error(f"Failed to mark video viewed: {e}")
+        logger.error(f"Failed to process video view: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
