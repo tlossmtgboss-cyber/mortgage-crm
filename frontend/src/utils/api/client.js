@@ -72,6 +72,19 @@ class APIClient {
       ...(fetchOptions.headers || {}),
     };
 
+    // Add impersonation token if present (for permission-based data filtering)
+    const impersonationData = localStorage.getItem('impersonation');
+    if (impersonationData) {
+      try {
+        const data = JSON.parse(impersonationData);
+        if (data.session_token) {
+          headers['X-Impersonation-Token'] = data.session_token;
+        }
+      } catch (error) {
+        console.error('Error parsing impersonation data:', error);
+      }
+    }
+
     // Remove Content-Type for FormData
     if (body instanceof FormData) {
       delete headers['Content-Type'];

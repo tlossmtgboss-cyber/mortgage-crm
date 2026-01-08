@@ -42279,47 +42279,60 @@ async def scheduled_daily_duplicate_check():
 
 
 @app.get("/api/v1/loans/{loan_id}", response_model=LoanResponse)
-async def get_loan(loan_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Get single loan using raw SQL to avoid enum deserialization issues"""
+async def get_loan(loan_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
+    """Get single loan with permission-based filtering (PHASE 5: supports impersonation)"""
     try:
-        sql = """
-            SELECT id, loan_number, borrower_name, borrower_email, borrower_phone,
-                   coborrower_name, co_borrower_email,
-                   stage, program, amount, rate,
-                   closing_date, days_in_stage, sla_status, created_at,
-                   loan_officer_name, loan_officer_email, processor, processor_email,
-                   underwriter, underwriter_email, closer, closer_email, loan_officer_id
-            FROM loans
-            WHERE id = :loan_id
-        """
-        result = db.execute(text(sql), {"loan_id": loan_id}).first()
+        # PHASE 5: Use ORM with permission filtering for consistent behavior
+        query = db.query(Loan).filter(Loan.id == loan_id)
+        query = filter_loans_by_permissions(query, current_user, db)
+        loan = query.first()
 
-        if not result:
+        if not loan:
+            # Check if loan exists but user doesn't have access
+            any_loan = db.query(Loan).filter(Loan.id == loan_id).first()
+            if any_loan:
+                raise HTTPException(status_code=403, detail="You don't have access to this loan")
             raise HTTPException(status_code=404, detail="Loan not found")
 
-        row_dict = dict(result._mapping)
+        # Build response dict to match LoanResponse model
+        row_dict = {
+            "id": loan.id,
+            "loan_number": loan.loan_number,
+            "borrower_name": loan.borrower_name,
+            "borrower_email": loan.borrower_email,
+            "borrower_phone": loan.borrower_phone,
+            "coborrower_name": loan.coborrower_name,
+            "co_borrower_email": loan.co_borrower_email,
+            "stage": loan.stage,
+            "program": loan.program,
+            "amount": loan.amount,
+            "rate": loan.rate,
+            "closing_date": loan.closing_date,
+            "days_in_stage": loan.days_in_stage,
+            "sla_status": loan.sla_status,
+            "created_at": loan.created_at,
+            "loan_officer_name": loan.loan_officer_name,
+            "loan_officer_email": loan.loan_officer_email,
+            "processor": loan.processor,
+            "processor_email": loan.processor_email,
+            "underwriter": loan.underwriter,
+            "underwriter_email": loan.underwriter_email,
+            "closer": loan.closer,
+            "closer_email": loan.closer_email,
+        }
 
-        # Check ownership unless user has view_all permission
-        # Also allow access if loan_officer_id is null (e.g., application-created loans)
-        if not has_permission(current_user.id, 'loans.view_all', db):
-            loan_officer_id = row_dict.get('loan_officer_id')
-            if loan_officer_id is not None and loan_officer_id != current_user.id:
-                raise HTTPException(status_code=404, detail="Loan not found")
-
-        # Normalize stage
+        # Normalize stage to enum
         valid_stages = {s.name for s in LoanStage}
         stage_val = row_dict.get('stage')
         if stage_val:
-            stage_upper = str(stage_val).upper()
+            stage_str = stage_val.value if hasattr(stage_val, 'value') else str(stage_val)
+            stage_upper = stage_str.upper()
             if stage_upper in valid_stages:
                 row_dict['stage'] = LoanStage[stage_upper]
             else:
                 row_dict['stage'] = LoanStage.PROCESSING
         else:
             row_dict['stage'] = LoanStage.PROCESSING
-
-        # Remove loan_officer_id from response (not in LoanResponse model)
-        row_dict.pop('loan_officer_id', None)
 
         return row_dict
     except HTTPException:
@@ -42329,7 +42342,8 @@ async def get_loan(loan_id: int, db: Session = Depends(get_db), current_user: Us
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.patch("/api/v1/loans/{loan_id}", response_model=LoanResponse)
-async def update_loan(loan_id: int, loan_update: LoanUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def update_loan(loan_id: int, loan_update: LoanUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
+    """Update loan with permission-based filtering (PHASE 5: supports impersonation)"""
     try:
         # Use permission-based filtering to get the loan
         query = db.query(Loan).filter(Loan.id == loan_id)
@@ -42425,7 +42439,8 @@ async def update_loan(loan_id: int, loan_update: LoanUpdate, db: Session = Depen
         raise HTTPException(status_code=500, detail=f"Failed to update loan: {str(e)}")
 
 @app.delete("/api/v1/loans/{loan_id}", status_code=204)
-async def delete_loan(loan_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def delete_loan(loan_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
+    """Delete loan with permission checks (PHASE 5: supports impersonation)"""
     # PHASE 3: Check delete permission
     require_permission_or_403(current_user.id, 'loans.delete', db)
 
@@ -46260,7 +46275,8 @@ async def create_mum_client(client: MUMClientCreate, db: Session = Depends(get_d
         raise HTTPException(status_code=500, detail=f"Error creating MUM client: {str(e)}")
 
 @app.get("/api/v1/mum-clients/")
-async def get_mum_clients(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_mum_clients(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
+    """List MUM clients with permission-based filtering (PHASE 5: supports impersonation)"""
     # PHASE 3: Apply permission-based filtering
     query = db.query(MUMClient)
     query = filter_mum_clients_by_permissions(query, current_user, db)
@@ -46324,7 +46340,8 @@ async def get_mum_clients(skip: int = 0, limit: int = 100, db: Session = Depends
     return enhanced_clients
 
 @app.get("/api/v1/mum-clients/{client_id}", response_model=MUMClientResponse)
-async def get_mum_client(client_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_mum_client(client_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
+    """Get single MUM client with permission filtering (PHASE 5: supports impersonation)"""
     # Apply permission filter to the query
     query = db.query(MUMClient).filter(MUMClient.id == client_id)
     query = filter_mum_clients_by_permissions(query, current_user, db)
@@ -46334,10 +46351,14 @@ async def get_mum_client(client_id: int, db: Session = Depends(get_db), current_
     return client
 
 @app.patch("/api/v1/mum-clients/{client_id}", response_model=MUMClientResponse)
-async def update_mum_client(client_id: int, client_update: MUMClientUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    client = db.query(MUMClient).filter(MUMClient.id == client_id).first()
+async def update_mum_client(client_id: int, client_update: MUMClientUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
+    """Update MUM client with permission checks (PHASE 5: supports impersonation)"""
+    # Apply permission filter to find the client
+    query = db.query(MUMClient).filter(MUMClient.id == client_id)
+    query = filter_mum_clients_by_permissions(query, current_user, db)
+    client = query.first()
     if not client:
-        raise HTTPException(status_code=404, detail="MUM client not found")
+        raise HTTPException(status_code=404, detail="MUM client not found or access denied")
 
     # Permission check: must have clients.edit_all or (clients.edit_own and be the owner)
     check_resource_access(current_user.id, client.user_id or current_user.id, 'clients.edit_all', 'clients.edit_own', db)
@@ -46359,13 +46380,17 @@ async def update_mum_client(client_id: int, client_update: MUMClientUpdate, db: 
     return client
 
 @app.delete("/api/v1/mum-clients/{client_id}", status_code=204)
-async def delete_mum_client(client_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    client = db.query(MUMClient).filter(MUMClient.id == client_id).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="MUM client not found")
-
+async def delete_mum_client(client_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
+    """Delete MUM client with permission checks (PHASE 5: supports impersonation)"""
     # Permission check: must have clients.delete permission
     require_permission_or_403(current_user.id, 'clients.delete', db)
+
+    # Apply permission filter to find the client
+    query = db.query(MUMClient).filter(MUMClient.id == client_id)
+    query = filter_mum_clients_by_permissions(query, current_user, db)
+    client = query.first()
+    if not client:
+        raise HTTPException(status_code=404, detail="MUM client not found or access denied")
 
     db.delete(client)
     db.commit()
