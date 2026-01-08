@@ -58167,14 +58167,17 @@ async def check_user_permissions_debug(user_id: int, db: Session = Depends(get_d
         if not user:
             return {"status": "error", "message": f"User {user_id} not found"}
 
-        # Get user permissions
-        user_perms = db.execute(text("""
-            SELECT up.permission_key, up.granted
-            FROM user_permissions up
-            WHERE up.user_id = :user_id
-        """), {"user_id": user_id}).fetchall()
+        # Get user permissions using ORM
+        user_perms = db.query(UserPermission).filter(UserPermission.user_id == user_id).all()
+        permissions = {p.permission_key: p.granted for p in user_perms}
 
-        permissions = {p[0]: p[1] for p in user_perms}
+        # Check if user_permissions table exists
+        table_check = db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_name = 'user_permissions'
+            )
+        """)).scalar()
 
         return {
             "status": "success",
@@ -58182,14 +58185,17 @@ async def check_user_permissions_debug(user_id: int, db: Session = Depends(get_d
             "email": user.email,
             "role": user.role,
             "permission_role": user.permission_role,
+            "permissions_table_exists": table_check,
             "permissions_count": len(permissions),
             "permissions": permissions,
             "has_admin_view": permissions.get('admin.view', False),
             "has_admin_manage": permissions.get('admin.manage', False),
             "has_system_admin": permissions.get('system.admin', False),
+            "frontend_should_allow": user.permission_role == 'admin' or user.permission_role == 'management',
         }
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        import traceback
+        return {"status": "error", "message": str(e), "traceback": traceback.format_exc()}
 
 
 @app.post("/admin/fix-user-permission-role")
