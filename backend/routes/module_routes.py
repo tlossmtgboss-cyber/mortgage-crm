@@ -332,7 +332,6 @@ async def get_public_modules(db: Session = Depends(get_db)):
 @router.post("/admin/run-migration")
 async def run_module_migration(
     admin_key: str = Query(..., description="Admin API key"),
-    db: Session = Depends(get_db),
 ):
     """
     Run the subscription modules migration.
@@ -347,9 +346,8 @@ async def run_module_migration(
         import os
         sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         from migrations.add_subscription_modules import run_migration
+        from database import engine
 
-        # Get the engine from the session's bind
-        engine = db.get_bind()
         success = run_migration(engine)
 
         if success:
