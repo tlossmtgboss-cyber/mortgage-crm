@@ -58159,6 +58159,59 @@ async def test_duplicate_task_creation(db: Session = Depends(get_db)):
         }
 
 
+@app.get("/admin/check-duplicate-tasks")
+async def check_duplicate_tasks(db: Session = Depends(get_db)):
+    """Check for existing duplicate review tasks."""
+    try:
+        # Find all tasks with related_type like 'duplicate_%'
+        existing_tasks = db.execute(text("""
+            SELECT id, title, status, related_type, created_at
+            FROM tasks
+            WHERE related_type LIKE 'duplicate_%'
+            ORDER BY created_at DESC
+            LIMIT 50
+        """)).fetchall()
+
+        return {
+            "status": "success",
+            "existing_duplicate_tasks": len(existing_tasks),
+            "tasks": [
+                {
+                    "id": t[0],
+                    "title": t[1],
+                    "status": t[2],
+                    "related_type": t[3],
+                    "created_at": t[4].isoformat() if t[4] else None
+                }
+                for t in existing_tasks
+            ]
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.delete("/admin/clear-duplicate-tasks")
+async def clear_duplicate_tasks(db: Session = Depends(get_db)):
+    """Clear all existing duplicate review tasks so new ones can be created."""
+    try:
+        result = db.execute(text("""
+            DELETE FROM tasks
+            WHERE related_type LIKE 'duplicate_%'
+            RETURNING id
+        """))
+        deleted_ids = [r[0] for r in result.fetchall()]
+        db.commit()
+
+        return {
+            "status": "success",
+            "deleted_count": len(deleted_ids),
+            "deleted_ids": deleted_ids
+        }
+    except Exception as e:
+        db.rollback()
+        return {"status": "error", "error": str(e)}
+
+
 @app.get("/admin/check-user-permissions/{user_id}")
 async def check_user_permissions_debug(user_id: int, db: Session = Depends(get_db)):
     """Debug endpoint to check a user's permissions without auth."""
