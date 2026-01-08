@@ -457,6 +457,45 @@ async def debug_loans_data(
         }
 
 
+@router.get("/admin/test-funded")
+async def test_funded_loans(
+    db: Session = Depends(get_db),
+):
+    """Test funded loans query for production predictor."""
+    try:
+        from sqlalchemy import text
+
+        # Check funded loans with dates
+        result = db.execute(text("""
+            SELECT
+                l.id,
+                l.loan_number,
+                l.stage::text as stage,
+                l.funded_date,
+                l.amount
+            FROM loans l
+            WHERE UPPER(l.stage::text) = 'FUNDED'
+            ORDER BY l.funded_date DESC NULLS LAST
+            LIMIT 10
+        """))
+
+        loans = [dict(zip(['id', 'loan_number', 'stage', 'funded_date', 'amount'], row)) for row in result.fetchall()]
+
+        # Format dates
+        for loan in loans:
+            if loan['funded_date']:
+                loan['funded_date'] = str(loan['funded_date'])
+
+        return {
+            "status": "success",
+            "funded_loans": loans,
+            "count": len(loans)
+        }
+    except Exception as e:
+        import traceback
+        return {"status": "error", "error": str(e), "traceback": traceback.format_exc()}
+
+
 @router.get("/admin/test-query")
 async def test_loan_query(
     db: Session = Depends(get_db),
