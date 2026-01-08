@@ -457,6 +457,61 @@ async def debug_loans_data(
         }
 
 
+@router.get("/admin/test-query")
+async def test_loan_query(
+    db: Session = Depends(get_db),
+):
+    """Test the exact query used by _get_sample_loans() to debug why it fails."""
+    try:
+        from sqlalchemy import text
+        from datetime import date, timedelta
+        today = date.today()
+
+        # Run the exact query from _get_sample_loans()
+        result = db.execute(text("""
+            SELECT
+                l.id,
+                COALESCE(l.loan_number, 'LOAN-' || l.id) as loan_number,
+                COALESCE(le.first_name || ' ' || le.last_name, l.borrower_name, 'Unknown') as borrower_name,
+                COALESCE(l.stage::text, 'processing') as status,
+                COALESCE(l.days_in_stage, EXTRACT(DAY FROM (CURRENT_TIMESTAMP - l.updated_at))::integer, 0) as days_in_stage,
+                l.loan_amount
+            FROM loans l
+            LEFT JOIN leads le ON l.lead_id = le.id
+            WHERE l.stage IS NULL
+               OR UPPER(l.stage::text) NOT IN ('FUNDED', 'CANCELLED', 'DENIED', 'CLOSED')
+            ORDER BY l.updated_at ASC
+            LIMIT 20
+        """))
+
+        rows = result.fetchall()
+        loans = []
+        for row in rows:
+            row_dict = row._asdict() if hasattr(row, '_asdict') else dict(zip(['id', 'loan_number', 'borrower_name', 'status', 'days_in_stage', 'loan_amount'], row))
+            loans.append({
+                "id": str(row_dict.get('id')),
+                "loan_number": row_dict.get('loan_number'),
+                "borrower_name": row_dict.get('borrower_name'),
+                "status": row_dict.get('status'),
+                "days_in_stage": row_dict.get('days_in_stage'),
+                "loan_amount": float(row_dict.get('loan_amount') or 0),
+            })
+
+        return {
+            "status": "success",
+            "query_returned": len(loans),
+            "loans": loans,
+            "message": "Query executed successfully" if loans else "Query returned no results"
+        }
+    except Exception as e:
+        import traceback
+        return {
+            "status": "error",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+
 @router.get("/admin/run-migration")
 async def run_deal_alerts_migration(
     admin_key: str = Query(..., description="Admin API key"),

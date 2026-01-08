@@ -33,17 +33,17 @@ export const NAVIGATION_ITEMS = {
   },
   portfolio: {
     path: '/portfolio',
-    label: 'MUM Clients',  // Mortgages Under Management - for Loan Officers
+    label: 'MUM Clients',  // Mortgages Under Management - for Loan Officers only
     module: 'base'
   },
   closedClients: {
-    path: '/portfolio',
-    label: 'MUM Clients',  // Mortgages Under Management - same view for PA
+    path: '/closed-loans',
+    label: 'Closed Loans',  // Simple closed loans list for Production Assistants
     module: 'base'
   },
   closedLoans: {
-    path: '/portfolio',
-    label: 'MUM Clients',  // Mortgages Under Management - same view for ops roles
+    path: '/closed-loans',
+    label: 'Closed Loans',  // Simple closed loans list for ops roles
     module: 'base'
   },
   tasks: {
