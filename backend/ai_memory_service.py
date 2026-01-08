@@ -1,6 +1,10 @@
 """
 AI Memory Service with RAG (Retrieval-Augmented Generation)
 Provides context-aware AI responses using conversation history
+
+Caching:
+- Metadata extraction is cached with 6h TTL (same message = same metadata)
+- Reduces redundant LLM calls for repeated messages
 """
 import logging
 from typing import Optional, Dict, List
@@ -9,6 +13,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_
 import anthropic
 import json
+import hashlib
 
 from integrations.pinecone_service import vector_memory
 from main import ConversationMemory, Lead, Loan, User
@@ -16,6 +21,15 @@ from ai_receptionist_dashboard_models import AIReceptionistMetricsDaily, AIRecep
 from models.profitability import EmployeeCost, ProfitabilityLoan, LoanAttribution, ProfitabilityRole
 from sqlalchemy import func
 from decimal import Decimal
+
+# Import LLM cache service
+try:
+    from services.llm_cache_service import llm_cache, LLMCacheService
+    LLM_CACHE_AVAILABLE = True
+except ImportError:
+    llm_cache = None
+    LLMCacheService = None
+    LLM_CACHE_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -683,8 +697,28 @@ IMPORTANT: When asked about rate locks, use this real-time market data to provid
         user_message: str,
         ai_response: str
     ) -> Dict:
-        """Extract key metadata from conversation using Claude"""
+        """Extract key metadata from conversation using Claude
+
+        Caching:
+        - Results are cached based on message hash
+        - 6 hour TTL (metadata doesn't change for same conversation)
+        - Saves ~$0.01 per cached call
+        """
         try:
+            # Generate cache key from conversation content
+            cache_key = None
+            if LLM_CACHE_AVAILABLE and llm_cache and llm_cache._enabled:
+                content_hash = hashlib.sha256(
+                    f"{user_message}|{ai_response}".encode()
+                ).hexdigest()[:16]
+                cache_key = f"metadata:{content_hash}"
+
+                # Check cache
+                cached = llm_cache.get(cache_key)
+                if cached:
+                    logger.debug("[MEMORY] Metadata cache HIT")
+                    return cached
+
             # Use Claude to analyze the conversation
             analysis_prompt = f"""Analyze this conversation and extract structured information:
 
@@ -717,6 +751,12 @@ Return ONLY valid JSON, no other text."""
 
             # Parse JSON response
             analysis = json.loads(response.content[0].text)
+
+            # Cache the result (6 hour TTL)
+            if LLM_CACHE_AVAILABLE and llm_cache and llm_cache._enabled and cache_key:
+                llm_cache.set(cache_key, analysis, ttl=21600)  # 6 hours
+                logger.debug("[MEMORY] Cached metadata for 6h")
+
             return analysis
 
         except Exception as e:

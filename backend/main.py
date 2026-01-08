@@ -21769,6 +21769,57 @@ async def debug_tools_registry_status():
         "error": tools_router_error
     }
 
+
+# Cache stats monitoring endpoint
+@app.get("/api/v1/debug/cache-stats", tags=["Debug"])
+async def debug_cache_stats():
+    """
+    Debug endpoint to monitor Redis LLM cache statistics.
+
+    Returns cache hit/miss rates, estimated savings, and Redis connection status.
+    Used to verify caching is working and measure cost savings.
+    """
+    try:
+        from services.llm_cache_service import llm_cache
+
+        if llm_cache and llm_cache._enabled:
+            stats = llm_cache.get_stats()
+            return {
+                "cache_enabled": True,
+                "redis_connected": True,
+                "stats": {
+                    "hits": stats.get("hits", 0),
+                    "misses": stats.get("misses", 0),
+                    "errors": stats.get("errors", 0),
+                    "hit_rate_percent": stats.get("hit_rate", 0),
+                    "estimated_savings_usd": stats.get("estimated_savings", 0),
+                },
+                "message": "Cache is operational"
+            }
+        else:
+            return {
+                "cache_enabled": False,
+                "redis_connected": False,
+                "stats": None,
+                "message": "LLM cache service not enabled or Redis not connected"
+            }
+    except ImportError:
+        return {
+            "cache_enabled": False,
+            "redis_connected": False,
+            "stats": None,
+            "message": "LLM cache service not available"
+        }
+    except Exception as e:
+        return {
+            "cache_enabled": False,
+            "redis_connected": False,
+            "stats": None,
+            "error": str(e),
+            "message": f"Error checking cache: {str(e)}"
+        }
+
+
 # PURL System Migration Endpoint
 @app.post("/api/v1/migrations/add-purl-system")
 async def add_purl_system_migration(db: Session = Depends(get_db)):

@@ -8,6 +8,11 @@ Performance improvement:
 - Before: All 160 tools loaded on every request
 - After: Only 8-16 relevant tools loaded based on intent
 
+Caching:
+- LLM-based classification is cached in Redis with 24h TTL
+- Same query string returns cached intent (avoids redundant API calls)
+- Pattern matching remains instant (~1-5ms) with no caching needed
+
 Usage:
     from agents.intent_router import classify_intent, get_tools_for_intent
 
@@ -26,6 +31,15 @@ import logging
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
+
+# Import LLM cache service for caching intent classification
+try:
+    from services.llm_cache_service import llm_cache, LLMCacheService
+    LLM_CACHE_AVAILABLE = True
+except ImportError:
+    llm_cache = None
+    LLMCacheService = None
+    LLM_CACHE_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -364,10 +378,25 @@ async def classify_intent_llm(
     This is slower (~500-1000ms) but handles edge cases better.
     Only called when pattern matching fails.
 
+    Caching:
+    - Results are cached in Redis with 24h TTL
+    - Same query returns cached intent (saves ~$0.01 per call)
+    - Cache key is based on query hash
+
     Returns:
         Tuple of (intent, confidence)
     """
     start = time.time()
+
+    # Check cache first (if available)
+    cache_key = None
+    if LLM_CACHE_AVAILABLE and llm_cache and llm_cache._enabled:
+        cache_key = llm_cache._generate_key("intent", query.lower().strip())
+        cached = llm_cache.get(cache_key)
+        if cached:
+            elapsed = (time.time() - start) * 1000
+            logger.info(f"[INTENT] Cache HIT: '{cached.get('intent')}' in {elapsed:.1f}ms")
+            return (cached.get("intent", "general"), cached.get("confidence", 0.85))
 
     if anthropic_client is None:
         import os
@@ -391,10 +420,17 @@ async def classify_intent_llm(
 
         # Validate intent
         if intent in INTENT_TO_AGENTS:
-            return (intent, 0.85)
+            result = (intent, 0.85)
         else:
             logger.warning(f"[INTENT] Unknown intent from LLM: {intent}")
-            return ("general", 0.5)
+            result = ("general", 0.5)
+
+        # Cache the result (24 hour TTL - intents are stable)
+        if LLM_CACHE_AVAILABLE and llm_cache and llm_cache._enabled and cache_key:
+            llm_cache.set(cache_key, {"intent": result[0], "confidence": result[1]}, ttl=86400)
+            logger.debug(f"[INTENT] Cached intent '{result[0]}' for 24h")
+
+        return result
 
     except Exception as e:
         logger.error(f"[INTENT] LLM classification failed: {e}")
