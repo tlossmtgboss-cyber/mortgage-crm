@@ -720,12 +720,14 @@ class LoanScenarioService:
                 loan_amount, purchase_price, ltv, credit_score, config
             )
             if option:
-                # Save to database
-                self._save_option(scenario_id, option)
                 options.append(option)
 
-        # Rank options
+        # Rank options first (sets is_recommended, rank, recommendation_reasons)
         options = self._rank_options(options)
+
+        # Save to database after ranking so is_recommended is included
+        for option in options:
+            self._save_option(scenario_id, option)
 
         return options
 
@@ -919,14 +921,16 @@ class LoanScenarioService:
                 monthly_payment, monthly_pi, monthly_taxes,
                 monthly_insurance, monthly_pmi, closing_costs,
                 total_cash_to_close, total_interest_paid,
-                pros, cons, created_at
+                pros, cons, rank, is_recommended, recommendation_reasons,
+                created_at
             ) VALUES (
                 :scenario_id, :product_type, :product_name,
                 :interest_rate, :apr, :term_months,
                 :monthly_payment, :monthly_pi, :monthly_taxes,
                 :monthly_insurance, :monthly_pmi, :closing_costs,
                 :total_cash_to_close, :total_interest_paid,
-                :pros, :cons, :created_at
+                :pros, :cons, :rank, :is_recommended, :recommendation_reasons,
+                :created_at
             )
         """), {
             "scenario_id": scenario_id,
@@ -945,6 +949,9 @@ class LoanScenarioService:
             "total_interest_paid": option["total_interest_paid"],
             "pros": json.dumps(option["pros"]),
             "cons": json.dumps(option["cons"]),
+            "rank": option.get("rank"),
+            "is_recommended": option.get("is_recommended", False),
+            "recommendation_reasons": json.dumps(option.get("recommendation_reasons")) if option.get("recommendation_reasons") else None,
             "created_at": datetime.utcnow()
         })
         self.db.commit()
