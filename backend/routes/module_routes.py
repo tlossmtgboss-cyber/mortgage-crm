@@ -326,3 +326,40 @@ async def get_public_modules(db: Session = Depends(get_db)):
         }
         for m in modules
     ]
+
+
+# Admin endpoint for running migration (no auth, uses admin key)
+@router.post("/admin/run-migration")
+async def run_module_migration(
+    admin_key: str = Query(..., description="Admin API key"),
+    db: Session = Depends(get_db),
+):
+    """
+    Run the subscription modules migration.
+    Creates tables and seeds module definitions.
+    """
+    # Simple admin key check
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        import sys
+        import os
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from migrations.add_subscription_modules import run_migration
+
+        # Get the engine from the session's bind
+        engine = db.get_bind()
+        success = run_migration(engine)
+
+        if success:
+            return {
+                "success": True,
+                "message": "Subscription modules migration completed successfully",
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Migration failed")
+    except ImportError as e:
+        raise HTTPException(status_code=500, detail=f"Migration import failed: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
