@@ -1103,6 +1103,7 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
   const [activeTab, setActiveTab] = useState('overview');
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showVideoLightbox, setShowVideoLightbox] = useState(true); // Auto-show on load
+  const [videoListKey, setVideoListKey] = useState(0); // Key to force refresh video list
   const [newMessage, setNewMessage] = useState({ subject: '', body: '' });
 
   // Check for submission success message
@@ -1441,6 +1442,7 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
 
                 {/* Video Messages from Loan Officer */}
                 <PortalVideoMessages
+                  key={`video-messages-${videoListKey}`}
                   portalType="client"
                   identifier={slug}
                   title="Messages from Your Loan Officer"
@@ -2069,6 +2071,7 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
           onVideoWatched={() => {
             // Video was watched and deleted, refresh the portal video list
             setShowVideoLightbox(false);
+            setVideoListKey(prev => prev + 1); // Force PortalVideoMessages to re-fetch
           }}
         />
       )}
