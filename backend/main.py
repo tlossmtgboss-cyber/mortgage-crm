@@ -58108,6 +58108,42 @@ async def test_duplicate_task_creation(db: Session = Depends(get_db)):
         }
 
 
+@app.post("/admin/fix-user-permission-role")
+async def fix_user_permission_role(request: dict, db: Session = Depends(get_db)):
+    """Admin endpoint to fix a user's permission_role.
+    Usage: POST /admin/fix-user-permission-role with body: {"email": "user@example.com", "role": "admin"}
+    """
+    email = request.get("email")
+    new_role = request.get("role", "admin")
+
+    if not email:
+        return {"status": "error", "message": "Email is required"}
+
+    valid_roles = ['admin', 'leadership', 'management', 'sales', 'processing', 'operations']
+    if new_role not in valid_roles:
+        return {"status": "error", "message": f"Invalid role. Must be one of: {valid_roles}"}
+
+    try:
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            return {"status": "error", "message": f"User with email {email} not found"}
+
+        old_role = user.permission_role
+        user.permission_role = new_role
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": f"Updated permission_role for {email}",
+            "old_role": old_role,
+            "new_role": new_role,
+            "user_id": user.id
+        }
+    except Exception as e:
+        db.rollback()
+        return {"status": "error", "message": str(e)}
+
+
 @app.get("/api/v1/duplicates/check/{record_type}/{record_id}")
 async def check_single_record_duplicates(
     record_type: str,
