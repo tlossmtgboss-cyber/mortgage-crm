@@ -387,3 +387,171 @@ async def bulk_acknowledge(request: BulkAcknowledgeRequest, db: Session = Depend
     except Exception as e:
         logger.error(f"Error bulk acknowledging: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# Admin Migration Endpoint
+# =============================================================================
+
+@router.get("/admin/run-migration")
+async def run_deal_alerts_migration(
+    admin_key: str = Query(..., description="Admin API key"),
+    db: Session = Depends(get_db),
+):
+    """
+    Run the deal alerts database migration.
+    Creates deal_alerts, whisper_sessions, whisper_messages, and production_forecasts tables.
+    """
+    import os
+    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    if admin_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        from sqlalchemy import text
+
+        # Check if PostgreSQL or SQLite
+        db_url = str(db.get_bind().url)
+        is_postgres = 'postgresql' in db_url
+
+        if is_postgres:
+            # Create deal_alerts table
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS deal_alerts (
+                    id VARCHAR(50) PRIMARY KEY,
+                    type VARCHAR(50) NOT NULL,
+                    priority VARCHAR(20) NOT NULL DEFAULT 'medium',
+                    status VARCHAR(20) NOT NULL DEFAULT 'active',
+                    loan_id INTEGER REFERENCES loans(id),
+                    loan_number VARCHAR(50),
+                    borrower_name VARCHAR(255),
+                    title VARCHAR(500) NOT NULL,
+                    message TEXT,
+                    details JSONB DEFAULT '{}',
+                    recommended_action TEXT,
+                    tags JSONB DEFAULT '[]',
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    acknowledged_at TIMESTAMP WITH TIME ZONE,
+                    acknowledged_by INTEGER REFERENCES users(id),
+                    resolved_at TIMESTAMP WITH TIME ZONE,
+                    resolved_by INTEGER REFERENCES users(id),
+                    resolution_note TEXT,
+                    snoozed_until TIMESTAMP WITH TIME ZONE,
+                    due_date TIMESTAMP WITH TIME ZONE,
+                    organization_id INTEGER,
+                    user_id INTEGER REFERENCES users(id)
+                )
+            """))
+
+            # Create indexes
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_deal_alerts_status ON deal_alerts(status)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_deal_alerts_priority ON deal_alerts(priority)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_deal_alerts_loan_id ON deal_alerts(loan_id)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_deal_alerts_type ON deal_alerts(type)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_deal_alerts_org ON deal_alerts(organization_id)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_deal_alerts_user ON deal_alerts(user_id)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_deal_alerts_created ON deal_alerts(created_at DESC)"))
+
+            # Create whisper_sessions table
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS whisper_sessions (
+                    id VARCHAR(50) PRIMARY KEY,
+                    call_id VARCHAR(100),
+                    user_id INTEGER REFERENCES users(id),
+                    contact_id INTEGER,
+                    contact_name VARCHAR(255),
+                    contact_type VARCHAR(50),
+                    status VARCHAR(20) DEFAULT 'active',
+                    started_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    ended_at TIMESTAMP WITH TIME ZONE,
+                    duration_seconds INTEGER,
+                    whisper_count INTEGER DEFAULT 0,
+                    ai_suggestions_count INTEGER DEFAULT 0,
+                    organization_id INTEGER
+                )
+            """))
+
+            # Create whisper_messages table
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS whisper_messages (
+                    id SERIAL PRIMARY KEY,
+                    session_id VARCHAR(50) REFERENCES whisper_sessions(id),
+                    message_type VARCHAR(50) NOT NULL,
+                    priority VARCHAR(20) DEFAULT 'medium',
+                    content TEXT NOT NULL,
+                    context JSONB,
+                    source VARCHAR(20) DEFAULT 'ai',
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    acknowledged_at TIMESTAMP WITH TIME ZONE
+                )
+            """))
+
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_whisper_sessions_user ON whisper_sessions(user_id)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_whisper_sessions_status ON whisper_sessions(status)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_whisper_messages_session ON whisper_messages(session_id)"))
+
+            # Create production_forecasts table
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS production_forecasts (
+                    id SERIAL PRIMARY KEY,
+                    entity_type VARCHAR(20) NOT NULL,
+                    entity_id INTEGER NOT NULL,
+                    forecast_date DATE NOT NULL,
+                    period_days INTEGER NOT NULL,
+                    predicted_units INTEGER,
+                    predicted_volume NUMERIC(15, 2),
+                    confidence NUMERIC(5, 4),
+                    actual_units INTEGER,
+                    actual_volume NUMERIC(15, 2),
+                    model_version VARCHAR(50),
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    organization_id INTEGER
+                )
+            """))
+
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_prod_forecasts_entity ON production_forecasts(entity_type, entity_id)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_prod_forecasts_date ON production_forecasts(forecast_date)"))
+        else:
+            # SQLite version
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS deal_alerts (
+                    id TEXT PRIMARY KEY,
+                    type TEXT NOT NULL,
+                    priority TEXT NOT NULL DEFAULT 'medium',
+                    status TEXT NOT NULL DEFAULT 'active',
+                    loan_id INTEGER REFERENCES loans(id),
+                    loan_number TEXT,
+                    borrower_name TEXT,
+                    title TEXT NOT NULL,
+                    message TEXT,
+                    details TEXT,
+                    recommended_action TEXT,
+                    tags TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    acknowledged_at TIMESTAMP,
+                    acknowledged_by INTEGER REFERENCES users(id),
+                    resolved_at TIMESTAMP,
+                    resolved_by INTEGER REFERENCES users(id),
+                    resolution_note TEXT,
+                    snoozed_until TIMESTAMP,
+                    due_date TIMESTAMP,
+                    organization_id INTEGER,
+                    user_id INTEGER REFERENCES users(id)
+                )
+            """))
+
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": "Deal alerts migration completed successfully",
+            "tables_created": ["deal_alerts", "whisper_sessions", "whisper_messages", "production_forecasts"],
+            "database_type": "postgresql" if is_postgres else "sqlite"
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Migration failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
