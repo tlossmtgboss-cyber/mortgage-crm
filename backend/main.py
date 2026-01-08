@@ -59874,6 +59874,65 @@ async def set_admin_role(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/v1/admin/enable-all-modules")
+async def enable_all_modules_main(
+    organization_id: int = Query(None, description="Organization ID (defaults to user's org or 1)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Enable all premium modules for an organization.
+    Removes all UPGRADE badges by enabling every module.
+    Requires admin permission.
+    """
+    from utils.auth import check_admin_permission
+    if not check_admin_permission(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    org_id = organization_id or getattr(current_user, 'organization_id', 1) or 1
+
+    premium_modules = [
+        'ai_assistant',
+        'partner_portals',
+        'video_os',
+        'recruiting_suite',
+        'conversation_intelligence',
+        'advanced_analytics',
+        'integrations'
+    ]
+
+    enabled = []
+    errors = []
+
+    for module_key in premium_modules:
+        try:
+            db.execute(text("""
+                INSERT INTO organization_modules
+                (organization_id, module_key, is_enabled, enabled_at, is_trial, created_at, updated_at)
+                VALUES (:org_id, :module_key, true, NOW(), false, NOW(), NOW())
+                ON CONFLICT (organization_id, module_key)
+                DO UPDATE SET
+                    is_enabled = true,
+                    enabled_at = NOW(),
+                    is_trial = false,
+                    disabled_at = NULL,
+                    updated_at = NOW()
+            """), {"org_id": org_id, "module_key": module_key})
+            enabled.append(module_key)
+        except Exception as e:
+            errors.append({"module": module_key, "error": str(e)})
+
+    db.commit()
+
+    return {
+        "success": True,
+        "organization_id": org_id,
+        "enabled_modules": enabled,
+        "errors": errors if errors else None,
+        "message": f"All {len(enabled)} premium modules enabled for organization {org_id}"
+    }
+
+
 @app.post("/api/v1/migrations/run-phase2-permissions", response_model=None)
 async def run_phase2_permission_migration_endpoint(
     migration_key: str = "",
