@@ -58067,13 +58067,26 @@ async def test_duplicate_task_creation(db: Session = Depends(get_db)):
 
         column_names = [c[0] for c in columns_check]
 
-        # Try to create a simple test task
+        # Count leads in database
+        lead_count = db.execute(text("SELECT COUNT(*) FROM leads")).scalar()
+
+        # Get sample of emails to check for duplicates
+        sample_emails = db.execute(text("""
+            SELECT email, COUNT(*) as cnt FROM leads
+            WHERE email IS NOT NULL
+            GROUP BY email
+            HAVING COUNT(*) > 1
+            LIMIT 5
+        """)).fetchall()
+
         test_result = {
             "tasks_table_exists": len(column_names) > 0,
             "columns": column_names,
             "has_owner_id": "owner_id" in column_names,
             "has_related_type": "related_type" in column_names,
             "has_related_contact_name": "related_contact_name" in column_names,
+            "total_leads": lead_count,
+            "duplicate_emails_in_db": [{"email": r[0], "count": r[1]} for r in sample_emails],
         }
 
         # Test the service
@@ -58082,6 +58095,8 @@ async def test_duplicate_task_creation(db: Session = Depends(get_db)):
         # Just scan without creating tasks to test the scan
         lead_duplicates = service.find_duplicate_leads()
         test_result["lead_duplicates_found"] = len(lead_duplicates)
+        if lead_duplicates:
+            test_result["sample_duplicate"] = lead_duplicates[0]
 
         return {"status": "success", "debug_info": test_result}
     except Exception as e:
