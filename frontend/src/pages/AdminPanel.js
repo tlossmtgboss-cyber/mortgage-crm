@@ -61,8 +61,7 @@ const AdminPanel = () => {
   const [aiMetricsLoading, setAiMetricsLoading] = useState(false);
   const [aiMetricsLastUpdate, setAiMetricsLastUpdate] = useState(null);
 
-  // User impersonation state
-  const [selectedViewUser, setSelectedViewUser] = useState(null);
+  // Role preview state
   const [selectedViewRole, setSelectedViewRole] = useState(null);
   const [impersonating, setImpersonating] = useState(false);
 
@@ -474,11 +473,10 @@ const AdminPanel = () => {
             <label className="user-selector-label">View as:</label>
             <select
               className="user-selector role-selector"
-              value={selectedViewRole ? `role:${selectedViewRole.id}:${selectedViewRole.name}` : (selectedViewUser?.id || '')}
+              value={selectedViewRole ? `role:${selectedViewRole.id}:${selectedViewRole.name}` : ''}
               onChange={(e) => {
                 const value = e.target.value;
                 if (value === '') {
-                  setSelectedViewUser(null);
                   setSelectedViewRole(null);
                   setImpersonating(false);
                 } else if (value.startsWith('role:')) {
@@ -487,12 +485,6 @@ const AdminPanel = () => {
                   const roleId = parseInt(parts[1], 10);
                   const roleName = parts.slice(2).join(':'); // Handle names with colons
                   setSelectedViewRole({ id: roleId, name: roleName });
-                  setSelectedViewUser(null);
-                } else {
-                  // User selected
-                  const user = users.find(u => u.id.toString() === value);
-                  setSelectedViewUser(user);
-                  setSelectedViewRole(null);
                 }
               }}
             >
@@ -506,95 +498,64 @@ const AdminPanel = () => {
                   ))}
                 </optgroup>
               )}
-              <optgroup label="── View as Specific User ──">
-                {users.map(user => {
-                  const displayName = user.full_name?.trim() || `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email || `User #${user.id}`;
-                  return (
-                    <option key={user.id} value={user.id}>
-                      {displayName} ({user.role?.replace('_', ' ') || 'user'})
-                    </option>
-                  );
-                })}
-              </optgroup>
             </select>
-            {(selectedViewRole || selectedViewUser) && !impersonating && (
+            {selectedViewRole && !impersonating && (
               <button
                 className="btn-impersonate"
                 onClick={async () => {
                   try {
                     setImpersonating(true);
 
-                    if (selectedViewRole) {
-                      // Role-based preview - find a user with this role
-                      // First try to find by onboarding_role_id, then by role name match
-                      let userWithRole = users.find(u => u.onboarding_role_id === selectedViewRole.id);
-                      if (!userWithRole) {
-                        // Fallback: find by role name (case-insensitive partial match)
-                        const roleNameLower = selectedViewRole.name.toLowerCase().replace(/\s+/g, '_');
-                        userWithRole = users.find(u =>
-                          u.role?.toLowerCase() === roleNameLower ||
-                          u.role?.toLowerCase().includes(roleNameLower.split('_')[0])
-                        );
-                      }
+                    // Role-based preview - find a user with this role
+                    // First try to find by onboarding_role_id, then by role name match
+                    let userWithRole = users.find(u => u.onboarding_role_id === selectedViewRole.id);
+                    if (!userWithRole) {
+                      // Fallback: find by role name (case-insensitive partial match)
+                      const roleNameLower = selectedViewRole.name.toLowerCase().replace(/\s+/g, '_');
+                      userWithRole = users.find(u =>
+                        u.role?.toLowerCase() === roleNameLower ||
+                        u.role?.toLowerCase().includes(roleNameLower.split('_')[0])
+                      );
+                    }
 
-                      if (userWithRole) {
-                        // Impersonate a user with this role
-                        const response = await api.post('/api/v1/admin/account-management/impersonate/start', {
-                          user_id: userWithRole.id,
-                          reason: `Admin panel role preview: ${selectedViewRole.name}`
-                        });
-                        const sessionToken = response.data?.data?.sessionToken || response.data?.sessionToken || response.data?.token;
-                        if (sessionToken) {
-                          localStorage.setItem('original_token', localStorage.getItem('token'));
-                          localStorage.setItem('impersonation_session', JSON.stringify({
-                            session_token: sessionToken,
-                            impersonated_user: userWithRole,
-                            role_preview: selectedViewRole.name,
-                            started_at: new Date().toISOString()
-                          }));
-                          localStorage.setItem('impersonating_user', JSON.stringify(userWithRole));
-                          window.location.href = '/dashboard';
-                        } else {
-                          throw new Error('No session token returned from server');
-                        }
-                      } else {
-                        // No user found with this role
-                        alert(`No user found with the "${selectedViewRole.name}" role.\n\nPlease assign this role to a user first, then try again.`);
-                        setImpersonating(false);
-                      }
-                    } else if (selectedViewUser) {
-                      // User-based impersonation
+                    if (userWithRole) {
+                      // Impersonate a user with this role
                       const response = await api.post('/api/v1/admin/account-management/impersonate/start', {
-                        user_id: selectedViewUser.id,
-                        reason: 'Admin panel impersonation'
+                        user_id: userWithRole.id,
+                        reason: `Admin panel role preview: ${selectedViewRole.name}`
                       });
                       const sessionToken = response.data?.data?.sessionToken || response.data?.sessionToken || response.data?.token;
                       if (sessionToken) {
                         localStorage.setItem('original_token', localStorage.getItem('token'));
                         localStorage.setItem('impersonation_session', JSON.stringify({
                           session_token: sessionToken,
-                          impersonated_user: selectedViewUser,
+                          impersonated_user: userWithRole,
+                          role_preview: selectedViewRole.name,
                           started_at: new Date().toISOString()
                         }));
-                        localStorage.setItem('impersonating_user', JSON.stringify(selectedViewUser));
+                        localStorage.setItem('impersonating_user', JSON.stringify(userWithRole));
                         window.location.href = '/dashboard';
                       } else {
                         throw new Error('No session token returned from server');
                       }
+                    } else {
+                      // No user found with this role
+                      alert(`No user found with the "${selectedViewRole.name}" role.\n\nPlease assign this role to a user first, then try again.`);
+                      setImpersonating(false);
                     }
                   } catch (err) {
-                    console.error('Impersonation/preview failed:', err);
+                    console.error('Role preview failed:', err);
                     const errorDetail = err.response?.data?.detail;
                     const errorMessage = typeof errorDetail === 'string'
                       ? errorDetail
                       : (errorDetail?.message || err.message || 'Unknown error');
-                    alert('Failed to switch view: ' + errorMessage);
+                    alert('Failed to preview role: ' + errorMessage);
                     setImpersonating(false);
                   }
                 }}
                 disabled={impersonating}
               >
-                {impersonating ? 'Switching...' : selectedViewRole ? 'Preview Role' : 'Switch User'}
+                {impersonating ? 'Switching...' : 'Preview Role'}
               </button>
             )}
           </div>
