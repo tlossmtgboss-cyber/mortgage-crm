@@ -11,6 +11,21 @@ function Dashboard() {
   const navigate = useNavigate();
   const { hasPermission, userRole, effectiveRole } = usePermissions();
 
+  // Redirect admin users to /admin page
+  useEffect(() => {
+    // Check both userRole and localStorage for admin status
+    const isAdmin = userRole === 'admin' || (() => {
+      try {
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        return user.role === 'admin' || user.permission_role === 'admin';
+      } catch { return false; }
+    })();
+
+    if (isAdmin) {
+      navigate('/admin', { replace: true });
+    }
+  }, [userRole, navigate]);
+
   // Use React Query for cached dashboard data - instant on revisit!
   const { data: dashboardData, isLoading: loading, refetch: refetchDashboard } = useDashboard();
 
