@@ -168,15 +168,17 @@ function ScenarioBuilder({
       };
 
       const result = await decisionLabAPI.createScenario(sessionId, scenarioData);
+      const scenarioId = result.scenario?.scenario_id || result.scenario_id;
 
       // Calculate loan options
       setCalculating(true);
-      const options = await decisionLabAPI.calculateLoanOptions(result.scenario_id);
+      const options = await decisionLabAPI.calculateLoanOptions(scenarioId);
 
       const newScenario = {
-        ...result,
+        ...result.scenario,
         ...scenarioData,
-        loan_options: options.loan_options || [],
+        id: scenarioId,
+        loan_options: options.options || options.loan_options || [],
       };
 
       setScenarios(prev => [...prev, newScenario]);

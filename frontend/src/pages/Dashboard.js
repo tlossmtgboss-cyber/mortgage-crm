@@ -4,57 +4,15 @@ import { usePermissions } from '../contexts/PermissionContext';
 import { useDashboard } from '../hooks/useQueries';
 import { getDashboardContainersForRole } from '../config/roleConfig';
 import PendingPermissionRequests from '../components/PendingPermissionRequests';
-import {
-  RoleDashboardSwitcher,
-  getDashboardByRole,
-  LoanOfficerDashboard,
-  ProductionAssistant1Dashboard,
-  ProductionAssistant2Dashboard,
-  ProcessorDashboard,
-  UnderwriterDashboard,
-  CloserDashboard,
-  ManagerDashboard,
-  AdminDashboard
-} from '../components/dashboards/RoleDashboards';
+// Role dashboard components removed - admin uses /admin page instead
 import './Dashboard.css';
 
 function Dashboard() {
   const navigate = useNavigate();
-  const { hasPermission, userRole, effectiveRole, updateViewAsRole, viewAsRole, isAdmin } = usePermissions();
+  const { hasPermission, userRole, effectiveRole } = usePermissions();
 
   // Use React Query for cached dashboard data - instant on revisit!
   const { data: dashboardData, isLoading: loading, refetch: refetchDashboard } = useDashboard();
-
-  // State for admin role view switcher - sync with context viewAsRole
-  const [selectedDashboardView, setSelectedDashboardView] = useState(() => {
-    // Use viewAsRole from context if available, otherwise localStorage
-    return viewAsRole || localStorage.getItem('adminDashboardView') || 'admin';
-  });
-
-  // Check if current user is admin/management (can switch views)
-  const isAdminUser = () => {
-    try {
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        const user = JSON.parse(userStr);
-        return user.email === 'admin@perenniaai.com' ||
-               user.role === 'admin' ||
-               user.role === 'management' ||
-               userRole === 'management';
-      }
-    } catch (error) {
-      console.error('Error checking admin user:', error);
-    }
-    return userRole === 'management';
-  };
-
-  // Handle view change - updates both local state and context
-  const handleViewChange = (viewId) => {
-    setSelectedDashboardView(viewId);
-    localStorage.setItem('adminDashboardView', viewId);
-    // Update context so Navigation also updates
-    updateViewAsRole(viewId);
-  };
 
   // Check if current user is demo user
   const isDemoUser = () => {
