@@ -22017,6 +22017,82 @@ async def invalidate_cdn_cache(
         return {"success": False, "error": str(e)}
 
 
+@app.post("/api/v1/debug/add-missing-roles", tags=["Debug"])
+async def add_missing_employee_roles(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Add missing employee roles to the onboarding_roles table.
+
+    Adds: Admin, Site Admin, Executive Management, Management, Operations Manager,
+          Branch Manager, Underwriter, Closer, Funder
+    """
+    if current_user.role != 'admin' and current_user.permission_role != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        from sqlalchemy import text as sql_text
+        from datetime import datetime, timezone
+
+        MISSING_ROLES = [
+            {"name": "Admin", "description": "System administrator with full access"},
+            {"name": "Site Admin", "description": "Site-level administrator"},
+            {"name": "Executive Management", "description": "Executive management team"},
+            {"name": "Management", "description": "Management role"},
+            {"name": "Operations Manager", "description": "Operations manager overseeing daily operations"},
+            {"name": "Branch Manager", "description": "Branch manager overseeing branch operations"},
+            {"name": "Underwriter", "description": "Loan underwriter"},
+            {"name": "Closer", "description": "Loan closer handling closing process"},
+            {"name": "Funder", "description": "Loan funder handling funding process"},
+        ]
+
+        added = []
+        skipped = []
+
+        for role in MISSING_ROLES:
+            # Check if role exists
+            existing = db.execute(
+                sql_text("SELECT id FROM onboarding_roles WHERE name = :name"),
+                {"name": role["name"]}
+            ).fetchone()
+
+            if existing:
+                skipped.append(role["name"])
+            else:
+                db.execute(
+                    sql_text("""
+                        INSERT INTO onboarding_roles (name, description, is_active, created_at, updated_at)
+                        VALUES (:name, :description, true, :now, :now)
+                    """),
+                    {
+                        "name": role["name"],
+                        "description": role["description"],
+                        "now": datetime.now(timezone.utc)
+                    }
+                )
+                added.append(role["name"])
+
+        db.commit()
+
+        # Get all roles for display
+        all_roles = db.execute(
+            sql_text("SELECT id, name, is_active FROM onboarding_roles WHERE is_active = true ORDER BY name")
+        ).fetchall()
+
+        return {
+            "success": True,
+            "added": added,
+            "skipped": skipped,
+            "message": f"Added {len(added)} roles, skipped {len(skipped)} existing roles",
+            "all_roles": [{"id": r[0], "name": r[1]} for r in all_roles]
+        }
+
+    except Exception as e:
+        db.rollback()
+        return {"success": False, "error": str(e)}
+
+
 # PURL System Migration Endpoint
 @app.post("/api/v1/migrations/add-purl-system")
 async def add_purl_system_migration(db: Session = Depends(get_db)):
@@ -46697,7 +46773,7 @@ async def get_default_role_assignments(
                 r.name as role_name,
                 r.description as role_description,
                 dra.user_id,
-                u.name as user_name,
+                u.full_name as user_name,
                 u.email as user_email
             FROM roles r
             LEFT JOIN default_role_assignments dra ON dra.role_id = r.id
