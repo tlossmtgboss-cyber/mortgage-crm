@@ -20673,6 +20673,15 @@ try:
 except Exception as e:
     logger.warning(f"Integration Settings routes not loaded: {e}")
 
+# Twilio Self-Service Setup routes
+try:
+    from routes.twilio_setup_routes import router as twilio_setup_router, set_dependencies as set_twilio_setup_deps
+    set_twilio_setup_deps(User, get_current_user, get_db)
+    app.include_router(twilio_setup_router, tags=["Twilio Setup"])
+    logger.info("Twilio Setup routes loaded")
+except Exception as e:
+    logger.warning(f"Twilio Setup routes not loaded: {e}")
+
 # API Keys Settings routes (Comprehensive error handling pattern)
 try:
     from routes.api_keys_settings_routes import router as api_keys_settings_router, set_dependencies as set_api_keys_deps

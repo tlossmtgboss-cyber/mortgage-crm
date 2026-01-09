@@ -149,6 +149,7 @@ const LeadCaptureSettings = lazy(() => import('./pages/LeadCaptureSettings'));
 const ClientPortalSettings = lazy(() => import('./pages/ClientPortalSettings'));
 const CommunicationPreferences = lazy(() => import('./pages/CommunicationPreferences'));
 const IntegrationSettings = lazy(() => import('./pages/IntegrationSettings'));
+const TwilioSetup = lazy(() => import('./pages/settings/TwilioSetup'));
 const APIKeysSettings = lazy(() => import('./pages/APIKeysSettings'));
 const CompanyBrandingSettings = lazy(() => import('./pages/CompanyBrandingSettings'));
 const AccountManagement = lazy(() => import('./pages/AccountManagement'));
@@ -1689,6 +1690,28 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><IntegrationSettings /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/settings/twilio"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><TwilioSetup /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
