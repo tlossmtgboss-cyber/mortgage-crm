@@ -110,7 +110,7 @@ const AdminPanel = () => {
       const [statsRes, usersRes, rolesRes] = await Promise.allSettled([
         api.get('/api/v1/admin/stats'),
         api.get('/api/v1/admin/users'),
-        api.get('/api/v1/user-creation/roles'),
+        api.get('/api/v1/admin/users/roles'),
       ]);
 
       if (statsRes.status === 'fulfilled') {
