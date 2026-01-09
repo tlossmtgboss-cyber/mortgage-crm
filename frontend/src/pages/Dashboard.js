@@ -9,7 +9,7 @@ import './Dashboard.css';
 
 function Dashboard() {
   const navigate = useNavigate();
-  const { hasPermission, userRole, effectiveRole } = usePermissions();
+  const { hasPermission, userRole, effectiveRole, isRolePreview, rolePreview, exitRolePreview } = usePermissions();
 
   // Redirect admin users to /admin page (unless in role preview mode)
   useEffect(() => {
@@ -897,6 +897,48 @@ function Dashboard() {
 
   return (
     <div className="dashboard">
+      {/* Role Preview Banner */}
+      {isRolePreview && rolePreview && (
+        <div style={{
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          color: 'white',
+          padding: '12px 20px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '1rem',
+          borderRadius: '8px',
+          boxShadow: '0 2px 10px rgba(102, 126, 234, 0.3)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '18px' }}>👁️</span>
+            <span style={{ fontWeight: '600' }}>
+              Previewing as: <strong>{rolePreview.role_name}</strong>
+            </span>
+            <span style={{ opacity: 0.8, fontSize: '14px' }}>
+              (This is how a {rolePreview.role_name} sees their dashboard)
+            </span>
+          </div>
+          <button
+            onClick={exitRolePreview}
+            style={{
+              background: 'white',
+              color: '#667eea',
+              border: 'none',
+              padding: '8px 16px',
+              borderRadius: '6px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              transition: 'transform 0.2s'
+            }}
+            onMouseOver={(e) => e.target.style.transform = 'scale(1.05)'}
+            onMouseOut={(e) => e.target.style.transform = 'scale(1)'}
+          >
+            Exit Preview
+          </button>
+        </div>
+      )}
+
       <div className="dashboard-header-compact">
         <h1>Today's Command Center</h1>
         <div className="header-actions">

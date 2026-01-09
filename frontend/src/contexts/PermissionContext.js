@@ -50,9 +50,31 @@ export const PermissionProvider = ({ children }) => {
   const [currentUserId, setCurrentUserId] = useState(null);
   const { isImpersonating, getImpersonatedUser } = useImpersonation();
 
+  // Check for role preview mode (admin previewing a specific role's dashboard)
+  const [rolePreview, setRolePreview] = useState(() => {
+    try {
+      const preview = localStorage.getItem('role_preview');
+      return preview ? JSON.parse(preview) : null;
+    } catch {
+      return null;
+    }
+  });
+
   // Compute effective role for UI purposes (combines permission_role + legacy role)
   // If viewAsRole is set and user can switch views (admin or manager), use that instead
+  // IMPORTANT: Role preview mode takes highest priority
   const effectiveRole = useMemo(() => {
+    // If in role preview mode, use the preview role
+    if (rolePreview && rolePreview.role_name) {
+      const previewRoleName = rolePreview.role_name.toLowerCase().replace(/\s+/g, '_');
+      console.log('Role preview mode active, using role:', previewRoleName);
+      // Map production_assistant variants and concierge to production_assistant
+      if (previewRoleName === 'production_assistant_1' || previewRoleName === 'production_assistant_2' || previewRoleName === 'concierge') {
+        return 'production_assistant';
+      }
+      return previewRoleName;
+    }
+
     const baseRole = getUserEffectiveRole(userRole, legacyRole);
     // Check if user can switch role views (admin or management/manager)
     const canSwitchViews = baseRole === 'admin' ||
@@ -73,7 +95,7 @@ export const PermissionProvider = ({ children }) => {
       return viewAsRole;
     }
     return baseRole;
-  }, [userRole, legacyRole, viewAsRole]);
+  }, [userRole, legacyRole, viewAsRole, rolePreview]);
 
   // Fetch permissions whenever impersonation state changes
   useEffect(() => {
@@ -282,6 +304,33 @@ export const PermissionProvider = ({ children }) => {
            userRole === 'management';
   }, [userRole, legacyRole]);
 
+  // Exit role preview mode and restore original user
+  const exitRolePreview = () => {
+    try {
+      const originalUser = localStorage.getItem('original_user_backup');
+      const originalToken = localStorage.getItem('original_token_backup');
+
+      if (originalUser) {
+        localStorage.setItem('user', originalUser);
+      }
+      if (originalToken) {
+        localStorage.setItem('token', originalToken);
+      }
+
+      // Clear preview data
+      localStorage.removeItem('role_preview');
+      localStorage.removeItem('original_user_backup');
+      localStorage.removeItem('original_token_backup');
+
+      setRolePreview(null);
+
+      // Redirect to admin panel
+      window.location.href = '/admin';
+    } catch (error) {
+      console.error('Error exiting role preview:', error);
+    }
+  };
+
   const value = {
     permissions,
     userRole,
@@ -298,7 +347,11 @@ export const PermissionProvider = ({ children }) => {
     canPerformAction,
     getDataScope,
     updateViewAsRole,  // Function to update view-as role
-    refetchPermissions: fetchPermissions
+    refetchPermissions: fetchPermissions,
+    // Role preview mode
+    rolePreview,       // Current role preview info (if any)
+    isRolePreview: !!rolePreview,  // Boolean flag for easy checking
+    exitRolePreview    // Function to exit role preview mode
   };
 
   return (
