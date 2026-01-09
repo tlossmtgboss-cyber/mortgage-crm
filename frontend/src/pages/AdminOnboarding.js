@@ -20,8 +20,10 @@ import {
 } from '../services/onboardingApi';
 import './AdminOnboarding.css';
 
-// Initialize Stripe
-const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY || '');
+// Initialize Stripe only if key is available (prevents IntegrationError on empty key)
+const stripePromise = process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY
+  ? loadStripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY)
+  : Promise.resolve(null);
 
 // Timezone options
 const TIMEZONES = [

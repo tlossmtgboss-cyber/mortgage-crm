@@ -38926,6 +38926,80 @@ async def revoke_api_key(
 # USER MANAGEMENT (Admin)
 # ============================================================================
 
+@app.get("/api/v1/admin/stats")
+async def get_admin_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get admin dashboard statistics"""
+    from utils.auth import require_admin
+    require_admin(current_user)
+
+    from datetime import datetime
+
+    # Count users by role
+    total_users = db.query(User).count()
+    total_los = db.query(User).filter(User.role == 'loan_officer').count()
+    total_realtors = db.query(User).filter(User.role == 'realtor').count()
+
+    # Count leads and loans
+    total_leads = 0
+    total_loans = 0
+    mtd_volume = 0
+
+    try:
+        # Try to get lead count
+        lead_count = db.execute(text("SELECT COUNT(*) FROM leads")).scalar()
+        total_leads = lead_count or 0
+    except Exception:
+        pass
+
+    try:
+        # Try to get loan count and MTD volume
+        loan_count = db.execute(text("SELECT COUNT(*) FROM loans")).scalar()
+        total_loans = loan_count or 0
+
+        # MTD volume - sum of loan amounts funded this month
+        mtd_result = db.execute(text("""
+            SELECT COALESCE(SUM(loan_amount), 0)
+            FROM loans
+            WHERE status = 'funded'
+            AND funded_at >= date_trunc('month', CURRENT_DATE)
+        """)).scalar()
+        mtd_volume = float(mtd_result or 0)
+    except Exception:
+        pass
+
+    return {
+        "total_users": total_users,
+        "total_los": total_los,
+        "total_realtors": total_realtors,
+        "total_leads": total_leads,
+        "total_loans": total_loans,
+        "mtd_volume": mtd_volume
+    }
+
+@app.get("/api/v1/admin/users/roles")
+async def get_user_roles(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get available user roles for admin panel"""
+    from utils.auth import require_admin
+    require_admin(current_user)
+
+    # Return standard roles
+    roles = [
+        {"id": 1, "name": "admin", "description": "Full system access", "is_active": True},
+        {"id": 2, "name": "manager", "description": "Team management access", "is_active": True},
+        {"id": 3, "name": "loan_officer", "description": "Loan origination access", "is_active": True},
+        {"id": 4, "name": "processor", "description": "Loan processing access", "is_active": True},
+        {"id": 5, "name": "realtor", "description": "Realtor partner access", "is_active": True},
+        {"id": 6, "name": "user", "description": "Basic user access", "is_active": True},
+    ]
+
+    return {"roles": roles}
+
 @app.get("/api/v1/admin/users")
 async def get_all_users(
     db: Session = Depends(get_db),
@@ -46860,11 +46934,11 @@ async def set_default_role_assignment(
 
         return {
             "success": True,
-            "message": f"Set {user.name} as default {role[1]}",
+            "message": f"Set {user.full_name} as default {role[1]}",
             "role_id": role_id,
             "role_name": role[1],
             "user_id": user_id,
-            "user_name": user.name
+            "user_name": user.full_name
         }
     except HTTPException:
         raise
