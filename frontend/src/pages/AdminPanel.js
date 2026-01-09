@@ -426,6 +426,8 @@ const AdminPanel = () => {
             userRole: {userRole || 'undefined'}<br />
             canAccessAdmin: {String(canAccessAdmin)}<br />
             permissionsLoading: {String(permissionsLoading)}<br />
+            localUser.role: {localUser?.role || 'N/A'}<br />
+            localUser.permission_role: {localUser?.permission_role || 'N/A'}<br />
             localStorage.user.id: {userFromStorage?.id || 'N/A'}<br />
             localStorage.user.permission_role: {userFromStorage?.permission_role || 'N/A'}<br />
             localStorage.user.role: {userFromStorage?.role || 'N/A'}
