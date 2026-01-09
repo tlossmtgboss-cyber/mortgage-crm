@@ -65378,9 +65378,9 @@ async def add_performance_indices_migration(
             ("idx_tasks_owner_due",
              "CREATE INDEX IF NOT EXISTS idx_tasks_owner_due ON tasks(owner_id, due_date) WHERE status != 'completed'"),
 
-            # MUM Clients - Portfolio queries
-            ("idx_mum_clients_loan_officer",
-             "CREATE INDEX IF NOT EXISTS idx_mum_clients_loan_officer ON mum_clients(loan_officer_id)"),
+            # MUM Clients - Portfolio queries (user_id is the loan officer owner)
+            ("idx_mum_clients_user_id",
+             "CREATE INDEX IF NOT EXISTS idx_mum_clients_user_id ON mum_clients(user_id)"),
             ("idx_mum_clients_status",
              "CREATE INDEX IF NOT EXISTS idx_mum_clients_status ON mum_clients(status)"),
 
