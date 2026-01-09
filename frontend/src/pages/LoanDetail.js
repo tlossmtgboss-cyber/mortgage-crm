@@ -22,6 +22,7 @@ import UnifiedIncomeCalculator from '../components/income/UnifiedIncomeCalculato
 import PortalSelectorModal from '../components/PortalSelectorModal';
 import SendVideoModal from '../components/video/SendVideoModal';
 import CreditTab from '../components/CreditTab';
+import WorkflowRoleAssignment from '../components/WorkflowRoleAssignment';
 import { formatPhoneNumber } from '../utils/phoneUtils';
 import './LeadDetail.css';
 
@@ -2348,8 +2349,19 @@ function LoanDetail() {
         {activeTab === 'team' && (
           <div className="info-section">
             <h2>TEAM MEMBERS</h2>
+
+            {/* Workflow Role Assignments */}
+            <div style={{ marginBottom: '24px' }}>
+              <WorkflowRoleAssignment
+                loanId={parseInt(id)}
+                onUpdate={() => {
+                  // Optionally refresh data when assignments change
+                }}
+              />
+            </div>
+
             <div className="team-members-display">
-              <h4 style={{ marginBottom: '15px', color: '#333' }}>Team Members on File</h4>
+              <h4 style={{ marginBottom: '15px', color: '#333' }}>Transaction Partners</h4>
 
               {/* Standard/Internal Team Members */}
               {standardMembers.map((member, index) => {

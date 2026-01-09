@@ -13,6 +13,7 @@ import CreateTaskModal from '../components/CreateTaskModal';
 import AppointmentModal from '../components/AppointmentModal';
 import ScheduleAppointmentModal from '../components/ScheduleAppointmentModal';
 import TeamAssignment from '../components/TeamAssignment';
+import WorkflowRoleAssignment from '../components/WorkflowRoleAssignment';
 import EmploymentTab from '../components/EmploymentTab';
 import IncomeTab from '../components/income/IncomeTab';
 import UnifiedIncomeCalculator from '../components/income/UnifiedIncomeCalculator';
@@ -3268,7 +3269,21 @@ function LeadDetail() {
           {activeTab === 'team' && (
           <div className="info-section">
             <h2>Team Members</h2>
-            <TeamAssignment leadId={id} />
+
+            {/* Workflow Role Assignments */}
+            <div style={{ marginBottom: '24px' }}>
+              <WorkflowRoleAssignment
+                leadId={parseInt(id)}
+                onUpdate={() => {
+                  // Optionally refresh data when assignments change
+                }}
+              />
+            </div>
+
+            <div style={{ marginTop: '24px' }}>
+              <h3 style={{ marginBottom: '16px', color: '#333', fontSize: '16px' }}>General Team Assignments</h3>
+              <TeamAssignment leadId={id} />
+            </div>
           </div>
           )}
 

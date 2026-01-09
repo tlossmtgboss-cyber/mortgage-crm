@@ -1,0 +1,333 @@
+/* WorkflowRoleAssignment Component Styles */
+
+.workflow-role-assignment {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.workflow-role-assignment.compact {
+  padding: 16px;
+}
+
+/* Header */
+.role-assignment-header {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #eee;
+}
+
+.role-assignment-header h4 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a2e;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-icon {
+  font-size: 20px;
+}
+
+.header-subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: #666;
+}
+
+/* Grid Layout */
+.role-assignment-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.compact .role-assignment-grid {
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+/* Role Card */
+.role-assignment-card {
+  background: #f8f9fa;
+  border: 2px solid #e9ecef;
+  border-radius: 10px;
+  padding: 16px;
+  transition: all 0.2s ease;
+}
+
+.role-assignment-card.assigned {
+  background: #e8f5f5;
+  border-color: #218D8D;
+}
+
+.role-assignment-card:hover {
+  border-color: #218D8D;
+  box-shadow: 0 4px 12px rgba(33, 141, 141, 0.15);
+}
+
+/* Role Header */
+.role-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.role-icon {
+  font-size: 24px;
+  width: 40px;
+  height: 40px;
+  background: white;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.role-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.role-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a2e;
+}
+
+.role-description {
+  font-size: 12px;
+  color: #666;
+  line-height: 1.4;
+}
+
+/* Assignment Control */
+.role-assignment-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+}
+
+.role-user-select {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+
+.role-user-select:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.15);
+}
+
+.role-user-select:hover {
+  border-color: #aaa;
+}
+
+.role-user-select:disabled {
+  background-color: #f0f0f0;
+  cursor: not-allowed;
+}
+
+/* Assigned Badge */
+.assigned-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: #218D8D;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+/* Assigned User Preview */
+.assigned-user-preview {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #ddd;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.preview-label {
+  color: #888;
+}
+
+.preview-name {
+  color: #218D8D;
+  font-weight: 500;
+}
+
+/* Loading States */
+.role-assignment-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px;
+  color: #666;
+  font-size: 14px;
+}
+
+.loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #e0e0e0;
+  border-top-color: #218D8D;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.saving-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.saving-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #e0e0e0;
+  border-top-color: #218D8D;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Empty State */
+.role-assignment-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: #666;
+}
+
+.empty-icon {
+  font-size: 48px;
+  display: block;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.role-assignment-empty p {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+}
+
+.empty-hint {
+  color: #888;
+  font-size: 13px !important;
+}
+
+/* Compact Mode Adjustments */
+.compact .role-assignment-card {
+  padding: 12px;
+}
+
+.compact .role-header {
+  margin-bottom: 8px;
+}
+
+.compact .role-icon {
+  width: 32px;
+  height: 32px;
+  font-size: 18px;
+}
+
+.compact .role-name {
+  font-size: 13px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .workflow-role-assignment {
+    padding: 16px;
+  }
+
+  .role-assignment-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .role-assignment-card {
+    padding: 14px;
+  }
+}
+
+/* Dark Mode Support (if using) */
+@media (prefers-color-scheme: dark) {
+  .workflow-role-assignment {
+    background: #1a1a2e;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  .role-assignment-header h4 {
+    color: #fff;
+  }
+
+  .header-subtitle,
+  .role-description {
+    color: #aaa;
+  }
+
+  .role-assignment-card {
+    background: #252540;
+    border-color: #333;
+  }
+
+  .role-assignment-card.assigned {
+    background: #1a3a3a;
+    border-color: #218D8D;
+  }
+
+  .role-icon {
+    background: #1a1a2e;
+  }
+
+  .role-name {
+    color: #fff;
+  }
+
+  .role-user-select {
+    background: #252540;
+    border-color: #444;
+    color: #fff;
+  }
+
+  .role-user-select:hover {
+    border-color: #666;
+  }
+
+  .assigned-user-preview {
+    border-top-color: #444;
+  }
+
+  .preview-label {
+    color: #777;
+  }
+}
