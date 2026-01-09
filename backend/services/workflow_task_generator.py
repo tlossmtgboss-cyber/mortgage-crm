@@ -748,54 +748,63 @@ Email: {contact_info.get('email', 'N/A')}
         """
         Get role-to-user assignments for an entity.
 
+        Uses the RoleAssignmentService for consistent role resolution.
         Returns dict of role_id -> user_id
         """
+        from services.workflow_role_assignment import get_role_assignment_service
+
         assignments = {}
 
-        if lead_id:
-            # Try to get lead role assignments (table may not exist yet)
-            try:
-                results = self.db.execute(text("""
-                    SELECT role_id, assigned_user_id
-                    FROM lead_workflow_role_assignments
-                    WHERE lead_id = :lead_id AND is_active = true
-                """), {"lead_id": lead_id}).fetchall()
+        try:
+            service = get_role_assignment_service(self.db)
 
-                for row in results:
-                    assignments[row[0]] = row[1]
-            except Exception as e:
-                # Table may not exist - fall back to owner assignment
-                logger.debug(f"lead_workflow_role_assignments not available: {e}")
+            if lead_id:
+                # Get all active role assignments for the lead
+                lead_assignments = service.get_lead_role_assignments(lead_id)
+                for assignment in lead_assignments:
+                    assignments[assignment['role_id']] = assignment['user_id']
 
-            # Also get owner as default LO
-            lead = self.db.query(self.Lead).filter(self.Lead.id == lead_id).first()
-            if lead and lead.owner_id:
-                # Get LO role ID
-                lo_role = self.db.query(self.Role).filter(self.Role.name == 'Loan Officer').first()
-                if lo_role and lo_role.id not in assignments:
-                    assignments[lo_role.id] = lead.owner_id
+                # Also get owner as default Loan Officer
+                lead = self.db.query(self.Lead).filter(self.Lead.id == lead_id).first()
+                if lead and lead.owner_id:
+                    lo_role = self.db.query(self.Role).filter(self.Role.name == 'Loan Officer').first()
+                    if lo_role and lo_role.id not in assignments:
+                        assignments[lo_role.id] = lead.owner_id
 
-        if loan_id:
-            # Try to get loan role assignments (table may not exist yet)
-            try:
-                results = self.db.execute(text("""
-                    SELECT role_id, assigned_user_id
-                    FROM loan_workflow_role_assignments
-                    WHERE loan_id = :loan_id AND is_active = true
-                """), {"loan_id": loan_id}).fetchall()
+            if loan_id:
+                # Get all active role assignments for the loan
+                loan_assignments = service.get_loan_role_assignments(loan_id)
+                for assignment in loan_assignments:
+                    # Don't overwrite lead assignments (loan takes precedence if both exist)
+                    assignments[assignment['role_id']] = assignment['user_id']
 
-                for row in results:
-                    assignments[row[0]] = row[1]
-            except Exception as e:
-                # Table may not exist - fall back to loan officer assignment
-                logger.debug(f"loan_workflow_role_assignments not available: {e}")
+                # Also get loan officer as default
+                loan = self.db.query(self.Loan).filter(self.Loan.id == loan_id).first()
+                if loan and loan.loan_officer_id:
+                    lo_role = self.db.query(self.Role).filter(self.Role.name == 'Loan Officer').first()
+                    if lo_role and lo_role.id not in assignments:
+                        assignments[lo_role.id] = loan.loan_officer_id
 
-            # Also get loan officer as default
-            loan = self.db.query(self.Loan).filter(self.Loan.id == loan_id).first()
-            if loan and loan.loan_officer_id:
-                lo_role = self.db.query(self.Role).filter(self.Role.name == 'Loan Officer').first()
-                if lo_role and lo_role.id not in assignments:
-                    assignments[lo_role.id] = loan.loan_officer_id
+            # Log role assignments for debugging
+            if assignments:
+                logger.debug(f"Role assignments for lead={lead_id}, loan={loan_id}: {assignments}")
+
+        except Exception as e:
+            logger.warning(f"Error getting role assignments: {e}")
+            # Fall back to basic owner/LO assignment
+            if lead_id:
+                lead = self.db.query(self.Lead).filter(self.Lead.id == lead_id).first()
+                if lead and lead.owner_id:
+                    lo_role = self.db.query(self.Role).filter(self.Role.name == 'Loan Officer').first()
+                    if lo_role:
+                        assignments[lo_role.id] = lead.owner_id
+
+            if loan_id:
+                loan = self.db.query(self.Loan).filter(self.Loan.id == loan_id).first()
+                if loan and loan.loan_officer_id:
+                    lo_role = self.db.query(self.Role).filter(self.Role.name == 'Loan Officer').first()
+                    if lo_role:
+                        assignments[lo_role.id] = loan.loan_officer_id
 
         return assignments
 

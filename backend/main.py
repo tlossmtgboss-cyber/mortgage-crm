@@ -46202,6 +46202,264 @@ async def mark_team_member_viewed(
 
 
 # ============================================================================
+# WORKFLOW ROLE ASSIGNMENT ENDPOINTS
+# ============================================================================
+
+@app.get("/api/v1/roles")
+async def get_available_roles(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get all available roles for workflow assignment."""
+    from services.workflow_role_assignment import get_role_assignment_service
+
+    try:
+        service = get_role_assignment_service(db)
+        roles = service.get_available_roles()
+        return {"roles": roles, "count": len(roles)}
+    except Exception as e:
+        logger.error(f"Error fetching roles: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/loans/{loan_id}/roles")
+async def get_loan_role_assignments(
+    loan_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get all role assignments for a loan."""
+    from services.workflow_role_assignment import get_role_assignment_service
+
+    try:
+        # Verify loan exists
+        loan = db.query(Loan).filter(Loan.id == loan_id).first()
+        if not loan:
+            raise HTTPException(status_code=404, detail="Loan not found")
+
+        service = get_role_assignment_service(db)
+        assignments = service.get_loan_role_assignments(loan_id)
+
+        return {
+            "loan_id": loan_id,
+            "assignments": assignments,
+            "count": len(assignments)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching loan role assignments: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/loans/{loan_id}/roles/{role_id}/assign")
+async def assign_role_to_loan(
+    loan_id: int,
+    role_id: int,
+    user_id: int = Body(..., embed=True),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Assign a user to a role for a specific loan."""
+    from services.workflow_role_assignment import get_role_assignment_service
+
+    try:
+        service = get_role_assignment_service(db)
+        result = service.assign_role_to_loan(
+            loan_id=loan_id,
+            role_id=role_id,
+            user_id=user_id,
+            assigned_by_id=current_user.id
+        )
+
+        if not result["success"]:
+            raise HTTPException(status_code=400, detail=result["error"])
+
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error assigning role to loan: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/v1/loans/{loan_id}/roles/{role_id}")
+async def remove_role_from_loan(
+    loan_id: int,
+    role_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Remove a role assignment from a loan."""
+    from services.workflow_role_assignment import get_role_assignment_service
+
+    try:
+        service = get_role_assignment_service(db)
+        result = service.remove_role_from_loan(loan_id, role_id)
+
+        if not result["success"]:
+            raise HTTPException(status_code=400, detail=result["error"])
+
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error removing role from loan: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/leads/{lead_id}/roles")
+async def get_lead_role_assignments(
+    lead_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get all role assignments for a lead."""
+    from services.workflow_role_assignment import get_role_assignment_service
+
+    try:
+        # Verify lead exists
+        lead = db.query(Lead).filter(Lead.id == lead_id).first()
+        if not lead:
+            raise HTTPException(status_code=404, detail="Lead not found")
+
+        service = get_role_assignment_service(db)
+        assignments = service.get_lead_role_assignments(lead_id)
+
+        return {
+            "lead_id": lead_id,
+            "assignments": assignments,
+            "count": len(assignments)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching lead role assignments: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/leads/{lead_id}/roles/{role_id}/assign")
+async def assign_role_to_lead(
+    lead_id: int,
+    role_id: int,
+    user_id: int = Body(..., embed=True),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Assign a user to a role for a specific lead."""
+    from services.workflow_role_assignment import get_role_assignment_service
+
+    try:
+        service = get_role_assignment_service(db)
+        result = service.assign_role_to_lead(
+            lead_id=lead_id,
+            role_id=role_id,
+            user_id=user_id,
+            assigned_by_id=current_user.id
+        )
+
+        if not result["success"]:
+            raise HTTPException(status_code=400, detail=result["error"])
+
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error assigning role to lead: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/v1/leads/{lead_id}/roles/{role_id}")
+async def remove_role_from_lead(
+    lead_id: int,
+    role_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Remove a role assignment from a lead."""
+    from services.workflow_role_assignment import get_role_assignment_service
+
+    try:
+        service = get_role_assignment_service(db)
+        result = service.remove_role_from_lead(lead_id, role_id)
+
+        if not result["success"]:
+            raise HTTPException(status_code=400, detail=result["error"])
+
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error removing role from lead: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/loans/{loan_id}/roles/copy-from-lead/{lead_id}")
+async def copy_role_assignments_to_loan(
+    loan_id: int,
+    lead_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Copy role assignments from a lead to a loan (when lead converts)."""
+    from services.workflow_role_assignment import get_role_assignment_service
+
+    try:
+        service = get_role_assignment_service(db)
+        result = service.copy_assignments_lead_to_loan(lead_id, loan_id)
+
+        if not result["success"]:
+            raise HTTPException(status_code=400, detail=result["error"])
+
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error copying role assignments: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/loans/{loan_id}/roles/{role_id}/resolve")
+async def resolve_user_for_loan_role(
+    loan_id: int,
+    role_id: int,
+    fallback: bool = True,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Resolve which user is assigned to a role for a loan."""
+    from services.workflow_role_assignment import get_role_assignment_service
+
+    try:
+        service = get_role_assignment_service(db)
+        user_id = service.resolve_user_for_role(
+            role_id=role_id,
+            loan_id=loan_id,
+            fallback_to_owner=fallback
+        )
+
+        if user_id:
+            user = db.query(User).filter(User.id == user_id).first()
+            return {
+                "role_id": role_id,
+                "loan_id": loan_id,
+                "resolved_user_id": user_id,
+                "resolved_user_name": user.full_name if user else None,
+                "resolved_user_email": user.email if user else None
+            }
+        else:
+            return {
+                "role_id": role_id,
+                "loan_id": loan_id,
+                "resolved_user_id": None,
+                "message": "No user assigned to this role"
+            }
+    except Exception as e:
+        logger.error(f"Error resolving role: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
 # FUNDED LOAN → MUM CLIENT CONVERSION
 # ============================================================================
 
