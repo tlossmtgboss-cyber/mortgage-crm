@@ -8,6 +8,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Import from main app
 import sys
@@ -105,12 +108,13 @@ async def get_my_modules(
     org_id = getattr(current_user, 'organization_id', None)
     user_id = getattr(current_user, 'id', None)
     user_email = getattr(current_user, 'email', None)
+    user_role = getattr(current_user, 'role', None) or getattr(current_user, 'permission_role', None)
 
+    # Default to org 1 if user doesn't have an org (single-tenant fallback)
     if not org_id:
-        raise HTTPException(
-            status_code=400,
-            detail=f"User not associated with an organization. User ID: {user_id}, Email: {user_email}, Org: {org_id}"
-        )
+        # For admins or if no org set, default to org 1
+        org_id = 1
+        logger.info(f"User {user_id} ({user_email}) has no organization_id, defaulting to org 1")
 
     modules = ModuleService.get_organization_modules_detailed(db, org_id)
     pricing = ModuleService.get_pricing_summary(db, org_id)
@@ -367,6 +371,52 @@ async def run_module_migration(
         raise HTTPException(status_code=500, detail=f"Migration import failed: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
+@router.get("/admin/check-users")
+async def check_users_debug(
+    admin_key: str = Query(..., description="Admin API key"),
+):
+    """Debug endpoint to check users and their organization associations."""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        from database import engine
+        from sqlalchemy import text
+
+        with engine.connect() as conn:
+            # Get all users with their org info
+            result = conn.execute(text("""
+                SELECT id, email, role, permission_role, organization_id
+                FROM users
+                ORDER BY id
+                LIMIT 20
+            """))
+            users = [
+                {
+                    "id": row[0],
+                    "email": row[1],
+                    "role": row[2],
+                    "permission_role": row[3],
+                    "organization_id": row[4]
+                }
+                for row in result.fetchall()
+            ]
+
+            # Get org modules for org 1
+            org_result = conn.execute(text("""
+                SELECT module_key, is_enabled FROM organization_modules
+                WHERE organization_id = 1
+            """))
+            org_modules = [{"key": r[0], "enabled": r[1]} for r in org_result.fetchall()]
+
+            return {
+                "users": users,
+                "org_1_modules": org_modules
+            }
+    except Exception as e:
+        return {"error": str(e)}
 
 
 @router.get("/admin/debug")
