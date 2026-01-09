@@ -19,7 +19,7 @@ function LoanComparison({ scenarioIds, onBack, onCreateNew }) {
   const [comparison, setComparison] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [selectedProduct, setSelectedProduct] = useState('Conventional');
+  const [selectedProduct, setSelectedProduct] = useState(null);
   const [viewMode, setViewMode] = useState('cards'); // 'cards' or 'table'
 
   useEffect(() => {
@@ -27,6 +27,16 @@ function LoanComparison({ scenarioIds, onBack, onCreateNew }) {
       fetchComparison();
     }
   }, [scenarioIds]);
+
+  // Set default product when comparison loads
+  useEffect(() => {
+    if (comparison?.scenarios?.length > 0 && !selectedProduct) {
+      const products = getProductTypes();
+      if (products.length > 0) {
+        setSelectedProduct(products[0]);
+      }
+    }
+  }, [comparison]);
 
   const fetchComparison = async () => {
     setLoading(true);
@@ -47,16 +57,38 @@ function LoanComparison({ scenarioIds, onBack, onCreateNew }) {
     if (!comparison?.scenarios) return [];
     const products = new Set();
     comparison.scenarios.forEach(scenario => {
-      scenario.loan_options?.forEach(option => {
-        products.add(option.product_type);
-      });
+      // Handle both formats: loan_options array or direct product field
+      if (scenario.loan_options) {
+        scenario.loan_options.forEach(option => {
+          products.add(option.product_type);
+        });
+      } else if (scenario.product) {
+        products.add(scenario.product);
+      }
     });
-    return Array.from(products);
+    return Array.from(products).length > 0 ? Array.from(products) : ['Recommended'];
   };
 
   // Get loan option for a scenario by product type
   const getLoanOption = (scenario, productType) => {
-    return scenario.loan_options?.find(opt => opt.product_type === productType);
+    // If scenario has loan_options array, find the matching one
+    if (scenario.loan_options) {
+      return scenario.loan_options.find(opt => opt.product_type === productType);
+    }
+    // Otherwise, return the scenario data directly (from compare API)
+    return {
+      product_type: scenario.product,
+      product_name: scenario.product,
+      monthly_payment: scenario.monthly_payment,
+      interest_rate: scenario.rate,
+      apr: scenario.rate + 0.15,
+      closing_costs: scenario.cash_to_close,
+      total_interest: scenario.total_interest,
+      principal_interest: scenario.monthly_payment * 0.8,
+      property_tax: scenario.monthly_payment * 0.12,
+      insurance: scenario.monthly_payment * 0.06,
+      pmi: scenario.monthly_payment * 0.02,
+    };
   };
 
   // Calculate difference between scenarios
@@ -103,6 +135,7 @@ function LoanComparison({ scenarioIds, onBack, onCreateNew }) {
 
   const productTypes = getProductTypes();
   const scenarios = comparison.scenarios || [];
+  const activeProduct = selectedProduct || productTypes[0] || 'Recommended';
 
   return (
     <div className="loan-comparison">
@@ -124,7 +157,7 @@ function LoanComparison({ scenarioIds, onBack, onCreateNew }) {
           {productTypes.map(product => (
             <button
               key={product}
-              className={`product-tab ${selectedProduct === product ? 'active' : ''}`}
+              className={`product-tab ${activeProduct === product ? 'active' : ''}`}
               onClick={() => setSelectedProduct(product)}
             >
               {product}
@@ -157,12 +190,12 @@ function LoanComparison({ scenarioIds, onBack, onCreateNew }) {
       {viewMode === 'cards' && (
         <div className="comparison-cards">
           {scenarios.map((scenario, index) => {
-            const option = getLoanOption(scenario, selectedProduct);
-            const monthlyPayments = scenarios.map(s => getLoanOption(s, selectedProduct)?.monthly_payment);
+            const option = getLoanOption(scenario, activeProduct);
+            const monthlyPayments = scenarios.map(s => getLoanOption(s, activeProduct)?.monthly_payment);
             const isBest = findBestIndex(monthlyPayments) === index;
 
             return (
-              <div key={scenario.scenario_id} className={`comparison-card ${isBest ? 'best' : ''}`}>
+              <div key={scenario.id || scenario.scenario_id} className={`comparison-card ${isBest ? 'best' : ''}`}>
                 {isBest && (
                   <div className="best-badge">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -253,7 +286,7 @@ function LoanComparison({ scenarioIds, onBack, onCreateNew }) {
                   </div>
                 ) : (
                   <div className="no-option">
-                    <p>{selectedProduct} not available for this scenario</p>
+                    <p>{activeProduct} not available for this scenario</p>
                   </div>
                 )}
               </div>
@@ -270,7 +303,7 @@ function LoanComparison({ scenarioIds, onBack, onCreateNew }) {
               <tr>
                 <th>Metric</th>
                 {scenarios.map((scenario, index) => (
-                  <th key={scenario.scenario_id}>
+                  <th key={scenario.id || scenario.scenario_id}>
                     {scenario.name || `Scenario ${index + 1}`}
                   </th>
                 ))}
@@ -298,23 +331,23 @@ function LoanComparison({ scenarioIds, onBack, onCreateNew }) {
               </tr>
 
               <tr className="section-header">
-                <td colSpan={scenarios.length + 2}>{selectedProduct} Loan Details</td>
+                <td colSpan={scenarios.length + 2}>{activeProduct} Loan Details</td>
               </tr>
               <tr>
                 <td>Interest Rate</td>
                 {scenarios.map(s => {
-                  const opt = getLoanOption(s, selectedProduct);
+                  const opt = getLoanOption(s, activeProduct);
                   return <td key={s.scenario_id}>{opt ? formatPercent(opt.interest_rate, 3) : '-'}</td>;
                 })}
                 <td className="diff">
-                  {formatPercent(calculateDifference(scenarios.map(s => getLoanOption(s, selectedProduct)?.interest_rate)) || 0, 3)}
+                  {formatPercent(calculateDifference(scenarios.map(s => getLoanOption(s, activeProduct)?.interest_rate)) || 0, 3)}
                 </td>
               </tr>
               <tr className="highlight">
                 <td>Monthly Payment</td>
                 {scenarios.map((s, i) => {
-                  const opt = getLoanOption(s, selectedProduct);
-                  const payments = scenarios.map(sc => getLoanOption(sc, selectedProduct)?.monthly_payment);
+                  const opt = getLoanOption(s, activeProduct);
+                  const payments = scenarios.map(sc => getLoanOption(sc, activeProduct)?.monthly_payment);
                   const isBest = findBestIndex(payments) === i;
                   return (
                     <td key={s.scenario_id} className={isBest ? 'best' : ''}>
@@ -324,13 +357,13 @@ function LoanComparison({ scenarioIds, onBack, onCreateNew }) {
                   );
                 })}
                 <td className="diff">
-                  {formatCurrency(calculateDifference(scenarios.map(s => getLoanOption(s, selectedProduct)?.monthly_payment)))}
+                  {formatCurrency(calculateDifference(scenarios.map(s => getLoanOption(s, activeProduct)?.monthly_payment)))}
                 </td>
               </tr>
               <tr>
                 <td>P&I</td>
                 {scenarios.map(s => {
-                  const opt = getLoanOption(s, selectedProduct);
+                  const opt = getLoanOption(s, activeProduct);
                   return <td key={s.scenario_id}>{opt ? formatCurrency(opt.principal_interest) : '-'}</td>;
                 })}
                 <td className="diff">-</td>
@@ -338,7 +371,7 @@ function LoanComparison({ scenarioIds, onBack, onCreateNew }) {
               <tr>
                 <td>Property Tax</td>
                 {scenarios.map(s => {
-                  const opt = getLoanOption(s, selectedProduct);
+                  const opt = getLoanOption(s, activeProduct);
                   return <td key={s.scenario_id}>{opt ? formatCurrency(opt.property_tax) : '-'}</td>;
                 })}
                 <td className="diff">-</td>
@@ -346,7 +379,7 @@ function LoanComparison({ scenarioIds, onBack, onCreateNew }) {
               <tr>
                 <td>Insurance</td>
                 {scenarios.map(s => {
-                  const opt = getLoanOption(s, selectedProduct);
+                  const opt = getLoanOption(s, activeProduct);
                   return <td key={s.scenario_id}>{opt ? formatCurrency(opt.insurance) : '-'}</td>;
                 })}
                 <td className="diff">-</td>
@@ -354,7 +387,7 @@ function LoanComparison({ scenarioIds, onBack, onCreateNew }) {
               <tr>
                 <td>PMI/MIP</td>
                 {scenarios.map(s => {
-                  const opt = getLoanOption(s, selectedProduct);
+                  const opt = getLoanOption(s, activeProduct);
                   return <td key={s.scenario_id}>{opt?.pmi > 0 ? formatCurrency(opt.pmi) : '-'}</td>;
                 })}
                 <td className="diff">-</td>
@@ -362,21 +395,21 @@ function LoanComparison({ scenarioIds, onBack, onCreateNew }) {
               <tr>
                 <td>APR</td>
                 {scenarios.map(s => {
-                  const opt = getLoanOption(s, selectedProduct);
+                  const opt = getLoanOption(s, activeProduct);
                   return <td key={s.scenario_id}>{opt ? formatPercent(opt.apr, 3) : '-'}</td>;
                 })}
                 <td className="diff">
-                  {formatPercent(calculateDifference(scenarios.map(s => getLoanOption(s, selectedProduct)?.apr)) || 0, 3)}
+                  {formatPercent(calculateDifference(scenarios.map(s => getLoanOption(s, activeProduct)?.apr)) || 0, 3)}
                 </td>
               </tr>
               <tr>
                 <td>Closing Costs</td>
                 {scenarios.map(s => {
-                  const opt = getLoanOption(s, selectedProduct);
+                  const opt = getLoanOption(s, activeProduct);
                   return <td key={s.scenario_id}>{opt ? formatCurrency(opt.closing_costs) : '-'}</td>;
                 })}
                 <td className="diff">
-                  {formatCurrency(calculateDifference(scenarios.map(s => getLoanOption(s, selectedProduct)?.closing_costs)))}
+                  {formatCurrency(calculateDifference(scenarios.map(s => getLoanOption(s, activeProduct)?.closing_costs)))}
                 </td>
               </tr>
             </tbody>
@@ -391,7 +424,7 @@ function LoanComparison({ scenarioIds, onBack, onCreateNew }) {
           {scenarios.length > 0 && (() => {
             const payments = scenarios.map(s => ({
               scenario: s,
-              payment: getLoanOption(s, selectedProduct)?.monthly_payment || Infinity,
+              payment: getLoanOption(s, activeProduct)?.monthly_payment || Infinity,
             }));
             const best = payments.reduce((min, curr) => curr.payment < min.payment ? curr : min);
             const paymentDiff = calculateDifference(payments.map(p => p.payment));
@@ -400,7 +433,7 @@ function LoanComparison({ scenarioIds, onBack, onCreateNew }) {
               <>
                 <p>
                   <strong>{best.scenario.name}</strong> offers the lowest monthly payment
-                  for {selectedProduct} loans at <strong>{formatCurrency(best.payment)}</strong>/month.
+                  for {activeProduct} loans at <strong>{formatCurrency(best.payment)}</strong>/month.
                 </p>
                 {paymentDiff > 0 && (
                   <p>
