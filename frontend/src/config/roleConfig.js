@@ -187,6 +187,8 @@ export const ROLE_NAVIGATION = {
   ],
 
   // Loan Officer - Full sales navigation
+  // Note: Production Predictor, Deal Alerts are on dashboard instead of nav
+  // Note: Live Call Whisper, Call Intelligence are accessed via Marketing
   loan_officer: [
     'dashboard',
     'leads',
@@ -201,11 +203,7 @@ export const ROLE_NAVIGATION = {
     'aiUnderwriter',
     'market',
     'profitability',
-    'partnerRecruiting',
-    'conversationIntelligence',
-    'liveCallWhisper',
-    'productionPredictor',
-    'dealAlerts'
+    'partnerRecruiting'
   ],
 
   // Production Assistant - Support role navigation
@@ -316,6 +314,8 @@ export const ROLE_DASHBOARD_CONTAINERS = {
   loan_officer: [
     'ai-alerts',           // AI Alerts (lead alerts, follow-ups)
     'production-tracker',  // Monthly Production Tracker
+    'production-predictor', // Production Predictor (moved from nav)
+    'deal-alerts',         // Deal Alerts (moved from nav)
     'profitability',       // Profitability Intelligence (LO view)
     'efficiency',          // Pipeline Efficiency Monitor
     'workflow-scorecards', // Workflow Scorecards (acts as scorecard)

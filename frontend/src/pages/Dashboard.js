@@ -4,7 +4,8 @@ import { usePermissions } from '../contexts/PermissionContext';
 import { useDashboard } from '../hooks/useQueries';
 import { getDashboardContainersForRole } from '../config/roleConfig';
 import PendingPermissionRequests from '../components/PendingPermissionRequests';
-// Role dashboard components removed - admin uses /admin page instead
+import ProductionPredictor from '../components/ProductionPredictor';
+import DealAlerts from '../components/DealAlerts';
 import './Dashboard.css';
 
 function Dashboard() {
@@ -374,6 +375,44 @@ function Dashboard() {
               )}
             </div>
           </div>
+        </div>
+      );
+    }
+
+    if (containerId === 'production-predictor') {
+      return (
+        <div
+          key={containerId}
+          className={`dashboard-block production-predictor-block draggable-container ${isDragging ? 'dragging' : ''}`}
+          onDragOver={(e) => handleDragOver(e, index)}
+          onDragEnd={handleDragEnd}
+        >
+          <div
+            className="drag-handle"
+            title="Drag to reorder"
+            draggable="true"
+            onDragStart={() => handleDragStart(index)}
+          >⋮⋮</div>
+          <ProductionPredictor embedded={true} />
+        </div>
+      );
+    }
+
+    if (containerId === 'deal-alerts') {
+      return (
+        <div
+          key={containerId}
+          className={`dashboard-block deal-alerts-block draggable-container ${isDragging ? 'dragging' : ''}`}
+          onDragOver={(e) => handleDragOver(e, index)}
+          onDragEnd={handleDragEnd}
+        >
+          <div
+            className="drag-handle"
+            title="Drag to reorder"
+            draggable="true"
+            onDragStart={() => handleDragStart(index)}
+          >⋮⋮</div>
+          <DealAlerts embedded={true} />
         </div>
       );
     }
