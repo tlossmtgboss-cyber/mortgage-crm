@@ -434,11 +434,25 @@ async def debug_modules(
             # Set user as admin if requested
             if set_admin_user:
                 try:
+                    # Update user role
                     conn.execute(text("""
                         UPDATE users SET permission_role = 'admin', role = 'admin' WHERE id = :user_id
                     """), {"user_id": set_admin_user})
+
+                    # Also grant admin permissions in user_permissions table
+                    admin_perms = ['admin.view', 'admin.manage', 'system.admin', 'permissions.view_all', 'team.manage_permissions']
+                    for perm in admin_perms:
+                        try:
+                            conn.execute(text("""
+                                INSERT INTO user_permissions (user_id, permission_key, granted, created_at, updated_at)
+                                VALUES (:user_id, :perm_key, true, NOW(), NOW())
+                                ON CONFLICT (user_id, permission_key) DO UPDATE SET granted = true, updated_at = NOW()
+                            """), {"user_id": set_admin_user, "perm_key": perm})
+                        except:
+                            pass  # Skip if column structure is different
+
                     conn.commit()
-                    results["admin_set"] = f"User {set_admin_user} set as admin"
+                    results["admin_set"] = f"User {set_admin_user} set as admin with permissions"
                 except Exception as e:
                     results["admin_error"] = str(e)
 
