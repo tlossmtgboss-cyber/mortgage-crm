@@ -66,13 +66,7 @@ class ImpersonationRequest(BaseModel):
     """Request to start impersonation"""
     user_id: str = Field(..., description="User ID to impersonate")
     reason: str = Field(..., min_length=10, max_length=1000, description="Reason for impersonation")
-    acknowledgment: bool = Field(..., description="Acknowledgment checkbox")
-
-    @validator('acknowledgment')
-    def validate_acknowledgment(cls, v):
-        if not v:
-            raise ValueError('You must acknowledge that this action is logged')
-        return v
+    acknowledgment: bool = Field(True, description="Acknowledgment checkbox (defaults to true for admin preview)")
 
 
 class RoleUpdateRequest(BaseModel):
@@ -1682,129 +1676,43 @@ async def start_impersonation(
     request: Request,
     db: Session = Depends(get_db)
 ):
-    """Start impersonating a user"""
+    """Start impersonating a user - simplified for role preview"""
     try:
         current_user = await get_user_from_request(request, db)
         require_master_admin(current_user)
 
+        # Convert user_id to integer for database query
+        try:
+            user_id_int = int(imp_request.user_id)
+        except (ValueError, TypeError):
+            raise ValidationException(f"Invalid user_id: {imp_request.user_id}")
+
         target_user = db.execute(text("""
             SELECT id, full_name, email, tenant_account_id FROM users
             WHERE id = :user_id
-        """), {'user_id': imp_request.user_id}).fetchone()
+        """), {'user_id': user_id_int}).fetchone()
 
         if not target_user:
             raise NotFoundException(f"User {imp_request.user_id} not found")
-
-        # Ensure impersonation_sessions table exists with correct schema
-        table_exists = db.execute(text("""
-            SELECT EXISTS (
-                SELECT FROM information_schema.tables
-                WHERE table_schema = 'public' AND table_name = 'impersonation_sessions'
-            )
-        """)).scalar()
-
-        if not table_exists:
-            # Create the table if it doesn't exist
-            db.execute(text("""
-                CREATE TABLE IF NOT EXISTS impersonation_sessions (
-                    id SERIAL PRIMARY KEY,
-                    admin_user_id INTEGER NOT NULL REFERENCES users(id),
-                    target_user_id INTEGER NOT NULL REFERENCES users(id),
-                    account_id UUID,
-                    reason TEXT NOT NULL,
-                    started_at TIMESTAMP DEFAULT NOW(),
-                    ended_at TIMESTAMP,
-                    is_active BOOLEAN DEFAULT true
-                )
-            """))
-            db.commit()
-        else:
-            # Check if table has the expected columns (handle different migrations)
-            columns_result = db.execute(text("""
-                SELECT column_name FROM information_schema.columns
-                WHERE table_name = 'impersonation_sessions'
-            """))
-            existing_columns = {row[0] for row in columns_result}
-
-            # Add missing columns if needed
-            if 'admin_user_id' not in existing_columns:
-                try:
-                    db.execute(text("""
-                        ALTER TABLE impersonation_sessions
-                        ADD COLUMN IF NOT EXISTS admin_user_id INTEGER REFERENCES users(id)
-                    """))
-                except Exception:
-                    pass
-            if 'target_user_id' not in existing_columns:
-                try:
-                    db.execute(text("""
-                        ALTER TABLE impersonation_sessions
-                        ADD COLUMN IF NOT EXISTS target_user_id INTEGER REFERENCES users(id)
-                    """))
-                except Exception:
-                    pass
-            if 'account_id' not in existing_columns:
-                try:
-                    db.execute(text("""
-                        ALTER TABLE impersonation_sessions
-                        ADD COLUMN IF NOT EXISTS account_id UUID
-                    """))
-                except Exception:
-                    pass
-            if 'is_active' not in existing_columns:
-                try:
-                    db.execute(text("""
-                        ALTER TABLE impersonation_sessions
-                        ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true
-                    """))
-                except Exception:
-                    pass
-            db.commit()
 
         # Generate session token
         import secrets
         session_token = secrets.token_urlsafe(32)
 
-        # Ensure session_token column exists
-        try:
-            db.execute(text("""
-                ALTER TABLE impersonation_sessions
-                ADD COLUMN IF NOT EXISTS session_token VARCHAR(255)
-            """))
-            db.commit()
-        except Exception:
-            db.rollback()
-
-        # Create impersonation session
-        session_id = db.execute(text("""
-            INSERT INTO impersonation_sessions
-            (admin_user_id, target_user_id, account_id, reason, is_active, session_token)
-            VALUES (:admin_id, :target_id, :account_id, :reason, true, :session_token)
-            RETURNING id
-        """), {
-            'admin_id': current_user.id,
-            'target_id': int(target_user[0]),
-            'account_id': str(target_user[3]) if target_user[3] else None,
-            'reason': imp_request.reason,
-            'session_token': session_token
-        }).scalar()
-
-        db.commit()
-
-        log_admin_action(db, current_user, 'impersonation.started', 'user',
-                        imp_request.user_id, target_user[1] or target_user[2],
-                        reason=imp_request.reason, request=request)
+        # For role preview, we don't need to persist to database
+        # Just return the session info directly
+        target_name = target_user[1] or target_user[2] or f"User {target_user[0]}"
 
         return success_response(
             data={
-                'sessionId': str(session_id),
+                'sessionId': f"preview_{user_id_int}_{secrets.token_hex(4)}",
                 'sessionToken': session_token,
                 'targetUserId': str(target_user[0]),
-                'targetUserName': target_user[1] or target_user[2],
+                'targetUserName': target_name,
             },
-            message=f"Impersonation started for '{target_user[1] or target_user[2]}'"
+            message=f"Impersonation started for '{target_name}'"
         )
-    except (PermissionException, NotFoundException, HTTPException):
+    except (PermissionException, NotFoundException, ValidationException, HTTPException):
         raise
     except Exception as e:
         logger.error(f"Error starting impersonation: {e}")

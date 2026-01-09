@@ -521,8 +521,9 @@ const AdminPanel = () => {
                     if (userWithRole) {
                       // Impersonate a user with this role
                       const response = await api.post('/api/v1/admin/account-management/impersonate/start', {
-                        user_id: userWithRole.id,
-                        reason: `Admin panel role preview: ${selectedViewRole.name}`
+                        user_id: String(userWithRole.id),
+                        reason: `Admin panel role preview: ${selectedViewRole.name}`,
+                        acknowledgment: true
                       });
                       const sessionToken = response.data?.data?.sessionToken || response.data?.sessionToken || response.data?.token;
                       if (sessionToken) {
