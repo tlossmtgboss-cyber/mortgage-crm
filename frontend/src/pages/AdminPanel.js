@@ -525,9 +525,13 @@ const AdminPanel = () => {
                         reason: `Admin panel role preview: ${selectedViewRole.name}`,
                         acknowledgment: true
                       });
-                      const sessionToken = response.data?.data?.sessionToken || response.data?.sessionToken || response.data?.token;
+                      const sessionToken = response.data?.data?.token || response.data?.data?.sessionToken || response.data?.sessionToken || response.data?.token;
                       if (sessionToken) {
+                        // Save the original token and user so we can restore later
                         localStorage.setItem('original_token', localStorage.getItem('token'));
+                        localStorage.setItem('original_user', localStorage.getItem('user'));
+
+                        // Store impersonation session info
                         localStorage.setItem('impersonation_session', JSON.stringify({
                           session_token: sessionToken,
                           impersonated_user: userWithRole,
@@ -535,6 +539,18 @@ const AdminPanel = () => {
                           started_at: new Date().toISOString()
                         }));
                         localStorage.setItem('impersonating_user', JSON.stringify(userWithRole));
+
+                        // IMPORTANT: Actually switch to the new token
+                        localStorage.setItem('token', sessionToken);
+
+                        // Update user info in localStorage to match impersonated user
+                        localStorage.setItem('user', JSON.stringify({
+                          ...userWithRole,
+                          impersonated: true,
+                          impersonated_by: JSON.parse(localStorage.getItem('original_user') || '{}').id
+                        }));
+
+                        // Redirect to dashboard
                         window.location.href = '/dashboard';
                       } else {
                         throw new Error('No session token returned from server');

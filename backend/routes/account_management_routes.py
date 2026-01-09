@@ -1676,7 +1676,7 @@ async def start_impersonation(
     request: Request,
     db: Session = Depends(get_db)
 ):
-    """Start impersonating a user - simplified for role preview"""
+    """Start impersonating a user - generates a real JWT for the target user"""
     try:
         current_user = await get_user_from_request(request, db)
         require_master_admin(current_user)
@@ -1688,27 +1688,45 @@ async def start_impersonation(
             raise ValidationException(f"Invalid user_id: {imp_request.user_id}")
 
         target_user = db.execute(text("""
-            SELECT id, full_name, email, tenant_account_id FROM users
+            SELECT id, full_name, email, tenant_account_id, role, permission_role
+            FROM users
             WHERE id = :user_id
         """), {'user_id': user_id_int}).fetchone()
 
         if not target_user:
             raise NotFoundException(f"User {imp_request.user_id} not found")
 
-        # Generate session token
+        # Generate a real JWT token for the target user
         import secrets
-        session_token = secrets.token_urlsafe(32)
+        import jwt
+        from datetime import datetime, timedelta, timezone
+        import os
 
-        # For role preview, we don't need to persist to database
-        # Just return the session info directly
+        SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+        ALGORITHM = "HS256"
+
+        # Create token data for the target user
+        token_data = {
+            "sub": target_user[2],  # email
+            "user_id": target_user[0],  # id
+            "impersonated_by": current_user.id,  # track who is impersonating
+            "exp": datetime.now(timezone.utc) + timedelta(hours=1)  # 1 hour expiry for preview
+        }
+
+        # Generate the JWT
+        access_token = jwt.encode(token_data, SECRET_KEY, algorithm=ALGORITHM)
+
         target_name = target_user[1] or target_user[2] or f"User {target_user[0]}"
+        target_role = target_user[4] or target_user[5] or "user"
 
         return success_response(
             data={
                 'sessionId': f"preview_{user_id_int}_{secrets.token_hex(4)}",
-                'sessionToken': session_token,
+                'sessionToken': access_token,  # This is now a real JWT
+                'token': access_token,  # Also provide as 'token' for compatibility
                 'targetUserId': str(target_user[0]),
                 'targetUserName': target_name,
+                'targetUserRole': target_role,
             },
             message=f"Impersonation started for '{target_name}'"
         )
