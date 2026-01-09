@@ -107,8 +107,49 @@ export const ModuleProvider = ({ children }) => {
       }
     }
 
-    // Fetch fresh data
-    fetchModules();
+    // Only fetch if user is logged in (token exists)
+    const token = localStorage.getItem('token');
+    if (token) {
+      fetchModules();
+    } else {
+      setLoading(false);
+    }
+  }, [fetchModules]);
+
+  // Re-fetch modules when auth token changes (login/logout)
+  useEffect(() => {
+    // Handle storage changes from other tabs
+    const handleStorageChange = (e) => {
+      if (e.key === 'token') {
+        if (e.newValue) {
+          // Token was set (login) - fetch modules
+          fetchModules(true);
+        } else {
+          // Token was removed (logout) - reset to base
+          setEnabledModules(['base']);
+          setAllModules([]);
+          localStorage.removeItem('moduleCache');
+        }
+      }
+    };
+
+    // Handle auth changes within the same tab (custom event)
+    const handleAuthChange = (e) => {
+      if (e.detail?.type === 'login') {
+        fetchModules(true);
+      } else if (e.detail?.type === 'logout') {
+        setEnabledModules(['base']);
+        setAllModules([]);
+        localStorage.removeItem('moduleCache');
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('authChange', handleAuthChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('authChange', handleAuthChange);
+    };
   }, [fetchModules]);
 
   /**

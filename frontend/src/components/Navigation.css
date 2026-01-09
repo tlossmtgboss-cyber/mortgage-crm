@@ -124,6 +124,68 @@
   gap: var(--space-sm);
 }
 
+/* Role Preview Selector - Admin only */
+.role-preview-selector {
+  display: flex;
+  align-items: center;
+  margin-right: var(--space-sm);
+}
+
+.role-preview-selector select {
+  padding: 6px 28px 6px 12px;
+  border-radius: var(--radius-base);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-surface);
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: all 200ms ease;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M3 4.5L6 7.5L9 4.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+}
+
+.role-preview-selector select:hover {
+  border-color: var(--color-primary);
+  background-color: var(--color-bg-secondary);
+}
+
+.role-preview-selector select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(33, 141, 141, 0.2);
+}
+
+/* Active state - when viewing as different role */
+.role-preview-selector.active select {
+  border-color: var(--color-primary);
+  background-color: rgba(33, 141, 141, 0.1);
+  color: var(--color-primary);
+}
+
+.role-preview-selector.active::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  background: var(--color-primary);
+  border-radius: 50%;
+  margin-right: 8px;
+  animation: previewPulse 2s ease-in-out infinite;
+}
+
+@keyframes previewPulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(0.9);
+  }
+}
+
 .settings-link {
   display: flex;
   align-items: center;
@@ -344,6 +406,11 @@
   .logout-btn {
     padding: var(--space-sm);
     font-size: var(--font-sm);
+  }
+
+  .role-preview-selector select {
+    padding: 4px 24px 4px 8px;
+    font-size: 12px;
   }
 }
 

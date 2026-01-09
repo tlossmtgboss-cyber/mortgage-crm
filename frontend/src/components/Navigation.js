@@ -15,8 +15,8 @@ import './Navigation.css';
  */
 function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen, taskCounts = {} }) {
   const location = useLocation();
-  const { effectiveRole, userRole, hasAnyPermission } = usePermissions();
-  const { hasModule, getModule } = useModules();
+  const { effectiveRole, userRole, hasAnyPermission, viewAsRole, updateViewAsRole } = usePermissions();
+  const { hasModule, getModule, loading: modulesLoading } = useModules();
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const [selectedModule, setSelectedModule] = useState(null);
 
@@ -42,13 +42,14 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
   }, [prefetchMap]);
 
   // Get navigation items for the current role, with module lock status
+  // Don't show locked state while modules are still loading to avoid flash of upgrade badges
   const navItems = useMemo(() => {
     const items = getNavigationForRole(effectiveRole);
     return items.map(item => ({
       ...item,
-      isLocked: item.module && !hasModule(item.module)
+      isLocked: !modulesLoading && item.module && !hasModule(item.module)
     }));
-  }, [effectiveRole, hasModule]);
+  }, [effectiveRole, hasModule, modulesLoading]);
 
   // Handle click on locked nav item
   const handleLockedClick = useCallback((e, item) => {
@@ -89,6 +90,19 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
   // Check if user can see team-related actions
   const canViewTeam = hasAnyPermission(['team.view_all', 'team.view_team', 'team.manage_permissions']) ||
     userRole === 'management' || userRole === 'admin';
+
+  // Check if user is admin (can switch role views)
+  const isAdmin = userRole === 'admin' || userRole === 'management';
+
+  // Available roles for preview
+  const previewRoles = [
+    { value: 'default', label: 'Admin View' },
+    { value: 'loan_officer', label: 'Loan Officer' },
+    { value: 'processor', label: 'Processor' },
+    { value: 'production_assistant', label: 'Production Assistant' },
+    { value: 'concierge', label: 'Concierge' },
+    { value: 'manager', label: 'Manager' },
+  ];
 
   return (
     <>
@@ -131,6 +145,22 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
               >
                 Team
               </Link>
+            )}
+            {/* Role Preview Selector - admin only */}
+            {isAdmin && (
+              <div className={`role-preview-selector ${viewAsRole && viewAsRole !== 'default' ? 'active' : ''}`}>
+                <select
+                  value={viewAsRole || 'default'}
+                  onChange={(e) => updateViewAsRole(e.target.value === 'default' ? null : e.target.value)}
+                  title="Preview as different role"
+                >
+                  {previewRoles.map(role => (
+                    <option key={role.value} value={role.value}>
+                      {role.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             )}
             <Link
               to="/settings"

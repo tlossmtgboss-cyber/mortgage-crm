@@ -3,6 +3,8 @@ import { getItem, setItem, removeItem, getJSON, setJSON, STORAGE_KEYS } from './
 export const setAuth = async (token, user) => {
   await setItem(STORAGE_KEYS.TOKEN, token);
   await setJSON(STORAGE_KEYS.USER, user);
+  // Dispatch custom event to notify contexts of auth change
+  window.dispatchEvent(new CustomEvent('authChange', { detail: { type: 'login', user } }));
 };
 
 export const getAuth = async () => {
@@ -14,6 +16,8 @@ export const getAuth = async () => {
 export const clearAuth = async () => {
   await removeItem(STORAGE_KEYS.TOKEN);
   await removeItem(STORAGE_KEYS.USER);
+  // Dispatch custom event to notify contexts of auth change
+  window.dispatchEvent(new CustomEvent('authChange', { detail: { type: 'logout' } }));
 };
 
 export const isAuthenticated = async () => {
