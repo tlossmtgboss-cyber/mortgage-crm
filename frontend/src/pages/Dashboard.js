@@ -873,56 +873,11 @@ function Dashboard() {
     );
   }
 
-  // Render role-specific dashboard if admin has selected one
-  const renderSelectedDashboard = () => {
-    if (!isAdminUser() || selectedDashboardView === 'default') {
-      return null;
-    }
-
-    switch (selectedDashboardView) {
-      case 'loan_officer':
-        return <LoanOfficerDashboard />;
-      case 'production_assistant_1':
-        return <ProductionAssistant1Dashboard />;
-      case 'production_assistant_2':
-        return <ProductionAssistant2Dashboard />;
-      case 'concierge':
-        return <ProductionAssistant1Dashboard />; // Concierge has same permissions as Production Assistants
-      case 'processor':
-        return <ProcessorDashboard />;
-      case 'underwriter':
-        return <UnderwriterDashboard />;
-      case 'closer':
-        return <CloserDashboard />;
-      case 'manager':
-        return <ManagerDashboard />;
-      case 'executive':
-        return <AdminDashboard />;
-      case 'admin':
-        // Admin view shows the full containerized dashboard (not a limited component)
-        return null;
-      default:
-        return null;
-    }
-  };
-
-  // Check if showing a role-specific dashboard
-  // Admin view ('admin') shows the full containerized dashboard, not a role component
-  const showingRoleDashboard = isAdminUser() && selectedDashboardView !== 'default' && selectedDashboardView !== 'admin';
-
   return (
     <div className="dashboard">
       <div className="dashboard-header-compact">
         <h1>Today's Command Center</h1>
         <div className="header-actions">
-          {/* Role Switcher for Admin Users */}
-          {isAdminUser() && (
-            <RoleDashboardSwitcher
-              currentView={selectedDashboardView}
-              onViewChange={handleViewChange}
-              isAdmin={true}
-            />
-          )}
           <div className="header-date">
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </div>
@@ -936,29 +891,17 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* Role-Specific Dashboard (when admin selects a role view) */}
-      {showingRoleDashboard && (
-        <div className="role-dashboard-container">
-          {renderSelectedDashboard()}
+      {/* Permission Requests Widget - Users with team.manage_permissions or managers */}
+      {(hasPermission('team.manage_permissions') || userRole === 'management') && (
+        <div style={{ marginBottom: '2rem' }}>
+          <PendingPermissionRequests />
         </div>
       )}
 
-      {/* Default Dashboard Content (when not viewing a role-specific dashboard) */}
-      {!showingRoleDashboard && (
-        <>
-          {/* Permission Requests Widget - Users with team.manage_permissions or managers */}
-          {(hasPermission('team.manage_permissions') || userRole === 'management') && (
-            <div style={{ marginBottom: '2rem' }}>
-              <PendingPermissionRequests />
-            </div>
-          )}
-
-          {/* Draggable Containers */}
-          <div className="draggable-containers-wrapper">
-            {containerOrder.map((containerId, index) => renderDraggableContainer(containerId, index))}
-          </div>
-        </>
-      )}
+      {/* Draggable Containers */}
+      <div className="draggable-containers-wrapper">
+        {containerOrder.map((containerId, index) => renderDraggableContainer(containerId, index))}
+      </div>
     </div>
   );
 }
