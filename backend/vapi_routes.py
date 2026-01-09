@@ -747,17 +747,22 @@ async def schedule_calendly_appointment_function(
     db: Session = Depends(get_db)
 ):
     """
-    Provide Calendly link for scheduling discovery call
-    Called by Vapi when customer wants to schedule an appointment
+    Provide Calendly link for scheduling discovery call.
+    Called by Vapi when customer wants to schedule an appointment.
+
+    Now automatically sends the Calendly link via SMS!
     """
     try:
         from main import Lead, Task, Activity, ActivityType
         from sqlalchemy import or_
+        from vapi_service import AIReceptionistSMSService
 
         data = await request.json()
         phone = data.get("phone_number")
         name = data.get("name", "")
         email = data.get("email", "")
+        send_sms = data.get("send_sms", True)  # Default to sending SMS
+        context = data.get("context", "discovery call")  # e.g., "pre-approval", "refinance"
 
         if not phone:
             return {"success": False, "error": "Phone number required"}
@@ -792,24 +797,48 @@ async def schedule_calendly_appointment_function(
             db.add(lead)
             db.flush()
 
-        # Calendly link (this should be configured in your settings)
-        calendly_link = "https://calendly.com/timloss/discovery-call"
+        # Calendly link (configured via environment variable)
+        import os
+        calendly_link = os.getenv("CALENDLY_LINK", "https://calendly.com/timloss/discovery-call")
+
+        # Send SMS with Calendly link
+        sms_sent = False
+        sms_result = None
+        if send_sms:
+            try:
+                sms_service = AIReceptionistSMSService(db)
+                sms_result = await sms_service.send_calendly_link(
+                    phone_number=phone,
+                    caller_name=name or (lead.first_name if lead else None),
+                    context=context
+                )
+                sms_sent = sms_result.get("success", False)
+                logger.info(f"Calendly SMS sent to {phone}: {sms_sent}")
+            except Exception as sms_error:
+                logger.error(f"Error sending Calendly SMS: {sms_error}")
 
         # Create activity
         if lead:
             activity = Activity(
                 type=ActivityType.NOTE,
-                content=f"Calendly link sent via AI call: {calendly_link}",
+                content=f"Calendly link sent via AI call: {calendly_link}" + (f" (SMS sent)" if sms_sent else " (SMS failed)"),
                 lead_id=lead.id,
                 user_id=lead.owner_id
             )
             db.add(activity)
             db.commit()
 
+        # Build response message based on SMS status
+        if sms_sent:
+            response_message = f"Perfect! I just sent you a text with the booking link. You'll receive it in just a moment. Is there anything else I can help you with?"
+        else:
+            response_message = f"I'd love to help you schedule a discovery call. Here's the link: {calendly_link}. You can book a time that works best for you. Would you like me to repeat that?"
+
         return {
             "success": True,
             "calendly_link": calendly_link,
-            "message": f"I'm sending you a link to schedule a discovery call. You can book a time that works best for you at: {calendly_link}. Would you like me to text or email this link to you?"
+            "sms_sent": sms_sent,
+            "message": response_message
         }
 
     except Exception as e:
@@ -2177,3 +2206,247 @@ async def run_vapi_migration(
     except Exception as e:
         logger.error(f"Migration error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
+# ============================================================================
+# AI RECEPTIONIST SMS ENDPOINTS
+# ============================================================================
+
+@router.post("/webhook/sms")
+async def ai_receptionist_sms_webhook(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """
+    Webhook for inbound SMS to AI Receptionist.
+
+    This handles SMS messages sent to the AI receptionist phone number
+    and provides intelligent auto-responses based on intent.
+
+    Integrates with the existing SMS Intelligence system but adds
+    AI receptionist-specific handling.
+    """
+    try:
+        # Parse Twilio webhook payload
+        form_data = await request.form()
+        from_number = form_data.get("From", "")
+        to_number = form_data.get("To", "")
+        message_body = form_data.get("Body", "")
+        message_sid = form_data.get("MessageSid", "")
+
+        logger.info(f"AI Receptionist SMS webhook: {from_number} -> {to_number}: {message_body[:50]}...")
+
+        # Process in background for fast response to Twilio
+        background_tasks.add_task(
+            process_ai_receptionist_sms,
+            db, from_number, to_number, message_body, message_sid
+        )
+
+        # Return empty TwiML response (we'll send our own response via API)
+        return JSONResponse(
+            status_code=200,
+            content={"status": "received"},
+            headers={"Content-Type": "application/json"}
+        )
+
+    except Exception as e:
+        logger.error(f"AI Receptionist SMS webhook error: {e}")
+        return JSONResponse(status_code=200, content={"status": "error"})
+
+
+async def process_ai_receptionist_sms(
+    db: Session,
+    from_number: str,
+    to_number: str,
+    message_body: str,
+    message_sid: str
+):
+    """Process AI Receptionist SMS in background."""
+    try:
+        from vapi_service import AIReceptionistSMSService
+
+        sms_service = AIReceptionistSMSService(db)
+        result = await sms_service.handle_inbound_sms(
+            from_number=from_number,
+            message_body=message_body,
+            to_number=to_number
+        )
+
+        logger.info(f"AI Receptionist SMS processed: {result}")
+
+    except Exception as e:
+        logger.error(f"Error processing AI Receptionist SMS: {e}")
+
+
+@router.post("/sms/send-calendly")
+async def send_calendly_sms(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_flexible)
+):
+    """
+    Manually send Calendly link via SMS.
+
+    Useful for:
+    - Sending to a lead who didn't call
+    - Re-sending a link
+    - Sending from the CRM interface
+    """
+    try:
+        from vapi_service import AIReceptionistSMSService
+
+        data = await request.json()
+        phone_number = data.get("phone_number")
+        name = data.get("name")
+        context = data.get("context", "consultation")
+
+        if not phone_number:
+            return {"success": False, "error": "phone_number required"}
+
+        sms_service = AIReceptionistSMSService(db)
+        result = await sms_service.send_calendly_link(
+            phone_number=phone_number,
+            caller_name=name,
+            context=context
+        )
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Error sending Calendly SMS: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/sms/send-followup")
+async def send_followup_sms(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_flexible)
+):
+    """
+    Manually send follow-up SMS.
+
+    Useful for:
+    - Post-call follow-ups
+    - Lead nurturing
+    - Appointment reminders
+    """
+    try:
+        from vapi_service import AIReceptionistSMSService
+
+        data = await request.json()
+        phone_number = data.get("phone_number")
+        name = data.get("name")
+        message_type = data.get("type", "general")  # general, appointment, calendly
+
+        if not phone_number:
+            return {"success": False, "error": "phone_number required"}
+
+        sms_service = AIReceptionistSMSService(db)
+
+        if message_type == "appointment":
+            appointment_time = data.get("appointment_time")
+            appointment_type = data.get("appointment_type", "consultation")
+            if not appointment_time:
+                return {"success": False, "error": "appointment_time required for appointment type"}
+
+            result = await sms_service.send_appointment_confirmation(
+                phone_number=phone_number,
+                caller_name=name,
+                appointment_time=appointment_time,
+                appointment_type=appointment_type
+            )
+        elif message_type == "calendly":
+            context = data.get("context")
+            result = await sms_service.send_calendly_link(
+                phone_number=phone_number,
+                caller_name=name,
+                context=context
+            )
+        else:
+            # General follow-up
+            result = await sms_service.send_post_call_followup(
+                phone_number=phone_number,
+                caller_name=name,
+                call_summary=data.get("summary"),
+                appointment_scheduled=data.get("appointment_scheduled", False),
+                appointment_time=data.get("appointment_time"),
+                include_calendly=data.get("include_calendly", True)
+            )
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Error sending follow-up SMS: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/sms/config")
+async def get_sms_config(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_flexible)
+):
+    """Get AI Receptionist SMS configuration."""
+    import os
+
+    return {
+        "enabled": bool(os.getenv("TWILIO_ACCOUNT_SID")),
+        "post_call_sms_enabled": os.getenv("ENABLE_POST_CALL_SMS", "true").lower() == "true",
+        "calendly_link": os.getenv("CALENDLY_LINK", "https://calendly.com/timloss/discovery-call"),
+        "business_name": os.getenv("BUSINESS_NAME", "CMG Home Loans"),
+        "lo_name": os.getenv("LO_NAME", "Tim"),
+        "webhook_url": "/api/vapi/webhook/sms"
+    }
+
+
+@router.post("/functions/send-sms-calendly-link")
+async def send_sms_calendly_link_function(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    VAPI Function: Send Calendly link via SMS.
+
+    Called by VAPI when the AI says "I'll text you the booking link"
+    during a phone call.
+    """
+    try:
+        from vapi_service import AIReceptionistSMSService
+
+        data = await request.json()
+        phone_number = data.get("phone_number")
+        name = data.get("name", "")
+
+        if not phone_number:
+            return {
+                "success": False,
+                "error": "Phone number required",
+                "message": "I don't have your phone number. Could you provide it?"
+            }
+
+        sms_service = AIReceptionistSMSService(db)
+        result = await sms_service.send_calendly_link(
+            phone_number=phone_number,
+            caller_name=name
+        )
+
+        if result.get("success"):
+            return {
+                "success": True,
+                "message": "Perfect! I just sent you a text with the booking link. You should receive it any moment. Is there anything else I can help you with?"
+            }
+        else:
+            return {
+                "success": False,
+                "error": result.get("error"),
+                "message": "I'm having trouble sending the text right now. Let me give you the link verbally instead. You can book a time at calendly dot com slash timloss slash discovery-call. Would you like me to repeat that?"
+            }
+
+    except Exception as e:
+        logger.error(f"Error in send_sms_calendly_link_function: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "I'm having some technical difficulties. Let me get your information and have someone follow up with the booking link."
+        }

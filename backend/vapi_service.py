@@ -1,11 +1,12 @@
 """
 Vapi AI Service - API Client and Business Logic
 Handles all Vapi API interactions and CRM integration
+Enhanced with AI Receptionist SMS capabilities
 """
 import httpx
 import os
 from typing import Optional, Dict, List, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from vapi_models import VapiCall, VapiCallNote, VapiAssistant, VapiPhoneNumber
 from ai_receptionist_dashboard_models import AIReceptionistActivity, AIReceptionistConversation
@@ -13,6 +14,519 @@ import logging
 import uuid
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# AI RECEPTIONIST SMS SERVICE
+# =============================================================================
+
+class AIReceptionistSMSService:
+    """
+    SMS service for AI Receptionist follow-ups and two-way messaging.
+
+    Features:
+    - Post-call SMS follow-ups (appointment confirmations, summaries)
+    - Calendly link delivery via SMS
+    - Two-way SMS handling with AI-powered responses
+    """
+
+    def __init__(self, db: Session):
+        self.db = db
+        self._twilio_client = None
+        self._calendly_link = os.getenv("CALENDLY_LINK", "https://calendly.com/timloss/discovery-call")
+        self._business_name = os.getenv("BUSINESS_NAME", "CMG Home Loans")
+        self._lo_name = os.getenv("LO_NAME", "Tim")
+
+    def _get_twilio_client(self):
+        """Lazy load Twilio client."""
+        if self._twilio_client is None:
+            try:
+                from integrations.twilio_service import TwilioSMSClient
+                self._twilio_client = TwilioSMSClient()
+            except Exception as e:
+                logger.error(f"Failed to initialize Twilio client: {e}")
+                return None
+        return self._twilio_client
+
+    async def send_post_call_followup(
+        self,
+        phone_number: str,
+        caller_name: Optional[str],
+        call_summary: Optional[str],
+        appointment_scheduled: bool = False,
+        appointment_time: Optional[str] = None,
+        include_calendly: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Send post-call SMS follow-up to caller.
+
+        Args:
+            phone_number: Caller's phone number (E.164 format)
+            caller_name: Caller's name if known
+            call_summary: Brief summary of the call
+            appointment_scheduled: Whether an appointment was scheduled
+            appointment_time: Scheduled appointment time if any
+            include_calendly: Whether to include Calendly link
+
+        Returns:
+            Result dict with success status and message SID
+        """
+        client = self._get_twilio_client()
+        if not client:
+            return {"success": False, "error": "SMS service unavailable"}
+
+        # Build personalized message
+        greeting = f"Hi {caller_name}!" if caller_name else "Hi!"
+
+        if appointment_scheduled and appointment_time:
+            # Appointment confirmation message
+            message = f"""{greeting} Thanks for calling {self._business_name}. Your appointment is confirmed for {appointment_time}. We look forward to speaking with you!
+
+If you need to reschedule: {self._calendly_link}
+
+Questions? Reply to this text or call us back.
+- {self._lo_name} at {self._business_name}"""
+        elif include_calendly:
+            # Follow-up with Calendly link
+            message = f"""{greeting} Thanks for calling {self._business_name}! Here's the link to schedule a consultation at your convenience:
+
+{self._calendly_link}
+
+We're looking forward to helping you with your mortgage needs!
+- {self._lo_name} at {self._business_name}"""
+        else:
+            # General follow-up
+            message = f"""{greeting} Thanks for calling {self._business_name}! We appreciate you reaching out.
+
+If you'd like to schedule a time to discuss your mortgage needs, here's our booking link:
+{self._calendly_link}
+
+Or just reply to this text with any questions!
+- {self._lo_name} at {self._business_name}"""
+
+        try:
+            message_sid = await client.send_sms(
+                to_number=phone_number,
+                message=message
+            )
+
+            if message_sid:
+                # Log to activity feed
+                await self._log_sms_activity(
+                    phone_number=phone_number,
+                    caller_name=caller_name,
+                    message_type="post_call_followup",
+                    message_content=message,
+                    message_sid=message_sid
+                )
+
+                logger.info(f"Post-call SMS sent to {phone_number}. SID: {message_sid}")
+                return {
+                    "success": True,
+                    "message_sid": message_sid,
+                    "message_type": "post_call_followup"
+                }
+            else:
+                return {"success": False, "error": "Failed to send SMS"}
+
+        except Exception as e:
+            logger.error(f"Error sending post-call SMS: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def send_calendly_link(
+        self,
+        phone_number: str,
+        caller_name: Optional[str] = None,
+        context: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Send Calendly booking link via SMS.
+
+        Args:
+            phone_number: Recipient phone number
+            caller_name: Optional name for personalization
+            context: Optional context (e.g., "pre-approval", "refinance")
+
+        Returns:
+            Result dict with success status
+        """
+        client = self._get_twilio_client()
+        if not client:
+            return {"success": False, "error": "SMS service unavailable"}
+
+        greeting = f"Hi {caller_name}!" if caller_name else "Hi!"
+
+        if context:
+            message = f"""{greeting} Here's the link to schedule your {context} consultation:
+
+{self._calendly_link}
+
+Pick a time that works best for you. We're looking forward to it!
+- {self._lo_name} at {self._business_name}"""
+        else:
+            message = f"""{greeting} Here's the link to schedule your consultation:
+
+{self._calendly_link}
+
+Pick a time that works best for you!
+- {self._lo_name} at {self._business_name}"""
+
+        try:
+            message_sid = await client.send_sms(
+                to_number=phone_number,
+                message=message
+            )
+
+            if message_sid:
+                await self._log_sms_activity(
+                    phone_number=phone_number,
+                    caller_name=caller_name,
+                    message_type="calendly_link",
+                    message_content=message,
+                    message_sid=message_sid
+                )
+
+                logger.info(f"Calendly link SMS sent to {phone_number}. SID: {message_sid}")
+                return {
+                    "success": True,
+                    "message_sid": message_sid,
+                    "calendly_link": self._calendly_link
+                }
+            else:
+                return {"success": False, "error": "Failed to send SMS"}
+
+        except Exception as e:
+            logger.error(f"Error sending Calendly SMS: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def send_appointment_confirmation(
+        self,
+        phone_number: str,
+        caller_name: Optional[str],
+        appointment_time: str,
+        appointment_type: str = "consultation"
+    ) -> Dict[str, Any]:
+        """
+        Send appointment confirmation SMS.
+
+        Args:
+            phone_number: Recipient phone number
+            caller_name: Caller's name
+            appointment_time: Formatted appointment time
+            appointment_type: Type of appointment (consultation, pre-approval, etc.)
+
+        Returns:
+            Result dict with success status
+        """
+        client = self._get_twilio_client()
+        if not client:
+            return {"success": False, "error": "SMS service unavailable"}
+
+        greeting = f"Hi {caller_name}!" if caller_name else "Hi!"
+
+        message = f"""{greeting} Your {appointment_type} is confirmed!
+
+Date/Time: {appointment_time}
+
+Need to reschedule? {self._calendly_link}
+
+We'll call you at this number at the scheduled time.
+- {self._lo_name} at {self._business_name}"""
+
+        try:
+            message_sid = await client.send_sms(
+                to_number=phone_number,
+                message=message
+            )
+
+            if message_sid:
+                await self._log_sms_activity(
+                    phone_number=phone_number,
+                    caller_name=caller_name,
+                    message_type="appointment_confirmation",
+                    message_content=message,
+                    message_sid=message_sid
+                )
+
+                return {
+                    "success": True,
+                    "message_sid": message_sid,
+                    "appointment_time": appointment_time
+                }
+            else:
+                return {"success": False, "error": "Failed to send SMS"}
+
+        except Exception as e:
+            logger.error(f"Error sending appointment confirmation SMS: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def handle_inbound_sms(
+        self,
+        from_number: str,
+        message_body: str,
+        to_number: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Handle inbound SMS with AI-powered response.
+
+        This integrates with the existing SMS Intelligence system for
+        AI analysis and generates appropriate responses for the AI
+        receptionist context.
+
+        Args:
+            from_number: Sender's phone number
+            message_body: SMS content
+            to_number: Number the SMS was sent to
+
+        Returns:
+            Result dict with response and analysis
+        """
+        try:
+            # Check for opt-out keywords first
+            opt_out_keywords = ["stop", "unsubscribe", "cancel", "quit", "end"]
+            if message_body.strip().lower() in opt_out_keywords:
+                return {
+                    "success": True,
+                    "is_opt_out": True,
+                    "response": None,
+                    "action": "opt_out_processed"
+                }
+
+            # Look up lead/contact
+            lead = await self._find_lead_by_phone(from_number)
+
+            # Analyze the message
+            analysis = await self._analyze_sms_intent(message_body, lead)
+
+            # Generate response based on intent
+            response = await self._generate_ai_response(
+                message_body=message_body,
+                lead=lead,
+                intent=analysis.get("intent"),
+                sentiment=analysis.get("sentiment")
+            )
+
+            # Send response if we have one
+            if response and response.get("should_respond"):
+                client = self._get_twilio_client()
+                if client:
+                    message_sid = await client.send_sms(
+                        to_number=from_number,
+                        message=response.get("message")
+                    )
+
+                    # Log the activity
+                    await self._log_sms_activity(
+                        phone_number=from_number,
+                        caller_name=lead.name if lead else None,
+                        message_type="auto_response",
+                        message_content=response.get("message"),
+                        message_sid=message_sid,
+                        inbound_message=message_body
+                    )
+
+            return {
+                "success": True,
+                "lead_found": lead is not None,
+                "lead_id": lead.id if lead else None,
+                "analysis": analysis,
+                "response_sent": response.get("should_respond", False),
+                "response": response
+            }
+
+        except Exception as e:
+            logger.error(f"Error handling inbound SMS: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def _find_lead_by_phone(self, phone_number: str):
+        """Find lead by phone number."""
+        try:
+            from main import Lead
+            from sqlalchemy import or_
+
+            # Clean phone number
+            cleaned = ''.join(filter(str.isdigit, phone_number))
+            if len(cleaned) >= 10:
+                cleaned = cleaned[-10:]
+
+            lead = self.db.query(Lead).filter(
+                or_(
+                    Lead.phone == phone_number,
+                    Lead.phone.contains(cleaned)
+                )
+            ).first()
+
+            return lead
+        except Exception as e:
+            logger.error(f"Error finding lead: {e}")
+            return None
+
+    async def _analyze_sms_intent(
+        self,
+        message_body: str,
+        lead = None
+    ) -> Dict[str, Any]:
+        """
+        Analyze SMS intent for AI receptionist context.
+
+        Returns intent classification relevant to mortgage inquiries.
+        """
+        message_lower = message_body.lower()
+
+        # Intent patterns for mortgage context
+        if any(word in message_lower for word in ["rate", "rates", "interest", "apr"]):
+            intent = "rate_inquiry"
+            urgency = "medium"
+        elif any(word in message_lower for word in ["schedule", "appointment", "meet", "call"]):
+            intent = "appointment_request"
+            urgency = "high"
+        elif any(word in message_lower for word in ["refinance", "refi", "lower payment"]):
+            intent = "refinance_inquiry"
+            urgency = "medium"
+        elif any(word in message_lower for word in ["pre-approval", "preapproval", "qualify", "approved"]):
+            intent = "preapproval_inquiry"
+            urgency = "high"
+        elif any(word in message_lower for word in ["document", "paperwork", "upload", "send"]):
+            intent = "document_inquiry"
+            urgency = "medium"
+        elif any(word in message_lower for word in ["status", "update", "where", "loan"]):
+            intent = "status_inquiry"
+            urgency = "medium"
+        elif any(word in message_lower for word in ["yes", "ok", "sure", "great", "sounds good"]):
+            intent = "affirmative"
+            urgency = "low"
+        elif any(word in message_lower for word in ["no", "not interested", "later"]):
+            intent = "negative"
+            urgency = "low"
+        elif any(word in message_lower for word in ["help", "question", "?"]):
+            intent = "general_inquiry"
+            urgency = "medium"
+        else:
+            intent = "unknown"
+            urgency = "low"
+
+        # Simple sentiment detection
+        positive_words = ["thanks", "great", "excellent", "good", "happy", "appreciate"]
+        negative_words = ["frustrated", "angry", "upset", "bad", "terrible", "disappointed"]
+
+        if any(word in message_lower for word in positive_words):
+            sentiment = "positive"
+        elif any(word in message_lower for word in negative_words):
+            sentiment = "negative"
+        else:
+            sentiment = "neutral"
+
+        return {
+            "intent": intent,
+            "urgency": urgency,
+            "sentiment": sentiment,
+            "requires_human": intent in ["status_inquiry", "document_inquiry"] or sentiment == "negative"
+        }
+
+    async def _generate_ai_response(
+        self,
+        message_body: str,
+        lead,
+        intent: str,
+        sentiment: str
+    ) -> Dict[str, Any]:
+        """
+        Generate AI-powered response for the SMS.
+
+        Returns response dict with message and whether to send it.
+        """
+        # Determine if we should auto-respond
+        # Don't auto-respond to complex inquiries that need human attention
+        auto_respond_intents = [
+            "appointment_request", "rate_inquiry", "refinance_inquiry",
+            "preapproval_inquiry", "affirmative", "general_inquiry"
+        ]
+
+        if intent not in auto_respond_intents:
+            return {
+                "should_respond": False,
+                "reason": "requires_human_response",
+                "intent": intent
+            }
+
+        # Generate response based on intent
+        greeting = f"Hi {lead.first_name}!" if lead and lead.first_name else "Hi!"
+
+        if intent == "appointment_request":
+            message = f"""{greeting} I'd love to help you schedule a time to talk. Here's our booking link:
+
+{self._calendly_link}
+
+Pick a time that works for you!"""
+
+        elif intent == "rate_inquiry":
+            message = f"""{greeting} Rates change daily and depend on your specific situation. Want to schedule a quick call to discuss your options?
+
+{self._calendly_link}"""
+
+        elif intent == "refinance_inquiry":
+            message = f"""{greeting} Great timing to look into refinancing! I can help you see if it makes sense. Schedule a quick chat:
+
+{self._calendly_link}"""
+
+        elif intent == "preapproval_inquiry":
+            message = f"""{greeting} Getting pre-approved is a great first step! It usually takes about 24 hours. Let's get you started:
+
+{self._calendly_link}"""
+
+        elif intent == "affirmative":
+            message = f"""{greeting} Great! Here's the link to schedule your consultation:
+
+{self._calendly_link}
+
+Looking forward to it!"""
+
+        else:  # general_inquiry
+            message = f"""{greeting} Thanks for reaching out! I'm here to help. Want to schedule a quick call to discuss your needs?
+
+{self._calendly_link}
+
+Or reply with your question and I'll get back to you!"""
+
+        return {
+            "should_respond": True,
+            "message": message,
+            "intent": intent
+        }
+
+    async def _log_sms_activity(
+        self,
+        phone_number: str,
+        caller_name: Optional[str],
+        message_type: str,
+        message_content: str,
+        message_sid: Optional[str] = None,
+        inbound_message: Optional[str] = None
+    ):
+        """Log SMS activity to AI Receptionist dashboard."""
+        try:
+            activity = AIReceptionistActivity(
+                id=str(uuid.uuid4()),
+                timestamp=datetime.now(timezone.utc),
+                client_phone=phone_number,
+                client_name=caller_name,
+                action_type=f"sms_{message_type}",
+                channel='sms',
+                message_in=inbound_message or "",
+                message_out=message_content,
+                confidence_score=0.95,
+                outcome_status='success',
+                extra_data={
+                    'message_sid': message_sid,
+                    'message_type': message_type,
+                    'calendly_link': self._calendly_link if 'calendly' in message_content.lower() else None
+                }
+            )
+            self.db.add(activity)
+            self.db.commit()
+        except Exception as e:
+            logger.error(f"Error logging SMS activity: {e}")
+            # Don't fail the main operation
 
 
 class VapiService:
@@ -224,7 +738,95 @@ class VapiCRMIntegration:
         self.db.commit()
         self.db.refresh(vapi_call)
 
+        # Send post-call SMS follow-up
+        await self._send_post_call_sms(vapi_call, call_data)
+
         return vapi_call
+
+    async def _send_post_call_sms(self, vapi_call: VapiCall, call_data: Dict[str, Any]) -> None:
+        """
+        Send post-call SMS follow-up to caller.
+
+        Determines the appropriate follow-up based on call outcome:
+        - Appointment scheduled -> Send confirmation
+        - Calendly mentioned -> Send Calendly link
+        - General call -> Send thank you + Calendly
+        """
+        try:
+            # Check if SMS follow-ups are enabled
+            if not os.getenv("ENABLE_POST_CALL_SMS", "true").lower() == "true":
+                logger.debug("Post-call SMS disabled")
+                return
+
+            # Don't send SMS for very short calls (likely missed/dropped)
+            if vapi_call.duration and vapi_call.duration < 15:
+                logger.debug(f"Skipping SMS for short call ({vapi_call.duration}s)")
+                return
+
+            # Don't send SMS for outbound calls (we initiated)
+            if vapi_call.direction == "outbound":
+                logger.debug("Skipping SMS for outbound call")
+                return
+
+            # Check if phone number is valid
+            if not vapi_call.phone_number:
+                logger.debug("No phone number for SMS follow-up")
+                return
+
+            sms_service = AIReceptionistSMSService(self.db)
+
+            # Analyze call content to determine follow-up type
+            analysis = call_data.get("analysis", {})
+            structured_data = analysis.get("structuredData", {})
+            transcript = vapi_call.transcript or ""
+            transcript_lower = transcript.lower()
+
+            # Check if appointment was scheduled during the call
+            appointment_scheduled = (
+                structured_data.get("appointmentScheduled", False) or
+                "appointment" in transcript_lower and any(
+                    phrase in transcript_lower
+                    for phrase in ["scheduled", "booked", "confirmed", "set up"]
+                )
+            )
+
+            # Check if Calendly was mentioned
+            calendly_mentioned = "calendly" in transcript_lower or "booking link" in transcript_lower
+
+            # Get appointment time if scheduled
+            appointment_time = structured_data.get("appointmentTime")
+
+            # Send appropriate follow-up
+            if appointment_scheduled:
+                await sms_service.send_post_call_followup(
+                    phone_number=vapi_call.phone_number,
+                    caller_name=vapi_call.caller_name,
+                    call_summary=vapi_call.summary,
+                    appointment_scheduled=True,
+                    appointment_time=appointment_time,
+                    include_calendly=True
+                )
+            elif calendly_mentioned:
+                # They asked about scheduling - send the Calendly link
+                await sms_service.send_calendly_link(
+                    phone_number=vapi_call.phone_number,
+                    caller_name=vapi_call.caller_name
+                )
+            else:
+                # General call - send thank you with Calendly
+                await sms_service.send_post_call_followup(
+                    phone_number=vapi_call.phone_number,
+                    caller_name=vapi_call.caller_name,
+                    call_summary=vapi_call.summary,
+                    appointment_scheduled=False,
+                    include_calendly=True
+                )
+
+            logger.info(f"Post-call SMS sent to {vapi_call.phone_number}")
+
+        except Exception as e:
+            # Don't fail the whole process if SMS fails
+            logger.error(f"Error sending post-call SMS: {e}")
 
     async def _process_status_update(self, data: Dict[str, Any]) -> Optional[VapiCall]:
         """Process real-time status updates"""
