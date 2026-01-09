@@ -5039,6 +5039,37 @@ except Exception as e:
     structured_logger = None
     health_checker = None
 
+# ============================================================================
+# DATADOG MONITORING - APM, Metrics, Dashboards
+# ============================================================================
+try:
+    from datadog_monitoring import (
+        setup_datadog_monitoring,
+        business_metrics,
+        metrics as dd_metrics,
+        trace_function,
+        track_metric
+    )
+
+    # Initialize DataDog monitoring
+    dd_result = setup_datadog_monitoring(app)
+    logger.info(f"✅ DataDog monitoring initialized: {dd_result}")
+
+    # Register Redis health check with DataDog
+    if health_checker:
+        async def check_redis():
+            try:
+                from services.redis_cache import redis_cache
+                return await redis_cache.health_check()
+            except Exception:
+                return False
+        health_checker.register_check("redis", check_redis)
+
+except Exception as e:
+    logger.warning(f"⚠️ DataDog monitoring not fully initialized: {e}")
+    business_metrics = None
+    dd_metrics = None
+
 # Mount static files directory for voicemail audio files
 import os as os_module
 from pathlib import Path as PathLib
@@ -21827,6 +21858,104 @@ async def debug_cache_stats():
             "error": str(e),
             "message": f"Error checking cache: {str(e)}"
         }
+
+
+# DataDog monitoring status endpoint
+@app.get("/api/v1/debug/datadog-status", tags=["Debug"])
+async def debug_datadog_status():
+    """
+    Debug endpoint to check DataDog monitoring status.
+
+    Returns APM tracing status, metrics collection status, and configuration.
+    """
+    try:
+        from datadog_monitoring import (
+            DD_SERVICE, DD_ENV, DD_TRACE_ENABLED,
+            _tracer, _statsd, _initialized
+        )
+
+        return {
+            "datadog_enabled": _initialized,
+            "apm_tracing": {
+                "enabled": DD_TRACE_ENABLED,
+                "initialized": _tracer is not None,
+                "service": DD_SERVICE,
+                "environment": DD_ENV
+            },
+            "metrics": {
+                "statsd_initialized": _statsd is not None,
+                "prefix": "mortgage_crm"
+            },
+            "config": {
+                "DD_SERVICE": DD_SERVICE,
+                "DD_ENV": DD_ENV,
+                "DD_TRACE_ENABLED": DD_TRACE_ENABLED
+            },
+            "message": "DataDog monitoring is operational" if _initialized else "DataDog not fully initialized"
+        }
+    except ImportError:
+        return {
+            "datadog_enabled": False,
+            "message": "DataDog monitoring module not available"
+        }
+    except Exception as e:
+        return {
+            "datadog_enabled": False,
+            "error": str(e),
+            "message": f"Error checking DataDog status: {str(e)}"
+        }
+
+
+@app.get("/api/v1/debug/datadog-dashboard-config", tags=["Debug"])
+async def get_datadog_dashboard_config():
+    """
+    Get DataDog dashboard configuration JSON.
+
+    Returns the dashboard configuration that can be imported into DataDog
+    using their Dashboard API.
+    """
+    try:
+        from datadog_monitoring import get_dashboard_config
+        return get_dashboard_config()
+    except ImportError:
+        return {"error": "DataDog monitoring module not available"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/api/v1/debug/datadog-test-metrics", tags=["Debug"])
+async def test_datadog_metrics(current_user: User = Depends(get_current_user)):
+    """
+    Send test metrics to DataDog.
+
+    Useful for verifying the DataDog agent connection and metrics pipeline.
+    """
+    try:
+        from datadog_monitoring import metrics, business_metrics
+
+        # Send test metrics
+        metrics.increment("test.counter", tags=["source:api_test"])
+        metrics.gauge("test.gauge", 42.0, tags=["source:api_test"])
+        metrics.histogram("test.histogram", 100.5, tags=["source:api_test"])
+
+        # Send test business metric
+        business_metrics.metrics.event(
+            title="DataDog Test Event",
+            text=f"Test event triggered by user {current_user.email}",
+            alert_type="info",
+            tags=["source:api_test", f"user:{current_user.id}"]
+        )
+
+        return {
+            "success": True,
+            "message": "Test metrics sent to DataDog",
+            "metrics_sent": ["test.counter", "test.gauge", "test.histogram"],
+            "event_sent": True
+        }
+    except ImportError:
+        return {"success": False, "error": "DataDog monitoring module not available"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 # PURL System Migration Endpoint
@@ -40091,6 +40220,16 @@ async def create_lead(lead: LeadCreate, db: Session = Depends(get_db), current_u
     except Exception as e:
         logger.warning(f"Failed to update capacity for user {current_user.id}: {e}")
 
+    # Track lead creation in DataDog
+    if business_metrics:
+        try:
+            business_metrics.lead_created(
+                source=db_lead.source,
+                lo_id=current_user.id
+            )
+        except Exception as e:
+            logger.debug(f"Failed to track lead metric: {e}")
+
     logger.info(f"Lead created: {lead_name} (Score: {lead_score})")
     return db_lead
 
@@ -41948,6 +42087,17 @@ async def create_loan(
             await update_capacity_on_assignment(db, current_user.id)
         except Exception as e:
             logger.warning(f"Failed to update capacity for user {current_user.id}: {e}")
+
+        # Track loan creation in DataDog
+        if business_metrics:
+            try:
+                business_metrics.loan_created(
+                    loan_type=str(db_loan.loan_type) if db_loan.loan_type else None,
+                    lo_id=current_user.id,
+                    amount=float(db_loan.amount) if db_loan.amount else None
+                )
+            except Exception as e:
+                logger.debug(f"Failed to track loan metric: {e}")
 
         logger.info(f"Loan created: {db_loan.loan_number} - ${db_loan.amount:,.0f}")
         return db_loan
