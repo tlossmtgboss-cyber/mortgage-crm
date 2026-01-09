@@ -4,7 +4,8 @@ Module Subscription Routes
 API endpoints for managing subscription modules.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel
@@ -20,6 +21,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from services.module_service import ModuleService
 
 router = APIRouter(prefix="/api/v1/modules", tags=["modules"])
+
+# OAuth2 scheme for token extraction
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 
 # Pydantic models for request/response
@@ -67,6 +71,7 @@ class NavigationAccessResponse(BaseModel):
 
 
 # Database and user dependencies - injected from main app
+# These are stored as the actual dependency functions from main.py
 _get_db = None
 _get_current_user = None
 
@@ -79,17 +84,29 @@ def set_dependencies(get_db_func, get_current_user_func):
 
 
 def get_db():
-    """Get database session."""
+    """
+    Wrapper for database dependency.
+    Yields from the underlying generator.
+    """
     if _get_db is None:
         raise RuntimeError("Database dependency not configured. Call set_dependencies first.")
-    return _get_db()
+    # Yield from the generator
+    yield from _get_db()
 
 
-def get_current_user():
-    """Get current user."""
+async def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    request: Request = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Async wrapper for current user dependency.
+    Calls the injected dependency function with proper parameters.
+    """
     if _get_current_user is None:
         raise RuntimeError("User dependency not configured. Call set_dependencies first.")
-    return _get_current_user()
+    # Call the stored async function and await it
+    return await _get_current_user(token=token, request=request, db=db)
 
 
 @router.get("/available", response_model=List[ModuleResponse])
