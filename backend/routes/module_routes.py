@@ -99,10 +99,10 @@ async def get_available_modules(db: Session = Depends(get_db)):
 @router.get("/my-modules")
 async def get_my_modules(
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    current_user = Depends(get_current_user)
 ):
     """Get current user's organization modules with enabled status."""
-    org_id = current_user.get('organization_id')
+    org_id = getattr(current_user, 'organization_id', None)
     if not org_id:
         raise HTTPException(status_code=400, detail="User not associated with an organization")
 
@@ -119,10 +119,10 @@ async def get_my_modules(
 async def check_module_access(
     module_key: str,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    current_user = Depends(get_current_user)
 ):
     """Check if current user's organization has access to a specific module."""
-    org_id = current_user.get('organization_id')
+    org_id = getattr(current_user, 'organization_id', None)
     if not org_id:
         raise HTTPException(status_code=400, detail="User not associated with an organization")
 
@@ -141,10 +141,10 @@ async def check_module_access(
 async def check_feature_access(
     feature_key: str,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    current_user = Depends(get_current_user)
 ):
     """Check if current user's organization has access to a specific feature."""
-    org_id = current_user.get('organization_id')
+    org_id = getattr(current_user, 'organization_id', None)
     if not org_id:
         raise HTTPException(status_code=400, detail="User not associated with an organization")
 
@@ -160,10 +160,10 @@ async def check_feature_access(
 async def check_route_access(
     route: str = Query(..., description="Route path to check"),
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    current_user = Depends(get_current_user)
 ):
     """Check if a route is accessible based on organization's modules."""
-    org_id = current_user.get('organization_id')
+    org_id = getattr(current_user, 'organization_id', None)
     if not org_id:
         raise HTTPException(status_code=400, detail="User not associated with an organization")
 
@@ -175,10 +175,10 @@ async def check_route_access(
 @router.get("/navigation")
 async def get_navigation_access(
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    current_user = Depends(get_current_user)
 ):
     """Get navigation items with lock status based on modules."""
-    org_id = current_user.get('organization_id')
+    org_id = getattr(current_user, 'organization_id', None)
     if not org_id:
         raise HTTPException(status_code=400, detail="User not associated with an organization")
 
@@ -188,10 +188,10 @@ async def get_navigation_access(
 @router.get("/pricing")
 async def get_pricing_summary(
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    current_user = Depends(get_current_user)
 ):
     """Get pricing summary for current organization's modules."""
-    org_id = current_user.get('organization_id')
+    org_id = getattr(current_user, 'organization_id', None)
     if not org_id:
         raise HTTPException(status_code=400, detail="User not associated with an organization")
 
@@ -202,17 +202,17 @@ async def get_pricing_summary(
 async def enable_module(
     request: EnableModuleRequest,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    current_user = Depends(get_current_user)
 ):
     """Enable a module for the current organization."""
-    org_id = current_user.get('organization_id')
-    user_id = current_user.get('id')
+    org_id = getattr(current_user, 'organization_id', None)
+    user_id = getattr(current_user, 'id', None)
 
     if not org_id:
         raise HTTPException(status_code=400, detail="User not associated with an organization")
 
     # Check if user has admin permissions
-    role = current_user.get('role') or current_user.get('permission_role')
+    role = getattr(current_user, 'role', None) or getattr(current_user, 'permission_role', None)
     if role not in ['admin', 'owner', 'leadership']:
         raise HTTPException(status_code=403, detail="Only admins can enable modules")
 
@@ -234,16 +234,16 @@ async def enable_module(
 async def disable_module(
     module_key: str,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    current_user = Depends(get_current_user)
 ):
     """Disable a module for the current organization."""
-    org_id = current_user.get('organization_id')
+    org_id = getattr(current_user, 'organization_id', None)
 
     if not org_id:
         raise HTTPException(status_code=400, detail="User not associated with an organization")
 
     # Check if user has admin permissions
-    role = current_user.get('role') or current_user.get('permission_role')
+    role = getattr(current_user, 'role', None) or getattr(current_user, 'permission_role', None)
     if role not in ['admin', 'owner', 'leadership']:
         raise HTTPException(status_code=403, detail="Only admins can disable modules")
 
@@ -259,11 +259,11 @@ async def disable_module(
 async def admin_get_org_modules(
     organization_id: int,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    current_user = Depends(get_current_user)
 ):
     """Admin: Get modules for a specific organization."""
     # Check admin permission
-    role = current_user.get('role') or current_user.get('permission_role')
+    role = getattr(current_user, 'role', None) or getattr(current_user, 'permission_role', None)
     if role != 'admin':
         raise HTTPException(status_code=403, detail="Admin access required")
 
@@ -282,15 +282,15 @@ async def admin_enable_module(
     organization_id: int,
     request: EnableModuleRequest,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    current_user = Depends(get_current_user)
 ):
     """Admin: Enable a module for a specific organization."""
     # Check admin permission
-    role = current_user.get('role') or current_user.get('permission_role')
+    role = getattr(current_user, 'role', None) or getattr(current_user, 'permission_role', None)
     if role != 'admin':
         raise HTTPException(status_code=403, detail="Admin access required")
 
-    user_id = current_user.get('id')
+    user_id = getattr(current_user, 'id', None)
 
     try:
         result = ModuleService.enable_module(
