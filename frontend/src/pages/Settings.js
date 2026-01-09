@@ -2833,6 +2833,7 @@ const API_BASE_URL = isProduction
                       <button className={`sidebar-btn child ${activeSection === 'dialer-settings' ? 'active' : ''}`} onClick={() => setActiveSection('dialer-settings')}><span>Power Dialer</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'voice-os' ? 'active' : ''}`} onClick={() => navigate('/voice-os-dashboard')}><span>Voice OS</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'ai-receptionist' ? 'active' : ''}`} onClick={() => setActiveSection('ai-receptionist')}><span>AI Receptionist</span></button>
+                      <button className={`sidebar-btn child`} onClick={() => navigate('/settings/twilio')}><span>Twilio Setup</span></button>
                     </div>
                   )}
                 </div>
