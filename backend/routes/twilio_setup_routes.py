@@ -742,6 +742,70 @@ async def get_account_info(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/run-migration")
+async def run_twilio_migration(
+    admin_key: str = None,
+    db=Depends(get_db)
+):
+    """Run the user_twilio_config table migration."""
+    import os
+    from sqlalchemy import text
+
+    # Verify admin key
+    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    if admin_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        # Check if table exists
+        table_check = db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'user_twilio_config'
+            )
+        """)).scalar()
+
+        if table_check:
+            return {"status": "success", "message": "Table already exists"}
+
+        # Create table
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS user_twilio_config (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                account_sid VARCHAR(34),
+                auth_token VARCHAR(255),
+                phone_number VARCHAR(20),
+                phone_number_sid VARCHAR(34),
+                messaging_service_sid VARCHAR(34),
+                brand_sid VARCHAR(34),
+                campaign_sid VARCHAR(34),
+                a2p_status VARCHAR(50) DEFAULT 'pending',
+                customer_profile_sid VARCHAR(34),
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                CONSTRAINT unique_user_twilio_config UNIQUE (user_id)
+            )
+        """))
+
+        db.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_user_twilio_config_user_id ON user_twilio_config(user_id)
+        """))
+
+        db.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_user_twilio_config_account_sid ON user_twilio_config(account_sid)
+        """))
+
+        db.commit()
+
+        return {"status": "success", "message": "Table user_twilio_config created successfully"}
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/phone-numbers")
 async def get_owned_phone_numbers(
     current_user=Depends(get_current_user),
