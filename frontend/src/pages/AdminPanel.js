@@ -19,11 +19,33 @@ const AdminPanel = () => {
   const navigate = useNavigate();
   const { userRole, hasPermission, hasAnyPermission, loading: permissionsLoading } = usePermissions();
 
+  // Get user info from localStorage as fallback (in case PermissionContext has stale data)
+  const getLocalStorageRole = () => {
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        return {
+          role: user.role,
+          permission_role: user.permission_role
+        };
+      }
+    } catch (e) {}
+    return { role: null, permission_role: null };
+  };
+
+  const localUser = getLocalStorageRole();
+
   // Permission check - require admin access
-  const canAccessAdmin = hasAnyPermission(['admin.view', 'admin.manage', 'system.admin']) || userRole === 'admin' || userRole === 'management';
+  // Check both PermissionContext and localStorage for admin role
+  const canAccessAdmin = hasAnyPermission(['admin.view', 'admin.manage', 'system.admin']) ||
+                         userRole === 'admin' ||
+                         userRole === 'management' ||
+                         localUser.permission_role === 'admin' ||
+                         localUser.role === 'admin';
 
   // Debug logging
-  console.log('AdminPanel permissions:', { userRole, canAccessAdmin, permissionsLoading });
+  console.log('AdminPanel permissions:', { userRole, canAccessAdmin, permissionsLoading, localUser });
 
   // State
   const [loading, setLoading] = useState(true);
