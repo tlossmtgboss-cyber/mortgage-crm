@@ -103,8 +103,14 @@ async def get_my_modules(
 ):
     """Get current user's organization modules with enabled status."""
     org_id = getattr(current_user, 'organization_id', None)
+    user_id = getattr(current_user, 'id', None)
+    user_email = getattr(current_user, 'email', None)
+
     if not org_id:
-        raise HTTPException(status_code=400, detail="User not associated with an organization")
+        raise HTTPException(
+            status_code=400,
+            detail=f"User not associated with an organization. User ID: {user_id}, Email: {user_email}, Org: {org_id}"
+        )
 
     modules = ModuleService.get_organization_modules_detailed(db, org_id)
     pricing = ModuleService.get_pricing_summary(db, org_id)
