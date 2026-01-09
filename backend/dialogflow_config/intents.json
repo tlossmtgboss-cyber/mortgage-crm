@@ -1,0 +1,268 @@
+{
+  "intents": [
+    {
+      "displayName": "start_qualification",
+      "description": "User initiates a mortgage inquiry or opens the widget",
+      "trainingPhrases": [
+        {"parts": [{"text": "I want to buy a home"}]},
+        {"parts": [{"text": "I'm interested in getting a mortgage"}]},
+        {"parts": [{"text": "Can you help me with a home loan"}]},
+        {"parts": [{"text": "I need a mortgage"}]},
+        {"parts": [{"text": "Looking for mortgage options"}]},
+        {"parts": [{"text": "Help me get pre-approved"}]},
+        {"parts": [{"text": "I want to refinance"}]},
+        {"parts": [{"text": "What are your rates"}]},
+        {"parts": [{"text": "Get started"}]},
+        {"parts": [{"text": "Hello"}]},
+        {"parts": [{"text": "Hi"}]},
+        {"parts": [{"text": "Hey"}]},
+        {"parts": [{"text": "I have questions about mortgages"}]},
+        {"parts": [{"text": "Can I get a home loan"}]},
+        {"parts": [{"text": "I'm ready to buy"}]}
+      ],
+      "parameters": [],
+      "webhookState": "WEBHOOK_STATE_ENABLED"
+    },
+    {
+      "displayName": "capture_loan_purpose",
+      "description": "Captures whether user wants to purchase, refinance, or cash-out",
+      "trainingPhrases": [
+        {"parts": [{"text": "I want to ", "parameterId": ""}, {"text": "buy", "parameterId": "loan_purpose"}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "purchase", "parameterId": "loan_purpose"}, {"text": " a home", "parameterId": ""}]},
+        {"parts": [{"text": "Looking to ", "parameterId": ""}, {"text": "refinance", "parameterId": "loan_purpose"}]},
+        {"parts": [{"text": "I want to ", "parameterId": ""}, {"text": "cash out", "parameterId": "loan_purpose"}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "buying", "parameterId": "loan_purpose"}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "refi", "parameterId": "loan_purpose"}]},
+        {"parts": [{"text": "I'd like to ", "parameterId": ""}, {"text": "buy a house", "parameterId": "loan_purpose"}]},
+        {"parts": [{"text": "Want to ", "parameterId": ""}, {"text": "lower my rate", "parameterId": "loan_purpose"}]},
+        {"parts": [{"text": "Need to ", "parameterId": ""}, {"text": "pull equity", "parameterId": "loan_purpose"}]},
+        {"parts": [{"text": "Looking to ", "parameterId": ""}, {"text": "purchase", "parameterId": "loan_purpose"}, {"text": " my first home", "parameterId": ""}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "home purchase", "parameterId": "loan_purpose"}]},
+        {"parts": [{"text": "I want a ", "parameterId": ""}, {"text": "cash out refinance", "parameterId": "loan_purpose"}]}
+      ],
+      "parameters": [
+        {
+          "id": "loan_purpose",
+          "entityType": "@loan_purpose",
+          "isList": false,
+          "redact": false
+        }
+      ],
+      "webhookState": "WEBHOOK_STATE_ENABLED"
+    },
+    {
+      "displayName": "capture_experience",
+      "description": "Captures whether user is a first-time homebuyer",
+      "trainingPhrases": [
+        {"parts": [{"text": "This is my ", "parameterId": ""}, {"text": "first home", "parameterId": "first_time_buyer"}]},
+        {"parts": [{"text": "I'm a ", "parameterId": ""}, {"text": "first time buyer", "parameterId": "first_time_buyer"}]},
+        {"parts": [{"text": "I've ", "parameterId": ""}, {"text": "never owned", "parameterId": "first_time_buyer"}, {"text": " before", "parameterId": ""}]},
+        {"parts": [{"text": "I've ", "parameterId": ""}, {"text": "bought before", "parameterId": "first_time_buyer"}]},
+        {"parts": [{"text": "I ", "parameterId": ""}, {"text": "currently own", "parameterId": "first_time_buyer"}, {"text": " a home", "parameterId": ""}]},
+        {"parts": [{"text": "Yes, ", "parameterId": ""}, {"text": "first time", "parameterId": "first_time_buyer"}]},
+        {"parts": [{"text": "No, I've ", "parameterId": ""}, {"text": "owned before", "parameterId": "first_time_buyer"}]},
+        {"parts": [{"text": "I'm ", "parameterId": ""}, {"text": "currently renting", "parameterId": "first_time_buyer"}]},
+        {"parts": [{"text": "I'm a ", "parameterId": ""}, {"text": "homeowner", "parameterId": "first_time_buyer"}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "first time homebuyer", "parameterId": "first_time_buyer"}]},
+        {"parts": [{"text": "This would be my ", "parameterId": ""}, {"text": "second home", "parameterId": "first_time_buyer"}]}
+      ],
+      "parameters": [
+        {
+          "id": "first_time_buyer",
+          "entityType": "@first_time_buyer",
+          "isList": false,
+          "redact": false
+        }
+      ],
+      "webhookState": "WEBHOOK_STATE_ENABLED"
+    },
+    {
+      "displayName": "capture_location",
+      "description": "Captures target location (city, state, or zip)",
+      "trainingPhrases": [
+        {"parts": [{"text": "I'm looking in ", "parameterId": ""}, {"text": "Austin", "parameterId": "location"}, {"text": ", ", "parameterId": ""}, {"text": "Texas", "parameterId": "state"}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "Denver", "parameterId": "location"}, {"text": " area", "parameterId": ""}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "California", "parameterId": "state"}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "78701", "parameterId": "location"}]},
+        {"parts": [{"text": "Somewhere in ", "parameterId": ""}, {"text": "Florida", "parameterId": "state"}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "Phoenix", "parameterId": "location"}]},
+        {"parts": [{"text": "The ", "parameterId": ""}, {"text": "Seattle", "parameterId": "location"}, {"text": " area", "parameterId": ""}]},
+        {"parts": [{"text": "Around ", "parameterId": ""}, {"text": "Chicago", "parameterId": "location"}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "New York", "parameterId": "location"}]},
+        {"parts": [{"text": "Near ", "parameterId": ""}, {"text": "Los Angeles", "parameterId": "location"}]},
+        {"parts": [{"text": "In ", "parameterId": ""}, {"text": "TX", "parameterId": "state"}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "Miami", "parameterId": "location"}, {"text": ", ", "parameterId": ""}, {"text": "FL", "parameterId": "state"}]}
+      ],
+      "parameters": [
+        {
+          "id": "location",
+          "entityType": "@sys.geo-city",
+          "isList": false,
+          "redact": false
+        },
+        {
+          "id": "state",
+          "entityType": "@us_state",
+          "isList": false,
+          "redact": false
+        }
+      ],
+      "webhookState": "WEBHOOK_STATE_ENABLED"
+    },
+    {
+      "displayName": "capture_timeline",
+      "description": "Captures user's purchase/refinance timeline",
+      "trainingPhrases": [
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "As soon as possible", "parameterId": "timeline"}]},
+        {"parts": [{"text": "In the ", "parameterId": ""}, {"text": "next few months", "parameterId": "timeline"}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "Next year", "parameterId": "timeline"}]},
+        {"parts": [{"text": "I'm ", "parameterId": ""}, {"text": "just exploring", "parameterId": "timeline"}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "Right now", "parameterId": "timeline"}]},
+        {"parts": [{"text": "Within ", "parameterId": ""}, {"text": "3 months", "parameterId": "timeline"}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "6 months", "parameterId": "timeline"}, {"text": " from now", "parameterId": ""}]},
+        {"parts": [{"text": "I'm ", "parameterId": ""}, {"text": "actively looking", "parameterId": "timeline"}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "No rush", "parameterId": "timeline"}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "Urgent", "parameterId": "timeline"}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "This month", "parameterId": "timeline"}]},
+        {"parts": [{"text": "Sometime ", "parameterId": ""}, {"text": "next year", "parameterId": "timeline"}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "Not anytime soon", "parameterId": "timeline"}]},
+        {"parts": [{"text": "We're ", "parameterId": ""}, {"text": "researching", "parameterId": "timeline"}]}
+      ],
+      "parameters": [
+        {
+          "id": "timeline",
+          "entityType": "@timeline",
+          "isList": false,
+          "redact": false
+        }
+      ],
+      "webhookState": "WEBHOOK_STATE_ENABLED"
+    },
+    {
+      "displayName": "capture_price",
+      "description": "Captures estimated purchase price or loan amount",
+      "trainingPhrases": [
+        {"parts": [{"text": "Around ", "parameterId": ""}, {"text": "$400,000", "parameterId": "amount"}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "500000", "parameterId": "amount"}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "$350k", "parameterId": "amount"}]},
+        {"parts": [{"text": "About ", "parameterId": ""}, {"text": "300 thousand", "parameterId": "amount"}]},
+        {"parts": [{"text": "Between ", "parameterId": ""}, {"text": "$400,000", "parameterId": "amount"}, {"text": " and $500,000", "parameterId": ""}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "Half a million", "parameterId": "amount"}]},
+        {"parts": [{"text": "Maybe ", "parameterId": ""}, {"text": "$600,000", "parameterId": "amount"}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "250k", "parameterId": "amount"}]},
+        {"parts": [{"text": "Looking at ", "parameterId": ""}, {"text": "$450,000", "parameterId": "amount"}, {"text": " range", "parameterId": ""}]},
+        {"parts": [{"text": "Roughly ", "parameterId": ""}, {"text": "700000", "parameterId": "amount"}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "$1 million", "parameterId": "amount"}]},
+        {"parts": [{"text": "Under ", "parameterId": ""}, {"text": "$300,000", "parameterId": "amount"}]}
+      ],
+      "parameters": [
+        {
+          "id": "amount",
+          "entityType": "@sys.unit-currency",
+          "isList": false,
+          "redact": false
+        }
+      ],
+      "webhookState": "WEBHOOK_STATE_ENABLED"
+    },
+    {
+      "displayName": "capture_credit",
+      "description": "Captures user's credit tier or score range",
+      "trainingPhrases": [
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "Excellent", "parameterId": "credit_tier"}]},
+        {"parts": [{"text": "Around ", "parameterId": ""}, {"text": "720", "parameterId": "credit_tier"}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "Good credit", "parameterId": "credit_tier"}]},
+        {"parts": [{"text": "It's ", "parameterId": ""}, {"text": "fair", "parameterId": "credit_tier"}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "Not sure", "parameterId": "credit_tier"}]},
+        {"parts": [{"text": "I think it's around ", "parameterId": ""}, {"text": "700", "parameterId": "credit_tier"}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "750", "parameterId": "credit_tier"}, {"text": " or so", "parameterId": ""}]},
+        {"parts": [{"text": "My score is ", "parameterId": ""}, {"text": "680", "parameterId": "credit_tier"}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "I don't know my score", "parameterId": "credit_tier"}]},
+        {"parts": [{"text": "It's ", "parameterId": ""}, {"text": "pretty good", "parameterId": "credit_tier"}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "Above 740", "parameterId": "credit_tier"}]},
+        {"parts": [{"text": "Probably ", "parameterId": ""}, {"text": "in the 600s", "parameterId": "credit_tier"}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "Haven't checked", "parameterId": "credit_tier"}]}
+      ],
+      "parameters": [
+        {
+          "id": "credit_tier",
+          "entityType": "@credit_tier",
+          "isList": false,
+          "redact": false
+        }
+      ],
+      "webhookState": "WEBHOOK_STATE_ENABLED"
+    },
+    {
+      "displayName": "capture_contact",
+      "description": "Captures user's contact information and preference",
+      "trainingPhrases": [
+        {"parts": [{"text": "My name is ", "parameterId": ""}, {"text": "John Smith", "parameterId": "name"}, {"text": " and you can ", "parameterId": ""}, {"text": "text me", "parameterId": "preferred_contact"}, {"text": " at ", "parameterId": ""}, {"text": "512-555-1234", "parameterId": "phone"}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "Email", "parameterId": "preferred_contact"}, {"text": " is best, it's ", "parameterId": ""}, {"text": "john@email.com", "parameterId": "email"}]},
+        {"parts": [{"text": "You can reach me at ", "parameterId": ""}, {"text": "555-123-4567", "parameterId": "phone"}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "Call me", "parameterId": "preferred_contact"}, {"text": " at ", "parameterId": ""}, {"text": "5551234567", "parameterId": "phone"}]},
+        {"parts": [{"text": "I'm ", "parameterId": ""}, {"text": "Sarah Johnson", "parameterId": "name"}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "Text", "parameterId": "preferred_contact"}, {"text": " works best", "parameterId": ""}]},
+        {"parts": [{"text": "My email is ", "parameterId": ""}, {"text": "sarah@gmail.com", "parameterId": "email"}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "Please call", "parameterId": "preferred_contact"}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "john.doe@company.com", "parameterId": "email"}]},
+        {"parts": [{"text": "", "parameterId": ""}, {"text": "(555) 123-4567", "parameterId": "phone"}]},
+        {"parts": [{"text": "I prefer ", "parameterId": ""}, {"text": "email", "parameterId": "preferred_contact"}]},
+        {"parts": [{"text": "Best to ", "parameterId": ""}, {"text": "text me", "parameterId": "preferred_contact"}]}
+      ],
+      "parameters": [
+        {
+          "id": "name",
+          "entityType": "@sys.person",
+          "isList": false,
+          "redact": false
+        },
+        {
+          "id": "email",
+          "entityType": "@sys.email",
+          "isList": false,
+          "redact": true
+        },
+        {
+          "id": "phone",
+          "entityType": "@sys.phone-number",
+          "isList": false,
+          "redact": true
+        },
+        {
+          "id": "preferred_contact",
+          "entityType": "@contact_preference",
+          "isList": false,
+          "redact": false
+        }
+      ],
+      "webhookState": "WEBHOOK_STATE_ENABLED"
+    },
+    {
+      "displayName": "request_human_handoff",
+      "description": "User wants to speak with a human",
+      "trainingPhrases": [
+        {"parts": [{"text": "I want to talk to a person"}]},
+        {"parts": [{"text": "Can I speak to someone"}]},
+        {"parts": [{"text": "Human please"}]},
+        {"parts": [{"text": "Transfer me to an agent"}]},
+        {"parts": [{"text": "I need to speak with a loan officer"}]},
+        {"parts": [{"text": "Get me a real person"}]},
+        {"parts": [{"text": "Connect me with someone"}]},
+        {"parts": [{"text": "I'd prefer to talk to a human"}]},
+        {"parts": [{"text": "Can someone call me"}]},
+        {"parts": [{"text": "I have complex questions"}]}
+      ],
+      "parameters": [],
+      "webhookState": "WEBHOOK_STATE_ENABLED"
+    },
+    {
+      "displayName": "default_fallback",
+      "description": "Fallback intent for unrecognized input",
+      "trainingPhrases": [],
+      "isFallback": true,
+      "parameters": [],
+      "webhookState": "WEBHOOK_STATE_ENABLED"
+    }
+  ]
+}

@@ -1,0 +1,508 @@
+{
+  "flows": [
+    {
+      "displayName": "Default Start Flow",
+      "description": "Main qualification flow for mortgage leads",
+      "transitionRouteGroups": [],
+      "transitionRoutes": [
+        {
+          "intent": "start_qualification",
+          "triggerFulfillment": {
+            "webhook": "mortgage-webhook",
+            "tag": "start_qualification",
+            "messages": [
+              {
+                "text": {
+                  "text": ["Hi! I'm here to help you explore your mortgage options. Are you looking to buy a home or refinance an existing mortgage?"]
+                }
+              }
+            ]
+          },
+          "targetPage": "Capture Loan Purpose"
+        }
+      ],
+      "eventHandlers": [
+        {
+          "event": "sys.no-match-default",
+          "triggerFulfillment": {
+            "messages": [
+              {
+                "text": {
+                  "text": ["I didn't quite catch that. Are you looking to buy a home or refinance?"]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "event": "sys.no-input-default",
+          "triggerFulfillment": {
+            "messages": [
+              {
+                "text": {
+                  "text": ["I'm here to help with your mortgage questions. Would you like to explore buying or refinancing?"]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "displayName": "Capture Loan Purpose",
+      "entryFulfillment": {
+        "messages": []
+      },
+      "form": {
+        "parameters": [
+          {
+            "displayName": "loan_purpose",
+            "entityType": "@loan_purpose",
+            "required": true,
+            "fillBehavior": {
+              "initialPromptFulfillment": {
+                "messages": [
+                  {
+                    "text": {
+                      "text": ["Are you looking to purchase a home, refinance, or take cash out?"]
+                    }
+                  }
+                ]
+              },
+              "repromptEventHandlers": [
+                {
+                  "event": "sys.no-match-1",
+                  "triggerFulfillment": {
+                    "messages": [
+                      {
+                        "text": {
+                          "text": ["I want to make sure I understand - are you looking to buy a home, or refinance an existing mortgage?"]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "transitionRoutes": [
+        {
+          "condition": "$page.params.status = \"FINAL\"",
+          "triggerFulfillment": {
+            "webhook": "mortgage-webhook",
+            "tag": "capture_loan_purpose"
+          },
+          "targetPage": "Capture Experience"
+        },
+        {
+          "intent": "request_human_handoff",
+          "targetPage": "Human Handoff"
+        }
+      ]
+    },
+    {
+      "displayName": "Capture Experience",
+      "entryFulfillment": {
+        "messages": [
+          {
+            "text": {
+              "text": ["Great choice! Is this your first home, or have you purchased before?"]
+            }
+          }
+        ],
+        "conditionalCases": [
+          {
+            "cases": [
+              {
+                "condition": "$session.params.loan_purpose = \"refinance\" OR $session.params.loan_purpose = \"cash_out\"",
+                "caseFulfillment": {
+                  "messages": [
+                    {
+                      "text": {
+                        "text": ["Got it! What area is your current property in?"]
+                      }
+                    }
+                  ]
+                },
+                "targetPage": "Capture Location"
+              }
+            ]
+          }
+        ]
+      },
+      "form": {
+        "parameters": [
+          {
+            "displayName": "first_time_buyer",
+            "entityType": "@first_time_buyer",
+            "required": true,
+            "fillBehavior": {
+              "initialPromptFulfillment": {
+                "messages": [
+                  {
+                    "text": {
+                      "text": ["Is this your first time buying a home?"]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "transitionRoutes": [
+        {
+          "condition": "$page.params.status = \"FINAL\"",
+          "triggerFulfillment": {
+            "webhook": "mortgage-webhook",
+            "tag": "capture_experience"
+          },
+          "targetPage": "Capture Location"
+        }
+      ]
+    },
+    {
+      "displayName": "Capture Location",
+      "entryFulfillment": {
+        "messages": [
+          {
+            "text": {
+              "text": ["What area are you looking to buy in? City, state, or zip code works great."]
+            }
+          }
+        ]
+      },
+      "form": {
+        "parameters": [
+          {
+            "displayName": "location",
+            "entityType": "@sys.geo-city",
+            "required": false
+          },
+          {
+            "displayName": "state",
+            "entityType": "@us_state",
+            "required": false
+          }
+        ]
+      },
+      "transitionRoutes": [
+        {
+          "condition": "$page.params.location != null OR $page.params.state != null",
+          "triggerFulfillment": {
+            "webhook": "mortgage-webhook",
+            "tag": "capture_location"
+          },
+          "targetPage": "Capture Timeline"
+        },
+        {
+          "condition": "$page.params.status = \"FINAL\"",
+          "triggerFulfillment": {
+            "webhook": "mortgage-webhook",
+            "tag": "capture_location"
+          },
+          "targetPage": "Capture Timeline"
+        }
+      ],
+      "eventHandlers": [
+        {
+          "event": "sys.no-match-default",
+          "triggerFulfillment": {
+            "messages": [
+              {
+                "text": {
+                  "text": ["No problem - just let me know the general area or state you're interested in."]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "displayName": "Capture Timeline",
+      "entryFulfillment": {
+        "messages": [
+          {
+            "text": {
+              "text": ["What's your timeline - are you actively shopping, or just exploring options?"]
+            }
+          }
+        ]
+      },
+      "form": {
+        "parameters": [
+          {
+            "displayName": "timeline",
+            "entityType": "@timeline",
+            "required": true,
+            "fillBehavior": {
+              "initialPromptFulfillment": {
+                "messages": [
+                  {
+                    "text": {
+                      "text": ["When are you hoping to close on your home?"]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "transitionRoutes": [
+        {
+          "condition": "$page.params.status = \"FINAL\"",
+          "triggerFulfillment": {
+            "webhook": "mortgage-webhook",
+            "tag": "capture_timeline"
+          },
+          "targetPage": "Capture Price"
+        }
+      ]
+    },
+    {
+      "displayName": "Capture Price",
+      "entryFulfillment": {
+        "messages": [
+          {
+            "text": {
+              "text": ["What purchase price range are you considering? A ballpark is fine."]
+            }
+          }
+        ]
+      },
+      "form": {
+        "parameters": [
+          {
+            "displayName": "amount",
+            "entityType": "@sys.unit-currency",
+            "required": true,
+            "fillBehavior": {
+              "initialPromptFulfillment": {
+                "messages": [
+                  {
+                    "text": {
+                      "text": ["What's your target price range?"]
+                    }
+                  }
+                ]
+              },
+              "repromptEventHandlers": [
+                {
+                  "event": "sys.no-match-1",
+                  "triggerFulfillment": {
+                    "messages": [
+                      {
+                        "text": {
+                          "text": ["No worries if you're not sure exactly - just give me a rough estimate like $300,000 or $500k."]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "transitionRoutes": [
+        {
+          "condition": "$page.params.status = \"FINAL\"",
+          "triggerFulfillment": {
+            "webhook": "mortgage-webhook",
+            "tag": "capture_price"
+          },
+          "targetPage": "Capture Credit"
+        }
+      ]
+    },
+    {
+      "displayName": "Capture Credit",
+      "entryFulfillment": {
+        "messages": [
+          {
+            "text": {
+              "text": ["Do you know roughly where your credit score falls? Excellent (740+), Good (700-739), Fair (660-699), or not sure?"]
+            }
+          }
+        ]
+      },
+      "form": {
+        "parameters": [
+          {
+            "displayName": "credit_tier",
+            "entityType": "@credit_tier",
+            "required": true,
+            "fillBehavior": {
+              "initialPromptFulfillment": {
+                "messages": [
+                  {
+                    "text": {
+                      "text": ["How would you describe your credit - excellent, good, fair, or not sure?"]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "transitionRoutes": [
+        {
+          "condition": "$page.params.status = \"FINAL\"",
+          "triggerFulfillment": {
+            "webhook": "mortgage-webhook",
+            "tag": "capture_credit"
+          },
+          "targetPage": "Capture Contact"
+        }
+      ]
+    },
+    {
+      "displayName": "Capture Contact",
+      "entryFulfillment": {
+        "messages": [
+          {
+            "text": {
+              "text": ["Last question! What's the best way to reach you - text, email, or phone call? And what's your name and contact info?"]
+            }
+          }
+        ]
+      },
+      "form": {
+        "parameters": [
+          {
+            "displayName": "first_name",
+            "entityType": "@sys.given-name",
+            "required": true,
+            "fillBehavior": {
+              "initialPromptFulfillment": {
+                "messages": [
+                  {
+                    "text": {
+                      "text": ["What's your first name?"]
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "displayName": "phone",
+            "entityType": "@sys.phone-number",
+            "required": true,
+            "redact": true,
+            "fillBehavior": {
+              "initialPromptFulfillment": {
+                "messages": [
+                  {
+                    "text": {
+                      "text": ["What's the best phone number to reach you?"]
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "displayName": "email",
+            "entityType": "@sys.email",
+            "required": false,
+            "redact": true
+          },
+          {
+            "displayName": "preferred_contact",
+            "entityType": "@contact_preference",
+            "required": false,
+            "defaultValue": "sms"
+          }
+        ]
+      },
+      "transitionRoutes": [
+        {
+          "condition": "$page.params.status = \"FINAL\"",
+          "triggerFulfillment": {
+            "webhook": "mortgage-webhook",
+            "tag": "capture_contact"
+          },
+          "targetPage": "Qualification Complete"
+        }
+      ]
+    },
+    {
+      "displayName": "Qualification Complete",
+      "entryFulfillment": {
+        "webhook": "mortgage-webhook",
+        "tag": "qualification_complete",
+        "messages": [
+          {
+            "text": {
+              "text": ["Thanks $session.params.first_name! A loan officer will reach out within the hour. Is there anything specific you'd like them to know?"]
+            }
+          }
+        ]
+      },
+      "transitionRoutes": [
+        {
+          "condition": "true",
+          "targetPage": "END_SESSION"
+        }
+      ]
+    },
+    {
+      "displayName": "Human Handoff",
+      "entryFulfillment": {
+        "messages": [
+          {
+            "text": {
+              "text": ["I'll connect you with a loan officer right away. What's the best number to reach you?"]
+            }
+          }
+        ],
+        "webhook": "mortgage-webhook",
+        "tag": "human_handoff_requested"
+      },
+      "form": {
+        "parameters": [
+          {
+            "displayName": "phone",
+            "entityType": "@sys.phone-number",
+            "required": true,
+            "redact": true
+          }
+        ]
+      },
+      "transitionRoutes": [
+        {
+          "condition": "$page.params.status = \"FINAL\"",
+          "triggerFulfillment": {
+            "messages": [
+              {
+                "text": {
+                  "text": ["Got it! Someone will call you shortly. Thank you!"]
+                }
+              }
+            ]
+          },
+          "targetPage": "END_SESSION"
+        }
+      ]
+    }
+  ],
+  "webhooks": [
+    {
+      "displayName": "mortgage-webhook",
+      "genericWebService": {
+        "uri": "https://YOUR_RAILWAY_DOMAIN/api/v1/dialogflow/webhook",
+        "requestHeaders": {},
+        "allowedCaCerts": [],
+        "timeout": "10s"
+      }
+    }
+  ]
+}

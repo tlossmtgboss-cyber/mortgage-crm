@@ -21712,6 +21712,18 @@ except Exception as e:
     intake_engine_error = traceback.format_exc()
     logger.warning(f"⚠️ Intake Engine routes not loaded: {e}")
 
+# Dialogflow Widget Webhook Routes (Lead Qualification)
+dialogflow_webhook_error = None
+try:
+    from routes.dialogflow_webhook_routes import router as dialogflow_webhook_router
+    app.include_router(dialogflow_webhook_router, tags=["Dialogflow Widget"])
+    logger.info("✅ Dialogflow Widget Webhook routes loaded")
+except Exception as e:
+    dialogflow_webhook_error = str(e)
+    import traceback
+    dialogflow_webhook_error = traceback.format_exc()
+    logger.warning(f"⚠️ Dialogflow Widget Webhook routes not loaded: {e}")
+
 @app.get("/api/v1/debug/portal-services-status")
 async def debug_portal_services_status():
     """Debug endpoint to check all portal-related routes loading status"""
@@ -21759,6 +21771,22 @@ async def debug_intake_engine_status():
             status["engine_init_error"] = str(e)
 
     return status
+
+@app.get("/api/v1/debug/dialogflow-webhook-status")
+async def debug_dialogflow_webhook_status():
+    """Debug endpoint to check Dialogflow webhook routes loading status"""
+    return {
+        "dialogflow_webhook_loaded": dialogflow_webhook_error is None,
+        "error": dialogflow_webhook_error,
+        "endpoints": [
+            "/api/v1/dialogflow/webhook",
+            "/api/v1/dialogflow/health",
+            "/api/v1/widget/chat",
+            "/api/v1/widget/create-lead",
+            "/api/v1/widget/generate-summary",
+            "/api/v1/widget/notify-lo"
+        ] if dialogflow_webhook_error is None else []
+    }
 
 # Debug endpoint for tools registry loading
 @app.get("/api/v1/debug/tools-registry-status")

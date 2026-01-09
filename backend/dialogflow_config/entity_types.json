@@ -1,0 +1,463 @@
+{
+  "entityTypes": [
+    {
+      "displayName": "loan_purpose",
+      "kind": "KIND_MAP",
+      "entities": [
+        {
+          "value": "purchase",
+          "synonyms": [
+            "purchase",
+            "buy",
+            "buying",
+            "buy a home",
+            "buy a house",
+            "purchase a home",
+            "purchase a house",
+            "first home",
+            "new home",
+            "buying my first",
+            "home purchase",
+            "house purchase",
+            "want to buy",
+            "looking to buy",
+            "interested in buying"
+          ]
+        },
+        {
+          "value": "refinance",
+          "synonyms": [
+            "refinance",
+            "refi",
+            "refinancing",
+            "lower my rate",
+            "lower rate",
+            "reduce my payment",
+            "lower my payment",
+            "shorten my term",
+            "15 year",
+            "switch lenders",
+            "better rate",
+            "rate and term"
+          ]
+        },
+        {
+          "value": "cash_out",
+          "synonyms": [
+            "cash out",
+            "cash-out",
+            "cash out refinance",
+            "cash out refi",
+            "take cash out",
+            "pull equity",
+            "tap equity",
+            "home equity",
+            "access equity",
+            "equity loan",
+            "consolidate debt",
+            "home improvement",
+            "renovations"
+          ]
+        }
+      ],
+      "autoExpansionMode": "AUTO_EXPANSION_MODE_DEFAULT"
+    },
+    {
+      "displayName": "timeline",
+      "kind": "KIND_MAP",
+      "entities": [
+        {
+          "value": "immediate",
+          "synonyms": [
+            "immediately",
+            "now",
+            "right now",
+            "as soon as possible",
+            "asap",
+            "this week",
+            "this month",
+            "ready now",
+            "very soon",
+            "urgent",
+            "urgently",
+            "active shopping",
+            "actively looking",
+            "found a house",
+            "under contract",
+            "offer accepted"
+          ]
+        },
+        {
+          "value": "1_3_months",
+          "synonyms": [
+            "1 to 3 months",
+            "one to three months",
+            "next month",
+            "next couple months",
+            "few weeks",
+            "few months",
+            "couple of months",
+            "within 3 months",
+            "soon",
+            "starting to look",
+            "beginning my search"
+          ]
+        },
+        {
+          "value": "3_6_months",
+          "synonyms": [
+            "3 to 6 months",
+            "three to six months",
+            "later this year",
+            "in a few months",
+            "spring",
+            "summer",
+            "fall",
+            "winter",
+            "planning ahead",
+            "not urgent"
+          ]
+        },
+        {
+          "value": "6_plus_months",
+          "synonyms": [
+            "6 months or more",
+            "more than 6 months",
+            "next year",
+            "sometime next year",
+            "not anytime soon",
+            "long term",
+            "eventually",
+            "no rush",
+            "down the road"
+          ]
+        },
+        {
+          "value": "exploring",
+          "synonyms": [
+            "just exploring",
+            "just looking",
+            "exploring options",
+            "researching",
+            "curious",
+            "not sure yet",
+            "gathering information",
+            "learning",
+            "no timeline",
+            "undecided",
+            "haven't decided",
+            "maybe someday"
+          ]
+        }
+      ],
+      "autoExpansionMode": "AUTO_EXPANSION_MODE_DEFAULT"
+    },
+    {
+      "displayName": "credit_tier",
+      "kind": "KIND_MAP",
+      "entities": [
+        {
+          "value": "excellent_740+",
+          "synonyms": [
+            "excellent",
+            "excellent credit",
+            "over 740",
+            "above 740",
+            "740 or higher",
+            "750",
+            "760",
+            "770",
+            "780",
+            "790",
+            "800",
+            "very high",
+            "great credit",
+            "perfect credit",
+            "top tier"
+          ]
+        },
+        {
+          "value": "good_700_739",
+          "synonyms": [
+            "good",
+            "good credit",
+            "700 to 740",
+            "around 700",
+            "700s",
+            "710",
+            "720",
+            "730",
+            "pretty good",
+            "decent credit",
+            "solid credit"
+          ]
+        },
+        {
+          "value": "fair_660_699",
+          "synonyms": [
+            "fair",
+            "fair credit",
+            "660 to 700",
+            "around 680",
+            "680",
+            "690",
+            "670",
+            "660",
+            "okay credit",
+            "average credit",
+            "could be better",
+            "working on it"
+          ]
+        },
+        {
+          "value": "below_660",
+          "synonyms": [
+            "below 660",
+            "under 660",
+            "poor",
+            "poor credit",
+            "bad credit",
+            "low credit",
+            "not great",
+            "needs work",
+            "rebuilding",
+            "650",
+            "640",
+            "630",
+            "620",
+            "600s",
+            "500s"
+          ]
+        },
+        {
+          "value": "unknown",
+          "synonyms": [
+            "not sure",
+            "don't know",
+            "unsure",
+            "I don't know my score",
+            "haven't checked",
+            "no idea",
+            "unknown",
+            "need to check",
+            "haven't looked"
+          ]
+        }
+      ],
+      "autoExpansionMode": "AUTO_EXPANSION_MODE_DEFAULT"
+    },
+    {
+      "displayName": "first_time_buyer",
+      "kind": "KIND_MAP",
+      "entities": [
+        {
+          "value": "true",
+          "synonyms": [
+            "first time",
+            "first home",
+            "first house",
+            "never owned",
+            "first time buyer",
+            "first time homebuyer",
+            "never bought before",
+            "renting now",
+            "currently renting",
+            "been renting",
+            "my first",
+            "haven't owned",
+            "no I haven't"
+          ]
+        },
+        {
+          "value": "false",
+          "synonyms": [
+            "not first time",
+            "bought before",
+            "owned before",
+            "have owned",
+            "currently own",
+            "homeowner",
+            "existing homeowner",
+            "sold a home",
+            "second home",
+            "investment property",
+            "yes I have",
+            "multiple homes",
+            "previous homeowner"
+          ]
+        }
+      ],
+      "autoExpansionMode": "AUTO_EXPANSION_MODE_DEFAULT"
+    },
+    {
+      "displayName": "contact_preference",
+      "kind": "KIND_MAP",
+      "entities": [
+        {
+          "value": "sms",
+          "synonyms": [
+            "text",
+            "text me",
+            "sms",
+            "text message",
+            "texting",
+            "send a text",
+            "message me",
+            "prefer text",
+            "texts are best"
+          ]
+        },
+        {
+          "value": "email",
+          "synonyms": [
+            "email",
+            "email me",
+            "send an email",
+            "e-mail",
+            "prefer email",
+            "email is best",
+            "by email"
+          ]
+        },
+        {
+          "value": "call",
+          "synonyms": [
+            "call",
+            "call me",
+            "phone call",
+            "phone",
+            "prefer a call",
+            "give me a call",
+            "talk on the phone",
+            "calls are best",
+            "by phone"
+          ]
+        }
+      ],
+      "autoExpansionMode": "AUTO_EXPANSION_MODE_DEFAULT"
+    },
+    {
+      "displayName": "property_type",
+      "kind": "KIND_MAP",
+      "entities": [
+        {
+          "value": "single_family",
+          "synonyms": [
+            "single family",
+            "single family home",
+            "house",
+            "detached",
+            "detached home",
+            "standalone house",
+            "sfr",
+            "single family residence"
+          ]
+        },
+        {
+          "value": "condo",
+          "synonyms": [
+            "condo",
+            "condominium",
+            "condo unit",
+            "high rise",
+            "highrise",
+            "apartment condo"
+          ]
+        },
+        {
+          "value": "townhouse",
+          "synonyms": [
+            "townhouse",
+            "townhome",
+            "town home",
+            "row house",
+            "attached home"
+          ]
+        },
+        {
+          "value": "multi_family",
+          "synonyms": [
+            "multi family",
+            "multifamily",
+            "duplex",
+            "triplex",
+            "fourplex",
+            "2-4 unit",
+            "investment property",
+            "rental property"
+          ]
+        },
+        {
+          "value": "manufactured",
+          "synonyms": [
+            "manufactured",
+            "manufactured home",
+            "mobile home",
+            "modular",
+            "modular home",
+            "prefab"
+          ]
+        }
+      ],
+      "autoExpansionMode": "AUTO_EXPANSION_MODE_DEFAULT"
+    },
+    {
+      "displayName": "us_state",
+      "kind": "KIND_MAP",
+      "autoExpansionMode": "AUTO_EXPANSION_MODE_DEFAULT",
+      "entities": [
+        {"value": "AL", "synonyms": ["alabama", "al"]},
+        {"value": "AK", "synonyms": ["alaska", "ak"]},
+        {"value": "AZ", "synonyms": ["arizona", "az"]},
+        {"value": "AR", "synonyms": ["arkansas", "ar"]},
+        {"value": "CA", "synonyms": ["california", "ca", "cali"]},
+        {"value": "CO", "synonyms": ["colorado", "co"]},
+        {"value": "CT", "synonyms": ["connecticut", "ct"]},
+        {"value": "DE", "synonyms": ["delaware", "de"]},
+        {"value": "FL", "synonyms": ["florida", "fl"]},
+        {"value": "GA", "synonyms": ["georgia", "ga"]},
+        {"value": "HI", "synonyms": ["hawaii", "hi"]},
+        {"value": "ID", "synonyms": ["idaho", "id"]},
+        {"value": "IL", "synonyms": ["illinois", "il"]},
+        {"value": "IN", "synonyms": ["indiana", "in"]},
+        {"value": "IA", "synonyms": ["iowa", "ia"]},
+        {"value": "KS", "synonyms": ["kansas", "ks"]},
+        {"value": "KY", "synonyms": ["kentucky", "ky"]},
+        {"value": "LA", "synonyms": ["louisiana", "la"]},
+        {"value": "ME", "synonyms": ["maine", "me"]},
+        {"value": "MD", "synonyms": ["maryland", "md"]},
+        {"value": "MA", "synonyms": ["massachusetts", "ma", "mass"]},
+        {"value": "MI", "synonyms": ["michigan", "mi"]},
+        {"value": "MN", "synonyms": ["minnesota", "mn"]},
+        {"value": "MS", "synonyms": ["mississippi", "ms"]},
+        {"value": "MO", "synonyms": ["missouri", "mo"]},
+        {"value": "MT", "synonyms": ["montana", "mt"]},
+        {"value": "NE", "synonyms": ["nebraska", "ne"]},
+        {"value": "NV", "synonyms": ["nevada", "nv"]},
+        {"value": "NH", "synonyms": ["new hampshire", "nh"]},
+        {"value": "NJ", "synonyms": ["new jersey", "nj"]},
+        {"value": "NM", "synonyms": ["new mexico", "nm"]},
+        {"value": "NY", "synonyms": ["new york", "ny"]},
+        {"value": "NC", "synonyms": ["north carolina", "nc"]},
+        {"value": "ND", "synonyms": ["north dakota", "nd"]},
+        {"value": "OH", "synonyms": ["ohio", "oh"]},
+        {"value": "OK", "synonyms": ["oklahoma", "ok"]},
+        {"value": "OR", "synonyms": ["oregon", "or"]},
+        {"value": "PA", "synonyms": ["pennsylvania", "pa"]},
+        {"value": "RI", "synonyms": ["rhode island", "ri"]},
+        {"value": "SC", "synonyms": ["south carolina", "sc"]},
+        {"value": "SD", "synonyms": ["south dakota", "sd"]},
+        {"value": "TN", "synonyms": ["tennessee", "tn"]},
+        {"value": "TX", "synonyms": ["texas", "tx"]},
+        {"value": "UT", "synonyms": ["utah", "ut"]},
+        {"value": "VT", "synonyms": ["vermont", "vt"]},
+        {"value": "VA", "synonyms": ["virginia", "va"]},
+        {"value": "WA", "synonyms": ["washington", "wa", "washington state"]},
+        {"value": "WV", "synonyms": ["west virginia", "wv"]},
+        {"value": "WI", "synonyms": ["wisconsin", "wi"]},
+        {"value": "WY", "synonyms": ["wyoming", "wy"]},
+        {"value": "DC", "synonyms": ["washington dc", "dc", "district of columbia"]}
+      ]
+    }
+  ]
+}
