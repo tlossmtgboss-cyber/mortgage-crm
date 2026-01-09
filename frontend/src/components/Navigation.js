@@ -132,6 +132,15 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
                 Team
               </Link>
             )}
+            {canViewTeam && (
+              <Link
+                to="/team-role-settings"
+                className={`nav-link team-roles-link ${isActive('/team-role-settings') ? 'active' : ''}`}
+                title="Team Role Settings"
+              >
+                Team Roles
+              </Link>
+            )}
             <Link
               to="/settings"
               className={`settings-link ${isActive('/settings') ? 'active' : ''}`}
