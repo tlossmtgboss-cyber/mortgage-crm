@@ -112,6 +112,33 @@
   cursor: not-allowed;
 }
 
+/* Role Selector Styles */
+.user-selector.role-selector {
+  min-width: 240px;
+}
+
+.user-selector.role-selector optgroup {
+  font-weight: 600;
+  font-size: 11px;
+  color: #6b7280;
+  background: #f3f4f6;
+  padding: 8px 0 4px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.user-selector.role-selector option {
+  font-weight: 400;
+  font-size: 14px;
+  color: #374151;
+  padding: 8px 12px;
+  background: white;
+}
+
+.user-selector.role-selector option:hover {
+  background: #f0fdfa;
+}
+
 /* Buttons */
 .btn-primary {
   padding: 12px 24px;
