@@ -11,8 +11,15 @@ function Dashboard() {
   const navigate = useNavigate();
   const { hasPermission, userRole, effectiveRole } = usePermissions();
 
-  // Redirect admin users to /admin page
+  // Redirect admin users to /admin page (unless in role preview mode)
   useEffect(() => {
+    // Check if we're in role preview mode - if so, don't redirect
+    const rolePreview = localStorage.getItem('role_preview');
+    if (rolePreview) {
+      console.log('Role preview mode active - staying on dashboard');
+      return; // Don't redirect when previewing a role
+    }
+
     // Check both userRole and localStorage for admin status
     const isAdmin = userRole === 'admin' || (() => {
       try {
