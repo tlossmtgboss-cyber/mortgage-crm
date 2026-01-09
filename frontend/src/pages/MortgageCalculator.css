@@ -1,0 +1,416 @@
+.mortgage-calculator-page {
+  min-height: 100vh;
+  background: #f8fafe;
+  padding: 0;
+}
+
+/* Header */
+.calculator-header {
+  background: white;
+  padding: 32px 48px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.calculator-header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0 0 8px;
+}
+
+.calculator-header p {
+  font-size: 16px;
+  color: #6b7280;
+  margin: 0;
+}
+
+/* Settings Bar */
+.calculator-settings {
+  display: flex;
+  gap: 24px;
+  padding: 16px 48px;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+  flex-wrap: wrap;
+}
+
+.setting-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.setting-item label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #4b5563;
+  white-space: nowrap;
+}
+
+.setting-item select,
+.setting-item input {
+  padding: 6px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+  background: white;
+  min-width: 80px;
+}
+
+.setting-item input {
+  width: 80px;
+}
+
+/* Comparison Table Container */
+.comparison-container {
+  padding: 32px 48px;
+  overflow-x: auto;
+}
+
+/* Comparison Table */
+.comparison-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.comparison-table thead tr {
+  background: #f9fafb;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.comparison-table th {
+  padding: 16px 24px;
+  text-align: left;
+  font-weight: 600;
+  color: #374151;
+  font-size: 14px;
+}
+
+.comparison-table th.label-column {
+  width: 200px;
+  min-width: 200px;
+}
+
+.comparison-table th.scenario-column {
+  min-width: 180px;
+  text-align: center;
+}
+
+.comparison-table th.add-column {
+  width: 80px;
+  min-width: 80px;
+}
+
+/* Scenario Header */
+.scenario-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.scenario-name-input {
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  text-align: center;
+  padding: 4px 8px;
+  border-radius: 4px;
+  width: 120px;
+}
+
+.scenario-name-input:hover {
+  background: #e5e7eb;
+}
+
+.scenario-name-input:focus {
+  outline: none;
+  background: white;
+  border: 1px solid #217F8D;
+}
+
+.remove-scenario-btn {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.remove-scenario-btn:hover {
+  color: #dc2626;
+}
+
+.add-scenario-btn {
+  background: #217F8D;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.add-scenario-btn:hover {
+  background: #1a6670;
+}
+
+/* Table Body */
+.comparison-table tbody tr {
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.comparison-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.comparison-table tbody tr.even-row {
+  background: white;
+}
+
+.comparison-table tbody tr.odd-row {
+  background: #fafafa;
+}
+
+.comparison-table td {
+  padding: 14px 24px;
+  font-size: 14px;
+}
+
+.label-cell {
+  color: #374151;
+  font-weight: 500;
+}
+
+.value-cell {
+  text-align: center;
+  color: #1f2937;
+}
+
+.value-cell.highlight {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+/* Editable Cells */
+.editable-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.cell-input {
+  border: 1px solid transparent;
+  background: transparent;
+  font-size: 14px;
+  color: #1f2937;
+  text-align: center;
+  padding: 4px 8px;
+  border-radius: 4px;
+  width: 120px;
+}
+
+.cell-input:hover {
+  border-color: #d1d5db;
+  background: #f9fafb;
+}
+
+.cell-input:focus {
+  outline: none;
+  border-color: #217F8D;
+  background: white;
+}
+
+.rate-input {
+  width: 80px;
+}
+
+.sub-label {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+/* Savings Cell */
+.savings-cell {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.savings-cell .positive {
+  color: #059669;
+}
+
+.savings-cell .negative {
+  color: #dc2626;
+}
+
+.savings-cell .neutral {
+  color: #9ca3af;
+}
+
+.add-column-spacer {
+  width: 80px;
+}
+
+/* Payment Breakdown Section */
+.breakdown-section {
+  padding: 32px 48px;
+  background: white;
+  border-top: 1px solid #e5e7eb;
+}
+
+.breakdown-section h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 24px;
+}
+
+.breakdown-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+}
+
+.breakdown-card {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.breakdown-card h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.breakdown-items {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+}
+
+.breakdown-row span:first-child {
+  color: #6b7280;
+}
+
+.breakdown-row span:last-child {
+  color: #1f2937;
+  font-weight: 500;
+}
+
+.breakdown-row.total {
+  padding-top: 12px;
+  margin-top: 8px;
+  border-top: 1px solid #e5e7eb;
+  font-weight: 600;
+}
+
+.breakdown-row.total span:first-child {
+  color: #374151;
+}
+
+.breakdown-row.total span:last-child {
+  color: #217F8D;
+  font-size: 16px;
+}
+
+/* Disclaimer */
+.calculator-disclaimer {
+  padding: 24px 48px;
+  background: #f9fafb;
+  border-top: 1px solid #e5e7eb;
+}
+
+.calculator-disclaimer p {
+  font-size: 12px;
+  color: #9ca3af;
+  margin: 0;
+  line-height: 1.6;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .calculator-header,
+  .comparison-container,
+  .breakdown-section,
+  .calculator-disclaimer {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+
+  .calculator-settings {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+
+  .comparison-table th.label-column {
+    width: 150px;
+    min-width: 150px;
+  }
+}
+
+@media (max-width: 768px) {
+  .calculator-header h1 {
+    font-size: 24px;
+  }
+
+  .calculator-settings {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .setting-item {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .setting-item select,
+  .setting-item input {
+    flex: 1;
+    max-width: 150px;
+  }
+
+  .comparison-container {
+    padding: 16px;
+  }
+
+  .comparison-table th,
+  .comparison-table td {
+    padding: 12px 16px;
+  }
+
+  .comparison-table th.label-column {
+    width: 120px;
+    min-width: 120px;
+  }
+
+  .cell-input {
+    width: 100px;
+  }
+
+  .breakdown-grid {
+    grid-template-columns: 1fr;
+  }
+}
