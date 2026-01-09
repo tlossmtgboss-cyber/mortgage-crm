@@ -178,6 +178,7 @@ function ScenarioBuilder({
         ...result.scenario,
         ...scenarioData,
         id: scenarioId,
+        scenario_id: scenarioId,
         loan_options: options.options || options.loan_options || [],
       };
 

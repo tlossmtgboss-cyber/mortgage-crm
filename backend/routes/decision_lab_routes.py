@@ -415,6 +415,7 @@ async def list_scenarios(
     for r in results:
         scenarios.append({
             "id": r[0],
+            "scenario_id": r[0],  # Include both for frontend compatibility
             "name": r[1],
             "scenario_type": r[2],
             "loan_amount": float(r[3]) if r[3] else 0,
@@ -560,7 +561,7 @@ async def compare_scenarios(
     scenarios = []
     for sid in request.scenario_ids:
         result = db.execute(text("""
-            SELECT s.id, s.name, s.loan_amount, s.down_payment,
+            SELECT s.id, s.name, s.loan_amount, s.down_payment, s.purchase_price, s.credit_score,
                    o.monthly_payment, o.total_interest_paid, o.total_cash_to_close,
                    o.product_name, o.interest_rate
             FROM loan_scenarios s
@@ -571,14 +572,17 @@ async def compare_scenarios(
         if result:
             scenarios.append({
                 "id": result[0],
+                "scenario_id": result[0],  # Include both for frontend compatibility
                 "name": result[1] or f"Scenario {result[0]}",
                 "loan_amount": float(result[2]) if result[2] else 0,
                 "down_payment": float(result[3]) if result[3] else 0,
-                "monthly_payment": float(result[4]) if result[4] else 0,
-                "total_interest": float(result[5]) if result[5] else 0,
-                "cash_to_close": float(result[6]) if result[6] else 0,
-                "product": result[7],
-                "rate": float(result[8]) if result[8] else 0
+                "purchase_price": float(result[4]) if result[4] else 0,
+                "credit_score": result[5] or 0,
+                "monthly_payment": float(result[6]) if result[6] else 0,
+                "total_interest": float(result[7]) if result[7] else 0,
+                "cash_to_close": float(result[8]) if result[8] else 0,
+                "product": result[9],
+                "rate": float(result[10]) if result[10] else 0
             })
 
     # Calculate differences
