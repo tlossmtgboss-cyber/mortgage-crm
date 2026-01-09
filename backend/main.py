@@ -46678,6 +46678,156 @@ async def resolve_user_for_loan_role(
 
 
 # ============================================================================
+# DEFAULT TEAM ROLE SETTINGS ENDPOINTS
+# ============================================================================
+
+@app.get("/api/v1/settings/team-roles")
+async def get_default_role_assignments(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get default role assignments for the organization (Team Settings)."""
+    from sqlalchemy import text
+
+    try:
+        # Get all roles with their default assignments
+        result = db.execute(text("""
+            SELECT
+                r.id as role_id,
+                r.name as role_name,
+                r.description as role_description,
+                dra.user_id,
+                u.name as user_name,
+                u.email as user_email
+            FROM roles r
+            LEFT JOIN default_role_assignments dra ON dra.role_id = r.id
+                AND dra.organization_id = :org_id
+            LEFT JOIN users u ON u.id = dra.user_id
+            WHERE r.is_active = 1
+            ORDER BY r.id
+        """), {"org_id": current_user.organization_id or 1}).fetchall()
+
+        assignments = []
+        for row in result:
+            assignments.append({
+                "role_id": row[0],
+                "role_name": row[1],
+                "role_description": row[2],
+                "user_id": row[3],
+                "user_name": row[4],
+                "user_email": row[5]
+            })
+
+        return {
+            "organization_id": current_user.organization_id or 1,
+            "assignments": assignments,
+            "count": len(assignments)
+        }
+    except Exception as e:
+        logger.error(f"Error fetching default role assignments: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/settings/team-roles/{role_id}")
+async def set_default_role_assignment(
+    role_id: int,
+    user_id: int = Body(..., embed=True),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Set default user for a role (Team Settings)."""
+    from sqlalchemy import text
+
+    try:
+        org_id = current_user.organization_id or 1
+
+        # Verify role exists
+        role = db.execute(text("SELECT id, name FROM roles WHERE id = :role_id"),
+                         {"role_id": role_id}).fetchone()
+        if not role:
+            raise HTTPException(status_code=404, detail="Role not found")
+
+        # Verify user exists
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Upsert the default assignment
+        # First try to update
+        result = db.execute(text("""
+            UPDATE default_role_assignments
+            SET user_id = :user_id,
+                assigned_by_id = :assigned_by_id,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE organization_id = :org_id AND role_id = :role_id
+        """), {
+            "org_id": org_id,
+            "role_id": role_id,
+            "user_id": user_id,
+            "assigned_by_id": current_user.id
+        })
+
+        if result.rowcount == 0:
+            # Insert new
+            db.execute(text("""
+                INSERT INTO default_role_assignments
+                (organization_id, role_id, user_id, assigned_by_id)
+                VALUES (:org_id, :role_id, :user_id, :assigned_by_id)
+            """), {
+                "org_id": org_id,
+                "role_id": role_id,
+                "user_id": user_id,
+                "assigned_by_id": current_user.id
+            })
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": f"Set {user.name} as default {role[1]}",
+            "role_id": role_id,
+            "role_name": role[1],
+            "user_id": user_id,
+            "user_name": user.name
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error setting default role assignment: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/v1/settings/team-roles/{role_id}")
+async def remove_default_role_assignment(
+    role_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Remove default user assignment for a role."""
+    from sqlalchemy import text
+
+    try:
+        org_id = current_user.organization_id or 1
+
+        db.execute(text("""
+            DELETE FROM default_role_assignments
+            WHERE organization_id = :org_id AND role_id = :role_id
+        """), {"org_id": org_id, "role_id": role_id})
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": "Default role assignment removed"
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error removing default role assignment: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
 # FUNDED LOAN → MUM CLIENT CONVERSION
 # ============================================================================
 

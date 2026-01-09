@@ -90,6 +90,7 @@ const ScenarioModeling = lazy(() => import('./pages/ScenarioModeling'));
 const DecisionLab = lazy(() => import('./pages/DecisionLab'));
 const PipelineProbability = lazy(() => import('./pages/PipelineProbability'));
 const SLASettings = lazy(() => import('./pages/SLASettings'));
+const TeamRoleSettings = lazy(() => import('./pages/TeamRoleSettings'));
 const EmployeeOnboardingAdmin = lazy(() => import('./pages/EmployeeOnboardingAdmin'));
 const AcceptInvite = lazy(() => import('./pages/AcceptInvite'));
 const MortgagePlannerQuestionnaire = lazy(() => import('./pages/MortgagePlannerQuestionnaire'));
@@ -722,6 +723,30 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><SLASettings /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+
+          {/* Team Role Settings */}
+          <Route
+            path="/team-role-settings"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><TeamRoleSettings /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
