@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { decisionLabAPI } from '../../services/decisionLabApi';
+import { useMortgageLab } from '../../contexts/MortgageLabContext';
 import './ScenarioBuilder.css';
 
 const PROPERTY_TYPES = [
@@ -47,6 +48,9 @@ function ScenarioBuilder({
   onSelectScenario,
   onCompare,
 }) {
+  // Get context for syncing data with calculators
+  const { syncFromScenario, sharedData } = useMortgageLab();
+
   const [scenarios, setScenarios] = useState(existingScenarios);
   const [loading, setLoading] = useState(false);
   const [calculating, setCalculating] = useState(false);
@@ -81,6 +85,21 @@ function ScenarioBuilder({
       fetchScenarios();
     }
   }, [sessionId]);
+
+  // Pre-fill form from calculator shared data if available
+  useEffect(() => {
+    if (showForm && sharedData.purchasePrice && !formData.purchase_price) {
+      setFormData(prev => ({
+        ...prev,
+        purchase_price: sharedData.purchasePrice ? String(sharedData.purchasePrice) : '',
+        down_payment: sharedData.downPayment ? String(sharedData.downPayment) : '',
+        credit_score: sharedData.creditScore ? String(sharedData.creditScore) : '720',
+        property_type: sharedData.propertyType || 'single_family',
+        occupancy: sharedData.occupancy || 'primary',
+        state: sharedData.state || 'CA',
+      }));
+    }
+  }, [showForm, sharedData]);
 
   const fetchScenarios = async () => {
     try {
@@ -187,6 +206,9 @@ function ScenarioBuilder({
       setShowForm(false);
       onScenarioCreated(newScenario);
 
+      // Sync to context for calculator panel
+      syncFromScenario(newScenario);
+
       // Reset form
       setFormData({
         name: '',
@@ -213,6 +235,8 @@ function ScenarioBuilder({
   const handleViewScenario = (scenario) => {
     setActiveScenario(scenario);
     setShowForm(false);
+    // Sync to context for calculator panel
+    syncFromScenario(scenario);
   };
 
   // Render loan option card

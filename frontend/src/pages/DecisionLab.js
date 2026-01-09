@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { decisionLabAPI } from '../services/decisionLabApi';
+import { MortgageLabProvider, useMortgageLab } from '../contexts/MortgageLabContext';
 import ConfidenceAssessment from '../components/decisionlab/ConfidenceAssessment';
 import ScenarioBuilder from '../components/decisionlab/ScenarioBuilder';
 import LoanComparison from '../components/decisionlab/LoanComparison';
 import ConfidenceResults from '../components/decisionlab/ConfidenceResults';
 import EducationOverlayManager from '../components/decisionlab/EducationOverlayManager';
+import CalculatorPanel from '../components/decisionlab/CalculatorPanel';
 import './DecisionLab.css';
 
 const STEPS = {
@@ -17,7 +19,7 @@ const STEPS = {
   EDUCATION_ADMIN: 'education_admin',
 };
 
-function DecisionLab() {
+function DecisionLabContent() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [currentStep, setCurrentStep] = useState(STEPS.WELCOME);
   const [sessionId, setSessionId] = useState(null);
@@ -27,6 +29,13 @@ function DecisionLab() {
   const [confidenceScore, setConfidenceScore] = useState(null);
   const [scenarios, setScenarios] = useState([]);
   const [selectedScenarios, setSelectedScenarios] = useState([]);
+
+  // Get context methods
+  const {
+    setSessionId: setContextSessionId,
+    calculatorPanelOpen,
+    toggleCalculatorPanel,
+  } = useMortgageLab();
 
   // Check URL params for admin mode
   const isAdminMode = searchParams.get('admin') === 'true';
@@ -78,6 +87,7 @@ function DecisionLab() {
     try {
       const data = await decisionLabAPI.startSession();
       setSessionId(data.session_id);
+      setContextSessionId(data.session_id); // Sync to context
       setCurrentStep(STEPS.ASSESSMENT);
     } catch (err) {
       setError('Failed to start session. Please try again.');
@@ -314,7 +324,7 @@ function DecisionLab() {
   };
 
   return (
-    <div className="decision-lab-page">
+    <div className={`decision-lab-page ${calculatorPanelOpen ? 'panel-open' : ''}`}>
       <div className="decision-lab-header">
         <div className="header-content">
           <h1 className="header-title">
@@ -329,6 +339,18 @@ function DecisionLab() {
           )}
         </div>
         <div className="header-actions">
+          {!isAdminMode && (
+            <button
+              className={`calculator-toggle ${calculatorPanelOpen ? 'active' : ''}`}
+              onClick={toggleCalculatorPanel}
+              title={calculatorPanelOpen ? 'Close Calculators' : 'Open Calculators'}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              </svg>
+              Calculators
+            </button>
+          )}
           <button
             className={`admin-toggle ${isAdminMode ? 'active' : ''}`}
             onClick={toggleAdminMode}
@@ -345,10 +367,24 @@ function DecisionLab() {
 
       {renderStepIndicator()}
 
-      <div className="decision-lab-content">
-        {renderContent()}
+      <div className="decision-lab-layout">
+        <div className="decision-lab-content">
+          {renderContent()}
+        </div>
+
+        {/* Calculator Panel */}
+        {!isAdminMode && <CalculatorPanel />}
       </div>
     </div>
+  );
+}
+
+// Wrapper component with context provider
+function DecisionLab() {
+  return (
+    <MortgageLabProvider>
+      <DecisionLabContent />
+    </MortgageLabProvider>
   );
 }
 
