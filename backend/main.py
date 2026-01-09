@@ -21958,6 +21958,65 @@ async def test_datadog_metrics(current_user: User = Depends(get_current_user)):
         return {"success": False, "error": str(e)}
 
 
+@app.get("/api/v1/debug/cdn-status", tags=["Debug"])
+async def get_cdn_status():
+    """
+    Get CloudFront CDN status and configuration.
+
+    Returns information about CDN setup, distribution status,
+    and whether CDN URLs are being used.
+    """
+    try:
+        from services.cdn_service import get_cdn_service
+        cdn = get_cdn_service()
+        status = cdn.get_distribution_status()
+        return {
+            "cdn_enabled": cdn.enabled,
+            "distribution_id": cdn.distribution_id,
+            "domain_name": cdn.domain_name,
+            "s3_bucket": cdn.s3_bucket,
+            "signed_urls_available": bool(cdn._private_key and cdn.key_pair_id),
+            "distribution_status": status
+        }
+    except ImportError:
+        return {
+            "cdn_enabled": False,
+            "error": "CDN service module not available",
+            "message": "Install cdn_service.py and configure CloudFront"
+        }
+    except Exception as e:
+        return {
+            "cdn_enabled": False,
+            "error": str(e),
+            "message": f"Error checking CDN status: {str(e)}"
+        }
+
+
+@app.post("/api/v1/debug/cdn-invalidate", tags=["Debug"])
+async def invalidate_cdn_cache(
+    paths: List[str] = Body(..., description="List of paths to invalidate"),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Invalidate CloudFront cache for specified paths.
+
+    Requires admin or appropriate permissions.
+    """
+    try:
+        from services.cdn_service import get_cdn_service
+        cdn = get_cdn_service()
+
+        if not cdn.enabled:
+            return {"success": False, "error": "CDN not configured"}
+
+        result = cdn.invalidate_cache(paths)
+        return result
+    except ImportError:
+        return {"success": False, "error": "CDN service module not available"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 # PURL System Migration Endpoint
 @app.post("/api/v1/migrations/add-purl-system")
 async def add_purl_system_migration(db: Session = Depends(get_db)):

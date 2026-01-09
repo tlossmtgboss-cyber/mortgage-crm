@@ -1,8 +1,11 @@
 """
-Twilio Self-Service Setup Routes
+Twilio Self-Service Setup Routes (Subaccount Model)
 
-Allows users to:
-1. Connect their Twilio account (credentials)
+Users get their own Twilio subaccount under the master account.
+All billing goes through the master account.
+
+Flow:
+1. Create subaccount for user (automatic)
 2. Search and purchase phone numbers
 3. Register for A2P 10DLC (Brand + Campaign)
 4. Create and configure messaging services
@@ -20,6 +23,10 @@ import re
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/twilio-setup", tags=["Twilio Setup"])
+
+# Master Twilio credentials from environment
+TWILIO_MASTER_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
+TWILIO_MASTER_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 
 # Dependency injection placeholders
 User = None
@@ -129,8 +136,39 @@ class MessagingServiceCreate(BaseModel):
 # Helper Functions
 # =============================================================================
 
+def get_master_twilio_client():
+    """Get Twilio client using master account credentials"""
+    if not TWILIO_MASTER_ACCOUNT_SID or not TWILIO_MASTER_AUTH_TOKEN:
+        raise HTTPException(
+            status_code=500,
+            detail="Twilio master account not configured. Contact support."
+        )
+    try:
+        from twilio.rest import Client
+        return Client(TWILIO_MASTER_ACCOUNT_SID, TWILIO_MASTER_AUTH_TOKEN)
+    except Exception as e:
+        logger.error(f"Failed to create master Twilio client: {e}")
+        raise HTTPException(status_code=500, detail="Twilio service unavailable")
+
+
+def get_subaccount_client(subaccount_sid: str):
+    """Get Twilio client for a subaccount (using master credentials)"""
+    if not TWILIO_MASTER_ACCOUNT_SID or not TWILIO_MASTER_AUTH_TOKEN:
+        raise HTTPException(
+            status_code=500,
+            detail="Twilio master account not configured. Contact support."
+        )
+    try:
+        from twilio.rest import Client
+        # Use master credentials but operate on subaccount
+        return Client(TWILIO_MASTER_ACCOUNT_SID, TWILIO_MASTER_AUTH_TOKEN, subaccount_sid)
+    except Exception as e:
+        logger.error(f"Failed to create subaccount client: {e}")
+        raise HTTPException(status_code=500, detail="Twilio service unavailable")
+
+
 def get_twilio_client(account_sid: str, auth_token: str):
-    """Create Twilio client with provided credentials"""
+    """Create Twilio client with provided credentials (legacy)"""
     try:
         from twilio.rest import Client
         return Client(account_sid, auth_token)
@@ -139,33 +177,41 @@ def get_twilio_client(account_sid: str, auth_token: str):
         raise HTTPException(status_code=400, detail=f"Invalid Twilio credentials: {str(e)}")
 
 
-async def get_user_twilio_credentials(user_id: int, db) -> Optional[Dict]:
-    """Get stored Twilio credentials for a user"""
+async def get_user_twilio_config(user_id: int, db) -> Optional[Dict]:
+    """Get stored Twilio subaccount config for a user"""
     from sqlalchemy import text
     try:
         result = db.execute(text("""
-            SELECT account_sid, auth_token, messaging_service_sid, phone_number,
-                   brand_sid, campaign_sid, a2p_status, created_at, updated_at
+            SELECT subaccount_sid, account_sid, auth_token, messaging_service_sid,
+                   phone_number, phone_number_sid, brand_sid, campaign_sid,
+                   a2p_status, created_at, updated_at
             FROM user_twilio_config
             WHERE user_id = :user_id
         """), {"user_id": user_id})
         row = result.fetchone()
         if row:
             return {
-                "account_sid": row[0],
-                "auth_token": row[1],
-                "messaging_service_sid": row[2],
-                "phone_number": row[3],
-                "brand_sid": row[4],
-                "campaign_sid": row[5],
-                "a2p_status": row[6],
-                "created_at": row[7],
-                "updated_at": row[8]
+                "subaccount_sid": row[0],
+                "account_sid": row[1],
+                "auth_token": row[2],
+                "messaging_service_sid": row[3],
+                "phone_number": row[4],
+                "phone_number_sid": row[5],
+                "brand_sid": row[6],
+                "campaign_sid": row[7],
+                "a2p_status": row[8],
+                "created_at": row[9],
+                "updated_at": row[10]
             }
         return None
     except Exception as e:
         logger.error(f"Error fetching Twilio config: {e}")
         return None
+
+
+# Alias for backwards compatibility
+async def get_user_twilio_credentials(user_id: int, db) -> Optional[Dict]:
+    return await get_user_twilio_config(user_id, db)
 
 
 # =============================================================================
@@ -177,19 +223,20 @@ async def get_setup_status(
     current_user=Depends(get_current_user),
     db=Depends(get_db)
 ):
-    """Get current Twilio setup status for the user"""
+    """Get current Twilio setup status for the user (subaccount model)"""
     try:
         user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
-        config = await get_user_twilio_credentials(user_id, db)
+        config = await get_user_twilio_config(user_id, db)
 
         if not config:
             return {
                 "success": True,
                 "data": {
                     "setup_complete": False,
+                    "initialized": False,
                     "steps": {
-                        "credentials": {"complete": False, "status": "pending"},
+                        "subaccount": {"complete": False, "status": "pending"},
                         "phone_number": {"complete": False, "status": "pending"},
                         "messaging_service": {"complete": False, "status": "pending"},
                         "brand_registration": {"complete": False, "status": "pending"},
@@ -200,9 +247,9 @@ async def get_setup_status(
             }
 
         steps = {
-            "credentials": {
-                "complete": bool(config.get("account_sid")),
-                "status": "complete" if config.get("account_sid") else "pending"
+            "subaccount": {
+                "complete": bool(config.get("subaccount_sid")),
+                "status": "complete" if config.get("subaccount_sid") else "pending"
             },
             "phone_number": {
                 "complete": bool(config.get("phone_number")),
@@ -232,9 +279,10 @@ async def get_setup_status(
             "success": True,
             "data": {
                 "setup_complete": all_complete,
+                "initialized": bool(config.get("subaccount_sid")),
                 "steps": steps,
                 "config": {
-                    "account_sid": config.get("account_sid", "")[:8] + "..." if config.get("account_sid") else None,
+                    "subaccount_sid": config.get("subaccount_sid", "")[:8] + "..." if config.get("subaccount_sid") else None,
                     "phone_number": config.get("phone_number"),
                     "a2p_status": config.get("a2p_status")
                 }
@@ -243,6 +291,88 @@ async def get_setup_status(
 
     except Exception as e:
         logger.error(f"Error getting setup status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/initialize")
+async def initialize_subaccount(
+    current_user=Depends(get_current_user),
+    db=Depends(get_db)
+):
+    """Initialize a Twilio subaccount for the user"""
+    try:
+        user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
+        user_email = current_user.get("email") if isinstance(current_user, dict) else getattr(current_user, "email", None)
+        user_name = current_user.get("name") if isinstance(current_user, dict) else getattr(current_user, "name", "User")
+
+        # Check if already initialized
+        config = await get_user_twilio_config(user_id, db)
+        if config and config.get("subaccount_sid"):
+            return {
+                "success": True,
+                "message": "Subaccount already exists",
+                "data": {
+                    "subaccount_sid": config["subaccount_sid"][:8] + "..."
+                }
+            }
+
+        # Create subaccount under master account
+        client = get_master_twilio_client()
+
+        subaccount = client.api.accounts.create(
+            friendly_name=f"Perennia - {user_name} ({user_id})"
+        )
+
+        # Save to database
+        from sqlalchemy import text
+
+        # Check if config exists
+        existing = db.execute(text("""
+            SELECT id FROM user_twilio_config WHERE user_id = :user_id
+        """), {"user_id": user_id}).fetchone()
+
+        if existing:
+            db.execute(text("""
+                UPDATE user_twilio_config
+                SET subaccount_sid = :subaccount_sid,
+                    account_sid = :account_sid,
+                    auth_token = :auth_token,
+                    updated_at = NOW()
+                WHERE user_id = :user_id
+            """), {
+                "user_id": user_id,
+                "subaccount_sid": subaccount.sid,
+                "account_sid": subaccount.sid,
+                "auth_token": subaccount.auth_token
+            })
+        else:
+            db.execute(text("""
+                INSERT INTO user_twilio_config
+                (user_id, subaccount_sid, account_sid, auth_token, created_at, updated_at)
+                VALUES (:user_id, :subaccount_sid, :account_sid, :auth_token, NOW(), NOW())
+            """), {
+                "user_id": user_id,
+                "subaccount_sid": subaccount.sid,
+                "account_sid": subaccount.sid,
+                "auth_token": subaccount.auth_token
+            })
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": "Twilio subaccount created successfully",
+            "data": {
+                "subaccount_sid": subaccount.sid[:8] + "...",
+                "friendly_name": subaccount.friendly_name
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating subaccount: {e}")
+        db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -323,11 +453,12 @@ async def search_phone_numbers(
     try:
         user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
-        config = await get_user_twilio_credentials(user_id, db)
-        if not config or not config.get("account_sid"):
-            raise HTTPException(status_code=400, detail="Twilio credentials not configured")
+        config = await get_user_twilio_config(user_id, db)
+        if not config or not config.get("subaccount_sid"):
+            raise HTTPException(status_code=400, detail="Please initialize your account first")
 
-        client = get_twilio_client(config["account_sid"], config["auth_token"])
+        # Use master client to search (available numbers are the same)
+        client = get_master_twilio_client()
 
         # Build search parameters
         search_params = {
@@ -390,17 +521,18 @@ async def purchase_phone_number(
     current_user=Depends(get_current_user),
     db=Depends(get_db)
 ):
-    """Purchase a phone number"""
+    """Purchase a phone number for the user's subaccount"""
     try:
         user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
-        config = await get_user_twilio_credentials(user_id, db)
-        if not config or not config.get("account_sid"):
-            raise HTTPException(status_code=400, detail="Twilio credentials not configured")
+        config = await get_user_twilio_config(user_id, db)
+        if not config or not config.get("subaccount_sid"):
+            raise HTTPException(status_code=400, detail="Please initialize your account first")
 
-        client = get_twilio_client(config["account_sid"], config["auth_token"])
+        # Use subaccount client to purchase (bills to master but owned by subaccount)
+        client = get_subaccount_client(config["subaccount_sid"])
 
-        # Purchase the number
+        # Purchase the number under the subaccount
         incoming_number = client.incoming_phone_numbers.create(
             phone_number=purchase.phone_number,
             friendly_name=purchase.friendly_name or f"Perennia - {purchase.phone_number}"
@@ -452,13 +584,13 @@ async def create_messaging_service(
     try:
         user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
-        config = await get_user_twilio_credentials(user_id, db)
-        if not config or not config.get("account_sid"):
-            raise HTTPException(status_code=400, detail="Twilio credentials not configured")
+        config = await get_user_twilio_config(user_id, db)
+        if not config or not config.get("subaccount_sid"):
+            raise HTTPException(status_code=400, detail="Please initialize your account first")
         if not config.get("phone_number"):
             raise HTTPException(status_code=400, detail="Phone number not configured")
 
-        client = get_twilio_client(config["account_sid"], config["auth_token"])
+        client = get_subaccount_client(config["subaccount_sid"])
 
         # Create messaging service
         base_url = os.getenv("API_URL", "https://api.perenniaai.com")
@@ -519,11 +651,11 @@ async def register_brand(
     try:
         user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
-        config = await get_user_twilio_credentials(user_id, db)
-        if not config or not config.get("account_sid"):
-            raise HTTPException(status_code=400, detail="Twilio credentials not configured")
+        config = await get_user_twilio_config(user_id, db)
+        if not config or not config.get("subaccount_sid"):
+            raise HTTPException(status_code=400, detail="Please initialize your account first")
 
-        client = get_twilio_client(config["account_sid"], config["auth_token"])
+        client = get_subaccount_client(config["subaccount_sid"])
 
         # Create Customer Profile (Trust Hub)
         # First, create a customer profile
@@ -582,13 +714,13 @@ async def register_campaign(
     try:
         user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
-        config = await get_user_twilio_credentials(user_id, db)
-        if not config or not config.get("account_sid"):
-            raise HTTPException(status_code=400, detail="Twilio credentials not configured")
+        config = await get_user_twilio_config(user_id, db)
+        if not config or not config.get("subaccount_sid"):
+            raise HTTPException(status_code=400, detail="Please initialize your account first")
         if not config.get("messaging_service_sid"):
             raise HTTPException(status_code=400, detail="Messaging service not configured")
 
-        client = get_twilio_client(config["account_sid"], config["auth_token"])
+        client = get_subaccount_client(config["subaccount_sid"])
 
         # Create US App-to-Person (A2P) Campaign
         us_app_to_person = client.messaging.v1.services(
@@ -649,11 +781,11 @@ async def get_a2p_status(
     try:
         user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
-        config = await get_user_twilio_credentials(user_id, db)
-        if not config or not config.get("account_sid"):
-            raise HTTPException(status_code=400, detail="Twilio credentials not configured")
+        config = await get_user_twilio_config(user_id, db)
+        if not config or not config.get("subaccount_sid"):
+            raise HTTPException(status_code=400, detail="Please initialize your account first")
 
-        client = get_twilio_client(config["account_sid"], config["auth_token"])
+        client = get_subaccount_client(config["subaccount_sid"])
 
         result = {
             "brand": None,
@@ -705,33 +837,28 @@ async def get_account_info(
     current_user=Depends(get_current_user),
     db=Depends(get_db)
 ):
-    """Get Twilio account information and balance"""
+    """Get Twilio subaccount information"""
     try:
         user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
-        config = await get_user_twilio_credentials(user_id, db)
-        if not config or not config.get("account_sid"):
-            raise HTTPException(status_code=400, detail="Twilio credentials not configured")
+        config = await get_user_twilio_config(user_id, db)
+        if not config or not config.get("subaccount_sid"):
+            raise HTTPException(status_code=400, detail="Please initialize your account first")
 
-        client = get_twilio_client(config["account_sid"], config["auth_token"])
+        client = get_master_twilio_client()
 
-        # Get account info
-        account = client.api.accounts(config["account_sid"]).fetch()
-
-        # Get balance
-        balance = client.api.accounts(config["account_sid"]).balance.fetch()
+        # Get subaccount info
+        account = client.api.accounts(config["subaccount_sid"]).fetch()
 
         return {
             "success": True,
             "data": {
                 "account_name": account.friendly_name,
-                "account_sid": config["account_sid"][:8] + "...",
+                "subaccount_sid": config["subaccount_sid"][:8] + "...",
                 "status": account.status,
-                "type": account.type,
-                "balance": {
-                    "currency": balance.currency,
-                    "balance": balance.balance
-                }
+                "type": "subaccount",
+                "phone_number": config.get("phone_number"),
+                "a2p_status": config.get("a2p_status")
             }
         }
 
@@ -766,13 +893,27 @@ async def run_twilio_migration(
         """)).scalar()
 
         if table_check:
-            return {"status": "success", "message": "Table already exists"}
+            # Table exists, just add subaccount_sid if missing
+            db.execute(text("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_name = 'user_twilio_config' AND column_name = 'subaccount_sid'
+                    ) THEN
+                        ALTER TABLE user_twilio_config ADD COLUMN subaccount_sid VARCHAR(34);
+                    END IF;
+                END $$;
+            """))
+            db.commit()
+            return {"status": "success", "message": "Table updated with subaccount_sid column"}
 
-        # Create table
+        # Create table with subaccount support
         db.execute(text("""
             CREATE TABLE IF NOT EXISTS user_twilio_config (
                 id SERIAL PRIMARY KEY,
                 user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                subaccount_sid VARCHAR(34),
                 account_sid VARCHAR(34),
                 auth_token VARCHAR(255),
                 phone_number VARCHAR(20),
@@ -786,6 +927,19 @@ async def run_twilio_migration(
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                 CONSTRAINT unique_user_twilio_config UNIQUE (user_id)
             )
+        """))
+
+        # Add subaccount_sid column if table already exists without it
+        db.execute(text("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'user_twilio_config' AND column_name = 'subaccount_sid'
+                ) THEN
+                    ALTER TABLE user_twilio_config ADD COLUMN subaccount_sid VARCHAR(34);
+                END IF;
+            END $$;
         """))
 
         db.execute(text("""
@@ -811,15 +965,15 @@ async def get_owned_phone_numbers(
     current_user=Depends(get_current_user),
     db=Depends(get_db)
 ):
-    """Get list of phone numbers owned by the account"""
+    """Get list of phone numbers owned by the user's subaccount"""
     try:
         user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
-        config = await get_user_twilio_credentials(user_id, db)
-        if not config or not config.get("account_sid"):
-            raise HTTPException(status_code=400, detail="Twilio credentials not configured")
+        config = await get_user_twilio_config(user_id, db)
+        if not config or not config.get("subaccount_sid"):
+            raise HTTPException(status_code=400, detail="Please initialize your account first")
 
-        client = get_twilio_client(config["account_sid"], config["auth_token"])
+        client = get_subaccount_client(config["subaccount_sid"])
 
         # Get all phone numbers
         numbers = client.incoming_phone_numbers.list(limit=50)

@@ -1,12 +1,14 @@
 /**
- * Twilio Self-Service Setup Page
+ * Twilio Self-Service Setup Page (Subaccount Model)
  *
- * Wizard flow for users to set up their own Twilio account:
- * 1. Enter credentials (Account SID + Auth Token)
+ * Wizard flow for users to set up their Twilio communications:
+ * 1. Initialize subaccount (automatic)
  * 2. Search and purchase phone number
  * 3. Create messaging service
  * 4. Register A2P Brand
  * 5. Register A2P Campaign
+ *
+ * All billing goes through the master account - users don't need their own Twilio account.
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -17,15 +19,10 @@ const API_URL = process.env.REACT_APP_API_URL || '';
 const TwilioSetup = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [initializing, setInitializing] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [setupStatus, setSetupStatus] = useState(null);
-
-  // Step 1: Credentials
-  const [credentials, setCredentials] = useState({
-    account_sid: '',
-    auth_token: ''
-  });
 
   // Step 2: Phone Number
   const [phoneSearch, setPhoneSearch] = useState({
@@ -69,34 +66,6 @@ const TwilioSetup = () => {
     help_message: 'For help, contact us at support@example.com or call 1-800-XXX-XXXX.'
   });
 
-  // Fetch setup status on mount
-  const fetchStatus = useCallback(async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/api/v1/twilio-setup/status`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await response.json();
-      if (data.success) {
-        setSetupStatus(data.data);
-        // Set current step based on completion status
-        const steps = data.data.steps;
-        if (!steps.credentials.complete) setCurrentStep(1);
-        else if (!steps.phone_number.complete) setCurrentStep(2);
-        else if (!steps.messaging_service.complete) setCurrentStep(3);
-        else if (!steps.brand_registration.complete) setCurrentStep(4);
-        else if (!steps.campaign_registration.complete) setCurrentStep(5);
-        else setCurrentStep(6); // All complete
-      }
-    } catch (err) {
-      console.error('Error fetching status:', err);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchStatus();
-  }, [fetchStatus]);
-
   // API call helper
   const apiCall = async (endpoint, method = 'GET', body = null) => {
     const token = localStorage.getItem('token');
@@ -118,13 +87,39 @@ const TwilioSetup = () => {
     return data;
   };
 
-  // Step 1: Save Credentials
-  const saveCredentials = async () => {
+  // Fetch setup status on mount
+  const fetchStatus = useCallback(async () => {
+    try {
+      const data = await apiCall('/api/v1/twilio-setup/status');
+      if (data.success) {
+        setSetupStatus(data.data);
+        // Set current step based on completion status
+        const steps = data.data.steps;
+        if (!steps.subaccount.complete) setCurrentStep(1);
+        else if (!steps.phone_number.complete) setCurrentStep(2);
+        else if (!steps.messaging_service.complete) setCurrentStep(3);
+        else if (!steps.brand_registration.complete) setCurrentStep(4);
+        else if (!steps.campaign_registration.complete) setCurrentStep(5);
+        else setCurrentStep(6); // All complete
+      }
+    } catch (err) {
+      console.error('Error fetching status:', err);
+    } finally {
+      setInitializing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStatus();
+  }, [fetchStatus]);
+
+  // Step 1: Initialize Subaccount
+  const initializeAccount = async () => {
     setLoading(true);
     setError(null);
     try {
-      await apiCall('/api/v1/twilio-setup/credentials', 'POST', credentials);
-      setSuccess('Credentials saved and validated!');
+      await apiCall('/api/v1/twilio-setup/initialize', 'POST');
+      setSuccess('Account initialized successfully!');
       setTimeout(() => {
         setSuccess(null);
         setCurrentStep(2);
@@ -244,18 +239,28 @@ const TwilioSetup = () => {
   };
 
   const steps = [
-    { number: 1, title: 'Credentials', description: 'Connect your Twilio account' },
+    { number: 1, title: 'Get Started', description: 'Initialize your account' },
     { number: 2, title: 'Phone Number', description: 'Get a phone number' },
     { number: 3, title: 'Messaging', description: 'Setup messaging service' },
     { number: 4, title: 'Brand', description: 'Register your brand' },
     { number: 5, title: 'Campaign', description: 'Register A2P campaign' }
   ];
 
+  if (initializing) {
+    return (
+      <div className="twilio-setup-page">
+        <div className="setup-content" style={{ textAlign: 'center', padding: '60px' }}>
+          <p>Loading setup status...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="twilio-setup-page">
       <div className="twilio-setup-header">
         <h1>Twilio Setup</h1>
-        <p>Configure your Twilio account for SMS and voice communications</p>
+        <p>Configure SMS and voice communications for your account</p>
       </div>
 
       {/* Progress Steps */}
@@ -266,7 +271,13 @@ const TwilioSetup = () => {
             className={`progress-step ${currentStep === step.number ? 'active' : ''} ${
               setupStatus?.steps && Object.values(setupStatus.steps)[step.number - 1]?.complete ? 'complete' : ''
             }`}
-            onClick={() => setCurrentStep(step.number)}
+            onClick={() => {
+              // Only allow clicking on completed steps or current step
+              const stepComplete = setupStatus?.steps && Object.values(setupStatus.steps)[step.number - 1]?.complete;
+              if (stepComplete || step.number <= currentStep) {
+                setCurrentStep(step.number);
+              }
+            }}
           >
             <div className="step-number">
               {setupStatus?.steps && Object.values(setupStatus.steps)[step.number - 1]?.complete ? '✓' : step.number}
@@ -285,41 +296,27 @@ const TwilioSetup = () => {
 
       {/* Step Content */}
       <div className="setup-content">
-        {/* Step 1: Credentials */}
+        {/* Step 1: Initialize Account */}
         {currentStep === 1 && (
           <div className="setup-step">
-            <h2>Connect Your Twilio Account</h2>
+            <h2>Get Started with Twilio</h2>
             <p className="step-instructions">
-              Enter your Twilio Account SID and Auth Token. You can find these in your{' '}
-              <a href="https://console.twilio.com" target="_blank" rel="noopener noreferrer">
-                Twilio Console
-              </a>.
+              Click the button below to set up your Twilio communications account.
+              This will enable SMS and voice features in your CRM.
             </p>
 
-            <div className="form-group">
-              <label>Account SID</label>
-              <input
-                type="text"
-                placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                value={credentials.account_sid}
-                onChange={(e) => setCredentials({ ...credentials, account_sid: e.target.value })}
-              />
-              <span className="help-text">Starts with "AC" and is 34 characters long</span>
+            <div style={{ background: '#f0fdf4', padding: '16px', borderRadius: '8px', marginBottom: '24px' }}>
+              <h4 style={{ margin: '0 0 8px 0', color: '#166534' }}>What's included:</h4>
+              <ul style={{ margin: 0, paddingLeft: '20px', color: '#166534' }}>
+                <li>Your own dedicated phone number</li>
+                <li>SMS messaging capabilities</li>
+                <li>A2P 10DLC registration for reliable delivery</li>
+                <li>All billing handled through your CRM subscription</li>
+              </ul>
             </div>
 
-            <div className="form-group">
-              <label>Auth Token</label>
-              <input
-                type="password"
-                placeholder="Your auth token"
-                value={credentials.auth_token}
-                onChange={(e) => setCredentials({ ...credentials, auth_token: e.target.value })}
-              />
-              <span className="help-text">Found in Account Info section of Twilio Console</span>
-            </div>
-
-            <button className="btn-primary" onClick={saveCredentials} disabled={loading}>
-              {loading ? 'Validating...' : 'Connect Account'}
+            <button className="btn-primary" onClick={initializeAccount} disabled={loading}>
+              {loading ? 'Setting up...' : 'Initialize Account'}
             </button>
           </div>
         )}
@@ -329,7 +326,7 @@ const TwilioSetup = () => {
           <div className="setup-step">
             <h2>Get a Phone Number</h2>
             <p className="step-instructions">
-              Search for available phone numbers and purchase one for your account.
+              Search for available phone numbers and select one for your account.
             </p>
 
             <div className="search-form">
@@ -398,7 +395,7 @@ const TwilioSetup = () => {
                   onClick={purchaseNumber}
                   disabled={loading || !selectedNumber}
                 >
-                  {loading ? 'Purchasing...' : `Purchase ${selectedNumber || 'Selected Number'}`}
+                  {loading ? 'Purchasing...' : `Select ${selectedNumber || 'a Number'}`}
                 </button>
               </div>
             )}

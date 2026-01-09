@@ -1,0 +1,36 @@
+# =============================================================================
+# Terraform Variables - Example Configuration
+# =============================================================================
+# Copy this file to terraform.tfvars and update with your values
+# DO NOT commit terraform.tfvars to version control
+# =============================================================================
+
+# Environment (dev, staging, production)
+environment = "production"
+
+# Project name for resource naming
+project_name = "perennia-crm"
+
+# S3 bucket name for documents (must exist)
+s3_bucket_name = "perennia-docs"
+
+# Backend API origin (Railway deployment URL without https://)
+backend_origin = "mortgage-crm-production-7a9a.up.railway.app"
+
+# Custom domain (leave empty to use CloudFront domain)
+# custom_domain = "cdn.yourcompany.com"
+
+# ACM certificate ARN for custom domain (must be in us-east-1)
+# custom_domain_cert_arn = "arn:aws:acm:us-east-1:123456789:certificate/abc-123"
+
+# CloudFront price class
+# PriceClass_100 = US, Canada, Europe (cheapest)
+# PriceClass_200 = US, Canada, Europe, Asia, Middle East, Africa
+# PriceClass_All = All edge locations (most expensive)
+price_class = "PriceClass_100"
+
+# Enable AWS WAF (requires additional configuration)
+enable_waf = false
+
+# S3 bucket for CloudFront access logs (leave empty to disable)
+# log_bucket = "perennia-logs"
