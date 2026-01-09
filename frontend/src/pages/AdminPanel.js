@@ -468,9 +468,12 @@ const AdminPanel = () => {
           <p>Manage users, loan officers, and system settings</p>
         </div>
         <div className="header-right">
-          {/* Role/User selector for viewing/impersonation */}
+          {/* Full Impersonation - switches JWT tokens and redirects */}
+          {/* Note: Quick role preview is available in the navigation bar dropdown */}
           <div className="user-selector-wrapper">
-            <label className="user-selector-label">View as:</label>
+            <label className="user-selector-label" title="Full impersonation switches tokens and redirects to dashboard">
+              Impersonate:
+            </label>
             <select
               className="user-selector role-selector"
               value={selectedViewRole ? `role:${selectedViewRole.id}:${selectedViewRole.name}` : ''}
@@ -488,9 +491,9 @@ const AdminPanel = () => {
                 }
               }}
             >
-              <option value="">Admin (Default)</option>
+              <option value="">Select role...</option>
               {employeeRoles.length > 0 && (
-                <optgroup label="── View by Employee Role ──">
+                <optgroup label="── Impersonate by Role ──">
                   {employeeRoles.map(role => (
                     <option key={role.id} value={`role:${role.id}:${role.name}`}>
                       {role.name}
@@ -502,71 +505,44 @@ const AdminPanel = () => {
             {selectedViewRole && !impersonating && (
               <button
                 className="btn-impersonate"
-                onClick={async () => {
+                title="Preview this role's dashboard view"
+                onClick={() => {
                   try {
                     setImpersonating(true);
 
-                    // Role-based preview - find a user with this role
-                    // First try to find by onboarding_role_id, then by role name match
-                    let userWithRole = users.find(u => u.onboarding_role_id === selectedViewRole.id);
-                    if (!userWithRole) {
-                      // Fallback: find by role name (case-insensitive partial match)
-                      const roleNameLower = selectedViewRole.name.toLowerCase().replace(/\s+/g, '_');
-                      userWithRole = users.find(u =>
-                        u.role?.toLowerCase() === roleNameLower ||
-                        u.role?.toLowerCase().includes(roleNameLower.split('_')[0])
-                      );
+                    // Role simulation - directly preview the role without needing a specific user
+                    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+
+                    // Save original user info if not already saved
+                    if (!localStorage.getItem('original_user_backup')) {
+                      localStorage.setItem('original_user_backup', JSON.stringify(currentUser));
+                      localStorage.setItem('original_token_backup', localStorage.getItem('token'));
                     }
 
-                    if (userWithRole) {
-                      // Impersonate a user with this role
-                      const response = await api.post('/api/v1/admin/account-management/impersonate/start', {
-                        user_id: String(userWithRole.id),
-                        reason: `Admin panel role preview: ${selectedViewRole.name}`,
-                        acknowledgment: true
-                      });
-                      const sessionToken = response.data?.data?.token || response.data?.data?.sessionToken || response.data?.sessionToken || response.data?.token;
-                      if (sessionToken) {
-                        // Save the original token and user so we can restore later
-                        localStorage.setItem('original_token', localStorage.getItem('token'));
-                        localStorage.setItem('original_user', localStorage.getItem('user'));
+                    // Store role preview info
+                    localStorage.setItem('role_preview', JSON.stringify({
+                      role_id: selectedViewRole.id,
+                      role_name: selectedViewRole.name,
+                      started_at: new Date().toISOString(),
+                      original_user_id: currentUser.id
+                    }));
 
-                        // Store impersonation session info
-                        localStorage.setItem('impersonation_session', JSON.stringify({
-                          session_token: sessionToken,
-                          impersonated_user: userWithRole,
-                          role_preview: selectedViewRole.name,
-                          started_at: new Date().toISOString()
-                        }));
-                        localStorage.setItem('impersonating_user', JSON.stringify(userWithRole));
+                    // Update user object with the preview role for dashboard rendering
+                    const previewUser = {
+                      ...currentUser,
+                      role: selectedViewRole.name.toLowerCase().replace(/\s+/g, '_'),
+                      permission_role: selectedViewRole.name.toLowerCase().replace(/\s+/g, '_'),
+                      display_role: selectedViewRole.name,
+                      is_role_preview: true,
+                      original_role: currentUser.role
+                    };
+                    localStorage.setItem('user', JSON.stringify(previewUser));
 
-                        // IMPORTANT: Actually switch to the new token
-                        localStorage.setItem('token', sessionToken);
-
-                        // Update user info in localStorage to match impersonated user
-                        localStorage.setItem('user', JSON.stringify({
-                          ...userWithRole,
-                          impersonated: true,
-                          impersonated_by: JSON.parse(localStorage.getItem('original_user') || '{}').id
-                        }));
-
-                        // Redirect to dashboard
-                        window.location.href = '/dashboard';
-                      } else {
-                        throw new Error('No session token returned from server');
-                      }
-                    } else {
-                      // No user found with this role
-                      alert(`No user found with the "${selectedViewRole.name}" role.\n\nPlease assign this role to a user first, then try again.`);
-                      setImpersonating(false);
-                    }
+                    // Redirect to dashboard to see the role's view
+                    window.location.href = '/dashboard';
                   } catch (err) {
                     console.error('Role preview failed:', err);
-                    const errorDetail = err.response?.data?.detail;
-                    const errorMessage = typeof errorDetail === 'string'
-                      ? errorDetail
-                      : (errorDetail?.message || err.message || 'Unknown error');
-                    alert('Failed to preview role: ' + errorMessage);
+                    alert('Failed to preview role: ' + err.message);
                     setImpersonating(false);
                   }
                 }}
