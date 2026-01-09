@@ -171,7 +171,7 @@ class RoleAssignmentService:
                 r.name as role_name,
                 r.abbreviation as role_abbr,
                 lra.assigned_user_id,
-                u.name as user_name,
+                u.full_name as user_name,
                 u.email as user_email,
                 lra.assigned_at
             FROM lead_workflow_role_assignments lra
@@ -324,7 +324,7 @@ class RoleAssignmentService:
                 r.name as role_name,
                 r.abbreviation as role_abbr,
                 lra.assigned_user_id,
-                u.name as user_name,
+                u.full_name as user_name,
                 u.email as user_email,
                 lra.assigned_at
             FROM loan_workflow_role_assignments lra

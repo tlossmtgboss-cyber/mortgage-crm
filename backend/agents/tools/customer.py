@@ -143,7 +143,7 @@ def get_customer_360(
             ch.summary,
             ch.sentiment,
             ch.created_at,
-            u.name as user_name
+            u.full_name as user_name
         FROM communication_history ch
         LEFT JOIN users u ON u.id = ch.user_id
         WHERE ch.contact_id = :customer_id
@@ -1038,7 +1038,7 @@ def get_interaction_history(
             ch.sentiment,
             ch.outcome,
             ch.created_at,
-            u.name as user_name,
+            u.full_name as user_name,
             l.loan_number
         FROM communication_history ch
         LEFT JOIN users u ON u.id = ch.user_id

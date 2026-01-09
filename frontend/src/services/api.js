@@ -5,11 +5,12 @@ import { ensureArray } from '../utils/arrayHelpers';
 // Use direct Railway URL for production, localhost for development
 // Bypassing Vercel proxy due to POST request issues
 // Also use production URL for native mobile apps (Capacitor)
-const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-const isNativeApp = Capacitor.isNativePlatform();
-export const API_BASE_URL = (isProduction || isNativeApp)
-  ? 'https://api.perenniaai.com' // Custom domain
-  : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
+const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const isNativeApp = Capacitor.isNativePlatform() && !isLocalhost; // Don't treat web browser as native
+
+export const API_BASE_URL = isLocalhost
+  ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
+  : 'https://api.perenniaai.com'; // Production custom domain
 
 // Create axios instance with mobile app identification
 const api = axios.create({

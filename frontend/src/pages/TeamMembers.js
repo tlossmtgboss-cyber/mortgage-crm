@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { teamAPI } from '../services/api';
+import { teamAPI, API_BASE_URL } from '../services/api';
 import { usePermissions } from '../contexts/PermissionContext';
+import { toast } from '../utils/toast';
 import './Settings.css';
 import './Leads.css';
 
@@ -13,6 +14,7 @@ function TeamMembers() {
   const canViewTeam = hasAnyPermission(['team.view_all', 'team.view_team', 'team.manage_permissions']) || userRole === 'management' || userRole === 'admin';
   const canEditTeam = hasAnyPermission(['team.manage', 'team.manage_permissions']) || userRole === 'management' || userRole === 'admin';
 
+  // Team Members state
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -28,70 +30,34 @@ function TeamMembers() {
     role: '',
     title: ''
   });
-  const [saveStatus, setSaveStatus] = useState(''); // 'saving', 'saved', or ''
+  const [saveStatus, setSaveStatus] = useState('');
   const autoSaveTimerRef = useRef(null);
   const initialFormDataRef = useRef(null);
 
-  useEffect(() => {
-    loadMembers();
-  }, []);
+  // Workflow roles state
+  const [workflowRoles, setWorkflowRoles] = useState([]);
+  const [roleAssignments, setRoleAssignments] = useState({}); // { memberId: roleId }
+  const [savingWorkflowRole, setSavingWorkflowRole] = useState({}); // { memberId: true/false }
 
-  // Auto-save effect - triggers 2 seconds after form data changes
-  useEffect(() => {
-    // Clear existing timer
-    if (autoSaveTimerRef.current) {
-      clearTimeout(autoSaveTimerRef.current);
-    }
+  const getAuthHeaders = useCallback(() => ({
+    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+    'Content-Type': 'application/json',
+  }), []);
 
-    // Only auto-save if we're editing an existing member (not adding new)
-    if (!editingMember) {
-      return;
-    }
-
-    // Check if data has actually changed from initial values
-    if (initialFormDataRef.current && JSON.stringify(formData) === JSON.stringify(initialFormDataRef.current)) {
-      return;
-    }
-
-    // Don't auto-save if required fields are empty
-    if (!formData.first_name || !formData.last_name || !formData.role) {
-      return;
-    }
-
-    // Set up auto-save timer
-    autoSaveTimerRef.current = setTimeout(() => {
-      autoSave();
-    }, 2000);
-
-    // Cleanup function
-    return () => {
-      if (autoSaveTimerRef.current) {
-        clearTimeout(autoSaveTimerRef.current);
-      }
-    };
-  }, [formData, editingMember]);
-
+  // Load team members
   const loadMembers = async () => {
     try {
       setLoading(true);
-      setSelectedMembers([]); // Clear selection when reloading
+      setSelectedMembers([]);
       const data = await teamAPI.getMembers();
 
-      console.log('Team API response:', data);
-      console.log('Type of data:', typeof data);
-
-      // Handle different response formats
       let membersList = [];
-
       if (Array.isArray(data)) {
-        // Direct array response
         membersList = data;
       } else if (data && typeof data === 'object') {
-        // Object with team_members property
         if (Array.isArray(data.team_members)) {
           membersList = data.team_members;
         } else if (data.team_members && typeof data.team_members === 'string') {
-          // Handle case where backend returns stringified data
           try {
             const parsed = JSON.parse(data.team_members);
             membersList = Array.isArray(parsed) ? parsed : [];
@@ -102,7 +68,6 @@ function TeamMembers() {
         }
       }
 
-      console.log('Processed members list:', membersList);
       setMembers(membersList);
     } catch (error) {
       console.error('Failed to load team members:', error);
@@ -112,6 +77,63 @@ function TeamMembers() {
     }
   };
 
+  // Load workflow roles
+  const loadWorkflowRoles = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/settings/team-roles`, {
+        headers: getAuthHeaders(),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setWorkflowRoles(data.assignments || []);
+
+        // Build reverse mapping: userId -> roleId
+        const assignments = {};
+        (data.assignments || []).forEach(role => {
+          if (role.user_id) {
+            assignments[role.user_id] = role.role_id;
+          }
+        });
+        setRoleAssignments(assignments);
+      }
+    } catch (error) {
+      console.error('Error loading workflow roles:', error);
+    }
+  }, [getAuthHeaders]);
+
+  useEffect(() => {
+    loadMembers();
+    loadWorkflowRoles();
+  }, [loadWorkflowRoles]);
+
+  // Auto-save effect for team member editing
+  useEffect(() => {
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+
+    if (!editingMember) return;
+
+    if (initialFormDataRef.current && JSON.stringify(formData) === JSON.stringify(initialFormDataRef.current)) {
+      return;
+    }
+
+    if (!formData.first_name || !formData.last_name || !formData.role) {
+      return;
+    }
+
+    autoSaveTimerRef.current = setTimeout(() => {
+      autoSave();
+    }, 2000);
+
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, [formData, editingMember]);
+
   const autoSave = async () => {
     if (!editingMember) return;
 
@@ -119,27 +141,84 @@ function TeamMembers() {
       setSaveStatus('saving');
       await teamAPI.updateMember(editingMember.id, formData);
       setSaveStatus('saved');
-
-      // Update the initial form data to reflect the saved state
       initialFormDataRef.current = { ...formData };
 
-      // Update the member in the list using functional update to avoid stale closure
       setMembers(prevMembers => prevMembers.map(m =>
-        m.id === editingMember.id
-          ? { ...m, ...formData }
-          : m
+        m.id === editingMember.id ? { ...m, ...formData } : m
       ));
 
-      // Clear 'saved' status after 2 seconds
-      setTimeout(() => {
-        setSaveStatus('');
-      }, 2000);
+      setTimeout(() => setSaveStatus(''), 2000);
     } catch (error) {
       console.error('Auto-save failed:', error);
       setSaveStatus('error');
-      setTimeout(() => {
-        setSaveStatus('');
-      }, 3000);
+      setTimeout(() => setSaveStatus(''), 3000);
+    }
+  };
+
+  // Handle workflow role assignment change
+  const handleWorkflowRoleChange = async (memberId, roleId) => {
+    setSavingWorkflowRole(prev => ({ ...prev, [memberId]: true }));
+
+    try {
+      // First, remove any existing assignment for this user (if they had a different role)
+      const previousRoleId = roleAssignments[memberId];
+
+      if (roleId) {
+        // Assign new role
+        const response = await fetch(`${API_BASE_URL}/api/v1/settings/team-roles/${roleId}`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ user_id: memberId }),
+        });
+
+        if (response.ok) {
+          toast.success('Workflow role assigned');
+
+          // Update local state
+          setRoleAssignments(prev => {
+            const newAssignments = { ...prev };
+            // Remove old assignment if user was assigned to a different role
+            Object.keys(newAssignments).forEach(uid => {
+              if (parseInt(uid) === memberId) {
+                delete newAssignments[uid];
+              }
+            });
+            newAssignments[memberId] = parseInt(roleId);
+            return newAssignments;
+          });
+
+          // Reload to get fresh data
+          loadWorkflowRoles();
+        } else {
+          const error = await response.json();
+          toast.error(error.detail || 'Failed to assign role');
+        }
+      } else {
+        // Remove assignment - need to clear the role that this user was assigned to
+        if (previousRoleId) {
+          const response = await fetch(`${API_BASE_URL}/api/v1/settings/team-roles/${previousRoleId}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders(),
+          });
+
+          if (response.ok) {
+            toast.success('Workflow role removed');
+            setRoleAssignments(prev => {
+              const newAssignments = { ...prev };
+              delete newAssignments[memberId];
+              return newAssignments;
+            });
+          } else {
+            const error = await response.json();
+            toast.error(error.detail || 'Failed to remove role');
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error updating workflow role:', error);
+      toast.error('Failed to update workflow role');
+    } finally {
+      setSavingWorkflowRole(prev => ({ ...prev, [memberId]: false }));
     }
   };
 
@@ -177,22 +256,20 @@ function TeamMembers() {
   const handleSaveMember = async (e) => {
     e.preventDefault();
 
-    // Only handle new member creation (editing is auto-saved)
     if (!editingMember) {
       try {
         await teamAPI.createMember(formData);
         setShowAddModal(false);
         loadMembers();
-        alert('Team member added!');
+        toast.success('Team member added!');
       } catch (error) {
         console.error('Failed to save team member:', error);
-        alert('Failed to save team member');
+        toast.error('Failed to save team member');
       }
     }
   };
 
   const handleCloseModal = () => {
-    // Clear any pending auto-save timers
     if (autoSaveTimerRef.current) {
       clearTimeout(autoSaveTimerRef.current);
     }
@@ -201,17 +278,18 @@ function TeamMembers() {
   };
 
   const handleDeleteMember = async (memberId) => {
+    if (!window.confirm('Are you sure you want to delete this team member?')) return;
+
     try {
       await teamAPI.deleteMember(memberId);
       loadMembers();
-      alert('Team member removed');
+      toast.success('Team member removed');
     } catch (error) {
       console.error('Failed to delete team member:', error);
-      alert('Failed to remove team member');
+      toast.error('Failed to remove team member');
     }
   };
 
-  // Handle checkbox selection for a single member
   const handleSelectMember = (memberId, e) => {
     e.stopPropagation();
     setSelectedMembers(prev => {
@@ -223,20 +301,16 @@ function TeamMembers() {
     });
   };
 
-  // Handle select all checkbox
   const handleSelectAll = (e) => {
     e.stopPropagation();
     const safeMembers = Array.isArray(members) ? members : [];
     if (selectedMembers.length === safeMembers.length) {
-      // Deselect all
       setSelectedMembers([]);
     } else {
-      // Select all
       setSelectedMembers(safeMembers.map(m => m.id));
     }
   };
 
-  // Handle bulk delete
   const handleBulkDelete = async () => {
     if (selectedMembers.length === 0) return;
 
@@ -262,9 +336,9 @@ function TeamMembers() {
     loadMembers();
 
     if (failCount === 0) {
-      alert(`Successfully deleted ${successCount} team member${successCount > 1 ? 's' : ''}`);
+      toast.success(`Successfully deleted ${successCount} team member${successCount > 1 ? 's' : ''}`);
     } else {
-      alert(`Deleted ${successCount} member${successCount !== 1 ? 's' : ''}, failed to delete ${failCount}`);
+      toast.warning(`Deleted ${successCount} member${successCount !== 1 ? 's' : ''}, failed to delete ${failCount}`);
     }
   };
 
@@ -272,11 +346,18 @@ function TeamMembers() {
     setFormData({ ...formData, [field]: value });
   };
 
+  // Get the workflow role name for a member
+  const getMemberWorkflowRole = (memberId) => {
+    const roleId = roleAssignments[memberId];
+    if (!roleId) return null;
+    const role = workflowRoles.find(r => r.role_id === roleId);
+    return role ? role.role_name : null;
+  };
+
   if (loading) {
-    return <div className="loading">Loading team members...</div>;
+    return <div className="loading">Loading team...</div>;
   }
 
-  // Filter by search query - ensure members is always an array
   const safeMembers = Array.isArray(members) ? members : [];
   let filteredMembers = safeMembers;
 
@@ -286,6 +367,7 @@ function TeamMembers() {
       member &&
       (
         `${member.first_name || ''} ${member.last_name || ''}`.toLowerCase().includes(query) ||
+        member.full_name?.toLowerCase().includes(query) ||
         member.email?.toLowerCase().includes(query) ||
         member.phone?.toLowerCase().includes(query) ||
         member.role?.toLowerCase().includes(query) ||
@@ -294,7 +376,6 @@ function TeamMembers() {
     );
   }
 
-  // Access denied if user doesn't have team permissions
   if (!canViewTeam) {
     return (
       <div className="leads-page">
@@ -309,12 +390,14 @@ function TeamMembers() {
     );
   }
 
+  const assignedCount = Object.keys(roleAssignments).length;
+
   return (
     <div className="leads-page">
       <div className="page-header">
         <div>
-          <h1>Team Members</h1>
-          <p>{String(safeMembers.length)} total team members</p>
+          <h1>Team Management</h1>
+          <p>Manage your team members and workflow role assignments</p>
         </div>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           {selectedMembers.length > 0 && (
@@ -386,6 +469,7 @@ function TeamMembers() {
                 <th>PHONE</th>
                 <th>ROLE</th>
                 <th>TITLE</th>
+                <th style={{ minWidth: '180px' }}>WORKFLOW ROLE</th>
                 <th>ACTIONS</th>
               </tr>
             </thead>
@@ -393,12 +477,13 @@ function TeamMembers() {
               {filteredMembers.map((member) => {
                 if (!member || !member.id) return null;
                 const isSelected = selectedMembers.includes(member.id);
+                const assignedRoleId = roleAssignments[member.id];
+                const isSavingRole = savingWorkflowRole[member.id];
+
                 return (
                   <tr
                     key={member.id}
-                    onClick={() => navigate(`/team-members/${member.id}`)}
                     style={{
-                      cursor: 'pointer',
                       backgroundColor: isSelected ? '#e0f2fe' : undefined
                     }}
                   >
@@ -410,9 +495,13 @@ function TeamMembers() {
                         style={{ width: '18px', height: '18px', cursor: 'pointer' }}
                       />
                     </td>
-                    <td className="lead-name">
+                    <td
+                      className="lead-name"
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => navigate(`/team-members/${member.id}`)}
+                    >
                       <strong>
-                        {`${member.first_name || ''} ${member.last_name || ''}`.trim() || 'No Name'}
+                        {member.full_name || `${member.first_name || ''} ${member.last_name || ''}`.trim() || 'No Name'}
                       </strong>
                     </td>
                     <td>{String(member.email || 'N/A')}</td>
@@ -421,6 +510,51 @@ function TeamMembers() {
                       <span className="status-badge status-prospect">{String(member.role || 'Team Member')}</span>
                     </td>
                     <td>{String(member.title || 'N/A')}</td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <select
+                          value={assignedRoleId || ''}
+                          onChange={(e) => handleWorkflowRoleChange(member.id, e.target.value)}
+                          disabled={isSavingRole}
+                          style={{
+                            padding: '6px 28px 6px 10px',
+                            borderRadius: '6px',
+                            border: assignedRoleId ? '2px solid #218D8D' : '1px solid #d1d5db',
+                            background: assignedRoleId ? '#f0fdf4' : 'white',
+                            fontSize: '13px',
+                            cursor: isSavingRole ? 'wait' : 'pointer',
+                            minWidth: '150px',
+                            appearance: 'none',
+                            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
+                            backgroundRepeat: 'no-repeat',
+                            backgroundPosition: 'right 8px center',
+                            opacity: isSavingRole ? 0.7 : 1
+                          }}
+                        >
+                          <option value="">-- None --</option>
+                          {workflowRoles.map(role => (
+                            <option
+                              key={role.role_id}
+                              value={role.role_id}
+                              disabled={role.user_id && role.user_id !== member.id}
+                            >
+                              {role.role_name}
+                              {role.user_id && role.user_id !== member.id ? ' (assigned)' : ''}
+                            </option>
+                          ))}
+                        </select>
+                        {isSavingRole && (
+                          <span style={{
+                            width: '16px',
+                            height: '16px',
+                            border: '2px solid #e5e7eb',
+                            borderTopColor: '#218D8D',
+                            borderRadius: '50%',
+                            animation: 'spin 0.8s linear infinite'
+                          }} />
+                        )}
+                      </div>
+                    </td>
                     <td>
                       <div className="table-actions">
                         <button
@@ -445,6 +579,24 @@ function TeamMembers() {
             </tbody>
           </table>
         )}
+      </div>
+
+      {/* Summary footer */}
+      <div style={{
+        marginTop: '16px',
+        padding: '12px 16px',
+        background: '#f0f9ff',
+        borderRadius: '8px',
+        border: '1px solid #bae6fd',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px'
+      }}>
+        <span style={{ fontSize: '16px' }}>ℹ️</span>
+        <span style={{ color: '#0369a1', fontSize: '14px' }}>
+          {assignedCount} of {workflowRoles.length} workflow roles assigned.
+          Workflow roles determine default team member assignments for new loans and leads.
+        </span>
       </div>
 
       {/* Add/Edit Modal */}
@@ -569,6 +721,12 @@ function TeamMembers() {
           </div>
         </div>
       )}
+
+      <style>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }
