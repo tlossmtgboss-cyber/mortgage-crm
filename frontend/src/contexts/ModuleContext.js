@@ -11,8 +11,10 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { getAuthHeaders } from '../utils/auth';
+import { API_BASE_URL } from '../services/api';
 
-const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
+// Use the same API URL as the rest of the app (handles production vs dev)
+const API_BASE = API_BASE_URL;
 
 // Cache duration in milliseconds (5 minutes)
 const CACHE_TTL = 5 * 60 * 1000;
