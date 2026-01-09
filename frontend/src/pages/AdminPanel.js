@@ -66,19 +66,8 @@ const AdminPanel = () => {
   const [selectedViewRole, setSelectedViewRole] = useState(null);
   const [impersonating, setImpersonating] = useState(false);
 
-  // All available roles in the system
-  const ALL_ROLES = [
-    { value: 'admin', label: 'Admin', description: 'Full system access' },
-    { value: 'management', label: 'Management', description: 'Branch/team management' },
-    { value: 'loan_officer', label: 'Loan Officer', description: 'Origination & sales' },
-    { value: 'processor', label: 'Processor', description: 'Loan processing' },
-    { value: 'underwriter', label: 'Underwriter', description: 'Loan underwriting' },
-    { value: 'closer', label: 'Closer', description: 'Loan closing' },
-    { value: 'team_lead', label: 'Team Lead', description: 'Team supervision' },
-    { value: 'realtor', label: 'Partner/Realtor', description: 'Referral partner' },
-    { value: 'assistant', label: 'Assistant', description: 'LO assistant' },
-    { value: 'user', label: 'Basic User', description: 'Standard access' },
-  ];
+  // Employee roles fetched from the system
+  const [employeeRoles, setEmployeeRoles] = useState([]);
 
   // Security monitoring state
   const [securityData, setSecurityData] = useState(null);
@@ -118,9 +107,10 @@ const AdminPanel = () => {
     try {
       setLoading(true);
 
-      const [statsRes, usersRes] = await Promise.allSettled([
+      const [statsRes, usersRes, rolesRes] = await Promise.allSettled([
         api.get('/api/v1/admin/stats'),
         api.get('/api/v1/admin/users'),
+        api.get('/api/v1/user-creation/roles'),
       ]);
 
       if (statsRes.status === 'fulfilled') {
@@ -141,6 +131,12 @@ const AdminPanel = () => {
         setUsers(allUsers);
         setLoanOfficers(allUsers.filter(u => u.role === 'loan_officer'));
         setRealtors(allUsers.filter(u => u.role === 'realtor'));
+      }
+
+      // Load employee roles from the system
+      if (rolesRes.status === 'fulfilled') {
+        const rolesData = rolesRes.value.data?.data?.roles || rolesRes.value.data?.roles || [];
+        setEmployeeRoles(rolesData);
       }
 
     } catch (err) {
@@ -478,7 +474,7 @@ const AdminPanel = () => {
             <label className="user-selector-label">View as:</label>
             <select
               className="user-selector role-selector"
-              value={selectedViewRole || selectedViewUser?.id || ''}
+              value={selectedViewRole ? `role:${selectedViewRole.id}:${selectedViewRole.name}` : (selectedViewUser?.id || '')}
               onChange={(e) => {
                 const value = e.target.value;
                 if (value === '') {
@@ -486,9 +482,11 @@ const AdminPanel = () => {
                   setSelectedViewRole(null);
                   setImpersonating(false);
                 } else if (value.startsWith('role:')) {
-                  // Role selected
-                  const role = value.replace('role:', '');
-                  setSelectedViewRole(role);
+                  // Role selected - parse "role:id:name"
+                  const parts = value.split(':');
+                  const roleId = parseInt(parts[1], 10);
+                  const roleName = parts.slice(2).join(':'); // Handle names with colons
+                  setSelectedViewRole({ id: roleId, name: roleName });
                   setSelectedViewUser(null);
                 } else {
                   // User selected
@@ -499,13 +497,15 @@ const AdminPanel = () => {
               }}
             >
               <option value="">Admin (Default)</option>
-              <optgroup label="── View by Role ──">
-                {ALL_ROLES.map(role => (
-                  <option key={role.value} value={`role:${role.value}`}>
-                    {role.label}
-                  </option>
-                ))}
-              </optgroup>
+              {employeeRoles.length > 0 && (
+                <optgroup label="── View by Employee Role ──">
+                  {employeeRoles.map(role => (
+                    <option key={role.id} value={`role:${role.id}:${role.name}`}>
+                      {role.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
               <optgroup label="── View as Specific User ──">
                 {users.map(user => {
                   const displayName = user.full_name?.trim() || `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email || `User #${user.id}`;
@@ -525,14 +525,23 @@ const AdminPanel = () => {
                     setImpersonating(true);
 
                     if (selectedViewRole) {
-                      // Role-based preview - find a user with this role or create preview session
-                      const userWithRole = users.find(u => u.role === selectedViewRole);
+                      // Role-based preview - find a user with this role
+                      // First try to find by onboarding_role_id, then by role name match
+                      let userWithRole = users.find(u => u.onboarding_role_id === selectedViewRole.id);
+                      if (!userWithRole) {
+                        // Fallback: find by role name (case-insensitive partial match)
+                        const roleNameLower = selectedViewRole.name.toLowerCase().replace(/\s+/g, '_');
+                        userWithRole = users.find(u =>
+                          u.role?.toLowerCase() === roleNameLower ||
+                          u.role?.toLowerCase().includes(roleNameLower.split('_')[0])
+                        );
+                      }
 
                       if (userWithRole) {
                         // Impersonate a user with this role
                         const response = await api.post('/api/v1/admin/account-management/impersonate/start', {
                           user_id: userWithRole.id,
-                          reason: `Admin panel role preview: ${selectedViewRole}`
+                          reason: `Admin panel role preview: ${selectedViewRole.name}`
                         });
                         const sessionToken = response.data?.data?.sessionToken || response.data?.sessionToken || response.data?.token;
                         if (sessionToken) {
@@ -540,7 +549,7 @@ const AdminPanel = () => {
                           localStorage.setItem('impersonation_session', JSON.stringify({
                             session_token: sessionToken,
                             impersonated_user: userWithRole,
-                            role_preview: selectedViewRole,
+                            role_preview: selectedViewRole.name,
                             started_at: new Date().toISOString()
                           }));
                           localStorage.setItem('impersonating_user', JSON.stringify(userWithRole));
@@ -549,13 +558,9 @@ const AdminPanel = () => {
                           throw new Error('No session token returned from server');
                         }
                       } else {
-                        // No user found with this role - show preview mode
-                        localStorage.setItem('role_preview_mode', JSON.stringify({
-                          role: selectedViewRole,
-                          started_at: new Date().toISOString()
-                        }));
-                        alert(`Preview mode: Viewing dashboard as ${selectedViewRole.replace('_', ' ')} role.\n\nNote: No active user with this role found. Some features may be limited.`);
-                        window.location.href = `/dashboard?preview_role=${selectedViewRole}`;
+                        // No user found with this role
+                        alert(`No user found with the "${selectedViewRole.name}" role.\n\nPlease assign this role to a user first, then try again.`);
+                        setImpersonating(false);
                       }
                     } else if (selectedViewUser) {
                       // User-based impersonation
