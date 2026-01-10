@@ -91,10 +91,61 @@ DEFAULT_FIELD_MAPPING = {
     # Status and dates
     "MtgPlanner_CRM__Status__c": ("stage", "stage_mapping"),
     "MtgPlanner_CRM__Stage__c": ("stage", "stage_mapping"),
-    "MtgPlanner_CRM__Closing_Date__c": ("closing_date", "date"),
+
+    # ============================================================
+    # JUNGO CUSTOM BYTE MAPPINGS - All 33 Date Fields
+    # ============================================================
+
+    # Lead & Application Phase
+    "MtgPlanner_CRM__Prospect_Date__c": ("prospect_date", "date"),
+    "MtgPlanner_CRM__Application_Date__c": ("application_date", "date"),
+    "MtgPlanner_CRM__LE_Pending_Date__c": ("le_pending_date", "date"),
+    "MtgPlanner_CRM__Credit_Only_Date__c": ("credit_only_date", "date"),
+    "MtgPlanner_CRM__File_Received_Date__c": ("file_received_date", "date"),
+    "MtgPlanner_CRM__Loan_Pre_Approval_Date__c": ("preapproval_date", "date"),
+
+    # Lock Phase
     "MtgPlanner_CRM__Lock_Date__c": ("lock_date", "date"),
     "MtgPlanner_CRM__Lock_Expiration__c": ("lock_expiration_date", "date"),
-    "MtgPlanner_CRM__Application_Date__c": ("application_date", "date"),
+
+    # Processing & Underwriting Phase
+    "MtgPlanner_CRM__UW_Received_Date__c": ("uw_received_date", "date"),
+    "MtgPlanner_CRM__Conditions_For_Review_Date__c": ("conditions_for_review_date", "date"),
+    "MtgPlanner_CRM__Suspended_Date__c": ("suspended_date", "date"),
+    "MtgPlanner_CRM__Loan_Approved_Date__c": ("loan_approved_date", "date"),
+    "MtgPlanner_CRM__Approved_Not_Accepted_Date__c": ("approved_not_accepted_date", "date"),
+    "MtgPlanner_CRM__Approval_Expires_Date__c": ("approval_expires_date", "date"),
+
+    # Appraisal Phase
+    "MtgPlanner_CRM__Appraisal_Ordered_Date__c": ("appraisal_ordered_date", "date"),
+    "MtgPlanner_CRM__Appraisal_Received_Date__c": ("appraisal_received_date", "date"),
+    "MtgPlanner_CRM__Appraisal_Docs_Expire_Date__c": ("appraisal_docs_expire_date", "date"),
+
+    # Closing Disclosure Phase
+    "MtgPlanner_CRM__CD_Requested_Date__c": ("cd_requested_date", "date"),
+    "MtgPlanner_CRM__CD_Sent_To_Borrower_Date__c": ("cd_sent_to_borrower_date", "date"),
+    "MtgPlanner_CRM__CD_Acknowledged_Date__c": ("cd_acknowledged_date", "date"),
+
+    # Clear to Close & Docs Phase
+    "MtgPlanner_CRM__Clear_To_Close_Date__c": ("clear_to_close_date", "date"),
+    "MtgPlanner_CRM__Docs_Ordered_Date__c": ("docs_ordered_date", "date"),
+    "MtgPlanner_CRM__Docs_Out_Date__c": ("docs_out_date", "date"),
+    "MtgPlanner_CRM__Credit_Docs_Expire_Date__c": ("credit_docs_expire_date", "date"),
+
+    # Funding Phase
+    "MtgPlanner_CRM__Scheduled_Closing_Date__c": ("scheduled_closing_date", "date"),
+    "MtgPlanner_CRM__Scheduled_Funding_Date__c": ("scheduled_funding_date", "date"),
+    "MtgPlanner_CRM__Funds_Ordered_Date__c": ("funds_ordered_date", "date"),
+    "MtgPlanner_CRM__Funds_Sent_Date__c": ("funds_sent_date", "date"),
+    "MtgPlanner_CRM__Funded_Date__c": ("funded_date", "date"),
+    "MtgPlanner_CRM__Closing_Date__c": ("closing_date", "date"),
+    "MtgPlanner_CRM__First_Payment_Date__c": ("first_payment_date", "date"),
+
+    # Post-Closing
+    "MtgPlanner_CRM__Investor_Purchased_Date__c": ("investor_purchased_date", "date"),
+
+    # Status Changes
+    "MtgPlanner_CRM__Withdrawn_Date__c": ("withdrawn_date", "date"),
     "MtgPlanner_CRM__Contract_Date__c": ("contract_received_date", "date"),
 
     # Timestamps

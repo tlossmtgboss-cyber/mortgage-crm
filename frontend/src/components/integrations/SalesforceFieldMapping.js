@@ -30,6 +30,53 @@ const CRM_LOAN_FIELDS = [
   { name: 'application_date', label: 'Application Date', type: 'date' },
   { name: 'program', label: 'Program', type: 'string' },
   { name: 'lender', label: 'Lender', type: 'string' },
+  // ============================================================
+  // JUNGO CUSTOM BYTE MAPPINGS - All 33 Date Fields
+  // ============================================================
+
+  // Lead & Application Phase
+  { name: 'prospect_date', label: 'Prospect Date', type: 'date' },
+  { name: 'le_pending_date', label: 'LE Pending Date', type: 'date' },
+  { name: 'credit_only_date', label: 'Credit Only Date', type: 'date' },
+  { name: 'file_received_date', label: 'File Received Date', type: 'date' },
+  { name: 'preapproval_date', label: 'Pre-Approval Date', type: 'date' },
+
+  // Processing & Underwriting Phase
+  { name: 'uw_received_date', label: 'UW Received Date', type: 'date' },
+  { name: 'conditions_for_review_date', label: 'Conditions for Review Date', type: 'date' },
+  { name: 'suspended_date', label: 'Suspended Date', type: 'date' },
+  { name: 'loan_approved_date', label: 'Loan Approved Date', type: 'date' },
+  { name: 'approved_not_accepted_date', label: 'Approved Not Accepted Date', type: 'date' },
+  { name: 'approval_expires_date', label: 'Approval Expires Date', type: 'date' },
+
+  // Appraisal Phase
+  { name: 'appraisal_ordered_date', label: 'Appraisal Ordered Date', type: 'date' },
+  { name: 'appraisal_received_date', label: 'Appraisal Received Date', type: 'date' },
+  { name: 'appraisal_docs_expire_date', label: 'Appraisal Docs Expire Date', type: 'date' },
+
+  // Closing Disclosure Phase
+  { name: 'cd_requested_date', label: 'CD Requested Date', type: 'date' },
+  { name: 'cd_sent_to_borrower_date', label: 'CD Sent to Borrower Date', type: 'date' },
+  { name: 'cd_acknowledged_date', label: 'CD Acknowledged Date', type: 'date' },
+
+  // Clear to Close & Docs Phase
+  { name: 'clear_to_close_date', label: 'Clear to Close Date', type: 'date' },
+  { name: 'docs_ordered_date', label: 'Docs Ordered Date', type: 'date' },
+  { name: 'docs_out_date', label: 'Docs Out Date', type: 'date' },
+  { name: 'credit_docs_expire_date', label: 'Credit Docs Expire Date', type: 'date' },
+
+  // Funding Phase
+  { name: 'scheduled_closing_date', label: 'Scheduled Closing Date', type: 'date' },
+  { name: 'scheduled_funding_date', label: 'Scheduled Funding Date', type: 'date' },
+  { name: 'funds_ordered_date', label: 'Funds Ordered Date', type: 'date' },
+  { name: 'funds_sent_date', label: 'Funds Sent Date', type: 'date' },
+  { name: 'funded_date', label: 'Funded Date', type: 'date' },
+  { name: 'first_payment_date', label: 'First Payment Date', type: 'date' },
+
+  // Post-Closing & Status
+  { name: 'investor_purchased_date', label: 'Investor Purchased Date', type: 'date' },
+  { name: 'withdrawn_date', label: 'Withdrawn Date', type: 'date' },
+  { name: 'contract_received_date', label: 'Contract Received Date', type: 'date' },
 ];
 
 // Transform types available

@@ -1165,3 +1165,33 @@ async def run_call_transcripts_migration(
     except Exception as e:
         logger.error(f"Call Transcripts migration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/add-sessions-table")
+async def run_sessions_table_migration(
+    admin: Any = Depends(verify_admin_access)
+):
+    """
+    Run the sessions table migration
+    Creates sessions table for storing user authentication tokens
+    """
+    try:
+        from migrations.add_sessions_table import run_migration
+
+        logger.info("Starting sessions table migration...")
+        success = run_migration()
+
+        if success:
+            return {
+                "status": "success",
+                "message": "Sessions table created successfully"
+            }
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail="Migration failed - check logs for details"
+            )
+
+    except Exception as e:
+        logger.error(f"Sessions table migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

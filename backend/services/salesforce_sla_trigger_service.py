@@ -21,46 +21,242 @@ from sqlalchemy import text
 logger = logging.getLogger(__name__)
 
 
-# Salesforce field to SLA workflow mapping
-# Format: "salesforce_field" -> (workflow_key, entity_type, days_before_due)
+# ============================================================
+# JUNGO CUSTOM BYTE MAPPINGS - All 33 SLA Date Field Triggers
+# ============================================================
+# Format: "crm_field_name" -> trigger configuration
+# sla_type: "countdown" = tasks count down TO this date
+#           "elapsed" = tasks count FROM this date
+#           "expiration" = alerts as deadline approaches
+
 SALESFORCE_SLA_TRIGGERS = {
-    # Date fields from Salesforce sync
-    "contract_received_date": {
-        "workflow_key": "under_contract",
+    # ==================== Lead & Application Phase ====================
+    "prospect_date": {
+        "workflow_key": "prospect",
         "entity_type": "loan",
-        "trigger_name": "Contract Received",
-        "sla_type": "countdown",  # Tasks generated counting down to this date
+        "trigger_name": "Prospect Date",
+        "sla_type": "elapsed",
     },
-    "closing_date": {
-        "workflow_key": "closing",
+    "application_date": {
+        "workflow_key": "application",
         "entity_type": "loan",
-        "trigger_name": "Closing Date",
-        "sla_type": "countdown",
-        "days_before_alerts": [14, 7, 3, 1],  # Send task alerts at these days before
+        "trigger_name": "Application Received",
+        "sla_type": "elapsed",
     },
+    "le_pending_date": {
+        "workflow_key": "le_pending",
+        "entity_type": "loan",
+        "trigger_name": "LE Pending",
+        "sla_type": "elapsed",
+        "days_before_alerts": [3, 1],  # TRID compliance
+    },
+    "credit_only_date": {
+        "workflow_key": "credit_only",
+        "entity_type": "loan",
+        "trigger_name": "Credit Only",
+        "sla_type": "elapsed",
+    },
+    "file_received_date": {
+        "workflow_key": "file_received",
+        "entity_type": "loan",
+        "trigger_name": "File Received",
+        "sla_type": "elapsed",
+    },
+    "preapproval_date": {
+        "workflow_key": "preapproval",
+        "entity_type": "loan",
+        "trigger_name": "Pre-Approval",
+        "sla_type": "elapsed",
+    },
+
+    # ==================== Lock Phase ====================
     "lock_date": {
         "workflow_key": "rate_lock",
         "entity_type": "loan",
         "trigger_name": "Rate Lock",
-        "sla_type": "countdown",
+        "sla_type": "elapsed",
     },
     "lock_expiration_date": {
         "workflow_key": "lock_expiration",
         "entity_type": "loan",
         "trigger_name": "Lock Expiration",
         "sla_type": "countdown",
-        "days_before_alerts": [7, 3, 1],  # Urgency for lock expiration
+        "days_before_alerts": [14, 7, 3, 1],  # Critical deadline
     },
-    "application_date": {
-        "workflow_key": "prequal",
+
+    # ==================== Processing & Underwriting ====================
+    "uw_received_date": {
+        "workflow_key": "underwriting",
         "entity_type": "loan",
-        "trigger_name": "Application Received",
-        "sla_type": "elapsed",  # Tasks generated based on days since date
+        "trigger_name": "UW Received",
+        "sla_type": "elapsed",
     },
-    "disclosure_sent_date": {
-        "workflow_key": "disclosure_sent",
+    "conditions_for_review_date": {
+        "workflow_key": "conditions_review",
         "entity_type": "loan",
-        "trigger_name": "Disclosure Sent",
+        "trigger_name": "Conditions for Review",
+        "sla_type": "elapsed",
+    },
+    "suspended_date": {
+        "workflow_key": "suspended",
+        "entity_type": "loan",
+        "trigger_name": "Suspended",
+        "sla_type": "elapsed",
+    },
+    "loan_approved_date": {
+        "workflow_key": "approved",
+        "entity_type": "loan",
+        "trigger_name": "Loan Approved",
+        "sla_type": "elapsed",
+    },
+    "approved_not_accepted_date": {
+        "workflow_key": "approved_not_accepted",
+        "entity_type": "loan",
+        "trigger_name": "Approved Not Accepted",
+        "sla_type": "elapsed",
+    },
+    "approval_expires_date": {
+        "workflow_key": "approval_expiration",
+        "entity_type": "loan",
+        "trigger_name": "Approval Expires",
+        "sla_type": "countdown",
+        "days_before_alerts": [14, 7, 3, 1],
+    },
+
+    # ==================== Appraisal ====================
+    "appraisal_ordered_date": {
+        "workflow_key": "appraisal_ordered",
+        "entity_type": "loan",
+        "trigger_name": "Appraisal Ordered",
+        "sla_type": "elapsed",
+    },
+    "appraisal_received_date": {
+        "workflow_key": "appraisal_received",
+        "entity_type": "loan",
+        "trigger_name": "Appraisal Received",
+        "sla_type": "elapsed",
+    },
+    "appraisal_docs_expire_date": {
+        "workflow_key": "appraisal_expiration",
+        "entity_type": "loan",
+        "trigger_name": "Appraisal Docs Expire",
+        "sla_type": "countdown",
+        "days_before_alerts": [30, 14, 7],
+    },
+
+    # ==================== Closing Disclosure ====================
+    "cd_requested_date": {
+        "workflow_key": "cd_requested",
+        "entity_type": "loan",
+        "trigger_name": "CD Requested",
+        "sla_type": "elapsed",
+    },
+    "cd_sent_to_borrower_date": {
+        "workflow_key": "cd_sent",
+        "entity_type": "loan",
+        "trigger_name": "CD Sent to Borrower",
+        "sla_type": "elapsed",
+        "days_before_alerts": [3],  # TRID 3-day rule
+    },
+    "cd_acknowledged_date": {
+        "workflow_key": "cd_acknowledged",
+        "entity_type": "loan",
+        "trigger_name": "CD Acknowledged",
+        "sla_type": "elapsed",
+    },
+
+    # ==================== Clear to Close & Docs ====================
+    "clear_to_close_date": {
+        "workflow_key": "clear_to_close",
+        "entity_type": "loan",
+        "trigger_name": "Clear to Close",
+        "sla_type": "elapsed",
+    },
+    "docs_ordered_date": {
+        "workflow_key": "docs_ordered",
+        "entity_type": "loan",
+        "trigger_name": "Docs Ordered",
+        "sla_type": "elapsed",
+    },
+    "docs_out_date": {
+        "workflow_key": "docs_out",
+        "entity_type": "loan",
+        "trigger_name": "Docs Out",
+        "sla_type": "elapsed",
+    },
+    "credit_docs_expire_date": {
+        "workflow_key": "credit_expiration",
+        "entity_type": "loan",
+        "trigger_name": "Credit Docs Expire",
+        "sla_type": "countdown",
+        "days_before_alerts": [30, 14, 7],
+    },
+
+    # ==================== Funding & Closing ====================
+    "scheduled_closing_date": {
+        "workflow_key": "closing",
+        "entity_type": "loan",
+        "trigger_name": "Scheduled Closing",
+        "sla_type": "countdown",
+        "days_before_alerts": [14, 7, 3, 1],
+    },
+    "scheduled_funding_date": {
+        "workflow_key": "funding",
+        "entity_type": "loan",
+        "trigger_name": "Scheduled Funding",
+        "sla_type": "countdown",
+        "days_before_alerts": [7, 3, 1],
+    },
+    "funds_ordered_date": {
+        "workflow_key": "funds_ordered",
+        "entity_type": "loan",
+        "trigger_name": "Funds Ordered",
+        "sla_type": "elapsed",
+    },
+    "funds_sent_date": {
+        "workflow_key": "funds_sent",
+        "entity_type": "loan",
+        "trigger_name": "Funds Sent",
+        "sla_type": "elapsed",
+    },
+    "funded_date": {
+        "workflow_key": "funded",
+        "entity_type": "loan",
+        "trigger_name": "Funded",
+        "sla_type": "elapsed",
+    },
+    "closing_date": {
+        "workflow_key": "closing_complete",
+        "entity_type": "loan",
+        "trigger_name": "Closing Date",
+        "sla_type": "countdown",
+        "days_before_alerts": [14, 7, 3, 1],
+    },
+    "first_payment_date": {
+        "workflow_key": "first_payment",
+        "entity_type": "loan",
+        "trigger_name": "First Payment",
+        "sla_type": "countdown",
+        "days_before_alerts": [30, 14, 7],
+    },
+
+    # ==================== Post-Closing & Status ====================
+    "investor_purchased_date": {
+        "workflow_key": "investor_purchased",
+        "entity_type": "loan",
+        "trigger_name": "Investor Purchased",
+        "sla_type": "elapsed",
+    },
+    "withdrawn_date": {
+        "workflow_key": "withdrawn",
+        "entity_type": "loan",
+        "trigger_name": "Withdrawn",
+        "sla_type": "elapsed",
+    },
+    "contract_received_date": {
+        "workflow_key": "under_contract",
+        "entity_type": "loan",
+        "trigger_name": "Contract Received",
         "sla_type": "elapsed",
     },
 }
