@@ -10,6 +10,7 @@ import logging
 import json
 import asyncio
 import base64
+from typing import List, Dict, Any
 
 # Import from database instead of main to avoid circular dependency
 from database import get_db
