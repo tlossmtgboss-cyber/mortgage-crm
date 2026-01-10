@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import './ProductionPredictor.css';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
@@ -35,7 +36,7 @@ const formatCurrency = (amount) => {
 };
 
 // Production Predictor Dashboard
-export function ProductionPredictorDashboard({ entityId, entityType = 'lo' }) {
+export function ProductionPredictorDashboard({ entityId, entityType = 'lo', embedded = false }) {
   const [summary, setSummary] = useState(null);
   const [goalAttainment, setGoalAttainment] = useState(null);
   const [conversions, setConversions] = useState(null);
@@ -92,6 +93,13 @@ export function ProductionPredictorDashboard({ entityId, entityType = 'lo' }) {
   };
 
   if (loading) {
+    if (embedded) {
+      return (
+        <div className="production-predictor-embedded loading">
+          <div className="loading-spinner small"></div>
+        </div>
+      );
+    }
     return (
       <div className="production-predictor loading">
         <div className="loading-spinner"></div>
@@ -101,11 +109,94 @@ export function ProductionPredictorDashboard({ entityId, entityType = 'lo' }) {
   }
 
   if (error) {
+    if (embedded) {
+      return (
+        <div className="production-predictor-embedded error">
+          <p>Unable to load forecast</p>
+        </div>
+      );
+    }
     return (
       <div className="production-predictor error">
         <p>Error loading production data: {error}</p>
         <button onClick={fetchData}>Retry</button>
       </div>
+    );
+  }
+
+  // Embedded compact view for dashboard
+  if (embedded) {
+    const trend = summary?.trend || {};
+    const trendConfig = TREND_CONFIG[trend.direction] || TREND_CONFIG.stable;
+    const forecast30 = summary?.forecasts?.['30_day'] || {};
+    const forecast60 = summary?.forecasts?.['60_day'] || {};
+    const forecast90 = summary?.forecasts?.['90_day'] || {};
+    const riskConfig = goalAttainment ? (RISK_CONFIG[goalAttainment.risk_level] || RISK_CONFIG.on_track) : null;
+
+    return (
+      <a href="/production-predictor" className="production-predictor-embedded" style={{ textDecoration: 'none', color: 'inherit' }}>
+        <div className="embedded-header">
+          <div className="embedded-title">
+            <h3>Production Forecast</h3>
+            <span className="embedded-trend" style={{ color: trendConfig.color }}>
+              {trendConfig.icon} {trend.change_pct > 0 ? '+' : ''}{trend.change_pct || 0}%
+            </span>
+          </div>
+          {riskConfig && (
+            <div className="embedded-status" style={{ backgroundColor: riskConfig.color }}>
+              {riskConfig.icon} {riskConfig.label}
+            </div>
+          )}
+        </div>
+
+        <div className="embedded-content">
+          <div className="embedded-current">
+            <div className="current-stat">
+              <span className="current-value">{summary?.current_month?.mtd_units || 0}</span>
+              <span className="current-label">MTD Units</span>
+            </div>
+            <div className="current-divider"></div>
+            <div className="current-stat">
+              <span className="current-value">{formatCurrency(summary?.current_month?.mtd_volume || 0)}</span>
+              <span className="current-label">MTD Volume</span>
+            </div>
+            <div className="current-divider"></div>
+            <div className="current-stat projected">
+              <span className="current-value">{summary?.current_month?.projected_units || 0}</span>
+              <span className="current-label">Projected</span>
+            </div>
+          </div>
+
+          <div className="embedded-forecasts">
+            <div className="forecast-item">
+              <div className="forecast-period">30d</div>
+              <div className="forecast-data">
+                <span className="forecast-units">{forecast30.units || 0} units</span>
+                <span className="forecast-volume">{formatCurrency(forecast30.volume || 0)}</span>
+              </div>
+            </div>
+            <div className="forecast-item">
+              <div className="forecast-period">60d</div>
+              <div className="forecast-data">
+                <span className="forecast-units">{forecast60.units || 0} units</span>
+                <span className="forecast-volume">{formatCurrency(forecast60.volume || 0)}</span>
+              </div>
+            </div>
+            <div className="forecast-item">
+              <div className="forecast-period">90d</div>
+              <div className="forecast-data">
+                <span className="forecast-units">{forecast90.units || 0} units</span>
+                <span className="forecast-volume">{formatCurrency(forecast90.volume || 0)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="embedded-footer">
+          <span>Click for detailed analysis</span>
+          <span className="arrow">→</span>
+        </div>
+      </a>
     );
   }
 
@@ -153,9 +244,47 @@ export function ProductionPredictorDashboard({ entityId, entityType = 'lo' }) {
 
 // Forecast View Component
 function ForecastView({ summary }) {
+  const navigate = useNavigate();
   const trend = summary.trend || {};
   const forecasts = summary.forecasts || {};
   const trendConfig = TREND_CONFIG[trend.direction] || TREND_CONFIG.stable;
+
+  const handleStatClick = (type) => {
+    switch (type) {
+      case 'mtd_units':
+        navigate('/production-predictor/detail?view=mtd_units');
+        break;
+      case 'mtd_volume':
+        navigate('/production-predictor/detail?view=mtd_volume');
+        break;
+      case 'projected_units':
+        navigate('/production-predictor/detail?view=projected_units');
+        break;
+      case 'projected_volume':
+        navigate('/production-predictor/detail?view=projected_volume');
+        break;
+      case 'trend':
+        navigate('/production-predictor/detail?view=trend');
+        break;
+      case 'volatility':
+        navigate('/production-predictor/detail?view=trend');
+        break;
+      case 'historical':
+        navigate('/production-predictor/detail?view=historical');
+        break;
+      default:
+        break;
+    }
+  };
+
+  const handleForecastClick = (period) => {
+    const periodMap = {
+      '30_day': 'forecast_30',
+      '60_day': 'forecast_60',
+      '90_day': 'forecast_90',
+    };
+    navigate(`/production-predictor/detail?view=${periodMap[period] || 'forecast_30'}`);
+  };
 
   return (
     <div className="forecast-view">
@@ -163,14 +292,25 @@ function ForecastView({ summary }) {
       <div className="section current-month-section">
         <h2>Current Month</h2>
         <div className="stats-grid">
-          <div className="stat-card">
+          <div
+            className="stat-card clickable"
+            onClick={() => handleStatClick('mtd_units')}
+            role="button"
+            tabIndex={0}
+          >
             <div className="stat-label">MTD Units</div>
             <div className="stat-value">{summary.current_month?.mtd_units || 0}</div>
             <div className="stat-subtext">
               Projected: {summary.current_month?.projected_units || 0}
             </div>
+            <div className="stat-action">View Details →</div>
           </div>
-          <div className="stat-card">
+          <div
+            className="stat-card clickable"
+            onClick={() => handleStatClick('mtd_volume')}
+            role="button"
+            tabIndex={0}
+          >
             <div className="stat-label">MTD Volume</div>
             <div className="stat-value">
               {formatCurrency(summary.current_month?.mtd_volume || 0)}
@@ -178,15 +318,27 @@ function ForecastView({ summary }) {
             <div className="stat-subtext">
               Projected: {formatCurrency(summary.current_month?.projected_volume || 0)}
             </div>
+            <div className="stat-action">View Details →</div>
           </div>
-          <div className="stat-card trend-card">
+          <div
+            className="stat-card trend-card clickable"
+            onClick={() => handleStatClick('trend')}
+            role="button"
+            tabIndex={0}
+          >
             <div className="stat-label">Trend</div>
             <div className="stat-value" style={{ color: trendConfig.color }}>
               {trendConfig.icon} {trend.change_pct > 0 ? '+' : ''}{trend.change_pct}%
             </div>
             <div className="stat-subtext">{trendConfig.label}</div>
+            <div className="stat-action">View Details →</div>
           </div>
-          <div className="stat-card">
+          <div
+            className="stat-card clickable"
+            onClick={() => handleStatClick('volatility')}
+            role="button"
+            tabIndex={0}
+          >
             <div className="stat-label">Volatility</div>
             <div className="stat-value">
               {trend.volatility?.toFixed(1) || 0}%
@@ -194,6 +346,7 @@ function ForecastView({ summary }) {
             <div className="stat-subtext">
               {trend.volatility < 20 ? 'Low' : trend.volatility < 40 ? 'Medium' : 'High'}
             </div>
+            <div className="stat-action">View Details →</div>
           </div>
         </div>
       </div>
@@ -210,7 +363,13 @@ function ForecastView({ summary }) {
             const days = period.split('_')[0];
 
             return (
-              <div key={period} className="forecast-card">
+              <div
+                key={period}
+                className="forecast-card clickable"
+                onClick={() => handleForecastClick(period)}
+                role="button"
+                tabIndex={0}
+              >
                 <div className="forecast-header">
                   <span className="period-label">{days} Days</span>
                   <span
@@ -230,6 +389,7 @@ function ForecastView({ summary }) {
                     <span className="metric-value">{formatCurrency(forecast.volume)}</span>
                   </div>
                 </div>
+                <div className="forecast-action">Click for breakdown →</div>
               </div>
             );
           })}
@@ -237,8 +397,16 @@ function ForecastView({ summary }) {
       </div>
 
       {/* Historical Performance */}
-      <div className="section historical-section">
-        <h2>Historical Performance</h2>
+      <div
+        className="section historical-section clickable-section"
+        onClick={() => handleStatClick('historical')}
+        role="button"
+        tabIndex={0}
+      >
+        <div className="section-header-row">
+          <h2>Historical Performance</h2>
+          <span className="section-action">View Full History →</span>
+        </div>
         <div className="historical-stats">
           <div className="historical-stat">
             <span className="label">Avg Monthly Units</span>
@@ -285,7 +453,20 @@ function ForecastView({ summary }) {
 
 // Goal View Component
 function GoalView({ attainment }) {
+  const navigate = useNavigate();
   const riskConfig = RISK_CONFIG[attainment.risk_level] || RISK_CONFIG.on_track;
+
+  const handleProgressClick = (type) => {
+    if (type === 'units') {
+      navigate('/active-loans?view=units');
+    } else {
+      navigate('/reporting?view=volume');
+    }
+  };
+
+  const handlePaceClick = () => {
+    navigate('/reporting?view=pace');
+  };
 
   return (
     <div className="goal-view">
@@ -299,7 +480,12 @@ function GoalView({ attainment }) {
         </div>
 
         <div className="progress-grid">
-          <div className="progress-card">
+          <div
+            className="progress-card clickable"
+            onClick={() => handleProgressClick('units')}
+            role="button"
+            tabIndex={0}
+          >
             <h3>Units Progress</h3>
             <div className="progress-bar-container">
               <div
@@ -325,9 +511,15 @@ function GoalView({ attainment }) {
             <div className="predicted-final">
               Predicted: {attainment.predicted_final_units} units
             </div>
+            <div className="card-action">View Active Loans →</div>
           </div>
 
-          <div className="progress-card">
+          <div
+            className="progress-card clickable"
+            onClick={() => handleProgressClick('volume')}
+            role="button"
+            tabIndex={0}
+          >
             <h3>Volume Progress</h3>
             <div className="progress-bar-container">
               <div
@@ -349,6 +541,7 @@ function GoalView({ attainment }) {
             <div className="predicted-final">
               Predicted: {formatCurrency(attainment.predicted_final_volume)}
             </div>
+            <div className="card-action">View Volume Report →</div>
           </div>
         </div>
       </div>
@@ -357,13 +550,25 @@ function GoalView({ attainment }) {
       <div className="section pace-section">
         <h2>Required Pace</h2>
         <div className="pace-grid">
-          <div className="pace-card">
+          <div
+            className="pace-card clickable"
+            onClick={handlePaceClick}
+            role="button"
+            tabIndex={0}
+          >
             <div className="pace-value">{attainment.units_per_day_needed.toFixed(2)}</div>
             <div className="pace-label">units per day needed</div>
+            <div className="pace-action">View Breakdown →</div>
           </div>
-          <div className="pace-card">
+          <div
+            className="pace-card clickable"
+            onClick={handlePaceClick}
+            role="button"
+            tabIndex={0}
+          >
             <div className="pace-value">{formatCurrency(attainment.volume_per_day_needed)}</div>
             <div className="pace-label">volume per day needed</div>
+            <div className="pace-action">View Breakdown →</div>
           </div>
         </div>
       </div>
@@ -385,14 +590,35 @@ function GoalView({ attainment }) {
 
 // Conversion View Component
 function ConversionView({ conversions }) {
+  const navigate = useNavigate();
   const stages = conversions.stage_conversions || {};
   const weakSpots = conversions.weak_spots || [];
+
+  const handleOverallClick = () => {
+    navigate('/reporting?view=conversions');
+  };
+
+  const handleStageClick = (stage) => {
+    navigate(`/active-loans?status=${stage}`);
+  };
+
+  const handleWeakSpotClick = (stage) => {
+    navigate(`/reporting?view=conversions&focus=${stage}`);
+  };
 
   return (
     <div className="conversion-view">
       {/* Overall Conversion */}
-      <div className="section overall-section">
-        <h2>Pipeline Conversion</h2>
+      <div
+        className="section overall-section clickable-section"
+        onClick={handleOverallClick}
+        role="button"
+        tabIndex={0}
+      >
+        <div className="section-header-row">
+          <h2>Pipeline Conversion</h2>
+          <span className="section-action">View Full Report →</span>
+        </div>
         <div className="overall-stats">
           <div className="overall-stat">
             <div className="stat-value">
@@ -423,8 +649,11 @@ function ConversionView({ conversions }) {
             return (
               <div
                 key={stage}
-                className={`funnel-stage ${isWeakSpot ? 'weak' : ''}`}
+                className={`funnel-stage clickable ${isWeakSpot ? 'weak' : ''}`}
                 style={{ width: `${widthPct}%` }}
+                onClick={() => handleStageClick(stage)}
+                role="button"
+                tabIndex={0}
               >
                 <div className="stage-header">
                   <span className="stage-name">{stageLabel}</span>
@@ -445,6 +674,7 @@ function ConversionView({ conversions }) {
                   <span>{data.converted || 0} / {data.total || data.total_leads || 0}</span>
                   <span className="benchmark">Target: {(data.benchmark * 100).toFixed(0)}%</span>
                 </div>
+                <div className="stage-action">View Loans →</div>
               </div>
             );
           })}
@@ -457,7 +687,13 @@ function ConversionView({ conversions }) {
           <h2>Areas for Improvement</h2>
           <div className="weak-spots-list">
             {weakSpots.map((spot, idx) => (
-              <div key={idx} className="weak-spot-card">
+              <div
+                key={idx}
+                className="weak-spot-card clickable"
+                onClick={() => handleWeakSpotClick(spot.stage)}
+                role="button"
+                tabIndex={0}
+              >
                 <div className="weak-spot-header">
                   <span className="stage">{spot.stage.replace(/_/g, ' → ')}</span>
                   <span className="gap">-{spot.gap_pct}% below benchmark</span>
@@ -465,6 +701,7 @@ function ConversionView({ conversions }) {
                 <div className="potential">
                   Fixing this could yield +{spot.potential_units} units
                 </div>
+                <div className="weak-spot-action">Analyze Issue →</div>
               </div>
             ))}
           </div>

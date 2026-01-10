@@ -482,7 +482,7 @@ function AlertFilters({ filters, onChange }) {
 // Main Dashboard Component
 // =============================================================================
 
-export function DealAlertsDashboard({ userId }) {
+export function DealAlertsDashboard({ userId, embedded = false }) {
   const navigate = useNavigate();
   const [summary, setSummary] = useState(null);
   const [alerts, setAlerts] = useState([]);
@@ -626,11 +626,88 @@ export function DealAlertsDashboard({ userId }) {
   };
 
   if (loading) {
+    if (embedded) {
+      return (
+        <div className="deal-alerts-embedded loading">
+          <div className="loading-spinner small" />
+        </div>
+      );
+    }
     return (
       <div className="deal-alerts-dashboard loading">
         <div className="loading-spinner" />
         <p>Loading deal alerts...</p>
       </div>
+    );
+  }
+
+  // Embedded compact view for dashboard
+  if (embedded) {
+    const criticalAlerts = alerts.filter(a => a.priority === 'critical').slice(0, 2);
+    const highAlerts = alerts.filter(a => a.priority === 'high').slice(0, 2);
+    const topAlerts = [...criticalAlerts, ...highAlerts].slice(0, 3);
+
+    return (
+      <a href="/deal-alerts" className="deal-alerts-embedded" style={{ textDecoration: 'none', color: 'inherit' }}>
+        <div className="embedded-header">
+          <div className="embedded-title">
+            <h3>Deal Alerts</h3>
+            {summary && summary.total_alerts > 0 && (
+              <span className={`alert-badge ${summary.critical_count > 0 ? 'critical' : 'normal'}`}>
+                {summary.total_alerts}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="embedded-summary">
+          {summary?.critical_count > 0 && (
+            <div className="summary-stat critical">
+              <span className="stat-value">{summary.critical_count}</span>
+              <span className="stat-label">Critical</span>
+            </div>
+          )}
+          {summary?.high_count > 0 && (
+            <div className="summary-stat high">
+              <span className="stat-value">{summary.high_count}</span>
+              <span className="stat-label">High</span>
+            </div>
+          )}
+          {summary?.loans_at_risk > 0 && (
+            <div className="summary-stat at-risk">
+              <span className="stat-value">{summary.loans_at_risk}</span>
+              <span className="stat-label">Loans at Risk</span>
+            </div>
+          )}
+          {(!summary || (summary.critical_count === 0 && summary.high_count === 0 && summary.loans_at_risk === 0)) && (
+            <div className="summary-stat healthy">
+              <span className="stat-icon">✓</span>
+              <span className="stat-label">Pipeline Healthy</span>
+            </div>
+          )}
+        </div>
+
+        {topAlerts.length > 0 && (
+          <div className="embedded-alerts">
+            {topAlerts.map(alert => (
+              <div key={alert.id} className={`mini-alert ${alert.priority}`}>
+                <span className="mini-alert-icon">
+                  {alert.priority === 'critical' ? '🚨' : '⚠️'}
+                </span>
+                <div className="mini-alert-content">
+                  <span className="mini-alert-title">{alert.title}</span>
+                  <span className="mini-alert-loan">{alert.loan_number}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="embedded-footer">
+          <span>Click to view all alerts</span>
+          <span className="arrow">→</span>
+        </div>
+      </a>
     );
   }
 

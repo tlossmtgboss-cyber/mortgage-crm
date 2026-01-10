@@ -11,6 +11,7 @@ const ConversationIntelligence = lazy(() => import('./ConversationIntelligence')
 const AIDailyBlog = lazy(() => import('./AIDailyBlog'));
 const AIReceptionistDashboard = lazy(() => import('./AIReceptionistDashboard'));
 const PowerDialer = lazy(() => import('./PowerDialer'));
+const LiveCallWhisper = lazy(() => import('./LiveCallWhisper'));
 
 // Marketing settings components (inline for now, can be extracted)
 const LandingPagesSettings = lazy(() => import('./marketing/LandingPagesSettings'));
@@ -30,6 +31,8 @@ const MARKETING_TOOLS = [
       { id: 'ai-receptionist', name: 'AI Receptionist', description: 'AI-powered phone receptionist' },
       { id: 'power-dialer', name: 'Power Dialer', description: 'High-volume outbound calling' },
       { id: 'communication', name: 'Communication Hub', description: 'Email and SMS management' },
+      { id: 'call-intelligence', name: 'Call Intelligence', description: 'AI-powered call analysis and insights' },
+      { id: 'live-call-whisper', name: 'Live Call Whisper', description: 'Real-time AI coaching during calls' },
       { id: 'call-qa', name: 'Call QA', description: 'Call quality analysis and coaching' },
     ]
   },
@@ -115,6 +118,10 @@ function Marketing() {
         return <AcquisitionDashboard />;
       case 'call-qa':
         return <ConversationIntelligence />;
+      case 'call-intelligence':
+        return <ConversationIntelligence />;
+      case 'live-call-whisper':
+        return <LiveCallWhisper />;
       case 'ai-blog':
         return <AIDailyBlog />;
       case 'landing-pages':

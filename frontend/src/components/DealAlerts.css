@@ -969,6 +969,220 @@
 }
 
 /* =============================================================================
+   Embedded Dashboard View
+   ============================================================================= */
+
+.deal-alerts-embedded {
+  display: block;
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  border: 1px solid #e5e7eb;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.deal-alerts-embedded:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+  transform: translateY(-1px);
+}
+
+.deal-alerts-embedded.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 140px;
+}
+
+.deal-alerts-embedded .embedded-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.deal-alerts-embedded .embedded-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.deal-alerts-embedded .embedded-title h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.deal-alerts-embedded .alert-badge {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.deal-alerts-embedded .alert-badge.critical {
+  background: #fef2f2;
+  color: #dc2626;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.deal-alerts-embedded .embedded-summary {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+
+.deal-alerts-embedded .summary-stat {
+  flex: 1;
+  text-align: center;
+  padding: 12px;
+  background: white;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+}
+
+.deal-alerts-embedded .summary-stat.critical {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.deal-alerts-embedded .summary-stat.high {
+  border-color: #fed7aa;
+  background: #fff7ed;
+}
+
+.deal-alerts-embedded .summary-stat.at-risk {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.deal-alerts-embedded .summary-stat.healthy {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.deal-alerts-embedded .summary-stat .stat-value {
+  display: block;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.deal-alerts-embedded .summary-stat.critical .stat-value {
+  color: #dc2626;
+}
+
+.deal-alerts-embedded .summary-stat.high .stat-value {
+  color: #ea580c;
+}
+
+.deal-alerts-embedded .summary-stat.at-risk .stat-value {
+  color: #d97706;
+}
+
+.deal-alerts-embedded .summary-stat .stat-icon {
+  display: block;
+  font-size: 28px;
+  line-height: 1;
+  margin-bottom: 4px;
+  color: #10b981;
+}
+
+.deal-alerts-embedded .summary-stat .stat-label {
+  display: block;
+  font-size: 11px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.deal-alerts-embedded .embedded-alerts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.deal-alerts-embedded .mini-alert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border-left: 3px solid #e5e7eb;
+}
+
+.deal-alerts-embedded .mini-alert.critical {
+  border-left-color: #dc2626;
+  background: #fef2f2;
+}
+
+.deal-alerts-embedded .mini-alert.high {
+  border-left-color: #ea580c;
+  background: #fff7ed;
+}
+
+.deal-alerts-embedded .mini-alert-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.deal-alerts-embedded .mini-alert-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.deal-alerts-embedded .mini-alert-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1f2937;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.deal-alerts-embedded .mini-alert-loan {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.deal-alerts-embedded .embedded-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 12px;
+  border-top: 1px solid #f3f4f6;
+  font-size: 13px;
+  color: #3b82f6;
+  font-weight: 500;
+}
+
+.deal-alerts-embedded .embedded-footer .arrow {
+  font-size: 16px;
+  transition: transform 0.2s;
+}
+
+.deal-alerts-embedded:hover .embedded-footer .arrow {
+  transform: translateX(4px);
+}
+
+/* =============================================================================
    Responsive
    ============================================================================= */
 
@@ -1037,5 +1251,19 @@
 
   .sidebar {
     flex-direction: column;
+  }
+
+  /* Embedded responsive */
+  .deal-alerts-embedded .embedded-summary {
+    flex-wrap: wrap;
+  }
+
+  .deal-alerts-embedded .summary-stat {
+    flex: 1 1 calc(50% - 6px);
+    min-width: 80px;
+  }
+
+  .deal-alerts-embedded .summary-stat .stat-value {
+    font-size: 22px;
   }
 }
