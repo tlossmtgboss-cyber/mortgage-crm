@@ -13,7 +13,6 @@ import CoachCorner from './components/CoachCorner';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import ErrorBoundary from './components/ErrorBoundary';
 import UnifiedTaskSidebar from './components/UnifiedTaskSidebar';
-import EmailDropZone from './components/EmailDropZone';
 import GlobalLayoutFix from './components/GlobalLayoutFix';
 import GlobalSearch from './components/GlobalSearch';
 import './App.css';
@@ -327,7 +326,6 @@ function App() {
         <ModuleProvider>
           <Router>
             <GlobalLayoutFix />
-            <EmailDropZone>
             <ImpersonationBanner />
             <div className="app">
         <Routes>
@@ -3020,7 +3018,6 @@ function App() {
         {/* Global Search - floating, triggered by Cmd+K */}
         <GlobalSearch />
         </div>
-            </EmailDropZone>
       </Router>
         </ModuleProvider>
         </PermissionProvider>
