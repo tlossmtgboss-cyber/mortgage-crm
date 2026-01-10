@@ -38,12 +38,13 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 # Available language operators for analysis
+# Names matched against Twilio's friendly_name (case-insensitive, hyphen/space normalized)
 RECOMMENDED_OPERATORS = [
-    'sentiment-analysis',      # Positive, negative, neutral, mixed
-    'summarization',           # AI-generated conversation summary
-    'entity-recognition',      # Person, Location, Organization, etc.
-    'escalation-request',      # Detect customer escalation requests
-    'recording-disclosure',    # Verify recording was disclosed
+    'sentiment',               # Matches "Sentiment Analysis"
+    'summary',                 # Matches "Conversation Summary"
+    'entity',                  # Matches "Entity Recognition"
+    'escalation',              # Matches "Escalation Request"
+    'recording disclosure',    # Matches "Recording Disclosure"
 ]
 
 
@@ -183,9 +184,11 @@ class TwilioIntelligenceService:
 
             for operator in available_operators:
                 # Check if this operator matches any we want
-                operator_lower = operator.friendly_name.lower()
+                # Normalize both names: remove hyphens, lowercase
+                operator_normalized = operator.friendly_name.lower().replace("-", " ")
                 should_attach = any(
-                    name.lower() in operator_lower
+                    name.lower().replace("-", " ") in operator_normalized or
+                    name.lower().replace("-", "") in operator_normalized.replace(" ", "")
                     for name in names_to_attach
                 )
 
