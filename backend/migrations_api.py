@@ -1110,8 +1110,10 @@ async def run_call_transcripts_migration(
 
         # Execute the migration
         with engine.connect() as conn:
-            # Split by semicolons and execute each statement
-            statements = [s.strip() for s in sql.split(';') if s.strip() and not s.strip().startswith('--')]
+            # Remove comment lines first, then split by semicolons
+            lines = [line for line in sql.split('\n') if not line.strip().startswith('--')]
+            clean_sql = '\n'.join(lines)
+            statements = [s.strip() for s in clean_sql.split(';') if s.strip()]
             executed = 0
             skipped = 0
 
