@@ -173,9 +173,9 @@ class TwilioIntelligenceService:
         names_to_attach = operator_names or RECOMMENDED_OPERATORS
 
         try:
-            # List available public operators for English
+            # List available operators for English (general-availability)
             available_operators = self.client.intelligence.v2.operators.list(
-                availability='public',
+                availability='general-availability',
                 language_code='en'
             )
 
@@ -230,7 +230,7 @@ class TwilioIntelligenceService:
 
         try:
             operators = self.client.intelligence.v2.operators.list(
-                availability='public',
+                availability='general-availability',
                 language_code=language_code
             )
 
