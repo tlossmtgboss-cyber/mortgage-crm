@@ -641,11 +641,438 @@ async def handle_recording_ready(request: Request, db: Session = Depends(get_db)
             )
         )
 
+        # Also submit to Twilio Voice Intelligence for enhanced transcription
+        # (runs in parallel, results come via webhook)
+        try:
+            from integrations.twilio_intelligence_service import intelligence_service
+            if intelligence_service.enabled and intelligence_service.service_sid:
+                asyncio.create_task(
+                    submit_to_twilio_intelligence(
+                        recording_sid=recording_sid,
+                        caller_name=lead_name,
+                        call_sid=call_sid
+                    )
+                )
+                logger.info(f"Submitted recording {recording_sid} to Twilio Intelligence")
+        except Exception as intel_error:
+            logger.warning(f"Could not submit to Twilio Intelligence: {intel_error}")
+
         return {"status": "ok"}
 
     except Exception as e:
         logger.error(f"Error handling recording: {e}")
         return {"status": "error"}
+
+
+@router.post("/transcript-complete")
+async def handle_transcript_complete(request: Request, db: Session = Depends(get_db)):
+    """
+    Webhook from Twilio Voice Intelligence when transcription is complete.
+
+    Event type: voice_intelligence_transcript_available
+
+    Receives transcript with:
+    - Speaker-labeled sentences
+    - PII redaction
+    - Sentiment analysis (via operator)
+    - Summarization (via operator)
+    - Entity recognition (via operator)
+    - Escalation detection (via operator)
+    - Recording disclosure check (via operator)
+    """
+    try:
+        # Try JSON first, then form data (Twilio sometimes uses either)
+        try:
+            data = await request.json()
+        except:
+            form_data = await request.form()
+            data = dict(form_data)
+
+        transcript_sid = data.get("transcript_sid") or data.get("TranscriptSid")
+        service_sid = data.get("service_sid") or data.get("ServiceSid")
+        customer_key = data.get("customer_key") or data.get("CustomerKey")
+        event_type = data.get("event_type") or data.get("EventType")
+        status = data.get("status") or data.get("Status")
+
+        logger.info(f"Transcript webhook received: {transcript_sid}, event: {event_type}, status: {status}")
+
+        # Handle specific event type
+        if event_type and event_type != "voice_intelligence_transcript_available":
+            logger.info(f"Ignoring event type: {event_type}")
+            return {"status": "acknowledged", "event_type": event_type}
+
+        # Also check status for non-event webhooks
+        if not event_type and status and status != "completed":
+            logger.info(f"Transcript {transcript_sid} status: {status}, waiting for completion")
+            return {"status": "acknowledged"}
+
+        # Import intelligence service
+        from integrations.twilio_intelligence_service import intelligence_service
+
+        # Fetch the full transcript with insights
+        transcript = await intelligence_service.get_transcript(transcript_sid)
+        if not transcript:
+            logger.error(f"Could not fetch transcript {transcript_sid}")
+            return {"status": "error", "message": "Could not fetch transcript"}
+
+        # Fetch operator results for AI insights
+        operator_results = await intelligence_service.get_operator_results(transcript_sid)
+
+        # Parse operator results into structured insights
+        insights = parse_operator_results(operator_results or [])
+
+        logger.info(f"Transcript {transcript_sid} fetched: {transcript.get('duration')}s, "
+                   f"{len(transcript.get('sentences', []))} sentences, "
+                   f"sentiment: {insights.get('sentiment')}")
+
+        # Store transcript in database
+        try:
+            from sqlalchemy import text
+
+            # Get media info if available
+            media = await intelligence_service.get_transcript_media(transcript_sid)
+
+            db.execute(text("""
+                INSERT INTO call_transcripts (
+                    transcript_sid, status, duration_seconds, full_text,
+                    sentences, sentiment, topics, action_items, entities,
+                    summary, pii_detected, created_at, updated_at
+                ) VALUES (
+                    :transcript_sid, :status, :duration, :full_text,
+                    :sentences, :sentiment, :topics, :action_items, :entities,
+                    :summary, :pii_detected, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                ON CONFLICT (transcript_sid) DO UPDATE SET
+                    status = EXCLUDED.status,
+                    full_text = EXCLUDED.full_text,
+                    sentences = EXCLUDED.sentences,
+                    sentiment = EXCLUDED.sentiment,
+                    topics = EXCLUDED.topics,
+                    action_items = EXCLUDED.action_items,
+                    entities = EXCLUDED.entities,
+                    summary = EXCLUDED.summary,
+                    pii_detected = EXCLUDED.pii_detected,
+                    updated_at = CURRENT_TIMESTAMP
+            """), {
+                "transcript_sid": transcript_sid,
+                "status": "completed",
+                "duration": transcript.get("duration"),
+                "full_text": transcript.get("full_text"),
+                "sentences": json.dumps(transcript.get("sentences", [])),
+                "sentiment": json.dumps(insights.get("sentiment")),
+                "topics": json.dumps(insights.get("topics", [])),
+                "action_items": json.dumps(insights.get("action_items", [])),
+                "entities": json.dumps(insights.get("entities", [])),
+                "summary": insights.get("summary"),
+                "pii_detected": transcript.get("redaction", {}).get("pii_detected", False) if isinstance(transcript.get("redaction"), dict) else False,
+            })
+            db.commit()
+            logger.info(f"Stored transcript {transcript_sid} in database")
+
+            # If we have a customer_key, update related records
+            if customer_key:
+                await link_transcript_to_customer(db, transcript_sid, customer_key, insights)
+
+        except Exception as db_error:
+            logger.warning(f"Could not store transcript (table may not exist): {db_error}")
+
+        return {
+            "status": "success",
+            "transcript_sid": transcript_sid,
+            "duration": transcript.get("duration"),
+            "sentence_count": len(transcript.get("sentences", [])),
+            "insights": {
+                "sentiment": insights.get("sentiment"),
+                "has_summary": insights.get("summary") is not None,
+                "entity_count": len(insights.get("entities", [])),
+                "escalation_detected": insights.get("escalation_detected", False),
+                "recording_disclosed": insights.get("recording_disclosed", False),
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Error handling transcript webhook: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+def parse_operator_results(operator_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Parse operator results into structured insights.
+
+    Operators may include:
+    - sentiment-analysis: positive, negative, neutral, mixed
+    - summarization: AI-generated summary
+    - entity-recognition: names, amounts, dates, etc.
+    - escalation-request: customer wants to escalate
+    - recording-disclosure: recording was disclosed
+    """
+    insights = {
+        "sentiment": None,
+        "summary": None,
+        "entities": [],
+        "topics": [],
+        "action_items": [],
+        "escalation_detected": False,
+        "recording_disclosed": False,
+    }
+
+    for result in operator_results:
+        operator_type = result.get("operator_type", "").lower()
+        operator_name = result.get("name", "").lower()
+        results_data = result.get("results", {})
+
+        # Handle different operator types
+        if "sentiment" in operator_type or "sentiment" in operator_name:
+            insights["sentiment"] = results_data.get("predicted_label") or results_data.get("sentiment")
+
+        elif "summar" in operator_type or "summar" in operator_name:
+            insights["summary"] = results_data.get("transcript_text") or results_data.get("summary")
+
+        elif "entity" in operator_type or "entity" in operator_name:
+            entities = results_data.get("extraction_results") or results_data.get("entities") or []
+            insights["entities"] = entities
+
+        elif "escalation" in operator_type or "escalation" in operator_name:
+            label = results_data.get("predicted_label", "").lower()
+            insights["escalation_detected"] = label in ["true", "yes", "escalation"]
+
+        elif "recording" in operator_type or "disclosure" in operator_name:
+            label = results_data.get("predicted_label", "").lower()
+            insights["recording_disclosed"] = label in ["true", "yes", "disclosed"]
+
+        elif "topic" in operator_type:
+            topics = results_data.get("topics", [])
+            insights["topics"] = topics
+
+        elif "action" in operator_type:
+            items = results_data.get("items", [])
+            insights["action_items"] = items
+
+    return insights
+
+
+async def link_transcript_to_customer(
+    db: Session,
+    transcript_sid: str,
+    customer_key: str,
+    insights: Dict[str, Any]
+):
+    """Link transcript to customer/lead records and update with insights."""
+    try:
+        from sqlalchemy import text
+
+        # Try to find and update related activity
+        result = db.execute(text("""
+            UPDATE ai_receptionist_activities
+            SET extra_data = COALESCE(extra_data, '{}'::jsonb) || :insights_data
+            WHERE conversation_id = :customer_key
+               OR extra_data->>'customer_id' = :customer_key
+        """), {
+            "customer_key": customer_key,
+            "insights_data": json.dumps({
+                "transcript_sid": transcript_sid,
+                "sentiment": insights.get("sentiment"),
+                "summary": insights.get("summary"),
+                "escalation_detected": insights.get("escalation_detected"),
+            })
+        })
+        db.commit()
+
+        if result.rowcount > 0:
+            logger.info(f"Linked transcript {transcript_sid} to activity {customer_key}")
+
+    except Exception as e:
+        logger.warning(f"Could not link transcript to customer: {e}")
+
+
+# ============================================================================
+# TRANSCRIPT RETRIEVAL ENDPOINTS
+# ============================================================================
+
+@router.get("/transcripts")
+async def list_transcripts(
+    db: Session = Depends(get_db),
+    sentiment: str = None,
+    escalation: bool = None,
+    keyword: str = None,
+    limit: int = 50,
+    offset: int = 0
+):
+    """
+    List and search call transcripts.
+
+    Args:
+        sentiment: Filter by sentiment (positive, negative, neutral, mixed)
+        escalation: Filter by escalation detection (true/false)
+        keyword: Search transcripts by keyword
+        limit: Max results to return
+        offset: Pagination offset
+    """
+    try:
+        from sqlalchemy import text
+
+        # Build query with filters
+        conditions = ["1=1"]
+        params = {"limit": limit, "offset": offset}
+
+        if sentiment:
+            conditions.append("sentiment->>'sentiment' = :sentiment OR sentiment = :sentiment_raw")
+            params["sentiment"] = sentiment
+            params["sentiment_raw"] = f'"{sentiment}"'
+
+        if escalation is not None:
+            # Check in entities or a dedicated field
+            conditions.append("(entities::text ILIKE '%escalation%') = :escalation")
+            params["escalation"] = escalation
+
+        if keyword:
+            conditions.append("full_text ILIKE :keyword")
+            params["keyword"] = f"%{keyword}%"
+
+        where_clause = " AND ".join(conditions)
+
+        result = db.execute(text(f"""
+            SELECT
+                id, transcript_sid, status, duration_seconds,
+                full_text, sentiment, summary, entities,
+                topics, action_items, pii_detected, created_at
+            FROM call_transcripts
+            WHERE {where_clause}
+            ORDER BY created_at DESC
+            LIMIT :limit OFFSET :offset
+        """), params)
+
+        transcripts = []
+        for row in result.fetchall():
+            transcripts.append({
+                "id": row[0],
+                "transcript_sid": row[1],
+                "status": row[2],
+                "duration_seconds": row[3],
+                "full_text": row[4][:500] + "..." if row[4] and len(row[4]) > 500 else row[4],
+                "sentiment": row[5],
+                "summary": row[6],
+                "entities": row[7],
+                "topics": row[8],
+                "action_items": row[9],
+                "pii_detected": row[10],
+                "created_at": row[11].isoformat() if row[11] else None,
+            })
+
+        return {
+            "transcripts": transcripts,
+            "count": len(transcripts),
+            "limit": limit,
+            "offset": offset
+        }
+
+    except Exception as e:
+        logger.error(f"Error listing transcripts: {e}")
+        return {"transcripts": [], "error": str(e)}
+
+
+@router.get("/transcripts/{transcript_sid}")
+async def get_transcript_detail(
+    transcript_sid: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Get detailed transcript by SID.
+
+    Returns full transcript with all sentences and AI insights.
+    """
+    try:
+        from sqlalchemy import text
+
+        result = db.execute(text("""
+            SELECT
+                id, transcript_sid, call_sid, recording_sid, activity_id,
+                status, duration_seconds, language_code, full_text,
+                sentences, sentiment, topics, action_items, entities,
+                summary, redaction_enabled, pii_detected, created_at, updated_at
+            FROM call_transcripts
+            WHERE transcript_sid = :transcript_sid
+        """), {"transcript_sid": transcript_sid})
+
+        row = result.fetchone()
+        if not row:
+            return {"error": "Transcript not found"}
+
+        return {
+            "id": row[0],
+            "transcript_sid": row[1],
+            "call_sid": row[2],
+            "recording_sid": row[3],
+            "activity_id": row[4],
+            "status": row[5],
+            "duration_seconds": row[6],
+            "language_code": row[7],
+            "full_text": row[8],
+            "sentences": row[9],
+            "sentiment": row[10],
+            "topics": row[11],
+            "action_items": row[12],
+            "entities": row[13],
+            "summary": row[14],
+            "redaction_enabled": row[15],
+            "pii_detected": row[16],
+            "created_at": row[17].isoformat() if row[17] else None,
+            "updated_at": row[18].isoformat() if row[18] else None,
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting transcript: {e}")
+        return {"error": str(e)}
+
+
+@router.get("/transcripts/customer/{customer_id}")
+async def get_customer_transcripts(
+    customer_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Get all transcripts for a customer/lead.
+
+    Searches by customer_key used when creating the transcript.
+    """
+    try:
+        from sqlalchemy import text
+
+        # Look for transcripts linked via activity or directly
+        result = db.execute(text("""
+            SELECT
+                ct.id, ct.transcript_sid, ct.status, ct.duration_seconds,
+                ct.sentiment, ct.summary, ct.created_at
+            FROM call_transcripts ct
+            LEFT JOIN ai_receptionist_activities ara ON
+                ara.extra_data->>'transcript_sid' = ct.transcript_sid
+            WHERE ara.lead_id::text = :customer_id
+               OR ara.conversation_id = :customer_id
+               OR ct.activity_id = :customer_id
+            ORDER BY ct.created_at DESC
+        """), {"customer_id": customer_id})
+
+        transcripts = []
+        for row in result.fetchall():
+            transcripts.append({
+                "id": row[0],
+                "transcript_sid": row[1],
+                "status": row[2],
+                "duration_seconds": row[3],
+                "sentiment": row[4],
+                "summary": row[5],
+                "created_at": row[6].isoformat() if row[6] else None,
+            })
+
+        return {
+            "customer_id": customer_id,
+            "total_conversations": len(transcripts),
+            "transcripts": transcripts
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting customer transcripts: {e}")
+        return {"customer_id": customer_id, "transcripts": [], "error": str(e)}
 
 
 async def process_call_recording(
@@ -793,6 +1220,43 @@ Keep the summary concise but comprehensive. Use professional language appropriat
 
     except Exception as e:
         logger.error(f"Error processing call recording: {e}")
+
+
+async def submit_to_twilio_intelligence(
+    recording_sid: str,
+    caller_name: str = None,
+    call_sid: str = None
+):
+    """
+    Submit a recording to Twilio Voice Intelligence for enhanced transcription.
+    Results will be delivered via the /transcript-complete webhook.
+    """
+    try:
+        from integrations.twilio_intelligence_service import intelligence_service
+
+        # Submit recording for transcription
+        result = await intelligence_service.transcribe_recording(
+            recording_url=recording_sid,  # Can pass recording SID directly
+            participants=[
+                {"role": "customer", "channel": 1, "name": caller_name},
+                {"role": "agent", "channel": 2, "name": "AI Assistant"}
+            ],
+            metadata={
+                "call_sid": call_sid,
+                "source": "ai_receptionist"
+            }
+        )
+
+        if result:
+            logger.info(f"Twilio Intelligence transcript job created: {result.get('transcript_sid')}")
+            return result
+        else:
+            logger.warning(f"Failed to create Twilio Intelligence transcript for {recording_sid}")
+            return None
+
+    except Exception as e:
+        logger.error(f"Error submitting to Twilio Intelligence: {e}")
+        return None
 
 
 async def create_call_summary_email_draft(
