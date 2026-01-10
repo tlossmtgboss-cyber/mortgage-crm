@@ -1073,3 +1073,95 @@ async def run_partner_recruiting_migration(
     except Exception as e:
         logger.error(f"Partner Recruiting migration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/add-call-transcripts-table")
+async def run_call_transcripts_migration(
+    admin: Any = Depends(verify_admin_access)
+):
+    """
+    Run the Call Transcripts table migration for Twilio Voice Intelligence.
+
+    Creates the call_transcripts table to store AI-transcribed call recordings with:
+    - Speaker-labeled transcript sentences
+    - Sentiment analysis
+    - Topic detection
+    - Action items extraction
+    - Entity recognition
+    - AI-generated call summaries
+    - PII redaction tracking
+    """
+    try:
+        from pathlib import Path
+        from database import engine
+        from sqlalchemy import text
+
+        logger.info("Starting Call Transcripts table migration...")
+
+        # Read the migration file
+        migration_path = Path(__file__).parent / "migrations" / "add_call_transcripts_table.sql"
+        if not migration_path.exists():
+            raise HTTPException(
+                status_code=500,
+                detail=f"Migration file not found at {migration_path}"
+            )
+
+        sql = migration_path.read_text()
+
+        # Execute the migration
+        with engine.connect() as conn:
+            # Split by semicolons and execute each statement
+            statements = [s.strip() for s in sql.split(';') if s.strip() and not s.strip().startswith('--')]
+            executed = 0
+            skipped = 0
+
+            for statement in statements:
+                if not statement:
+                    continue
+                try:
+                    conn.execute(text(statement))
+                    executed += 1
+                    logger.info(f"Executed: {statement[:60]}...")
+                except Exception as e:
+                    if "already exists" in str(e).lower():
+                        skipped += 1
+                        logger.info(f"Skipped (already exists): {statement[:60]}...")
+                    else:
+                        raise
+
+            conn.commit()
+
+            # Verify table was created
+            result = conn.execute(text("""
+                SELECT column_name, data_type
+                FROM information_schema.columns
+                WHERE table_name = 'call_transcripts'
+                ORDER BY ordinal_position
+            """))
+            columns = [{"name": row[0], "type": row[1]} for row in result.fetchall()]
+
+        logger.info(f"Migration completed. Executed: {executed}, Skipped: {skipped}")
+
+        return {
+            "status": "success",
+            "message": "Call Transcripts table created successfully",
+            "statements_executed": executed,
+            "statements_skipped": skipped,
+            "table_columns": len(columns),
+            "features": [
+                "transcript_sid - Unique Twilio transcript identifier",
+                "sentences - JSONB array of speaker-labeled sentences",
+                "sentiment - Overall call sentiment analysis",
+                "topics - Detected discussion topics",
+                "action_items - Extracted action items",
+                "entities - Named entities (names, amounts, dates)",
+                "summary - AI-generated call summary",
+                "pii_detected - PII redaction flag"
+            ]
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Call Transcripts migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
