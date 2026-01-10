@@ -2021,27 +2021,37 @@ async def attach_operators(request: Request):
 
     Body (optional):
     {
-        "operators": ["sentiment-analysis", "summarization"]  // defaults to recommended set
+        "service_sid": "GAxxxx",  // optional, uses env var if not provided
+        "operators": ["sentiment", "summary"]  // defaults to recommended set
     }
     """
     try:
         from integrations.twilio_intelligence_service import intelligence_service
 
-        if not intelligence_service.enabled or not intelligence_service.service_sid:
+        if not intelligence_service.enabled:
             return {
                 "status": "error",
-                "message": "Intelligence Service not configured. Run /intelligence/setup first."
+                "message": "Twilio client not configured."
             }
 
         data = await request.json() if request.headers.get("content-type") == "application/json" else {}
+        service_sid = data.get("service_sid") or intelligence_service.service_sid
         operator_names = data.get("operators")  # None = use recommended
 
+        if not service_sid:
+            return {
+                "status": "error",
+                "message": "No service_sid provided and TWILIO_INTELLIGENCE_SERVICE_SID not set."
+            }
+
         attached = intelligence_service.attach_operators_to_service(
+            service_sid=service_sid,
             operator_names=operator_names
         )
 
         return {
             "status": "success",
+            "service_sid": service_sid,
             "operators_attached": len(attached),
             "operators": attached
         }
