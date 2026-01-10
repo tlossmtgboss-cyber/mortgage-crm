@@ -1880,3 +1880,172 @@ async def test_voice_sample(request: Request):
     except Exception as e:
         logger.error(f"Error testing voice: {e}")
         return {"success": False, "error": str(e)}
+
+
+# ============================================================================
+# TWILIO VOICE INTELLIGENCE SETUP
+# ============================================================================
+
+@router.post("/intelligence/setup")
+async def setup_intelligence_service(request: Request):
+    """
+    One-time setup for Twilio Voice Intelligence Service.
+
+    Creates the Intelligence Service and attaches AI operators for:
+    - Automatic transcription with speaker diarization
+    - PII redaction (SSN, phone numbers, etc.)
+    - Sentiment analysis
+    - Call summarization
+    - Entity recognition
+    - Escalation detection
+    - Recording disclosure verification
+
+    Returns the Service SID to add to environment variables.
+    """
+    try:
+        data = await request.json() if request.headers.get("content-type") == "application/json" else {}
+
+        from integrations.twilio_intelligence_service import intelligence_service
+
+        # Check if already configured
+        if intelligence_service.service_sid:
+            existing = intelligence_service.get_service_info()
+            if existing:
+                return {
+                    "status": "already_configured",
+                    "message": "Intelligence Service already exists",
+                    "service": existing
+                }
+
+        # Create new service
+        unique_name = data.get("unique_name", "MortgageCRMService")
+        friendly_name = data.get("friendly_name", "Mortgage CRM Voice Intelligence")
+
+        service_sid = intelligence_service.create_intelligence_service(
+            unique_name=unique_name,
+            friendly_name=friendly_name
+        )
+
+        if not service_sid:
+            return {
+                "status": "error",
+                "message": "Failed to create Intelligence Service. Check Twilio credentials."
+            }
+
+        # Attach operators
+        attached_operators = intelligence_service.attach_operators_to_service(service_sid)
+
+        return {
+            "status": "success",
+            "message": "Intelligence Service created successfully",
+            "service_sid": service_sid,
+            "operators_attached": len(attached_operators),
+            "operators": attached_operators,
+            "next_steps": [
+                f"Add to Railway environment: TWILIO_INTELLIGENCE_SERVICE_SID={service_sid}",
+                "Redeploy the application",
+                "Test with a real call recording"
+            ]
+        }
+
+    except Exception as e:
+        logger.error(f"Error setting up Intelligence Service: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@router.get("/intelligence/status")
+async def get_intelligence_status():
+    """
+    Get current status of Twilio Voice Intelligence configuration.
+    """
+    try:
+        from integrations.twilio_intelligence_service import intelligence_service
+
+        status = {
+            "enabled": intelligence_service.enabled,
+            "service_configured": bool(intelligence_service.service_sid),
+            "service_sid": intelligence_service.service_sid if intelligence_service.service_sid else None,
+            "webhook_base": intelligence_service.webhook_base,
+        }
+
+        # If configured, get full service info
+        if intelligence_service.service_sid and intelligence_service.enabled:
+            service_info = intelligence_service.get_service_info()
+            if service_info:
+                status["service"] = service_info
+
+        return status
+
+    except Exception as e:
+        logger.error(f"Error getting Intelligence status: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@router.get("/intelligence/operators")
+async def list_available_operators():
+    """
+    List all available Twilio Voice Intelligence operators.
+    """
+    try:
+        from integrations.twilio_intelligence_service import intelligence_service
+
+        if not intelligence_service.enabled:
+            return {
+                "status": "error",
+                "message": "Twilio client not configured"
+            }
+
+        operators = intelligence_service.list_available_operators()
+
+        return {
+            "operators": operators,
+            "count": len(operators),
+            "recommended": [
+                "sentiment-analysis",
+                "summarization",
+                "entity-recognition",
+                "escalation-request",
+                "recording-disclosure"
+            ]
+        }
+
+    except Exception as e:
+        logger.error(f"Error listing operators: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@router.post("/intelligence/attach-operators")
+async def attach_operators(request: Request):
+    """
+    Attach operators to an existing Intelligence Service.
+
+    Body (optional):
+    {
+        "operators": ["sentiment-analysis", "summarization"]  // defaults to recommended set
+    }
+    """
+    try:
+        from integrations.twilio_intelligence_service import intelligence_service
+
+        if not intelligence_service.enabled or not intelligence_service.service_sid:
+            return {
+                "status": "error",
+                "message": "Intelligence Service not configured. Run /intelligence/setup first."
+            }
+
+        data = await request.json() if request.headers.get("content-type") == "application/json" else {}
+        operator_names = data.get("operators")  # None = use recommended
+
+        attached = intelligence_service.attach_operators_to_service(
+            operator_names=operator_names
+        )
+
+        return {
+            "status": "success",
+            "operators_attached": len(attached),
+            "operators": attached
+        }
+
+    except Exception as e:
+        logger.error(f"Error attaching operators: {e}")
+        return {"status": "error", "message": str(e)}
