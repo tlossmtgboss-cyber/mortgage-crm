@@ -625,13 +625,28 @@ async def debug_test_session(
 
 @router.get("/debug/test-noauth")
 async def debug_test_noauth(
-    user_id: int = Query(1, description="User ID to test with"),
+    user_id: int = Query(None, description="User ID to test with (if not provided, finds first valid user)"),
     db: Session = Depends(get_db),
 ):
     """Debug endpoint without auth to test voice workflow components directly."""
     import traceback
 
-    results = {"user_id": user_id, "steps": []}
+    results = {"steps": []}
+
+    # Find a valid user if not provided
+    if user_id is None:
+        try:
+            user_result = db.execute(text("SELECT id, email FROM users LIMIT 5")).fetchall()
+            if user_result:
+                user_id = user_result[0][0]
+                results["available_users"] = [{"id": u[0], "email": u[1]} for u in user_result]
+                results["steps"].append({"step": "find_user", "status": "ok", "selected_user_id": user_id})
+            else:
+                return {"success": False, "error": "No users found in database", "results": results}
+        except Exception as e:
+            return {"success": False, "error": f"Failed to find users: {str(e)}", "results": results}
+
+    results["user_id"] = user_id
 
     try:
         # Step 1: Check loans for user (using correct column names)
