@@ -4,11 +4,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 
 
 const AgentStudio = ({ onAgentSelect, onEditAgent }) => {
+  console.log('[AgentStudio] Component mounting...');
   const [agents, setAgents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  console.log('[AgentStudio] State initialized, loading:', loading);
 
   const API_BASE_URL = typeof window !== 'undefined' &&
     (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
@@ -133,11 +135,15 @@ const AgentStudio = ({ onAgentSelect, onEditAgent }) => {
     return `${mins}m ${secs}s`;
   };
 
+  console.log('[AgentStudio] Rendering, loading:', loading, 'agents:', agents.length, 'error:', error);
+
   if (loading) {
+    console.log('[AgentStudio] Returning loading UI');
     return (
-      <div className="agent-studio-loading">
-        <div className="spinner"></div>
+      <div className="agent-studio-loading" style={{ padding: '40px', textAlign: 'center' }}>
+        <div className="spinner" style={{ width: '40px', height: '40px', margin: '0 auto 16px', border: '3px solid #f3f4f6', borderTopColor: '#2563eb', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
         <p>Loading agents...</p>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
