@@ -50,7 +50,8 @@ function Login() {
       const effectiveRole = getUserEffectiveRole(permissionRole, legacyRole);
       const defaultRoute = getDefaultRouteForRole(effectiveRole);
       console.log('Role-based redirect:', { permissionRole, legacyRole, effectiveRole, defaultRoute });
-      navigate(defaultRoute);
+      // Use full page reload instead of navigate() to ensure all contexts reinitialize with the new token
+      window.location.href = defaultRoute;
     } catch (err) {
       console.error('Login error:', err);
       console.error('Error response:', err.response);
