@@ -23,8 +23,8 @@ import {
 } from '../lib/api';
 import ScheduleAppointmentModal from '../components/ScheduleAppointmentModal';
 import PaymentCalculator from '../components/PaymentCalculator';
-import PortalDocumentRequirements from '../components/Portal/PortalDocumentRequirements';
-import PortalOnboardingGuide from '../components/Portal/PortalOnboardingGuide';
+import PortalDocumentRequirements from '../components/portal/PortalDocumentRequirements';
+import PortalOnboardingGuide from '../components/portal/PortalOnboardingGuide';
 import './PURLPortal.css';
 
 // Tab components
