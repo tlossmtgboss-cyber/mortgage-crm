@@ -684,9 +684,9 @@ async def connect_to_openai_realtime():
         "OpenAI-Beta": "realtime=v1"
     }
 
-    # Connect with timeout
+    # Connect with timeout - use additional_headers (websockets 10.x+)
     ws = await asyncio.wait_for(
-        websockets.connect(url, extra_headers=headers),
+        websockets.connect(url, additional_headers=headers),
         timeout=10.0
     )
 
