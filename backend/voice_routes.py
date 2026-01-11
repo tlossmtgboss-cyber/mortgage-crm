@@ -28,6 +28,14 @@ import uuid
 # Voice Sentiment Analysis
 from services.voice_sentiment_service import analyze_voice_sentiment
 
+# Call Screening Service
+from services.call_screening_service import (
+    CallScreeningService,
+    ScreeningDecision,
+    ScreeningResult,
+    add_to_whitelist
+)
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/voice", tags=["voice"])
@@ -55,6 +63,12 @@ async def handle_incoming_call(request: Request, db: Session = Depends(get_db)):
     """
     Twilio webhook for incoming calls
     Returns TwiML to handle the call with AI
+
+    Call flow with spam filtering:
+    1. Screen the call (whitelist → blocklist → lookup → unknown)
+    2. ALLOW: Connect directly to AI receptionist
+    3. BLOCK: Hang up immediately (no message)
+    4. SCREEN: Ask name/reason before connecting
     """
     try:
         form_data = await request.form()
@@ -64,35 +78,119 @@ async def handle_incoming_call(request: Request, db: Session = Depends(get_db)):
 
         logger.info(f"Incoming call from {caller_number} (SID: {call_sid})")
 
-        # Note: Not logging to IncomingDataEvent because it requires user_id
-        # Instead, we log directly to AI Receptionist Dashboard which is better for voice
+        # ============================================================
+        # CALL SCREENING - Spam filtering
+        # ============================================================
+        screening_service = CallScreeningService(db)
+        screening_result = await screening_service.screen_call(caller_number, call_sid)
 
-        # ✅ Log to AI Receptionist Dashboard
-        dashboard_activity = AIReceptionistActivity(
-            id=str(uuid.uuid4()),
-            timestamp=datetime.now(timezone.utc),
-            client_phone=caller_number,
-            action_type='incoming_call',
-            channel='voice',
-            outcome_status='pending',
-            conversation_id=call_sid,
-            extra_data={
-                "twilio_call_sid": call_sid,
-                "called_number": called_number
-            }
+        logger.info(
+            f"Screening decision for {caller_number}: {screening_result.decision.value} "
+            f"(reason: {screening_result.reason})"
         )
-        db.add(dashboard_activity)
 
-        db.commit()
+        # ============================================================
+        # HANDLE SCREENING DECISION
+        # ============================================================
 
-        # Generate TwiML response to connect to AI
-        twiml = voice_client.create_greeting_response(ai_config.business_name)
+        if screening_result.decision == ScreeningDecision.BLOCK:
+            # Blocked caller - immediate hangup, no message
+            logger.warning(f"BLOCKING call from {caller_number}: {screening_result.reason}")
 
-        return Response(content=str(twiml), media_type="application/xml")
+            # Log to dashboard as blocked
+            dashboard_activity = AIReceptionistActivity(
+                id=str(uuid.uuid4()),
+                timestamp=datetime.now(timezone.utc),
+                client_phone=caller_number,
+                action_type='call_blocked',
+                channel='voice',
+                outcome_status='blocked',
+                conversation_id=call_sid,
+                extra_data={
+                    "twilio_call_sid": call_sid,
+                    "called_number": called_number,
+                    "block_reason": screening_result.reason,
+                    "spam_score": screening_result.spam_score
+                }
+            )
+            db.add(dashboard_activity)
+            db.commit()
+
+            # Immediate hangup
+            twiml = """<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Hangup/>
+</Response>"""
+            return Response(content=twiml, media_type="application/xml")
+
+        elif screening_result.decision == ScreeningDecision.SCREEN:
+            # Unknown caller - ask for name and reason first
+            logger.info(f"SCREENING unknown caller {caller_number}")
+
+            # Log to dashboard as screening
+            dashboard_activity = AIReceptionistActivity(
+                id=str(uuid.uuid4()),
+                timestamp=datetime.now(timezone.utc),
+                client_phone=caller_number,
+                action_type='call_screening',
+                channel='voice',
+                outcome_status='screening',
+                conversation_id=call_sid,
+                extra_data={
+                    "twilio_call_sid": call_sid,
+                    "called_number": called_number,
+                    "screening_reason": screening_result.reason,
+                    "spam_score": screening_result.spam_score,
+                    "lookup_performed": screening_result.lookup_performed
+                }
+            )
+            db.add(dashboard_activity)
+            db.commit()
+
+            # Redirect to screening flow
+            twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Redirect>/api/v1/voice/screening?CallSid={call_sid}&amp;From={caller_number}</Redirect>
+</Response>"""
+            return Response(content=twiml, media_type="application/xml")
+
+        else:
+            # ALLOW - Known good caller, connect directly to AI
+            logger.info(
+                f"ALLOWING call from {caller_number} "
+                f"(caller: {screening_result.caller_name or 'Unknown'}, "
+                f"category: {screening_result.category or 'N/A'})"
+            )
+
+            # Log to AI Receptionist Dashboard
+            dashboard_activity = AIReceptionistActivity(
+                id=str(uuid.uuid4()),
+                timestamp=datetime.now(timezone.utc),
+                client_phone=caller_number,
+                client_name=screening_result.caller_name,
+                action_type='incoming_call',
+                channel='voice',
+                outcome_status='pending',
+                conversation_id=call_sid,
+                extra_data={
+                    "twilio_call_sid": call_sid,
+                    "called_number": called_number,
+                    "screening_decision": "allow",
+                    "screening_reason": screening_result.reason,
+                    "caller_category": screening_result.category,
+                    "spam_score": screening_result.spam_score
+                }
+            )
+            db.add(dashboard_activity)
+            db.commit()
+
+            # Generate TwiML response to connect to AI
+            twiml = voice_client.create_greeting_response(ai_config.business_name)
+            return Response(content=str(twiml), media_type="application/xml")
 
     except Exception as e:
         logger.error(f"Error handling incoming call: {e}")
-        # Fallback to voicemail
+        # On error, fall back to voicemail to not lose the call
         twiml = voice_client.create_voicemail_response()
         return Response(content=str(twiml), media_type="application/xml")
 
@@ -116,6 +214,226 @@ async def handle_outbound_script(request: Request):
     except Exception as e:
         logger.error(f"Error creating outbound script: {e}")
         return Response(content="<Response></Response>", media_type="application/xml")
+
+
+# ============================================================================
+# CALL SCREENING ENDPOINTS
+# ============================================================================
+
+@router.post("/screening")
+async def handle_screening(request: Request, db: Session = Depends(get_db)):
+    """
+    Unknown caller screening - Step 1: Ask for name
+
+    TwiML flow:
+    1. Play a message asking for their name
+    2. Record their response (up to 5 seconds)
+    3. Redirect to /screening-name with the recording
+    """
+    try:
+        form_data = await request.form()
+        caller_number = form_data.get("From", "Unknown")
+        call_sid = form_data.get("CallSid", "")
+
+        logger.info(f"Screening call from {caller_number} (SID: {call_sid})")
+
+        # Generate TwiML to ask for name
+        twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say voice="Polly.Joanna">Thank you for calling {ai_config.business_name}. Before I connect you, may I have your name please?</Say>
+    <Record
+        maxLength="10"
+        playBeep="false"
+        timeout="3"
+        action="/api/v1/voice/screening-name?CallSid={call_sid}&amp;From={caller_number}"
+        transcribe="true"
+        transcribeCallback="/api/v1/voice/screening-transcription"
+    />
+    <Say voice="Polly.Joanna">I didn't catch that. Let me connect you to our team.</Say>
+    <Redirect>/api/v1/voice/screening-complete?CallSid={call_sid}&amp;From={caller_number}&amp;skipped=true</Redirect>
+</Response>"""
+
+        return Response(content=twiml, media_type="application/xml")
+
+    except Exception as e:
+        logger.error(f"Error in screening step 1: {e}")
+        # On error, connect to AI anyway
+        twiml = voice_client.create_greeting_response(ai_config.business_name)
+        return Response(content=str(twiml), media_type="application/xml")
+
+
+@router.post("/screening-name")
+async def handle_screening_name(request: Request, db: Session = Depends(get_db)):
+    """
+    Unknown caller screening - Step 2: Got name, ask for reason
+
+    TwiML flow:
+    1. Acknowledge name receipt
+    2. Ask for reason for calling
+    3. Record their response
+    4. Redirect to /screening-complete
+    """
+    try:
+        form_data = await request.form()
+        query_params = request.query_params
+
+        caller_number = query_params.get("From") or form_data.get("From", "Unknown")
+        call_sid = query_params.get("CallSid") or form_data.get("CallSid", "")
+        recording_url = form_data.get("RecordingUrl", "")
+
+        logger.info(f"Screening name recorded for {caller_number}: {recording_url}")
+
+        # Generate TwiML to ask for reason
+        twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say voice="Polly.Joanna">Thank you. And briefly, what is your call regarding?</Say>
+    <Record
+        maxLength="15"
+        playBeep="false"
+        timeout="3"
+        action="/api/v1/voice/screening-complete?CallSid={call_sid}&amp;From={caller_number}&amp;name_recording={recording_url}"
+        transcribe="true"
+        transcribeCallback="/api/v1/voice/screening-transcription"
+    />
+    <Say voice="Polly.Joanna">No problem. Let me connect you now.</Say>
+    <Redirect>/api/v1/voice/screening-complete?CallSid={call_sid}&amp;From={caller_number}&amp;skipped_reason=true</Redirect>
+</Response>"""
+
+        return Response(content=twiml, media_type="application/xml")
+
+    except Exception as e:
+        logger.error(f"Error in screening step 2: {e}")
+        twiml = voice_client.create_greeting_response(ai_config.business_name)
+        return Response(content=str(twiml), media_type="application/xml")
+
+
+@router.post("/screening-complete")
+async def handle_screening_complete(request: Request, db: Session = Depends(get_db)):
+    """
+    Unknown caller screening - Step 3: Connect to AI receptionist
+
+    After screening is complete, connect caller to the AI receptionist.
+    Log the screening info for context.
+    """
+    try:
+        form_data = await request.form()
+        query_params = request.query_params
+
+        caller_number = query_params.get("From") or form_data.get("From", "Unknown")
+        call_sid = query_params.get("CallSid") or form_data.get("CallSid", "")
+        name_recording = query_params.get("name_recording", "")
+        reason_recording = form_data.get("RecordingUrl", "")
+        skipped = query_params.get("skipped", "false") == "true"
+        skipped_reason = query_params.get("skipped_reason", "false") == "true"
+
+        logger.info(f"Screening complete for {caller_number} (SID: {call_sid})")
+
+        # Update screening log with outcome
+        try:
+            from sqlalchemy import text
+            db.execute(text("""
+                UPDATE call_screening_log
+                SET
+                    connected_to_ai = true,
+                    extra_data = COALESCE(extra_data, '{}'::jsonb) || :screening_data
+                WHERE call_sid = :call_sid
+            """), {
+                "call_sid": call_sid,
+                "screening_data": json.dumps({
+                    "screening_completed": True,
+                    "name_recording": name_recording,
+                    "reason_recording": reason_recording,
+                    "skipped_name": skipped,
+                    "skipped_reason": skipped_reason
+                })
+            })
+            db.commit()
+        except Exception as log_error:
+            logger.warning(f"Could not update screening log: {log_error}")
+
+        # Connect to AI receptionist
+        logger.info(f"Connecting screened caller {caller_number} to AI")
+        twiml = voice_client.create_greeting_response(ai_config.business_name)
+
+        return Response(content=str(twiml), media_type="application/xml")
+
+    except Exception as e:
+        logger.error(f"Error in screening complete: {e}")
+        twiml = voice_client.create_greeting_response(ai_config.business_name)
+        return Response(content=str(twiml), media_type="application/xml")
+
+
+@router.post("/screening-transcription")
+async def handle_screening_transcription(request: Request, db: Session = Depends(get_db)):
+    """
+    Handle transcription callback from screening recordings.
+
+    Updates the screening log with caller's stated name and reason.
+    """
+    try:
+        form_data = await request.form()
+        call_sid = form_data.get("CallSid", "")
+        transcription_text = form_data.get("TranscriptionText", "")
+        transcription_status = form_data.get("TranscriptionStatus", "")
+        recording_url = form_data.get("RecordingUrl", "")
+
+        logger.info(f"Screening transcription for {call_sid}: {transcription_text[:100] if transcription_text else 'empty'}")
+
+        if transcription_status == "completed" and transcription_text:
+            try:
+                from sqlalchemy import text
+
+                # Determine if this is name or reason based on recording length/content
+                # Names are typically shorter, update the appropriate field
+                if len(transcription_text) < 50:  # Likely a name
+                    db.execute(text("""
+                        UPDATE call_screening_log
+                        SET caller_stated_name = COALESCE(caller_stated_name, :name)
+                        WHERE call_sid = :call_sid
+                    """), {"call_sid": call_sid, "name": transcription_text})
+                else:  # Likely a reason
+                    db.execute(text("""
+                        UPDATE call_screening_log
+                        SET caller_stated_reason = COALESCE(caller_stated_reason, :reason)
+                        WHERE call_sid = :call_sid
+                    """), {"call_sid": call_sid, "reason": transcription_text})
+
+                db.commit()
+                logger.info(f"Updated screening transcription for {call_sid}")
+
+            except Exception as db_error:
+                logger.warning(f"Could not update transcription: {db_error}")
+
+        return {"status": "ok"}
+
+    except Exception as e:
+        logger.error(f"Error handling screening transcription: {e}")
+        return {"status": "error"}
+
+
+@router.post("/blocked")
+async def handle_blocked_call(request: Request):
+    """
+    TwiML response for blocked calls - immediate hangup with no message.
+    """
+    try:
+        form_data = await request.form()
+        caller_number = form_data.get("From", "Unknown")
+        call_sid = form_data.get("CallSid", "")
+
+        logger.warning(f"Blocking call from {caller_number} (SID: {call_sid})")
+
+        # Immediate hangup - no message for blocked callers
+        twiml = """<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Hangup/>
+</Response>"""
+
+        return Response(content=twiml, media_type="application/xml")
+
+    except Exception as e:
+        logger.error(f"Error in blocked handler: {e}")
+        return Response(content="<Response><Hangup/></Response>", media_type="application/xml")
 
 
 # ============================================================================

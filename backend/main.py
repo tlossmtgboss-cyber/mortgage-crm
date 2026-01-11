@@ -19850,6 +19850,14 @@ app.include_router(ai_receptionist_dashboard_router, tags=["AI Receptionist Dash
 from voice_routes import router as voice_router
 app.include_router(voice_router, tags=["Voice AI"])
 
+# Include Call Screening routes (blocklist/whitelist management, spam filtering)
+try:
+    from routes.call_screening_routes import router as call_screening_router
+    app.include_router(call_screening_router, tags=["Call Screening"])
+    logger.info("✅ Call Screening routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load Call Screening routes: {e}")
+
 # Include Voice OS API routes (agents, phone numbers, call sessions, analytics)
 from voice_os_routes import router as voice_os_router
 app.include_router(voice_os_router, tags=["Voice OS"])
