@@ -2,6 +2,7 @@
 Voice AI Receptionist Routes
 Handles Twilio voice webhooks and OpenAI Realtime API integration
 """
+import os
 from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect, Depends, HTTPException, UploadFile, File
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
@@ -1492,7 +1493,6 @@ async def process_call_recording(
 ):
     """Process call recording: transcribe, summarize with AI, create email draft"""
     import httpx
-    import os
     from anthropic import Anthropic
 
     logger.info(f"Processing call recording {recording_sid}...")
@@ -1672,7 +1672,6 @@ async def create_call_summary_email_draft(
     recording_url: str
 ):
     """Create an email draft in the user's Outlook drafts folder"""
-    import os
     import httpx
     from msal import ConfidentialClientApplication
 
@@ -2050,8 +2049,6 @@ async def update_ai_receptionist_config(
 @router.get("/voice-os/config")
 async def get_voice_os_config():
     """Get Voice OS configuration for dashboard"""
-    import os
-
     return {
         "status": "running",
         "voice": os.getenv("TTS_VOICE", "alloy"),
@@ -2162,8 +2159,6 @@ async def update_voice_os_config(request: Request):
 @router.get("/voice-os/status")
 async def get_voice_os_status():
     """Get Voice OS system status and health"""
-    import os
-
     # Voice OS runs through the main Python backend with Twilio + OpenAI integration
     # Check if the essential services are configured and enabled
     twilio_healthy = voice_client.enabled and bool(voice_client.from_number)
@@ -2208,7 +2203,6 @@ async def transcribe_audio(
     Used by mobile app when OpenAI key is not in the app.
     """
     import httpx
-    import os
 
     openai_key = os.getenv("OPENAI_API_KEY")
     if not openai_key:

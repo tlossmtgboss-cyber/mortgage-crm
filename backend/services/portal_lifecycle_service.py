@@ -343,12 +343,12 @@ class PortalLifecycleService:
         """Add a risk flag to a loan."""
         risk_flag = RiskFlag(
             loan_id=loan_id,
-            risk_type=risk_type,
+            flag_type=risk_type,
             severity=severity,
             description=description,
-            recommended_action=recommended_action,
+            title=f"{risk_type} - {severity}",
             auto_resolve_condition=auto_resolve_condition,
-            is_active=True,
+            is_resolved=False,
         )
         self.db.add(risk_flag)
         self.db.commit()
@@ -374,7 +374,7 @@ class PortalLifecycleService:
         if not risk_flag:
             return {"success": False, "error": "Risk flag not found"}
 
-        risk_flag.is_active = False
+        risk_flag.is_resolved = True
         risk_flag.resolved_at = datetime.utcnow()
         risk_flag.resolved_by = resolved_by
         risk_flag.resolution_notes = resolution_notes
@@ -388,7 +388,7 @@ class PortalLifecycleService:
         risks = self.db.query(RiskFlag).filter(
             and_(
                 RiskFlag.loan_id == loan_id,
-                RiskFlag.is_active == True
+                RiskFlag.is_resolved == False
             )
         ).order_by(
             RiskFlag.severity.desc(),
@@ -431,7 +431,7 @@ class PortalLifecycleService:
         active_risks = self.db.query(RiskFlag).filter(
             and_(
                 RiskFlag.loan_id == loan_id,
-                RiskFlag.is_active == True
+                RiskFlag.is_resolved == False
             )
         ).count()
 
