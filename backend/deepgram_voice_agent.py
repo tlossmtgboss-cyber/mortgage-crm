@@ -91,7 +91,8 @@ class DeepgramVoiceAgentSession:
         }
 
         logger.info("[VoiceAgent] Connecting to Deepgram Voice Agent API...")
-        self.deepgram_ws = await websockets.connect(url, extra_headers=headers)
+        # websockets v10+ uses additional_headers instead of extra_headers
+        self.deepgram_ws = await websockets.connect(url, additional_headers=headers)
         logger.info("[VoiceAgent] Connected to Deepgram Voice Agent API")
 
         # Configure the agent
