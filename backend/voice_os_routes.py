@@ -2,7 +2,8 @@
 Voice OS API Routes
 CRUD operations for Voice OS agents, phone numbers, call sessions, and analytics
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from datetime import datetime, timezone, timedelta
@@ -16,6 +17,26 @@ from database import get_db
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/voice", tags=["voice-os"])
+
+# Auth dependency - lazy loaded to avoid circular imports
+_get_current_user = None
+
+def set_auth_dependency(get_current_user_func):
+    """Set the auth dependency from main.py to avoid circular imports"""
+    global _get_current_user
+    _get_current_user = get_current_user_func
+
+async def get_current_user(request: Request, db: Session = Depends(get_db)):
+    """Get current user - raises 401 if not authenticated"""
+    if _get_current_user is None:
+        # Fallback: allow unauthenticated access if auth not configured
+        logger.warning("Voice OS auth dependency not configured - allowing unauthenticated access")
+        return None
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return await _get_current_user(token=token, request=request, db=db)
 
 
 # =============================================================================
@@ -78,10 +99,12 @@ class CallSessionUpdate(BaseModel):
 
 @router.get("/agents")
 async def list_agents(
+    request: Request,
     status: Optional[str] = Query(None, description="Filter by status (active/inactive)"),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """List all Voice OS agents with optional filtering"""
     try:
@@ -154,7 +177,7 @@ async def list_agents(
 
 
 @router.get("/agents/{agent_id}")
-async def get_agent(agent_id: str, db: Session = Depends(get_db)):
+async def get_agent(request: Request, agent_id: str, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """Get a single Voice OS agent by ID"""
     try:
         result = db.execute(text("""
@@ -208,7 +231,7 @@ async def get_agent(agent_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/agents")
-async def create_agent(agent: AgentCreate, db: Session = Depends(get_db)):
+async def create_agent(request: Request, agent: AgentCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """Create a new Voice OS agent"""
     try:
         import json
@@ -267,7 +290,7 @@ async def create_agent(agent: AgentCreate, db: Session = Depends(get_db)):
 
 
 @router.patch("/agents/{agent_id}")
-async def update_agent(agent_id: str, updates: AgentUpdate, db: Session = Depends(get_db)):
+async def update_agent(request: Request, agent_id: str, updates: AgentUpdate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """Update a Voice OS agent"""
     try:
         import json
@@ -322,7 +345,7 @@ async def update_agent(agent_id: str, updates: AgentUpdate, db: Session = Depend
 
 
 @router.delete("/agents/{agent_id}")
-async def delete_agent(agent_id: str, db: Session = Depends(get_db)):
+async def delete_agent(request: Request, agent_id: str, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """Delete a Voice OS agent"""
     try:
         # Check if agent has active calls
@@ -366,9 +389,11 @@ async def delete_agent(agent_id: str, db: Session = Depends(get_db)):
 
 @router.get("/phone-numbers")
 async def list_phone_numbers(
+    request: Request,
     enabled: Optional[bool] = None,
     agent_id: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """List all Voice OS phone numbers"""
     try:
@@ -415,7 +440,7 @@ async def list_phone_numbers(
 
 
 @router.post("/phone-numbers")
-async def assign_phone_number(data: PhoneNumberAssign, db: Session = Depends(get_db)):
+async def assign_phone_number(request: Request, data: PhoneNumberAssign, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """Assign a phone number to a Voice OS agent"""
     try:
         result = db.execute(text("""
@@ -447,7 +472,7 @@ async def assign_phone_number(data: PhoneNumberAssign, db: Session = Depends(get
 
 
 @router.delete("/phone-numbers/{phone_id}")
-async def unassign_phone_number(phone_id: str, db: Session = Depends(get_db)):
+async def unassign_phone_number(request: Request, phone_id: str, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """Remove a phone number from Voice OS"""
     try:
         result = db.execute(text("""
@@ -477,6 +502,7 @@ async def unassign_phone_number(phone_id: str, db: Session = Depends(get_db)):
 
 @router.get("/calls")
 async def list_call_sessions(
+    request: Request,
     status: Optional[str] = None,
     agent_id: Optional[str] = None,
     from_number: Optional[str] = None,
@@ -484,7 +510,8 @@ async def list_call_sessions(
     days: int = Query(7, ge=1, le=90),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """List Voice OS call sessions with filtering"""
     try:
@@ -570,7 +597,7 @@ async def list_call_sessions(
 
 
 @router.get("/calls/live")
-async def get_live_calls(db: Session = Depends(get_db)):
+async def get_live_calls(request: Request, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """Get currently active calls for live monitoring"""
     try:
         result = db.execute(text("""
@@ -623,7 +650,7 @@ async def get_live_calls(db: Session = Depends(get_db)):
 
 
 @router.get("/calls/{call_id}")
-async def get_call_session(call_id: str, db: Session = Depends(get_db)):
+async def get_call_session(request: Request, call_id: str, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """Get detailed call session including full transcript"""
     try:
         result = db.execute(text("""
@@ -692,7 +719,7 @@ async def get_call_session(call_id: str, db: Session = Depends(get_db)):
 
 
 @router.patch("/calls/{call_id}")
-async def update_call_session(call_id: str, updates: CallSessionUpdate, db: Session = Depends(get_db)):
+async def update_call_session(request: Request, call_id: str, updates: CallSessionUpdate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """Update a call session (for manual annotations)"""
     try:
         update_fields = []
@@ -735,9 +762,11 @@ async def update_call_session(call_id: str, updates: CallSessionUpdate, db: Sess
 
 @router.get("/analytics")
 async def get_voice_analytics(
+    request: Request,
     days: int = Query(30, ge=1, le=365),
     agent_id: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """Get Voice OS analytics and metrics"""
     try:
@@ -835,7 +864,7 @@ async def get_voice_analytics(
 
 
 @router.get("/agents/{agent_id}/analytics")
-async def get_agent_analytics(agent_id: str, days: int = Query(30, ge=1, le=365), db: Session = Depends(get_db)):
+async def get_agent_analytics(request: Request, agent_id: str, days: int = Query(30, ge=1, le=365), db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """Get analytics for a specific agent"""
     try:
         # Get agent info
@@ -919,7 +948,7 @@ async def get_agent_analytics(agent_id: str, days: int = Query(30, ge=1, le=365)
 
 
 @router.get("/performance")
-async def get_agent_performance_view(db: Session = Depends(get_db)):
+async def get_agent_performance_view(request: Request, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """Get agent performance from the materialized view"""
     try:
         result = db.execute(text("""

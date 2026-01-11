@@ -134,10 +134,13 @@ class TwilioVoiceClient:
 
             # Create TwiML for the call
             twiml_url = f"https://{os.getenv('RAILWAY_PUBLIC_DOMAIN')}/api/v1/voice/outbound-script"
+            query_params = []
             if callback_url:
-                twiml_url += f"?callback={callback_url}"
+                query_params.append(f"callback={callback_url}")
             if script:
-                twiml_url += f"&script_id={script}"
+                query_params.append(f"script_id={script}")
+            if query_params:
+                twiml_url += "?" + "&".join(query_params)
 
             call = self.client.calls.create(
                 to=to_number,

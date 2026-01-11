@@ -4061,6 +4061,51 @@ class LoanResponse(BaseModel):
     withdrawn_date: Optional[date] = None
     contract_received_date: Optional[date] = None
 
+    # Property Details (Salesforce sync)
+    property_address: Optional[str] = None
+    property_city: Optional[str] = None
+    property_state: Optional[str] = None
+    property_zip: Optional[str] = None
+    property_type: Optional[str] = None
+    occupancy_type: Optional[str] = None
+    property_county: Optional[str] = None
+    property_ownership_type: Optional[str] = None
+    property_units: Optional[int] = None
+    appraisal_value: Optional[float] = None
+    purchase_price: Optional[float] = None
+
+    # 1st Loan Details
+    interest_rate: Optional[float] = None
+    rate_type: Optional[str] = None
+    loan_type: Optional[str] = None
+    property_tax: Optional[float] = None
+    hazard_insurance: Optional[float] = None
+    mortgage_insurance: Optional[float] = None
+    hoa_amount: Optional[float] = None
+    origination_fee: Optional[float] = None
+    estimated_prepaid_interest: Optional[float] = None
+    points: Optional[float] = None
+    monthly_payment: Optional[float] = None
+    index_rate: Optional[float] = None
+    margin: Optional[float] = None
+
+    # LTV/CLTV
+    ltv: Optional[float] = None
+    cltv: Optional[float] = None
+    loan_purpose: Optional[str] = None
+    file_state: Optional[str] = None
+
+    # 2nd Loan
+    second_loan_amount: Optional[float] = None
+    second_loan_rate: Optional[float] = None
+    second_loan_payment: Optional[float] = None
+
+    # Present vs Proposed
+    present_housing_expense: Optional[float] = None
+    proposed_housing_expense: Optional[float] = None
+    present_monthly_payment: Optional[float] = None
+    proposed_monthly_payment: Optional[float] = None
+
     class Config:
         from_attributes = True
 
@@ -19859,7 +19904,8 @@ except Exception as e:
     logger.warning(f"⚠️ Could not load Call Screening routes: {e}")
 
 # Include Voice OS API routes (agents, phone numbers, call sessions, analytics)
-from voice_os_routes import router as voice_os_router
+from voice_os_routes import router as voice_os_router, set_auth_dependency as set_voice_os_auth
+set_voice_os_auth(get_current_user)
 app.include_router(voice_os_router, tags=["Voice OS"])
 
 # Include Mobile Voice routes for real-time voice conversations
@@ -43005,7 +43051,23 @@ async def get_loan(loan_id: int, db: Session = Depends(get_db), current_user: Us
                    stage, program, amount, rate,
                    closing_date, days_in_stage, sla_status, created_at,
                    loan_officer_name, loan_officer_email, processor, processor_email,
-                   underwriter, underwriter_email, closer, closer_email
+                   underwriter, underwriter_email, closer, closer_email,
+                   -- Property Details (Salesforce sync)
+                   property_address, property_city, property_state, property_zip,
+                   property_type, occupancy_type, property_county, property_ownership_type,
+                   property_units, appraisal_value, purchase_price,
+                   -- 1st Loan Details
+                   interest_rate, rate_type, loan_type,
+                   property_tax, hazard_insurance, mortgage_insurance, hoa_amount,
+                   origination_fee, estimated_prepaid_interest, points,
+                   monthly_payment, index_rate, margin,
+                   -- LTV/CLTV
+                   ltv, cltv, loan_purpose, file_state,
+                   -- 2nd Loan
+                   second_loan_amount, second_loan_rate, second_loan_payment,
+                   -- Present vs Proposed
+                   present_housing_expense, proposed_housing_expense,
+                   present_monthly_payment, proposed_monthly_payment
             FROM loans
             WHERE {where_sql}
         """

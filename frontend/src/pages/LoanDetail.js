@@ -1352,6 +1352,212 @@ function LoanDetail() {
                 />
               </div>
             </div>
+
+            {/* 1st Loan Financial Details - Salesforce Sync */}
+            <h3 style={{ margin: '2rem 0 1rem 0', fontSize: '16px', fontWeight: '600', color: '#333', borderTop: '1px solid #e0e0e0', paddingTop: '1.5rem' }}>
+              1st Loan Financial Details
+              <span style={{ fontSize: '12px', fontWeight: '400', color: '#666', marginLeft: '8px' }}>(Synced from Salesforce)</span>
+            </h3>
+            <div className="info-grid">
+              <div className="info-field">
+                <label>Rate Type</label>
+                <select
+                  value={formData.rate_type || ''}
+                  onChange={(e) => handleFieldChange('rate_type', e.target.value)}
+                >
+                  <option value="">Select...</option>
+                  <option value="Fixed">Fixed</option>
+                  <option value="ARM">ARM</option>
+                  <option value="5/1 ARM">5/1 ARM</option>
+                  <option value="7/1 ARM">7/1 ARM</option>
+                  <option value="10/1 ARM">10/1 ARM</option>
+                </select>
+              </div>
+              <div className="info-field">
+                <label>Monthly P&I Payment</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.monthly_payment || ''}
+                  onChange={(e) => handleFieldChange('monthly_payment', parseFloat(e.target.value))}
+                  placeholder="$0.00"
+                />
+              </div>
+              <div className="info-field">
+                <label>Property Tax (Annual)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.property_tax || ''}
+                  onChange={(e) => handleFieldChange('property_tax', parseFloat(e.target.value))}
+                  placeholder="$0.00"
+                />
+              </div>
+              <div className="info-field">
+                <label>Hazard Insurance (Monthly)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.hazard_insurance || ''}
+                  onChange={(e) => handleFieldChange('hazard_insurance', parseFloat(e.target.value))}
+                  placeholder="$0.00"
+                />
+              </div>
+              <div className="info-field">
+                <label>Mortgage Insurance (Monthly)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.mortgage_insurance || ''}
+                  onChange={(e) => handleFieldChange('mortgage_insurance', parseFloat(e.target.value))}
+                  placeholder="$0.00"
+                />
+              </div>
+              <div className="info-field">
+                <label>HOA (Monthly)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.hoa_amount || ''}
+                  onChange={(e) => handleFieldChange('hoa_amount', parseFloat(e.target.value))}
+                  placeholder="$0.00"
+                />
+              </div>
+              <div className="info-field">
+                <label>Origination Fee</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.origination_fee || ''}
+                  onChange={(e) => handleFieldChange('origination_fee', parseFloat(e.target.value))}
+                  placeholder="$0.00"
+                />
+              </div>
+              <div className="info-field">
+                <label>Est. Prepaid Interest</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.estimated_prepaid_interest || ''}
+                  onChange={(e) => handleFieldChange('estimated_prepaid_interest', parseFloat(e.target.value))}
+                  placeholder="$0.00"
+                />
+              </div>
+            </div>
+
+            {/* ARM Details - Only show if Rate Type is ARM */}
+            {formData.rate_type && formData.rate_type.includes('ARM') && (
+              <>
+                <h4 style={{ margin: '1.5rem 0 1rem 0', fontSize: '14px', fontWeight: '600', color: '#666' }}>ARM Details</h4>
+                <div className="info-grid">
+                  <div className="info-field">
+                    <label>Index Rate</label>
+                    <input
+                      type="number"
+                      step="0.001"
+                      value={formData.index_rate || ''}
+                      onChange={(e) => handleFieldChange('index_rate', parseFloat(e.target.value))}
+                      placeholder="%"
+                    />
+                  </div>
+                  <div className="info-field">
+                    <label>Margin</label>
+                    <input
+                      type="number"
+                      step="0.001"
+                      value={formData.margin || ''}
+                      onChange={(e) => handleFieldChange('margin', parseFloat(e.target.value))}
+                      placeholder="%"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Present vs Proposed Section */}
+            <h3 style={{ margin: '2rem 0 1rem 0', fontSize: '16px', fontWeight: '600', color: '#333', borderTop: '1px solid #e0e0e0', paddingTop: '1.5rem' }}>
+              Present vs Proposed Housing
+            </h3>
+            <div className="info-grid">
+              <div className="info-field">
+                <label>Present Monthly Payment</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.present_monthly_payment || ''}
+                  onChange={(e) => handleFieldChange('present_monthly_payment', parseFloat(e.target.value))}
+                  placeholder="$0.00"
+                />
+              </div>
+              <div className="info-field">
+                <label>Proposed Monthly Payment</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.proposed_monthly_payment || ''}
+                  onChange={(e) => handleFieldChange('proposed_monthly_payment', parseFloat(e.target.value))}
+                  placeholder="$0.00"
+                />
+              </div>
+              <div className="info-field">
+                <label>Present Housing Expense</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.present_housing_expense || ''}
+                  onChange={(e) => handleFieldChange('present_housing_expense', parseFloat(e.target.value))}
+                  placeholder="$0.00"
+                />
+              </div>
+              <div className="info-field">
+                <label>Proposed Housing Expense</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.proposed_housing_expense || ''}
+                  onChange={(e) => handleFieldChange('proposed_housing_expense', parseFloat(e.target.value))}
+                  placeholder="$0.00"
+                />
+              </div>
+            </div>
+
+            {/* 2nd Loan Details */}
+            <h3 style={{ margin: '2rem 0 1rem 0', fontSize: '16px', fontWeight: '600', color: '#333', borderTop: '1px solid #e0e0e0', paddingTop: '1.5rem' }}>
+              2nd Loan Details
+              <span style={{ fontSize: '12px', fontWeight: '400', color: '#666', marginLeft: '8px' }}>(If Applicable)</span>
+            </h3>
+            <div className="info-grid">
+              <div className="info-field">
+                <label>2nd Loan Amount</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.second_loan_amount || ''}
+                  onChange={(e) => handleFieldChange('second_loan_amount', parseFloat(e.target.value))}
+                  placeholder="$0.00"
+                />
+              </div>
+              <div className="info-field">
+                <label>2nd Loan Rate</label>
+                <input
+                  type="number"
+                  step="0.001"
+                  value={formData.second_loan_rate || ''}
+                  onChange={(e) => handleFieldChange('second_loan_rate', parseFloat(e.target.value))}
+                  placeholder="%"
+                />
+              </div>
+              <div className="info-field">
+                <label>2nd Loan Payment</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.second_loan_payment || ''}
+                  onChange={(e) => handleFieldChange('second_loan_payment', parseFloat(e.target.value))}
+                  placeholder="$0.00"
+                />
+              </div>
+            </div>
           </div>
           )}
 
@@ -1897,11 +2103,19 @@ function LoanDetail() {
                   </div>
                   <div className="info-field">
                     <label>Property Type</label>
-                    <input
-                      type="text"
+                    <select
                       value={formData.property_type || ''}
                       onChange={(e) => handleFieldChange('property_type', e.target.value)}
-                    />
+                      style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}
+                    >
+                      <option value="">Select Type</option>
+                      <option value="Single Family">Single Family</option>
+                      <option value="Condo">Condo</option>
+                      <option value="Townhouse">Townhouse</option>
+                      <option value="Multi-Family">Multi-Family</option>
+                      <option value="Manufactured">Manufactured</option>
+                      <option value="PUD">PUD</option>
+                    </select>
                   </div>
                   <div className="info-field">
                     <label>Property Value</label>
@@ -1925,6 +2139,127 @@ function LoanDetail() {
                       type="number"
                       value={formData.credit_score || ''}
                       onChange={(e) => handleFieldChange('credit_score', parseInt(e.target.value))}
+                    />
+                  </div>
+                </div>
+
+                {/* Property Details Section - Salesforce Sync Fields */}
+                <h3 style={{ margin: '2rem 0 1rem 0', fontSize: '16px', fontWeight: '600', color: '#333', borderTop: '1px solid #e0e0e0', paddingTop: '1.5rem' }}>
+                  Property Details
+                  <span style={{ fontSize: '12px', fontWeight: '400', color: '#666', marginLeft: '8px' }}>(Synced from Salesforce)</span>
+                </h3>
+                <div className="info-grid compact">
+                  <div className="info-field">
+                    <label>Occupancy Type</label>
+                    <select
+                      value={formData.occupancy_type || ''}
+                      onChange={(e) => handleFieldChange('occupancy_type', e.target.value)}
+                      style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}
+                    >
+                      <option value="">Select Occupancy</option>
+                      <option value="Primary Residence">Primary Residence</option>
+                      <option value="Second Home">Second Home</option>
+                      <option value="Investment">Investment</option>
+                    </select>
+                  </div>
+                  <div className="info-field">
+                    <label>Property County</label>
+                    <input
+                      type="text"
+                      value={formData.property_county || ''}
+                      onChange={(e) => handleFieldChange('property_county', e.target.value)}
+                    />
+                  </div>
+                  <div className="info-field">
+                    <label>Ownership Type</label>
+                    <select
+                      value={formData.property_ownership_type || ''}
+                      onChange={(e) => handleFieldChange('property_ownership_type', e.target.value)}
+                      style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}
+                    >
+                      <option value="">Select Ownership</option>
+                      <option value="Fee Simple">Fee Simple</option>
+                      <option value="Leasehold">Leasehold</option>
+                    </select>
+                  </div>
+                  <div className="info-field">
+                    <label>Number of Units</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="4"
+                      value={formData.property_units || ''}
+                      onChange={(e) => handleFieldChange('property_units', parseInt(e.target.value))}
+                    />
+                  </div>
+                  <div className="info-field">
+                    <label>Appraised Value</label>
+                    <input
+                      type="number"
+                      value={formData.appraisal_value || ''}
+                      onChange={(e) => handleFieldChange('appraisal_value', parseFloat(e.target.value))}
+                      placeholder="$0.00"
+                    />
+                  </div>
+                  <div className="info-field">
+                    <label>Purchase Price</label>
+                    <input
+                      type="number"
+                      value={formData.purchase_price || ''}
+                      onChange={(e) => handleFieldChange('purchase_price', parseFloat(e.target.value))}
+                      placeholder="$0.00"
+                    />
+                  </div>
+                </div>
+
+                {/* LTV/CLTV Section */}
+                <h3 style={{ margin: '2rem 0 1rem 0', fontSize: '16px', fontWeight: '600', color: '#333', borderTop: '1px solid #e0e0e0', paddingTop: '1.5rem' }}>
+                  Loan Ratios
+                </h3>
+                <div className="info-grid compact">
+                  <div className="info-field">
+                    <label>LTV (%)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={formData.ltv || ''}
+                      onChange={(e) => handleFieldChange('ltv', parseFloat(e.target.value))}
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div className="info-field">
+                    <label>CLTV (%)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={formData.cltv || ''}
+                      onChange={(e) => handleFieldChange('cltv', parseFloat(e.target.value))}
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div className="info-field">
+                    <label>Loan Purpose</label>
+                    <select
+                      value={formData.loan_purpose || ''}
+                      onChange={(e) => handleFieldChange('loan_purpose', e.target.value)}
+                      style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}
+                    >
+                      <option value="">Select Purpose</option>
+                      <option value="Purchase">Purchase</option>
+                      <option value="Refinance">Refinance</option>
+                      <option value="Cash-Out Refinance">Cash-Out Refinance</option>
+                      <option value="Construction">Construction</option>
+                      <option value="Home Equity">Home Equity</option>
+                    </select>
+                  </div>
+                  <div className="info-field">
+                    <label>File State</label>
+                    <input
+                      type="text"
+                      value={formData.file_state || ''}
+                      onChange={(e) => handleFieldChange('file_state', e.target.value)}
+                      readOnly
+                      style={{ backgroundColor: '#f5f5f5' }}
                     />
                   </div>
                 </div>

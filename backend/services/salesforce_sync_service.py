@@ -148,6 +148,63 @@ DEFAULT_FIELD_MAPPING = {
     "MtgPlanner_CRM__Withdrawn_Date__c": ("withdrawn_date", "date"),
     "MtgPlanner_CRM__Contract_Date__c": ("contract_received_date", "date"),
 
+    # ============================================================
+    # PROPERTY DETAILS
+    # ============================================================
+    "MtgPlanner_CRM__Property_Type__c": ("property_type", None),
+    "MtgPlanner_CRM__Occupancy_Type__c": ("occupancy_type", None),
+    "MtgPlanner_CRM__Property_County__c": ("property_county", None),
+    "MtgPlanner_CRM__Property_Ownership_Type__c": ("property_ownership_type", None),
+    "MtgPlanner_CRM__Property_Units__c": ("property_units", "integer"),
+    "MtgPlanner_CRM__Appraised_Value__c": ("appraisal_value", "decimal"),
+
+    # ============================================================
+    # 1ST LOAN DETAILS
+    # ============================================================
+    "MtgPlanner_CRM__Rate_Type_1st_TD__c": ("rate_type", None),
+    "MtgPlanner_CRM__Note_Rate__c": ("interest_rate", "decimal"),
+    "MtgPlanner_CRM__Property_Tax_1st_TD__c": ("property_tax", "decimal"),
+    "MtgPlanner_CRM__Est_Prepaid_Int_1st_TD__c": ("estimated_prepaid_interest", "decimal"),
+    "MtgPlanner_CRM__Hazard_Ins_1st_TD__c": ("hazard_insurance", "decimal"),
+    "MtgPlanner_CRM__Origination_1st_TD__c": ("origination_fee", "decimal"),
+    "MtgPlanner_CRM__Mortgage_Ins_1st_TD__c": ("mortgage_insurance", "decimal"),
+    "MtgPlanner_CRM__HOA_1st_TD__c": ("hoa_amount", "decimal"),
+    "MtgPlanner_CRM__Points_1st_TD__c": ("points", "decimal"),
+    "MtgPlanner_CRM__Index_1st_TD__c": ("index_rate", "decimal"),
+    "MtgPlanner_CRM__Margin_1st_TD__c": ("margin", "decimal"),
+    "MtgPlanner_CRM__Monthly_Payment_1st_TD__c": ("monthly_payment", "decimal"),
+    "MtgPlanner_CRM__Loan_Date_1st_TD__c": ("loan_date", "date"),
+    "MtgPlanner_CRM__AUS_DU_Run_Date_1st_TD__c": ("aus_du_run_date", "date"),
+    "MtgPlanner_CRM__Lender_State_Elig_1st_TD__c": ("lender_state_eligibility", None),
+
+    # ============================================================
+    # LTV / CLTV
+    # ============================================================
+    "MtgPlanner_CRM__LTV__c": ("ltv", "decimal"),
+    "MtgPlanner_CRM__CLTV__c": ("cltv", "decimal"),
+
+    # ============================================================
+    # LOAN PURPOSE & ADDITIONAL INFO
+    # ============================================================
+    "MtgPlanner_CRM__Loan_Purpose__c": ("loan_purpose", None),
+    "MtgPlanner_CRM__File_State__c": ("file_state", None),
+    "MtgPlanner_CRM__Account__c": ("borrower_account", None),
+
+    # ============================================================
+    # 2ND LOAN DETAILS
+    # ============================================================
+    "MtgPlanner_CRM__Loan_Amount_2nd_TD__c": ("second_loan_amount", "decimal"),
+    "MtgPlanner_CRM__Rate_2nd_TD__c": ("second_loan_rate", "decimal"),
+    "MtgPlanner_CRM__Monthly_Payment_2nd_TD__c": ("second_loan_payment", "decimal"),
+
+    # ============================================================
+    # PRESENT VS PROPOSED
+    # ============================================================
+    "MtgPlanner_CRM__Present_Total_Expenses__c": ("present_housing_expense", "decimal"),
+    "MtgPlanner_CRM__Proposed_Total_Expenses__c": ("proposed_housing_expense", "decimal"),
+    "MtgPlanner_CRM__Present_Monthly_Payment__c": ("present_monthly_payment", "decimal"),
+    "MtgPlanner_CRM__Proposed_Monthly_Payment_1st_TD__c": ("proposed_monthly_payment", "decimal"),
+
     # Timestamps
     "CreatedDate": ("created_at", "datetime"),
     "LastModifiedDate": ("updated_at", "datetime"),

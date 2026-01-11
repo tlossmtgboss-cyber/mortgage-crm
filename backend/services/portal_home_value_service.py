@@ -432,7 +432,7 @@ class PortalHomeValueService:
             })
 
         # Insight: PMI removal eligibility
-        portal_loan = self.db.query(PortalLoan).filter(PortalLoan.loan_id == loan_id).first()
+        portal_loan = self.db.query(PortalLoan).filter(or_(PortalLoan.id == loan_id, PortalLoan.crm_deal_id == loan_id)).first()
         if portal_loan and portal_loan.current_loan_balance:
             equity = self.calculate_equity(loan_id, portal_loan.current_loan_balance)
             if equity.get("can_remove_pmi") and portal_loan.has_pmi:
@@ -553,7 +553,7 @@ class PortalHomeValueService:
         history = self.get_valuation_history(loan_id, limit=6)
 
         # Get equity if loan balance available
-        portal_loan = self.db.query(PortalLoan).filter(PortalLoan.loan_id == loan_id).first()
+        portal_loan = self.db.query(PortalLoan).filter(or_(PortalLoan.id == loan_id, PortalLoan.crm_deal_id == loan_id)).first()
         equity_data = None
         if portal_loan and portal_loan.current_loan_balance:
             equity_data = self.calculate_equity(loan_id, portal_loan.current_loan_balance)

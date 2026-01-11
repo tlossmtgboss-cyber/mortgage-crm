@@ -23,7 +23,26 @@ function Login() {
     try {
       const data = await authAPI.login(email, password);
       console.log('Login successful:', data);
+      console.log('Token received:', data.access_token ? 'Yes (length: ' + data.access_token.length + ')' : 'NO TOKEN!');
+      console.log('User received:', data.user);
+
+      // Validate token exists before saving
+      if (!data.access_token) {
+        console.error('Login response missing access_token!', data);
+        setError('Login failed: No token received from server');
+        return;
+      }
+
       await setAuth(data.access_token, data.user);
+
+      // Verify token was saved
+      const savedToken = localStorage.getItem('token');
+      console.log('Token saved to localStorage:', savedToken ? 'Yes' : 'NO!');
+      if (!savedToken) {
+        console.error('Token failed to save to localStorage!');
+        setError('Login failed: Could not save authentication');
+        return;
+      }
 
       // Determine role-based default route
       const permissionRole = data.user?.permission_role || 'sales';
