@@ -542,6 +542,85 @@ async def list_workflow_types():
     }
 
 
+@router.get("/debug/test-session")
+async def debug_test_session(
+    token: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    """Debug endpoint to test session creation components."""
+    import traceback
+
+    results = {"steps": []}
+
+    try:
+        # Step 1: Auth check
+        import jwt
+        SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+        ALGORITHM = "HS256"
+
+        user_id = None
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            email = payload.get("sub")
+            if email:
+                result = db.execute(text("SELECT id FROM users WHERE email = :email"), {"email": email}).fetchone()
+                if result:
+                    user_id = result[0]
+                    results["steps"].append({"step": "auth", "status": "ok", "user_id": user_id, "email": email})
+        except Exception as e:
+            results["steps"].append({"step": "auth", "status": "error", "error": str(e)})
+
+        if not user_id:
+            return {"success": False, "error": "Auth failed", "results": results}
+
+        # Step 2: Check loans for user
+        try:
+            loans = db.execute(text("""
+                SELECT id, borrower_name, loan_amount, loan_type, status
+                FROM loans
+                WHERE loan_officer_id = :user_id
+                AND status NOT IN ('funded', 'cancelled', 'denied', 'closed')
+                LIMIT 5
+            """), {"user_id": user_id}).fetchall()
+            results["steps"].append({
+                "step": "loans_query",
+                "status": "ok",
+                "count": len(loans),
+                "loans": [{"id": l[0], "name": l[1], "amount": float(l[2]) if l[2] else 0} for l in loans]
+            })
+        except Exception as e:
+            results["steps"].append({"step": "loans_query", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+
+        # Step 3: Test response generator import
+        try:
+            from services.voice_response_generator import get_response_generator
+            gen = get_response_generator()
+            results["steps"].append({"step": "response_generator", "status": "ok"})
+        except Exception as e:
+            results["steps"].append({"step": "response_generator", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+
+        # Step 4: Test slot extractor import
+        try:
+            from services.voice_slot_extractor import get_slot_extractor
+            ext = get_slot_extractor()
+            results["steps"].append({"step": "slot_extractor", "status": "ok"})
+        except Exception as e:
+            results["steps"].append({"step": "slot_extractor", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+
+        # Step 5: Test workflow service import
+        try:
+            from services.voice_workflow_service import get_workflow_service
+            svc = get_workflow_service(db)
+            results["steps"].append({"step": "workflow_service", "status": "ok"})
+        except Exception as e:
+            results["steps"].append({"step": "workflow_service", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+
+        return {"success": True, "results": results}
+
+    except Exception as e:
+        return {"success": False, "error": str(e), "traceback": traceback.format_exc(), "results": results}
+
+
 def _get_workflow_description(wt: WorkflowType) -> str:
     """Get human-readable description for workflow type."""
     descriptions = {
