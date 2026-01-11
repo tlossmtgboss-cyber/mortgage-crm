@@ -56,16 +56,35 @@ async def get_current_user_id(
     token: str = Query(...),
     db: Session = Depends(get_db),
 ) -> int:
-    """Get user ID from authentication token."""
+    """Get user ID from authentication token (supports JWT and session tokens)."""
+    import jwt
+
+    SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+    ALGORITHM = "HS256"
+
+    # First try JWT token
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email = payload.get("sub")
+        if email:
+            result = db.execute(text("""
+                SELECT id FROM users WHERE email = :email
+            """), {"email": email}).fetchone()
+            if result:
+                return result[0]
+    except jwt.PyJWTError:
+        pass  # Not a valid JWT, try session token
+
+    # Fall back to session token
     result = db.execute(text("""
         SELECT user_id FROM sessions
         WHERE token = :token AND expires_at > NOW()
     """), {"token": token}).fetchone()
 
-    if not result:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    if result:
+        return result[0]
 
-    return result[0]
+    raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 
 # =============================================================================
@@ -136,12 +155,35 @@ async def voice_workflow_websocket(
     db = next(db_gen)
 
     try:
-        result = db.execute(text("""
-            SELECT user_id FROM sessions
-            WHERE token = :token AND expires_at > NOW()
-        """), {"token": token}).fetchone()
+        import jwt
+        SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+        ALGORITHM = "HS256"
 
-        if not result:
+        user_id = None
+
+        # First try JWT token
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            email = payload.get("sub")
+            if email:
+                result = db.execute(text("""
+                    SELECT id FROM users WHERE email = :email
+                """), {"email": email}).fetchone()
+                if result:
+                    user_id = result[0]
+        except jwt.PyJWTError:
+            pass  # Not a valid JWT, try session token
+
+        # Fall back to session token
+        if not user_id:
+            result = db.execute(text("""
+                SELECT user_id FROM sessions
+                WHERE token = :token AND expires_at > NOW()
+            """), {"token": token}).fetchone()
+            if result:
+                user_id = result[0]
+
+        if not user_id:
             await websocket.send_json({
                 "type": WebSocketMessageType.ERROR.value,
                 "error": "Invalid or expired token"
@@ -149,7 +191,6 @@ async def voice_workflow_websocket(
             await websocket.close()
             return
 
-        user_id = result[0]
         workflow_service = get_workflow_service(db)
 
         # Check for existing active session
