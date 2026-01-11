@@ -561,7 +561,10 @@ async def voice_stream_websocket(websocket: WebSocket):
         "caller_number": None,
         "conversation_history": [],
         "lead_data": {},
-        "intent": None
+        "intent": None,
+        "session_ready": False,  # OpenAI session configured
+        "twilio_ready": False,   # Twilio stream started
+        "greeting_sent": False   # Greeting already triggered
     }
 
     openai_ws = None
@@ -579,6 +582,23 @@ async def voice_stream_websocket(websocket: WebSocket):
             await websocket.close(code=1011, reason=f"AI service error: {str(e)[:50]}")
             return
 
+        # Helper to trigger greeting only when BOTH conditions are met
+        async def maybe_trigger_greeting():
+            """Trigger AI greeting only when OpenAI session is ready AND Twilio stream has started"""
+            if call_context['session_ready'] and call_context['twilio_ready'] and not call_context['greeting_sent']:
+                call_context['greeting_sent'] = True
+                logger.info("🎤 Both OpenAI session and Twilio ready - triggering AI greeting")
+                try:
+                    await openai_ws.send(json.dumps({
+                        "type": "response.create",
+                        "response": {
+                            "modalities": ["text", "audio"]
+                        }
+                    }))
+                    logger.info("✅ Greeting trigger sent to OpenAI successfully")
+                except Exception as greet_err:
+                    logger.error(f"❌ Failed to send greeting trigger: {greet_err}")
+
         # Handle bidirectional streaming
         async def twilio_to_openai():
             """Forward audio from Twilio to OpenAI"""
@@ -592,18 +612,10 @@ async def voice_stream_websocket(websocket: WebSocket):
                         call_context['caller_number'] = data['start'].get('customParameters', {}).get('From')
                         logger.info(f"📞 Call started: {call_context['call_sid']}, stream: {call_context['stream_sid']}")
 
-                        # NOW trigger the AI greeting - Twilio is ready to receive audio
-                        logger.info("🎤 Triggering AI greeting now that Twilio stream is ready")
-                        try:
-                            await openai_ws.send(json.dumps({
-                                "type": "response.create",
-                                "response": {
-                                    "modalities": ["text", "audio"]
-                                }
-                            }))
-                            logger.info("✅ Greeting trigger sent to OpenAI successfully")
-                        except Exception as greet_err:
-                            logger.error(f"❌ Failed to send greeting trigger: {greet_err}")
+                        # Mark Twilio as ready, try to trigger greeting
+                        call_context['twilio_ready'] = True
+                        logger.info(f"📱 Twilio ready. Session ready: {call_context['session_ready']}")
+                        await maybe_trigger_greeting()
 
                     elif data['event'] == 'media':
                         # Forward audio payload to OpenAI
@@ -631,6 +643,12 @@ async def voice_stream_websocket(websocket: WebSocket):
                     # Log all events for debugging
                     if event_type not in ['response.audio.delta', 'input_audio_buffer.speech_started', 'input_audio_buffer.speech_stopped']:
                         logger.info(f"🎙️ OpenAI event: {event_type}")
+
+                    # Handle session.updated - OpenAI is now configured
+                    if event_type == 'session.updated':
+                        call_context['session_ready'] = True
+                        logger.info(f"🔧 OpenAI session configured. Twilio ready: {call_context['twilio_ready']}")
+                        await maybe_trigger_greeting()
 
                     if event_type == 'response.audio.delta':
                         # Forward AI audio to Twilio
