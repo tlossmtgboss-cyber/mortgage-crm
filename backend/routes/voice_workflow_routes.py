@@ -150,9 +150,21 @@ async def voice_workflow_websocket(
     """
     await websocket.accept()
 
-    # Validate token and get user
-    db_gen = get_db()
-    db = next(db_gen)
+    # Get database session - need to handle generator properly
+    db = None
+    db_gen = None
+
+    try:
+        db_gen = get_db()
+        db = next(db_gen)
+    except Exception as db_err:
+        logger.error(f"Failed to get database session: {db_err}")
+        await websocket.send_json({
+            "type": WebSocketMessageType.ERROR.value,
+            "error": "Database connection failed"
+        })
+        await websocket.close()
+        return
 
     try:
         import jwt
@@ -380,19 +392,25 @@ async def voice_workflow_websocket(
                     "error": "Invalid JSON message"
                 })
             except Exception as e:
-                logger.error(f"WebSocket error: {e}")
-                await websocket.send_json({
-                    "type": WebSocketMessageType.ERROR.value,
-                    "error": str(e)
-                })
+                import traceback
+                logger.error(f"WebSocket message error: {e}\n{traceback.format_exc()}")
+                try:
+                    await websocket.send_json({
+                        "type": WebSocketMessageType.ERROR.value,
+                        "error": str(e)
+                    })
+                except Exception:
+                    pass  # Connection might be closed
 
     except Exception as e:
-        logger.error(f"WebSocket connection error: {e}")
+        import traceback
+        logger.error(f"WebSocket connection error: {e}\n{traceback.format_exc()}")
     finally:
-        try:
-            next(db_gen)
-        except StopIteration:
-            pass
+        if db_gen:
+            try:
+                next(db_gen)
+            except StopIteration:
+                pass
 
 
 # =============================================================================
