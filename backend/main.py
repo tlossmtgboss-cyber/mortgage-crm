@@ -35,7 +35,7 @@ from sqlalchemy.orm import sessionmaker, Session, relationship, selectinload, jo
 from pydantic import BaseModel, EmailStr
 from passlib.context import CryptContext
 from jose import JWTError, jwt
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, date, timedelta, timezone
 from typing import List, Optional, Dict, Any
 import uvicorn
 import os
@@ -69718,3 +69718,4 @@ if __name__ == "__main__":
 # Forced rebuild v3
 # force redeploy Sun Dec 21 10:53:37 EST 2025
 
+# Force redeploy Sun Jan 11 04:22:56 EST 2026
