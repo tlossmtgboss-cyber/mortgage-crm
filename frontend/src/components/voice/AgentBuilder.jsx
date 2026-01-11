@@ -180,7 +180,7 @@ Guidelines:
     if (!acc[tool.category]) acc[tool.category] = [];
     acc[tool.category].push(tool);
     return acc;
-  }, {} as Record<string, ToolOption[]>);
+  }, {});
 
   return (
     <div className="agent-builder">
