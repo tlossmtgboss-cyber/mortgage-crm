@@ -13,7 +13,7 @@ class IntegrationProfile(Base):
     __tablename__ = "integration_profiles"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    user_id = Column(Integer, nullable=False)  # FK to users.id exists in DB
     provider = Column(String(50), nullable=False, default='salesforce')
     status = Column(String(50), nullable=False, default='disconnected')
     # Status values: disconnected, connected, mapping_required, active, error, suspended
@@ -52,6 +52,7 @@ class IntegrationProfile(Base):
 
     __table_args__ = (
         UniqueConstraint('user_id', 'provider', name='uq_user_provider'),
+        {'extend_existing': True}
     )
 
 
@@ -81,6 +82,7 @@ class SfUserSchema(Base):
 
     __table_args__ = (
         UniqueConstraint('integration_profile_id', 'object_name', name='uq_profile_object'),
+        {'extend_existing': True}
     )
 
 
@@ -125,6 +127,7 @@ class FieldMapping(Base):
 
     __table_args__ = (
         UniqueConstraint('integration_profile_id', 'source_object', 'source_field', name='uq_profile_source'),
+        {'extend_existing': True}
     )
 
 
@@ -166,6 +169,8 @@ class IntegrationEvent(Base):
     # Relationship
     profile = relationship("IntegrationProfile", back_populates="events")
 
+    __table_args__ = {'extend_existing': True}
+
 
 class SyncQueueItem(Base):
     """Queue for managing async sync operations"""
@@ -203,14 +208,17 @@ class SyncQueueItem(Base):
     # Relationship
     profile = relationship("IntegrationProfile", back_populates="sync_queue_items")
 
+    __table_args__ = {'extend_existing': True}
+
 
 class OAuthState(Base):
     """Temporary storage for OAuth CSRF protection"""
     __tablename__ = "oauth_states"
+    __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
     state_token = Column(String(255), unique=True, nullable=False, index=True)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    user_id = Column(Integer, nullable=False)  # FK to users.id exists in DB
     provider = Column(String(50), nullable=False)
 
     # Security
@@ -252,4 +260,5 @@ class IntegrationRecordTracking(Base):
 
     __table_args__ = (
         UniqueConstraint('integration_profile_id', 'source_object', 'source_record_id', name='uq_profile_source_record'),
+        {'extend_existing': True}
     )

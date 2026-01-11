@@ -738,7 +738,7 @@ async def connect_to_openai_realtime():
 
     logger.info(f"Connecting to OpenAI Realtime API (key: {openai_api_key[:10]}...)")
 
-    url = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01"
+    url = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17"
 
     headers = {
         "Authorization": f"Bearer {openai_api_key}",
