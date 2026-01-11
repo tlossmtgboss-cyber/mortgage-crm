@@ -121,6 +121,7 @@ const ApplyVerify = lazy(() => import('./pages/ApplyVerify'));
 const BorrowerOAuthCallback = lazy(() => import('./pages/BorrowerOAuthCallback'));
 const ApplicationAnalytics = lazy(() => import('./pages/ApplicationAnalytics'));
 const BorrowerPortal = lazy(() => import('./pages/BorrowerPortal'));
+const PortalTest = lazy(() => import('./pages/PortalTest'));
 const ThemeRenderer = lazy(() => import('./pages/microsites/ThemeRenderer'));
 const ThemePreview = lazy(() => import('./pages/microsites/ThemePreview'));
 const MicrositePreview = lazy(() => import('./pages/microsites/MicrositePreview'));
@@ -377,6 +378,9 @@ function App() {
 
           {/* Public Booking Page */}
           <Route path="/book/:slug" element={<LazyPage><PublicBooking /></LazyPage>} />
+
+          {/* Portal Components Test Page */}
+          <Route path="/portal-test" element={<LazyPage><PortalTest /></LazyPage>} />
 
           {/* Loan Officer Microsite (public) - Uses ThemeRenderer for dynamic themes */}
           <Route path="/lo/:slug" element={<LazyPage><ThemeRenderer /></LazyPage>} />

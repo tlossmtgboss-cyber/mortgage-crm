@@ -989,7 +989,9 @@ class MultiLoanPortalService:
         mode_filter: Optional[PortalMode] = None,
         include_paid_off: bool = False
     ) -> List[dict]:
-        """Get all loans for a borrower with optional filtering"""
+        """Get all loans for a borrower with optional filtering.
+        Note: borrower_profile_id is used for session tracking, loans are fetched by workspace_id.
+        """
         query = """
             SELECT
                 pl.id, pl.loan_number, pl.status,
@@ -1000,14 +1002,10 @@ class MultiLoanPortalService:
                 pl.paid_off_date, pl.paid_off_reason, pl.refinanced_from_loan_id,
                 pl.created_at, pl.updated_at
             FROM purl_loans pl
-            JOIN purl_workspaces pw ON pw.id = pl.workspace_id
-            JOIN purl_applications pa ON pa.workspace_id = pw.id
-            WHERE pa.borrower_profile_id = :borrower_profile_id
-            AND pl.workspace_id = :workspace_id
+            WHERE pl.workspace_id = :workspace_id
             AND pl.status NOT IN ('denied', 'cancelled', 'withdrawn')
         """
         params = {
-            "borrower_profile_id": borrower_profile_id,
             "workspace_id": workspace_id
         }
 
