@@ -154,6 +154,14 @@ export const NAVIGATION_ITEMS = {
     label: 'Deal Alerts',
     matchPaths: ['/deal-alerts'],
     module: 'advanced_analytics'  // Premium: Advanced Analytics module
+  },
+  // Admin-only navigation items
+  adminPanel: {
+    path: '/admin',
+    label: 'Admin Panel',
+    matchPaths: ['/admin'],
+    module: 'base',
+    adminOnly: true  // Flag for admin-only items
   }
 };
 
@@ -162,8 +170,9 @@ export const NAVIGATION_ITEMS = {
 // =============================================================================
 
 export const ROLE_NAVIGATION = {
-  // Admin - Full access to everything
+  // Admin - Full access to everything, Admin Panel first
   admin: [
+    'adminPanel',           // Admin Panel link - admin only
     'dashboard',
     'leads',
     'activeLoans',
