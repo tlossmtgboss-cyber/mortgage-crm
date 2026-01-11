@@ -1,55 +1,26 @@
 // Voice OS Live Calls Monitor - Real-time call monitoring dashboard
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 
-interface LiveCall {
-  id: string;
-  callSid: string;
-  agentId: string;
-  agentName: string;
-  direction: 'inbound' | 'outbound';
-  fromNumber: string;
-  toNumber: string;
-  status: 'ringing' | 'in_progress' | 'on_hold' | 'transferring';
-  startTime: string;
-  durationSeconds: number;
-  contactName?: string;
-  contactId?: string;
-  emotionState: 'neutral' | 'happy' | 'frustrated' | 'confused' | 'urgent';
-  lastTranscript?: string;
-  sentiment?: 'positive' | 'neutral' | 'negative';
-  actionsCount: number;
-}
 
-interface CallMetrics {
-  totalActiveCalls: number;
-  avgDuration: number;
-  avgWaitTime: number;
-  escalationRate: number;
-}
 
-interface LiveCallsMonitorProps {
-  agentId?: string;
-  onCallSelect?: (call: LiveCall) => void;
-  refreshInterval?: number;
-}
 
-const LiveCallsMonitor: React.FC<LiveCallsMonitorProps> = ({
+const LiveCallsMonitor = ({
   agentId,
   onCallSelect,
   refreshInterval = 2000
 }) => {
-  const [calls, setCalls] = useState<LiveCall[]>([]);
-  const [metrics, setMetrics] = useState<CallMetrics>({
+  const [calls, setCalls] = useState([]);
+  const [metrics, setMetrics] = useState({
     totalActiveCalls: 0,
     avgDuration: 0,
     avgWaitTime: 0,
     escalationRate: 0
   });
-  const [selectedCall, setSelectedCall] = useState<LiveCall | null>(null);
+  const [selectedCall, setSelectedCall] = useState(null);
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const wsRef = useRef(null);
+  const intervalRef = useRef(null);
 
   const API_BASE_URL = typeof window !== 'undefined' &&
     (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')

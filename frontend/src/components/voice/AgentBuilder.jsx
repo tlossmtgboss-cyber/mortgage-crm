@@ -1,51 +1,18 @@
 // Voice OS Agent Builder - Agent creation and editing wizard
 import React, { useState, useEffect } from 'react';
 
-interface AgentConfig {
-  name: string;
-  description: string;
-  voice_id: string;
-  voice_stability: number;
-  voice_similarity: number;
-  voice_style: number;
-  system_prompt: string;
-  temperature: number;
-  max_tokens: number;
-  interrupt_enabled: boolean;
-  filler_words_enabled: boolean;
-  backchanneling_enabled: boolean;
-  emotion_detection_enabled: boolean;
-  tools_allowed: string[];
-}
 
-interface VoiceOption {
-  id: string;
-  name: string;
-  description: string;
-  personality: string;
-}
 
-interface ToolOption {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-}
 
-interface AgentBuilderProps {
-  existingAgent?: Partial<AgentConfig>;
-  onSave?: (config: AgentConfig) => void;
-  onCancel?: () => void;
-}
 
-const AgentBuilder: React.FC<AgentBuilderProps> = ({
+const AgentBuilder = ({
   existingAgent,
   onSave,
   onCancel
 }) => {
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
-  const [config, setConfig] = useState<AgentConfig>({
+  const [config, setConfig] = useState({
     name: '',
     description: '',
     voice_id: 'alloy',

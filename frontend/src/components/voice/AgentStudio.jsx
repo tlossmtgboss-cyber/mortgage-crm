@@ -1,41 +1,13 @@
 // Voice OS Agent Studio - Main agent management dashboard
 import React, { useState, useEffect, useCallback } from 'react';
 
-interface Agent {
-  id: string;
-  name: string;
-  description: string;
-  status: 'active' | 'inactive';
-  voice_id: string;
-  voice_stability: number;
-  voice_similarity: number;
-  voice_style: number;
-  system_prompt: string;
-  temperature: number;
-  max_tokens: number;
-  interrupt_enabled: boolean;
-  filler_words_enabled: boolean;
-  backchanneling_enabled: boolean;
-  emotion_detection_enabled: boolean;
-  tools_allowed: string[];
-  total_calls: number;
-  successful_calls: number;
-  avg_duration_seconds: number;
-  avg_satisfaction: number | null;
-  created_at: string;
-  updated_at: string;
-}
 
-interface AgentStudioProps {
-  onAgentSelect?: (agent: Agent) => void;
-  onEditAgent?: (agent: Agent) => void;
-}
 
-const AgentStudio: React.FC<AgentStudioProps> = ({ onAgentSelect, onEditAgent }) => {
-  const [agents, setAgents] = useState<Agent[]>([]);
+const AgentStudio = ({ onAgentSelect, onEditAgent }) => {
+  const [agents, setAgents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
+  const [error, setError] = useState(null);
+  const [selectedAgent, setSelectedAgent] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   const API_BASE_URL = typeof window !== 'undefined' &&
@@ -62,7 +34,7 @@ const AgentStudio: React.FC<AgentStudioProps> = ({ onAgentSelect, onEditAgent })
       const data = await response.json();
       setAgents(data.agents || data || []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load agents');
+      setError(err?.message || 'Failed to load agents');
       // Set default agents for demo
       setAgents([
         {

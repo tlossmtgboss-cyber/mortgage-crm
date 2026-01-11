@@ -155,6 +155,18 @@ export const NAVIGATION_ITEMS = {
     matchPaths: ['/deal-alerts'],
     module: 'advanced_analytics'  // Premium: Advanced Analytics module
   },
+  voiceAgents: {
+    path: '/voice/agents',
+    label: 'Voice Agents',
+    matchPaths: ['/voice/agents', '/voice/agents/new'],
+    module: 'voice_os'  // Premium: Voice OS module
+  },
+  voiceLive: {
+    path: '/voice/live',
+    label: 'Live Calls',
+    matchPaths: ['/voice/live'],
+    module: 'voice_os'  // Premium: Voice OS module
+  },
   // Admin-only navigation items
   adminPanel: {
     path: '/admin',
@@ -191,6 +203,8 @@ export const ROLE_NAVIGATION = {
     'partnerRecruiting',
     'conversationIntelligence',
     'liveCallWhisper',
+    'voiceAgents',
+    'voiceLive',
     'productionPredictor',
     'dealAlerts'
   ],
