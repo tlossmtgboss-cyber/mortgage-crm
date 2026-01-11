@@ -657,9 +657,11 @@ async def connect_to_openai_realtime():
     """Connect to OpenAI Realtime API WebSocket"""
     import websockets
 
-    openai_api_key = openai.api_key
+    openai_api_key = os.getenv("OPENAI_API_KEY") or openai.api_key
     if not openai_api_key:
         raise Exception("OpenAI API key not configured")
+
+    logger.info(f"Connecting to OpenAI Realtime API (key: {openai_api_key[:10]}...)")
 
     url = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01"
 
