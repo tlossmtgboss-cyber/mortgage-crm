@@ -874,135 +874,92 @@ const AdminPanel = () => {
               )}
             </section>
 
-            {/* Account Management */}
-            <section className="account-management-section">
+            {/* Account Management - Clickable Card */}
+            <section
+              className="account-management-section clickable-card"
+              onClick={() => navigate('/settings/account-management')}
+              style={{ cursor: 'pointer' }}
+            >
               <div className="section-header">
                 <h2>Account Management</h2>
-                <button onClick={() => navigate('/settings/account-management?action=invite')} className="btn-primary btn-sm">
-                  + Invite Subscriber
-                </button>
+                <span className="card-arrow">→</span>
               </div>
               <p className="section-subtitle">Manage all business accounts, users, subscriptions, and costs.</p>
 
               {accountKpisLoading ? (
                 <div className="loading-placeholder">Loading account data...</div>
               ) : (
-                <>
-                  <div className="account-metrics-grid">
-                    <div className="account-metric-card">
-                      <span className="metric-label">ACTIVE ACCOUNTS</span>
-                      <span className="metric-value">{accountKpis?.totalActiveAccounts || 0}</span>
-                      <span className="metric-sublabel">{accountKpis?.totalSuspendedAccounts || 0} suspended</span>
-                    </div>
-
-                    <div className="account-metric-card highlight-green">
-                      <span className="metric-label">TOTAL MRR</span>
-                      <span className="metric-value">${(accountKpis?.totalMRR || 0).toLocaleString()}</span>
-                      <span className="metric-sublabel">${(accountKpis?.totalARR || 0).toLocaleString()} ARR</span>
-                      {accountKpis?.mrrGrowth > 0 && (
-                        <span className="metric-growth positive">↑ {accountKpis.mrrGrowth}% vs last month</span>
-                      )}
-                    </div>
-
-                    <div className="account-metric-card highlight-blue">
-                      <span className="metric-label">SEAT UTILIZATION</span>
-                      <span className="metric-value">
-                        {accountKpis?.totalSeatsPurchased > 0
-                          ? ((accountKpis.totalSeatsUsed / accountKpis.totalSeatsPurchased) * 100).toFixed(1)
-                          : 0}%
-                      </span>
-                      <span className="metric-sublabel">
-                        {accountKpis?.totalSeatsUsed || 0} / {accountKpis?.totalSeatsPurchased || 0}
-                      </span>
-                    </div>
-
-                    <div className="account-metric-card">
-                      <span className="metric-label">AVG COST/USER</span>
-                      <span className="metric-value">${accountKpis?.avgCostPerUser || 0}</span>
-                      <span className="metric-sublabel">per month</span>
-                    </div>
-
-                    <div className="account-metric-card highlight-yellow">
-                      <span className="metric-label">AVG MARGIN</span>
-                      <span className="metric-value">{accountKpis?.avgMarginPercent || 0}%</span>
-                      <span className="metric-sublabel">gross margin</span>
-                    </div>
-
-                    <div className="account-metric-card highlight-red">
-                      <span className="metric-label">AT RISK</span>
-                      <span className="metric-value">{accountKpis?.accountsAtRisk || 0}</span>
-                      <span className="metric-sublabel">{accountKpis?.accountsNoActivity30d || 0} inactive</span>
-                    </div>
+                <div className="account-metrics-grid">
+                  <div className="account-metric-card">
+                    <span className="metric-label">ACTIVE ACCOUNTS</span>
+                    <span className="metric-value">{accountKpis?.totalActiveAccounts || 0}</span>
+                    <span className="metric-sublabel">{accountKpis?.totalSuspendedAccounts || 0} suspended</span>
                   </div>
 
-                  <div className="account-stats-row">
-                    <span className="churn-stat">Churn Rate: <strong>{accountKpis?.churnRate || 0}%</strong></span>
-                    <span className="canceled-stat">Canceled: <strong>{accountKpis?.totalCanceledAccounts || 0}</strong></span>
+                  <div className="account-metric-card highlight-green">
+                    <span className="metric-label">TOTAL MRR</span>
+                    <span className="metric-value">${(accountKpis?.totalMRR || 0).toLocaleString()}</span>
+                    <span className="metric-sublabel">${(accountKpis?.totalARR || 0).toLocaleString()} ARR</span>
                   </div>
 
-                  {/* Subscriptions Tabs */}
-                  <div className="subscriptions-tabs">
-                    <button
-                      className={`sub-tab ${accountFilter === 'active' ? 'active' : ''}`}
-                      onClick={() => setAccountFilter('active')}
-                    >
-                      Active Subscriptions <span className="badge">{accountKpis?.totalActiveAccounts || 0}</span>
-                    </button>
-                    <button
-                      className={`sub-tab ${accountFilter === 'suspended' ? 'active' : ''}`}
-                      onClick={() => setAccountFilter('suspended')}
-                    >
-                      Suspended Subscriptions <span className="badge">{accountKpis?.totalSuspendedAccounts || 0}</span>
-                    </button>
-                    <button
-                      className={`sub-tab ${accountFilter === 'canceled' ? 'active' : ''}`}
-                      onClick={() => setAccountFilter('canceled')}
-                    >
-                      Canceled Subscriptions <span className="badge">{accountKpis?.totalCanceledAccounts || 0}</span>
-                    </button>
+                  <div className="account-metric-card highlight-blue">
+                    <span className="metric-label">SEAT UTILIZATION</span>
+                    <span className="metric-value">
+                      {accountKpis?.totalSeatsPurchased > 0
+                        ? ((accountKpis.totalSeatsUsed / accountKpis.totalSeatsPurchased) * 100).toFixed(1)
+                        : 0}%
+                    </span>
+                    <span className="metric-sublabel">
+                      {accountKpis?.totalSeatsUsed || 0} / {accountKpis?.totalSeatsPurchased || 0}
+                    </span>
                   </div>
 
-                  {/* Accounts List */}
-                  {accountsLoading ? (
-                    <div className="loading-placeholder">Loading accounts...</div>
-                  ) : accounts.length > 0 ? (
-                    <div className="accounts-table-container">
-                      <table className="accounts-table">
-                        <thead>
-                          <tr>
-                            <th>Account</th>
-                            <th>Plan</th>
-                            <th>Seats</th>
-                            <th>MRR</th>
-                            <th>Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {accounts.slice(0, 5).map(account => (
-                            <tr key={account.id} onClick={() => navigate(`/settings/account-management?account=${account.id}`)}>
-                              <td>
-                                <div className="account-name">{account.company_name || account.name}</div>
-                                <div className="account-domain">{account.domain}</div>
-                              </td>
-                              <td><span className="plan-badge">{account.plan || 'Professional'}</span></td>
-                              <td>{account.seats_used || 0} / {account.seats_purchased || 0}</td>
-                              <td>${(account.mrr || 0).toLocaleString()}</td>
-                              <td><span className={`status-badge ${account.status}`}>{account.status}</span></td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      {accounts.length > 5 && (
-                        <button className="btn-link view-all" onClick={() => navigate('/settings/account-management')}>
-                          View all {accounts.length} accounts →
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="empty-state">No {accountFilter} accounts found</div>
-                  )}
-                </>
+                  <div className="account-metric-card highlight-red">
+                    <span className="metric-label">AT RISK</span>
+                    <span className="metric-value">{accountKpis?.accountsAtRisk || 0}</span>
+                    <span className="metric-sublabel">{accountKpis?.accountsNoActivity30d || 0} inactive</span>
+                  </div>
+                </div>
               )}
+            </section>
+
+            {/* Financial Management - Clickable Card */}
+            <section
+              className="financial-management-section clickable-card"
+              onClick={() => navigate('/settings/financial')}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="section-header">
+                <h2>Financial Management</h2>
+                <span className="card-arrow">→</span>
+              </div>
+              <p className="section-subtitle">Revenue, expenses, invoicing, and financial reporting.</p>
+
+              <div className="account-metrics-grid">
+                <div className="account-metric-card highlight-green">
+                  <span className="metric-label">REVENUE (MTD)</span>
+                  <span className="metric-value">${(accountKpis?.totalMRR || 0).toLocaleString()}</span>
+                  <span className="metric-sublabel">Monthly recurring</span>
+                </div>
+
+                <div className="account-metric-card highlight-yellow">
+                  <span className="metric-label">GROSS MARGIN</span>
+                  <span className="metric-value">{accountKpis?.avgMarginPercent || 0}%</span>
+                  <span className="metric-sublabel">Avg across accounts</span>
+                </div>
+
+                <div className="account-metric-card">
+                  <span className="metric-label">AVG COST/USER</span>
+                  <span className="metric-value">${accountKpis?.avgCostPerUser || 0}</span>
+                  <span className="metric-sublabel">per month</span>
+                </div>
+
+                <div className="account-metric-card highlight-blue">
+                  <span className="metric-label">PROJECTED ARR</span>
+                  <span className="metric-value">${(accountKpis?.totalARR || 0).toLocaleString()}</span>
+                  <span className="metric-sublabel">Annual recurring</span>
+                </div>
+              </div>
             </section>
 
           </>

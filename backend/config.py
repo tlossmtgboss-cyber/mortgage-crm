@@ -152,6 +152,30 @@ class Settings(BaseSettings):
     )
 
     # =========================================================================
+    # SALESFORCE INTEGRATION
+    # =========================================================================
+    SALESFORCE_CLIENT_ID: str = Field(
+        default="",
+        description="Salesforce Connected App Consumer Key"
+    )
+    SALESFORCE_CLIENT_SECRET: str = Field(
+        default="",
+        description="Salesforce Connected App Consumer Secret"
+    )
+    SALESFORCE_REDIRECT_URI: Optional[str] = Field(
+        default=None,
+        description="Salesforce OAuth callback URI (defaults to BASE_URL/api/integrations/salesforce/callback)"
+    )
+    SALESFORCE_SANDBOX: bool = Field(
+        default=False,
+        description="Use Salesforce sandbox environment"
+    )
+    SALESFORCE_API_VERSION: str = Field(
+        default="v60.0",
+        description="Salesforce API version"
+    )
+
+    # =========================================================================
     # MONITORING
     # =========================================================================
     SENTRY_DSN: Optional[str] = Field(

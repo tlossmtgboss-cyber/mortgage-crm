@@ -11,6 +11,7 @@ Multi-tier call screening for spam filtering:
 
 import os
 import re
+import json
 import logging
 from enum import Enum
 from dataclasses import dataclass, field
@@ -303,7 +304,7 @@ class CallScreeningService:
                 "country_code": result.get("country_code"),
                 "spam_score": result.get("spam_score"),
                 "risk_level": result.get("risk_level"),
-                "lookup_data": str(result),  # JSON string
+                "lookup_data": json.dumps(result),  # JSON string
                 "expires_at": expires_at
             })
             self.db.commit()
@@ -346,7 +347,7 @@ class CallScreeningService:
                 "decision": result.decision.value,
                 "reason": result.reason,
                 "lookup_performed": result.lookup_performed,
-                "lookup_result": str(result.extra_data) if result.extra_data else None,
+                "lookup_result": json.dumps(result.extra_data) if result.extra_data else None,
                 "lookup_cost": result.lookup_cost_cents,
                 "duration_ms": duration_ms,
                 "connected": result.decision == ScreeningDecision.ALLOW

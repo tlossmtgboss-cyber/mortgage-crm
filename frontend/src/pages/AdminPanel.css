@@ -2656,3 +2656,115 @@
   font-size: 12px;
   color: #6b7280;
 }
+
+/* Clickable Card Styles */
+.clickable-card {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.clickable-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.clickable-card .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.card-arrow {
+  font-size: 24px;
+  color: #9ca3af;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.clickable-card:hover .card-arrow {
+  transform: translateX(4px);
+  color: #0d9488;
+}
+
+/* Financial Management Section */
+.financial-management-section {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.financial-management-section .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.financial-management-section h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.financial-management-section .section-subtitle {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0 0 20px 0;
+}
+
+.financial-management-section .financial-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.financial-management-section .financial-metric-card {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.financial-management-section .financial-metric-card.highlight-green {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+
+.financial-management-section .financial-metric-card.highlight-blue {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.financial-metric-card .metric-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
+.financial-metric-card .metric-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.financial-metric-card .metric-value.green {
+  color: #059669;
+}
+
+.financial-metric-card .metric-value.blue {
+  color: #2563eb;
+}
+
+/* Responsive adjustments for clickable cards */
+@media (max-width: 768px) {
+  .financial-management-section .financial-metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

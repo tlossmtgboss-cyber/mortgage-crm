@@ -20361,6 +20361,23 @@ app.include_router(ai_insights_router, tags=["AI Profitability Insights"])
 from financial_intelligence_routes import router as financial_intelligence_router
 app.include_router(financial_intelligence_router, tags=["Financial Intelligence"])
 
+# Include Accounting System routes (Full Double-Entry Accounting)
+try:
+    from routes.accounting import (
+        chart_of_accounts_router, journal_entry_router, period_router,
+        ar_router, ap_router, reports_router, bank_router
+    )
+    app.include_router(chart_of_accounts_router, tags=["Chart of Accounts"])
+    app.include_router(journal_entry_router, tags=["Journal Entries"])
+    app.include_router(period_router, tags=["Accounting Periods"])
+    app.include_router(ar_router, tags=["Accounts Receivable"])
+    app.include_router(ap_router, tags=["Accounts Payable"])
+    app.include_router(reports_router, tags=["Financial Reports"])
+    app.include_router(bank_router, tags=["Banking & Plaid"])
+    logger.info("✅ Accounting System routes loaded (CoA, JE, Periods, AR, AP, Reports, Banking)")
+except Exception as e:
+    logger.warning(f"Could not load Accounting System routes: {e}")
+
 # Include Business Operations Dashboard routes
 from routes.business_operations_routes import router as business_ops_router
 app.include_router(business_ops_router, tags=["Business Operations"])
@@ -20727,6 +20744,14 @@ try:
     logger.info("✅ Salesforce routes loaded")
 except Exception as e:
     logger.warning(f"⚠️ Salesforce routes not loaded: {e}")
+
+# Salesforce Per-User Integration routes (OAuth, Schema Discovery, Field Mapping, Sync)
+try:
+    from routes.salesforce_integration_routes import router as salesforce_integration_router
+    app.include_router(salesforce_integration_router, tags=["Salesforce User Integration"])
+    logger.info("✅ Salesforce user integration routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Salesforce user integration routes not loaded: {e}")
 
 # HubSpot Integration routes (OAuth, CRM Sync)
 try:

@@ -207,12 +207,19 @@ def get_recent_activity(
     db: Session = Depends(get_db),
 ):
     """Get recent activity for loan heartbeat display."""
-    service = PortalLifecycleService(db)
-    return service.get_recent_activity(
-        loan_id=loan_id,
-        limit=limit,
-        borrower_visible_only=borrower_visible_only,
-    )
+    try:
+        service = PortalLifecycleService(db)
+        result = service.get_recent_activity(
+            loan_id=loan_id,
+            limit=limit,
+            borrower_visible_only=borrower_visible_only,
+        )
+        return result
+    except Exception as e:
+        import traceback
+        logger.error(f"Activity endpoint error: {e}")
+        logger.error(traceback.format_exc())
+        raise
 
 
 # =============================================================================

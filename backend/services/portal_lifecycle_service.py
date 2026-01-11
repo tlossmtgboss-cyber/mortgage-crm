@@ -304,12 +304,17 @@ class PortalLifecycleService:
         borrower_visible_only: bool = False,
     ) -> List[Dict[str, Any]]:
         """Get recent activity for loan heartbeat display."""
+        # Get the portal loan to get the correct loan_id for activity log
+        portal_loan = self.get_portal_loan(loan_id)
+        if not portal_loan:
+            return []
+
         query = self.db.query(LoanActivityLog).filter(
-            LoanActivityLog.loan_id == loan_id
+            LoanActivityLog.loan_id == portal_loan.id
         )
 
         if borrower_visible_only:
-            query = query.filter(LoanActivityLog.is_visible_to_borrower == True)
+            query = query.filter(LoanActivityLog.visible_to_borrower == True)
 
         activities = query.order_by(
             LoanActivityLog.created_at.desc()
@@ -319,10 +324,10 @@ class PortalLifecycleService:
             {
                 "id": a.id,
                 "activity_type": a.activity_type,
-                "description": a.description,
-                "metadata": a.metadata,
-                "actor": a.actor,
-                "created_at": a.created_at.isoformat(),
+                "description": a.activity_description or a.activity_title,
+                "metadata": a.extra_data,
+                "actor": f"User {a.actor_id}" if a.actor_id else (a.actor_role.value if a.actor_role else None),
+                "created_at": a.created_at.isoformat() if a.created_at else None,
             }
             for a in activities
         ]
