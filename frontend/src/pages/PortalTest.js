@@ -4,8 +4,8 @@
  */
 import React from 'react';
 import { PortalProvider, usePortal, PORTAL_MODES } from '../contexts/PortalContext';
-import { LoanSelector, PortalModeIndicator } from '../components/Portal';
-import { ModeBadge } from '../components/Portal/PortalModeIndicator';
+import { LoanSelector, PortalModeIndicator } from '../components/portal';
+import { ModeBadge } from '../components/portal/PortalModeIndicator';
 
 // Inner component that uses portal context
 function PortalTestContent() {

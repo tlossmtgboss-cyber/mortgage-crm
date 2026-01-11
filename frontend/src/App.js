@@ -173,10 +173,10 @@ const ProductionPredictorDetail = lazy(() => import('./pages/ProductionPredictor
 const DealAlerts = lazy(() => import('./pages/DealAlerts'));
 
 // Portal Components - Real-time borrower and partner portals
-const ActiveLoanPortalComplete = lazy(() => import('./components/portal/ActiveLoanPortalComplete'));
-const PartnerPortalView = lazy(() => import('./components/portal/PartnerPortalView'));
-const PerenniaClientPortalUltimate = lazy(() => import('./components/portal/PerenniaClientPortalUltimate'));
-const TotalCostAnalysis = lazy(() => import('./components/portal/TotalCostAnalysis'));
+const ActiveLoanPortalComplete = lazy(() => import('./components/Portal/ActiveLoanPortalComplete'));
+const PartnerPortalView = lazy(() => import('./components/Portal/PartnerPortalView'));
+const PerenniaClientPortalUltimate = lazy(() => import('./components/Portal/PerenniaClientPortalUltimate'));
+const TotalCostAnalysis = lazy(() => import('./components/Portal/TotalCostAnalysis'));
 
 // Create a client with optimized defaults for instant navigation
 const queryClient = new QueryClient({
