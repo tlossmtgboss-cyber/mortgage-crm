@@ -91,6 +91,7 @@ const MarketDashboard = lazy(() => import('./pages/MarketDashboard'));
 const MorningCheckin = lazy(() => import('./pages/MorningCheckin'));
 const PartnerROIDashboard = lazy(() => import('./pages/PartnerROIDashboard'));
 const ProfitabilityDashboard = lazy(() => import('./pages/ProfitabilityDashboard'));
+const UsageIntelligenceDashboard = lazy(() => import('./pages/UsageIntelligenceDashboard'));
 const ScenarioModeling = lazy(() => import('./pages/ScenarioModeling'));
 const DecisionLab = lazy(() => import('./pages/DecisionLab'));
 const MortgageCalculator = lazy(() => import('./pages/MortgageCalculator'));
@@ -163,6 +164,7 @@ const AccountManagement = lazy(() => import('./pages/AccountManagement'));
 const PURLDashboard = lazy(() => import('./pages/PURLDashboard'));
 const PURLApplication = lazy(() => import('./pages/PURLApplication'));
 const PortalContainer = lazy(() => import('./pages/portal/PortalContainer'));
+const LoanPortalRedirect = lazy(() => import('./components/Portal/LoanPortalRedirect'));
 const AdminDocumentReviewQueue = lazy(() => import('./pages/AdminDocumentReviewQueue'));
 const IncomeCalculatorPopout = lazy(() => import('./pages/IncomeCalculatorPopout'));
 const IntakeEngine = lazy(() => import('./components/intake/IntakeEngine'));
@@ -459,6 +461,10 @@ function App() {
           <Route path="/portal/ultimate/:loanId" element={<LazyPage><PerenniaClientPortalUltimate /></LazyPage>} />
           <Route path="/portal/ultimate/token/:token" element={<LazyPage><PerenniaClientPortalUltimate /></LazyPage>} />
 
+          {/* Loan to Portal Redirect - Maps loan IDs to borrower portal access */}
+          <Route path="/portal/redirect/:loanId" element={<LazyPage><LoanPortalRedirect /></LazyPage>} />
+          <Route path="/client-portal/:loanId" element={<LazyPage><LoanPortalRedirect /></LazyPage>} />
+
           {/* Total Cost Analysis - Mortgage Coach style comparison tool */}
           <Route path="/portal/tca/:loanId" element={<LazyPage><TotalCostAnalysis /></LazyPage>} />
           <Route path="/analysis/:token" element={<LazyPage><TotalCostAnalysis /></LazyPage>} />
@@ -689,6 +695,30 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><ProfitabilityDashboard /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+
+          {/* Usage Intelligence Dashboard - Owner cost tracking & pricing */}
+          <Route
+            path="/usage-intelligence"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><UsageIntelligenceDashboard /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>

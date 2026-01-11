@@ -1,0 +1,175 @@
+/**
+ * PortalTabs Styles
+ */
+
+.portal-tabs {
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 24px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.tabs-container {
+  display: flex;
+  gap: 4px;
+  padding: 0 16px;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.tabs-container::-webkit-scrollbar {
+  display: none;
+}
+
+/* Tab Button - Default Style */
+.portal-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 20px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  position: relative;
+}
+
+.portal-tab-btn:hover:not(.disabled) {
+  color: #1e293b;
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.portal-tab-btn.active {
+  color: #3b82f6;
+  border-bottom-color: #3b82f6;
+}
+
+.portal-tab-btn.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tab-icon {
+  font-size: 16px;
+}
+
+.tab-label {
+  font-size: 14px;
+}
+
+.tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: #ef4444;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 10px;
+}
+
+/* Compact Variant */
+.portal-tabs.compact .portal-tab-btn {
+  padding: 10px 16px;
+}
+
+.portal-tabs.compact .tab-icon {
+  font-size: 14px;
+}
+
+.portal-tabs.compact .tab-label {
+  font-size: 13px;
+}
+
+/* Pills Variant */
+.portal-tabs.pills {
+  background: #f1f5f9;
+  border-bottom: none;
+  padding: 8px;
+  border-radius: 12px;
+  margin: 0 0 24px 0;
+}
+
+.portal-tabs.pills .tabs-container {
+  padding: 0;
+  gap: 8px;
+}
+
+.portal-tabs.pills .portal-tab-btn {
+  padding: 10px 18px;
+  border-radius: 8px;
+  border-bottom: none;
+}
+
+.portal-tabs.pills .portal-tab-btn:hover:not(.disabled) {
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.portal-tabs.pills .portal-tab-btn.active {
+  background: white;
+  color: #1e293b;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Tab Panel */
+.portal-tab-panel {
+  animation: fadeIn 0.2s ease;
+}
+
+.portal-tab-panel[hidden] {
+  display: none;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .portal-tab-btn {
+    padding: 12px 14px;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .tab-icon {
+    font-size: 18px;
+  }
+
+  .tab-label {
+    font-size: 11px;
+  }
+
+  .portal-tabs.compact .portal-tab-btn {
+    padding: 10px 12px;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .portal-tabs.compact .tab-icon {
+    font-size: 16px;
+  }
+
+  .portal-tabs.compact .tab-label {
+    font-size: 10px;
+  }
+}

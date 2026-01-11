@@ -19921,6 +19921,42 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Could not load Voice Workflow routes: {e}")
 
+# Include Advanced Telephony routes (Hold Music, Transfers, IVR, Queues, Conferences)
+try:
+    from routes.hold_music_routes import router as hold_music_router
+    app.include_router(hold_music_router, tags=["Hold Music"])
+    logger.info("✅ Hold Music routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load Hold Music routes: {e}")
+
+try:
+    from routes.call_transfer_routes import router as call_transfer_router
+    app.include_router(call_transfer_router, tags=["Call Transfers"])
+    logger.info("✅ Call Transfer routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load Call Transfer routes: {e}")
+
+try:
+    from routes.ivr_routes import router as ivr_router
+    app.include_router(ivr_router, tags=["IVR"])
+    logger.info("✅ IVR routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load IVR routes: {e}")
+
+try:
+    from routes.call_queue_routes import router as call_queue_router
+    app.include_router(call_queue_router, tags=["Call Queues"])
+    logger.info("✅ Call Queue routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load Call Queue routes: {e}")
+
+try:
+    from routes.conference_routes import router as conference_router
+    app.include_router(conference_router, tags=["Conferences"])
+    logger.info("✅ Conference routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load Conference routes: {e}")
+
 # Include Deepgram Voice Agent routes (new all-in-one voice API)
 from deepgram_voice_agent import router as deepgram_voice_agent_router
 app.include_router(deepgram_voice_agent_router, tags=["Voice Agent"])
@@ -19970,6 +20006,14 @@ try:
     logger.info("Module Subscription routes loaded")
 except Exception as e:
     logger.warning(f"Could not load Module Subscription routes: {e}")
+
+# Include Usage Intelligence routes for cost tracking (Owner-only)
+try:
+    from routes.usage_intelligence_routes import router as usage_intelligence_router
+    app.include_router(usage_intelligence_router, tags=["Usage Intelligence"])
+    logger.info("✅ Usage Intelligence routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load Usage Intelligence routes: {e}")
 
 # Include Custom Domain routes for multi-tenant domain support
 try:

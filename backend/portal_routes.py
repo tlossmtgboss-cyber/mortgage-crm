@@ -1721,3 +1721,101 @@ def log_multi_loan_portal_activity(
     )
 
     return {"success": True}
+
+
+# =============================================================================
+# LOAN ID TO PORTAL LOOKUP ENDPOINT
+# =============================================================================
+
+@router.get("/by-loan/{loan_id}")
+def get_portal_by_loan_id(
+    loan_id: int = Path(..., description="Loan ID (either portal_loans.id or crm_deal_id)"),
+    db: Session = Depends(get_db),
+):
+    """Look up portal access by loan ID.
+
+    This endpoint maps a loan ID to the portal, supporting both:
+    - portal_loans.id (the portal loan ID)
+    - portal_loans.crm_deal_id (the CRM deal ID)
+
+    Returns portal access information for redirecting to the borrower portal.
+    """
+    from models.portal_models import PortalLoan
+    from services.purl_token_service import PURLTokenService
+
+    # Try to find portal loan by ID first, then by crm_deal_id
+    portal_loan = db.query(PortalLoan).filter(PortalLoan.id == loan_id).first()
+
+    if not portal_loan:
+        portal_loan = db.query(PortalLoan).filter(PortalLoan.crm_deal_id == loan_id).first()
+
+    if not portal_loan:
+        # Try looking up in purl_loans table if PortalLoan is empty
+        result = db.execute(text("""
+            SELECT id, loan_number, status, workspace_id, property_address,
+                   loan_amount, target_close_date, actual_close_date
+            FROM purl_loans
+            WHERE id = :loan_id OR crm_deal_id = :loan_id
+            LIMIT 1
+        """), {"loan_id": loan_id})
+        purl_loan = result.fetchone()
+
+        if purl_loan:
+            loan_data = dict(purl_loan._mapping)
+            workspace_id = loan_data.get("workspace_id")
+
+            # Get or create access token for this workspace
+            token_result = db.execute(text("""
+                SELECT token FROM purl_access_tokens
+                WHERE workspace_id = :workspace_id
+                AND is_active = true
+                AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+                ORDER BY created_at DESC
+                LIMIT 1
+            """), {"workspace_id": workspace_id})
+            token_row = token_result.fetchone()
+
+            access_token = token_row.token if token_row else None
+
+            return {
+                "found": True,
+                "portal_loan_id": loan_data["id"],
+                "loan_number": loan_data.get("loan_number"),
+                "status": loan_data.get("status"),
+                "access_token": access_token,
+                "redirect_url": f"/borrower-portal/{access_token}" if access_token else None,
+                "property_address": loan_data.get("property_address"),
+                "loan_amount": float(loan_data["loan_amount"]) if loan_data.get("loan_amount") else None,
+            }
+
+        raise HTTPException(status_code=404, detail="Loan not found")
+
+    # Found in portal_loans table
+    # Get workspace_id from portal_loan if available
+    workspace_id = getattr(portal_loan, 'workspace_id', None)
+
+    # Try to find an access token for this portal
+    token_result = db.execute(text("""
+        SELECT token FROM purl_access_tokens
+        WHERE loan_id = :loan_id OR workspace_id = :workspace_id
+        AND is_active = true
+        AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+        ORDER BY created_at DESC
+        LIMIT 1
+    """), {"loan_id": portal_loan.id, "workspace_id": workspace_id})
+    token_row = token_result.fetchone()
+
+    access_token = token_row.token if token_row else None
+
+    return {
+        "found": True,
+        "portal_loan_id": portal_loan.id,
+        "crm_deal_id": portal_loan.crm_deal_id,
+        "loan_number": getattr(portal_loan, 'loan_number', None),
+        "status": getattr(portal_loan, 'status', None),
+        "lifecycle_stage": portal_loan.lifecycle_stage.value if portal_loan.lifecycle_stage else None,
+        "access_token": access_token,
+        "redirect_url": f"/borrower-portal/{access_token}" if access_token else None,
+        "portal_enabled": portal_loan.portal_enabled,
+        "partner_portal_enabled": portal_loan.partner_portal_enabled,
+    }

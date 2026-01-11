@@ -86,6 +86,11 @@ class ServiceUsageRecord(Base):
     organization_id = Column(Integer, nullable=False, index=True)
     service_provider_id = Column(UUID(as_uuid=True), ForeignKey("service_providers.id", ondelete="CASCADE"), nullable=False)
 
+    # User/Team Attribution (for per-user cost tracking)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    team_id = Column(Integer, index=True)
+    request_id = Column(String(100), index=True)  # Correlation ID for AITokenUsageLog
+
     # Usage Details
     usage_date = Column(Date, nullable=False)
     usage_type = Column(String(50))  # api_call, tokens_input, tokens_output, messages, minutes, storage_gb, etc.
@@ -110,6 +115,8 @@ class ServiceUsageRecord(Base):
     __table_args__ = (
         Index("idx_usage_org_date", "organization_id", "usage_date"),
         Index("idx_usage_provider_date", "service_provider_id", "usage_date"),
+        Index("idx_usage_user", "user_id"),
+        Index("idx_usage_team", "team_id"),
         CheckConstraint("source IN ('api', 'manual', 'csv_import')", name="ck_usage_source"),
     )
 

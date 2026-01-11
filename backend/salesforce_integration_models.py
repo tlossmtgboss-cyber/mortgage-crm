@@ -214,11 +214,10 @@ class SyncQueueItem(Base):
 class OAuthState(Base):
     """Temporary storage for OAuth CSRF protection"""
     __tablename__ = "oauth_states"
-    __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
     state_token = Column(String(255), unique=True, nullable=False, index=True)
-    user_id = Column(Integer, nullable=False)  # FK to users.id exists in DB
+    user_id = Column(Integer, nullable=False)
     provider = Column(String(50), nullable=False)
 
     # Security
@@ -228,7 +227,7 @@ class OAuthState(Base):
 
     # Context
     return_url = Column(Text)
-    state_metadata = Column(JSON)  # Named to avoid conflict with SQLAlchemy's reserved 'metadata'
+    state_metadata = Column(JSON)
 
 
 class IntegrationRecordTracking(Base):

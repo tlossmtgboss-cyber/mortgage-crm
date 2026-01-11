@@ -102,6 +102,12 @@ export const NAVIGATION_ITEMS = {
     label: 'Profitability',
     module: 'advanced_analytics'  // Premium: Advanced Analytics module
   },
+  usageIntelligence: {
+    path: '/usage-intelligence',
+    label: 'Usage Intelligence',
+    module: 'base',
+    adminOnly: true  // Owner-only: Cost tracking and pricing recommendations
+  },
   capacity: {
     path: '/master-manager',
     label: 'Capacity',
@@ -258,6 +264,7 @@ export const ROLE_NAVIGATION = {
     'aiUnderwriter',
     'market',
     'profitability',
+    'usageIntelligence',    // Owner-only: Usage costs & pricing
     'accounting',           // Accounting System
     'capacity',
     'recruiting',
