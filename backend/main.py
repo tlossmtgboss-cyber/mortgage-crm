@@ -19801,6 +19801,15 @@ app.include_router(voice_router, tags=["Voice AI"])
 from mobile_voice_routes import router as mobile_voice_router
 app.include_router(mobile_voice_router, tags=["Mobile Voice"])
 
+# Include Voice Workflow routes for conversational task completion
+try:
+    from routes.voice_workflow_routes import router as voice_workflow_router, set_dependencies as set_voice_workflow_deps
+    set_voice_workflow_deps(get_db)
+    app.include_router(voice_workflow_router, tags=["Voice Workflow"])
+    logger.info("✅ Voice Workflow routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load Voice Workflow routes: {e}")
+
 # Include Deepgram Voice Agent routes (new all-in-one voice API)
 from deepgram_voice_agent import router as deepgram_voice_agent_router
 app.include_router(deepgram_voice_agent_router, tags=["Voice Agent"])

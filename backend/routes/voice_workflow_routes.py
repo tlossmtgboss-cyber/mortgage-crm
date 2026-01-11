@@ -1,0 +1,503 @@
+"""
+Voice Workflow Routes - WebSocket and REST endpoints
+
+Provides real-time voice-driven workflow interaction via WebSocket,
+plus REST endpoints for session management and status.
+"""
+import os
+import json
+import logging
+import asyncio
+import base64
+from uuid import UUID
+from typing import Optional
+
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+import aiohttp
+
+from models.voice_workflow_models import (
+    WorkflowType,
+    WorkflowSessionCreate,
+    ServerMessage,
+    WebSocketMessageType,
+)
+from services.voice_workflow_service import get_workflow_service
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/v1/voice-workflow", tags=["Voice Workflow"])
+
+
+# =============================================================================
+# DEPENDENCY INJECTION
+# =============================================================================
+
+_get_db = None
+
+
+def set_dependencies(get_db_func):
+    """Set dependencies from main.py."""
+    global _get_db
+    _get_db = get_db_func
+    logger.info("Voice Workflow routes dependencies set")
+
+
+def get_db():
+    """Get database session."""
+    if _get_db is None:
+        raise RuntimeError("Voice Workflow routes not initialized")
+    yield from _get_db()
+
+
+async def get_current_user_id(
+    token: str = Query(...),
+    db: Session = Depends(get_db),
+) -> int:
+    """Get user ID from authentication token."""
+    result = db.execute(text("""
+        SELECT user_id FROM sessions
+        WHERE token = :token AND expires_at > NOW()
+    """), {"token": token}).fetchone()
+
+    if not result:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    return result[0]
+
+
+# =============================================================================
+# DEEPGRAM STT
+# =============================================================================
+
+async def transcribe_audio(audio_data: bytes) -> Optional[str]:
+    """Transcribe audio using Deepgram API."""
+    deepgram_key = os.getenv("DEEPGRAM_API_KEY")
+    if not deepgram_key:
+        logger.warning("Deepgram API key not configured")
+        return None
+
+    try:
+        url = "https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true"
+
+        headers = {
+            "Authorization": f"Token {deepgram_key}",
+            "Content-Type": "audio/webm",
+        }
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, data=audio_data, headers=headers) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    transcript = result.get("results", {}).get("channels", [{}])[0].get(
+                        "alternatives", [{}]
+                    )[0].get("transcript", "")
+                    return transcript if transcript else None
+                else:
+                    error = await response.text()
+                    logger.error(f"Deepgram error: {response.status} - {error}")
+                    return None
+
+    except Exception as e:
+        logger.error(f"Transcription error: {e}")
+        return None
+
+
+# =============================================================================
+# WEBSOCKET ENDPOINT
+# =============================================================================
+
+@router.websocket("/ws")
+async def voice_workflow_websocket(
+    websocket: WebSocket,
+    token: str = Query(...),
+):
+    """
+    WebSocket endpoint for real-time voice workflow interaction.
+
+    Protocol:
+    - Client sends: {"type": "audio", "data": "<base64>"}
+    - Client sends: {"type": "text_input", "text": "John Smith"}
+    - Client sends: {"type": "start_workflow", "workflow_type": "pre_approval_letter"}
+    - Client sends: {"type": "cancel_workflow"}
+
+    - Server sends: {"type": "workflow_started", "workflow_id": "...", "current_state": "..."}
+    - Server sends: {"type": "state_changed", "current_state": "...", "slots_collected": {...}}
+    - Server sends: {"type": "response_audio", "audio_data": "<base64>", "text": "..."}
+    - Server sends: {"type": "workflow_completed", "result": {...}}
+    - Server sends: {"type": "error", "error": "..."}
+    """
+    await websocket.accept()
+
+    # Validate token and get user
+    db_gen = get_db()
+    db = next(db_gen)
+
+    try:
+        result = db.execute(text("""
+            SELECT user_id FROM sessions
+            WHERE token = :token AND expires_at > NOW()
+        """), {"token": token}).fetchone()
+
+        if not result:
+            await websocket.send_json({
+                "type": WebSocketMessageType.ERROR.value,
+                "error": "Invalid or expired token"
+            })
+            await websocket.close()
+            return
+
+        user_id = result[0]
+        workflow_service = get_workflow_service(db)
+
+        # Check for existing active session
+        session = await workflow_service.get_active_session(user_id)
+
+        logger.info(f"Voice workflow WebSocket connected for user {user_id}")
+
+        while True:
+            try:
+                # Receive message
+                message = await websocket.receive_json()
+                msg_type = message.get("type")
+
+                # Start new workflow
+                if msg_type == "start_workflow":
+                    workflow_type_str = message.get("workflow_type", "pre_approval_letter")
+                    try:
+                        workflow_type = WorkflowType(workflow_type_str)
+                    except ValueError:
+                        await websocket.send_json({
+                            "type": WebSocketMessageType.ERROR.value,
+                            "error": f"Unknown workflow type: {workflow_type_str}"
+                        })
+                        continue
+
+                    # Create new session
+                    session, response = await workflow_service.create_session(
+                        user_id=user_id,
+                        workflow_type=workflow_type,
+                        initial_transcript=message.get("transcript"),
+                    )
+
+                    # Send workflow started
+                    await websocket.send_json({
+                        "type": WebSocketMessageType.WORKFLOW_STARTED.value,
+                        "workflow_id": str(session.id),
+                        "current_state": session.current_state,
+                    })
+
+                    # Send response
+                    await websocket.send_json({
+                        "type": WebSocketMessageType.RESPONSE_AUDIO.value,
+                        "text": response.get("text"),
+                        "audio_data": response.get("audio_base64"),
+                        "current_state": session.current_state,
+                        "options": response.get("options"),
+                    })
+
+                # Handle audio input
+                elif msg_type == "audio":
+                    if not session:
+                        await websocket.send_json({
+                            "type": WebSocketMessageType.ERROR.value,
+                            "error": "No active workflow. Send 'start_workflow' first."
+                        })
+                        continue
+
+                    # Decode and transcribe audio
+                    audio_base64 = message.get("data", "")
+                    try:
+                        audio_bytes = base64.b64decode(audio_base64)
+                    except Exception:
+                        await websocket.send_json({
+                            "type": WebSocketMessageType.ERROR.value,
+                            "error": "Invalid base64 audio data"
+                        })
+                        continue
+
+                    transcript = await transcribe_audio(audio_bytes)
+
+                    if not transcript:
+                        await websocket.send_json({
+                            "type": WebSocketMessageType.ERROR.value,
+                            "error": "Could not transcribe audio"
+                        })
+                        continue
+
+                    # Process the transcript
+                    response = await workflow_service.process_user_input(
+                        session=session,
+                        transcript=transcript,
+                        audio_duration_ms=message.get("duration_ms"),
+                    )
+
+                    # Check if workflow completed
+                    if not session.is_active:
+                        await websocket.send_json({
+                            "type": WebSocketMessageType.WORKFLOW_COMPLETED.value,
+                            "result": response.get("result_data", {}),
+                            "text": response.get("text"),
+                            "audio_data": response.get("audio_base64"),
+                        })
+                        session = None
+                    else:
+                        # Send state change and response
+                        await websocket.send_json({
+                            "type": WebSocketMessageType.STATE_CHANGED.value,
+                            "current_state": session.current_state,
+                            "slots_collected": session.slots,
+                        })
+
+                        await websocket.send_json({
+                            "type": WebSocketMessageType.RESPONSE_AUDIO.value,
+                            "text": response.get("text"),
+                            "audio_data": response.get("audio_base64"),
+                            "options": response.get("options"),
+                        })
+
+                # Handle text input (for testing/accessibility)
+                elif msg_type == "text_input":
+                    if not session:
+                        await websocket.send_json({
+                            "type": WebSocketMessageType.ERROR.value,
+                            "error": "No active workflow. Send 'start_workflow' first."
+                        })
+                        continue
+
+                    transcript = message.get("text", "")
+
+                    # Process the transcript
+                    response = await workflow_service.process_user_input(
+                        session=session,
+                        transcript=transcript,
+                    )
+
+                    # Check if workflow completed
+                    if not session.is_active:
+                        await websocket.send_json({
+                            "type": WebSocketMessageType.WORKFLOW_COMPLETED.value,
+                            "result": response.get("result_data", {}),
+                            "text": response.get("text"),
+                            "audio_data": response.get("audio_base64"),
+                        })
+                        session = None
+                    else:
+                        await websocket.send_json({
+                            "type": WebSocketMessageType.STATE_CHANGED.value,
+                            "current_state": session.current_state,
+                            "slots_collected": session.slots,
+                        })
+
+                        await websocket.send_json({
+                            "type": WebSocketMessageType.RESPONSE_AUDIO.value,
+                            "text": response.get("text"),
+                            "audio_data": response.get("audio_base64"),
+                            "options": response.get("options"),
+                        })
+
+                # Cancel workflow
+                elif msg_type == "cancel_workflow":
+                    if session:
+                        await workflow_service.cancel_session(session.id)
+                        await websocket.send_json({
+                            "type": WebSocketMessageType.WORKFLOW_CANCELLED.value,
+                        })
+                        session = None
+
+            except WebSocketDisconnect:
+                logger.info(f"WebSocket disconnected for user {user_id}")
+                break
+            except json.JSONDecodeError:
+                await websocket.send_json({
+                    "type": WebSocketMessageType.ERROR.value,
+                    "error": "Invalid JSON message"
+                })
+            except Exception as e:
+                logger.error(f"WebSocket error: {e}")
+                await websocket.send_json({
+                    "type": WebSocketMessageType.ERROR.value,
+                    "error": str(e)
+                })
+
+    except Exception as e:
+        logger.error(f"WebSocket connection error: {e}")
+    finally:
+        try:
+            next(db_gen)
+        except StopIteration:
+            pass
+
+
+# =============================================================================
+# REST ENDPOINTS
+# =============================================================================
+
+@router.post("/sessions")
+async def create_workflow_session(
+    request: WorkflowSessionCreate,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Create a new voice workflow session."""
+    workflow_service = get_workflow_service(db)
+
+    session, response = await workflow_service.create_session(
+        user_id=user_id,
+        workflow_type=request.workflow_type,
+        initial_transcript=request.initial_transcript,
+    )
+
+    return {
+        "success": True,
+        "workflow_id": str(session.id),
+        "current_state": session.current_state,
+        "response": response,
+    }
+
+
+@router.get("/sessions/{user_id}")
+async def get_user_sessions(
+    user_id: int,
+    db: Session = Depends(get_db),
+):
+    """Get workflow sessions for a user."""
+    results = db.execute(text("""
+        SELECT id, workflow_type, current_state, started_at, completed_at, is_active
+        FROM voice_workflow_sessions
+        WHERE user_id = :user_id
+        ORDER BY started_at DESC
+        LIMIT 20
+    """), {"user_id": user_id}).fetchall()
+
+    return {
+        "sessions": [
+            {
+                "id": str(r[0]),
+                "workflow_type": r[1],
+                "current_state": r[2],
+                "started_at": r[3].isoformat() if r[3] else None,
+                "completed_at": r[4].isoformat() if r[4] else None,
+                "is_active": r[5],
+            }
+            for r in results
+        ]
+    }
+
+
+@router.get("/session/{workflow_id}")
+async def get_session_details(
+    workflow_id: str,
+    db: Session = Depends(get_db),
+):
+    """Get details of a specific workflow session."""
+    workflow_service = get_workflow_service(db)
+
+    try:
+        session = await workflow_service.get_session(UUID(workflow_id))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid workflow ID")
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    return {
+        "id": str(session.id),
+        "user_id": session.user_id,
+        "workflow_type": session.workflow_type.value,
+        "current_state": session.current_state,
+        "slots": session.slots,
+        "conversation_history": [
+            {
+                "role": t.role,
+                "content": t.content,
+                "timestamp": t.timestamp.isoformat() if t.timestamp else None,
+            }
+            for t in session.conversation_history
+        ],
+        "started_at": session.started_at.isoformat() if session.started_at else None,
+        "is_active": session.is_active,
+    }
+
+
+@router.post("/session/{workflow_id}/input")
+async def process_workflow_input(
+    workflow_id: str,
+    request: dict,
+    db: Session = Depends(get_db),
+):
+    """Process text input for a workflow session (for testing)."""
+    workflow_service = get_workflow_service(db)
+
+    try:
+        session = await workflow_service.get_session(UUID(workflow_id))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid workflow ID")
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if not session.is_active:
+        raise HTTPException(status_code=400, detail="Session is no longer active")
+
+    transcript = request.get("text", "")
+    if not transcript:
+        raise HTTPException(status_code=400, detail="No text provided")
+
+    response = await workflow_service.process_user_input(
+        session=session,
+        transcript=transcript,
+    )
+
+    return {
+        "success": True,
+        "current_state": session.current_state,
+        "slots": session.slots,
+        "is_active": session.is_active,
+        "response": response,
+    }
+
+
+@router.delete("/session/{workflow_id}")
+async def cancel_workflow_session(
+    workflow_id: str,
+    db: Session = Depends(get_db),
+):
+    """Cancel a workflow session."""
+    workflow_service = get_workflow_service(db)
+
+    try:
+        await workflow_service.cancel_session(UUID(workflow_id))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid workflow ID")
+
+    return {"success": True, "message": "Session cancelled"}
+
+
+@router.get("/workflow-types")
+async def list_workflow_types():
+    """List available workflow types."""
+    return {
+        "workflow_types": [
+            {
+                "type": wt.value,
+                "name": wt.name.replace("_", " ").title(),
+                "description": _get_workflow_description(wt),
+            }
+            for wt in WorkflowType
+        ]
+    }
+
+
+def _get_workflow_description(wt: WorkflowType) -> str:
+    """Get human-readable description for workflow type."""
+    descriptions = {
+        WorkflowType.PRE_APPROVAL_LETTER: "Generate and send pre-approval letters to realtors",
+        WorkflowType.SCHEDULE_APPOINTMENT: "Schedule meetings with contacts",
+        WorkflowType.CREATE_TASK: "Create tasks and reminders",
+        WorkflowType.SEND_EMAIL: "Send emails to borrowers or realtors",
+        WorkflowType.UPDATE_LOAN_STATUS: "Update loan pipeline status",
+    }
+    return descriptions.get(wt, "")
