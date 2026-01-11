@@ -679,7 +679,8 @@ View the letter here: {result.get('share_url')}
     ) -> None:
         """Load applicants for the loan officer."""
         # Get active loans/applicants for this LO
-        # Note: loans table uses 'amount' not 'loan_amount', 'rate' not 'interest_rate', 'program' not 'loan_type'
+        # Note: loans table uses 'amount', 'program', 'rate', 'stage' columns
+        # LoanStage enum values are capitalized (e.g., 'Funded', 'Closing')
         results = self.db.execute(text("""
             SELECT
                 l.id,
@@ -690,7 +691,7 @@ View the letter here: {result.get('share_url')}
                 l.stage
             FROM loans l
             WHERE l.loan_officer_id = :user_id
-                AND l.stage NOT IN ('funded', 'cancelled', 'denied', 'closed', 'withdrawn')
+                AND l.stage NOT IN ('Funded')
             ORDER BY l.updated_at DESC
             LIMIT 10
         """), {"user_id": user_id}).fetchall()

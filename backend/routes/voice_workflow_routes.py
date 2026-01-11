@@ -574,13 +574,14 @@ async def debug_test_session(
             return {"success": False, "error": "Auth failed", "results": results}
 
         # Step 2: Check loans for user
-        # Note: loans table uses 'amount', 'program', 'rate', 'stage' instead of 'loan_amount', 'loan_type', 'interest_rate', 'status'
+        # Note: loans table uses 'amount', 'program', 'rate', 'stage' columns
+        # LoanStage enum values are capitalized (e.g., 'Funded', 'Closing')
         try:
             loans = db.execute(text("""
                 SELECT id, borrower_name, amount, program, stage
                 FROM loans
                 WHERE loan_officer_id = :user_id
-                AND stage NOT IN ('funded', 'cancelled', 'denied', 'closed', 'withdrawn')
+                AND stage NOT IN ('Funded')
                 LIMIT 5
             """), {"user_id": user_id}).fetchall()
             results["steps"].append({
@@ -634,12 +635,13 @@ async def debug_test_noauth(
 
     try:
         # Step 1: Check loans for user (using correct column names)
+        # LoanStage enum values are capitalized (e.g., 'Funded', 'Closing')
         try:
             loans = db.execute(text("""
                 SELECT id, borrower_name, amount, program, stage
                 FROM loans
                 WHERE loan_officer_id = :user_id
-                AND stage NOT IN ('funded', 'cancelled', 'denied', 'closed', 'withdrawn')
+                AND stage NOT IN ('Funded')
                 LIMIT 5
             """), {"user_id": user_id}).fetchall()
             results["steps"].append({
