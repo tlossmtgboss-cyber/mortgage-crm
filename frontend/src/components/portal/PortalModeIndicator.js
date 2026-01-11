@@ -32,6 +32,7 @@ function PortalModeIndicator({ showCounts = false, size = 'default' }) {
       icon: (
         <svg
           className={`${size === 'small' ? 'w-3 h-3' : 'w-4 h-4'} mr-1.5`}
+          style={{ width: size === 'small' ? '12px' : '16px', height: size === 'small' ? '12px' : '16px' }}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -54,6 +55,7 @@ function PortalModeIndicator({ showCounts = false, size = 'default' }) {
       icon: (
         <svg
           className={`${size === 'small' ? 'w-3 h-3' : 'w-4 h-4'} mr-1.5`}
+          style={{ width: size === 'small' ? '12px' : '16px', height: size === 'small' ? '12px' : '16px' }}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -137,6 +139,7 @@ export function ModeBadge({ mode, size = 'default', showIcon = true }) {
         {showIcon && (
           <svg
             className={`${size === 'small' ? 'w-3 h-3' : 'w-4 h-4'} mr-1.5`}
+            style={{ width: size === 'small' ? '12px' : '16px', height: size === 'small' ? '12px' : '16px' }}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -161,6 +164,7 @@ export function ModeBadge({ mode, size = 'default', showIcon = true }) {
       {showIcon && (
         <svg
           className={`${size === 'small' ? 'w-3 h-3' : 'w-4 h-4'} mr-1.5`}
+          style={{ width: size === 'small' ? '12px' : '16px', height: size === 'small' ? '12px' : '16px' }}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
