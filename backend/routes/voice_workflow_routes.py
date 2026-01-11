@@ -229,11 +229,22 @@ async def voice_workflow_websocket(
                         continue
 
                     # Create new session
-                    session, response = await workflow_service.create_session(
-                        user_id=user_id,
-                        workflow_type=workflow_type,
-                        initial_transcript=message.get("transcript"),
-                    )
+                    try:
+                        logger.info(f"Creating workflow session for user {user_id}, type: {workflow_type}")
+                        session, response = await workflow_service.create_session(
+                            user_id=user_id,
+                            workflow_type=workflow_type,
+                            initial_transcript=message.get("transcript"),
+                        )
+                        logger.info(f"Session created: {session.id}, state: {session.current_state}")
+                    except Exception as create_err:
+                        import traceback
+                        logger.error(f"Failed to create session: {create_err}\n{traceback.format_exc()}")
+                        await websocket.send_json({
+                            "type": WebSocketMessageType.ERROR.value,
+                            "error": f"Failed to create session: {str(create_err)}"
+                        })
+                        continue
 
                     # Send workflow started
                     await websocket.send_json({
