@@ -1372,6 +1372,9 @@ function App() {
                     taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <div style={{ padding: '20px', background: '#f0f0f0', marginBottom: '10px' }}>
+                      <strong>Voice Agents Page - Route Loaded</strong>
+                    </div>
                     <LazyPage><VoiceAgentStudio /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
