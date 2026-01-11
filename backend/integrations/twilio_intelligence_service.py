@@ -194,17 +194,16 @@ class TwilioIntelligenceService:
 
                 if should_attach:
                     try:
-                        # Attach operator to service
-                        attachment = self.client.intelligence.v2.services(
-                            sid
-                        ).operator_attachments.create(
+                        # Attach operator to service using correct API path
+                        attachment = self.client.intelligence.v2.operator_attachment(
+                            service_sid=sid,
                             operator_sid=operator.sid
-                        )
+                        ).create()
 
                         attached.append({
                             "operator_sid": operator.sid,
                             "operator_name": operator.friendly_name,
-                            "attachment_sid": attachment.sid if hasattr(attachment, 'sid') else None
+                            "status": "attached"
                         })
                         logger.info(f"Attached operator: {operator.friendly_name} ({operator.sid})")
 
