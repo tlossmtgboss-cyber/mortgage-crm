@@ -216,6 +216,75 @@ async def handle_outbound_script(request: Request):
         return Response(content="<Response></Response>", media_type="application/xml")
 
 
+@router.post("/make-call")
+async def make_outbound_call(
+    to_number: str,
+    caller_name: str = "Valued Customer",
+    purpose: str = "follow_up",
+    db: Session = Depends(get_db)
+):
+    """
+    Initiate an outbound call to a phone number.
+    The AI receptionist (Sam) will handle the call and try to schedule an appointment.
+    """
+    try:
+        # Normalize phone number
+        import re
+        phone = re.sub(r'[^\d+]', '', to_number)
+        if len(phone) == 10:
+            phone = f"+1{phone}"
+        elif not phone.startswith("+"):
+            phone = f"+{phone}"
+
+        logger.info(f"Initiating outbound call to {phone} (name: {caller_name}, purpose: {purpose})")
+
+        # Make the call using Twilio
+        call_sid = await voice_client.make_outbound_call(
+            to_number=phone,
+            script=purpose
+        )
+
+        if call_sid:
+            # Log to AI Receptionist Dashboard
+            dashboard_activity = AIReceptionistActivity(
+                id=str(uuid.uuid4()),
+                timestamp=datetime.now(timezone.utc),
+                client_phone=phone,
+                client_name=caller_name,
+                action_type='outbound_call',
+                channel='voice',
+                outcome_status='initiated',
+                conversation_id=call_sid,
+                extra_data={
+                    "twilio_call_sid": call_sid,
+                    "purpose": purpose,
+                    "caller_name": caller_name
+                }
+            )
+            db.add(dashboard_activity)
+            db.commit()
+
+            return {
+                "success": True,
+                "message": f"Call initiated to {phone}",
+                "call_sid": call_sid,
+                "to_number": phone,
+                "caller_name": caller_name
+            }
+        else:
+            return {
+                "success": False,
+                "error": "Failed to initiate call - check Twilio configuration"
+            }
+
+    except Exception as e:
+        logger.error(f"Error making outbound call: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
 # ============================================================================
 # CALL SCREENING ENDPOINTS
 # ============================================================================
