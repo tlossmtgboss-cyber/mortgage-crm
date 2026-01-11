@@ -11,6 +11,7 @@ from .ar_routes import router as ar_router
 from .ap_routes import router as ap_router
 from .reports_routes import router as reports_router
 from .bank_routes import router as bank_router
+from .budget_routes import router as budget_router
 
 __all__ = [
     'chart_of_accounts_router',
@@ -20,4 +21,5 @@ __all__ = [
     'ap_router',
     'reports_router',
     'bank_router',
+    'budget_router',
 ]

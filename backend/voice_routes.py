@@ -163,27 +163,34 @@ async def handle_incoming_call(request: Request, db: Session = Depends(get_db)):
                 f"category: {screening_result.category or 'N/A'})"
             )
 
-            # Log to AI Receptionist Dashboard
-            dashboard_activity = AIReceptionistActivity(
-                id=str(uuid.uuid4()),
-                timestamp=datetime.now(timezone.utc),
-                client_phone=caller_number,
-                client_name=screening_result.caller_name,
-                action_type='incoming_call',
-                channel='voice',
-                outcome_status='pending',
-                conversation_id=call_sid,
-                extra_data={
-                    "twilio_call_sid": call_sid,
-                    "called_number": called_number,
-                    "screening_decision": "allow",
-                    "screening_reason": screening_result.reason,
-                    "caller_category": screening_result.category,
-                    "spam_score": screening_result.spam_score
-                }
-            )
-            db.add(dashboard_activity)
-            db.commit()
+            # Log to AI Receptionist Dashboard (non-critical - don't fail the call)
+            try:
+                # Rollback any failed transaction first
+                db.rollback()
+
+                dashboard_activity = AIReceptionistActivity(
+                    id=str(uuid.uuid4()),
+                    timestamp=datetime.now(timezone.utc),
+                    client_phone=caller_number,
+                    client_name=screening_result.caller_name,
+                    action_type='incoming_call',
+                    channel='voice',
+                    outcome_status='pending',
+                    conversation_id=call_sid,
+                    extra_data={
+                        "twilio_call_sid": call_sid,
+                        "called_number": called_number,
+                        "screening_decision": "allow",
+                        "screening_reason": screening_result.reason,
+                        "caller_category": screening_result.category,
+                        "spam_score": screening_result.spam_score
+                    }
+                )
+                db.add(dashboard_activity)
+                db.commit()
+            except Exception as log_error:
+                logger.warning(f"Failed to log dashboard activity (non-critical): {log_error}")
+                db.rollback()
 
             # Generate TwiML response to connect to AI
             twiml = voice_client.create_greeting_response(ai_config.business_name)
@@ -191,9 +198,15 @@ async def handle_incoming_call(request: Request, db: Session = Depends(get_db)):
 
     except Exception as e:
         logger.error(f"Error handling incoming call: {e}")
-        # On error, fall back to voicemail to not lose the call
-        twiml = voice_client.create_voicemail_response()
-        return Response(content=str(twiml), media_type="application/xml")
+        db.rollback()
+        # On error, still try to connect to AI (don't lose the call to voicemail)
+        try:
+            twiml = voice_client.create_greeting_response(ai_config.business_name)
+            return Response(content=str(twiml), media_type="application/xml")
+        except:
+            # Last resort: voicemail
+            twiml = voice_client.create_voicemail_response()
+            return Response(content=str(twiml), media_type="application/xml")
 
 
 @router.post("/outbound-script")

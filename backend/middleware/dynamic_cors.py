@@ -105,8 +105,10 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
         try:
             response = await call_next(request)
         except Exception as e:
-            # Log the error
+            # Log the error with full traceback
+            import traceback
             logger.error(f"Error in request to {request.url.path}: {str(e)}")
+            logger.error(f"Full traceback:\n{traceback.format_exc()}")
             # Create error response with CORS headers
             from starlette.responses import JSONResponse
             response = JSONResponse(

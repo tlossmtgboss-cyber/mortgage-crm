@@ -2,6 +2,7 @@
 Salesforce OAuth Service
 Handles per-user Salesforce authentication and token management
 """
+import os
 import secrets
 import logging
 from datetime import datetime, timedelta
@@ -10,7 +11,6 @@ import httpx
 
 from sqlalchemy.orm import Session
 
-from config import settings
 from encryption_utils import encrypt_value, decrypt_value
 from salesforce_integration_models import (
     IntegrationProfile,
@@ -22,8 +22,18 @@ from salesforce_integration_models import (
 logger = logging.getLogger(__name__)
 
 
+def _get_settings():
+    """Lazy load settings to avoid import-time config parsing errors"""
+    try:
+        from config import settings
+        return settings
+    except Exception as e:
+        logger.warning(f"Could not load config settings: {e}")
+        return None
+
+
 class SalesforceOAuthConfig:
-    """Salesforce OAuth Configuration - uses centralized config settings"""
+    """Salesforce OAuth Configuration - uses centralized config settings or environment variables"""
     def __init__(
         self,
         client_id: Optional[str] = None,
@@ -31,15 +41,25 @@ class SalesforceOAuthConfig:
         redirect_uri: Optional[str] = None,
         use_sandbox: Optional[bool] = None
     ):
-        self.client_id = client_id or settings.SALESFORCE_CLIENT_ID
-        self.client_secret = client_secret or settings.SALESFORCE_CLIENT_SECRET
+        settings = _get_settings()
+
+        # Use passed values, then settings, then env vars
+        self.client_id = client_id or (settings.SALESFORCE_CLIENT_ID if settings else None) or os.getenv("SALESFORCE_CLIENT_ID", "")
+        self.client_secret = client_secret or (settings.SALESFORCE_CLIENT_SECRET if settings else None) or os.getenv("SALESFORCE_CLIENT_SECRET", "")
 
         # Build default redirect URI if not specified
-        default_redirect = f"{settings.BASE_URL}/api/integrations/salesforce/callback"
-        self.redirect_uri = redirect_uri or settings.SALESFORCE_REDIRECT_URI or default_redirect
+        base_url = (settings.BASE_URL if settings else None) or os.getenv("BASE_URL", "http://localhost:8000")
+        default_redirect = f"{base_url}/api/integrations/salesforce/callback"
+        sf_redirect = (settings.SALESFORCE_REDIRECT_URI if settings else None) or os.getenv("SALESFORCE_REDIRECT_URI")
+        self.redirect_uri = redirect_uri or sf_redirect or default_redirect
 
         # Determine if using sandbox
-        is_sandbox = use_sandbox if use_sandbox is not None else settings.SALESFORCE_SANDBOX
+        if use_sandbox is not None:
+            is_sandbox = use_sandbox
+        elif settings:
+            is_sandbox = settings.SALESFORCE_SANDBOX
+        else:
+            is_sandbox = os.getenv("SALESFORCE_SANDBOX", "false").lower() == "true"
 
         if is_sandbox:
             self.base_url = 'https://test.salesforce.com'

@@ -20365,7 +20365,7 @@ app.include_router(financial_intelligence_router, tags=["Financial Intelligence"
 try:
     from routes.accounting import (
         chart_of_accounts_router, journal_entry_router, period_router,
-        ar_router, ap_router, reports_router, bank_router
+        ar_router, ap_router, reports_router, bank_router, budget_router
     )
     app.include_router(chart_of_accounts_router, tags=["Chart of Accounts"])
     app.include_router(journal_entry_router, tags=["Journal Entries"])
@@ -20374,7 +20374,8 @@ try:
     app.include_router(ap_router, tags=["Accounts Payable"])
     app.include_router(reports_router, tags=["Financial Reports"])
     app.include_router(bank_router, tags=["Banking & Plaid"])
-    logger.info("✅ Accounting System routes loaded (CoA, JE, Periods, AR, AP, Reports, Banking)")
+    app.include_router(budget_router, tags=["Budgeting"])
+    logger.info("✅ Accounting System routes loaded (Full Suite: CoA, JE, AR, AP, Reports, Banking, Budgets)")
 except Exception as e:
     logger.warning(f"Could not load Accounting System routes: {e}")
 
