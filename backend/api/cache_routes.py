@@ -53,3 +53,64 @@ async def clear_cache(confirm: bool = False):
 
     count = await cache.clear_all()
     return {"status": "cleared", "count": count}
+
+
+# =============================================================================
+# CRM CONTEXT CACHE ENDPOINTS
+# =============================================================================
+
+@router.get("/crm-context/stats")
+async def get_crm_context_cache_stats():
+    """
+    Get CRM context cache statistics.
+
+    Returns hit rate, miss count, total keys cached, and TTL configuration.
+    This is the cache for the expensive 12-query CRM context that runs on every AI chat.
+    """
+    try:
+        from services.crm_context_cache import crm_context_cache
+        return await crm_context_cache.get_stats()
+    except ImportError:
+        return {"enabled": False, "reason": "CRM context cache module not available"}
+    except Exception as e:
+        raise HTTPException(500, f"Error getting CRM context cache stats: {str(e)}")
+
+
+@router.post("/crm-context/invalidate")
+async def invalidate_crm_context_cache(
+    user_id: Optional[int] = None,
+    context_type: Optional[str] = None
+):
+    """
+    Invalidate CRM context cache.
+
+    Options:
+    - No params: Clears ALL CRM context cache
+    - user_id only: Clears all context for specific user
+    - context_type only: Clears specific context type for all users
+    - Both: Clears specific context type for specific user
+
+    Context types: leads, loans, tasks, mum_clients, pipeline, activities,
+                   referral_partners, team_performance, loan_officer_performance,
+                   top_referral_borrowers, rate_lock_intelligence, pipeline_efficiency
+    """
+    try:
+        from services.crm_context_cache import crm_context_cache
+
+        if user_id and context_type:
+            deleted = await crm_context_cache.invalidate_context_type(context_type, user_id)
+            return {"status": "invalidated", "type": "user_context_type", "user_id": user_id, "context_type": context_type, "deleted": deleted}
+        elif user_id:
+            deleted = await crm_context_cache.invalidate_user_context(user_id)
+            return {"status": "invalidated", "type": "user", "user_id": user_id, "deleted": deleted}
+        elif context_type:
+            deleted = await crm_context_cache.invalidate_context_type(context_type)
+            return {"status": "invalidated", "type": "context_type", "context_type": context_type, "deleted": deleted}
+        else:
+            deleted = await crm_context_cache.invalidate_all()
+            return {"status": "invalidated", "type": "all", "deleted": deleted}
+
+    except ImportError:
+        raise HTTPException(500, "CRM context cache module not available")
+    except Exception as e:
+        raise HTTPException(500, f"Error invalidating CRM context cache: {str(e)}")

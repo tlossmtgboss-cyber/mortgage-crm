@@ -4195,8 +4195,8 @@ async def process_command(
             current_message=request.message
         )
 
-        # 3. GET FULL CRM DATA CONTEXT
-        crm_context = CRMContextService.get_full_crm_context(db, current_user_id)
+        # 3. GET FULL CRM DATA CONTEXT (with Redis caching for performance)
+        crm_context = await CRMContextService.get_full_crm_context_cached(db, current_user_id)
 
         # 4. BUILD ENHANCED CONTEXT FOR CLAUDE
         # Combine permanent memory with current session context

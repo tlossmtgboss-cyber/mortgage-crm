@@ -57861,6 +57861,15 @@ async def startup_event():
     except Exception as cache_e:
         logger.warning(f"⚠️ Response cache initialization skipped: {cache_e}")
 
+    # Initialize Redis cache for CRM context (biggest performance win)
+    try:
+        from services.crm_context_cache import crm_context_cache
+        await crm_context_cache.connect()
+    except ImportError:
+        logger.info("ℹ️ CRM Context cache module not available")
+    except Exception as cache_e:
+        logger.warning(f"⚠️ CRM Context cache initialization skipped: {cache_e}")
+
     try:
         # Initialize database with retry logic
         if init_db_with_retry():
@@ -66054,6 +66063,15 @@ async def shutdown_event():
         pass
     except Exception as e:
         logger.warning(f"Error disconnecting response cache: {e}")
+
+    # Disconnect Redis cache (CRM context)
+    try:
+        from services.crm_context_cache import crm_context_cache
+        await crm_context_cache.disconnect()
+    except ImportError:
+        pass
+    except Exception as e:
+        logger.warning(f"Error disconnecting CRM context cache: {e}")
 
 
 # ============================================================================
