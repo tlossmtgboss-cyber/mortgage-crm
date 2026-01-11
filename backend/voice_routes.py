@@ -803,7 +803,7 @@ Extract and return JSON with:
 Return ONLY valid JSON, no other text."""
 
         message = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model="claude-sonnet-4-20250514",
             max_tokens=500,
             messages=[{"role": "user", "content": prompt}]
         )
@@ -1006,8 +1006,9 @@ async def handle_recording_ready(request: Request, db: Session = Depends(get_db)
                     activity.extra_data = {}
                 activity.extra_data['recording_url'] = recording_url
                 activity.extra_data['recording_sid'] = recording_sid
-                user_id = activity.user_id
-                lead_id = activity.lead_id
+                # Use getattr since these columns may not exist in all versions
+                user_id = getattr(activity, 'user_id', None) or (activity.extra_data.get('user_id') if activity.extra_data else None)
+                lead_id = getattr(activity, 'lead_id', None) or (activity.extra_data.get('lead_id') if activity.extra_data else None)
                 db.commit()
                 logger.info(f"Updated activity with recording for call {call_sid}")
 
