@@ -594,12 +594,16 @@ async def voice_stream_websocket(websocket: WebSocket):
 
                         # NOW trigger the AI greeting - Twilio is ready to receive audio
                         logger.info("🎤 Triggering AI greeting now that Twilio stream is ready")
-                        await openai_ws.send(json.dumps({
-                            "type": "response.create",
-                            "response": {
-                                "modalities": ["text", "audio"]
-                            }
-                        }))
+                        try:
+                            await openai_ws.send(json.dumps({
+                                "type": "response.create",
+                                "response": {
+                                    "modalities": ["text", "audio"]
+                                }
+                            }))
+                            logger.info("✅ Greeting trigger sent to OpenAI successfully")
+                        except Exception as greet_err:
+                            logger.error(f"❌ Failed to send greeting trigger: {greet_err}")
 
                     elif data['event'] == 'media':
                         # Forward audio payload to OpenAI
@@ -632,15 +636,24 @@ async def voice_stream_websocket(websocket: WebSocket):
                         # Forward AI audio to Twilio
                         audio_payload = data.get('delta', '')
                         if audio_payload and call_context.get('stream_sid'):
-                            await websocket.send_json({
-                                "event": "media",
-                                "streamSid": call_context['stream_sid'],
-                                "media": {
-                                    "payload": audio_payload
-                                }
-                            })
+                            try:
+                                await websocket.send_json({
+                                    "event": "media",
+                                    "streamSid": call_context['stream_sid'],
+                                    "media": {
+                                        "payload": audio_payload
+                                    }
+                                })
+                            except Exception as send_err:
+                                logger.error(f"❌ Failed to send audio to Twilio: {send_err}")
                         else:
-                            logger.warning(f"⚠️ Missing audio payload or stream_sid")
+                            logger.warning(f"⚠️ Missing audio payload ({len(audio_payload) if audio_payload else 0} bytes) or stream_sid ({call_context.get('stream_sid')})")
+
+                    elif event_type == 'response.audio.done':
+                        logger.info("🔊 OpenAI audio response complete")
+
+                    elif event_type == 'response.done':
+                        logger.info("✅ OpenAI response fully done")
 
                     elif data['type'] == 'response.text.done':
                         # Log conversation

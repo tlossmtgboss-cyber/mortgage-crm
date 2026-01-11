@@ -26,6 +26,27 @@ class PortalMilestoneService:
     def __init__(self, db: Session):
         self.db = db
 
+    def _resolve_loan_id(self, loan_id: int) -> int:
+        """Resolve crm_deal_id to portal_loan.id."""
+        # First try to find by portal_loan.id
+        portal_loan = self.db.query(PortalLoan).filter(
+            PortalLoan.id == loan_id
+        ).first()
+
+        if portal_loan:
+            return portal_loan.id
+
+        # Try by crm_deal_id
+        portal_loan = self.db.query(PortalLoan).filter(
+            PortalLoan.crm_deal_id == loan_id
+        ).first()
+
+        if portal_loan:
+            return portal_loan.id
+
+        # Return original if not found (will return empty results)
+        return loan_id
+
     # =========================================================================
     # MILESTONE TEMPLATE MANAGEMENT
     # =========================================================================
@@ -179,8 +200,9 @@ class PortalMilestoneService:
         borrower_view: bool = False,
     ) -> List[Dict[str, Any]]:
         """Get all milestones for a loan with optional task details."""
+        resolved_loan_id = self._resolve_loan_id(loan_id)
         query = self.db.query(MilestoneInstance).filter(
-            MilestoneInstance.loan_id == loan_id
+            MilestoneInstance.loan_id == resolved_loan_id
         )
 
         if borrower_view:
@@ -240,8 +262,9 @@ class PortalMilestoneService:
 
     def get_milestone_progress(self, loan_id: int) -> Dict[str, Any]:
         """Get overall milestone progress for a loan."""
+        resolved_loan_id = self._resolve_loan_id(loan_id)
         milestones = self.db.query(MilestoneInstance).filter(
-            MilestoneInstance.loan_id == loan_id
+            MilestoneInstance.loan_id == resolved_loan_id
         ).all()
 
         if not milestones:
@@ -254,7 +277,7 @@ class PortalMilestoneService:
                 "current_milestone": None,
             }
 
-        completed = len([m for m in milestones if m.status == MilestoneStatus.COMPLETED])
+        completed = len([m for m in milestones if m.status == MilestoneStatus.COMPLETE])
         active = len([m for m in milestones if m.status == MilestoneStatus.ACTIVE])
         locked = len([m for m in milestones if m.status == MilestoneStatus.LOCKED])
 
@@ -444,9 +467,10 @@ class PortalMilestoneService:
 
     def get_pending_borrower_tasks(self, loan_id: int) -> List[Dict[str, Any]]:
         """Get tasks requiring borrower action."""
+        resolved_loan_id = self._resolve_loan_id(loan_id)
         tasks = self.db.query(TaskInstance).join(MilestoneInstance).filter(
             and_(
-                MilestoneInstance.loan_id == loan_id,
+                MilestoneInstance.loan_id == resolved_loan_id,
                 TaskInstance.owner_role == PortalUserRole.BORROWER,
                 TaskInstance.status.in_([TaskStatus.TODO, TaskStatus.IN_PROGRESS]),
             )
@@ -504,13 +528,14 @@ class PortalMilestoneService:
 
     def get_journey_summary(self, loan_id: int) -> Dict[str, Any]:
         """Get journey summary for dashboard display."""
+        resolved_loan_id = self._resolve_loan_id(loan_id)
         progress = self.get_milestone_progress(loan_id)
         pending_tasks = self.get_pending_borrower_tasks(loan_id)
 
         # Get next upcoming milestone
         next_milestone = self.db.query(MilestoneInstance).join(MilestoneTemplate).filter(
             and_(
-                MilestoneInstance.loan_id == loan_id,
+                MilestoneInstance.loan_id == resolved_loan_id,
                 MilestoneInstance.status.in_([MilestoneStatus.LOCKED, MilestoneStatus.ACTIVE])
             )
         ).order_by(MilestoneTemplate.display_order).first()

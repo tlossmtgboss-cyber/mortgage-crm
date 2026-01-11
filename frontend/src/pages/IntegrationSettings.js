@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAsyncOperation, useFormSubmit, APIError } from '../utils/errorHandling';
 import { toast } from '../utils/toast';
 import SalesforceFieldMapping from '../components/integrations/SalesforceFieldMapping';
+import SalesforceSetupWizard from '../components/integrations/SalesforceSetupWizard';
 import './IntegrationSettings.css';
 
 const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
@@ -589,15 +590,30 @@ const IntegrationSettings = () => {
               </div>
             </div>
 
-            {/* Salesforce Field Mapping - only show for Salesforce */}
+            {/* Salesforce Integration - Setup Wizard and Field Mapping */}
             {selectedIntegration.id === 'salesforce' && (
-              <div className="detail-section">
-                <SalesforceFieldMapping
-                  isConnected={selectedIntegration.status === 'connected'}
-                  onMappingSaved={() => {
-                    toast.success('Field mapping updated');
+              <div className="detail-section salesforce-integration">
+                <SalesforceSetupWizard
+                  onConnectionComplete={() => {
+                    toast.success('Salesforce connected successfully!');
+                    loadIntegrationDetails('salesforce');
+                  }}
+                  onError={(error) => {
+                    toast.error(error || 'Failed to connect to Salesforce');
                   }}
                 />
+
+                {/* Show field mapping only when connected */}
+                {selectedIntegration.status === 'connected' && (
+                  <div className="field-mapping-section">
+                    <SalesforceFieldMapping
+                      isConnected={true}
+                      onMappingSaved={() => {
+                        toast.success('Field mapping updated');
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             )}
 

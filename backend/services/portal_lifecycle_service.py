@@ -420,14 +420,17 @@ class PortalLifecycleService:
         """Get comprehensive portal status for a loan."""
         portal_loan = self.get_portal_loan(loan_id)
 
+        # Use portal_loan.id for milestone queries (not crm_deal_id)
+        portal_loan_id = portal_loan.id if portal_loan else loan_id
+
         # Get milestone progress
         total_milestones = self.db.query(MilestoneInstance).filter(
-            MilestoneInstance.loan_id == loan_id
+            MilestoneInstance.loan_id == portal_loan_id
         ).count()
 
         completed_milestones = self.db.query(MilestoneInstance).filter(
             and_(
-                MilestoneInstance.loan_id == loan_id,
+                MilestoneInstance.loan_id == portal_loan_id,
                 MilestoneInstance.status == MilestoneStatus.COMPLETE
             )
         ).count()
@@ -435,7 +438,7 @@ class PortalLifecycleService:
         # Get active risks
         active_risks = self.db.query(RiskFlag).filter(
             and_(
-                RiskFlag.loan_id == loan_id,
+                RiskFlag.loan_id == portal_loan_id,
                 RiskFlag.is_resolved == False
             )
         ).count()
