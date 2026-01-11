@@ -203,10 +203,23 @@ async def handle_outbound_script(request: Request):
     try:
         query_params = request.query_params
         script_id = query_params.get("script_id")
+        test_mode = query_params.get("test", "false") == "true"
 
-        logger.info(f"Outbound call script requested: {script_id}")
+        logger.info(f"Outbound call script requested: {script_id}, test_mode: {test_mode}")
 
-        # Generate TwiML for outbound call
+        if test_mode:
+            # Simple test TwiML without WebSocket
+            twiml = """<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say voice="Polly.Matthew">Hello! This is Sam from Perennia AI. I'm calling to follow up on your mortgage inquiry. How can I help you today?</Say>
+    <Pause length="3"/>
+    <Say voice="Polly.Matthew">If you'd like to schedule an appointment with a loan officer, please let me know your availability.</Say>
+    <Pause length="5"/>
+    <Say voice="Polly.Matthew">Thank you for your time. Have a great day!</Say>
+</Response>"""
+            return Response(content=twiml, media_type="application/xml")
+
+        # Generate TwiML for outbound call with AI
         twiml = voice_client.create_greeting_response(ai_config.business_name)
 
         return Response(content=str(twiml), media_type="application/xml")
