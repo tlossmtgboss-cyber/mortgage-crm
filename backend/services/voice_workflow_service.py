@@ -679,17 +679,18 @@ View the letter here: {result.get('share_url')}
     ) -> None:
         """Load applicants for the loan officer."""
         # Get active loans/applicants for this LO
+        # Note: loans table uses 'amount' not 'loan_amount', 'rate' not 'interest_rate', 'program' not 'loan_type'
         results = self.db.execute(text("""
             SELECT
                 l.id,
                 l.borrower_name,
-                l.loan_amount,
-                l.loan_type,
-                l.interest_rate,
-                l.status
+                l.amount,
+                l.program,
+                l.rate,
+                l.stage
             FROM loans l
             WHERE l.loan_officer_id = :user_id
-                AND l.status NOT IN ('funded', 'cancelled', 'denied', 'closed')
+                AND l.stage NOT IN ('funded', 'cancelled', 'denied', 'closed', 'withdrawn')
             ORDER BY l.updated_at DESC
             LIMIT 10
         """), {"user_id": user_id}).fetchall()
