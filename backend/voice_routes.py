@@ -774,7 +774,7 @@ async def connect_to_openai_realtime():
         "session": {
             "modalities": ["text", "audio"],
             "instructions": ai_config.system_prompt.format(business_name=ai_config.business_name),
-            "voice": "shimmer",  # More natural, warm voice for phone conversations
+            "voice": "alloy",  # Clearer, more natural voice for phone
             "input_audio_format": "g711_ulaw",
             "output_audio_format": "g711_ulaw",
             "input_audio_transcription": {
@@ -782,9 +782,9 @@ async def connect_to_openai_realtime():
             },
             "turn_detection": {
                 "type": "server_vad",
-                "threshold": 0.6,  # Slightly higher to reduce false triggers
-                "prefix_padding_ms": 400,  # More context before speech
-                "silence_duration_ms": 900  # Wait longer before responding (more natural)
+                "threshold": 0.5,  # More responsive to speech
+                "prefix_padding_ms": 300,  # Quicker pickup
+                "silence_duration_ms": 500  # Faster response time
             },
             "tools": [
                 {
