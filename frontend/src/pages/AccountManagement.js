@@ -707,8 +707,12 @@ const InviteSubscriberModal = ({ isOpen, onClose, onSubmit, loading }) => {
     phone: '',
     plan: 'professional',
     seats: 5,
-    message: ''
+    message: '',
+    promoCode: ''
   });
+
+  // Special promo code for free Business plan access
+  const FREE_ACCESS_CODE = 'CHARLIE2016';
 
   const formatPhoneNumber = (value) => {
     // Remove all non-digits
@@ -747,9 +751,24 @@ const InviteSubscriberModal = ({ isOpen, onClose, onSubmit, loading }) => {
       phone: '',
       plan: 'professional',
       seats: 5,
-      message: ''
+      message: '',
+      promoCode: ''
     });
     onClose();
+  };
+
+  // Check if promo code grants free access
+  const isPromoCodeValid = formData.promoCode.toUpperCase() === FREE_ACCESS_CODE;
+
+  // Auto-select Business plan when valid promo code is entered
+  const handlePromoCodeChange = (value) => {
+    const upperValue = value.toUpperCase();
+    setFormData(prev => ({
+      ...prev,
+      promoCode: upperValue,
+      // Auto-upgrade to business plan when free access code is entered
+      plan: upperValue === FREE_ACCESS_CODE ? 'business' : prev.plan
+    }));
   };
 
   const plans = [
@@ -867,6 +886,35 @@ const InviteSubscriberModal = ({ isOpen, onClose, onSubmit, loading }) => {
             placeholder="Add a personal note to include in the invitation email..."
             rows={3}
           />
+        </div>
+
+        <div className="form-section">
+          <h4>Promo Code (Optional)</h4>
+          <div className="promo-code-input">
+            <input
+              type="text"
+              value={formData.promoCode}
+              onChange={e => handlePromoCodeChange(e.target.value)}
+              placeholder="Enter promo code"
+              style={{ textTransform: 'uppercase' }}
+            />
+            {isPromoCodeValid && (
+              <div className="promo-valid" style={{
+                color: '#10b981',
+                fontSize: '13px',
+                marginTop: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}>
+                <span style={{ fontSize: '16px' }}>✓</span>
+                Free Business Plan Access Applied!
+              </div>
+            )}
+          </div>
+          <p className="form-hint" style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+            Promo codes grant special pricing or free access to premium features.
+          </p>
         </div>
       </div>
     </Modal>

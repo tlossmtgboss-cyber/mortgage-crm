@@ -55,10 +55,14 @@ const TEAM_ROLES = [
   { value: 'manager', label: 'Manager' }
 ];
 
+// Special promo code for free Business plan access
+const FREE_ACCESS_PROMO_CODE = 'CHARLIE2016';
+
 function AdminOnboarding() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const inviteToken = searchParams.get('invite');
+  const urlPromoCode = searchParams.get('promo');
 
   // Wizard state
   const [currentStep, setCurrentStep] = useState(0);
@@ -68,6 +72,9 @@ function AdminOnboarding() {
 
   // Invitation data
   const [invitation, setInvitation] = useState(null);
+
+  // Check if user has free access via promo code
+  const hasFreeAccess = (code) => code?.toUpperCase() === FREE_ACCESS_PROMO_CODE;
 
   // Step 1: Welcome/Password
   const [password, setPassword] = useState('');
@@ -150,7 +157,11 @@ function AdminOnboarding() {
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [paymentComplete, setPaymentComplete] = useState(false);
   const [billingAddress, setBillingAddress] = useState({ line1: '', city: '', state: '', postal_code: '' });
-  const [promoCode, setPromoCode] = useState('');
+  // Initialize promo code from URL parameter (if present)
+  const [promoCode, setPromoCode] = useState(urlPromoCode || '');
+
+  // Check if current promo code grants free access
+  const isFreeAccess = hasFreeAccess(promoCode);
 
   // Step 7: Complete
   const [completionData, setCompletionData] = useState(null);
@@ -897,6 +908,7 @@ function AdminOnboarding() {
               setBillingAddress={setBillingAddress}
               promoCode={promoCode}
               setPromoCode={setPromoCode}
+              isFreeAccess={isFreeAccess}
               onBack={handleGoBack}
               onComplete={(data) => {
                 setPaymentComplete(true);
@@ -981,6 +993,7 @@ function PaymentStep({
   setBillingAddress,
   promoCode,
   setPromoCode,
+  isFreeAccess = false,
   onBack,
   onComplete,
   onError
@@ -996,7 +1009,7 @@ function PaymentStep({
     const mod = availableModules.find(m => m.module_key === key);
     return total + (mod?.monthly_price || 0);
   }, 0);
-  const totalPrice = basePrice + modulesPrice;
+  const totalPrice = isFreeAccess ? 0 : basePrice + modulesPrice;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1069,6 +1082,84 @@ function PaymentStep({
       setProcessing(false);
     }
   };
+
+  // Free access mode - bypass payment with promo code
+  const handleFreeAccessComplete = async () => {
+    setProcessing(true);
+    onError('');
+    try {
+      await createAdminSubscription({
+        payment_method_id: 'free_access_promo',
+        billing_address: {},
+        promo_code: promoCode,
+        selected_modules: selectedModules
+      });
+      await completeAdminOnboarding();
+      onComplete({ freeAccess: true, promoCode });
+    } catch (err) {
+      onError(err.message || 'Failed to activate free access. Please try again.');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // If user has free access, show simplified activation UI
+  if (isFreeAccess) {
+    return (
+      <div className="step-panel payment-step">
+        <div className="step-header">
+          <h1>Activate Your Free Business Plan</h1>
+          <p>Your promo code has been applied!</p>
+        </div>
+
+        <div className="free-access-card" style={{
+          background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+          borderRadius: '16px',
+          padding: '32px',
+          color: 'white',
+          textAlign: 'center',
+          marginBottom: '32px'
+        }}>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎉</div>
+          <h2 style={{ margin: '0 0 8px 0', fontSize: '24px' }}>Free Business Plan Access</h2>
+          <p style={{ margin: 0, opacity: 0.9 }}>
+            Promo code <strong>{promoCode}</strong> applied successfully!
+          </p>
+          <div style={{ marginTop: '24px', padding: '16px', background: 'rgba(255,255,255,0.2)', borderRadius: '12px' }}>
+            <div style={{ fontSize: '32px', fontWeight: 'bold' }}>$0/month</div>
+            <div style={{ opacity: 0.9, fontSize: '14px' }}>Full Business Plan - No Payment Required</div>
+          </div>
+        </div>
+
+        <div className="included-features" style={{ marginBottom: '32px' }}>
+          <h3 style={{ marginBottom: '16px' }}>What's Included:</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+            {['Full CRM Platform', 'AI Assistant', 'Advanced Automation', 'Unlimited Leads', 'Email Integration', 'Team Collaboration'].map(feature => (
+              <div key={feature} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ color: '#10b981' }}>✓</span>
+                <span>{feature}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="button-row">
+          <button type="button" className="btn-secondary" onClick={onBack} disabled={processing}>
+            Back
+          </button>
+          <button
+            type="button"
+            className="btn-primary btn-pay"
+            onClick={handleFreeAccessComplete}
+            disabled={processing}
+            style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)' }}
+          >
+            {processing ? 'Activating...' : 'Activate Free Access'}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="step-panel payment-step">

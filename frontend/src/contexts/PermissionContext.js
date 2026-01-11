@@ -202,8 +202,8 @@ export const PermissionProvider = ({ children }) => {
 
   // Check if user has a specific permission
   const hasPermission = (permissionKey) => {
-    // Management role has all permissions
-    if (userRole === 'management') {
+    // Admin and management roles have all permissions
+    if (userRole === 'admin' || userRole === 'management') {
       return true;
     }
 
@@ -213,7 +213,8 @@ export const PermissionProvider = ({ children }) => {
 
   // Check if user has ANY of the provided permissions
   const hasAnyPermission = (permissionKeys) => {
-    if (userRole === 'management') {
+    // Admin and management roles have all permissions
+    if (userRole === 'admin' || userRole === 'management') {
       return true;
     }
 
@@ -222,7 +223,8 @@ export const PermissionProvider = ({ children }) => {
 
   // Check if user has ALL of the provided permissions
   const hasAllPermissions = (permissionKeys) => {
-    if (userRole === 'management') {
+    // Admin and management roles have all permissions
+    if (userRole === 'admin' || userRole === 'management') {
       return true;
     }
 
@@ -257,8 +259,8 @@ export const PermissionProvider = ({ children }) => {
   // Get the data scope for a resource type (what data can user see)
   // Returns: 'all', 'team', 'own', or 'none'
   const getDataScope = (resourceType) => {
-    // Management role sees all
-    if (userRole === 'management') {
+    // Admin and management roles see all
+    if (userRole === 'admin' || userRole === 'management') {
       return 'all';
     }
 

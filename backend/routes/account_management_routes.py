@@ -543,6 +543,7 @@ class InviteSubscriberRequest(BaseModel):
     plan: str = Field('professional', description="Subscription plan")
     seats: int = Field(5, ge=1, le=1000, description="Initial seat count")
     message: Optional[str] = Field(None, max_length=2000, description="Personal message")
+    promo_code: Optional[str] = Field(None, max_length=50, description="Promo code for special pricing")
 
 
 @router.post("/invite")
@@ -591,6 +592,7 @@ async def invite_subscriber(
                     'contact_name': invite.contact_name,
                     'plan': invite.plan,
                     'seats': invite.seats,
+                    'promo_code': invite.promo_code,
                     'expires_at': expires_at.isoformat()
                 }),
                 'message': invite.message or 'Subscription invitation',
@@ -616,7 +618,8 @@ async def invite_subscriber(
                 seats=invite.seats,
                 invitation_token=invitation_token,
                 personal_message=invite.message,
-                expires_days=7
+                expires_days=7,
+                promo_code=invite.promo_code
             )
             if email_sent:
                 logger.info(f"Invitation email sent successfully to {invite.email}")
@@ -626,15 +629,21 @@ async def invite_subscriber(
             logger.error(f"Error sending invitation email: {email_err}")
             # Continue anyway - email failure shouldn't block the invitation creation
 
+        # Build invitation link with promo code if present
+        invitation_link = f"https://perenniaai.com/signup?invite={invitation_token}"
+        if invite.promo_code:
+            invitation_link += f"&promo={invite.promo_code}"
+
         return success_response(
             data={
                 'email': invite.email,
                 'company_name': invite.company_name,
                 'plan': invite.plan,
                 'seats': invite.seats,
+                'promo_code': invite.promo_code,
                 'invitation_token': invitation_token,
                 'expires_at': expires_at.isoformat(),
-                'invitation_link': f"https://perenniaai.com/signup?invite={invitation_token}",
+                'invitation_link': invitation_link,
                 'email_sent': email_sent
             },
             message=f"Invitation {'sent' if email_sent else 'created (email pending)'} to {invite.email}"

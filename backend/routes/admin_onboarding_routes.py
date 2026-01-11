@@ -100,14 +100,16 @@ class InviteTeamRequest(BaseModel):
 
 class PaymentRequest(BaseModel):
     """Payment/subscription request"""
-    payment_method_id: str = Field(..., description="Stripe payment method ID")
-    billing_name: str = Field(..., min_length=2)
+    payment_method_id: str = Field(..., description="Stripe payment method ID or 'free_access_promo'")
+    billing_name: Optional[str] = Field(None, description="Billing name (optional for promo codes)")
+    billing_address: Optional[dict] = Field(None, description="Billing address object")
     billing_address_line1: Optional[str] = None
     billing_city: Optional[str] = None
     billing_state: Optional[str] = None
     billing_postal_code: Optional[str] = None
     billing_country: str = Field('US')
     promo_code: Optional[str] = None
+    selected_modules: Optional[list] = Field(None, description="Selected premium modules")
 
 
 # =============================================================================
@@ -611,6 +613,50 @@ async def create_subscription(
 
         plan_key = user.plan_id or 'professional'
         plan_info = PLAN_PRICES.get(plan_key, PLAN_PRICES['professional'])
+
+        # Free access promo code - bypass payment entirely
+        FREE_ACCESS_PROMO_CODE = 'CHARLIE2016'
+        if payment.payment_method_id == 'free_access_promo' and payment.promo_code and payment.promo_code.upper() == FREE_ACCESS_PROMO_CODE:
+            logger.info(f"Free access promo code applied for user {email}")
+
+            # Upgrade to business plan
+            db.execute(text("""
+                UPDATE tenant_accounts SET
+                    status = 'active',
+                    plan_id = 'business',
+                    stripe_customer_id = :customer_id,
+                    stripe_subscription_id = :sub_id,
+                    updated_at = NOW()
+                WHERE id = :tenant_id
+            """), {
+                'customer_id': f'promo_cus_{uuid.uuid4().hex[:8]}',
+                'sub_id': f'promo_free_access_{uuid.uuid4().hex[:8]}',
+                'tenant_id': str(user.tenant_account_id)
+            })
+
+            # Log the promo code usage
+            db.execute(text("""
+                INSERT INTO admin_audit_log (action_type, actor_admin_id, actor_name, target_type, target_id, new_values, reason)
+                VALUES ('promo_code_applied', :user_id, :user_name, 'tenant', :tenant_id, :details, 'Free Business Plan Access')
+            """), {
+                'user_id': user.id,
+                'user_name': user.full_name or email,
+                'tenant_id': str(user.tenant_account_id),
+                'details': str({'promo_code': FREE_ACCESS_PROMO_CODE, 'plan': 'business', 'price': 0})
+            })
+
+            db.commit()
+
+            return success_response(
+                data={
+                    'success': True,
+                    'free_access': True,
+                    'promo_code': FREE_ACCESS_PROMO_CODE,
+                    'plan': 'business',
+                    'subscription_id': f'promo_free_access_{uuid.uuid4().hex[:8]}'
+                },
+                message="Free Business Plan activated with promo code"
+            )
 
         if not STRIPE_AVAILABLE:
             # Demo mode - skip actual Stripe

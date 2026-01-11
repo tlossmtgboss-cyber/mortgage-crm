@@ -1233,13 +1233,16 @@ This notification was sent by Perennia AI CRM
         invitation_token: str,
         personal_message: Optional[str] = None,
         expires_days: int = 7,
-        base_url: str = None
+        base_url: str = None,
+        promo_code: Optional[str] = None
     ) -> bool:
         """Send subscription invitation email"""
         if not base_url:
             base_url = os.getenv('FRONTEND_URL', 'https://perenniaai.com')
 
         signup_url = f"{base_url}/signup?invite={invitation_token}"
+        if promo_code:
+            signup_url += f"&promo={promo_code}"
         subject = f"🎉 You're Invited to Join Perennia AI - {company_name}"
         html_body = self.format_subscription_invite_email(
             company_name, contact_name, plan, seats, signup_url, personal_message, expires_days
@@ -1328,7 +1331,8 @@ async def send_subscription_invite_email(
     seats: int,
     invitation_token: str,
     personal_message: Optional[str] = None,
-    expires_days: int = 7
+    expires_days: int = 7,
+    promo_code: Optional[str] = None
 ) -> bool:
     """Send subscription invitation email"""
     return email_service.send_subscription_invite(
@@ -1339,5 +1343,6 @@ async def send_subscription_invite_email(
         seats=seats,
         invitation_token=invitation_token,
         personal_message=personal_message,
-        expires_days=expires_days
+        expires_days=expires_days,
+        promo_code=promo_code
     )
