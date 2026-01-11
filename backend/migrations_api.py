@@ -1338,3 +1338,33 @@ async def run_voice_workflow_migration(
     except Exception as e:
         logger.error(f"Voice Workflow migration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/add-call-screening-tables")
+async def run_call_screening_migration(
+    admin: Any = Depends(verify_admin_access)
+):
+    """
+    Run the call screening tables migration.
+    Creates phone_blocklist, phone_whitelist, call_screening_log, phone_lookup_cache tables.
+    """
+    try:
+        from migrations.add_call_screening_tables import run_migration
+
+        logger.info("Starting call screening tables migration...")
+        run_migration()
+
+        return {
+            "status": "success",
+            "message": "Call screening tables created successfully",
+            "tables_created": [
+                "phone_blocklist",
+                "phone_whitelist",
+                "call_screening_log",
+                "phone_lookup_cache"
+            ]
+        }
+
+    except Exception as e:
+        logger.error(f"Call screening migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
