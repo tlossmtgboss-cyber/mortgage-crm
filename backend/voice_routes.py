@@ -782,9 +782,9 @@ async def connect_to_openai_realtime():
             },
             "turn_detection": {
                 "type": "server_vad",
-                "threshold": 0.5,  # More responsive to speech
+                "threshold": 0.75,  # Higher threshold to filter background noise
                 "prefix_padding_ms": 300,  # Quicker pickup
-                "silence_duration_ms": 500  # Faster response time
+                "silence_duration_ms": 600  # Slightly longer to avoid false triggers
             },
             "tools": [
                 {
