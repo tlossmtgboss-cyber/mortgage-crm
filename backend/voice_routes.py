@@ -738,7 +738,8 @@ async def connect_to_openai_realtime():
 
     logger.info(f"Connecting to OpenAI Realtime API (key: {openai_api_key[:10]}...)")
 
-    url = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17"
+    # Use generic model name - points to latest stable version
+    url = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview"
 
     headers = {
         "Authorization": f"Bearer {openai_api_key}",
@@ -753,7 +754,19 @@ async def connect_to_openai_realtime():
 
     # Wait for session.created event with timeout
     initial_response = await asyncio.wait_for(ws.recv(), timeout=5.0)
-    logger.info(f"OpenAI Realtime connected: {initial_response[:100]}")
+    logger.info(f"OpenAI Realtime initial response: {initial_response[:500]}")
+
+    # Check for error in initial response
+    try:
+        initial_data = json.loads(initial_response)
+        if initial_data.get('type') == 'error':
+            error_msg = initial_data.get('error', {}).get('message', 'Unknown error')
+            error_code = initial_data.get('error', {}).get('code', 'unknown')
+            logger.error(f"❌ OpenAI Realtime error: {error_code} - {error_msg}")
+            raise Exception(f"OpenAI error: {error_code} - {error_msg}")
+        logger.info(f"✅ OpenAI Realtime session created: {initial_data.get('type')}")
+    except json.JSONDecodeError:
+        logger.warning(f"Could not parse initial response as JSON: {initial_response[:200]}")
 
     # Configure the session for natural two-way conversation
     await ws.send(json.dumps({
