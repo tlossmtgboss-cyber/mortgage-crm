@@ -20754,6 +20754,15 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Salesforce user integration routes not loaded: {e}")
 
+# Calendar Salesforce Sync routes (Bi-directional 1-minute sync)
+try:
+    from routes.calendar_sync_routes import router as calendar_sync_router, set_dependencies as set_calendar_sync_deps
+    set_calendar_sync_deps(get_db, get_current_user)
+    app.include_router(calendar_sync_router, tags=["Calendar Salesforce Sync"])
+    logger.info("✅ Calendar Salesforce sync routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Calendar Salesforce sync routes not loaded: {e}")
+
 # HubSpot Integration routes (OAuth, CRM Sync)
 try:
     from routes.hubspot_routes import router as hubspot_router, set_dependencies as set_hubspot_deps
@@ -59043,6 +59052,14 @@ async def startup_event():
         logger.info("✅ Master Manager capacity recalculation job added (runs every 15 minutes)")
     except Exception as e:
         logger.warning(f"⚠️ Capacity recalculation job not added: {e}")
+
+    # Add Calendar Salesforce Sync jobs (1-minute bi-directional sync)
+    try:
+        from jobs.calendar_sync_job import register_calendar_sync_jobs
+        register_calendar_sync_jobs(scheduler)
+        logger.info("✅ Calendar Salesforce sync jobs added (push/pull every 60 seconds)")
+    except Exception as e:
+        logger.warning(f"⚠️ Calendar Salesforce sync jobs not added: {e}")
 
     logger.info("✅ CRM is ready!")
     logger.info("📚 API Documentation: http://localhost:8000/docs")
