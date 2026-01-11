@@ -383,20 +383,24 @@ async def create_workflow_session(
     db: Session = Depends(get_db),
 ):
     """Create a new voice workflow session."""
-    workflow_service = get_workflow_service(db)
+    try:
+        workflow_service = get_workflow_service(db)
 
-    session, response = await workflow_service.create_session(
-        user_id=user_id,
-        workflow_type=request.workflow_type,
-        initial_transcript=request.initial_transcript,
-    )
+        session, response = await workflow_service.create_session(
+            user_id=user_id,
+            workflow_type=request.workflow_type,
+            initial_transcript=request.initial_transcript,
+        )
 
-    return {
-        "success": True,
-        "workflow_id": str(session.id),
-        "current_state": session.current_state,
-        "response": response,
-    }
+        return {
+            "success": True,
+            "workflow_id": str(session.id),
+            "current_state": session.current_state,
+            "response": response,
+        }
+    except Exception as e:
+        logger.error(f"Error creating workflow session: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to create session: {str(e)}")
 
 
 @router.get("/sessions/{user_id}")
@@ -434,33 +438,39 @@ async def get_session_details(
     db: Session = Depends(get_db),
 ):
     """Get details of a specific workflow session."""
-    workflow_service = get_workflow_service(db)
-
     try:
-        session = await workflow_service.get_session(UUID(workflow_id))
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid workflow ID")
+        workflow_service = get_workflow_service(db)
 
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+        try:
+            session = await workflow_service.get_session(UUID(workflow_id))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid workflow ID")
 
-    return {
-        "id": str(session.id),
-        "user_id": session.user_id,
-        "workflow_type": session.workflow_type.value,
-        "current_state": session.current_state,
-        "slots": session.slots,
-        "conversation_history": [
-            {
-                "role": t.role,
-                "content": t.content,
-                "timestamp": t.timestamp.isoformat() if t.timestamp else None,
-            }
-            for t in session.conversation_history
-        ],
-        "started_at": session.started_at.isoformat() if session.started_at else None,
-        "is_active": session.is_active,
-    }
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        return {
+            "id": str(session.id),
+            "user_id": session.user_id,
+            "workflow_type": session.workflow_type.value,
+            "current_state": session.current_state,
+            "slots": session.slots,
+            "conversation_history": [
+                {
+                    "role": t.role,
+                    "content": t.content,
+                    "timestamp": t.timestamp.isoformat() if t.timestamp else None,
+                }
+                for t in session.conversation_history
+            ],
+            "started_at": session.started_at.isoformat() if session.started_at else None,
+            "is_active": session.is_active,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting session details: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to get session: {str(e)}")
 
 
 @router.post("/session/{workflow_id}/input")
