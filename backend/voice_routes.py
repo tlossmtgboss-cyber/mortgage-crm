@@ -589,32 +589,17 @@ async def voice_stream_websocket(websocket: WebSocket):
                 call_context['greeting_sent'] = True
                 logger.info("🎤 Both OpenAI session and Twilio ready - triggering AI greeting")
                 try:
-                    # First, add a conversation item to prompt the AI to greet
-                    await openai_ws.send(json.dumps({
-                        "type": "conversation.item.create",
-                        "item": {
-                            "type": "message",
-                            "role": "user",
-                            "content": [
-                                {
-                                    "type": "input_text",
-                                    "text": "[SYSTEM: A new caller has connected. Greet them warmly as Sam from CMG Home Loans and ask how you can help them today.]"
-                                }
-                            ]
-                        }
-                    }))
-                    logger.info("✅ Added greeting prompt to conversation")
-
-                    # Then request a response
+                    # Request a response with explicit instructions to greet
                     await openai_ws.send(json.dumps({
                         "type": "response.create",
                         "response": {
-                            "modalities": ["text", "audio"]
+                            "modalities": ["text", "audio"],
+                            "instructions": "Greet the caller warmly. Say: Hi, this is Sam with CMG Home Loans! Thanks for calling. How can I help you today?"
                         }
                     }))
-                    logger.info("✅ Greeting response requested from OpenAI")
+                    logger.info("✅ Greeting response requested with instructions")
                 except Exception as greet_err:
-                    logger.error(f"❌ Failed to send greeting trigger: {greet_err}")
+                    logger.error(f"❌ Failed to trigger greeting: {greet_err}")
 
         # Handle bidirectional streaming
         async def twilio_to_openai():
@@ -688,7 +673,13 @@ async def voice_stream_websocket(websocket: WebSocket):
                         logger.info("🔊 OpenAI audio response complete")
 
                     elif event_type == 'response.done':
-                        logger.info("✅ OpenAI response fully done")
+                        # Log the full response for debugging
+                        response_data = data.get('response', {})
+                        output_items = response_data.get('output', [])
+                        status = response_data.get('status', 'unknown')
+                        logger.info(f"✅ OpenAI response done - status: {status}, output items: {len(output_items)}")
+                        if not output_items:
+                            logger.warning(f"⚠️ Empty response from OpenAI! Full data: {json.dumps(data)[:500]}")
 
                     elif data['type'] == 'response.text.done':
                         # Log conversation
