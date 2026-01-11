@@ -1353,6 +1353,143 @@ class MultiLoanLifecycleService:
 
 
 # =============================================================================
+# PORTAL ACCESS BY TOKEN (Magic Link Entry Point)
+# =============================================================================
+
+@router.get("/access/{token}")
+def get_portal_by_token(
+    token: str = Path(..., description="PURL access token"),
+    db: Session = Depends(get_db),
+):
+    """Get portal data using a PURL access token.
+
+    This is the entry point for magic link access to the borrower portal.
+    Validates the token and returns portal data including loan information.
+    """
+    from services.purl_token_service import PURLTokenService
+    from sqlalchemy import text
+
+    # Validate token format
+    if not token.startswith("purl_live_"):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid token format"
+        )
+
+    # Verify token and get context
+    token_service = PURLTokenService(db)
+    context = token_service.verify_token(token)
+
+    if not context:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired access token"
+        )
+
+    workspace_id = context["workspace_id"]
+    contact_id = context.get("contact_id")
+    token_id = context["token_id"]
+
+    # Get the primary/current loan for this workspace
+    loan_result = db.execute(text("""
+        SELECT
+            l.id as loan_id,
+            l.loan_number,
+            l.status,
+            l.loan_purpose,
+            l.product_type,
+            l.loan_amount,
+            l.property_address,
+            l.property_type,
+            l.target_close_date,
+            l.actual_close_date,
+            l.paid_off_date,
+            CASE
+                WHEN l.paid_off_date IS NOT NULL THEN 'servicing'
+                WHEN l.actual_close_date IS NOT NULL THEN 'servicing'
+                ELSE 'transaction'
+            END as portal_mode
+        FROM purl_loans l
+        WHERE l.workspace_id = :workspace_id
+        AND l.paid_off_date IS NULL
+        ORDER BY l.created_at DESC
+        LIMIT 1
+    """), {"workspace_id": workspace_id})
+
+    loan_row = loan_result.fetchone()
+
+    if not loan_row:
+        raise HTTPException(
+            status_code=404,
+            detail="No active loan found for this portal"
+        )
+
+    loan_data = dict(loan_row._mapping)
+
+    # Get borrower name from contact or workspace
+    borrower_name = None
+    if contact_id:
+        contact_result = db.execute(text("""
+            SELECT first_name, last_name, email
+            FROM purl_contacts
+            WHERE id = :contact_id
+        """), {"contact_id": contact_id})
+        contact = contact_result.fetchone()
+        if contact:
+            borrower_name = f"{contact.first_name or ''} {contact.last_name or ''}".strip()
+
+    if not borrower_name:
+        # Try to get from workspace
+        workspace_result = db.execute(text("""
+            SELECT display_name FROM purl_workspaces WHERE id = :workspace_id
+        """), {"workspace_id": workspace_id})
+        workspace = workspace_result.fetchone()
+        if workspace:
+            borrower_name = workspace.display_name
+
+    # Determine lifecycle stage based on loan status
+    lifecycle_stage = "ACTIVE"
+    if loan_data.get("paid_off_date"):
+        lifecycle_stage = "MUM"
+    elif loan_data.get("actual_close_date"):
+        lifecycle_stage = "MUM"
+    elif loan_data.get("status") in ["funded", "closed"]:
+        lifecycle_stage = "MUM"
+
+    # Parse property address if it's a JSON string
+    property_address = loan_data.get("property_address")
+    if isinstance(property_address, str):
+        try:
+            import json
+            property_address = json.loads(property_address)
+        except:
+            pass
+
+    return {
+        "loan_id": loan_data["loan_id"],
+        "loan_number": loan_data.get("loan_number"),
+        "borrower_name": borrower_name or "Borrower",
+        "workspace_id": workspace_id,
+        "purl_token": token,
+        "lifecycle": {
+            "stage": lifecycle_stage,
+            "status": loan_data.get("status", "processing"),
+        },
+        "loan": {
+            "id": loan_data["loan_id"],
+            "loan_number": loan_data.get("loan_number"),
+            "status": loan_data.get("status"),
+            "portal_mode": loan_data.get("portal_mode", "transaction"),
+            "loan_purpose": loan_data.get("loan_purpose"),
+            "product_type": loan_data.get("product_type"),
+            "loan_amount": float(loan_data["loan_amount"]) if loan_data.get("loan_amount") else None,
+            "property_address": property_address,
+            "property_type": loan_data.get("property_type"),
+        }
+    }
+
+
+# =============================================================================
 # MULTI-LOAN PORTAL API ENDPOINTS
 # =============================================================================
 
