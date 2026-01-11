@@ -558,8 +558,20 @@ class PortalDocumentService:
 
     def get_document_summary(self, loan_id: int) -> Dict[str, Any]:
         """Get document upload summary for a loan."""
+        # Resolve loan_id to portal_loan.id
+        from models.portal_models import PortalLoan
+        portal_loan = self.db.query(PortalLoan).filter(
+            PortalLoan.crm_deal_id == loan_id
+        ).first()
+        if not portal_loan:
+            portal_loan = self.db.query(PortalLoan).filter(
+                PortalLoan.id == loan_id
+            ).first()
+
+        resolved_loan_id = portal_loan.id if portal_loan else loan_id
+
         docs = self.db.query(PortalDocument).filter(
-            PortalDocument.loan_id == loan_id
+            PortalDocument.loan_id == resolved_loan_id
         ).all()
 
         by_status = {
@@ -570,9 +582,15 @@ class PortalDocumentService:
         }
 
         for doc in docs:
-            status = doc.status.value.lower()
-            if status in by_status:
-                by_status[status] += 1
+            # Determine status from extraction_status and is_verified
+            if doc.is_verified:
+                by_status["approved"] += 1
+            elif doc.extraction_status and doc.extraction_status.value in ["PROCESSING"]:
+                by_status["processing"] += 1
+            elif doc.extraction_status and doc.extraction_status.value == "FAILED":
+                by_status["rejected"] += 1
+            else:
+                by_status["pending"] += 1
 
         return {
             "total": len(docs),
