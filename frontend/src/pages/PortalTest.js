@@ -5,8 +5,8 @@
 import React, { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { PortalProvider, usePortal, PORTAL_MODES } from '../contexts/PortalContext';
-import { LoanSelector, PortalModeIndicator } from '../components/portal';
-import { ModeBadge } from '../components/portal/PortalModeIndicator';
+import { LoanSelector, PortalModeIndicator } from '../components/Portal';
+import { ModeBadge } from '../components/Portal/PortalModeIndicator';
 
 // Inner component that uses portal context
 function PortalTestContent() {

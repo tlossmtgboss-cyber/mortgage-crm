@@ -19,11 +19,11 @@ import { useLocation } from 'react-router-dom';
 import { api } from '../../lib/api';
 import ScheduleAppointmentModal from '../../components/ScheduleAppointmentModal';
 import PaymentCalculator from '../../components/PaymentCalculator';
-import ApplicantTasks from '../../components/portal/ApplicantTasks';
-import PortalDocumentRequirements from '../../components/portal/PortalDocumentRequirements';
-import TotalCostAnalysis from '../../components/portal/TotalCostAnalysis';
-import PortalVideoMessages from '../../components/portal/PortalVideoMessages';
-import VideoLightbox from '../../components/portal/VideoLightbox';
+import ApplicantTasks from '../../components/Portal/ApplicantTasks';
+import PortalDocumentRequirements from '../../components/Portal/PortalDocumentRequirements';
+import TotalCostAnalysis from '../../components/Portal/TotalCostAnalysis';
+import PortalVideoMessages from '../../components/Portal/PortalVideoMessages';
+import VideoLightbox from '../../components/Portal/VideoLightbox';
 import '../PURLPortal.css';
 
 // Tab components - Arrow/chevron style with notification dots or count badges

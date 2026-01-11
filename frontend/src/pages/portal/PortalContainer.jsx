@@ -14,7 +14,7 @@ import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { useParams, useLocation } from 'react-router-dom';
 import { api } from '../../lib/api';
 import './PortalContainer.css';
-import PortalOnboardingGuide from '../../components/portal/PortalOnboardingGuide';
+import PortalOnboardingGuide from '../../components/Portal/PortalOnboardingGuide';
 
 // Lazy load portal components for code splitting
 const LeadPortal = lazy(() => import('./LeadPortal'));

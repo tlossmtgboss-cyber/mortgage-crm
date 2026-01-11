@@ -8,10 +8,10 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import BorrowerPortalDashboard, { MumPortalDashboard } from '../components/portal/BorrowerPortalDashboard';
+import BorrowerPortalDashboard, { MumPortalDashboard } from '../components/Portal/BorrowerPortalDashboard';
 import { borrowerPortalApi } from '../services/portalApi';
 import { PortalProvider, usePortal } from '../contexts/PortalContext';
-import { LoanSelector, PortalModeIndicator } from '../components/portal';
+import { LoanSelector, PortalModeIndicator } from '../components/Portal';
 import './BorrowerPortal.css';
 
 /**
