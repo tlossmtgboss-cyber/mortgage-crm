@@ -1,6 +1,3 @@
-// BUILD VERSION: 2026-01-11-v3 - Voice Agents Debug
-console.log('[APP] Build version: 2026-01-11-v3 - Voice Agents Debug');
-
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -28,6 +25,9 @@ import EmailVerificationSent from './pages/EmailVerificationSent';
 import Login from './pages/Login';
 import AdminOnboarding from './pages/AdminOnboarding';
 import ApplicationSubmitted from './pages/ApplicationSubmitted';
+
+// BUILD VERSION - for debugging deployment
+console.log('[APP] Build version: 2026-01-11-v4 - Voice Agents Debug');
 
 // Lazy load all other pages for instant navigation
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -197,6 +197,11 @@ const BankAccounts = lazy(() => import('./pages/accounting/banking/BankAccounts'
 const PlaidConnect = lazy(() => import('./pages/accounting/banking/PlaidConnect'));
 const BankTransactions = lazy(() => import('./pages/accounting/banking/BankTransactions'));
 const BankReconciliation = lazy(() => import('./pages/accounting/banking/BankReconciliation'));
+// Financial Reports
+const ProfitLoss = lazy(() => import('./pages/accounting/reports/ProfitLoss'));
+const BalanceSheet = lazy(() => import('./pages/accounting/reports/BalanceSheet'));
+const CashFlow = lazy(() => import('./pages/accounting/reports/CashFlow'));
+const TrialBalance = lazy(() => import('./pages/accounting/reports/TrialBalance'));
 
 // Portal Components - Real-time borrower and partner portals
 const ActiveLoanPortalComplete = lazy(() => import('./components/Portal/ActiveLoanPortalComplete'));
@@ -1778,6 +1783,94 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><BankReconciliation /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/accounting/reports/profit-loss"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><ProfitLoss /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/accounting/reports/balance-sheet"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><BalanceSheet /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/accounting/reports/cash-flow"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><CashFlow /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/accounting/reports/trial-balance"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><TrialBalance /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
