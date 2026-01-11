@@ -182,19 +182,19 @@ const LiveCallsMonitor = ({
     };
   }, [fetchCalls, connectWebSocket, refreshInterval]);
 
-  const handleCallClick = (call: LiveCall) => {
+  const handleCallClick = (call) => {
     setSelectedCall(call);
     onCallSelect?.(call);
   };
 
-  const formatDuration = (seconds: number): string => {
+  const formatDuration = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const getEmotionIcon = (emotion: string): string => {
-    const icons: Record<string, string> = {
+  const getEmotionIcon = (emotion) => {
+    const icons = {
       neutral: '😐',
       happy: '😊',
       frustrated: '😤',
@@ -204,8 +204,8 @@ const LiveCallsMonitor = ({
     return icons[emotion] || '😐';
   };
 
-  const getStatusColor = (status: string): string => {
-    const colors: Record<string, string> = {
+  const getStatusColor = (status) => {
+    const colors = {
       ringing: '#f59e0b',
       in_progress: '#22c55e',
       on_hold: '#6b7280',

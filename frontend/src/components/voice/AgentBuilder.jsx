@@ -30,7 +30,7 @@ const AgentBuilder = ({
     ...existingAgent
   });
 
-  const voiceOptions: VoiceOption[] = [
+  const voiceOptions = [
     { id: 'alloy', name: 'Alloy', description: 'Neutral and balanced', personality: 'Professional, Clear' },
     { id: 'echo', name: 'Echo', description: 'Professional and clear', personality: 'Confident, Articulate' },
     { id: 'fable', name: 'Fable', description: 'Warm and friendly', personality: 'Warm, Approachable' },
@@ -39,7 +39,7 @@ const AgentBuilder = ({
     { id: 'shimmer', name: 'Shimmer', description: 'Soft and gentle', personality: 'Gentle, Calm' }
   ];
 
-  const toolOptions: ToolOption[] = [
+  const toolOptions = [
     // Contact tools
     { id: 'get_contact_by_phone', name: 'Get Contact by Phone', description: 'Look up contacts by phone number', category: 'Contact' },
     { id: 'get_contact_details', name: 'Get Contact Details', description: 'Get full contact information', category: 'Contact' },
@@ -116,11 +116,11 @@ Guidelines:
     }
   ];
 
-  const updateConfig = (updates: Partial<AgentConfig>) => {
+  const updateConfig = (updates) => {
     setConfig(prev => ({ ...prev, ...updates }));
   };
 
-  const toggleTool = (toolId: string) => {
+  const toggleTool = (toolId) => {
     setConfig(prev => ({
       ...prev,
       tools_allowed: prev.tools_allowed.includes(toolId)
@@ -161,7 +161,7 @@ Guidelines:
     }
   };
 
-  const isStepValid = (stepNum: number): boolean => {
+  const isStepValid = (stepNum) => {
     switch (stepNum) {
       case 1:
         return config.name.trim().length > 0;

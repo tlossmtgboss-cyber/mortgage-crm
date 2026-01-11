@@ -95,12 +95,12 @@ const AgentStudio = ({ onAgentSelect, onEditAgent }) => {
     fetchAgents();
   }, [fetchAgents]);
 
-  const handleAgentClick = (agent: Agent) => {
+  const handleAgentClick = (agent) => {
     setSelectedAgent(agent);
     onAgentSelect?.(agent);
   };
 
-  const handleToggleStatus = async (agent: Agent) => {
+  const handleToggleStatus = async (agent) => {
     try {
       const token = localStorage.getItem('token');
       const newStatus = agent.status === 'active' ? 'inactive' : 'active';
@@ -122,12 +122,12 @@ const AgentStudio = ({ onAgentSelect, onEditAgent }) => {
     }
   };
 
-  const calculateSuccessRate = (agent: Agent): string => {
+  const calculateSuccessRate = (agent) => {
     if (agent.total_calls === 0) return '0%';
     return `${Math.round((agent.successful_calls / agent.total_calls) * 100)}%`;
   };
 
-  const formatDuration = (seconds: number): string => {
+  const formatDuration = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}m ${secs}s`;
