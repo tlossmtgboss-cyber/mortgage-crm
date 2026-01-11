@@ -124,7 +124,7 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
                 <Link
                   key={item.key}
                   to={item.path}
-                  className={`nav-link ${isNavItemActive(item) ? 'active' : ''}`}
+                  className={`nav-link ${isNavItemActive(item) ? 'active' : ''} ${item.adminOnly ? 'admin-link' : ''}`}
                   onMouseEnter={() => handleMouseEnter(item.path)}
                 >
                   {item.label}

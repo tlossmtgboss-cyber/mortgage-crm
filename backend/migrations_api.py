@@ -1197,3 +1197,94 @@ async def run_sessions_table_migration(
     except Exception as e:
         logger.error(f"Sessions table migration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/add-voice-workflow-tables")
+async def run_voice_workflow_migration(
+    admin: Any = Depends(verify_admin_access)
+):
+    """
+    Run the Voice Workflow Sessions table migration.
+
+    Creates the voice_workflow_sessions table for conversational AI workflows:
+    - Stores workflow state machine state
+    - Tracks collected slot data during conversation
+    - Records conversation history for context
+    - Stores execution results upon completion
+
+    Enables voice-driven task completion like "Send a pre-approval letter to a realtor"
+    with multi-turn conversational slot filling.
+    """
+    try:
+        from pathlib import Path
+        from database import engine
+        from sqlalchemy import text
+
+        logger.info("Starting Voice Workflow Sessions table migration...")
+
+        # Read the migration file
+        migration_path = Path(__file__).parent / "migrations" / "add_voice_workflow_tables.sql"
+        if not migration_path.exists():
+            raise HTTPException(
+                status_code=500,
+                detail=f"Migration file not found at {migration_path}"
+            )
+
+        sql = migration_path.read_text()
+
+        # Execute the migration
+        with engine.connect() as conn:
+            # Remove comment lines first, then split by semicolons
+            lines = [line for line in sql.split('\n') if not line.strip().startswith('--')]
+            clean_sql = '\n'.join(lines)
+            statements = [s.strip() for s in clean_sql.split(';') if s.strip()]
+            executed = 0
+            skipped = 0
+
+            for statement in statements:
+                if not statement:
+                    continue
+                try:
+                    conn.execute(text(statement))
+                    executed += 1
+                    logger.info(f"Executed: {statement[:60]}...")
+                except Exception as e:
+                    if "already exists" in str(e).lower():
+                        skipped += 1
+                        logger.info(f"Skipped (already exists): {statement[:60]}...")
+                    else:
+                        raise
+
+            conn.commit()
+
+            # Verify table was created
+            result = conn.execute(text("""
+                SELECT column_name, data_type
+                FROM information_schema.columns
+                WHERE table_name = 'voice_workflow_sessions'
+                ORDER BY ordinal_position
+            """))
+            columns = [{"name": row[0], "type": row[1]} for row in result.fetchall()]
+
+        logger.info(f"Voice Workflow migration completed. Executed: {executed}, Skipped: {skipped}")
+
+        return {
+            "status": "success",
+            "message": "Voice Workflow Sessions table created successfully",
+            "statements_executed": executed,
+            "statements_skipped": skipped,
+            "table_columns": len(columns),
+            "supported_workflows": [
+                "pre_approval_letter - Send pre-approval letters to realtors",
+                "schedule_appointment - Schedule meetings with contacts",
+                "create_task - Create tasks and reminders",
+                "send_email - Send emails to borrowers/realtors",
+                "update_loan_status - Update loan pipeline status"
+            ]
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Voice Workflow migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

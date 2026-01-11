@@ -154,6 +154,8 @@ PUBLIC_PATHS = [
     "/docs",
     "/redoc",
     "/openapi.json",
+    "/token",  # Login endpoint - must be accessible for authentication
+    "/api/v1/auth/",  # Auth endpoints
     "/api/v1/migrations/convert-lead-stage-to-enum-names",  # Key-protected migration
     "/api/v1/migrations/fix-lead-stage-values",  # Key-protected migration
     "/api/v1/webhook/",  # Webhooks must be accessible from external services (SendGrid, Twilio, etc.)
@@ -746,6 +748,20 @@ class IPBlockingMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         client_ip = self._get_client_ip(request)
+        logger.info(f"IPBlockingMiddleware: client_ip={client_ip}, path={path}")
+
+        # Skip IP blocking for localhost in development mode
+        environment = os.getenv("ENVIRONMENT", "development")
+        logger.info(f"IPBlockingMiddleware: environment={environment}")
+        # Always allow localhost in development (clear any stale blocks)
+        if client_ip in ("127.0.0.1", "::1", "localhost"):
+            logger.info(f"IPBlockingMiddleware: localhost detected, clearing blocks")
+            if client_ip in self.blocked_ips:
+                logger.info(f"Clearing stale block for localhost: {client_ip}")
+                self.blocked_ips.discard(client_ip)
+            if environment == "development":
+                logger.info(f"IPBlockingMiddleware: allowing localhost in development")
+                return await call_next(request)
 
         # Check if IP is blocked
         if client_ip in self.blocked_ips:

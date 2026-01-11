@@ -43,6 +43,26 @@
   color: var(--color-bg-base);
 }
 
+/* Admin Panel Link - Admin-only styling */
+.nav-link.admin-link {
+  background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%);
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.25);
+}
+
+.nav-link.admin-link:hover {
+  background: linear-gradient(135deg, #6d28d9 0%, #4f46e5 100%);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35);
+  transform: translateY(-1px);
+  color: #ffffff;
+}
+
+.nav-link.admin-link.active {
+  background: linear-gradient(135deg, #5b21b6 0%, #4338ca 100%);
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.4);
+}
+
 /* Locked navigation item - module not enabled */
 .nav-link.locked {
   opacity: 0.6;

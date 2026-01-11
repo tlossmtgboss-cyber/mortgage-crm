@@ -12,6 +12,7 @@ const AIDailyBlog = lazy(() => import('./AIDailyBlog'));
 const AIReceptionistDashboard = lazy(() => import('./AIReceptionistDashboard'));
 const PowerDialer = lazy(() => import('./PowerDialer'));
 const LiveCallWhisper = lazy(() => import('./LiveCallWhisper'));
+const DealAlertsDashboard = lazy(() => import('../components/DealAlerts').then(m => ({ default: m.DealAlertsDashboard })));
 
 // Marketing settings components (inline for now, can be extracted)
 const LandingPagesSettings = lazy(() => import('./marketing/LandingPagesSettings'));
@@ -34,6 +35,7 @@ const MARKETING_TOOLS = [
       { id: 'call-intelligence', name: 'Call Intelligence', description: 'AI-powered call analysis and insights' },
       { id: 'live-call-whisper', name: 'Live Call Whisper', description: 'Real-time AI coaching during calls' },
       { id: 'call-qa', name: 'Call QA', description: 'Call quality analysis and coaching' },
+      { id: 'deal-alerts', name: 'Deal Alerts', description: 'Proactive pipeline monitoring and alerts' },
     ]
   },
   {
@@ -122,6 +124,8 @@ function Marketing() {
         return <ConversationIntelligence />;
       case 'live-call-whisper':
         return <LiveCallWhisper />;
+      case 'deal-alerts':
+        return <DealAlertsDashboard embedded={true} />;
       case 'ai-blog':
         return <AIDailyBlog />;
       case 'landing-pages':

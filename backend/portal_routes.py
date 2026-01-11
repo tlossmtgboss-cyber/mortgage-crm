@@ -10,7 +10,7 @@ FastAPI router for all portal-related endpoints including:
 - Notifications
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Path, Body
+from fastapi import APIRouter, Depends, HTTPException, Query, Path, Body, Request
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from datetime import date, datetime
@@ -878,3 +878,630 @@ def get_mum_dashboard(
             loan_id, limit=10, borrower_visible_only=True
         ),
     }
+
+
+# =============================================================================
+# MULTI-LOAN PORTAL SUPPORT - PYDANTIC MODELS
+# =============================================================================
+
+from enum import Enum as PyEnum
+from sqlalchemy import text
+import uuid
+import json
+
+
+class PortalMode(str, PyEnum):
+    TRANSACTION = "transaction"
+    SERVICING = "servicing"
+
+
+class PaidOffReason(str, PyEnum):
+    REFINANCED = "refinanced"
+    SOLD = "sold"
+    PAID_IN_FULL = "paid_in_full"
+    FORECLOSURE = "foreclosure"
+    OTHER = "other"
+
+
+class LoanSummary(BaseModel):
+    """Minimal loan info for selector dropdown"""
+    id: int
+    loan_number: Optional[str]
+    property_address: Optional[str]
+    loan_amount: Optional[float]
+    status: str
+    portal_mode: str
+    is_current: bool = False
+
+
+class LoanPortalView(BaseModel):
+    """Complete loan view for portal display"""
+    id: int
+    loan_number: Optional[str]
+    status: str
+    portal_mode: str
+    loan_purpose: Optional[str]
+    product_type: Optional[str]
+    loan_amount: Optional[float]
+    interest_rate: Optional[float]
+    property_address: Optional[dict]
+    property_type: Optional[str]
+    target_close_date: Optional[str]
+    actual_close_date: Optional[str]
+    paid_off_date: Optional[str]
+    paid_off_reason: Optional[str]
+    refinanced_from_loan_id: Optional[int]
+    created_at: str
+    updated_at: str
+
+
+class BorrowerPortalContext(BaseModel):
+    """Complete portal context for the current borrower session"""
+    borrower_profile_id: str
+    session_id: str
+    current_loan: Optional[dict]
+    portal_mode: str
+    available_loans: List[dict]
+    transaction_loans_count: int
+    servicing_loans_count: int
+    has_multiple_loans: bool
+
+
+class SwitchLoanRequest(BaseModel):
+    """Request to switch to a different loan"""
+    loan_id: int
+    reason: Optional[str] = None
+
+
+class UpdatePortalModeRequest(BaseModel):
+    """Request to update loan portal mode (admin only)"""
+    portal_mode: PortalMode
+
+
+class MarkLoanPaidOffRequest(BaseModel):
+    """Request to mark a loan as paid off"""
+    paid_off_reason: PaidOffReason
+    paid_off_date: Optional[datetime] = None
+    new_loan_id: Optional[int] = None  # If refinanced, link to new loan
+
+
+class PortalActivityCreate(BaseModel):
+    """Log portal activity"""
+    activity_type: str
+    activity_data: Optional[dict] = None
+    page_path: Optional[str] = None
+
+
+# =============================================================================
+# MULTI-LOAN PORTAL SERVICE
+# =============================================================================
+
+class MultiLoanPortalService:
+    """Service for managing multi-loan portal context"""
+
+    def __init__(self, db: Session):
+        self.db = db
+
+    def get_borrower_loans(
+        self,
+        borrower_profile_id: str,
+        workspace_id: int,
+        mode_filter: Optional[PortalMode] = None,
+        include_paid_off: bool = False
+    ) -> List[dict]:
+        """Get all loans for a borrower with optional filtering"""
+        query = """
+            SELECT
+                pl.id, pl.loan_number, pl.status,
+                COALESCE(pl.portal_mode, 'transaction') as portal_mode,
+                pl.loan_purpose, pl.product_type, pl.loan_amount, pl.interest_rate,
+                pl.property_address, pl.property_type,
+                pl.target_close_date, pl.actual_close_date,
+                pl.paid_off_date, pl.paid_off_reason, pl.refinanced_from_loan_id,
+                pl.created_at, pl.updated_at
+            FROM purl_loans pl
+            JOIN purl_workspaces pw ON pw.id = pl.workspace_id
+            JOIN purl_applications pa ON pa.workspace_id = pw.id
+            WHERE pa.borrower_profile_id = :borrower_profile_id
+            AND pl.workspace_id = :workspace_id
+            AND pl.status NOT IN ('denied', 'cancelled', 'withdrawn')
+        """
+        params = {
+            "borrower_profile_id": borrower_profile_id,
+            "workspace_id": workspace_id
+        }
+
+        if mode_filter:
+            query += " AND COALESCE(pl.portal_mode, 'transaction') = :mode"
+            params["mode"] = mode_filter.value
+
+        if not include_paid_off:
+            query += " AND pl.paid_off_date IS NULL"
+
+        query += " ORDER BY pl.created_at DESC"
+
+        result = self.db.execute(text(query), params)
+        loans = []
+        for row in result:
+            loan = dict(row._mapping)
+            # Parse JSON fields
+            if loan.get("property_address") and isinstance(loan["property_address"], str):
+                try:
+                    loan["property_address"] = json.loads(loan["property_address"])
+                except:
+                    pass
+            loans.append(loan)
+
+        return loans
+
+    def get_portal_context(
+        self,
+        borrower_profile_id: str,
+        workspace_id: int,
+        current_loan_id: Optional[int] = None
+    ) -> dict:
+        """Get complete portal context for borrower"""
+        # Get all loans
+        all_loans = self.get_borrower_loans(
+            borrower_profile_id,
+            workspace_id,
+            include_paid_off=True
+        )
+
+        # Categorize loans
+        transaction_loans = [l for l in all_loans if l.get("portal_mode") == "transaction"]
+        servicing_loans = [l for l in all_loans if l.get("portal_mode") == "servicing"]
+        active_loans = [l for l in all_loans if l.get("paid_off_date") is None]
+
+        # Determine current loan
+        current_loan = None
+        if current_loan_id:
+            current_loan = next((l for l in all_loans if l["id"] == current_loan_id), None)
+
+        if not current_loan and active_loans:
+            # Default to most recent transaction loan, or most recent servicing loan
+            current_loan = next(
+                (l for l in transaction_loans if l.get("paid_off_date") is None),
+                None
+            )
+            if not current_loan:
+                current_loan = next(
+                    (l for l in servicing_loans if l.get("paid_off_date") is None),
+                    None
+                )
+
+        # Build loan summaries
+        loan_summaries = []
+        for loan in active_loans:
+            address = loan.get("property_address")
+            if isinstance(address, dict):
+                address_str = f"{address.get('street', '')}, {address.get('city', '')} {address.get('state', '')}"
+            else:
+                address_str = str(address) if address else None
+
+            loan_summaries.append({
+                "id": loan["id"],
+                "loan_number": loan.get("loan_number"),
+                "property_address": address_str,
+                "loan_amount": float(loan["loan_amount"]) if loan.get("loan_amount") else None,
+                "status": loan["status"],
+                "portal_mode": loan.get("portal_mode", "transaction"),
+                "is_current": current_loan and loan["id"] == current_loan["id"]
+            })
+
+        # Generate session ID
+        session_id = str(uuid.uuid4())
+
+        return {
+            "borrower_profile_id": borrower_profile_id,
+            "session_id": session_id,
+            "current_loan": current_loan,
+            "portal_mode": current_loan.get("portal_mode", "transaction") if current_loan else "transaction",
+            "available_loans": loan_summaries,
+            "transaction_loans_count": len([l for l in transaction_loans if l.get("paid_off_date") is None]),
+            "servicing_loans_count": len([l for l in servicing_loans if l.get("paid_off_date") is None]),
+            "has_multiple_loans": len(active_loans) > 1
+        }
+
+    def switch_loan(
+        self,
+        borrower_profile_id: str,
+        workspace_id: int,
+        session_id: str,
+        from_loan_id: Optional[int],
+        to_loan_id: int,
+        reason: Optional[str] = None
+    ) -> dict:
+        """Switch to a different loan and record the switch"""
+        # Verify the loan belongs to this borrower
+        loans = self.get_borrower_loans(borrower_profile_id, workspace_id, include_paid_off=True)
+        to_loan = next((l for l in loans if l["id"] == to_loan_id), None)
+
+        if not to_loan:
+            raise HTTPException(status_code=404, detail="Loan not found")
+
+        from_loan = next((l for l in loans if l["id"] == from_loan_id), None) if from_loan_id else None
+
+        # Record the switch
+        try:
+            self.db.execute(text("""
+                INSERT INTO loan_switch_history
+                    (session_id, borrower_profile_id, from_loan_id, to_loan_id,
+                     from_mode, to_mode, switch_reason)
+                VALUES
+                    (:session_id, :borrower_profile_id, :from_loan_id, :to_loan_id,
+                     :from_mode, :to_mode, :reason)
+            """), {
+                "session_id": session_id,
+                "borrower_profile_id": borrower_profile_id,
+                "from_loan_id": from_loan_id,
+                "to_loan_id": to_loan_id,
+                "from_mode": from_loan.get("portal_mode") if from_loan else None,
+                "to_mode": to_loan.get("portal_mode", "transaction"),
+                "reason": reason
+            })
+            self.db.commit()
+        except Exception as e:
+            # Table might not exist yet, log and continue
+            pass
+
+        # Return updated context
+        return self.get_portal_context(borrower_profile_id, workspace_id, to_loan_id)
+
+    def create_session(
+        self,
+        borrower_profile_id: str,
+        workspace_id: int,
+        loan_id: Optional[int],
+        portal_mode: str,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None
+    ) -> str:
+        """Create a new portal session"""
+        session_id = str(uuid.uuid4())
+
+        try:
+            self.db.execute(text("""
+                INSERT INTO loan_portal_sessions
+                    (session_id, borrower_profile_id, workspace_id, current_loan_id,
+                     portal_mode, ip_address, user_agent)
+                VALUES
+                    (:session_id, :borrower_profile_id, :workspace_id, :loan_id,
+                     :portal_mode, :ip_address, :user_agent)
+            """), {
+                "session_id": session_id,
+                "borrower_profile_id": borrower_profile_id,
+                "workspace_id": workspace_id,
+                "loan_id": loan_id,
+                "portal_mode": portal_mode,
+                "ip_address": ip_address,
+                "user_agent": user_agent
+            })
+            self.db.commit()
+        except Exception as e:
+            # Table might not exist yet
+            pass
+
+        return session_id
+
+    def log_activity(
+        self,
+        session_id: str,
+        borrower_profile_id: str,
+        loan_id: Optional[int],
+        activity_type: str,
+        activity_data: Optional[dict] = None,
+        page_path: Optional[str] = None
+    ) -> None:
+        """Log portal activity"""
+        try:
+            self.db.execute(text("""
+                INSERT INTO loan_portal_activity
+                    (session_id, borrower_profile_id, loan_id, activity_type,
+                     activity_data, page_path)
+                VALUES
+                    (:session_id, :borrower_profile_id, :loan_id, :activity_type,
+                     :activity_data, :page_path)
+            """), {
+                "session_id": session_id,
+                "borrower_profile_id": borrower_profile_id,
+                "loan_id": loan_id,
+                "activity_type": activity_type,
+                "activity_data": json.dumps(activity_data) if activity_data else None,
+                "page_path": page_path
+            })
+            self.db.commit()
+        except Exception as e:
+            # Table might not exist yet
+            pass
+
+
+# =============================================================================
+# MULTI-LOAN LIFECYCLE SERVICE
+# =============================================================================
+
+class MultiLoanLifecycleService:
+    """Service for managing loan lifecycle transitions"""
+
+    def __init__(self, db: Session):
+        self.db = db
+
+    def transition_to_servicing(self, loan_id: int) -> dict:
+        """Transition a loan from transaction to servicing mode"""
+        result = self.db.execute(text("""
+            SELECT id, status, COALESCE(portal_mode, 'transaction') as portal_mode, actual_close_date
+            FROM purl_loans WHERE id = :loan_id
+        """), {"loan_id": loan_id})
+
+        loan = result.fetchone()
+        if not loan:
+            raise HTTPException(status_code=404, detail="Loan not found")
+
+        if loan.portal_mode == "servicing":
+            return {"message": "Loan already in servicing mode", "loan_id": loan_id}
+
+        if loan.status != "closed" or not loan.actual_close_date:
+            raise HTTPException(
+                status_code=400,
+                detail="Loan must be closed before transitioning to servicing"
+            )
+
+        self.db.execute(text("""
+            UPDATE purl_loans
+            SET portal_mode = 'servicing', updated_at = CURRENT_TIMESTAMP
+            WHERE id = :loan_id
+        """), {"loan_id": loan_id})
+
+        self.db.commit()
+
+        return {
+            "message": "Loan transitioned to servicing mode",
+            "loan_id": loan_id,
+            "new_mode": "servicing"
+        }
+
+    def mark_paid_off(
+        self,
+        loan_id: int,
+        reason: PaidOffReason,
+        paid_off_date: Optional[datetime] = None,
+        new_loan_id: Optional[int] = None
+    ) -> dict:
+        """Mark a loan as paid off"""
+        result = self.db.execute(text("""
+            SELECT id, status, COALESCE(portal_mode, 'transaction') as portal_mode
+            FROM purl_loans WHERE id = :loan_id
+        """), {"loan_id": loan_id})
+
+        loan = result.fetchone()
+        if not loan:
+            raise HTTPException(status_code=404, detail="Loan not found")
+
+        if loan.portal_mode != "servicing":
+            raise HTTPException(
+                status_code=400,
+                detail="Only servicing loans can be marked as paid off"
+            )
+
+        self.db.execute(text("""
+            UPDATE purl_loans
+            SET paid_off_date = :paid_off_date,
+                paid_off_reason = :reason,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = :loan_id
+        """), {
+            "loan_id": loan_id,
+            "paid_off_date": paid_off_date or datetime.now(),
+            "reason": reason.value
+        })
+
+        if reason == PaidOffReason.REFINANCED and new_loan_id:
+            self.db.execute(text("""
+                UPDATE purl_loans
+                SET refinanced_from_loan_id = :old_loan_id
+                WHERE id = :new_loan_id
+            """), {"old_loan_id": loan_id, "new_loan_id": new_loan_id})
+
+        self.db.commit()
+
+        return {
+            "message": "Loan marked as paid off",
+            "loan_id": loan_id,
+            "reason": reason.value,
+            "paid_off_date": (paid_off_date or datetime.now()).isoformat()
+        }
+
+    def get_loan_history(self, loan_id: int) -> List[dict]:
+        """Get the chain of loans (refinance history)"""
+        history = []
+
+        result = self.db.execute(text("""
+            SELECT id, loan_number, loan_amount, status,
+                   COALESCE(portal_mode, 'transaction') as portal_mode,
+                   actual_close_date, paid_off_date, paid_off_reason,
+                   refinanced_from_loan_id
+            FROM purl_loans WHERE id = :loan_id
+        """), {"loan_id": loan_id})
+
+        current = result.fetchone()
+        if not current:
+            return history
+
+        history.append(dict(current._mapping))
+
+        while current and current.refinanced_from_loan_id:
+            result = self.db.execute(text("""
+                SELECT id, loan_number, loan_amount, status,
+                       COALESCE(portal_mode, 'transaction') as portal_mode,
+                       actual_close_date, paid_off_date, paid_off_reason,
+                       refinanced_from_loan_id
+                FROM purl_loans WHERE id = :loan_id
+            """), {"loan_id": current.refinanced_from_loan_id})
+
+            current = result.fetchone()
+            if current:
+                history.append(dict(current._mapping))
+
+        return history
+
+
+# =============================================================================
+# MULTI-LOAN PORTAL API ENDPOINTS
+# =============================================================================
+
+@router.get("/multi-loan/context")
+def get_multi_loan_context(
+    request: Request = None,
+    loan_id: Optional[int] = Query(None, description="Current loan ID"),
+    borrower_profile_id: str = Query(..., description="Borrower profile ID"),
+    workspace_id: int = Query(..., description="Workspace ID"),
+    db: Session = Depends(get_db),
+):
+    """Get the current borrower's multi-loan portal context"""
+    service = MultiLoanPortalService(db)
+    context = service.get_portal_context(borrower_profile_id, workspace_id, loan_id)
+
+    # Create session
+    session_id = service.create_session(
+        borrower_profile_id=borrower_profile_id,
+        workspace_id=workspace_id,
+        loan_id=context.get("current_loan", {}).get("id") if context.get("current_loan") else None,
+        portal_mode=context.get("portal_mode", "transaction"),
+        ip_address=request.client.host if request and request.client else None,
+        user_agent=request.headers.get("user-agent") if request else None
+    )
+
+    context["session_id"] = session_id
+
+    return context
+
+
+@router.get("/multi-loan/loans")
+def get_multi_loan_borrower_loans(
+    borrower_profile_id: str = Query(..., description="Borrower profile ID"),
+    workspace_id: int = Query(..., description="Workspace ID"),
+    mode: Optional[PortalMode] = Query(None, description="Filter by portal mode"),
+    include_paid_off: bool = Query(False, description="Include paid off loans"),
+    db: Session = Depends(get_db),
+):
+    """Get all loans for a borrower"""
+    service = MultiLoanPortalService(db)
+    loans = service.get_borrower_loans(
+        borrower_profile_id,
+        workspace_id,
+        mode_filter=mode,
+        include_paid_off=include_paid_off
+    )
+
+    return {"loans": loans, "count": len(loans)}
+
+
+@router.post("/multi-loan/loans/switch")
+def switch_multi_loan(
+    switch_request: SwitchLoanRequest,
+    session_id: str = Query(..., description="Current session ID"),
+    borrower_profile_id: str = Query(..., description="Borrower profile ID"),
+    workspace_id: int = Query(..., description="Workspace ID"),
+    current_loan_id: Optional[int] = Query(None, description="Current loan ID"),
+    db: Session = Depends(get_db),
+):
+    """Switch to a different loan"""
+    service = MultiLoanPortalService(db)
+    context = service.switch_loan(
+        borrower_profile_id=borrower_profile_id,
+        workspace_id=workspace_id,
+        session_id=session_id,
+        from_loan_id=current_loan_id,
+        to_loan_id=switch_request.loan_id,
+        reason=switch_request.reason
+    )
+
+    return {
+        "success": True,
+        "previous_loan_id": current_loan_id,
+        "new_loan_id": switch_request.loan_id,
+        "new_portal_mode": context.get("portal_mode"),
+        "context": context
+    }
+
+
+@router.get("/multi-loan/loans/{loan_id}/history")
+def get_multi_loan_history(
+    loan_id: int = Path(..., description="Loan ID"),
+    db: Session = Depends(get_db),
+):
+    """Get the loan refinance history chain"""
+    lifecycle_service = MultiLoanLifecycleService(db)
+    history = lifecycle_service.get_loan_history(loan_id)
+
+    return {"loan_id": loan_id, "history": history}
+
+
+@router.post("/multi-loan/admin/loans/{loan_id}/transition-to-servicing")
+def admin_multi_loan_transition_to_servicing(
+    loan_id: int = Path(..., description="Loan ID"),
+    db: Session = Depends(get_db),
+):
+    """Admin endpoint to transition a loan to servicing mode"""
+    lifecycle_service = MultiLoanLifecycleService(db)
+    result = lifecycle_service.transition_to_servicing(loan_id)
+
+    return result
+
+
+@router.post("/multi-loan/admin/loans/{loan_id}/mark-paid-off")
+def admin_multi_loan_mark_paid_off(
+    loan_id: int = Path(..., description="Loan ID"),
+    request: MarkLoanPaidOffRequest = Body(...),
+    db: Session = Depends(get_db),
+):
+    """Admin endpoint to mark a loan as paid off"""
+    lifecycle_service = MultiLoanLifecycleService(db)
+    result = lifecycle_service.mark_paid_off(
+        loan_id=loan_id,
+        reason=request.paid_off_reason,
+        paid_off_date=request.paid_off_date,
+        new_loan_id=request.new_loan_id
+    )
+
+    return result
+
+
+@router.put("/multi-loan/admin/loans/{loan_id}/portal-mode")
+def admin_update_multi_loan_portal_mode(
+    loan_id: int = Path(..., description="Loan ID"),
+    request: UpdatePortalModeRequest = Body(...),
+    db: Session = Depends(get_db),
+):
+    """Admin endpoint to update loan portal mode"""
+    db.execute(text("""
+        UPDATE purl_loans
+        SET portal_mode = :mode, updated_at = CURRENT_TIMESTAMP
+        WHERE id = :loan_id
+    """), {"loan_id": loan_id, "mode": request.portal_mode.value})
+
+    db.commit()
+
+    return {"message": "Portal mode updated", "loan_id": loan_id, "portal_mode": request.portal_mode.value}
+
+
+@router.post("/multi-loan/activity")
+def log_multi_loan_portal_activity(
+    activity: PortalActivityCreate,
+    session_id: str = Query(..., description="Current session ID"),
+    borrower_profile_id: str = Query(..., description="Borrower profile ID"),
+    loan_id: Optional[int] = Query(None, description="Current loan ID"),
+    db: Session = Depends(get_db),
+):
+    """Log portal activity for analytics"""
+    service = MultiLoanPortalService(db)
+    service.log_activity(
+        session_id=session_id,
+        borrower_profile_id=borrower_profile_id,
+        loan_id=loan_id,
+        activity_type=activity.activity_type,
+        activity_data=activity.activity_data,
+        page_path=activity.page_path
+    )
+
+    return {"success": True}

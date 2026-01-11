@@ -809,6 +809,58 @@ class Loan(Base):
     closer_email = Column(String)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # ============================================================
+    # SLA Date Fields - All 33 Jungo Custom Byte Mappings
+    # ============================================================
+    # Lead & Application Phase
+    prospect_date = Column(Date)
+    application_date = Column(Date)
+    le_pending_date = Column(Date)
+    credit_only_date = Column(Date)
+    file_received_date = Column(Date)
+    preapproval_date = Column(Date)
+
+    # Lock Phase (lock_date and lock_expiration_date already exist above)
+
+    # Processing & Underwriting Phase
+    uw_received_date = Column(Date)
+    conditions_for_review_date = Column(Date)
+    suspended_date = Column(Date)
+    loan_approved_date = Column(Date)
+    approved_not_accepted_date = Column(Date)
+    approval_expires_date = Column(Date)
+
+    # Appraisal Phase (appraisal_ordered_date exists above)
+    appraisal_received_date = Column(Date)
+    appraisal_docs_expire_date = Column(Date)
+
+    # Closing Disclosure Phase
+    cd_requested_date = Column(Date)
+    cd_sent_to_borrower_date = Column(Date)
+    cd_acknowledged_date = Column(Date)
+
+    # Clear to Close & Docs Phase
+    clear_to_close_date = Column(Date)
+    docs_ordered_date = Column(Date)
+    docs_out_date = Column(Date)
+    credit_docs_expire_date = Column(Date)
+
+    # Funding Phase
+    scheduled_closing_date = Column(Date)
+    scheduled_funding_date = Column(Date)
+    funds_ordered_date = Column(Date)
+    funds_sent_date = Column(Date)
+    # funded_date already exists above as DateTime
+    first_payment_date = Column(Date)
+
+    # Post-Closing
+    investor_purchased_date = Column(Date)
+
+    # Status Changes
+    withdrawn_date = Column(Date)
+    # contract_received_date already exists above
+
     loan_officer = relationship("User", back_populates="loans")
     tasks = relationship("AITask", back_populates="loan")
     activities = relationship("Activity", back_populates="loan")

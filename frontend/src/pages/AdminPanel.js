@@ -86,6 +86,7 @@ const AdminPanel = () => {
 
   // Modal state
   const [showUserModal, setShowUserModal] = useState(false);
+  const [showTestAccountModal, setShowTestAccountModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [userForm, setUserForm] = useState({
     first_name: '',
@@ -99,7 +100,18 @@ const AdminPanel = () => {
     bio: '',
     is_active: true
   });
+  const [testAccountForm, setTestAccountForm] = useState({
+    first_name: 'Test',
+    last_name: 'User',
+    email: '',
+    password: '',
+    role: 'loan_officer',
+    permission_role: 'sales',
+    company: 'Test Company',
+    nmls_id: '12345',
+  });
   const [saving, setSaving] = useState(false);
+  const [creatingTestAccount, setCreatingTestAccount] = useState(false);
 
   // Load dashboard data
   const loadDashboard = useCallback(async () => {
@@ -378,6 +390,70 @@ const AdminPanel = () => {
     }
   };
 
+  // Create test account for admin testing
+  const createTestAccount = async (e) => {
+    e.preventDefault();
+    setCreatingTestAccount(true);
+
+    try {
+      // Create the test user with full paid subscriber access
+      const response = await api.post('/api/v1/admin/users', {
+        ...testAccountForm,
+        is_active: true,
+        is_test_account: true,
+        subscription_status: 'active',
+        has_full_access: true,
+      });
+
+      setShowTestAccountModal(false);
+      loadDashboard();
+
+      // Show credentials
+      const password = response.data?.temp_password || testAccountForm.password || 'Check email for password';
+      alert(
+        `Test account created successfully!\n\n` +
+        `Email: ${testAccountForm.email}\n` +
+        `Password: ${password}\n` +
+        `Role: ${testAccountForm.role}\n\n` +
+        `You can now:\n` +
+        `1. Log out and log in with these credentials\n` +
+        `2. Or use the Impersonate feature to view as this user`
+      );
+    } catch (err) {
+      console.error('Create test account error:', err);
+      const errorMsg = err.response?.data?.detail || 'Failed to create test account. Please try again.';
+      alert(errorMsg);
+    } finally {
+      setCreatingTestAccount(false);
+    }
+  };
+
+  // Handle test account form input
+  const handleTestAccountInput = (e) => {
+    const { name, value } = e.target;
+    setTestAccountForm(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  // Open test account modal with defaults
+  const openTestAccountModal = () => {
+    // Generate a unique email based on timestamp
+    const timestamp = Date.now();
+    setTestAccountForm({
+      first_name: 'Test',
+      last_name: 'User',
+      email: `testuser+${timestamp}@test.com`,
+      password: 'TestPassword123!',
+      role: 'loan_officer',
+      permission_role: 'sales',
+      company: 'Test Company',
+      nmls_id: '12345',
+    });
+    setShowTestAccountModal(true);
+  };
+
   // Format currency
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-US', {
@@ -552,6 +628,9 @@ const AdminPanel = () => {
               </button>
             )}
           </div>
+          <button className="btn-test-account" onClick={openTestAccountModal} title="Create a test account to test the software as a paid user">
+            Create Test Account
+          </button>
           <button className="btn-primary" onClick={openNewUserModal}>
             + Add User
           </button>
@@ -2057,6 +2136,155 @@ const AdminPanel = () => {
                 </button>
                 <button type="submit" className="btn-primary" disabled={saving}>
                   {saving ? 'Saving...' : 'Save User'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Test Account Modal */}
+      {showTestAccountModal && (
+        <div className="modal-overlay" onClick={() => setShowTestAccountModal(false)}>
+          <div className="modal-content test-account-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Create Test Account</h2>
+              <button className="modal-close" onClick={() => setShowTestAccountModal(false)}>
+                &times;
+              </button>
+            </div>
+
+            <div className="test-account-info">
+              <p>Create a test account to experience the software as a paid user. This account will have full access to all features.</p>
+            </div>
+
+            <form onSubmit={createTestAccount}>
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="test_first_name">First Name</label>
+                  <input
+                    type="text"
+                    id="test_first_name"
+                    name="first_name"
+                    value={testAccountForm.first_name}
+                    onChange={handleTestAccountInput}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="test_last_name">Last Name</label>
+                  <input
+                    type="text"
+                    id="test_last_name"
+                    name="last_name"
+                    value={testAccountForm.last_name}
+                    onChange={handleTestAccountInput}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="test_email">Email *</label>
+                  <input
+                    type="email"
+                    id="test_email"
+                    name="email"
+                    value={testAccountForm.email}
+                    onChange={handleTestAccountInput}
+                    required
+                    placeholder="testuser@test.com"
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="test_password">Password *</label>
+                  <input
+                    type="text"
+                    id="test_password"
+                    name="password"
+                    value={testAccountForm.password}
+                    onChange={handleTestAccountInput}
+                    required
+                    placeholder="TestPassword123!"
+                  />
+                  <small className="form-hint">Password will be shown in plain text for testing</small>
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="test_role">User Role</label>
+                  <select
+                    id="test_role"
+                    name="role"
+                    value={testAccountForm.role}
+                    onChange={handleTestAccountInput}
+                  >
+                    <option value="loan_officer">Loan Officer (Full Access)</option>
+                    <option value="processor">Processor</option>
+                    <option value="production_assistant">Production Assistant</option>
+                    <option value="manager">Manager</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label htmlFor="test_permission_role">Permission Level</label>
+                  <select
+                    id="test_permission_role"
+                    name="permission_role"
+                    value={testAccountForm.permission_role}
+                    onChange={handleTestAccountInput}
+                  >
+                    <option value="sales">Sales (Loan Officer)</option>
+                    <option value="processing">Processing</option>
+                    <option value="operations">Operations</option>
+                    <option value="management">Management</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="test_company">Company</label>
+                  <input
+                    type="text"
+                    id="test_company"
+                    name="company"
+                    value={testAccountForm.company}
+                    onChange={handleTestAccountInput}
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="test_nmls_id">NMLS ID</label>
+                  <input
+                    type="text"
+                    id="test_nmls_id"
+                    name="nmls_id"
+                    value={testAccountForm.nmls_id}
+                    onChange={handleTestAccountInput}
+                  />
+                </div>
+              </div>
+
+              <div className="test-account-note">
+                <strong>Note:</strong> After creating the account, you can:
+                <ul>
+                  <li>Log out and log in with the test credentials</li>
+                  <li>Use the "Impersonate" dropdown to preview as this role</li>
+                  <li>Test all features as a paid subscriber</li>
+                </ul>
+              </div>
+
+              <div className="form-actions">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowTestAccountModal(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary" disabled={creatingTestAccount}>
+                  {creatingTestAccount ? 'Creating...' : 'Create Test Account'}
                 </button>
               </div>
             </form>
