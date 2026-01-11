@@ -574,19 +574,20 @@ async def debug_test_session(
             return {"success": False, "error": "Auth failed", "results": results}
 
         # Step 2: Check loans for user
+        # Note: loans table uses 'amount', 'program', 'rate', 'stage' instead of 'loan_amount', 'loan_type', 'interest_rate', 'status'
         try:
             loans = db.execute(text("""
-                SELECT id, borrower_name, loan_amount, loan_type, status
+                SELECT id, borrower_name, amount, program, stage
                 FROM loans
                 WHERE loan_officer_id = :user_id
-                AND status NOT IN ('funded', 'cancelled', 'denied', 'closed')
+                AND stage NOT IN ('funded', 'cancelled', 'denied', 'closed', 'withdrawn')
                 LIMIT 5
             """), {"user_id": user_id}).fetchall()
             results["steps"].append({
                 "step": "loans_query",
                 "status": "ok",
                 "count": len(loans),
-                "loans": [{"id": l[0], "name": l[1], "amount": float(l[2]) if l[2] else 0} for l in loans]
+                "loans": [{"id": l[0], "name": l[1], "amount": float(l[2]) if l[2] else 0, "program": l[3], "stage": l[4]} for l in loans]
             })
         except Exception as e:
             results["steps"].append({"step": "loans_query", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
@@ -612,6 +613,70 @@ async def debug_test_session(
             from services.voice_workflow_service import get_workflow_service
             svc = get_workflow_service(db)
             results["steps"].append({"step": "workflow_service", "status": "ok"})
+        except Exception as e:
+            results["steps"].append({"step": "workflow_service", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+
+        return {"success": True, "results": results}
+
+    except Exception as e:
+        return {"success": False, "error": str(e), "traceback": traceback.format_exc(), "results": results}
+
+
+@router.get("/debug/test-noauth")
+async def debug_test_noauth(
+    user_id: int = Query(1, description="User ID to test with"),
+    db: Session = Depends(get_db),
+):
+    """Debug endpoint without auth to test voice workflow components directly."""
+    import traceback
+
+    results = {"user_id": user_id, "steps": []}
+
+    try:
+        # Step 1: Check loans for user (using correct column names)
+        try:
+            loans = db.execute(text("""
+                SELECT id, borrower_name, amount, program, stage
+                FROM loans
+                WHERE loan_officer_id = :user_id
+                AND stage NOT IN ('funded', 'cancelled', 'denied', 'closed', 'withdrawn')
+                LIMIT 5
+            """), {"user_id": user_id}).fetchall()
+            results["steps"].append({
+                "step": "loans_query",
+                "status": "ok",
+                "count": len(loans),
+                "loans": [{"id": l[0], "name": l[1], "amount": float(l[2]) if l[2] else 0, "program": l[3], "stage": l[4]} for l in loans]
+            })
+        except Exception as e:
+            results["steps"].append({"step": "loans_query", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+            return {"success": False, "results": results}
+
+        # Step 2: Test workflow service creation
+        try:
+            from services.voice_workflow_service import VoiceWorkflowService
+            from models.voice_workflow_models import WorkflowType
+
+            svc = VoiceWorkflowService(db)
+            results["steps"].append({"step": "workflow_service", "status": "ok"})
+
+            # Step 3: Try to create a session
+            try:
+                session, response = await svc.create_session(
+                    user_id=user_id,
+                    workflow_type=WorkflowType.PRE_APPROVAL_LETTER,
+                )
+                results["steps"].append({
+                    "step": "create_session",
+                    "status": "ok",
+                    "session_id": str(session.id),
+                    "current_state": session.current_state,
+                    "response_text": response.get("text", "")[:200] if response else None,
+                    "available_applicants": len(session.available_applicants) if hasattr(session, 'available_applicants') and session.available_applicants else 0,
+                })
+            except Exception as e:
+                results["steps"].append({"step": "create_session", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+
         except Exception as e:
             results["steps"].append({"step": "workflow_service", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
 
