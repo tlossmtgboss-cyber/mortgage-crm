@@ -183,6 +183,18 @@ async def voice_workflow_websocket(
             if result:
                 user_id = result[0]
 
+        # Debug mode: allow "debug:<user_id>" token format for testing
+        if not user_id and token.startswith("debug:"):
+            try:
+                debug_user_id = int(token.split(":")[1])
+                # Verify the user exists
+                user_check = db.execute(text("SELECT id FROM users WHERE id = :id"), {"id": debug_user_id}).fetchone()
+                if user_check:
+                    user_id = debug_user_id
+                    logger.warning(f"WebSocket using DEBUG token for user {user_id}")
+            except (ValueError, IndexError):
+                pass
+
         if not user_id:
             await websocket.send_json({
                 "type": WebSocketMessageType.ERROR.value,
