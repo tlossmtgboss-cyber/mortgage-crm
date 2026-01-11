@@ -23,23 +23,37 @@ const defaultPortalState = {
 // Context
 const PortalContext = createContext(null);
 
-export function PortalProvider({ children, borrowerProfileId, workspaceId }) {
+/**
+ * PortalProvider - Manages multi-loan portal state and API interactions
+ *
+ * @param {string} token - PURL access token for authentication (required)
+ * @param {React.ReactNode} children - Child components
+ */
+export function PortalProvider({ children, token }) {
   // Portal state
-  const [portalState, setPortalState] = useState({
-    ...defaultPortalState,
-    borrowerProfileId,
-    workspaceId,
-  });
+  const [portalState, setPortalState] = useState(defaultPortalState);
 
   // Loading states
   const [loading, setLoading] = useState(true);
   const [switching, setSwitching] = useState(false);
   const [error, setError] = useState(null);
 
+  // Build headers with auth token
+  const getHeaders = useCallback(() => {
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    return headers;
+  }, [token]);
+
   // Fetch portal context from API
   const fetchPortalContext = useCallback(async (loanId = null) => {
-    if (!borrowerProfileId || !workspaceId) {
+    if (!token) {
       setLoading(false);
+      setError('No authentication token provided');
       return;
     }
 
@@ -47,26 +61,22 @@ export function PortalProvider({ children, borrowerProfileId, workspaceId }) {
     setError(null);
 
     try {
-      const params = new URLSearchParams({
-        borrower_profile_id: borrowerProfileId,
-        workspace_id: workspaceId,
-      });
-
+      const params = new URLSearchParams();
       if (loanId) {
         params.append('loan_id', loanId);
       }
 
-      const response = await fetch(
-        `${API_BASE_URL}/api/portal/multi-loan/context?${params}`,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+      const url = params.toString()
+        ? `${API_BASE_URL}/api/portal/multi-loan/context?${params}`
+        : `${API_BASE_URL}/api/portal/multi-loan/context`;
+
+      const response = await fetch(url, {
+        headers: getHeaders(),
+      });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch portal context');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || errorData.detail || 'Failed to fetch portal context');
       }
 
       const data = await response.json();
@@ -74,7 +84,7 @@ export function PortalProvider({ children, borrowerProfileId, workspaceId }) {
       setPortalState({
         sessionId: data.session_id,
         borrowerProfileId: data.borrower_profile_id,
-        workspaceId,
+        workspaceId: data.workspace_id,
         currentLoan: data.current_loan,
         portalMode: data.portal_mode || PORTAL_MODES.TRANSACTION,
         availableLoans: data.available_loans || [],
@@ -88,10 +98,15 @@ export function PortalProvider({ children, borrowerProfileId, workspaceId }) {
     } finally {
       setLoading(false);
     }
-  }, [borrowerProfileId, workspaceId]);
+  }, [token, getHeaders]);
 
   // Switch to a different loan
   const switchLoan = useCallback(async (loanId, reason = null) => {
+    if (!token) {
+      console.error('No authentication token available');
+      return;
+    }
+
     if (!portalState.sessionId) {
       console.error('No session ID available');
       return;
@@ -103,8 +118,6 @@ export function PortalProvider({ children, borrowerProfileId, workspaceId }) {
     try {
       const params = new URLSearchParams({
         session_id: portalState.sessionId,
-        borrower_profile_id: borrowerProfileId,
-        workspace_id: workspaceId,
       });
 
       if (portalState.currentLoan?.id) {
@@ -115,9 +128,7 @@ export function PortalProvider({ children, borrowerProfileId, workspaceId }) {
         `${API_BASE_URL}/api/portal/multi-loan/loans/switch?${params}`,
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: getHeaders(),
           body: JSON.stringify({
             loan_id: loanId,
             reason,
@@ -126,7 +137,8 @@ export function PortalProvider({ children, borrowerProfileId, workspaceId }) {
       );
 
       if (!response.ok) {
-        throw new Error('Failed to switch loan');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || errorData.detail || 'Failed to switch loan');
       }
 
       const data = await response.json();
@@ -135,7 +147,7 @@ export function PortalProvider({ children, borrowerProfileId, workspaceId }) {
         setPortalState({
           sessionId: data.context.session_id,
           borrowerProfileId: data.context.borrower_profile_id,
-          workspaceId,
+          workspaceId: data.context.workspace_id,
           currentLoan: data.context.current_loan,
           portalMode: data.context.portal_mode || PORTAL_MODES.TRANSACTION,
           availableLoans: data.context.available_loans || [],
@@ -153,16 +165,15 @@ export function PortalProvider({ children, borrowerProfileId, workspaceId }) {
     } finally {
       setSwitching(false);
     }
-  }, [portalState.sessionId, portalState.currentLoan, borrowerProfileId, workspaceId]);
+  }, [token, portalState.sessionId, portalState.currentLoan, getHeaders]);
 
   // Log portal activity
   const logActivity = useCallback(async (activityType, activityData = null, pagePath = null) => {
-    if (!portalState.sessionId) return;
+    if (!token || !portalState.sessionId) return;
 
     try {
       const params = new URLSearchParams({
         session_id: portalState.sessionId,
-        borrower_profile_id: borrowerProfileId,
       });
 
       if (portalState.currentLoan?.id) {
@@ -173,9 +184,7 @@ export function PortalProvider({ children, borrowerProfileId, workspaceId }) {
         `${API_BASE_URL}/api/portal/multi-loan/activity?${params}`,
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: getHeaders(),
           body: JSON.stringify({
             activity_type: activityType,
             activity_data: activityData,
@@ -186,10 +195,12 @@ export function PortalProvider({ children, borrowerProfileId, workspaceId }) {
     } catch (err) {
       console.error('Failed to log activity:', err);
     }
-  }, [portalState.sessionId, portalState.currentLoan, borrowerProfileId]);
+  }, [token, portalState.sessionId, portalState.currentLoan, getHeaders]);
 
   // Get loan history chain
   const getLoanHistory = useCallback(async (loanId = null) => {
+    if (!token) return [];
+
     const targetLoanId = loanId || portalState.currentLoan?.id;
     if (!targetLoanId) return [];
 
@@ -197,14 +208,13 @@ export function PortalProvider({ children, borrowerProfileId, workspaceId }) {
       const response = await fetch(
         `${API_BASE_URL}/api/portal/multi-loan/loans/${targetLoanId}/history`,
         {
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: getHeaders(),
         }
       );
 
       if (!response.ok) {
-        throw new Error('Failed to fetch loan history');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || errorData.detail || 'Failed to fetch loan history');
       }
 
       const data = await response.json();
@@ -213,12 +223,14 @@ export function PortalProvider({ children, borrowerProfileId, workspaceId }) {
       console.error('Failed to fetch loan history:', err);
       return [];
     }
-  }, [portalState.currentLoan]);
+  }, [token, portalState.currentLoan, getHeaders]);
 
-  // Initialize portal context on mount
+  // Initialize portal context on mount when token is available
   useEffect(() => {
-    fetchPortalContext();
-  }, [fetchPortalContext]);
+    if (token) {
+      fetchPortalContext();
+    }
+  }, [token, fetchPortalContext]);
 
   // Check if current mode is transaction
   const isTransactionMode = portalState.portalMode === PORTAL_MODES.TRANSACTION;

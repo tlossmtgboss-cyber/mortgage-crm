@@ -184,20 +184,17 @@ export default function BorrowerPortal() {
     );
   }
 
-  // Extract workspace_id and borrower_profile_id from portal data for multi-loan context
-  const workspaceId = portalData?.workspace_id;
-  const borrowerProfileId = portalData?.borrower_profile_id || portalData?.borrower_id;
+  // Get PURL token for multi-loan context authentication
+  // The token can come from URL params (magic link) or portal data
+  const purlToken = portalData?.purl_token || token;
 
-  // If we have multi-loan context info, use PortalProvider for loan switching
-  const hasMultiLoanContext = workspaceId && borrowerProfileId;
+  // Check if we have multi-loan context (need a PURL token for authenticated API calls)
+  const hasMultiLoanContext = !!purlToken;
 
   return (
     <div className="portal-page">
       {hasMultiLoanContext ? (
-        <PortalProvider
-          workspaceId={workspaceId}
-          borrowerProfileId={borrowerProfileId}
-        >
+        <PortalProvider token={purlToken}>
           <BorrowerPortalContent initialPortalData={portalData} />
         </PortalProvider>
       ) : (

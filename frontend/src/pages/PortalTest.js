@@ -2,7 +2,8 @@
  * Portal Test Page
  * Temporary page to test the multi-loan portal components
  */
-import React from 'react';
+import React, { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { PortalProvider, usePortal, PORTAL_MODES } from '../contexts/PortalContext';
 import { LoanSelector, PortalModeIndicator } from '../components/portal';
 import { ModeBadge } from '../components/portal/PortalModeIndicator';
@@ -102,9 +103,43 @@ function PortalTestContent() {
 
 // Main test page with provider
 export default function PortalTest() {
-  // Use workspace 5 which has test data
+  const [searchParams] = useSearchParams();
+  const [tokenInput, setTokenInput] = useState('');
+
+  // Get token from URL params or use input
+  const urlToken = searchParams.get('token');
+  const activeToken = urlToken || tokenInput;
+
+  // If no token, show input form
+  if (!activeToken) {
+    return (
+      <div className="p-8 max-w-md mx-auto">
+        <h1 className="text-2xl font-bold mb-6">Portal Test</h1>
+        <p className="mb-4 text-gray-600">
+          Enter a PURL token to test the portal, or add ?token=YOUR_TOKEN to the URL.
+        </p>
+        <div className="space-y-4">
+          <input
+            type="text"
+            value={tokenInput}
+            onChange={(e) => setTokenInput(e.target.value)}
+            placeholder="purl_live_..."
+            className="w-full px-4 py-2 border rounded-lg"
+          />
+          <button
+            onClick={() => setTokenInput(tokenInput)}
+            disabled={!tokenInput}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg disabled:opacity-50"
+          >
+            Load Portal
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <PortalProvider borrowerProfileId="test-borrower" workspaceId={5}>
+    <PortalProvider token={activeToken}>
       <PortalTestContent />
     </PortalProvider>
   );
