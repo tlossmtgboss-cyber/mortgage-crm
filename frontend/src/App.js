@@ -1357,29 +1357,15 @@ function App() {
               </PrivateRoute>
             }
           />
+          {/* Simple test route - no dependencies */}
           <Route
             path="/voice/agents"
             element={
-              <PrivateRoute>
-                <div className="app-layout">
-                  <Navigation
-                    onToggleAssistant={toggleAssistant}
-                    onToggleCoach={toggleCoach}
-                    onToggleTaskSidebar={toggleTaskSidebar}
-                    assistantOpen={assistantOpen}
-                    coachOpen={coachOpen}
-                    taskSidebarOpen={taskSidebarOpen}
-                    taskCounts={taskCounts}
-                  />
-                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <div style={{ padding: '20px', background: '#f0f0f0', marginBottom: '10px' }}>
-                      <strong>Voice Agents Page - Route Loaded</strong>
-                    </div>
-                    <LazyPage><VoiceAgentStudio /></LazyPage>
-                  </main>
-                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
-                </div>
-              </PrivateRoute>
+              <div style={{ padding: '40px', background: 'yellow', fontSize: '24px' }}>
+                <h1>VOICE AGENTS TEST</h1>
+                <p>If you see this, the route is working!</p>
+                <p>Auth status: {isAuthenticated() ? 'LOGGED IN' : 'NOT LOGGED IN'}</p>
+              </div>
             }
           />
           <Route
