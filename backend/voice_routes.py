@@ -592,6 +592,15 @@ async def voice_stream_websocket(websocket: WebSocket):
                         call_context['caller_number'] = data['start'].get('customParameters', {}).get('From')
                         logger.info(f"📞 Call started: {call_context['call_sid']}, stream: {call_context['stream_sid']}")
 
+                        # NOW trigger the AI greeting - Twilio is ready to receive audio
+                        logger.info("🎤 Triggering AI greeting now that Twilio stream is ready")
+                        await openai_ws.send(json.dumps({
+                            "type": "response.create",
+                            "response": {
+                                "modalities": ["text", "audio"]
+                            }
+                        }))
+
                     elif data['event'] == 'media':
                         # Forward audio payload to OpenAI
                         audio_payload = data['media']['payload']
@@ -774,18 +783,8 @@ async def connect_to_openai_realtime():
 
     logger.info("OpenAI Realtime session configured")
 
-    # Small delay to ensure session is ready
-    await asyncio.sleep(0.3)
-
-    # Trigger AI greeting - the system prompt already tells it to greet callers
-    await ws.send(json.dumps({
-        "type": "response.create",
-        "response": {
-            "modalities": ["text", "audio"]
-        }
-    }))
-
-    logger.info("Initial greeting response triggered")
+    # NOTE: We no longer trigger greeting here - it's done in twilio_to_openai()
+    # when we receive the 'start' event from Twilio (meaning it's ready to receive audio)
 
     return ws
 

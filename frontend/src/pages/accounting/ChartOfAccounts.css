@@ -1,0 +1,845 @@
+/* Chart of Accounts - Main Styles */
+
+.chart-of-accounts {
+  padding: 24px;
+  max-width: 1600px;
+  margin: 0 auto;
+  min-height: calc(100vh - 60px);
+}
+
+.chart-of-accounts.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Loading State */
+.chart-of-accounts .loading-spinner {
+  text-align: center;
+  color: #6b7280;
+}
+
+.chart-of-accounts .loading-spinner i {
+  font-size: 32px;
+  color: #3b82f6;
+  margin-bottom: 12px;
+}
+
+.chart-of-accounts .loading-spinner p {
+  font-size: 14px;
+}
+
+/* Page Header */
+.chart-of-accounts .page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.chart-of-accounts .header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.chart-of-accounts .back-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.chart-of-accounts .back-btn:hover {
+  background: #f9fafb;
+  color: #374151;
+  border-color: #d1d5db;
+}
+
+.chart-of-accounts .header-title h1 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 24px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.chart-of-accounts .header-title h1 i {
+  color: #3b82f6;
+}
+
+.chart-of-accounts .subtitle {
+  font-size: 14px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.chart-of-accounts .header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Buttons */
+.chart-of-accounts .btn-primary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: #3b82f6;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.chart-of-accounts .btn-primary:hover {
+  background: #2563eb;
+}
+
+.chart-of-accounts .btn-primary:disabled {
+  background: #93c5fd;
+  cursor: not-allowed;
+}
+
+.chart-of-accounts .btn-secondary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: #fff;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.chart-of-accounts .btn-secondary:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+}
+
+/* Toolbar */
+.chart-of-accounts .toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+}
+
+.chart-of-accounts .toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.chart-of-accounts .toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chart-of-accounts .search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.chart-of-accounts .search-box i {
+  position: absolute;
+  left: 12px;
+  color: #9ca3af;
+  font-size: 14px;
+}
+
+.chart-of-accounts .search-box input {
+  padding: 10px 36px;
+  width: 280px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.chart-of-accounts .search-box input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.chart-of-accounts .search-box .clear-btn {
+  position: absolute;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: #e5e7eb;
+  border-radius: 50%;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 10px;
+}
+
+.chart-of-accounts .search-box .clear-btn:hover {
+  background: #d1d5db;
+}
+
+.chart-of-accounts .filter-select {
+  padding: 10px 36px 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  background: #fff;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 8px center;
+  background-repeat: no-repeat;
+  background-size: 20px;
+}
+
+.chart-of-accounts .filter-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.chart-of-accounts .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #4b5563;
+  cursor: pointer;
+}
+
+.chart-of-accounts .checkbox-label input {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.chart-of-accounts .toolbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.chart-of-accounts .toolbar-btn:hover {
+  background: #f9fafb;
+  color: #374151;
+  border-color: #d1d5db;
+}
+
+/* Type Summary Cards */
+.chart-of-accounts .type-summary {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.chart-of-accounts .type-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.chart-of-accounts .type-card:hover {
+  border-color: #d1d5db;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.chart-of-accounts .type-card.active {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.chart-of-accounts .type-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  font-size: 16px;
+}
+
+.chart-of-accounts .type-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.chart-of-accounts .type-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #111827;
+}
+
+.chart-of-accounts .type-count {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.chart-of-accounts .type-total {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  white-space: nowrap;
+}
+
+/* Accounts Table */
+.chart-of-accounts .accounts-table {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.chart-of-accounts .table-header {
+  display: grid;
+  grid-template-columns: 40px 120px 1fr 140px 140px 120px;
+  align-items: center;
+  padding: 12px 16px;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.chart-of-accounts .header-cell {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.chart-of-accounts .table-body {
+  max-height: calc(100vh - 420px);
+  overflow-y: auto;
+}
+
+/* Account Row */
+.chart-of-accounts .account-row {
+  display: grid;
+  grid-template-columns: 40px 120px 1fr 140px 140px 120px;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f3f4f6;
+  transition: background 0.2s;
+}
+
+.chart-of-accounts .account-row:hover {
+  background: #f9fafb;
+}
+
+.chart-of-accounts .account-row.inactive {
+  opacity: 0.6;
+}
+
+.chart-of-accounts .account-row.system {
+  background: #fefce8;
+}
+
+.chart-of-accounts .account-expand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chart-of-accounts .expand-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.chart-of-accounts .expand-btn:hover {
+  background: #e5e7eb;
+  color: #4b5563;
+}
+
+.chart-of-accounts .expand-placeholder {
+  width: 24px;
+  height: 24px;
+}
+
+.chart-of-accounts .account-number {
+  font-family: 'SF Mono', SFMono-Regular, ui-monospace, monospace;
+  font-size: 13px;
+  color: #4b5563;
+  font-weight: 500;
+}
+
+.chart-of-accounts .account-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.chart-of-accounts .name-text {
+  font-size: 14px;
+  color: #111827;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chart-of-accounts .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.chart-of-accounts .badge.bank {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.chart-of-accounts .badge.system {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.chart-of-accounts .badge.inactive {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.chart-of-accounts .account-type {
+  display: flex;
+  align-items: center;
+}
+
+.chart-of-accounts .type-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+}
+
+.chart-of-accounts .type-badge i {
+  font-size: 10px;
+}
+
+.chart-of-accounts .account-balance {
+  font-family: 'SF Mono', SFMono-Regular, ui-monospace, monospace;
+  font-size: 13px;
+  color: #111827;
+  font-weight: 500;
+  text-align: right;
+  padding-right: 16px;
+}
+
+.chart-of-accounts .account-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.chart-of-accounts .action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.chart-of-accounts .action-btn:hover {
+  background: #e5e7eb;
+  color: #4b5563;
+}
+
+.chart-of-accounts .action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.chart-of-accounts .action-btn:disabled:hover {
+  background: transparent;
+  color: #9ca3af;
+}
+
+/* Account Children */
+.chart-of-accounts .account-children {
+  border-left: 2px solid #e5e7eb;
+  margin-left: 32px;
+}
+
+/* Error State */
+.chart-of-accounts .error-state {
+  text-align: center;
+  padding: 60px 20px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+}
+
+.chart-of-accounts .error-state i {
+  font-size: 48px;
+  color: #f59e0b;
+  margin-bottom: 16px;
+}
+
+.chart-of-accounts .error-state h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 8px;
+}
+
+.chart-of-accounts .error-state p {
+  color: #6b7280;
+  margin: 0 0 20px;
+}
+
+.chart-of-accounts .retry-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: #3b82f6;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.chart-of-accounts .retry-btn:hover {
+  background: #2563eb;
+}
+
+/* Empty State */
+.chart-of-accounts .empty-state {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.chart-of-accounts .empty-state i {
+  font-size: 48px;
+  color: #d1d5db;
+  margin-bottom: 16px;
+}
+
+.chart-of-accounts .empty-state h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 8px;
+}
+
+.chart-of-accounts .empty-state p {
+  color: #6b7280;
+  margin: 0 0 20px;
+}
+
+/* Modal */
+.chart-of-accounts .modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.chart-of-accounts .modal-content {
+  background: #fff;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+}
+
+.chart-of-accounts .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.chart-of-accounts .modal-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.chart-of-accounts .modal-header h2 i {
+  color: #3b82f6;
+}
+
+.chart-of-accounts .close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: #f3f4f6;
+  border-radius: 8px;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.chart-of-accounts .close-btn:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.chart-of-accounts .modal-body {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.chart-of-accounts .form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.chart-of-accounts .form-row.checkboxes {
+  display: flex;
+  gap: 24px;
+}
+
+.chart-of-accounts .form-group {
+  margin-bottom: 16px;
+}
+
+.chart-of-accounts .form-row .form-group {
+  margin-bottom: 0;
+}
+
+.chart-of-accounts .form-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.chart-of-accounts .form-group .required {
+  color: #ef4444;
+}
+
+.chart-of-accounts .form-group input,
+.chart-of-accounts .form-group select,
+.chart-of-accounts .form-group textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: all 0.2s;
+  background: #fff;
+}
+
+.chart-of-accounts .form-group input:focus,
+.chart-of-accounts .form-group select:focus,
+.chart-of-accounts .form-group textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.chart-of-accounts .form-group textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.chart-of-accounts .form-group select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 8px center;
+  background-repeat: no-repeat;
+  background-size: 20px;
+  padding-right: 36px;
+}
+
+.chart-of-accounts .modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+  .chart-of-accounts .type-summary {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 992px) {
+  .chart-of-accounts .type-summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .chart-of-accounts .table-header,
+  .chart-of-accounts .account-row {
+    grid-template-columns: 40px 100px 1fr 120px 100px;
+  }
+
+  .chart-of-accounts .header-cell.actions,
+  .chart-of-accounts .account-actions {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .chart-of-accounts {
+    padding: 16px;
+  }
+
+  .chart-of-accounts .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .chart-of-accounts .header-right {
+    width: 100%;
+  }
+
+  .chart-of-accounts .header-right .btn-primary {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .chart-of-accounts .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .chart-of-accounts .toolbar-left {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .chart-of-accounts .search-box {
+    width: 100%;
+  }
+
+  .chart-of-accounts .search-box input {
+    width: 100%;
+  }
+
+  .chart-of-accounts .type-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .chart-of-accounts .table-header,
+  .chart-of-accounts .account-row {
+    grid-template-columns: 32px 80px 1fr 100px;
+  }
+
+  .chart-of-accounts .header-cell.type,
+  .chart-of-accounts .account-type {
+    display: none;
+  }
+
+  .chart-of-accounts .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .chart-of-accounts .form-row.checkboxes {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .chart-of-accounts .modal-content {
+    max-height: 100vh;
+    border-radius: 0;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .chart-of-accounts {
+    background: #111827;
+  }
+}

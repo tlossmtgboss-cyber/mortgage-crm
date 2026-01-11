@@ -175,6 +175,11 @@ const ProductionPredictor = lazy(() => import('./pages/ProductionPredictor'));
 const ProductionPredictorDetail = lazy(() => import('./pages/ProductionPredictorDetail'));
 const DealAlerts = lazy(() => import('./pages/DealAlerts'));
 
+// Accounting System
+const AccountingDashboard = lazy(() => import('./pages/accounting/AccountingDashboard'));
+const ChartOfAccounts = lazy(() => import('./pages/accounting/ChartOfAccounts'));
+const JournalEntries = lazy(() => import('./pages/accounting/JournalEntries'));
+
 // Portal Components - Real-time borrower and partner portals
 const ActiveLoanPortalComplete = lazy(() => import('./components/Portal/ActiveLoanPortalComplete'));
 const PartnerPortalView = lazy(() => import('./components/Portal/PartnerPortalView'));
@@ -1456,6 +1461,73 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><AcquisitionDashboard /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          {/* Accounting System Routes */}
+          <Route
+            path="/accounting/accounts"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><ChartOfAccounts /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/accounting/journal-entries"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><JournalEntries /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/accounting/*"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><AccountingDashboard /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>

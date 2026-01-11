@@ -167,6 +167,13 @@ export const NAVIGATION_ITEMS = {
     matchPaths: ['/voice/live'],
     module: 'voice_os'  // Premium: Voice OS module
   },
+  // Accounting System
+  accounting: {
+    path: '/accounting',
+    label: 'Accounting',
+    matchPaths: ['/accounting', '/accounting/'],
+    module: 'base'  // Base module - available to appropriate roles
+  },
   // Admin-only navigation items
   adminPanel: {
     path: '/admin',
@@ -198,6 +205,7 @@ export const ROLE_NAVIGATION = {
     'aiUnderwriter',
     'market',
     'profitability',
+    'accounting',           // Accounting System
     'capacity',
     'recruiting',
     'partnerRecruiting',
@@ -301,6 +309,7 @@ export const ROLE_NAVIGATION = {
     'calendar',
     'aiUnderwriter',
     'market',
+    'accounting',       // Accounting System
     'recruiting'
   ],
 
@@ -310,6 +319,7 @@ export const ROLE_NAVIGATION = {
     'tasks',
     'reconciliation',
     'calendar',
+    'accounting',       // Accounting System
     'recruiting'
   ]
 };
