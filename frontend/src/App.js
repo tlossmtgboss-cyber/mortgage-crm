@@ -202,6 +202,9 @@ const ProfitLoss = lazy(() => import('./pages/accounting/reports/ProfitLoss'));
 const BalanceSheet = lazy(() => import('./pages/accounting/reports/BalanceSheet'));
 const CashFlow = lazy(() => import('./pages/accounting/reports/CashFlow'));
 const TrialBalance = lazy(() => import('./pages/accounting/reports/TrialBalance'));
+// Budgeting
+const BudgetList = lazy(() => import('./pages/accounting/budgets/BudgetList'));
+const BudgetVariance = lazy(() => import('./pages/accounting/budgets/BudgetVariance'));
 
 // Portal Components - Real-time borrower and partner portals
 const ActiveLoanPortalComplete = lazy(() => import('./components/Portal/ActiveLoanPortalComplete'));
@@ -1871,6 +1874,50 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><TrialBalance /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/accounting/budgets"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><BudgetList /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/accounting/budgets/variance"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><BudgetVariance /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>

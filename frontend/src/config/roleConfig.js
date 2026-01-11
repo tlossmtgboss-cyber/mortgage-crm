@@ -167,12 +167,65 @@ export const NAVIGATION_ITEMS = {
     matchPaths: ['/voice/live'],
     module: 'voice_os'  // Premium: Voice OS module
   },
-  // Accounting System
+  // Accounting System - with submenu structure
   accounting: {
     path: '/accounting',
     label: 'Accounting',
-    matchPaths: ['/accounting', '/accounting/'],
-    module: 'base'  // Base module - available to appropriate roles
+    matchPaths: ['/accounting'],
+    module: 'base',  // Base module - available to appropriate roles
+    children: [
+      { path: '/accounting', label: 'Dashboard', icon: 'fa-tachometer-alt' },
+      { path: '/accounting/accounts', label: 'Chart of Accounts', icon: 'fa-sitemap' },
+      { path: '/accounting/journal-entries', label: 'Journal Entries', icon: 'fa-book' },
+      {
+        label: 'Receivables',
+        icon: 'fa-hand-holding-usd',
+        children: [
+          { path: '/accounting/ar/customers', label: 'Customers' },
+          { path: '/accounting/ar/invoices', label: 'Invoices' },
+          { path: '/accounting/ar/payments', label: 'Payments' },
+          { path: '/accounting/ar/aging', label: 'AR Aging Report' },
+        ]
+      },
+      {
+        label: 'Payables',
+        icon: 'fa-file-invoice-dollar',
+        children: [
+          { path: '/accounting/ap/vendors', label: 'Vendors' },
+          { path: '/accounting/ap/bills', label: 'Bills' },
+          { path: '/accounting/ap/payments', label: 'Pay Bills' },
+          { path: '/accounting/ap/aging', label: 'AP Aging Report' },
+        ]
+      },
+      {
+        label: 'Banking',
+        icon: 'fa-university',
+        children: [
+          { path: '/accounting/banking/accounts', label: 'Bank Accounts' },
+          { path: '/accounting/banking/connect', label: 'Connect Bank' },
+          { path: '/accounting/banking/transactions', label: 'Transactions' },
+          { path: '/accounting/banking/reconciliation', label: 'Reconciliation' },
+        ]
+      },
+      {
+        label: 'Reports',
+        icon: 'fa-chart-line',
+        children: [
+          { path: '/accounting/reports/profit-loss', label: 'Profit & Loss' },
+          { path: '/accounting/reports/balance-sheet', label: 'Balance Sheet' },
+          { path: '/accounting/reports/cash-flow', label: 'Cash Flow' },
+          { path: '/accounting/reports/trial-balance', label: 'Trial Balance' },
+        ]
+      },
+      {
+        label: 'Budgets',
+        icon: 'fa-calculator',
+        children: [
+          { path: '/accounting/budgets', label: 'Budget List' },
+          { path: '/accounting/budgets/variance', label: 'Variance Report' },
+        ]
+      },
+    ]
   },
   // Admin-only navigation items
   adminPanel: {

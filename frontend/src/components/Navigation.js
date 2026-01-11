@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useState } from 'react';
+import React, { useMemo, useCallback, useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { usePermissions } from '../contexts/PermissionContext';
 import { useModules } from '../contexts/ModuleContext';
@@ -19,6 +19,21 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
   const { hasModule, getModule, loading: modulesLoading } = useModules();
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const [selectedModule, setSelectedModule] = useState(null);
+  const [openDropdown, setOpenDropdown] = useState(null);
+  const [openSubmenu, setOpenSubmenu] = useState(null);
+  const dropdownRef = useRef(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setOpenDropdown(null);
+        setOpenSubmenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Prefetch utilities for instant navigation
   const { prefetchLeads, prefetchLoans, prefetchDashboard, prefetchTasks, prefetchPortfolio, prefetchPartners } = usePrefetch();
@@ -104,34 +119,122 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
     { value: 'manager', label: 'Manager' },
   ];
 
+  // Render a dropdown submenu item
+  const renderDropdownItem = (child, parentKey, index) => {
+    if (child.children) {
+      // Nested submenu
+      const submenuKey = `${parentKey}-${index}`;
+      const isSubmenuOpen = openSubmenu === submenuKey;
+      const isSubmenuActive = child.children.some(c => location.pathname === c.path);
+
+      return (
+        <div
+          key={submenuKey}
+          className={`dropdown-submenu ${isSubmenuOpen ? 'open' : ''}`}
+          onMouseEnter={() => setOpenSubmenu(submenuKey)}
+          onMouseLeave={() => setOpenSubmenu(null)}
+        >
+          <button className={`dropdown-item has-submenu ${isSubmenuActive ? 'active' : ''}`}>
+            {child.icon && <i className={`fas ${child.icon}`}></i>}
+            <span>{child.label}</span>
+            <i className="fas fa-chevron-right submenu-arrow"></i>
+          </button>
+          <div className="submenu-dropdown">
+            {child.children.map((subChild, subIndex) => (
+              <Link
+                key={subIndex}
+                to={subChild.path}
+                className={`dropdown-item ${location.pathname === subChild.path ? 'active' : ''}`}
+                onClick={() => {
+                  setOpenDropdown(null);
+                  setOpenSubmenu(null);
+                }}
+              >
+                {subChild.label}
+              </Link>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // Regular dropdown item
+    return (
+      <Link
+        key={index}
+        to={child.path}
+        className={`dropdown-item ${location.pathname === child.path ? 'active' : ''}`}
+        onClick={() => setOpenDropdown(null)}
+      >
+        {child.icon && <i className={`fas ${child.icon}`}></i>}
+        <span>{child.label}</span>
+      </Link>
+    );
+  };
+
+  // Render a navigation item (with or without dropdown)
+  const renderNavItem = (item) => {
+    if (item.isLocked) {
+      return (
+        <button
+          key={item.key}
+          className="nav-link locked"
+          onClick={(e) => handleLockedClick(e, item)}
+          title={`Upgrade to unlock ${item.label}`}
+        >
+          {item.label}
+          <span className="upgrade-badge">Upgrade</span>
+        </button>
+      );
+    }
+
+    // Item with children (dropdown menu)
+    if (item.children && item.children.length > 0) {
+      const isDropdownOpen = openDropdown === item.key;
+      const isActive = isNavItemActive(item) || location.pathname.startsWith(item.path);
+
+      return (
+        <div
+          key={item.key}
+          className={`nav-dropdown ${isDropdownOpen ? 'open' : ''}`}
+          ref={isDropdownOpen ? dropdownRef : null}
+        >
+          <button
+            className={`nav-link dropdown-toggle ${isActive ? 'active' : ''}`}
+            onClick={() => setOpenDropdown(isDropdownOpen ? null : item.key)}
+          >
+            {item.label}
+            <i className={`fas fa-chevron-down dropdown-arrow ${isDropdownOpen ? 'rotated' : ''}`}></i>
+          </button>
+          {isDropdownOpen && (
+            <div className="dropdown-menu">
+              {item.children.map((child, index) => renderDropdownItem(child, item.key, index))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Regular nav link
+    return (
+      <Link
+        key={item.key}
+        to={item.path}
+        className={`nav-link ${isNavItemActive(item) ? 'active' : ''} ${item.adminOnly ? 'admin-link' : ''}`}
+        onMouseEnter={() => handleMouseEnter(item.path)}
+      >
+        {item.label}
+        {renderBadge(item)}
+      </Link>
+    );
+  };
+
   return (
     <>
       <nav className="navigation">
         <div className="nav-container">
           <div className="nav-links">
-            {navItems.map((item) => (
-              item.isLocked ? (
-                <button
-                  key={item.key}
-                  className="nav-link locked"
-                  onClick={(e) => handleLockedClick(e, item)}
-                  title={`Upgrade to unlock ${item.label}`}
-                >
-                  {item.label}
-                  <span className="upgrade-badge">Upgrade</span>
-                </button>
-              ) : (
-                <Link
-                  key={item.key}
-                  to={item.path}
-                  className={`nav-link ${isNavItemActive(item) ? 'active' : ''} ${item.adminOnly ? 'admin-link' : ''}`}
-                  onMouseEnter={() => handleMouseEnter(item.path)}
-                >
-                  {item.label}
-                  {renderBadge(item)}
-                </Link>
-              )
-            ))}
+            {navItems.map((item) => renderNavItem(item))}
           </div>
 
           <div className="nav-actions">
