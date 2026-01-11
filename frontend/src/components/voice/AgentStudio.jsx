@@ -1,7 +1,6 @@
 // Voice OS Agent Studio - Main agent management dashboard
 import React, { useState, useEffect, useCallback } from 'react';
-
-
+import TalkToAgent from './TalkToAgent';
 
 const AgentStudio = ({ onAgentSelect, onEditAgent }) => {
   console.log('[AgentStudio] Component mounting...');
@@ -10,6 +9,7 @@ const AgentStudio = ({ onAgentSelect, onEditAgent }) => {
   const [error, setError] = useState(null);
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [talkingToAgent, setTalkingToAgent] = useState(null);
   console.log('[AgentStudio] State initialized, loading:', loading);
 
   const API_BASE_URL = typeof window !== 'undefined' &&
@@ -193,6 +193,16 @@ const AgentStudio = ({ onAgentSelect, onEditAgent }) => {
                 </span>
               </div>
               <div className="agent-actions">
+                <button
+                  className="btn-talk"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setTalkingToAgent(agent);
+                  }}
+                  title="Talk to Agent"
+                >
+                  🎙️ Talk
+                </button>
                 <button
                   className="btn-icon"
                   onClick={(e) => {
@@ -675,7 +685,34 @@ const AgentStudio = ({ onAgentSelect, onEditAgent }) => {
         @keyframes spin {
           to { transform: rotate(360deg); }
         }
+
+        .btn-talk {
+          background: linear-gradient(135deg, #22c55e, #16a34a);
+          color: white;
+          border: none;
+          padding: 6px 12px;
+          border-radius: 6px;
+          font-size: 13px;
+          font-weight: 500;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          transition: all 0.2s;
+        }
+
+        .btn-talk:hover {
+          background: linear-gradient(135deg, #16a34a, #15803d);
+          transform: scale(1.05);
+        }
       `}</style>
+
+      {/* Talk to Agent Modal */}
+      <TalkToAgent
+        agent={talkingToAgent}
+        isOpen={!!talkingToAgent}
+        onClose={() => setTalkingToAgent(null)}
+      />
     </div>
   );
 };

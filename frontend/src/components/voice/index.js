@@ -4,6 +4,7 @@
 export { default as AgentStudio } from './AgentStudio';
 export { default as LiveCallsMonitor } from './LiveCallsMonitor';
 export { default as AgentBuilder } from './AgentBuilder';
+export { default as TalkToAgent } from './TalkToAgent';
 
 // Usage example:
 // import { AgentStudio, LiveCallsMonitor, AgentBuilder } from './components/voice';
