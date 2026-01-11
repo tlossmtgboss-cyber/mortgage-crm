@@ -18,6 +18,15 @@ from decimal import Decimal
 from pydantic import BaseModel, Field
 
 from database import get_db
+from middleware.purl_auth import require_purl_token, PURLAuthContext
+from utils.auth import require_admin
+
+# Lazy import to avoid circular dependencies
+def get_current_user_dep():
+    """Get current user dependency - lazy import to avoid circular imports"""
+    from main import get_current_user
+    return get_current_user
+
 from models.portal_models import (
     LifecycleStage, MilestoneStatus, TaskStatus,
     DocumentType, DocumentStatus, NotificationChannel
@@ -1349,13 +1358,21 @@ class MultiLoanLifecycleService:
 
 @router.get("/multi-loan/context")
 def get_multi_loan_context(
-    request: Request = None,
+    request: Request,
     loan_id: Optional[int] = Query(None, description="Current loan ID"),
-    borrower_profile_id: str = Query(..., description="Borrower profile ID"),
-    workspace_id: int = Query(..., description="Workspace ID"),
     db: Session = Depends(get_db),
+    purl_context: PURLAuthContext = Depends(require_purl_token),
 ):
-    """Get the current borrower's multi-loan portal context"""
+    """Get the current borrower's multi-loan portal context.
+
+    Requires valid PURL token authentication. The workspace_id and borrower identity
+    are derived from the authenticated token.
+    """
+    # Use workspace_id from authenticated context
+    workspace_id = purl_context.workspace_id
+    # Use contact_id as borrower_profile_id (or token_id if no contact)
+    borrower_profile_id = str(purl_context.contact_id or purl_context.token_id)
+
     service = MultiLoanPortalService(db)
     context = service.get_portal_context(borrower_profile_id, workspace_id, loan_id)
 
@@ -1376,13 +1393,19 @@ def get_multi_loan_context(
 
 @router.get("/multi-loan/loans")
 def get_multi_loan_borrower_loans(
-    borrower_profile_id: str = Query(..., description="Borrower profile ID"),
-    workspace_id: int = Query(..., description="Workspace ID"),
     mode: Optional[PortalMode] = Query(None, description="Filter by portal mode"),
     include_paid_off: bool = Query(False, description="Include paid off loans"),
     db: Session = Depends(get_db),
+    purl_context: PURLAuthContext = Depends(require_purl_token),
 ):
-    """Get all loans for a borrower"""
+    """Get all loans for a borrower.
+
+    Requires valid PURL token authentication. The workspace_id and borrower identity
+    are derived from the authenticated token.
+    """
+    workspace_id = purl_context.workspace_id
+    borrower_profile_id = str(purl_context.contact_id or purl_context.token_id)
+
     service = MultiLoanPortalService(db)
     loans = service.get_borrower_loans(
         borrower_profile_id,
@@ -1398,12 +1421,18 @@ def get_multi_loan_borrower_loans(
 def switch_multi_loan(
     switch_request: SwitchLoanRequest,
     session_id: str = Query(..., description="Current session ID"),
-    borrower_profile_id: str = Query(..., description="Borrower profile ID"),
-    workspace_id: int = Query(..., description="Workspace ID"),
     current_loan_id: Optional[int] = Query(None, description="Current loan ID"),
     db: Session = Depends(get_db),
+    purl_context: PURLAuthContext = Depends(require_purl_token),
 ):
-    """Switch to a different loan"""
+    """Switch to a different loan.
+
+    Requires valid PURL token authentication. The workspace_id and borrower identity
+    are derived from the authenticated token.
+    """
+    workspace_id = purl_context.workspace_id
+    borrower_profile_id = str(purl_context.contact_id or purl_context.token_id)
+
     service = MultiLoanPortalService(db)
     context = service.switch_loan(
         borrower_profile_id=borrower_profile_id,
@@ -1427,8 +1456,29 @@ def switch_multi_loan(
 def get_multi_loan_history(
     loan_id: int = Path(..., description="Loan ID"),
     db: Session = Depends(get_db),
+    purl_context: PURLAuthContext = Depends(require_purl_token),
 ):
-    """Get the loan refinance history chain"""
+    """Get the loan refinance history chain.
+
+    Requires valid PURL token authentication. Validates that the requested loan
+    belongs to the authenticated borrower's workspace.
+    """
+    workspace_id = purl_context.workspace_id
+    borrower_profile_id = str(purl_context.contact_id or purl_context.token_id)
+
+    # Verify the loan belongs to this borrower's workspace
+    portal_service = MultiLoanPortalService(db)
+    borrower_loans = portal_service.get_borrower_loans(
+        borrower_profile_id, workspace_id, include_paid_off=True
+    )
+    loan_ids = [loan["id"] for loan in borrower_loans]
+
+    if loan_id not in loan_ids:
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied. This loan does not belong to your account."
+        )
+
     lifecycle_service = MultiLoanLifecycleService(db)
     history = lifecycle_service.get_loan_history(loan_id)
 
@@ -1436,11 +1486,17 @@ def get_multi_loan_history(
 
 
 @router.post("/multi-loan/admin/loans/{loan_id}/transition-to-servicing")
-def admin_multi_loan_transition_to_servicing(
+async def admin_multi_loan_transition_to_servicing(
     loan_id: int = Path(..., description="Loan ID"),
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_dep()),
 ):
-    """Admin endpoint to transition a loan to servicing mode"""
+    """Admin endpoint to transition a loan to servicing mode.
+
+    Requires admin authentication and authorization.
+    """
+    require_admin(current_user)
+
     lifecycle_service = MultiLoanLifecycleService(db)
     result = lifecycle_service.transition_to_servicing(loan_id)
 
@@ -1448,12 +1504,18 @@ def admin_multi_loan_transition_to_servicing(
 
 
 @router.post("/multi-loan/admin/loans/{loan_id}/mark-paid-off")
-def admin_multi_loan_mark_paid_off(
+async def admin_multi_loan_mark_paid_off(
     loan_id: int = Path(..., description="Loan ID"),
     request: MarkLoanPaidOffRequest = Body(...),
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_dep()),
 ):
-    """Admin endpoint to mark a loan as paid off"""
+    """Admin endpoint to mark a loan as paid off.
+
+    Requires admin authentication and authorization.
+    """
+    require_admin(current_user)
+
     lifecycle_service = MultiLoanLifecycleService(db)
     result = lifecycle_service.mark_paid_off(
         loan_id=loan_id,
@@ -1466,12 +1528,18 @@ def admin_multi_loan_mark_paid_off(
 
 
 @router.put("/multi-loan/admin/loans/{loan_id}/portal-mode")
-def admin_update_multi_loan_portal_mode(
+async def admin_update_multi_loan_portal_mode(
     loan_id: int = Path(..., description="Loan ID"),
     request: UpdatePortalModeRequest = Body(...),
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_dep()),
 ):
-    """Admin endpoint to update loan portal mode"""
+    """Admin endpoint to update loan portal mode.
+
+    Requires admin authentication and authorization.
+    """
+    require_admin(current_user)
+
     db.execute(text("""
         UPDATE purl_loans
         SET portal_mode = :mode, updated_at = CURRENT_TIMESTAMP
@@ -1487,11 +1555,17 @@ def admin_update_multi_loan_portal_mode(
 def log_multi_loan_portal_activity(
     activity: PortalActivityCreate,
     session_id: str = Query(..., description="Current session ID"),
-    borrower_profile_id: str = Query(..., description="Borrower profile ID"),
     loan_id: Optional[int] = Query(None, description="Current loan ID"),
     db: Session = Depends(get_db),
+    purl_context: PURLAuthContext = Depends(require_purl_token),
 ):
-    """Log portal activity for analytics"""
+    """Log portal activity for analytics.
+
+    Requires valid PURL token authentication. The borrower identity
+    is derived from the authenticated token.
+    """
+    borrower_profile_id = str(purl_context.contact_id or purl_context.token_id)
+
     service = MultiLoanPortalService(db)
     service.log_activity(
         session_id=session_id,
