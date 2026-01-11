@@ -1199,6 +1199,56 @@ async def run_sessions_table_migration(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/add-voice-os-tables")
+async def run_voice_os_migration(
+    admin: Any = Depends(verify_admin_access)
+):
+    """
+    Run the Voice OS tables migration.
+
+    Creates tables for the Voice OS real-time voice AI system:
+    - voice_os_agents: AI voice agent configurations
+    - voice_os_phone_numbers: Twilio phone number to agent mappings
+    - voice_os_call_sessions: Call records with transcripts and analytics
+    - voice_os_agent_performance: Real-time agent metrics view
+
+    Also creates triggers for auto-updating agent stats and seeds
+    the default "Sam - AI Receptionist" agent.
+    """
+    try:
+        from migrations.add_voice_os_tables import run_migration
+
+        logger.info("Starting Voice OS tables migration...")
+        success = run_migration()
+
+        if success:
+            return {
+                "status": "success",
+                "message": "Voice OS tables created successfully",
+                "tables_created": [
+                    "voice_os_agents",
+                    "voice_os_phone_numbers",
+                    "voice_os_call_sessions"
+                ],
+                "views_created": [
+                    "voice_os_agent_performance"
+                ],
+                "triggers_created": [
+                    "trigger_update_voice_os_agent_stats"
+                ],
+                "default_agent": "Sam - AI Receptionist"
+            }
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail="Migration failed - check logs for details"
+            )
+
+    except Exception as e:
+        logger.error(f"Voice OS migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/add-voice-workflow-tables")
 async def run_voice_workflow_migration(
     admin: Any = Depends(verify_admin_access)
