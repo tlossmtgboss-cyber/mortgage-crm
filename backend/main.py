@@ -3879,6 +3879,58 @@ class LoanUpdate(BaseModel):
     title_company: Optional[str] = None
     lender: Optional[str] = None
 
+    # SLA Date Fields - All 33 Jungo Custom Byte Mappings
+    # Lead & Application Phase
+    prospect_date: Optional[date] = None
+    application_date: Optional[date] = None
+    le_pending_date: Optional[date] = None
+    credit_only_date: Optional[date] = None
+    file_received_date: Optional[date] = None
+    preapproval_date: Optional[date] = None
+
+    # Lock Phase
+    lock_date: Optional[date] = None
+    lock_expiration_date: Optional[date] = None
+
+    # Processing & Underwriting Phase
+    uw_received_date: Optional[date] = None
+    conditions_for_review_date: Optional[date] = None
+    suspended_date: Optional[date] = None
+    loan_approved_date: Optional[date] = None
+    approved_not_accepted_date: Optional[date] = None
+    approval_expires_date: Optional[date] = None
+
+    # Appraisal Phase
+    appraisal_ordered_date: Optional[date] = None
+    appraisal_received_date: Optional[date] = None
+    appraisal_docs_expire_date: Optional[date] = None
+
+    # Closing Disclosure Phase
+    cd_requested_date: Optional[date] = None
+    cd_sent_to_borrower_date: Optional[date] = None
+    cd_acknowledged_date: Optional[date] = None
+
+    # Clear to Close & Docs Phase
+    clear_to_close_date: Optional[date] = None
+    docs_ordered_date: Optional[date] = None
+    docs_out_date: Optional[date] = None
+    credit_docs_expire_date: Optional[date] = None
+
+    # Funding Phase
+    scheduled_closing_date: Optional[date] = None
+    scheduled_funding_date: Optional[date] = None
+    funds_ordered_date: Optional[date] = None
+    funds_sent_date: Optional[date] = None
+    funded_date: Optional[date] = None
+    first_payment_date: Optional[date] = None
+
+    # Post-Closing
+    investor_purchased_date: Optional[date] = None
+
+    # Status Changes
+    withdrawn_date: Optional[date] = None
+    contract_received_date: Optional[date] = None
+
 class LoanResponse(BaseModel):
     id: int
     loan_number: str

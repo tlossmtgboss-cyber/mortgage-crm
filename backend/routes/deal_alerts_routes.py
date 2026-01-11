@@ -20,6 +20,7 @@ from services.proactive_deal_alerts_service import (
     AlertType,
     AlertPriority,
     AlertStatus,
+    DealAlert,
 )
 
 logger = logging.getLogger(__name__)
@@ -756,3 +757,140 @@ async def run_deal_alerts_migration(
         db.rollback()
         logger.error(f"Migration failed: {e}")
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
+@router.post("/seed-sample-alerts")
+async def seed_sample_alerts(db: Session = Depends(get_db)):
+    """
+    Seed sample deal alerts for testing and demo purposes.
+    Creates a variety of alerts with different priorities and types.
+    """
+    import uuid
+    from datetime import datetime, timedelta
+
+    try:
+        service = get_deal_alerts_service(db_session=db)
+
+        # Sample alerts data
+        sample_alerts = [
+            {
+                "type": AlertType.RATE_LOCK_EXPIRING,
+                "priority": AlertPriority.CRITICAL,
+                "loan_number": "2025-001234",
+                "borrower_name": "John & Sarah Martinez",
+                "title": "Rate Lock Expiring in 3 Days",
+                "message": "Rate lock for the Martinez loan expires on January 14th. Current rate: 6.25%. Market rate: 6.50%.",
+                "recommended_action": "Contact borrower to confirm closing timeline or discuss lock extension options",
+                "due_date": datetime.now().date() + timedelta(days=3),
+                "tags": ["rate_lock", "urgent", "closing_soon"],
+            },
+            {
+                "type": AlertType.STALLED_LOAN,
+                "priority": AlertPriority.HIGH,
+                "loan_number": "2025-001189",
+                "borrower_name": "Michael Thompson",
+                "title": "Loan Stalled in Processing - 12 Days",
+                "message": "No activity for 12 days. Last update: Waiting on bank statements from borrower.",
+                "recommended_action": "Follow up with borrower on outstanding documents. Consider escalating to manager.",
+                "due_date": datetime.now().date(),
+                "tags": ["stalled", "documents_needed", "follow_up"],
+            },
+            {
+                "type": AlertType.DOCUMENT_EXPIRING,
+                "priority": AlertPriority.MEDIUM,
+                "loan_number": "2025-001156",
+                "borrower_name": "Emily Chen",
+                "title": "Credit Report Expiring in 7 Days",
+                "message": "Credit report will expire before scheduled closing. New pull may affect approval.",
+                "recommended_action": "Expedite closing or prepare for credit refresh with underwriting",
+                "due_date": datetime.now().date() + timedelta(days=7),
+                "tags": ["credit", "expiring", "underwriting"],
+            },
+            {
+                "type": AlertType.COMPLIANCE_DEADLINE,
+                "priority": AlertPriority.HIGH,
+                "loan_number": "2025-001201",
+                "borrower_name": "Robert & Lisa Williams",
+                "title": "CD Due Tomorrow - Not Yet Sent",
+                "message": "Closing Disclosure must be sent by tomorrow to maintain compliance. Closing scheduled for Jan 15.",
+                "recommended_action": "Immediately prepare and send Closing Disclosure to borrower",
+                "due_date": datetime.now().date() + timedelta(days=1),
+                "tags": ["compliance", "trid", "cd", "urgent"],
+            },
+            {
+                "type": AlertType.APPRAISAL_ISSUE,
+                "priority": AlertPriority.HIGH,
+                "loan_number": "2025-001178",
+                "borrower_name": "David Park",
+                "title": "Appraisal Came in $25K Under Contract",
+                "message": "Property appraised at $475,000 vs $500,000 contract price. LTV now exceeds program limits.",
+                "recommended_action": "Discuss options with borrower: renegotiate price, bring cash to close, or contest appraisal",
+                "due_date": datetime.now().date() + timedelta(days=2),
+                "tags": ["appraisal", "value", "ltv", "negotiation"],
+            },
+            {
+                "type": AlertType.SLA_AT_RISK,
+                "priority": AlertPriority.MEDIUM,
+                "loan_number": "2025-001145",
+                "borrower_name": "Jennifer Adams",
+                "title": "Processing SLA at Risk",
+                "message": "Loan has been in processing for 4 days. SLA target is 5 days.",
+                "recommended_action": "Review file status and ensure all conditions are being actively worked",
+                "due_date": datetime.now().date() + timedelta(days=1),
+                "tags": ["sla", "processing", "timeline"],
+            },
+            {
+                "type": AlertType.BORROWER_UNRESPONSIVE,
+                "priority": AlertPriority.MEDIUM,
+                "loan_number": "2025-001167",
+                "borrower_name": "Chris & Amanda Brown",
+                "title": "Borrower Unresponsive - 5 Days",
+                "message": "No response to 3 calls and 2 emails requesting employment verification letter.",
+                "recommended_action": "Try alternate contact method or reach out to real estate agent",
+                "due_date": datetime.now().date(),
+                "tags": ["communication", "borrower", "documents"],
+            },
+            {
+                "type": AlertType.CLOSING_DELAY_RISK,
+                "priority": AlertPriority.LOW,
+                "loan_number": "2025-001190",
+                "borrower_name": "Michelle Garcia",
+                "title": "Potential Closing Delay - Title Issue",
+                "message": "Title company found old lien that needs to be cleared. May add 2-3 days to timeline.",
+                "recommended_action": "Monitor title clearance progress and communicate potential delay to all parties",
+                "due_date": datetime.now().date() + timedelta(days=5),
+                "tags": ["title", "lien", "closing", "delay"],
+            },
+        ]
+
+        created_count = 0
+        for alert_data in sample_alerts:
+            alert = DealAlert(
+                id=str(uuid.uuid4()),
+                type=alert_data["type"],
+                priority=alert_data["priority"],
+                status=AlertStatus.ACTIVE,
+                loan_id=str(uuid.uuid4()),
+                loan_number=alert_data["loan_number"],
+                borrower_name=alert_data["borrower_name"],
+                title=alert_data["title"],
+                message=alert_data["message"],
+                details={"source": "sample_data", "created_by": "seed_script"},
+                recommended_action=alert_data["recommended_action"],
+                created_at=datetime.now() - timedelta(hours=created_count * 2),
+                due_date=alert_data.get("due_date"),
+                tags=alert_data.get("tags", []),
+            )
+            service._alerts[alert.id] = alert
+            created_count += 1
+
+        return {
+            "status": "success",
+            "message": f"Created {created_count} sample deal alerts",
+            "alerts_created": created_count,
+            "alert_types": list(set(a["type"].value for a in sample_alerts)),
+        }
+
+    except Exception as e:
+        logger.error(f"Error seeding sample alerts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
