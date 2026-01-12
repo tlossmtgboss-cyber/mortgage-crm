@@ -1,0 +1,606 @@
+/* Talk to Agent Page Styles */
+
+.tta-page {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #f0fdf4 0%, #f8fafc 100%);
+}
+
+/* Hero Section */
+.tta-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 60px 48px;
+  background: linear-gradient(135deg, #059669 0%, #10b981 50%, #34d399 100%);
+  color: white;
+  position: relative;
+  overflow: hidden;
+}
+
+.tta-hero::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -20%;
+  width: 80%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.tta-hero-content {
+  flex: 1;
+  max-width: 600px;
+  position: relative;
+  z-index: 1;
+}
+
+.tta-hero-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.tta-hero h1 {
+  font-size: 42px;
+  font-weight: 700;
+  margin: 0 0 16px 0;
+  line-height: 1.2;
+}
+
+.tta-hero p {
+  font-size: 18px;
+  line-height: 1.6;
+  opacity: 0.95;
+  margin: 0 0 32px 0;
+}
+
+.tta-hero-actions {
+  margin-bottom: 32px;
+}
+
+.tta-hero-features {
+  display: flex;
+  gap: 32px;
+}
+
+.tta-feature {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.tta-feature-icon {
+  font-size: 18px;
+}
+
+/* Hero Visual */
+.tta-hero-visual {
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.tta-orb-container {
+  position: relative;
+  width: 280px;
+  height: 280px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tta-orb {
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0.3;
+  animation: orbFloat 6s ease-in-out infinite;
+}
+
+.tta-orb-1 {
+  width: 280px;
+  height: 280px;
+  background: rgba(255, 255, 255, 0.2);
+  animation-delay: 0s;
+}
+
+.tta-orb-2 {
+  width: 200px;
+  height: 200px;
+  background: rgba(255, 255, 255, 0.25);
+  animation-delay: -2s;
+}
+
+.tta-orb-3 {
+  width: 120px;
+  height: 120px;
+  background: rgba(255, 255, 255, 0.3);
+  animation-delay: -4s;
+}
+
+.tta-center-icon {
+  font-size: 64px;
+  position: relative;
+  z-index: 2;
+  animation: iconPulse 2s ease-in-out infinite;
+}
+
+@keyframes orbFloat {
+  0%, 100% { transform: scale(1); opacity: 0.3; }
+  50% { transform: scale(1.1); opacity: 0.4; }
+}
+
+@keyframes iconPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+/* Buttons */
+.tta-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 24px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.tta-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tta-btn-primary {
+  background: white;
+  color: #059669;
+}
+
+.tta-btn-primary:hover:not(:disabled) {
+  background: #f0fdf4;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+}
+
+.tta-btn-large {
+  padding: 18px 36px;
+  font-size: 18px;
+  border-radius: 50px;
+}
+
+.tta-btn-talk {
+  background: linear-gradient(135deg, #059669, #10b981);
+  color: white;
+  width: 100%;
+  padding: 14px 24px;
+}
+
+.tta-btn-talk:hover:not(:disabled) {
+  background: linear-gradient(135deg, #047857, #059669);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
+}
+
+.tta-btn-icon {
+  font-size: 18px;
+}
+
+/* Loading */
+.tta-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 400px;
+  gap: 16px;
+}
+
+.tta-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid #e2e8f0;
+  border-top-color: #10b981;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Error Banner */
+.tta-error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 16px 24px;
+  background: #fef2f2;
+  border-bottom: 1px solid #fecaca;
+  color: #dc2626;
+  font-size: 14px;
+}
+
+.tta-error-banner button {
+  background: #dc2626;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* Sections */
+.tta-section {
+  padding: 48px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.tta-section-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.tta-section-header h2 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 8px 0;
+}
+
+.tta-section-header p {
+  font-size: 16px;
+  color: #64748b;
+  margin: 0;
+}
+
+/* Agents Grid */
+.tta-agents-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 24px;
+}
+
+/* Agent Card */
+.tta-agent-card {
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+  display: flex;
+  flex-direction: column;
+}
+
+.tta-agent-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+}
+
+.tta-agent-card.default {
+  border-color: #10b981;
+  background: linear-gradient(to bottom, #f0fdf4, white);
+}
+
+.tta-agent-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.tta-agent-avatar {
+  width: 56px;
+  height: 56px;
+  background: linear-gradient(135deg, #059669, #10b981);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  color: white;
+  font-weight: 700;
+}
+
+.tta-agent-badges {
+  display: flex;
+  gap: 8px;
+}
+
+.tta-badge {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tta-badge-default {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.tta-agent-body {
+  flex: 1;
+  margin-bottom: 16px;
+}
+
+.tta-agent-body h3 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 8px 0;
+}
+
+.tta-agent-desc {
+  font-size: 14px;
+  color: #64748b;
+  line-height: 1.5;
+  margin: 0 0 16px 0;
+  min-height: 42px;
+}
+
+.tta-agent-meta {
+  display: flex;
+  gap: 20px;
+}
+
+.tta-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.tta-meta-icon {
+  font-size: 16px;
+}
+
+.tta-agent-footer {
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+/* Empty State */
+.tta-empty {
+  text-align: center;
+  padding: 60px 20px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.tta-empty-icon {
+  font-size: 64px;
+  display: block;
+  margin-bottom: 16px;
+}
+
+.tta-empty h3 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 8px 0;
+}
+
+.tta-empty p {
+  color: #64748b;
+  margin: 0;
+}
+
+/* How It Works */
+.tta-how-it-works {
+  background: white;
+}
+
+.tta-steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.tta-step {
+  text-align: center;
+  padding: 24px;
+  max-width: 220px;
+}
+
+.tta-step-number {
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, #059669, #10b981);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 auto 16px;
+}
+
+.tta-step h4 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 8px 0;
+}
+
+.tta-step p {
+  font-size: 14px;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.tta-step-arrow {
+  font-size: 24px;
+  color: #d1d5db;
+}
+
+/* Tips */
+.tta-tips-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
+}
+
+.tta-tip {
+  background: white;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  text-align: center;
+}
+
+.tta-tip-icon {
+  font-size: 32px;
+  display: block;
+  margin-bottom: 12px;
+}
+
+.tta-tip h4 {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 6px 0;
+}
+
+.tta-tip p {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* FAQ */
+.tta-faq {
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+}
+
+.tta-faq-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 24px;
+}
+
+.tta-faq-item {
+  background: white;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.tta-faq-item h4 {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 8px 0;
+}
+
+.tta-faq-item p {
+  font-size: 14px;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .tta-hero {
+    flex-direction: column;
+    text-align: center;
+    padding: 40px 24px;
+  }
+
+  .tta-hero-content {
+    max-width: 100%;
+  }
+
+  .tta-hero h1 {
+    font-size: 32px;
+  }
+
+  .tta-hero-features {
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .tta-hero-visual {
+    margin-top: 40px;
+  }
+
+  .tta-orb-container {
+    width: 200px;
+    height: 200px;
+  }
+
+  .tta-orb-1 {
+    width: 200px;
+    height: 200px;
+  }
+
+  .tta-orb-2 {
+    width: 140px;
+    height: 140px;
+  }
+
+  .tta-orb-3 {
+    width: 80px;
+    height: 80px;
+  }
+
+  .tta-center-icon {
+    font-size: 48px;
+  }
+
+  .tta-section {
+    padding: 32px 20px;
+  }
+
+  .tta-agents-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tta-steps {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .tta-step-arrow {
+    transform: rotate(90deg);
+  }
+}
+
+@media (max-width: 600px) {
+  .tta-hero h1 {
+    font-size: 28px;
+  }
+
+  .tta-hero p {
+    font-size: 16px;
+  }
+
+  .tta-btn-large {
+    padding: 14px 28px;
+    font-size: 16px;
+  }
+
+  .tta-section-header h2 {
+    font-size: 24px;
+  }
+}

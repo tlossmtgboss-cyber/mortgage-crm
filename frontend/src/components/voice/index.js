@@ -9,6 +9,7 @@ export { default as CallQueueDashboard } from './CallQueueDashboard';
 export { default as ConferenceRoomDashboard } from './ConferenceRoomDashboard';
 export { default as IVRMenuDashboard } from './IVRMenuDashboard';
 export { default as HoldMusicDashboard } from './HoldMusicDashboard';
+export { default as TalkToAgentPage } from './TalkToAgentPage';
 
 // Usage example:
 // import { AgentStudio, LiveCallsMonitor, AgentBuilder, CallQueueDashboard } from './components/voice';
