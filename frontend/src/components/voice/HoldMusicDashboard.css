@@ -1,0 +1,707 @@
+/* Hold Music Dashboard Styles */
+
+.hm-dashboard {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+  min-height: 100vh;
+  background: #f8fafc;
+}
+
+/* Header */
+.hm-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+.hm-header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 4px 0;
+}
+
+.hm-subtitle {
+  color: #64748b;
+  font-size: 14px;
+  margin: 0;
+}
+
+.hm-header-actions {
+  display: flex;
+  gap: 12px;
+}
+
+/* Buttons */
+.hm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.hm-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.hm-btn-primary {
+  background: #f59e0b;
+  color: white;
+}
+
+.hm-btn-primary:hover:not(:disabled) {
+  background: #d97706;
+}
+
+.hm-btn-secondary {
+  background: white;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.hm-btn-secondary:hover:not(:disabled) {
+  background: #f9fafb;
+}
+
+.hm-btn-small {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.hm-btn-icon {
+  padding: 6px 8px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.hm-btn-icon:hover {
+  background: #f1f5f9;
+}
+
+.hm-btn-icon.hm-btn-delete:hover {
+  background: #fef2f2;
+}
+
+.hm-icon {
+  font-size: 16px;
+}
+
+/* Loading */
+.hm-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 400px;
+  gap: 16px;
+}
+
+.hm-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #f59e0b;
+  border-radius: 50%;
+  animation: hm-spin 1s linear infinite;
+}
+
+@keyframes hm-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Error Banner */
+.hm-error-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #dc2626;
+  margin-bottom: 24px;
+}
+
+.hm-error-banner button {
+  margin-left: auto;
+  background: #dc2626;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* Stats Row */
+.hm-stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.hm-stat-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.hm-stat-highlight {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: white;
+}
+
+.hm-stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.hm-stat-label {
+  font-size: 13px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.hm-stat-highlight .hm-stat-label {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Section */
+.hm-section {
+  margin-bottom: 32px;
+}
+
+.hm-section h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 8px 0;
+}
+
+.hm-section-desc {
+  color: #64748b;
+  font-size: 14px;
+  margin: 0 0 16px 0;
+}
+
+/* Music Grid */
+.hm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+/* Music Card */
+.hm-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+}
+
+.hm-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.hm-card.inactive {
+  opacity: 0.6;
+}
+
+.hm-card.default {
+  border-color: #f59e0b;
+  background: linear-gradient(to bottom, #fffbeb, white);
+}
+
+.hm-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.hm-card-icon {
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
+
+.hm-card-badges {
+  display: flex;
+  gap: 6px;
+}
+
+.hm-badge {
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.hm-badge-default {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.hm-badge-inactive {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.hm-card-body h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 6px 0;
+}
+
+.hm-card-desc {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0 0 12px 0;
+}
+
+.hm-card-meta {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.hm-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.hm-meta-icon {
+  font-size: 12px;
+}
+
+.hm-card-comfort {
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+.hm-comfort-label {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.hm-card-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.hm-btn-play {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #f59e0b;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.hm-btn-play:hover:not(:disabled) {
+  background: #d97706;
+  transform: scale(1.05);
+}
+
+.hm-btn-play:disabled {
+  background: #e2e8f0;
+  cursor: not-allowed;
+}
+
+.hm-btn-play.playing {
+  background: #ef4444;
+  animation: hm-pulse 1s ease-in-out infinite;
+}
+
+@keyframes hm-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+.hm-card-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+/* Twilio Defaults Grid */
+.hm-twilio-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.hm-twilio-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  transition: all 0.2s;
+}
+
+.hm-twilio-card:hover {
+  border-color: #f59e0b;
+}
+
+.hm-twilio-card.added {
+  background: #fffbeb;
+  border-color: #fcd34d;
+}
+
+.hm-twilio-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hm-twilio-icon {
+  font-size: 20px;
+}
+
+.hm-twilio-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.hm-twilio-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hm-btn-play-small {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #f1f5f9;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.hm-btn-play-small:hover {
+  background: #e2e8f0;
+}
+
+.hm-btn-play-small.playing {
+  background: #fecaca;
+}
+
+.hm-twilio-added {
+  font-size: 12px;
+  color: #16a34a;
+  font-weight: 500;
+}
+
+/* Empty State */
+.hm-empty {
+  text-align: center;
+  padding: 60px 20px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.hm-empty-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  display: block;
+}
+
+.hm-empty h3 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 8px 0;
+}
+
+.hm-empty p {
+  color: #64748b;
+  margin: 0 0 24px 0;
+}
+
+/* Modal */
+.hm-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+}
+
+.hm-modal {
+  background: white;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.hm-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.hm-modal-header h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+.hm-close-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: #f1f5f9;
+  border-radius: 50%;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+}
+
+.hm-close-btn:hover {
+  background: #e2e8f0;
+}
+
+.hm-modal-body {
+  padding: 24px;
+}
+
+.hm-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid #e2e8f0;
+}
+
+/* Form Elements */
+.hm-form-group {
+  margin-bottom: 20px;
+}
+
+.hm-form-group label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.hm-form-group input[type="text"],
+.hm-form-group input[type="url"],
+.hm-form-group input[type="number"],
+.hm-form-group select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.hm-form-group input:focus,
+.hm-form-group select:focus {
+  outline: none;
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1);
+}
+
+.hm-form-error {
+  padding: 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #dc2626;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+.hm-hint {
+  font-size: 12px;
+  color: #94a3b8;
+  display: block;
+  margin-top: 4px;
+}
+
+.hm-checkbox {
+  display: flex;
+  align-items: center;
+}
+
+.hm-checkbox label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  margin-bottom: 0;
+}
+
+.hm-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #f59e0b;
+}
+
+/* Source Type Options */
+.hm-source-options {
+  display: flex;
+  gap: 12px;
+}
+
+.hm-source-option {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.hm-source-option:hover {
+  border-color: #f59e0b;
+}
+
+.hm-source-option.selected {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.hm-source-option input {
+  display: none;
+}
+
+.hm-source-icon {
+  font-size: 24px;
+}
+
+.hm-source-option span:last-child {
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+}
+
+/* Comfort Messages */
+.hm-comfort-input {
+  display: flex;
+  gap: 8px;
+}
+
+.hm-comfort-input input {
+  flex: 1;
+}
+
+.hm-comfort-list {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hm-comfort-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.hm-comfort-item button {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0 4px;
+}
+
+.hm-comfort-item button:hover {
+  color: #ef4444;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .hm-stats-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .hm-header {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .hm-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hm-twilio-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hm-source-options {
+    flex-direction: column;
+  }
+}

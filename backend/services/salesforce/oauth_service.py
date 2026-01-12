@@ -260,7 +260,7 @@ class SalesforceOAuthService:
             # Settings already exist, just ensure sync is enabled
             if not existing.sync_enabled:
                 existing.sync_enabled = True
-                db.commit()
+                db.flush()  # Flush changes, parent transaction will commit
             logger.info(f"Calendar sync settings already exist for user {user_id}")
             return existing
 
@@ -277,7 +277,7 @@ class SalesforceOAuthService:
             batch_size=50
         )
         db.add(settings)
-        db.commit()
+        db.flush()  # Flush to get the ID without committing
 
         logger.info(f"Created calendar sync settings for user {user_id}")
         return settings

@@ -700,6 +700,50 @@ class Lead(Base):
     last_workflow_action = Column(DateTime)  # Last automated action
     nurture_month = Column(Integer, default=0)  # Month in long-term nurture cycle
     stage_changed_at = Column(DateTime)  # Tracks when stage last changed (for workflow day calculation)
+
+    # ============================================================
+    # Salesforce Sync Fields - Additional Property Details
+    # ============================================================
+    occupancy_type = Column(String)  # Primary, Second Home, Investment
+    property_county = Column(String)
+    property_ownership_type = Column(String)
+    property_units = Column(Integer)
+
+    # ============================================================
+    # Salesforce Sync Fields - 1st Loan Financial Details
+    # ============================================================
+    rate_type = Column(String)  # Fixed, ARM, etc.
+    monthly_payment = Column(Float)  # Monthly P&I Payment
+    property_tax = Column(Float)  # Annual property tax
+    hazard_insurance = Column(Float)  # Monthly hazard insurance
+    mortgage_insurance = Column(Float)  # Monthly mortgage insurance
+    hoa_amount = Column(Float)  # Monthly HOA
+    origination_fee = Column(Float)
+    estimated_prepaid_interest = Column(Float)
+    index_rate = Column(Float)
+    margin = Column(Float)
+
+    # ============================================================
+    # Salesforce Sync Fields - LTV/CLTV Additional
+    # ============================================================
+    loan_purpose = Column(String)  # Purchase, Refinance, Cash-out, etc.
+    file_state = Column(String)  # Current file state
+
+    # ============================================================
+    # Salesforce Sync Fields - 2nd Loan Details
+    # ============================================================
+    second_loan_amount = Column(Float)
+    second_loan_rate = Column(Float)
+    second_loan_payment = Column(Float)
+
+    # ============================================================
+    # Salesforce Sync Fields - Present vs Proposed Housing
+    # ============================================================
+    present_housing_expense = Column(Float)
+    proposed_housing_expense = Column(Float)
+    present_monthly_payment = Column(Float)
+    proposed_monthly_payment = Column(Float)
+
     # Metadata
     user_metadata = Column(JSON)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -860,6 +904,53 @@ class Loan(Base):
     # Status Changes
     withdrawn_date = Column(Date)
     # contract_received_date already exists above
+
+    # ============================================================
+    # Salesforce Sync Fields - Property Details
+    # ============================================================
+    property_type = Column(String)  # Single Family, Condo, Townhouse, etc.
+    occupancy_type = Column(String)  # Primary, Second Home, Investment
+    property_county = Column(String)
+    property_ownership_type = Column(String)
+    property_units = Column(Integer)
+
+    # ============================================================
+    # Salesforce Sync Fields - 1st Loan Financial Details
+    # ============================================================
+    rate_type = Column(String)  # Fixed, ARM, etc.
+    monthly_payment = Column(Float)  # Monthly P&I Payment
+    property_tax = Column(Float)  # Annual property tax
+    hazard_insurance = Column(Float)  # Monthly hazard insurance
+    mortgage_insurance = Column(Float)  # Monthly mortgage insurance
+    hoa_amount = Column(Float)  # Monthly HOA
+    origination_fee = Column(Float)
+    estimated_prepaid_interest = Column(Float)
+    points = Column(Float)
+    index_rate = Column(Float)
+    margin = Column(Float)
+
+    # ============================================================
+    # Salesforce Sync Fields - LTV/CLTV
+    # ============================================================
+    ltv = Column(Float)  # Loan-to-Value ratio
+    cltv = Column(Float)  # Combined Loan-to-Value ratio
+    loan_purpose = Column(String)  # Purchase, Refinance, Cash-out, etc.
+    file_state = Column(String)  # Current file state
+
+    # ============================================================
+    # Salesforce Sync Fields - 2nd Loan Details
+    # ============================================================
+    second_loan_amount = Column(Float)
+    second_loan_rate = Column(Float)
+    second_loan_payment = Column(Float)
+
+    # ============================================================
+    # Salesforce Sync Fields - Present vs Proposed Housing
+    # ============================================================
+    present_housing_expense = Column(Float)
+    proposed_housing_expense = Column(Float)
+    present_monthly_payment = Column(Float)
+    proposed_monthly_payment = Column(Float)
 
     loan_officer = relationship("User", back_populates="loans")
     tasks = relationship("AITask", back_populates="loan")
@@ -3881,6 +3972,41 @@ class LeadResponse(BaseModel):
     rate_watch_enrollment_date: Optional[datetime] = None
     # Referral Partner
     referral_partner_id: Optional[int] = None
+
+    # Salesforce Sync Fields - Additional Property Details
+    occupancy_type: Optional[str] = None
+    property_county: Optional[str] = None
+    property_ownership_type: Optional[str] = None
+    property_units: Optional[int] = None
+
+    # Salesforce Sync Fields - 1st Loan Financial Details
+    rate_type: Optional[str] = None
+    monthly_payment: Optional[float] = None
+    property_tax: Optional[float] = None
+    hazard_insurance: Optional[float] = None
+    mortgage_insurance: Optional[float] = None
+    hoa_amount: Optional[float] = None
+    origination_fee: Optional[float] = None
+    estimated_prepaid_interest: Optional[float] = None
+    index_rate: Optional[float] = None
+    margin: Optional[float] = None
+
+    # Salesforce Sync Fields - Additional LTV/CLTV
+    cltv: Optional[float] = None
+    loan_purpose: Optional[str] = None
+    file_state: Optional[str] = None
+
+    # Salesforce Sync Fields - 2nd Loan Details
+    second_loan_amount: Optional[float] = None
+    second_loan_rate: Optional[float] = None
+    second_loan_payment: Optional[float] = None
+
+    # Salesforce Sync Fields - Present vs Proposed Housing
+    present_housing_expense: Optional[float] = None
+    proposed_housing_expense: Optional[float] = None
+    present_monthly_payment: Optional[float] = None
+    proposed_monthly_payment: Optional[float] = None
+
     created_at: datetime
     updated_at: Optional[datetime] = None
     class Config:
@@ -43134,9 +43260,22 @@ async def get_loan(loan_id: int, db: Session = Depends(get_db), current_user: Us
                    -- Property Details
                    property_address, property_city, property_state, property_zip,
                    appraisal_value, purchase_price,
+                   -- Salesforce Property Details
+                   property_type, occupancy_type, property_county, property_ownership_type, property_units,
                    -- Loan Details
                    loan_type, term, down_payment, lender,
                    lock_date, lock_expiration_date,
+                   -- 1st Loan Financial Details (Salesforce sync)
+                   rate_type, monthly_payment, property_tax, hazard_insurance,
+                   mortgage_insurance, hoa_amount, origination_fee, estimated_prepaid_interest,
+                   points, index_rate, margin,
+                   -- LTV/CLTV
+                   ltv, cltv, loan_purpose, file_state,
+                   -- 2nd Loan Details
+                   second_loan_amount, second_loan_rate, second_loan_payment,
+                   -- Present vs Proposed Housing
+                   present_housing_expense, proposed_housing_expense,
+                   present_monthly_payment, proposed_monthly_payment,
                    -- Loan Officer
                    loan_officer_id
             FROM loans
