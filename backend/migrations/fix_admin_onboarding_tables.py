@@ -241,7 +241,23 @@ def run_migration():
         else:
             print("users.headshot_url column already exists")
 
-        # 8. Create user_invitations table if not exists (for team invites)
+        # 8. Add password column to users table if not exists
+        print("Checking users.password column...")
+        result = conn.execute(text("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'users' AND column_name = 'password'
+        """))
+
+        if not result.fetchone():
+            print("Adding password column to users table...")
+            conn.execute(text("""
+                ALTER TABLE users ADD COLUMN password VARCHAR(255);
+            """))
+            print("Added password column")
+        else:
+            print("users.password column already exists")
+
+        # 9. Create user_invitations table if not exists (for team invites)
         print("Checking user_invitations table...")
         result = conn.execute(text("""
             SELECT table_name FROM information_schema.tables
