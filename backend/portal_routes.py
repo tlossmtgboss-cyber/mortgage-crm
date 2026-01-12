@@ -1755,6 +1755,7 @@ def get_portal_by_loan_id(
             portal_loan = db.query(PortalLoan).filter(PortalLoan.crm_deal_id == loan_id).first()
     except Exception as e:
         logger.error(f"Error querying PortalLoan: {e}")
+        db.rollback()  # Reset transaction after error
         portal_loan = None
 
     if not portal_loan:
@@ -1770,6 +1771,7 @@ def get_portal_by_loan_id(
             purl_loan = result.fetchone()
         except Exception as e:
             logger.error(f"Error querying purl_loans: {e}")
+            db.rollback()
             purl_loan = None
 
         if purl_loan:
