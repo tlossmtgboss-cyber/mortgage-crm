@@ -97,10 +97,10 @@ function CalendarSidebar({ leadId, loanId, children }) {
         .filter(appt => appt.status !== 'CANCELLED')
         .sort((a, b) => new Date(normalizeUTCDate(a.scheduled_start)) - new Date(normalizeUTCDate(b.scheduled_start)));
 
-      // Filter out cancelled CRM events and sort by date
+      // Filter out cancelled CRM events and sort by date (API returns start_at)
       const filteredCrmEvents = (crmEventsData || [])
         .filter(event => event.status !== 'cancelled')
-        .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+        .sort((a, b) => new Date(a.start_at || a.start_time) - new Date(b.start_at || b.start_time));
 
       setAppointments(filteredAppointments);
       setCrmEvents(filteredCrmEvents);
@@ -160,9 +160,9 @@ function CalendarSidebar({ leadId, loanId, children }) {
       const apptDate = new Date(normalizeUTCDate(appt.scheduled_start));
       return apptDate.toDateString() === date.toDateString();
     });
-    // Check CRM calendar events
+    // Check CRM calendar events (API returns start_at)
     const hasCrmEvent = crmEvents.some(event => {
-      const eventDate = new Date(event.start_time);
+      const eventDate = new Date(event.start_at || event.start_time);
       return eventDate.toDateString() === date.toDateString();
     });
     return hasAppt || hasCrmEvent;
@@ -197,14 +197,15 @@ function CalendarSidebar({ leadId, loanId, children }) {
     }));
 
     // Get CRM calendar events for selected date
+    // API returns start_at/end_at fields
     const events = crmEvents.filter(event => {
-      const eventDate = new Date(event.start_time);
+      const eventDate = new Date(event.start_at || event.start_time);
       return eventDate.toDateString() === selectedDate.toDateString();
     }).map(event => ({
       id: `crm-${event.id}`,
       title: event.title || event.subject || 'CRM Event',
-      scheduled_start: event.start_time,
-      scheduled_end: event.end_time,
+      scheduled_start: event.start_at || event.start_time,
+      scheduled_end: event.end_at || event.end_time,
       attendee_name: event.attendees?.length > 0 ? event.attendees[0].name : null,
       meeting_mode: event.event_type === 'video_call' ? 'VIDEO' :
                     event.event_type === 'phone_call' ? 'PHONE' :
@@ -212,7 +213,7 @@ function CalendarSidebar({ leadId, loanId, children }) {
       sourceType: 'crm_calendar',
       crmEventId: event.id,
       sync_status: event.sync_status,
-      displayTime: event.start_time
+      displayTime: event.start_at || event.start_time
     }));
 
     // Combine and sort by time
@@ -282,14 +283,14 @@ function CalendarSidebar({ leadId, loanId, children }) {
         displayTime: appt.scheduled_start
       }));
 
-    // Get upcoming CRM calendar events
+    // Get upcoming CRM calendar events (API returns start_at/end_at)
     const upcomingCrmEvents = crmEvents
-      .filter(event => new Date(event.start_time) >= now)
+      .filter(event => new Date(event.start_at || event.start_time) >= now)
       .map(event => ({
         id: `crm-${event.id}`,
         title: event.title || event.subject || 'CRM Event',
-        scheduled_start: event.start_time,
-        scheduled_end: event.end_time,
+        scheduled_start: event.start_at || event.start_time,
+        scheduled_end: event.end_at || event.end_time,
         attendee_name: event.attendees?.length > 0 ? event.attendees[0].name : null,
         meeting_mode: event.event_type === 'video_call' ? 'VIDEO' :
                       event.event_type === 'phone_call' ? 'PHONE' :
@@ -297,7 +298,7 @@ function CalendarSidebar({ leadId, loanId, children }) {
         sourceType: 'crm_calendar',
         crmEventId: event.id,
         sync_status: event.sync_status,
-        displayTime: event.start_time
+        displayTime: event.start_at || event.start_time
       }));
 
     // Combine, sort by time, and take first 5

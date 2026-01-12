@@ -163,15 +163,16 @@ function Calendar() {
   });
 
   // Convert CRM calendar event (synced with Salesforce) to display format
+  // API returns start_at/end_at, we convert to start_time/end_time for display
   const crmEventToEvent = (event) => ({
     id: `crm-${event.id}`,
     title: event.title || event.subject || 'CRM Event',
-    description: event.description || '',
-    start_time: event.start_time,
-    end_time: event.end_time,
+    description: event.description || event.notes || '',
+    start_time: event.start_at || event.start_time,
+    end_time: event.end_at || event.end_time,
     event_type: event.event_type || 'meeting',
     location: event.location || '',
-    related_lead_id: event.related_lead_id,
+    related_lead_id: event.related_lead_id || event.related_entity_id,
     related_loan_id: event.related_loan_id,
     related_contact_id: event.related_contact_id,
     isCrmEvent: true,
