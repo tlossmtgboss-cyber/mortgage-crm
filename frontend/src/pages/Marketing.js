@@ -14,6 +14,16 @@ const PowerDialer = lazy(() => import('./PowerDialer'));
 const LiveCallWhisper = lazy(() => import('./LiveCallWhisper'));
 const DealAlertsDashboard = lazy(() => import('../components/DealAlerts').then(m => ({ default: m.DealAlertsDashboard })));
 
+// Voice & Call Center components
+const AgentStudio = lazy(() => import('../components/voice/AgentStudio'));
+const LiveCallsMonitor = lazy(() => import('../components/voice/LiveCallsMonitor'));
+const CallQueueDashboard = lazy(() => import('../components/voice/CallQueueDashboard'));
+const ConferenceRoomDashboard = lazy(() => import('../components/voice/ConferenceRoomDashboard'));
+const IVRMenuDashboard = lazy(() => import('../components/voice/IVRMenuDashboard'));
+const HoldMusicDashboard = lazy(() => import('../components/voice/HoldMusicDashboard'));
+const TalkToAgentPage = lazy(() => import('../components/voice/TalkToAgentPage'));
+const CallAnalyticsDashboard = lazy(() => import('../components/voice/CallAnalyticsDashboard'));
+
 // Marketing settings components (inline for now, can be extracted)
 const LandingPagesSettings = lazy(() => import('./marketing/LandingPagesSettings'));
 const EmailMarketingSettings = lazy(() => import('./marketing/EmailMarketingSettings'));
@@ -29,13 +39,26 @@ const MARKETING_TOOLS = [
     category: 'Outreach & Communication',
     tools: [
       { id: 'ai-outreach', name: 'AI Outreach', description: 'Automated AI-powered outreach campaigns' },
-      { id: 'ai-receptionist', name: 'AI Receptionist', description: 'AI-powered phone receptionist' },
-      { id: 'power-dialer', name: 'Power Dialer', description: 'High-volume outbound calling' },
       { id: 'communication', name: 'Communication Hub', description: 'Email and SMS management' },
+      { id: 'deal-alerts', name: 'Deal Alerts', description: 'Proactive pipeline monitoring and alerts' },
+    ]
+  },
+  {
+    category: 'Voice & Call Center',
+    tools: [
+      { id: 'ai-receptionist', name: 'AI Receptionist', description: 'AI-powered phone receptionist' },
+      { id: 'voice-agents', name: 'Voice Agents', description: 'Create and manage AI voice agents' },
+      { id: 'live-calls', name: 'Live Calls', description: 'Monitor active calls in real-time' },
+      { id: 'power-dialer', name: 'Power Dialer', description: 'High-volume outbound calling' },
+      { id: 'call-queues', name: 'Call Queues', description: 'Manage inbound call queues' },
+      { id: 'conference-rooms', name: 'Conference Rooms', description: 'Virtual conference room management' },
+      { id: 'ivr-menus', name: 'IVR Menus', description: 'Interactive voice response menus' },
+      { id: 'hold-music', name: 'Hold Music', description: 'Customize hold music and messages' },
+      { id: 'talk-to-agent', name: 'Talk to Agent', description: 'Direct call routing to agents' },
+      { id: 'call-analytics', name: 'Call Analytics', description: 'Call performance metrics and insights' },
       { id: 'call-intelligence', name: 'Call Intelligence', description: 'AI-powered call analysis and insights' },
       { id: 'live-call-whisper', name: 'Live Call Whisper', description: 'Real-time AI coaching during calls' },
       { id: 'call-qa', name: 'Call QA', description: 'Call quality analysis and coaching' },
-      { id: 'deal-alerts', name: 'Deal Alerts', description: 'Proactive pipeline monitoring and alerts' },
     ]
   },
   {
@@ -106,42 +129,68 @@ function Marketing() {
   // Render the active tool component
   const renderActiveTool = () => {
     switch (activeTool) {
+      // Outreach & Communication
       case 'ai-outreach':
         return <AIOutreach />;
-      case 'ai-receptionist':
-        return <AIReceptionistDashboard />;
-      case 'power-dialer':
-        return <PowerDialer />;
-      case 'avatar-studio':
-        return <AvatarStudio />;
       case 'communication':
         return <CommunicationIntelligence />;
-      case 'acquisition':
-        return <AcquisitionDashboard />;
-      case 'call-qa':
-        return <ConversationIntelligence />;
+      case 'deal-alerts':
+        return <DealAlertsDashboard embedded={true} />;
+
+      // Voice & Call Center
+      case 'ai-receptionist':
+        return <AIReceptionistDashboard />;
+      case 'voice-agents':
+        return <AgentStudio />;
+      case 'live-calls':
+        return <LiveCallsMonitor />;
+      case 'power-dialer':
+        return <PowerDialer />;
+      case 'call-queues':
+        return <CallQueueDashboard />;
+      case 'conference-rooms':
+        return <ConferenceRoomDashboard />;
+      case 'ivr-menus':
+        return <IVRMenuDashboard />;
+      case 'hold-music':
+        return <HoldMusicDashboard />;
+      case 'talk-to-agent':
+        return <TalkToAgentPage />;
+      case 'call-analytics':
+        return <CallAnalyticsDashboard />;
       case 'call-intelligence':
         return <ConversationIntelligence />;
       case 'live-call-whisper':
         return <LiveCallWhisper />;
-      case 'deal-alerts':
-        return <DealAlertsDashboard embedded={true} />;
+      case 'call-qa':
+        return <ConversationIntelligence />;
+
+      // Content & Media
+      case 'avatar-studio':
+        return <AvatarStudio />;
       case 'ai-blog':
         return <AIDailyBlog />;
+
+      // Lead Generation
+      case 'acquisition':
+        return <AcquisitionDashboard />;
       case 'landing-pages':
         return <LandingPagesSettings />;
+      case 'microsite':
+        return <MicrositeSettings />;
+
+      // Templates & Assets
       case 'email-marketing':
         return <EmailMarketingSettings />;
       case 'text-marketing':
         return <TextMarketingSettings />;
       case 'voicemail':
         return <VoicemailSettings />;
-      case 'microsite':
-        return <MicrositeSettings />;
       case 'pre-approval-letter':
         return <PreApprovalLetterSettings />;
       case 'application-slides':
         return <ApplicationSlidesSettings />;
+
       default:
         return <ComingSoonPlaceholder toolName={activeToolInfo?.name || 'Unknown Tool'} />;
     }

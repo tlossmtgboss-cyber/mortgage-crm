@@ -291,6 +291,7 @@ export const NAVIGATION_ITEMS = {
 
 export const ROLE_NAVIGATION = {
   // Admin - Full access to everything, no restrictions
+  // Note: Voice/Call Center tools moved to Marketing page
   admin: [
     'adminPanel',           // Admin Panel link - admin only
     'dashboard',
@@ -301,7 +302,7 @@ export const ROLE_NAVIGATION = {
     'tasks',
     'reconciliation',
     'smartDocs',
-    'marketing',
+    'marketing',            // Marketing page now includes Voice & Call Center
     'calendar',
     'scorecard',            // Scorecard
     'partners',
@@ -313,26 +314,15 @@ export const ROLE_NAVIGATION = {
     'capacity',
     'recruiting',
     'partnerRecruiting',
-    'conversationIntelligence',
-    'liveCallWhisper',
     'videoOs',              // Video OS
     'integrations',         // Integrations
-    'voiceAgents',
-    'voiceLive',
-    'callQueues',
-    'conferenceRooms',
-    'ivrMenus',
-    'holdMusic',
-    'talkToAgent',
-    'powerDialer',
-    'callAnalytics',
     'productionPredictor',
     'dealAlerts'
   ],
 
   // Loan Officer - Full sales navigation
   // Note: Production Predictor, Deal Alerts are on dashboard instead of nav
-  // Note: Live Call Whisper, Call Intelligence are accessed via Marketing
+  // Note: Voice/Call tools are accessed via Marketing page
   loan_officer: [
     'dashboard',
     'leads',
@@ -341,15 +331,13 @@ export const ROLE_NAVIGATION = {
     'tasks',
     'reconciliation',
     'smartDocs',
-    'marketing',
+    'marketing',            // Marketing page includes Voice & Call Center tools
     'calendar',
     'partners',
     'aiUnderwriter',
     'market',
     'profitability',
-    'partnerRecruiting',
-    'powerDialer',
-    'callAnalytics'
+    'partnerRecruiting'
   ],
 
   // Production Assistant - Support role navigation
