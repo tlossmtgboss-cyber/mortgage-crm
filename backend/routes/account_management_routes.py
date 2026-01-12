@@ -408,6 +408,76 @@ async def run_account_management_migration(
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 
+@router.post("/run-invitations-migration")
+async def run_invitations_migration(
+    admin_key: str = None,
+    db: Session = Depends(get_db)
+):
+    """Run the subscriber_invitations table migration."""
+    import os
+
+    # Verify admin key
+    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    if admin_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        # Check if table already exists
+        table_check = db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'subscriber_invitations'
+            )
+        """)).scalar()
+
+        if table_check:
+            return {"status": "success", "message": "subscriber_invitations table already exists"}
+
+        # Create subscriber_invitations table
+        migration_sql = """
+        CREATE TABLE subscriber_invitations (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            token VARCHAR(255) NOT NULL UNIQUE,
+            email VARCHAR(255) NOT NULL,
+            company_name VARCHAR(255) NOT NULL,
+            contact_name VARCHAR(255),
+            plan VARCHAR(100) NOT NULL DEFAULT 'professional',
+            seats INTEGER NOT NULL DEFAULT 5,
+            promo_code VARCHAR(50),
+            personal_message TEXT,
+            status VARCHAR(30) NOT NULL DEFAULT 'pending'
+                CHECK (status IN ('pending', 'accepted', 'expired', 'revoked')),
+            invited_by INTEGER REFERENCES users(id),
+            invited_by_name VARCHAR(255),
+            expires_at TIMESTAMP NOT NULL,
+            accepted_at TIMESTAMP,
+            accepted_by_user_id INTEGER REFERENCES users(id),
+            revoked_at TIMESTAMP,
+            revoked_by INTEGER REFERENCES users(id),
+            ip_address VARCHAR(45),
+            metadata JSONB DEFAULT '{}',
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        );
+
+        CREATE INDEX idx_sub_invites_token ON subscriber_invitations(token);
+        CREATE INDEX idx_sub_invites_email ON subscriber_invitations(email);
+        CREATE INDEX idx_sub_invites_status ON subscriber_invitations(status);
+        CREATE INDEX idx_sub_invites_expires ON subscriber_invitations(expires_at);
+        CREATE INDEX idx_sub_invites_created ON subscriber_invitations(created_at);
+        """
+
+        db.execute(text(migration_sql))
+        db.commit()
+
+        return {"status": "success", "message": "subscriber_invitations table created successfully"}
+
+    except Exception as e:
+        logger.error(f"Invitations migration failed: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
 # =============================================================================
 # KPI Endpoints
 # =============================================================================
@@ -569,7 +639,40 @@ async def invite_subscriber(
         invitation_token = str(uuid.uuid4())
         expires_at = datetime.now(timezone.utc) + timedelta(days=7)
 
-        # Log the invitation action in audit log
+        # Store invitation in subscriber_invitations table for validation
+        try:
+            db.execute(text("""
+                INSERT INTO subscriber_invitations (
+                    token, email, company_name, contact_name, plan, seats,
+                    promo_code, personal_message, status, invited_by, invited_by_name,
+                    expires_at, ip_address, created_at, updated_at
+                ) VALUES (
+                    :token, :email, :company_name, :contact_name, :plan, :seats,
+                    :promo_code, :message, 'pending', :invited_by, :invited_by_name,
+                    :expires_at, :ip, NOW(), NOW()
+                )
+            """), {
+                'token': invitation_token,
+                'email': invite.email,
+                'company_name': invite.company_name,
+                'contact_name': invite.contact_name,
+                'plan': invite.plan,
+                'seats': invite.seats,
+                'promo_code': invite.promo_code,
+                'message': invite.message,
+                'invited_by': current_user.id,
+                'invited_by_name': getattr(current_user, 'full_name', current_user.email),
+                'expires_at': expires_at,
+                'ip': request.client.host if request.client else 'unknown'
+            })
+            db.commit()
+            logger.info(f"Invitation stored with token: {invitation_token}")
+        except Exception as store_err:
+            logger.error(f"Could not store invitation: {store_err}")
+            db.rollback()
+            raise DatabaseException(f"Failed to create invitation: {str(store_err)}")
+
+        # Also log to audit log for historical tracking
         try:
             db.execute(text("""
                 INSERT INTO admin_audit_log (
@@ -599,10 +702,9 @@ async def invite_subscriber(
                 'ip': request.client.host if request.client else 'unknown'
             })
             db.commit()
-            logger.info(f"Invitation logged to audit with token: {invitation_token}")
         except Exception as log_err:
-            logger.error(f"Could not log invitation to audit: {log_err}")
-            # Continue anyway - logging failure shouldn't block invitation
+            logger.warning(f"Could not log invitation to audit: {log_err}")
+            # Continue anyway - audit logging failure shouldn't block invitation
 
         # Log the action
         logger.info(f"Subscription invitation sent to {invite.email} by {current_user.email}")
@@ -657,6 +759,237 @@ async def invite_subscriber(
         logger.error(f"Error sending invitation: {e}")
         db.rollback()
         raise DatabaseException(f"Failed to send invitation: {str(e)}")
+
+
+@router.get("/pending-invites")
+async def list_pending_invites(
+    request: Request,
+    search: Optional[str] = Query(None, description="Search by email or company"),
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(20, ge=1, le=100, description="Items per page"),
+    db: Session = Depends(get_db)
+):
+    """List pending subscription invitations"""
+    try:
+        current_user = await get_user_from_request(request, db)
+        require_master_admin(current_user)
+
+        # Check if table exists
+        table_check = db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'subscriber_invitations'
+            )
+        """)).scalar()
+
+        if not table_check:
+            return success_response(
+                data={
+                    'invitations': [],
+                    'pagination': {
+                        'page': page,
+                        'limit': limit,
+                        'total': 0,
+                        'total_pages': 0
+                    }
+                },
+                message="No invitations table found"
+            )
+
+        # Build search filter
+        search_filter = ""
+        params = {'offset': (page - 1) * limit, 'limit': limit}
+        if search:
+            search_filter = "AND (email ILIKE :search OR company_name ILIKE :search)"
+            params['search'] = f"%{search}%"
+
+        # Get total count
+        count_result = db.execute(text(f"""
+            SELECT COUNT(*) as total
+            FROM subscriber_invitations
+            WHERE status = 'pending' {search_filter}
+        """), params).fetchone()
+        total = count_result.total if count_result else 0
+
+        # Get invitations
+        invitations = db.execute(text(f"""
+            SELECT id, token, email, company_name, contact_name, plan, seats,
+                   promo_code, status, invited_by_name, expires_at, created_at
+            FROM subscriber_invitations
+            WHERE status = 'pending' {search_filter}
+            ORDER BY created_at DESC
+            OFFSET :offset LIMIT :limit
+        """), params).fetchall()
+
+        invite_list = []
+        now = datetime.now(timezone.utc)
+        for inv in invitations:
+            expires_at = inv.expires_at
+            is_expired = False
+            if expires_at:
+                if hasattr(expires_at, 'replace'):
+                    expires_at_tz = expires_at.replace(tzinfo=timezone.utc)
+                    is_expired = now > expires_at_tz
+
+            invite_list.append({
+                'id': str(inv.id),
+                'email': inv.email,
+                'name': inv.contact_name or '',
+                'organizationName': inv.company_name,
+                'planName': inv.plan.title() if inv.plan else 'Professional',
+                'seatsPurchased': inv.seats or 5,
+                'invitedAt': inv.created_at.isoformat() if inv.created_at else None,
+                'invitedBy': inv.invited_by_name or 'System',
+                'expiresAt': inv.expires_at.isoformat() if inv.expires_at else None,
+                'status': 'expired' if is_expired else 'pending',
+                'promoCode': inv.promo_code
+            })
+
+        return success_response(
+            data={
+                'invitations': invite_list,
+                'pagination': {
+                    'page': page,
+                    'limit': limit,
+                    'total': total,
+                    'total_pages': (total + limit - 1) // limit
+                }
+            },
+            message=f"Found {len(invite_list)} pending invitations"
+        )
+
+    except PermissionException:
+        raise
+    except Exception as e:
+        logger.error(f"Error listing pending invites: {e}")
+        raise DatabaseException(f"Failed to list pending invites: {str(e)}")
+
+
+@router.post("/invites/{invite_id}/resend")
+async def resend_invite(
+    invite_id: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Resend an invitation email"""
+    try:
+        current_user = await get_user_from_request(request, db)
+        require_master_admin(current_user)
+
+        # Get invitation
+        invitation = db.execute(text("""
+            SELECT id, token, email, company_name, contact_name, plan, seats,
+                   promo_code, personal_message, expires_at, status
+            FROM subscriber_invitations
+            WHERE id = :id
+        """), {'id': invite_id}).fetchone()
+
+        if not invitation:
+            raise NotFoundException(f"Invitation {invite_id} not found")
+
+        if invitation.status != 'pending':
+            raise ValidationException(f"Cannot resend invitation with status '{invitation.status}'")
+
+        # Generate new token and extend expiration
+        new_token = str(uuid.uuid4())
+        new_expires = datetime.now(timezone.utc) + timedelta(days=7)
+
+        db.execute(text("""
+            UPDATE subscriber_invitations
+            SET token = :new_token,
+                expires_at = :new_expires,
+                updated_at = NOW()
+            WHERE id = :id
+        """), {
+            'id': invite_id,
+            'new_token': new_token,
+            'new_expires': new_expires
+        })
+        db.commit()
+
+        # Send the invitation email
+        email_sent = False
+        try:
+            email_sent = await send_subscription_invite_email(
+                to_email=invitation.email,
+                company_name=invitation.company_name,
+                contact_name=invitation.contact_name,
+                plan=invitation.plan,
+                seats=invitation.seats,
+                invitation_token=new_token,
+                personal_message=invitation.personal_message,
+                expires_days=7,
+                promo_code=invitation.promo_code
+            )
+        except Exception as email_err:
+            logger.error(f"Error sending resend email: {email_err}")
+
+        return success_response(
+            data={
+                'id': invite_id,
+                'email': invitation.email,
+                'new_token': new_token,
+                'expires_at': new_expires.isoformat(),
+                'email_sent': email_sent
+            },
+            message=f"Invitation resent to {invitation.email}"
+        )
+
+    except (PermissionException, NotFoundException, ValidationException):
+        raise
+    except Exception as e:
+        logger.error(f"Error resending invitation: {e}")
+        db.rollback()
+        raise DatabaseException(f"Failed to resend invitation: {str(e)}")
+
+
+@router.delete("/invites/{invite_id}")
+async def revoke_invite(
+    invite_id: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Revoke a pending invitation"""
+    try:
+        current_user = await get_user_from_request(request, db)
+        require_master_admin(current_user)
+
+        # Get invitation
+        invitation = db.execute(text("""
+            SELECT id, email, status FROM subscriber_invitations WHERE id = :id
+        """), {'id': invite_id}).fetchone()
+
+        if not invitation:
+            raise NotFoundException(f"Invitation {invite_id} not found")
+
+        if invitation.status != 'pending':
+            raise ValidationException(f"Cannot revoke invitation with status '{invitation.status}'")
+
+        # Revoke the invitation
+        db.execute(text("""
+            UPDATE subscriber_invitations
+            SET status = 'revoked',
+                revoked_at = NOW(),
+                revoked_by = :revoked_by,
+                updated_at = NOW()
+            WHERE id = :id
+        """), {
+            'id': invite_id,
+            'revoked_by': current_user.id
+        })
+        db.commit()
+
+        return success_response(
+            data={'id': invite_id, 'email': invitation.email},
+            message=f"Invitation to {invitation.email} has been revoked"
+        )
+
+    except (PermissionException, NotFoundException, ValidationException):
+        raise
+    except Exception as e:
+        logger.error(f"Error revoking invitation: {e}")
+        db.rollback()
+        raise DatabaseException(f"Failed to revoke invitation: {str(e)}")
 
 
 # =============================================================================

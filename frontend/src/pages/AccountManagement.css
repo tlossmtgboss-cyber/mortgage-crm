@@ -255,6 +255,7 @@
 .status-suspended, .status-pending { background: rgba(245, 158, 11, 0.1); color: #fbbf24; border-color: rgba(245, 158, 11, 0.3); }
 .status-canceled, .status-failed, .status-disabled { background: rgba(239, 68, 68, 0.1); color: #f87171; border-color: rgba(239, 68, 68, 0.3); }
 .status-invited { background: rgba(168, 85, 247, 0.1); color: #c084fc; border-color: rgba(168, 85, 247, 0.3); }
+.status-expired { background: rgba(239, 68, 68, 0.1); color: #f87171; border-color: rgba(239, 68, 68, 0.3); }
 
 /* Health Indicator */
 .health-dot {
@@ -1937,4 +1938,81 @@ button:disabled {
   .category-actions {
     flex-wrap: wrap;
   }
+}
+
+/* Pending Invites Styles */
+.invites-table .invite-row {
+  transition: background-color 0.15s ease;
+}
+
+.invites-table .invite-row:hover {
+  background: #f8fafc;
+}
+
+.invites-table .invite-row.expired {
+  opacity: 0.7;
+  background: #fef2f2;
+}
+
+.invites-table .invite-row.expired:hover {
+  background: #fee2e2;
+}
+
+.invite-email {
+  font-size: 13px;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+.invited-by {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.expires-text {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.expires-text.expired {
+  color: #ef4444;
+  font-weight: 500;
+}
+
+.row-actions {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.action-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: all 0.15s ease;
+}
+
+.action-btn:hover {
+  background: #f1f5f9;
+  color: #1a1a1a;
+}
+
+.action-btn.danger:hover {
+  background: #fef2f2;
+  color: #ef4444;
+}
+
+/* Status badge for expired invites */
+.status-badge.expired {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
 }

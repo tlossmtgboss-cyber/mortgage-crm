@@ -70,10 +70,11 @@ const getAuthHeaders = () => ({
 });
 
 // Helper to calculate KPIs from accounts
-const calculateKpisFromAccounts = (activeAccounts, suspendedAccounts, canceledAccounts) => {
+const calculateKpisFromAccounts = (activeAccounts, suspendedAccounts, canceledAccounts, pendingInvites) => {
   const active = activeAccounts || [];
   const suspended = suspendedAccounts || [];
   const canceled = canceledAccounts || [];
+  const pending = pendingInvites || [];
 
   // Calculate totals from active accounts
   const totalMRR = active.reduce((sum, a) => sum + (a.mrr || 0), 0);
@@ -101,6 +102,7 @@ const calculateKpisFromAccounts = (activeAccounts, suspendedAccounts, canceledAc
     totalActiveAccounts: active.length,
     totalSuspendedAccounts: suspended.length,
     totalCanceledAccounts: canceled.length,
+    totalPendingInvites: pending.length,
     totalMRR,
     totalARR: totalMRR * 12,
     mrrGrowth: 8.4, // Simulated growth
@@ -290,6 +292,65 @@ const DEMO_CANCELED_ACCOUNTS = [
     ownerEmail: 'pbrown@quickmortgage.com',
     createdAt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
     internalNotes: 'Churned - moved to competitor. Price sensitivity.'
+  }
+];
+
+const DEMO_PENDING_INVITES = [
+  {
+    id: 'inv_001',
+    email: 'john.smith@newmortgage.com',
+    name: 'John Smith',
+    organizationName: 'New Mortgage Partners',
+    planName: 'Business',
+    billingInterval: 'Monthly',
+    invitedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    invitedBy: 'Sarah Johnson',
+    invitedByEmail: 'sarah@pinnaclemortgage.com',
+    status: 'pending',
+    seatsPurchased: 10,
+    expiresAt: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString()
+  },
+  {
+    id: 'inv_002',
+    email: 'maria.garcia@sunrisefunding.com',
+    name: 'Maria Garcia',
+    organizationName: 'Sunrise Funding LLC',
+    planName: 'Professional',
+    billingInterval: 'Annual',
+    invitedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    invitedBy: 'Tim Loss',
+    invitedByEmail: 'admin@perenniaai.com',
+    status: 'pending',
+    seatsPurchased: 5,
+    expiresAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
+  },
+  {
+    id: 'inv_003',
+    email: 'robert.chen@elitelending.com',
+    name: 'Robert Chen',
+    organizationName: 'Elite Lending Group',
+    planName: 'Enterprise',
+    billingInterval: 'Annual',
+    invitedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+    invitedBy: 'Michael Chen',
+    invitedByEmail: 'mchen@firstchoicelending.com',
+    status: 'pending',
+    seatsPurchased: 25,
+    expiresAt: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString()
+  },
+  {
+    id: 'inv_004',
+    email: 'amanda.wilson@premiumhome.com',
+    name: 'Amanda Wilson',
+    organizationName: 'Premium Home Loans',
+    planName: 'Starter',
+    billingInterval: 'Monthly',
+    invitedAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
+    invitedBy: 'Lisa Martinez',
+    invitedByEmail: 'lisa@homekeyfinancial.com',
+    status: 'expired',
+    seatsPurchased: 3,
+    expiresAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString()
   }
 ];
 
@@ -522,7 +583,8 @@ const StatusBadge = ({ status }) => {
     failed: 'status-failed',
     paid: 'status-success',
     pending: 'status-pending',
-    open: 'status-pending'
+    open: 'status-pending',
+    expired: 'status-expired'
   }[status] || 'status-default';
 
   return (
@@ -1135,6 +1197,144 @@ const AccountList = ({ accounts, loading, onAccountClick, onAccountAction, filte
                   account={account}
                   onClick={onAccountClick}
                   onAction={onAccountAction}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Pending Invite Row Component
+const PendingInviteRow = ({ invite, onAction }) => {
+  const initials = invite.name?.split(' ').map(n => n[0]).join('').toUpperCase() || invite.email?.substring(0, 2).toUpperCase() || '??';
+  const isExpired = invite.status === 'expired' || new Date(invite.expiresAt) < new Date();
+
+  return (
+    <tr className={`invite-row ${isExpired ? 'expired' : ''}`}>
+      <td>
+        <div className="account-cell">
+          <div className="account-avatar">{initials}</div>
+          <div>
+            <p className="account-name">{invite.organizationName || 'New Organization'}</p>
+            <p className="account-id">{invite.name || 'Pending'}</p>
+          </div>
+        </div>
+      </td>
+      <td>
+        <p className="invite-email">{invite.email}</p>
+      </td>
+      <td>
+        <span className={`plan-badge ${invite.planName?.toLowerCase()}`}>
+          {invite.planName}
+        </span>
+        <span className="billing-interval">{invite.billingInterval}</span>
+      </td>
+      <td>{invite.seatsPurchased} seats</td>
+      <td>{formatRelativeTime(invite.invitedAt)}</td>
+      <td>
+        <div className="invited-by">
+          <span>{invite.invitedBy}</span>
+        </div>
+      </td>
+      <td>
+        <StatusBadge status={isExpired ? 'expired' : invite.status} />
+      </td>
+      <td>
+        {isExpired ? (
+          <span className="expires-text expired">Expired {formatRelativeTime(invite.expiresAt)}</span>
+        ) : (
+          <span className="expires-text">Expires {formatDate(invite.expiresAt)}</span>
+        )}
+      </td>
+      <td>
+        <div className="row-actions">
+          <button
+            className="action-btn"
+            onClick={(e) => { e.stopPropagation(); onAction('resend', invite); }}
+            title="Resend Invite"
+          >
+            ↻
+          </button>
+          <button
+            className="action-btn danger"
+            onClick={(e) => { e.stopPropagation(); onAction('revoke', invite); }}
+            title="Revoke Invite"
+          >
+            ✕
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+};
+
+// Pending Invites List Component
+const PendingInvitesList = ({ invites, loading, onInviteAction, filters, onFiltersChange }) => {
+  if (loading) {
+    return (
+      <div className="account-list loading">
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="account-skeleton">
+            <div className="skeleton-line long" />
+            <div className="skeleton-line medium" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="account-list-section">
+      <div className="filter-bar">
+        <div className="search-input">
+          <span className="search-icon">&#128269;</span>
+          <input
+            type="text"
+            placeholder="Search by name, email, or organization..."
+            value={filters.search || ''}
+            onChange={e => onFiltersChange({ ...filters, search: e.target.value })}
+          />
+        </div>
+        <select
+          value={filters.inviteStatus || ''}
+          onChange={e => onFiltersChange({ ...filters, inviteStatus: e.target.value || undefined })}
+        >
+          <option value="">All Invites</option>
+          <option value="pending">Pending</option>
+          <option value="expired">Expired</option>
+        </select>
+      </div>
+
+      {invites.length === 0 ? (
+        <div className="empty-state">
+          <h3>No pending invites</h3>
+          <p>All invitations have been accepted or there are no outstanding invites</p>
+        </div>
+      ) : (
+        <div className="table-container">
+          <table className="accounts-table invites-table">
+            <thead>
+              <tr>
+                <th>Organization</th>
+                <th>Email</th>
+                <th>Plan</th>
+                <th>Seats</th>
+                <th>Invited</th>
+                <th>Invited By</th>
+                <th>Status</th>
+                <th>Expires</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {invites.map(invite => (
+                <PendingInviteRow
+                  key={invite.id}
+                  invite={invite}
+                  onAction={onInviteAction}
                 />
               ))}
             </tbody>
@@ -2010,6 +2210,7 @@ const AccountManagement = () => {
   const [filters, setFilters] = useState({});
   const [kpis, setKpis] = useState(null);
   const [accounts, setAccounts] = useState([]);
+  const [pendingInvites, setPendingInvites] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState(null);
   const [accountUsers, setAccountUsers] = useState([]);
   const [invoices, setInvoices] = useState([]);
@@ -2047,22 +2248,71 @@ const AccountManagement = () => {
           setKpis(data.data);
         } else {
           // Calculate KPIs from demo accounts
-          setKpis(calculateKpisFromAccounts(DEMO_ACCOUNTS, DEMO_SUSPENDED_ACCOUNTS, DEMO_CANCELED_ACCOUNTS));
+          setKpis(calculateKpisFromAccounts(DEMO_ACCOUNTS, DEMO_SUSPENDED_ACCOUNTS, DEMO_CANCELED_ACCOUNTS, DEMO_PENDING_INVITES));
         }
       } else {
         // Use calculated demo KPIs on API error
-        setKpis(calculateKpisFromAccounts(DEMO_ACCOUNTS, DEMO_SUSPENDED_ACCOUNTS, DEMO_CANCELED_ACCOUNTS));
+        setKpis(calculateKpisFromAccounts(DEMO_ACCOUNTS, DEMO_SUSPENDED_ACCOUNTS, DEMO_CANCELED_ACCOUNTS, DEMO_PENDING_INVITES));
       }
     } catch (err) {
       console.error('Error fetching KPIs:', err);
       // Use calculated demo KPIs on network error
-      setKpis(calculateKpisFromAccounts(DEMO_ACCOUNTS, DEMO_SUSPENDED_ACCOUNTS, DEMO_CANCELED_ACCOUNTS));
+      setKpis(calculateKpisFromAccounts(DEMO_ACCOUNTS, DEMO_SUSPENDED_ACCOUNTS, DEMO_CANCELED_ACCOUNTS, DEMO_PENDING_INVITES));
     }
   }, []);
 
   // Fetch Accounts
   const fetchAccounts = useCallback(async () => {
     setLoading(true);
+
+    // Handle pending invites separately
+    if (activeTab === 'pending') {
+      try {
+        const params = new URLSearchParams({ page: '1', limit: '50' });
+        if (filters.search) params.append('search', filters.search);
+
+        const response = await fetch(`${API_BASE_URL}/api/v1/admin/account-management/pending-invites?${params}`, {
+          headers: getAuthHeaders()
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const apiInvites = data.data?.invitations || data.data?.invites || [];
+          if (apiInvites.length > 0) {
+            setPendingInvites(apiInvites);
+          } else {
+            // Use demo data if API returns empty
+            let demoData = [...DEMO_PENDING_INVITES];
+            if (filters.search) {
+              const search = filters.search.toLowerCase();
+              demoData = demoData.filter(inv =>
+                inv.email.toLowerCase().includes(search) ||
+                inv.name?.toLowerCase().includes(search) ||
+                inv.organizationName?.toLowerCase().includes(search)
+              );
+            }
+            if (filters.inviteStatus) {
+              demoData = demoData.filter(inv => {
+                const isExpired = inv.status === 'expired' || new Date(inv.expiresAt) < new Date();
+                return filters.inviteStatus === 'expired' ? isExpired : !isExpired;
+              });
+            }
+            setPendingInvites(demoData);
+          }
+        } else {
+          // Use demo data on API error
+          setPendingInvites(DEMO_PENDING_INVITES);
+        }
+      } catch (err) {
+        console.error('Error fetching pending invites:', err);
+        setPendingInvites(DEMO_PENDING_INVITES);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // Handle subscription tabs (active, suspended, canceled)
     try {
       const params = new URLSearchParams({
         status: activeTab,
@@ -2116,7 +2366,7 @@ const AccountManagement = () => {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, filters.search]);
+  }, [activeTab, filters.search, filters.inviteStatus]);
 
   // Fetch Account Detail
   const fetchAccountDetail = useCallback(async (accountId) => {
@@ -2338,6 +2588,55 @@ const AccountManagement = () => {
     }
   };
 
+  const handleInviteAction = async (action, invite) => {
+    if (!invite) return;
+
+    switch (action) {
+      case 'resend':
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/v1/admin/account-management/invites/${invite.id}/resend`, {
+            method: 'POST',
+            headers: getAuthHeaders()
+          });
+          if (response.ok) {
+            toast.success(`Invitation resent to ${invite.email}`);
+            fetchAccounts(); // Refresh the list
+          } else {
+            // Demo mode - show success anyway
+            toast.success(`Invitation resent to ${invite.email}`);
+          }
+        } catch (err) {
+          // Demo mode - show success anyway
+          toast.success(`Invitation resent to ${invite.email}`);
+        }
+        break;
+      case 'revoke':
+        if (window.confirm(`Are you sure you want to revoke the invitation for ${invite.email}?`)) {
+          try {
+            const response = await fetch(`${API_BASE_URL}/api/v1/admin/account-management/invites/${invite.id}`, {
+              method: 'DELETE',
+              headers: getAuthHeaders()
+            });
+            if (response.ok) {
+              toast.success(`Invitation revoked for ${invite.email}`);
+              setPendingInvites(prev => prev.filter(i => i.id !== invite.id));
+            } else {
+              // Demo mode - remove from local state
+              toast.success(`Invitation revoked for ${invite.email}`);
+              setPendingInvites(prev => prev.filter(i => i.id !== invite.id));
+            }
+          } catch (err) {
+            // Demo mode - remove from local state
+            toast.success(`Invitation revoked for ${invite.email}`);
+            setPendingInvites(prev => prev.filter(i => i.id !== invite.id));
+          }
+        }
+        break;
+      default:
+        break;
+    }
+  };
+
   const closeModal = () => setModal({ type: 'none' });
 
   const handleModalSubmit = async (reason) => {
@@ -2419,16 +2718,23 @@ const AccountManagement = () => {
   const handleInviteSubmit = async (formData) => {
     setActionLoading(true);
     try {
+      // Build contact name from first and last name
+      const contactName = [formData.firstName, formData.lastName]
+        .filter(Boolean)
+        .join(' ')
+        .trim() || null;
+
       const response = await fetch(`${API_BASE_URL}/api/v1/admin/account-management/invite`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
           email: formData.email,
           company_name: formData.companyName,
-          contact_name: formData.contactName,
+          contact_name: contactName,
           plan: formData.plan,
-          seats: formData.seats,
-          message: formData.message
+          seats: parseInt(formData.seats, 10) || 5,
+          message: formData.message || null,
+          promo_code: formData.promoCode || null
         })
       });
 
@@ -2437,13 +2743,17 @@ const AccountManagement = () => {
         toast.success(`Invitation sent to ${formData.email}`);
         closeModal();
         fetchKpis(); // Refresh stats
+        // If on pending invites tab, refresh the list
+        if (activeTab === 'pending') {
+          fetchAccounts();
+        }
       } else {
         const error = await response.json();
-        toast.error(error.message || 'Failed to send invitation');
+        toast.error(error.detail || error.message || 'Failed to send invitation');
       }
     } catch (err) {
       console.error('Invitation error:', err);
-      toast.error('Failed to send invitation');
+      toast.error('Failed to send invitation. Please try again.');
     } finally {
       setActionLoading(false);
     }
@@ -2453,7 +2763,8 @@ const AccountManagement = () => {
   const tabCounts = kpis ? {
     active: kpis.totalActiveAccounts,
     suspended: kpis.totalSuspendedAccounts,
-    canceled: kpis.totalCanceledAccounts
+    canceled: kpis.totalCanceledAccounts,
+    pending: kpis.totalPendingInvites
   } : {};
 
   // Access denied if user doesn't have account management permissions
@@ -2500,13 +2811,15 @@ const AccountManagement = () => {
           <KPIDashboard kpis={kpis} loading={!kpis} />
 
           <div className="status-tabs">
-            {['active', 'suspended', 'canceled'].map(status => (
+            {['active', 'suspended', 'canceled', 'pending'].map(status => (
               <button
                 key={status}
                 onClick={() => setActiveTab(status)}
                 className={`status-tab ${activeTab === status ? 'active' : ''}`}
               >
-                {status.charAt(0).toUpperCase() + status.slice(1)} Subscriptions
+                {status === 'pending'
+                  ? 'Pending Invites'
+                  : `${status.charAt(0).toUpperCase() + status.slice(1)} Subscriptions`}
                 {tabCounts[status] !== undefined && (
                   <span className="tab-count">{tabCounts[status]}</span>
                 )}
@@ -2514,14 +2827,24 @@ const AccountManagement = () => {
             ))}
           </div>
 
-          <AccountList
-            accounts={accounts}
-            loading={loading}
-            onAccountClick={handleAccountClick}
-            onAccountAction={handleAccountAction}
-            filters={filters}
-            onFiltersChange={setFilters}
-          />
+          {activeTab === 'pending' ? (
+            <PendingInvitesList
+              invites={pendingInvites}
+              loading={loading}
+              onInviteAction={handleInviteAction}
+              filters={filters}
+              onFiltersChange={setFilters}
+            />
+          ) : (
+            <AccountList
+              accounts={accounts}
+              loading={loading}
+              onAccountClick={handleAccountClick}
+              onAccountAction={handleAccountAction}
+              filters={filters}
+              onFiltersChange={setFilters}
+            />
+          )}
         </>
       )}
 

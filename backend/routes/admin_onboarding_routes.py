@@ -145,8 +145,43 @@ PLAN_PRICES = {
 # =============================================================================
 
 def get_invite_data(db: Session, token: str) -> Optional[dict]:
-    """Look up invitation data from audit log"""
+    """Look up invitation data from subscriber_invitations table"""
+    # First try the new subscriber_invitations table
     result = db.execute(text("""
+        SELECT id, token, email, company_name, contact_name, plan, seats,
+               promo_code, personal_message, status, invited_by, invited_by_name,
+               expires_at, created_at
+        FROM subscriber_invitations
+        WHERE token = :token
+        LIMIT 1
+    """), {'token': token}).fetchone()
+
+    if result:
+        # Check if already used/revoked
+        if result.status == 'accepted':
+            return {'already_used': True, 'email': result.email}
+        if result.status == 'revoked':
+            return {'revoked': True, 'email': result.email}
+
+        # Check expiration
+        if result.expires_at and datetime.now(timezone.utc) > result.expires_at.replace(tzinfo=timezone.utc):
+            return {'expired': True, 'email': result.email}
+
+        return {
+            'invitation_id': str(result.id),
+            'email': result.email,
+            'company_name': result.company_name,
+            'contact_name': result.contact_name,
+            'plan': result.plan,
+            'seats': result.seats,
+            'promo_code': result.promo_code,
+            'personal_message': result.personal_message,
+            'expires_at': result.expires_at.isoformat() if result.expires_at else None,
+            'created_at': result.created_at
+        }
+
+    # Fall back to audit log for older invitations
+    audit_result = db.execute(text("""
         SELECT id, new_values, created_at, target_id
         FROM admin_audit_log
         WHERE action_type = 'invitation_sent'
@@ -155,15 +190,15 @@ def get_invite_data(db: Session, token: str) -> Optional[dict]:
         LIMIT 1
     """), {'token': token}).fetchone()
 
-    if not result:
+    if not audit_result:
         return None
 
     # Parse the stored data
     try:
-        if isinstance(result.new_values, str):
-            data = eval(result.new_values)  # It was stored as str(dict)
+        if isinstance(audit_result.new_values, str):
+            data = eval(audit_result.new_values)  # It was stored as str(dict)
         else:
-            data = result.new_values
+            data = audit_result.new_values
     except:
         return None
 
@@ -178,8 +213,8 @@ def get_invite_data(db: Session, token: str) -> Optional[dict]:
             pass
 
     return {
-        'audit_id': result.id,
-        'created_at': result.created_at,
+        'audit_id': audit_result.id,
+        'created_at': audit_result.created_at,
         **data
     }
 
@@ -226,7 +261,19 @@ async def validate_invite(token: str, db: Session = Depends(get_db)):
                 message="This invitation has expired"
             )
 
-        # Check if already used
+        if invite_data.get('already_used'):
+            return success_response(
+                data={'valid': False, 'reason': 'already_used'},
+                message="This invitation has already been accepted"
+            )
+
+        if invite_data.get('revoked'):
+            return success_response(
+                data={'valid': False, 'reason': 'revoked'},
+                message="This invitation has been revoked"
+            )
+
+        # Check if email already has an account (for audit log fallback)
         if check_invite_used(db, invite_data.get('email', '')):
             return success_response(
                 data={'valid': False, 'reason': 'already_used'},
@@ -246,7 +293,8 @@ async def validate_invite(token: str, db: Session = Depends(get_db)):
                 'plan': plan_key,
                 'plan_name': plan_info['name'],
                 'seats': invite_data.get('seats', 5),
-                'monthly_price': plan_info['monthly_price']
+                'monthly_price': plan_info['monthly_price'],
+                'promo_code': invite_data.get('promo_code')
             },
             message="Invitation is valid"
         )
@@ -327,6 +375,20 @@ async def start_onboarding(
         db.execute(text("""
             UPDATE tenant_accounts SET owner_user_id = :user_id WHERE id = :tenant_id
         """), {'user_id': user_id, 'tenant_id': tenant_id})
+
+        # Mark invitation as accepted
+        try:
+            db.execute(text("""
+                UPDATE subscriber_invitations
+                SET status = 'accepted',
+                    accepted_at = NOW(),
+                    accepted_by_user_id = :user_id,
+                    updated_at = NOW()
+                WHERE token = :token
+            """), {'token': request.invite_token, 'user_id': user_id})
+        except Exception as update_err:
+            logger.warning(f"Could not update invitation status: {update_err}")
+            # Continue anyway - this is not critical
 
         # Create onboarding session
         session_id = str(uuid.uuid4())
