@@ -22,6 +22,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/conferences", tags=["conferences"])
 
 
+def safe_isoformat(dt_value) -> Optional[str]:
+    """Safely convert datetime to ISO format string, handling both datetime objects and strings"""
+    if dt_value is None:
+        return None
+    if isinstance(dt_value, str):
+        return dt_value  # Already a string (SQLite returns strings)
+    if hasattr(dt_value, 'isoformat'):
+        return dt_value.isoformat()
+    return str(dt_value)
+
+
 def get_current_user_flexible():
     """Lazy import auth dependency"""
     from main import get_current_user_flexible as _get_current_user_flexible
@@ -218,14 +229,14 @@ async def list_conferences(
             SELECT cr.id, cr.room_name, cr.friendly_name, cr.max_participants,
                    cr.status, cr.pin_required, cr.record_conference,
                    cr.started_at, cr.is_active, cr.created_at,
-                   u.name as created_by_name,
+                   u.full_name as created_by_name,
                    COUNT(cp.id) as participant_count
             FROM conference_rooms cr
             LEFT JOIN users u ON u.id = cr.created_by
             LEFT JOIN conference_participants cp ON cp.conference_id = cr.id
                 AND cp.status IN ('ringing', 'connected')
             {where_clause}
-            GROUP BY cr.id, u.name
+            GROUP BY cr.id, u.full_name
             ORDER BY cr.created_at DESC
         """), params).fetchall()
 
@@ -240,10 +251,10 @@ async def list_conferences(
                 "pin_required": row.pin_required,
                 "record_conference": row.record_conference,
                 "participant_count": row.participant_count,
-                "started_at": row.started_at.isoformat() if row.started_at else None,
+                "started_at": safe_isoformat(row.started_at),
                 "is_active": row.is_active,
                 "created_by": row.created_by_name,
-                "created_at": row.created_at.isoformat() if row.created_at else None
+                "created_at": safe_isoformat(row.created_at)
             })
 
         return {
@@ -265,7 +276,7 @@ async def get_conference(
     """Get conference details with participants"""
     try:
         conf = db.execute(text("""
-            SELECT cr.*, u.name as created_by_name
+            SELECT cr.*, u.full_name as created_by_name
             FROM conference_rooms cr
             LEFT JOIN users u ON u.id = cr.created_by
             WHERE cr.id = :id
@@ -278,7 +289,7 @@ async def get_conference(
         participants = db.execute(text("""
             SELECT cp.id, cp.call_sid, cp.phone_number, cp.name, cp.role,
                    cp.status, cp.is_muted, cp.is_on_hold, cp.joined_at,
-                   cp.user_id, u.name as user_name
+                   cp.user_id, u.full_name as user_name
             FROM conference_participants cp
             LEFT JOIN users u ON u.id = cp.user_id
             WHERE cp.conference_id = :id
@@ -299,8 +310,8 @@ async def get_conference(
             "participant_pin": conf.participant_pin if current_user else None,
             "current_conference_sid": conf.current_conference_sid,
             "status": conf.status,
-            "started_at": conf.started_at.isoformat() if conf.started_at else None,
-            "ended_at": conf.ended_at.isoformat() if conf.ended_at else None,
+            "started_at": safe_isoformat(conf.started_at),
+            "ended_at": safe_isoformat(conf.ended_at),
             "is_active": conf.is_active,
             "created_by": conf.created_by_name,
             "participants": [
@@ -314,7 +325,7 @@ async def get_conference(
                     "status": p.status,
                     "is_muted": p.is_muted,
                     "is_on_hold": p.is_on_hold,
-                    "joined_at": p.joined_at.isoformat() if p.joined_at else None
+                    "joined_at": safe_isoformat(p.joined_at)
                 }
                 for p in participants
             ]

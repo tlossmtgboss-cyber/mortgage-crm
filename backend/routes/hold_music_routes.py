@@ -20,6 +20,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/hold-music", tags=["hold-music"])
 
 
+def safe_isoformat(dt_value) -> Optional[str]:
+    """Safely convert datetime to ISO format string, handling both datetime objects and strings"""
+    if dt_value is None:
+        return None
+    if isinstance(dt_value, str):
+        return dt_value  # Already a string (SQLite returns strings)
+    if hasattr(dt_value, 'isoformat'):
+        return dt_value.isoformat()
+    return str(dt_value)
+
+
 def get_current_user_flexible():
     """Lazy import auth dependency"""
     from main import get_current_user_flexible as _get_current_user_flexible
@@ -211,7 +222,7 @@ async def list_hold_music(
                 "is_active": row.is_active,
                 "comfort_messages": comfort_msgs,
                 "comfort_message_interval": row.comfort_message_interval,
-                "created_at": row.created_at.isoformat() if row.created_at else None
+                "created_at": safe_isoformat(row.created_at)
             })
 
         return {
@@ -274,7 +285,7 @@ async def get_hold_music(
             "is_active": result.is_active,
             "comfort_messages": comfort_msgs,
             "comfort_message_interval": result.comfort_message_interval,
-            "created_at": result.created_at.isoformat() if result.created_at else None
+            "created_at": safe_isoformat(result.created_at)
         }
 
     except HTTPException:

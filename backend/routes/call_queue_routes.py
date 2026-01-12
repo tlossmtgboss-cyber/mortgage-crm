@@ -21,6 +21,45 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/queues", tags=["call-queues"])
 
 
+def safe_isoformat(dt_value) -> Optional[str]:
+    """Safely convert datetime to ISO format string, handling both datetime objects and strings"""
+    if dt_value is None:
+        return None
+    if isinstance(dt_value, str):
+        return dt_value  # Already a string (SQLite returns strings)
+    if hasattr(dt_value, 'isoformat'):
+        return dt_value.isoformat()
+    return str(dt_value)
+
+
+def parse_datetime(dt_value) -> Optional[datetime]:
+    """Parse a datetime value that might be a string or datetime object"""
+    if dt_value is None:
+        return None
+    if isinstance(dt_value, datetime):
+        return dt_value
+    if isinstance(dt_value, str):
+        try:
+            # Try ISO format first
+            return datetime.fromisoformat(dt_value.replace('Z', '+00:00'))
+        except ValueError:
+            try:
+                # Try common database format
+                return datetime.strptime(dt_value, '%Y-%m-%d %H:%M:%S')
+            except ValueError:
+                return None
+    return None
+
+
+def calc_wait_time(entered_at) -> float:
+    """Calculate wait time in seconds from entered_at to now"""
+    dt = parse_datetime(entered_at)
+    if dt is None:
+        return 0
+    now = datetime.now(timezone.utc) if dt.tzinfo else datetime.now()
+    return (now - dt).total_seconds()
+
+
 def get_current_user_flexible():
     """Lazy import auth dependency"""
     from main import get_current_user_flexible as _get_current_user_flexible
@@ -213,7 +252,7 @@ async def list_queues(
                 "twilio_queue_sid": row.twilio_queue_sid,
                 "member_count": row.member_count,
                 "waiting_calls": row.waiting_calls,
-                "created_at": row.created_at.isoformat() if row.created_at else None
+                "created_at": safe_isoformat(row.created_at)
             })
 
         return {
@@ -297,9 +336,9 @@ async def get_queue(
                     "caller_phone": e.caller_phone,
                     "caller_name": e.caller_name,
                     "position": e.position,
-                    "entered_at": e.entered_at.isoformat() if e.entered_at else None,
+                    "entered_at": safe_isoformat(e.entered_at),
                     "estimated_wait_seconds": e.estimated_wait_seconds,
-                    "wait_time_so_far": (datetime.now(timezone.utc) - e.entered_at).total_seconds() if e.entered_at else 0
+                    "wait_time_so_far": calc_wait_time(e.entered_at)
                 }
                 for e in entries
             ]

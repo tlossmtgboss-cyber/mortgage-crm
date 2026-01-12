@@ -21,6 +21,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/transfers", tags=["call-transfers"])
 
 
+def safe_isoformat(dt_value) -> Optional[str]:
+    """Safely convert datetime to ISO format string, handling both datetime objects and strings"""
+    if dt_value is None:
+        return None
+    if isinstance(dt_value, str):
+        return dt_value  # Already a string (SQLite returns strings)
+    if hasattr(dt_value, 'isoformat'):
+        return dt_value.isoformat()
+    return str(dt_value)
+
+
 def get_current_user_flexible():
     """Lazy import auth dependency"""
     from main import get_current_user_flexible as _get_current_user_flexible
@@ -679,7 +690,7 @@ async def warm_transfer_consult_twiml(
             result = db.execute(text("""
                 SELECT ct.caller_name, ct.caller_phone, ct.transfer_reason,
                        ct.whisper_message, ct.extra_data,
-                       u.name as from_user_name
+                       u.full_name as from_user_name
                 FROM call_transfers ct
                 LEFT JOIN users u ON u.id = ct.from_user_id
                 WHERE ct.id = :id
@@ -1033,7 +1044,7 @@ async def list_transfers(
             SELECT ct.id, ct.transfer_type, ct.status, ct.original_call_sid,
                    ct.transfer_call_sid, ct.to_phone, ct.to_user_id,
                    ct.from_user_id, ct.transfer_reason, ct.initiated_at, ct.completed_at,
-                   fu.name as from_user_name, tu.name as to_user_name
+                   fu.full_name as from_user_name, tu.full_name as to_user_name
             FROM call_transfers ct
             LEFT JOIN users fu ON fu.id = ct.from_user_id
             LEFT JOIN users tu ON tu.id = ct.to_user_id
@@ -1056,8 +1067,8 @@ async def list_transfers(
                 "from_user_id": row.from_user_id,
                 "from_user_name": row.from_user_name,
                 "transfer_reason": row.transfer_reason,
-                "initiated_at": row.initiated_at.isoformat() if row.initiated_at else None,
-                "completed_at": row.completed_at.isoformat() if row.completed_at else None
+                "initiated_at": safe_isoformat(row.initiated_at),
+                "completed_at": safe_isoformat(row.completed_at)
             })
 
         return {
@@ -1072,6 +1083,41 @@ async def list_transfers(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/available-recipients")
+async def get_available_recipients(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_flexible)
+):
+    """Get list of users available for transfer"""
+    try:
+        results = db.execute(text("""
+            SELECT id, full_name, email, phone, role, is_active
+            FROM users
+            WHERE is_active = TRUE
+                AND phone IS NOT NULL
+            ORDER BY full_name
+        """)).fetchall()
+
+        recipients = []
+        for row in results:
+            recipients.append({
+                "id": row.id,
+                "name": row.full_name,
+                "email": row.email,
+                "phone": row.phone,
+                "role": row.role
+            })
+
+        return {
+            "recipients": recipients,
+            "count": len(recipients)
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting recipients: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/{transfer_id}")
 async def get_transfer(
     transfer_id: int,
@@ -1081,7 +1127,7 @@ async def get_transfer(
     """Get transfer details"""
     try:
         result = db.execute(text("""
-            SELECT ct.*, fu.name as from_user_name, tu.name as to_user_name
+            SELECT ct.*, fu.full_name as from_user_name, tu.full_name as to_user_name
             FROM call_transfers ct
             LEFT JOIN users fu ON fu.id = ct.from_user_id
             LEFT JOIN users tu ON tu.id = ct.to_user_id
@@ -1108,52 +1154,14 @@ async def get_transfer(
             "transfer_reason": result.transfer_reason,
             "whisper_message": result.whisper_message,
             "failure_reason": result.failure_reason,
-            "initiated_at": result.initiated_at.isoformat() if result.initiated_at else None,
-            "completed_at": result.completed_at.isoformat() if result.completed_at else None,
-            "consultation_started_at": result.consultation_started_at.isoformat() if result.consultation_started_at else None,
-            "consultation_ended_at": result.consultation_ended_at.isoformat() if result.consultation_ended_at else None
+            "initiated_at": safe_isoformat(result.initiated_at),
+            "completed_at": safe_isoformat(result.completed_at),
+            "consultation_started_at": safe_isoformat(result.consultation_started_at),
+            "consultation_ended_at": safe_isoformat(result.consultation_ended_at)
         }
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error getting transfer: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/available-recipients")
-async def get_available_recipients(
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_flexible)
-):
-    """Get list of users available for transfer"""
-    try:
-        results = db.execute(text("""
-            SELECT id, name, email, phone, work_phone, mobile_phone,
-                   role, department, is_active
-            FROM users
-            WHERE is_active = TRUE
-                AND (phone IS NOT NULL OR work_phone IS NOT NULL OR mobile_phone IS NOT NULL)
-            ORDER BY name
-        """)).fetchall()
-
-        recipients = []
-        for row in results:
-            phone = row.mobile_phone or row.work_phone or row.phone
-            recipients.append({
-                "id": row.id,
-                "name": row.name,
-                "email": row.email,
-                "phone": phone,
-                "role": row.role,
-                "department": row.department
-            })
-
-        return {
-            "recipients": recipients,
-            "count": len(recipients)
-        }
-
-    except Exception as e:
-        logger.error(f"Error getting recipients: {e}")
         raise HTTPException(status_code=500, detail=str(e))
