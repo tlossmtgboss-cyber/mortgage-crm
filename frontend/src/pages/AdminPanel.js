@@ -926,7 +926,7 @@ const AdminPanel = () => {
             {/* Financial Management - Clickable Card */}
             <section
               className="financial-management-section clickable-card"
-              onClick={() => navigate('/settings/financial')}
+              onClick={() => navigate('/accounting')}
               style={{ cursor: 'pointer' }}
             >
               <div className="section-header">
