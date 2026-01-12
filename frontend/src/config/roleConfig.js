@@ -191,6 +191,12 @@ export const NAVIGATION_ITEMS = {
     matchPaths: ['/voice/ivr'],
     module: 'voice_os'  // Premium: Voice OS module
   },
+  holdMusic: {
+    path: '/voice/hold-music',
+    label: 'Hold Music',
+    matchPaths: ['/voice/hold-music'],
+    module: 'voice_os'  // Premium: Voice OS module
+  },
   // Accounting System - with submenu structure
   accounting: {
     path: '/accounting',
@@ -294,6 +300,7 @@ export const ROLE_NAVIGATION = {
     'callQueues',
     'conferenceRooms',
     'ivrMenus',
+    'holdMusic',
     'productionPredictor',
     'dealAlerts'
   ],
