@@ -85,6 +85,12 @@ class CallScreeningService:
             await self._log_screening_decision(call_sid, phone, whitelist_result, start_time)
             return whitelist_result
 
+        # 1b. Check CRM for known contacts (leads, clients, team members)
+        crm_result = await self._check_crm(phone)
+        if crm_result:
+            await self._log_screening_decision(call_sid, phone, crm_result, start_time)
+            return crm_result
+
         # 2. Check blocklist (known bad callers)
         blocklist_result = await self._check_blocklist(phone)
         if blocklist_result:
@@ -175,6 +181,93 @@ class CallScreeningService:
             return None
         except Exception as e:
             logger.error(f"Whitelist check error: {e}")
+            return None
+
+    async def _check_crm(self, phone: str) -> Optional[ScreeningResult]:
+        """
+        Check if phone belongs to a known contact in the CRM.
+        Searches: lead_profiles, mum_client_profiles, users (team members)
+        """
+        # Normalize phone for matching (remove +1 prefix for comparison)
+        phone_variants = [phone]
+        if phone.startswith("+1"):
+            phone_variants.append(phone[2:])  # Without +1
+        elif phone.startswith("+"):
+            phone_variants.append(phone[1:])  # Without +
+        # Also try with +1 if not present
+        if not phone.startswith("+"):
+            phone_variants.append(f"+1{phone}")
+            phone_variants.append(f"+{phone}")
+
+        try:
+            # 1. Check lead_profiles (prospective borrowers)
+            result = self.db.execute(text("""
+                SELECT first_name, last_name, email, phone, id
+                FROM lead_profiles
+                WHERE phone = ANY(:phones)
+                   OR REPLACE(REPLACE(REPLACE(phone, '-', ''), ' ', ''), '(', '')
+                      LIKE '%' || RIGHT(:phone_digits, 10)
+                LIMIT 1
+            """), {"phones": phone_variants, "phone_digits": phone.replace("+", "").replace("-", "")})
+            row = result.fetchone()
+
+            if row:
+                name = f"{row[0]} {row[1]}".strip() if row[0] else row[1]
+                logger.info(f"CRM Lead match for {phone}: {name}")
+                return ScreeningResult(
+                    decision=ScreeningDecision.ALLOW,
+                    reason="crm_lead_match",
+                    caller_name=name,
+                    category="lead",
+                    extra_data={"lead_id": str(row[4]), "email": row[2]}
+                )
+
+            # 2. Check mum_client_profiles (existing clients/funded loans)
+            result = self.db.execute(text("""
+                SELECT name, email, phone, id, loan_number
+                FROM mum_client_profiles
+                WHERE phone = ANY(:phones)
+                   OR REPLACE(REPLACE(REPLACE(phone, '-', ''), ' ', ''), '(', '')
+                      LIKE '%' || RIGHT(:phone_digits, 10)
+                LIMIT 1
+            """), {"phones": phone_variants, "phone_digits": phone.replace("+", "").replace("-", "")})
+            row = result.fetchone()
+
+            if row:
+                logger.info(f"CRM Client match for {phone}: {row[0]}")
+                return ScreeningResult(
+                    decision=ScreeningDecision.ALLOW,
+                    reason="crm_client_match",
+                    caller_name=row[0],
+                    category="client",
+                    extra_data={"client_id": str(row[3]), "email": row[1], "loan_number": row[4]}
+                )
+
+            # 3. Check users table (team members)
+            result = self.db.execute(text("""
+                SELECT name, email, phone, id, role
+                FROM users
+                WHERE phone = ANY(:phones)
+                   OR REPLACE(REPLACE(REPLACE(phone, '-', ''), ' ', ''), '(', '')
+                      LIKE '%' || RIGHT(:phone_digits, 10)
+                LIMIT 1
+            """), {"phones": phone_variants, "phone_digits": phone.replace("+", "").replace("-", "")})
+            row = result.fetchone()
+
+            if row:
+                logger.info(f"CRM Team member match for {phone}: {row[0]}")
+                return ScreeningResult(
+                    decision=ScreeningDecision.ALLOW,
+                    reason="crm_team_match",
+                    caller_name=row[0],
+                    category="team",
+                    extra_data={"user_id": str(row[3]), "email": row[1], "role": row[4]}
+                )
+
+            return None
+
+        except Exception as e:
+            logger.error(f"CRM check error: {e}")
             return None
 
     async def _check_blocklist(self, phone: str) -> Optional[ScreeningResult]:

@@ -825,13 +825,20 @@ async def voice_stream_websocket(websocket: WebSocket):
                     caller_category = call_context.get('caller_category')
 
                     if caller_name:
-                        # Known caller - personalized greeting
+                        # Extract first name for friendlier greeting
+                        first_name = caller_name.split()[0] if caller_name else caller_name
+
+                        # Known caller - personalized greeting based on category
                         if caller_category == 'client':
-                            greeting = f"Hi {caller_name}! This is Sam with CMG Home Loans. Great to hear from you! How can I help you today?"
+                            greeting = f"Hi {first_name}! This is Sam with CMG Home Loans. Great to hear from you! How can I help you today?"
+                        elif caller_category == 'lead':
+                            greeting = f"Hi {first_name}! This is Sam with CMG Home Loans. Thanks for calling! How can I help you today?"
+                        elif caller_category == 'team':
+                            greeting = f"Hey {first_name}! This is Sam. What can I do for you?"
                         elif caller_category == 'realtor':
-                            greeting = f"Hi {caller_name}! This is Sam with CMG Home Loans. Thanks for calling! How can I help you today?"
+                            greeting = f"Hi {first_name}! This is Sam with CMG Home Loans. Thanks for calling! How can I help you today?"
                         else:
-                            greeting = f"Hi {caller_name}! This is Sam with CMG Home Loans. Thanks for calling. How can I help you today?"
+                            greeting = f"Hi {first_name}! This is Sam with CMG Home Loans. Thanks for calling. How can I help you today?"
                         logger.info(f"🎯 Using personalized greeting for {caller_name} ({caller_category})")
                     else:
                         # Unknown caller - generic greeting
