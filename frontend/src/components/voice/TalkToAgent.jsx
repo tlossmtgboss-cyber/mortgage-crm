@@ -15,11 +15,14 @@ const TalkToAgent = ({ agent, isOpen, onClose }) => {
   const audioQueueRef = useRef([]);
   const isPlayingRef = useRef(false);
 
-  // API base URL
+  // API base URL - use voice endpoint with browser-voice WebSocket
   const API_BASE_URL = typeof window !== 'undefined' &&
     (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
     ? 'wss://api.perenniaai.com'
     : 'ws://localhost:8000';
+
+  // WebSocket endpoint for browser voice
+  const WS_ENDPOINT = '/api/v1/voice/ws/browser-voice';
 
   // Initialize audio context
   const initAudioContext = useCallback(() => {
@@ -101,7 +104,7 @@ const TalkToAgent = ({ agent, isOpen, onClose }) => {
 
     try {
       const token = localStorage.getItem('token');
-      const wsUrl = `${API_BASE_URL}/api/v1/voice-agent/ws?token=${token}`;
+      const wsUrl = `${API_BASE_URL}${WS_ENDPOINT}?token=${token}`;
 
       console.log('[TalkToAgent] Connecting to:', wsUrl);
 
@@ -115,13 +118,9 @@ const TalkToAgent = ({ agent, isOpen, onClose }) => {
       ws.onmessage = async (event) => {
         try {
           const data = JSON.parse(event.data);
-          console.log('[TalkToAgent] Received:', data.type);
+          console.log('[TalkToAgent] Received:', data.type, data);
 
           switch (data.type) {
-            case 'session_started':
-              console.log('[TalkToAgent] Session started:', data.session_id);
-              break;
-
             case 'ready':
               setStatus('ready');
               // Start capturing audio
@@ -129,35 +128,34 @@ const TalkToAgent = ({ agent, isOpen, onClose }) => {
               break;
 
             case 'transcript':
-              setTranscript(data.text);
-              if (data.is_final) {
-                setConversationHistory(prev => [...prev, { role: 'user', text: data.text }]);
+              // Handle transcripts from both user and assistant
+              if (data.role === 'user') {
+                setTranscript(data.text);
+                if (data.is_final && data.text) {
+                  setConversationHistory(prev => [...prev, { role: 'user', text: data.text }]);
+                }
+              } else if (data.role === 'assistant') {
+                setResponse(prev => data.is_final ? data.text : prev + data.text);
+                if (data.is_final && data.text) {
+                  setConversationHistory(prev => [...prev, { role: 'assistant', text: data.text }]);
+                }
               }
               break;
 
-            case 'user_speaking':
-              setStatus('listening');
-              break;
-
-            case 'processing':
-              setStatus('processing');
-              break;
-
             case 'speaking':
-              setStatus('speaking');
-              break;
-
-            case 'response_text':
-              setResponse(data.text);
-              setConversationHistory(prev => [...prev, { role: 'assistant', text: data.text }]);
+              // Handle speaking status for both user and assistant
+              if (data.who === 'user') {
+                setStatus(data.is_speaking ? 'listening' : 'ready');
+              } else if (data.who === 'assistant') {
+                setStatus(data.is_speaking ? 'speaking' : 'ready');
+              }
               break;
 
             case 'audio':
               await playAudio(data.data);
-              break;
-
-            case 'speech_complete':
-              setStatus('ready');
+              if (status !== 'speaking') {
+                setStatus('speaking');
+              }
               break;
 
             case 'error':
@@ -165,9 +163,8 @@ const TalkToAgent = ({ agent, isOpen, onClose }) => {
               setStatus('error');
               break;
 
-            case 'pong':
-              // Keep-alive response
-              break;
+            default:
+              console.log('[TalkToAgent] Unhandled message type:', data.type);
           }
         } catch (err) {
           console.error('[TalkToAgent] Error parsing message:', err);

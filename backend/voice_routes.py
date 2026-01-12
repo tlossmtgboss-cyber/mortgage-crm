@@ -533,7 +533,231 @@ async def handle_blocked_call(request: Request):
 
 
 # ============================================================================
-# WEBSOCKET FOR OPENAI REALTIME API
+# BROWSER WEBSOCKET FOR OPENAI REALTIME API (Talk to Agent)
+# ============================================================================
+
+@router.websocket("/ws/browser-voice")
+async def browser_voice_websocket(websocket: WebSocket):
+    """
+    WebSocket endpoint for browser-based voice conversations with AI agents.
+    Uses OpenAI Realtime API with PCM16 audio format.
+
+    Client Messages:
+    - {"type": "audio", "data": "<base64-pcm16-audio>"}
+    - {"type": "text", "text": "..."}
+
+    Server Messages:
+    - {"type": "ready"}
+    - {"type": "transcript", "text": "...", "role": "user"|"assistant"}
+    - {"type": "audio", "data": "<base64-pcm16-audio>"}
+    - {"type": "speaking", "is_speaking": true|false}
+    - {"type": "error", "message": "..."}
+    """
+    logger.info(f"🌐 Browser voice WebSocket connection from: {websocket.client}")
+
+    try:
+        await websocket.accept()
+        logger.info("✅ Browser voice WebSocket accepted")
+    except Exception as e:
+        logger.error(f"❌ Failed to accept WebSocket: {e}")
+        return
+
+    openai_ws = None
+
+    try:
+        # Connect to OpenAI Realtime API
+        openai_ws = await connect_to_openai_realtime_browser()
+        logger.info("✅ Connected to OpenAI Realtime for browser")
+
+        # Send ready signal to client
+        await websocket.send_json({"type": "ready"})
+
+        # Handle bidirectional streaming
+        async def browser_to_openai():
+            """Forward audio from browser to OpenAI"""
+            try:
+                async for message in websocket.iter_text():
+                    data = json.loads(message)
+
+                    if data.get('type') == 'audio':
+                        # Forward audio to OpenAI
+                        await openai_ws.send(json.dumps({
+                            "type": "input_audio_buffer.append",
+                            "audio": data['data']
+                        }))
+
+                    elif data.get('type') == 'text':
+                        # Send text message
+                        await openai_ws.send(json.dumps({
+                            "type": "conversation.item.create",
+                            "item": {
+                                "type": "message",
+                                "role": "user",
+                                "content": [{"type": "input_text", "text": data['text']}]
+                            }
+                        }))
+                        await openai_ws.send(json.dumps({"type": "response.create"}))
+
+                    elif data.get('type') == 'commit':
+                        # Commit audio buffer and request response
+                        await openai_ws.send(json.dumps({"type": "input_audio_buffer.commit"}))
+                        await openai_ws.send(json.dumps({"type": "response.create"}))
+
+            except WebSocketDisconnect:
+                logger.info("Browser disconnected")
+            except Exception as e:
+                logger.error(f"Error in browser_to_openai: {e}")
+
+        async def openai_to_browser():
+            """Forward responses from OpenAI to browser"""
+            try:
+                async for message in openai_ws:
+                    data = json.loads(message)
+                    event_type = data.get('type', '')
+
+                    if event_type == 'response.audio.delta':
+                        # Forward audio chunk to browser
+                        audio_data = data.get('delta', '')
+                        if audio_data:
+                            await websocket.send_json({
+                                "type": "audio",
+                                "data": audio_data
+                            })
+
+                    elif event_type == 'response.audio_transcript.delta':
+                        # AI is speaking - send transcript
+                        await websocket.send_json({
+                            "type": "transcript",
+                            "text": data.get('delta', ''),
+                            "role": "assistant",
+                            "is_final": False
+                        })
+
+                    elif event_type == 'response.audio_transcript.done':
+                        await websocket.send_json({
+                            "type": "transcript",
+                            "text": data.get('transcript', ''),
+                            "role": "assistant",
+                            "is_final": True
+                        })
+
+                    elif event_type == 'conversation.item.input_audio_transcription.completed':
+                        # User speech transcription complete
+                        await websocket.send_json({
+                            "type": "transcript",
+                            "text": data.get('transcript', ''),
+                            "role": "user",
+                            "is_final": True
+                        })
+
+                    elif event_type == 'input_audio_buffer.speech_started':
+                        await websocket.send_json({
+                            "type": "speaking",
+                            "who": "user",
+                            "is_speaking": True
+                        })
+
+                    elif event_type == 'input_audio_buffer.speech_stopped':
+                        await websocket.send_json({
+                            "type": "speaking",
+                            "who": "user",
+                            "is_speaking": False
+                        })
+
+                    elif event_type == 'response.audio.done':
+                        await websocket.send_json({
+                            "type": "speaking",
+                            "who": "assistant",
+                            "is_speaking": False
+                        })
+
+                    elif event_type == 'error':
+                        error_msg = data.get('error', {}).get('message', 'Unknown error')
+                        logger.error(f"OpenAI error: {error_msg}")
+                        await websocket.send_json({
+                            "type": "error",
+                            "message": error_msg
+                        })
+
+            except Exception as e:
+                logger.error(f"Error in openai_to_browser: {e}")
+
+        # Run both directions concurrently
+        await asyncio.gather(
+            browser_to_openai(),
+            openai_to_browser()
+        )
+
+    except Exception as e:
+        logger.error(f"Browser voice error: {e}")
+        try:
+            await websocket.send_json({"type": "error", "message": str(e)})
+        except:
+            pass
+    finally:
+        if openai_ws:
+            try:
+                await openai_ws.close()
+            except:
+                pass
+        logger.info("🔚 Browser voice session ended")
+
+
+async def connect_to_openai_realtime_browser():
+    """Connect to OpenAI Realtime API for browser (PCM16 format)"""
+    import websockets
+
+    openai_api_key = os.getenv("OPENAI_API_KEY") or openai.api_key
+    if not openai_api_key:
+        raise Exception("OpenAI API key not configured")
+
+    logger.info("Connecting to OpenAI Realtime API for browser...")
+
+    url = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17"
+
+    headers = {
+        "Authorization": f"Bearer {openai_api_key}",
+        "OpenAI-Beta": "realtime=v1"
+    }
+
+    ws = await asyncio.wait_for(
+        websockets.connect(url, additional_headers=headers),
+        timeout=10.0
+    )
+
+    # Wait for session.created
+    initial_response = await asyncio.wait_for(ws.recv(), timeout=5.0)
+    logger.info(f"OpenAI Realtime connected: {initial_response[:200]}")
+
+    # Configure session for browser audio (PCM16)
+    await ws.send(json.dumps({
+        "type": "session.update",
+        "session": {
+            "modalities": ["text", "audio"],
+            "instructions": """You are Sam, a friendly and professional AI receptionist for CMG Home Loans.
+Keep responses concise and conversational.
+Help callers with questions about mortgages, rates, and scheduling appointments with loan officers.
+Be warm, helpful, and professional.""",
+            "voice": "alloy",
+            "input_audio_format": "pcm16",
+            "output_audio_format": "pcm16",
+            "input_audio_transcription": {
+                "model": "whisper-1"
+            },
+            "turn_detection": {
+                "type": "server_vad",
+                "threshold": 0.5,
+                "prefix_padding_ms": 300,
+                "silence_duration_ms": 500
+            }
+        }
+    }))
+
+    return ws
+
+
+# ============================================================================
+# WEBSOCKET FOR OPENAI REALTIME API (Twilio)
 # ============================================================================
 
 @router.websocket("/ws/voice-stream")
