@@ -62147,7 +62147,7 @@ async def delete_user_migration(
     email: str = "",
     db: Session = Depends(get_db)
 ):
-    """Delete a user by email"""
+    """Delete a user by email, handling foreign key constraints"""
     if migration_key != "delete-user-2026":
         raise HTTPException(status_code=403, detail="Invalid migration key")
 
@@ -62155,17 +62155,25 @@ async def delete_user_migration(
         raise HTTPException(status_code=400, detail="Email is required")
 
     try:
-        result = db.execute(text("""
-            DELETE FROM users WHERE email = :email RETURNING id, email
-        """), {"email": email})
-
-        user = result.fetchone()
-
-        if not user:
+        # Get user ID first
+        user_result = db.execute(text("SELECT id FROM users WHERE email = :email"), {"email": email}).fetchone()
+        if not user_result:
             return {"success": False, "message": f"User {email} not found"}
 
+        user_id = user_result[0]
+
+        # Clear foreign key references
+        db.execute(text("UPDATE tenant_accounts SET owner_user_id = NULL WHERE owner_user_id = :id"), {"id": user_id})
+        db.execute(text("DELETE FROM impersonation_sessions WHERE target_user_id = :id OR admin_user_id = :id"), {"id": user_id})
+        db.execute(text("UPDATE referral_partners SET owner_id = NULL WHERE owner_id = :id"), {"id": user_id})
+        db.execute(text("DELETE FROM user_sessions WHERE user_id = :id"), {"id": user_id})
+        db.execute(text("DELETE FROM user_invitations WHERE invited_by = :id"), {"id": user_id})
+
+        # Now delete the user
+        db.execute(text("DELETE FROM users WHERE id = :id"), {"id": user_id})
+
         db.commit()
-        return {"success": True, "message": f"User {email} deleted", "user_id": user[0]}
+        return {"success": True, "message": f"User {email} deleted", "user_id": user_id}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
