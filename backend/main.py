@@ -62010,6 +62010,87 @@ async def add_smart_docs_columns_migration(
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 
+@app.post("/api/v1/public/migrations/create-bootstrap-invite", response_model=None)
+async def create_bootstrap_invite(
+    migration_key: str = "",
+    email: str = "",
+    company_name: str = "",
+    contact_name: str = "",
+    plan: str = "professional",
+    seats: int = 5,
+    db: Session = Depends(get_db)
+):
+    """
+    Create a bootstrap invitation for the initial admin signup.
+    Public endpoint - requires migration key for security
+    """
+    if migration_key != "bootstrap-invite-2026":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    if not email or not company_name:
+        raise HTTPException(status_code=400, detail="Email and company_name are required")
+
+    try:
+        import secrets
+        from datetime import timedelta
+
+        # Generate a new token
+        token = secrets.token_hex(5)
+        expires_at = datetime.now(timezone.utc) + timedelta(days=30)
+
+        # Check if email already has a pending invite
+        existing = db.execute(text("""
+            SELECT id, token FROM subscriber_invitations
+            WHERE email = :email AND status = 'pending'
+        """), {"email": email}).fetchone()
+
+        if existing:
+            # Update the existing invitation with new token and expiry
+            db.execute(text("""
+                UPDATE subscriber_invitations
+                SET token = :token,
+                    expires_at = :expires_at,
+                    updated_at = NOW()
+                WHERE id = :id
+            """), {"token": token, "expires_at": expires_at, "id": existing[0]})
+        else:
+            # Create new invitation
+            db.execute(text("""
+                INSERT INTO subscriber_invitations (
+                    token, email, company_name, contact_name,
+                    plan, seats, status, expires_at, created_at, updated_at
+                ) VALUES (
+                    :token, :email, :company_name, :contact_name,
+                    :plan, :seats, 'pending', :expires_at, NOW(), NOW()
+                )
+            """), {
+                "token": token,
+                "email": email,
+                "company_name": company_name,
+                "contact_name": contact_name,
+                "plan": plan,
+                "seats": seats,
+                "expires_at": expires_at
+            })
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": "Bootstrap invitation created successfully",
+            "data": {
+                "token": token,
+                "email": email,
+                "signup_url": f"https://perenniaai.com/signup?token={token}",
+                "expires_at": expires_at.isoformat()
+            }
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Bootstrap invite creation error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create invitation: {str(e)}")
+
+
 @app.post("/api/v1/migrations/add-user-compliance-columns", response_model=None)
 async def add_user_compliance_columns_migration(
     migration_key: str = "",
