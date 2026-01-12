@@ -62091,6 +62091,56 @@ async def create_bootstrap_invite(
         raise HTTPException(status_code=500, detail=f"Failed to create invitation: {str(e)}")
 
 
+@app.post("/api/v1/public/migrations/grant-master-admin", response_model=None)
+async def grant_master_admin(
+    migration_key: str = "",
+    email: str = "",
+    db: Session = Depends(get_db)
+):
+    """
+    Grant master admin role to a user by email.
+    Public endpoint - requires migration key for security
+    """
+    if migration_key != "grant-admin-2026":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
+
+    try:
+        # Update user to master_admin role
+        result = db.execute(text("""
+            UPDATE users
+            SET role = 'master_admin',
+                updated_at = NOW()
+            WHERE email = :email
+            RETURNING id, email, role
+        """), {"email": email})
+
+        user = result.fetchone()
+
+        if not user:
+            raise HTTPException(status_code=404, detail=f"User with email {email} not found")
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": f"User {email} granted master_admin role",
+            "data": {
+                "user_id": user[0],
+                "email": user[1],
+                "role": user[2]
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Grant master admin error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to grant master admin: {str(e)}")
+
+
 @app.post("/api/v1/migrations/add-user-compliance-columns", response_model=None)
 async def add_user_compliance_columns_migration(
     migration_key: str = "",
