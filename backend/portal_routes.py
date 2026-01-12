@@ -1877,18 +1877,33 @@ def debug_list_portal_loans(
     except Exception as e:
         results.append({"source": "deals", "error": str(e)})
 
-    # Try purl_workspaces table
+    # Try purl_loans table
     try:
         db.rollback()
-        ws_result = db.execute(text("SELECT id, slug, loan_id FROM purl_workspaces LIMIT :limit"), {"limit": limit})
-        for row in ws_result:
+        loans_result = db.execute(text("SELECT id, loan_number, workspace_id, status FROM purl_loans LIMIT :limit"), {"limit": limit})
+        for row in loans_result:
             results.append({
-                "source": "purl_workspaces",
+                "source": "purl_loans",
                 "id": row.id,
-                "slug": row.slug,
-                "loan_id": row.loan_id,
+                "loan_number": row.loan_number,
+                "workspace_id": row.workspace_id,
+                "status": row.status,
             })
     except Exception as e:
-        results.append({"source": "purl_workspaces", "error": str(e)})
+        results.append({"source": "purl_loans", "error": str(e)})
+
+    # Try loans table
+    try:
+        db.rollback()
+        loans_result = db.execute(text("SELECT id, loan_number, borrower_name FROM loans LIMIT :limit"), {"limit": limit})
+        for row in loans_result:
+            results.append({
+                "source": "loans",
+                "id": row.id,
+                "loan_number": row.loan_number,
+                "borrower_name": row.borrower_name,
+            })
+    except Exception as e:
+        results.append({"source": "loans", "error": str(e)})
 
     return {"loans": results, "count": len(results)}
