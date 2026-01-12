@@ -53,7 +53,7 @@ export default function ActiveLoanPortalComplete() {
     try {
       const [dashboardData, cotData, activityData] = await Promise.all([
         borrowerPortalApi.getDashboard(loanId),
-        closeOnTimeApi.getCloseCountdown(loanId).catch(() => null),
+        closeOnTimeApi.getCountdownData(loanId).catch(() => null),
         borrowerPortalApi.getActivities(loanId, 10).catch(() => []),
       ]);
 
