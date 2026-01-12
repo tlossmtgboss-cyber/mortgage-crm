@@ -1743,40 +1743,54 @@ def get_portal_by_loan_id(
     from models.portal_models import PortalLoan
     from services.purl_token_service import PURLTokenService
     from sqlalchemy import text
+    import logging
 
-    # Try to find portal loan by ID first, then by crm_deal_id
-    portal_loan = db.query(PortalLoan).filter(PortalLoan.id == loan_id).first()
+    logger = logging.getLogger(__name__)
 
-    if not portal_loan:
-        portal_loan = db.query(PortalLoan).filter(PortalLoan.crm_deal_id == loan_id).first()
+    try:
+        # Try to find portal loan by ID first, then by crm_deal_id
+        portal_loan = db.query(PortalLoan).filter(PortalLoan.id == loan_id).first()
+
+        if not portal_loan:
+            portal_loan = db.query(PortalLoan).filter(PortalLoan.crm_deal_id == loan_id).first()
+    except Exception as e:
+        logger.error(f"Error querying PortalLoan: {e}")
+        portal_loan = None
 
     if not portal_loan:
         # Try looking up in purl_loans table if PortalLoan is empty
-        result = db.execute(text("""
-            SELECT id, loan_number, status, workspace_id, property_address,
-                   loan_amount, target_close_date, actual_close_date
-            FROM purl_loans
-            WHERE id = :loan_id OR crm_deal_id = :loan_id
-            LIMIT 1
-        """), {"loan_id": loan_id})
-        purl_loan = result.fetchone()
+        try:
+            result = db.execute(text("""
+                SELECT id, loan_number, status, workspace_id, property_address,
+                       loan_amount, target_close_date, actual_close_date
+                FROM purl_loans
+                WHERE id = :loan_id
+                LIMIT 1
+            """), {"loan_id": loan_id})
+            purl_loan = result.fetchone()
+        except Exception as e:
+            logger.error(f"Error querying purl_loans: {e}")
+            purl_loan = None
 
         if purl_loan:
             loan_data = dict(purl_loan._mapping)
             workspace_id = loan_data.get("workspace_id")
 
-            # Get or create access token for this workspace
-            token_result = db.execute(text("""
-                SELECT token FROM purl_access_tokens
-                WHERE workspace_id = :workspace_id
-                AND is_active = true
-                AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
-                ORDER BY created_at DESC
-                LIMIT 1
-            """), {"workspace_id": workspace_id})
-            token_row = token_result.fetchone()
-
-            access_token = token_row.token if token_row else None
+            # Get access token for this workspace
+            access_token = None
+            try:
+                token_result = db.execute(text("""
+                    SELECT token FROM purl_access_tokens
+                    WHERE workspace_id = :workspace_id
+                    AND is_active = true
+                    AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                """), {"workspace_id": workspace_id})
+                token_row = token_result.fetchone()
+                access_token = token_row.token if token_row else None
+            except Exception as e:
+                logger.error(f"Error fetching access token: {e}")
 
             return {
                 "found": True,
@@ -1789,6 +1803,7 @@ def get_portal_by_loan_id(
                 "loan_amount": float(loan_data["loan_amount"]) if loan_data.get("loan_amount") else None,
             }
 
+        # No loan found in any table
         raise HTTPException(status_code=404, detail="Loan not found")
 
     # Found in portal_loans table
@@ -1796,17 +1811,20 @@ def get_portal_by_loan_id(
     workspace_id = getattr(portal_loan, 'workspace_id', None)
 
     # Try to find an access token for this portal
-    token_result = db.execute(text("""
-        SELECT token FROM purl_access_tokens
-        WHERE loan_id = :loan_id OR workspace_id = :workspace_id
-        AND is_active = true
-        AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
-        ORDER BY created_at DESC
-        LIMIT 1
-    """), {"loan_id": portal_loan.id, "workspace_id": workspace_id})
-    token_row = token_result.fetchone()
-
-    access_token = token_row.token if token_row else None
+    access_token = None
+    try:
+        token_result = db.execute(text("""
+            SELECT token FROM purl_access_tokens
+            WHERE loan_id = :loan_id OR workspace_id = :workspace_id
+            AND is_active = true
+            AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+            ORDER BY created_at DESC
+            LIMIT 1
+        """), {"loan_id": portal_loan.id, "workspace_id": workspace_id})
+        token_row = token_result.fetchone()
+        access_token = token_row.token if token_row else None
+    except Exception as e:
+        logger.error(f"Error fetching portal_loan access token: {e}")
 
     return {
         "found": True,
