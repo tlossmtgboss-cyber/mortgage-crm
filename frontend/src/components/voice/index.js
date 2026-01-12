@@ -7,6 +7,7 @@ export { default as AgentBuilder } from './AgentBuilder';
 export { default as TalkToAgent } from './TalkToAgent';
 export { default as CallQueueDashboard } from './CallQueueDashboard';
 export { default as ConferenceRoomDashboard } from './ConferenceRoomDashboard';
+export { default as IVRMenuDashboard } from './IVRMenuDashboard';
 
 // Usage example:
 // import { AgentStudio, LiveCallsMonitor, AgentBuilder, CallQueueDashboard } from './components/voice';

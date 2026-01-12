@@ -185,6 +185,12 @@ export const NAVIGATION_ITEMS = {
     matchPaths: ['/voice/conferences'],
     module: 'voice_os'  // Premium: Voice OS module
   },
+  ivrMenus: {
+    path: '/voice/ivr',
+    label: 'IVR Menus',
+    matchPaths: ['/voice/ivr'],
+    module: 'voice_os'  // Premium: Voice OS module
+  },
   // Accounting System - with submenu structure
   accounting: {
     path: '/accounting',
@@ -287,6 +293,7 @@ export const ROLE_NAVIGATION = {
     'voiceLive',
     'callQueues',
     'conferenceRooms',
+    'ivrMenus',
     'productionPredictor',
     'dealAlerts'
   ],
