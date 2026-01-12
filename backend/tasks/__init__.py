@@ -18,10 +18,17 @@ from .usage_aggregation_tasks import (
 )
 
 from .calendar_sync_tasks import (
+    # Phase 1: Push (CRM → Salesforce)
     push_event_to_salesforce,
     push_event_to_salesforce_sync,
     process_pending_sync_events,
     process_pending_sync_events_sync,
+    # Phase 2: Pull (Salesforce → CRM)
+    poll_salesforce_events,
+    poll_salesforce_events_sync,
+    sync_user_calendar,
+    sync_user_calendar_sync,
+    # Maintenance
     reconcile_calendar,
     reconcile_calendar_sync,
     check_sync_health,
@@ -36,11 +43,17 @@ __all__ = [
     "aggregate_daily_team_usage",
     "aggregate_daily_org_usage",
     "backfill_aggregation",
-    # Calendar sync
+    # Calendar sync - Phase 1 (Push)
     "push_event_to_salesforce",
     "push_event_to_salesforce_sync",
     "process_pending_sync_events",
     "process_pending_sync_events_sync",
+    # Calendar sync - Phase 2 (Pull)
+    "poll_salesforce_events",
+    "poll_salesforce_events_sync",
+    "sync_user_calendar",
+    "sync_user_calendar_sync",
+    # Calendar sync - Maintenance
     "reconcile_calendar",
     "reconcile_calendar_sync",
     "check_sync_health",

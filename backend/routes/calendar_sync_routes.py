@@ -2,7 +2,7 @@
 Calendar Sync API Routes
 CRUD operations for CRM calendar events with Salesforce sync
 
-Endpoints:
+Phase 1 - Push (CRM → Salesforce):
 - GET    /api/calendar/events          - List events
 - POST   /api/calendar/events          - Create event
 - GET    /api/calendar/events/{id}     - Get single event
@@ -10,12 +10,19 @@ Endpoints:
 - DELETE /api/calendar/events/{id}     - Cancel/delete event
 - POST   /api/calendar/events/{id}/resync - Force resync to Salesforce
 
+Phase 2 - Pull (Salesforce → CRM):
+- POST   /api/calendar/sync/pull       - Pull events from Salesforce
+- POST   /api/calendar/sync/pull/{sf_event_id} - Pull single SF event
+- POST   /api/calendar/webhook/cdc     - Salesforce CDC webhook
+
+Sync Management:
 - GET    /api/calendar/sync/status     - Get sync status
-- POST   /api/calendar/sync/trigger    - Trigger manual sync
+- POST   /api/calendar/sync/trigger    - Trigger manual sync (push)
 - GET    /api/calendar/sync/history    - Get sync history
 - GET    /api/calendar/sync/failures   - Get failed events
 - GET    /api/calendar/sync/health     - Get sync health metrics
 
+Settings:
 - GET    /api/calendar/settings        - Get sync settings
 - PUT    /api/calendar/settings        - Update sync settings
 """
@@ -497,6 +504,212 @@ async def get_sync_health(
 
 
 # ============================================================================
+# Phase 2: Pull Endpoints (Salesforce → CRM)
+# ============================================================================
+
+class PullRequest(BaseModel):
+    since: Optional[datetime] = None
+    limit: int = Field(200, ge=1, le=500)
+
+
+class CDCWebhookPayload(BaseModel):
+    """Salesforce CDC webhook payload structure."""
+    changeType: str  # CREATE, UPDATE, DELETE, UNDELETE
+    entityName: str  # Event
+    changedRecords: List[dict] = []
+    replayId: Optional[int] = None
+
+
+@router.post("/sync/pull")
+async def pull_events_from_salesforce(
+    request: Request,
+    pull_request: Optional[PullRequest] = None,
+    background_tasks: BackgroundTasks = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Pull events from Salesforce into CRM.
+
+    Fetches events from Salesforce and creates/updates corresponding CRM events.
+    Uses fingerprint matching to prevent sync loops.
+
+    Args:
+        since: Only pull events modified after this datetime
+        limit: Maximum events to pull (default 200)
+
+    Returns:
+        Summary of pull operation with counts
+    """
+    user_id = require_user(request, db)
+    service = get_calendar_sync_service(db)
+
+    since = pull_request.since if pull_request else None
+    limit = pull_request.limit if pull_request else 200
+
+    # If no since provided, use last poll watermark
+    if not since:
+        settings = service.get_settings(user_id)
+        since = settings.last_poll_watermark
+
+    import asyncio
+    result = await service.pull_events_from_salesforce(
+        user_id=user_id,
+        since=since,
+        limit=limit
+    )
+
+    return {
+        "status": "completed",
+        "pulled": result["pulled"],
+        "created": result["created"],
+        "updated": result["updated"],
+        "skipped_echo": result["skipped_echo"],
+        "skipped_conflict": result["skipped_conflict"],
+        "errors": result["errors"][:10] if result["errors"] else []  # Limit error details
+    }
+
+
+@router.post("/sync/pull/{salesforce_event_id}")
+async def pull_single_event(
+    salesforce_event_id: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Pull a single event from Salesforce by ID.
+
+    Useful for manually syncing specific events or handling webhook notifications.
+
+    Args:
+        salesforce_event_id: The Salesforce Event ID (18-char)
+
+    Returns:
+        Pull result with action taken
+    """
+    user_id = require_user(request, db)
+    service = get_calendar_sync_service(db)
+
+    result = await service.pull_single_event(
+        user_id=user_id,
+        salesforce_event_id=salesforce_event_id
+    )
+
+    if result.success:
+        return {
+            "status": "success",
+            "action": result.operation,
+            "crm_event_id": result.crm_event_id,
+            "salesforce_event_id": result.salesforce_event_id
+        }
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=result.error
+        )
+
+
+@router.post("/webhook/cdc")
+async def salesforce_cdc_webhook(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """
+    Salesforce CDC (Change Data Capture) webhook endpoint.
+
+    Receives real-time notifications when Salesforce Events are created,
+    updated, or deleted. Processes changes to sync back to CRM.
+
+    This endpoint should be registered as a webhook in Salesforce
+    Platform Events or via the Streaming API.
+
+    Security: Validates webhook signature if configured.
+    """
+    # Get raw body for signature verification
+    body = await request.body()
+
+    # Verify webhook signature (if configured)
+    webhook_secret = os.getenv("SALESFORCE_CDC_WEBHOOK_SECRET")
+    if webhook_secret:
+        signature = request.headers.get("X-Salesforce-Signature")
+        if not _verify_webhook_signature(body, signature, webhook_secret):
+            logger.warning("Invalid CDC webhook signature")
+            raise HTTPException(status_code=401, detail="Invalid signature")
+
+    try:
+        import json
+        payload = json.loads(body)
+    except Exception as e:
+        logger.error(f"Failed to parse CDC webhook payload: {e}")
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
+    # Extract CDC data
+    change_type = payload.get("changeType") or payload.get("ChangeEventHeader", {}).get("changeType")
+    entity_name = payload.get("entityName") or payload.get("ChangeEventHeader", {}).get("entityName", "").replace("ChangeEvent", "")
+
+    logger.info(f"Received CDC webhook: {change_type} on {entity_name}")
+
+    # Only process Event changes
+    if entity_name != "Event":
+        return {"status": "ignored", "reason": "not_event_object"}
+
+    # Extract user ID from the event owner or use default processing
+    # In production, you'd map the SF OwnerId to a CRM user
+    changed_records = payload.get("changedRecords", [])
+    if not changed_records:
+        # Try alternate CDC format
+        record_ids = payload.get("ChangeEventHeader", {}).get("recordIds", [])
+        changed_records = [{"Id": rid} for rid in record_ids]
+
+    if not changed_records:
+        return {"status": "ignored", "reason": "no_records"}
+
+    # Process in background to respond quickly
+    background_tasks.add_task(
+        _process_cdc_webhook_background,
+        change_type,
+        changed_records,
+        db
+    )
+
+    return {
+        "status": "accepted",
+        "change_type": change_type,
+        "record_count": len(changed_records)
+    }
+
+
+@router.post("/sync/full")
+async def trigger_full_sync(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """
+    Trigger a full bidirectional sync.
+
+    1. Pushes all pending CRM events to Salesforce
+    2. Pulls all recent Salesforce events to CRM
+
+    Use with caution - may be slow for large calendars.
+    """
+    user_id = require_user(request, db)
+    service = get_calendar_sync_service(db)
+
+    # Queue full sync in background
+    background_tasks.add_task(
+        _full_sync_background,
+        user_id,
+        db
+    )
+
+    return {
+        "status": "queued",
+        "message": "Full bidirectional sync queued"
+    }
+
+
+# ============================================================================
 # Settings Endpoints
 # ============================================================================
 
@@ -572,3 +785,116 @@ async def _sync_event_background(event_id: str):
             logger.warning(f"Background sync failed for event {event_id}: {result.get('error')}")
     except Exception as e:
         logger.exception(f"Background sync error for event {event_id}: {e}")
+
+
+async def _process_cdc_webhook_background(
+    change_type: str,
+    changed_records: List[dict],
+    db: Session
+):
+    """Background task to process CDC webhook payload."""
+    from database import SessionLocal
+
+    # Create new session for background task
+    db_session = SessionLocal()
+
+    try:
+        service = get_calendar_sync_service(db_session)
+
+        for record in changed_records:
+            record_id = record.get("Id")
+            owner_id = record.get("OwnerId")
+
+            if not record_id:
+                continue
+
+            # Find CRM user by SF owner ID
+            user_id = None
+            if owner_id:
+                from salesforce_integration_models import IntegrationProfile
+                profile = db_session.query(IntegrationProfile).filter(
+                    IntegrationProfile.sf_user_id == owner_id,
+                    IntegrationProfile.status == "active"
+                ).first()
+                if profile:
+                    user_id = profile.user_id
+
+            if not user_id:
+                logger.warning(f"Could not find CRM user for SF owner {owner_id}")
+                continue
+
+            try:
+                if change_type == "DELETE":
+                    # Handle deletion
+                    settings = service.get_settings(user_id)
+                    await service._handle_sf_delete(user_id, record_id, settings)
+                else:
+                    # CREATE or UPDATE - pull the event
+                    await service.pull_single_event(user_id, record_id)
+
+                logger.info(f"Processed CDC {change_type} for SF event {record_id}")
+
+            except Exception as e:
+                logger.error(f"Error processing CDC record {record_id}: {e}")
+
+    except Exception as e:
+        logger.exception(f"Error in CDC webhook background processing: {e}")
+    finally:
+        db_session.close()
+
+
+async def _full_sync_background(user_id: int, db: Session):
+    """Background task for full bidirectional sync."""
+    from database import SessionLocal
+
+    # Create new session for background task
+    db_session = SessionLocal()
+
+    try:
+        service = get_calendar_sync_service(db_session)
+
+        # Step 1: Push all pending CRM events
+        logger.info(f"Full sync: pushing pending events for user {user_id}")
+        pending = service.get_events(user_id=user_id, sync_status=SyncStatus.PENDING.value)
+        for event in pending:
+            try:
+                await push_event_to_salesforce(event.id)
+            except Exception as e:
+                logger.error(f"Full sync push error for {event.id}: {e}")
+
+        # Step 2: Pull all events from Salesforce (last 30 days)
+        logger.info(f"Full sync: pulling events from Salesforce for user {user_id}")
+        since = datetime.utcnow() - timedelta(days=30)
+        await service.pull_events_from_salesforce(
+            user_id=user_id,
+            since=since,
+            limit=500
+        )
+
+        logger.info(f"Full sync completed for user {user_id}")
+
+    except Exception as e:
+        logger.exception(f"Error in full sync background: {e}")
+    finally:
+        db_session.close()
+
+
+def _verify_webhook_signature(body: bytes, signature: str, secret: str) -> bool:
+    """Verify Salesforce webhook signature."""
+    import hmac
+    import hashlib
+    import base64
+
+    if not signature:
+        return False
+
+    try:
+        expected = hmac.new(
+            secret.encode('utf-8'),
+            body,
+            hashlib.sha256
+        ).digest()
+        expected_b64 = base64.b64encode(expected).decode('utf-8')
+        return hmac.compare_digest(signature, expected_b64)
+    except Exception:
+        return False

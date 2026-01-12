@@ -2,10 +2,17 @@
 Calendar Sync Background Tasks
 Handles async sync operations between CRM and Salesforce calendars
 
-Tasks:
+Phase 1 Tasks (Push - CRM → Salesforce):
 - push_event_to_salesforce: Push a single event to Salesforce
 - process_pending_sync_events: Process all pending events in queue
+
+Phase 2 Tasks (Pull - Salesforce → CRM):
+- poll_salesforce_events: Poll Salesforce for event changes
+- process_inbound_sync: Process pulled events
+
+Maintenance Tasks:
 - reconcile_calendar: Nightly reconciliation job
+- check_sync_health: Health monitoring
 """
 import logging
 import asyncio
@@ -393,6 +400,174 @@ def check_sync_health_sync() -> dict:
 
 
 # ============================================================================
+# Task: Poll Salesforce for Event Changes (Phase 2)
+# ============================================================================
+
+async def poll_salesforce_events() -> dict:
+    """
+    Poll Salesforce for event changes for all active users.
+
+    Queries Salesforce for events modified since last poll watermark.
+    Creates/updates CRM events accordingly.
+
+    Returns:
+        Summary of polling results
+    """
+    db = SessionLocal()
+
+    try:
+        from salesforce_integration_models import IntegrationProfile
+        from models.calendar_sync_models import CalendarSyncSettings
+
+        results = {
+            "users_polled": 0,
+            "total_pulled": 0,
+            "total_created": 0,
+            "total_updated": 0,
+            "total_skipped": 0,
+            "errors": []
+        }
+
+        # Get all users with active Salesforce integration and polling enabled
+        active_profiles = db.query(IntegrationProfile).filter(
+            IntegrationProfile.provider == "salesforce",
+            IntegrationProfile.status == "active"
+        ).all()
+
+        for profile in active_profiles:
+            try:
+                # Check if polling is enabled for this user
+                settings = db.query(CalendarSyncSettings).filter(
+                    CalendarSyncSettings.user_id == profile.user_id
+                ).first()
+
+                if not settings or not settings.polling_enabled:
+                    continue
+
+                service = CalendarSyncService(db)
+
+                # Use last poll watermark or default to 24 hours
+                since = settings.last_poll_watermark
+                if not since:
+                    since = datetime.utcnow() - timedelta(hours=24)
+
+                pull_result = await service.pull_events_from_salesforce(
+                    user_id=profile.user_id,
+                    since=since,
+                    limit=settings.batch_size or 200
+                )
+
+                results["users_polled"] += 1
+                results["total_pulled"] += pull_result["pulled"]
+                results["total_created"] += pull_result["created"]
+                results["total_updated"] += pull_result["updated"]
+                results["total_skipped"] += pull_result["skipped_echo"] + pull_result["skipped_conflict"]
+
+                if pull_result["errors"]:
+                    results["errors"].extend(pull_result["errors"][:3])
+
+                logger.info(
+                    f"Polled Salesforce for user {profile.user_id}: "
+                    f"pulled={pull_result['pulled']}, created={pull_result['created']}"
+                )
+
+            except Exception as e:
+                logger.error(f"Error polling for user {profile.user_id}: {e}")
+                results["errors"].append({
+                    "user_id": profile.user_id,
+                    "error": str(e)
+                })
+
+        logger.info(
+            f"Salesforce polling complete: {results['users_polled']} users, "
+            f"{results['total_pulled']} events processed"
+        )
+
+        return results
+
+    finally:
+        db.close()
+
+
+def poll_salesforce_events_sync() -> dict:
+    """Synchronous wrapper for poll_salesforce_events"""
+    return asyncio.run(poll_salesforce_events())
+
+
+# ============================================================================
+# Task: Bidirectional Sync for Single User
+# ============================================================================
+
+async def sync_user_calendar(user_id: int) -> dict:
+    """
+    Perform bidirectional sync for a single user.
+
+    1. Push pending CRM events to Salesforce
+    2. Pull changed events from Salesforce
+
+    Args:
+        user_id: CRM user ID
+
+    Returns:
+        Sync summary
+    """
+    db = SessionLocal()
+
+    try:
+        service = CalendarSyncService(db)
+
+        results = {
+            "user_id": user_id,
+            "push": {"processed": 0, "succeeded": 0, "failed": 0},
+            "pull": {"pulled": 0, "created": 0, "updated": 0}
+        }
+
+        # Phase 1: Push pending events
+        pending = service.get_pending_sync_events(limit=50)
+        pending_for_user = [e for e in pending if e.owner_user_id == user_id]
+
+        for event in pending_for_user:
+            try:
+                result = await service.push_event_to_salesforce(event.id)
+                results["push"]["processed"] += 1
+                if result.success:
+                    results["push"]["succeeded"] += 1
+                else:
+                    results["push"]["failed"] += 1
+            except Exception as e:
+                logger.error(f"Push error for event {event.id}: {e}")
+                results["push"]["failed"] += 1
+
+        # Phase 2: Pull from Salesforce
+        settings = service.get_settings(user_id)
+        since = settings.last_poll_watermark or (datetime.utcnow() - timedelta(hours=24))
+
+        pull_result = await service.pull_events_from_salesforce(
+            user_id=user_id,
+            since=since,
+            limit=200
+        )
+
+        results["pull"] = {
+            "pulled": pull_result["pulled"],
+            "created": pull_result["created"],
+            "updated": pull_result["updated"]
+        }
+
+        logger.info(f"User {user_id} sync complete: push={results['push']}, pull={results['pull']}")
+
+        return results
+
+    finally:
+        db.close()
+
+
+def sync_user_calendar_sync(user_id: int) -> dict:
+    """Synchronous wrapper for sync_user_calendar"""
+    return asyncio.run(sync_user_calendar(user_id))
+
+
+# ============================================================================
 # Scheduler Integration
 # ============================================================================
 
@@ -403,13 +578,23 @@ def register_calendar_sync_jobs(scheduler):
     Args:
         scheduler: APScheduler instance
     """
-    # Process pending events every 30 seconds
+    # Process pending push events every 2 minutes
     scheduler.add_job(
         process_pending_sync_events_sync,
         'interval',
-        seconds=30,
+        minutes=2,
         id='calendar_sync_pending',
-        name='Process pending calendar sync events',
+        name='Process pending calendar sync events (push)',
+        replace_existing=True
+    )
+
+    # Poll Salesforce for changes every 2 minutes
+    scheduler.add_job(
+        poll_salesforce_events_sync,
+        'interval',
+        minutes=2,
+        id='calendar_sync_poll',
+        name='Poll Salesforce for event changes (pull)',
         replace_existing=True
     )
 
@@ -423,4 +608,4 @@ def register_calendar_sync_jobs(scheduler):
         replace_existing=True
     )
 
-    logger.info("Calendar sync background jobs registered")
+    logger.info("Calendar sync jobs registered: push/pull every 2 minutes")
