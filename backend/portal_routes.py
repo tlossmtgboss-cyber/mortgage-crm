@@ -1838,3 +1838,44 @@ def get_portal_by_loan_id(
         "portal_enabled": portal_loan.portal_enabled,
         "partner_portal_enabled": portal_loan.partner_portal_enabled,
     }
+
+
+@router.get("/debug/list-loans")
+def debug_list_portal_loans(
+    db: Session = Depends(get_db),
+    limit: int = Query(10, description="Number of loans to return"),
+):
+    """Debug endpoint to list portal loans. Remove after testing."""
+    from models.portal_models import PortalLoan
+    from sqlalchemy import text
+
+    results = []
+
+    # Try portal_loans table
+    try:
+        loans = db.query(PortalLoan).limit(limit).all()
+        for loan in loans:
+            results.append({
+                "source": "portal_loans",
+                "id": loan.id,
+                "crm_deal_id": loan.crm_deal_id,
+                "borrower_name": getattr(loan, 'borrower_name', None),
+                "loan_number": getattr(loan, 'loan_number', None),
+            })
+    except Exception as e:
+        results.append({"source": "portal_loans", "error": str(e)})
+
+    # Try purl_loans table
+    try:
+        purl_result = db.execute(text("SELECT id, loan_number, workspace_id FROM purl_loans LIMIT :limit"), {"limit": limit})
+        for row in purl_result:
+            results.append({
+                "source": "purl_loans",
+                "id": row.id,
+                "loan_number": row.loan_number,
+                "workspace_id": row.workspace_id,
+            })
+    except Exception as e:
+        results.append({"source": "purl_loans", "error": str(e)})
+
+    return {"loans": results, "count": len(results)}
