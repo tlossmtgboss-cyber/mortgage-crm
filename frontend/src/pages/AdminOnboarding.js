@@ -36,15 +36,6 @@ const TIMEZONES = [
   { value: 'Pacific/Honolulu', label: 'Hawaii Time' }
 ];
 
-// Industry options
-const INDUSTRIES = [
-  { value: 'mortgage_broker', label: 'Mortgage Broker' },
-  { value: 'bank', label: 'Bank' },
-  { value: 'credit_union', label: 'Credit Union' },
-  { value: 'correspondent_lender', label: 'Correspondent Lender' },
-  { value: 'other', label: 'Other' }
-];
-
 // Role options for team invites
 const TEAM_ROLES = [
   { value: 'loan_officer', label: 'Loan Officer' },
@@ -86,7 +77,6 @@ function AdminOnboarding() {
   const [companyName, setCompanyName] = useState('');
   const [companyPhone, setCompanyPhone] = useState('');
   const [companyAddress, setCompanyAddress] = useState('');
-  const [industry, setIndustry] = useState('mortgage_broker');
   const [logoUrl, setLogoUrl] = useState('');
 
   // Step 3: Your Profile
@@ -266,7 +256,10 @@ function AdminOnboarding() {
         accept_terms: true
       });
 
-      if (result.data?.token) {
+      // Store the access token for subsequent API calls
+      if (result.data?.access_token) {
+        localStorage.setItem('token', result.data.access_token);
+      } else if (result.data?.token) {
         localStorage.setItem('token', result.data.token);
       }
 
@@ -292,7 +285,6 @@ function AdminOnboarding() {
         company_name: companyName,
         company_phone: companyPhone || null,
         company_address: companyAddress || null,
-        industry: industry,
         logo_url: logoUrl || null
       });
       setCurrentStep(2);
@@ -555,25 +547,14 @@ function AdminOnboarding() {
                 />
               </div>
 
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Company Phone</label>
-                  <input
-                    type="tel"
-                    value={companyPhone}
-                    onChange={(e) => setCompanyPhone(e.target.value)}
-                    placeholder="(555) 555-5555"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Industry</label>
-                  <select value={industry} onChange={(e) => setIndustry(e.target.value)}>
-                    {INDUSTRIES.map(ind => (
-                      <option key={ind.value} value={ind.value}>{ind.label}</option>
-                    ))}
-                  </select>
-                </div>
+              <div className="form-group">
+                <label>Company Phone</label>
+                <input
+                  type="tel"
+                  value={companyPhone}
+                  onChange={(e) => setCompanyPhone(e.target.value)}
+                  placeholder="(555) 555-5555"
+                />
               </div>
 
               <div className="form-group">
