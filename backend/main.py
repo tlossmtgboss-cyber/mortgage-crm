@@ -59018,6 +59018,14 @@ async def startup_event():
             except Exception as e:
                 logger.warning(f"⚠️ AI Receptionist Actions migration skipped: {e}")
 
+            # Run Admin Onboarding Tables migration (subscriber_invitations, tenant_accounts)
+            try:
+                from migrations.fix_admin_onboarding_tables import run_migration as run_admin_onboarding_migration
+                run_admin_onboarding_migration()
+                logger.info("✅ Admin Onboarding Tables migration completed")
+            except Exception as e:
+                logger.warning(f"⚠️ Admin Onboarding Tables migration skipped: {e}")
+
             # Ensure admin user exists with correct settings
             try:
                 db_admin = SessionLocal()
@@ -61886,6 +61894,31 @@ async def add_goals_and_okrs_migration(
     except Exception as e:
         db.rollback()
         logger.error(f"Goals migration error: {e}")
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
+@app.post("/api/v1/public/migrations/fix-admin-onboarding-tables", response_model=None)
+async def fix_admin_onboarding_tables_migration(
+    migration_key: str = "",
+    db: Session = Depends(get_db)
+):
+    """
+    Fix admin onboarding tables - creates subscriber_invitations, tenant_accounts, etc.
+    Public endpoint - requires migration key for security
+    """
+    if migration_key != "fix-admin-onboarding":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    try:
+        from migrations.fix_admin_onboarding_tables import run_migration
+        result = run_migration()
+        return {
+            "success": True,
+            "message": "Admin onboarding tables migration completed"
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Admin onboarding migration error: {e}")
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 
