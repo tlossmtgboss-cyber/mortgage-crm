@@ -3891,6 +3891,32 @@ class LeadUpdate(BaseModel):
     appraisal_value: Optional[float] = None
     ltv: Optional[float] = None
     dti: Optional[float] = None
+    purchase_price: Optional[float] = None
+    # Salesforce Sync Fields
+    cltv: Optional[float] = None
+    occupancy_type: Optional[str] = None
+    property_county: Optional[str] = None
+    property_ownership_type: Optional[str] = None
+    property_units: Optional[int] = None
+    rate_type: Optional[str] = None
+    monthly_payment: Optional[float] = None
+    property_tax: Optional[float] = None
+    hazard_insurance: Optional[float] = None
+    mortgage_insurance: Optional[float] = None
+    hoa_amount: Optional[float] = None
+    origination_fee: Optional[float] = None
+    estimated_prepaid_interest: Optional[float] = None
+    index_rate: Optional[float] = None
+    margin: Optional[float] = None
+    loan_purpose: Optional[str] = None
+    file_state: Optional[str] = None
+    second_loan_amount: Optional[float] = None
+    second_loan_rate: Optional[float] = None
+    second_loan_payment: Optional[float] = None
+    present_housing_expense: Optional[float] = None
+    proposed_housing_expense: Optional[float] = None
+    present_monthly_payment: Optional[float] = None
+    proposed_monthly_payment: Optional[float] = None
     # SLA Milestone Dates
     lead_received_date: Optional[datetime] = None
     first_contact_attempt_date: Optional[datetime] = None

@@ -24,6 +24,7 @@ import SendVideoModal from '../components/video/SendVideoModal';
 import CreditTab from '../components/CreditTab';
 import WorkflowRoleAssignment from '../components/WorkflowRoleAssignment';
 import { formatPhoneNumber } from '../utils/phoneUtils';
+import CurrencyInput from '../components/common/CurrencyInput';
 import './LeadDetail.css';
 
 // Mock loans data (same as Loans.js)
@@ -1216,22 +1217,20 @@ function LoanDetail() {
               {(formData.loan_purpose === 'Purchase' || !formData.loan_purpose) && (
                 <div className="info-field">
                   <label>Purchase Price</label>
-                  <input
-                    type="number"
+                  <CurrencyInput
                     value={formData.purchase_price || ''}
-                    onChange={(e) => handleFieldChange('purchase_price', e.target.value)}
-                    placeholder="$"
+                    onChange={(value) => handleFieldChange('purchase_price', value)}
+                    placeholder="$0"
                   />
                 </div>
               )}
 
               <div className="info-field">
                 <label>Loan Amount</label>
-                <input
-                  type="number"
+                <CurrencyInput
                   value={formData.loan_amount || formData.amount || ''}
-                  onChange={(e) => handleFieldChange('loan_amount', e.target.value)}
-                  placeholder="$"
+                  onChange={(value) => handleFieldChange('loan_amount', value)}
+                  placeholder="$0"
                 />
               </div>
 
@@ -1322,11 +1321,10 @@ function LoanDetail() {
 
               <div className="info-field">
                 <label>Appraisal Value</label>
-                <input
-                  type="number"
+                <CurrencyInput
                   value={formData.appraisal_value || ''}
-                  onChange={(e) => handleFieldChange('appraisal_value', e.target.value)}
-                  placeholder="$"
+                  onChange={(value) => handleFieldChange('appraisal_value', value)}
+                  placeholder="$0"
                 />
               </div>
 
@@ -1375,72 +1373,58 @@ function LoanDetail() {
               </div>
               <div className="info-field">
                 <label>Monthly P&I Payment</label>
-                <input
-                  type="number"
-                  step="0.01"
+                <CurrencyInput
                   value={formData.monthly_payment || ''}
-                  onChange={(e) => handleFieldChange('monthly_payment', parseFloat(e.target.value))}
-                  placeholder="$0.00"
+                  onChange={(value) => handleFieldChange('monthly_payment', value)}
+                  placeholder="$0"
                 />
               </div>
               <div className="info-field">
                 <label>Property Tax (Annual)</label>
-                <input
-                  type="number"
-                  step="0.01"
+                <CurrencyInput
                   value={formData.property_tax || ''}
-                  onChange={(e) => handleFieldChange('property_tax', parseFloat(e.target.value))}
-                  placeholder="$0.00"
+                  onChange={(value) => handleFieldChange('property_tax', value)}
+                  placeholder="$0"
                 />
               </div>
               <div className="info-field">
                 <label>Hazard Insurance (Monthly)</label>
-                <input
-                  type="number"
-                  step="0.01"
+                <CurrencyInput
                   value={formData.hazard_insurance || ''}
-                  onChange={(e) => handleFieldChange('hazard_insurance', parseFloat(e.target.value))}
-                  placeholder="$0.00"
+                  onChange={(value) => handleFieldChange('hazard_insurance', value)}
+                  placeholder="$0"
                 />
               </div>
               <div className="info-field">
                 <label>Mortgage Insurance (Monthly)</label>
-                <input
-                  type="number"
-                  step="0.01"
+                <CurrencyInput
                   value={formData.mortgage_insurance || ''}
-                  onChange={(e) => handleFieldChange('mortgage_insurance', parseFloat(e.target.value))}
-                  placeholder="$0.00"
+                  onChange={(value) => handleFieldChange('mortgage_insurance', value)}
+                  placeholder="$0"
                 />
               </div>
               <div className="info-field">
                 <label>HOA (Monthly)</label>
-                <input
-                  type="number"
-                  step="0.01"
+                <CurrencyInput
                   value={formData.hoa_amount || ''}
-                  onChange={(e) => handleFieldChange('hoa_amount', parseFloat(e.target.value))}
-                  placeholder="$0.00"
+                  onChange={(value) => handleFieldChange('hoa_amount', value)}
+                  placeholder="$0"
                 />
               </div>
               <div className="info-field">
                 <label>Origination Fee</label>
-                <input
-                  type="number"
-                  step="0.01"
+                <CurrencyInput
                   value={formData.origination_fee || ''}
-                  onChange={(e) => handleFieldChange('origination_fee', parseFloat(e.target.value))}
-                  placeholder="$0.00"
+                  onChange={(value) => handleFieldChange('origination_fee', value)}
+                  placeholder="$0"
                 />
               </div>
               <div className="info-field">
                 <label>Est. Prepaid Interest</label>
-                <input
-                  type="number"
-                  step="0.01"
+                <CurrencyInput
                   value={formData.estimated_prepaid_interest || ''}
-                  onChange={(e) => handleFieldChange('estimated_prepaid_interest', parseFloat(e.target.value))}
-                  placeholder="$0.00"
+                  onChange={(value) => handleFieldChange('estimated_prepaid_interest', value)}
+                  placeholder="$0"
                 />
               </div>
             </div>
@@ -1481,42 +1465,34 @@ function LoanDetail() {
             <div className="info-grid">
               <div className="info-field">
                 <label>Present Monthly Payment</label>
-                <input
-                  type="number"
-                  step="0.01"
+                <CurrencyInput
                   value={formData.present_monthly_payment || ''}
-                  onChange={(e) => handleFieldChange('present_monthly_payment', parseFloat(e.target.value))}
-                  placeholder="$0.00"
+                  onChange={(value) => handleFieldChange('present_monthly_payment', value)}
+                  placeholder="$0"
                 />
               </div>
               <div className="info-field">
                 <label>Proposed Monthly Payment</label>
-                <input
-                  type="number"
-                  step="0.01"
+                <CurrencyInput
                   value={formData.proposed_monthly_payment || ''}
-                  onChange={(e) => handleFieldChange('proposed_monthly_payment', parseFloat(e.target.value))}
-                  placeholder="$0.00"
+                  onChange={(value) => handleFieldChange('proposed_monthly_payment', value)}
+                  placeholder="$0"
                 />
               </div>
               <div className="info-field">
                 <label>Present Housing Expense</label>
-                <input
-                  type="number"
-                  step="0.01"
+                <CurrencyInput
                   value={formData.present_housing_expense || ''}
-                  onChange={(e) => handleFieldChange('present_housing_expense', parseFloat(e.target.value))}
-                  placeholder="$0.00"
+                  onChange={(value) => handleFieldChange('present_housing_expense', value)}
+                  placeholder="$0"
                 />
               </div>
               <div className="info-field">
                 <label>Proposed Housing Expense</label>
-                <input
-                  type="number"
-                  step="0.01"
+                <CurrencyInput
                   value={formData.proposed_housing_expense || ''}
-                  onChange={(e) => handleFieldChange('proposed_housing_expense', parseFloat(e.target.value))}
-                  placeholder="$0.00"
+                  onChange={(value) => handleFieldChange('proposed_housing_expense', value)}
+                  placeholder="$0"
                 />
               </div>
             </div>
@@ -1529,12 +1505,10 @@ function LoanDetail() {
             <div className="info-grid">
               <div className="info-field">
                 <label>2nd Loan Amount</label>
-                <input
-                  type="number"
-                  step="0.01"
+                <CurrencyInput
                   value={formData.second_loan_amount || ''}
-                  onChange={(e) => handleFieldChange('second_loan_amount', parseFloat(e.target.value))}
-                  placeholder="$0.00"
+                  onChange={(value) => handleFieldChange('second_loan_amount', value)}
+                  placeholder="$0"
                 />
               </div>
               <div className="info-field">
@@ -1549,12 +1523,10 @@ function LoanDetail() {
               </div>
               <div className="info-field">
                 <label>2nd Loan Payment</label>
-                <input
-                  type="number"
-                  step="0.01"
+                <CurrencyInput
                   value={formData.second_loan_payment || ''}
-                  onChange={(e) => handleFieldChange('second_loan_payment', parseFloat(e.target.value))}
-                  placeholder="$0.00"
+                  onChange={(value) => handleFieldChange('second_loan_payment', value)}
+                  placeholder="$0"
                 />
               </div>
             </div>
@@ -2119,18 +2091,18 @@ function LoanDetail() {
                   </div>
                   <div className="info-field">
                     <label>Property Value</label>
-                    <input
-                      type="number"
+                    <CurrencyInput
                       value={formData.property_value || ''}
-                      onChange={(e) => handleFieldChange('property_value', parseFloat(e.target.value))}
+                      onChange={(value) => handleFieldChange('property_value', value)}
+                      placeholder="$0"
                     />
                   </div>
                   <div className="info-field">
                     <label>Down Payment</label>
-                    <input
-                      type="number"
+                    <CurrencyInput
                       value={formData.down_payment || ''}
-                      onChange={(e) => handleFieldChange('down_payment', parseFloat(e.target.value))}
+                      onChange={(value) => handleFieldChange('down_payment', value)}
+                      placeholder="$0"
                     />
                   </div>
                   <div className="info-field">
@@ -2194,20 +2166,18 @@ function LoanDetail() {
                   </div>
                   <div className="info-field">
                     <label>Appraised Value</label>
-                    <input
-                      type="number"
+                    <CurrencyInput
                       value={formData.appraisal_value || ''}
-                      onChange={(e) => handleFieldChange('appraisal_value', parseFloat(e.target.value))}
-                      placeholder="$0.00"
+                      onChange={(value) => handleFieldChange('appraisal_value', value)}
+                      placeholder="$0"
                     />
                   </div>
                   <div className="info-field">
                     <label>Purchase Price</label>
-                    <input
-                      type="number"
+                    <CurrencyInput
                       value={formData.purchase_price || ''}
-                      onChange={(e) => handleFieldChange('purchase_price', parseFloat(e.target.value))}
-                      placeholder="$0.00"
+                      onChange={(value) => handleFieldChange('purchase_price', value)}
+                      placeholder="$0"
                     />
                   </div>
                 </div>
