@@ -61,13 +61,19 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
   // ADMIN users have full access - never lock any items for them
   const navItems = useMemo(() => {
     const items = getNavigationForRole(effectiveRole);
-    const isAdmin = effectiveRole === 'admin';
+    // Check if user is admin by any role indicator
+    // This ensures admin always has full access regardless of module subscriptions
+    const adminRoles = ['admin', 'site_admin', 'super_admin', 'owner'];
+    const normalizedEffectiveRole = effectiveRole?.toLowerCase();
+    const normalizedUserRole = userRole?.toLowerCase();
+    const isAdmin = adminRoles.includes(normalizedEffectiveRole) ||
+                    adminRoles.includes(normalizedUserRole);
     return items.map(item => ({
       ...item,
-      // Admin users bypass all module restrictions
+      // Admin users bypass all module restrictions - no locked items ever
       isLocked: !isAdmin && !modulesLoading && item.module && !hasModule(item.module)
     }));
-  }, [effectiveRole, hasModule, modulesLoading]);
+  }, [effectiveRole, userRole, hasModule, modulesLoading]);
 
   // Handle click on locked nav item
   const handleLockedClick = useCallback((e, item) => {
