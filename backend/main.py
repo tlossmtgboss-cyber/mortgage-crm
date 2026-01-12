@@ -59008,6 +59008,16 @@ async def startup_event():
             except Exception as e:
                 logger.warning(f"⚠️ Document Extraction migration skipped: {e}")
 
+            # Run AI Receptionist Actions migration (appointments, transfers, messages)
+            try:
+                from migrations.add_ai_receptionist_actions_tables import run_migration as run_ai_actions_migration
+                db_temp = SessionLocal()
+                run_ai_actions_migration(db_temp)
+                db_temp.close()
+                logger.info("✅ AI Receptionist Actions migration completed")
+            except Exception as e:
+                logger.warning(f"⚠️ AI Receptionist Actions migration skipped: {e}")
+
             # Ensure admin user exists with correct settings
             try:
                 db_admin = SessionLocal()

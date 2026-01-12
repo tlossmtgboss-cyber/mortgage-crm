@@ -961,6 +961,40 @@ async def voice_stream_websocket(websocket: WebSocket):
                         # Extract lead information
                         await extract_lead_info(data['transcript'], call_context)
 
+                    elif event_type == 'response.function_call_arguments.done':
+                        # Handle function calls from the AI
+                        func_name = data.get('name', '')
+                        func_args = data.get('arguments', '{}')
+                        call_id = data.get('call_id', '')
+
+                        logger.info(f"🔧 Function call: {func_name} with args: {func_args}")
+
+                        try:
+                            args = json.loads(func_args)
+                            result = await handle_ai_function_call(
+                                func_name, args, call_context, db
+                            )
+
+                            # Send function result back to OpenAI
+                            await openai_ws.send(json.dumps({
+                                "type": "conversation.item.create",
+                                "item": {
+                                    "type": "function_call_output",
+                                    "call_id": call_id,
+                                    "output": json.dumps(result)
+                                }
+                            }))
+
+                            # Request AI to continue responding after function result
+                            await openai_ws.send(json.dumps({
+                                "type": "response.create"
+                            }))
+
+                            logger.info(f"✅ Function {func_name} completed: {result}")
+
+                        except Exception as func_err:
+                            logger.error(f"❌ Function call error: {func_err}")
+
             except Exception as e:
                 logger.error(f"Error in OpenAI->Twilio stream: {e}")
 
@@ -1142,6 +1176,157 @@ Return ONLY valid JSON, no other text."""
 
     except Exception as e:
         logger.error(f"Error extracting lead info: {e}")
+
+
+async def handle_ai_function_call(func_name: str, args: dict, call_context: dict, db) -> dict:
+    """
+    Handle function calls from the AI receptionist.
+    Returns the result to send back to OpenAI.
+    """
+    from datetime import datetime, timedelta
+    from sqlalchemy import text
+
+    caller_name = call_context.get('caller_name') or call_context.get('lead_data', {}).get('name') or 'Unknown'
+    caller_phone = call_context.get('caller_number') or 'Unknown'
+
+    if func_name == "schedule_appointment":
+        # Schedule an appointment and save to database
+        date_str = args.get('date', '')
+        time_str = args.get('time', '')
+        reason = args.get('reason', 'Mortgage consultation')
+
+        try:
+            # Parse the date and time
+            if date_str and time_str:
+                appointment_datetime = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
+            else:
+                # Default to tomorrow at 10 AM if not specified
+                appointment_datetime = datetime.now() + timedelta(days=1)
+                appointment_datetime = appointment_datetime.replace(hour=10, minute=0, second=0)
+
+            # Save to appointments table
+            db.execute(text("""
+                INSERT INTO appointments (
+                    id, caller_name, caller_phone, appointment_datetime,
+                    reason, status, created_at, call_sid, notes
+                ) VALUES (
+                    gen_random_uuid(), :caller_name, :caller_phone, :appointment_datetime,
+                    :reason, 'scheduled', NOW(), :call_sid, :notes
+                )
+            """), {
+                "caller_name": caller_name,
+                "caller_phone": caller_phone,
+                "appointment_datetime": appointment_datetime,
+                "reason": reason,
+                "call_sid": call_context.get('call_sid'),
+                "notes": f"Scheduled via AI receptionist. Context: {json.dumps(call_context.get('lead_data', {}))}"
+            })
+            db.commit()
+
+            formatted_time = appointment_datetime.strftime("%A, %B %d at %I:%M %p")
+            logger.info(f"📅 Appointment scheduled: {caller_name} on {formatted_time}")
+
+            return {
+                "success": True,
+                "message": f"Appointment scheduled for {formatted_time}",
+                "appointment_time": formatted_time,
+                "caller_name": caller_name
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to schedule appointment: {e}")
+            db.rollback()
+            return {
+                "success": False,
+                "message": "Sorry, I couldn't save the appointment. Please try again."
+            }
+
+    elif func_name == "transfer_to_loan_officer":
+        # Log the transfer request
+        reason = args.get('reason', '')
+        urgency = args.get('urgency', 'medium')
+
+        try:
+            db.execute(text("""
+                INSERT INTO call_transfers (
+                    id, caller_name, caller_phone, transfer_reason,
+                    urgency, status, created_at, call_sid
+                ) VALUES (
+                    gen_random_uuid(), :caller_name, :caller_phone, :reason,
+                    :urgency, 'requested', NOW(), :call_sid
+                )
+            """), {
+                "caller_name": caller_name,
+                "caller_phone": caller_phone,
+                "reason": reason,
+                "urgency": urgency,
+                "call_sid": call_context.get('call_sid')
+            })
+            db.commit()
+
+            logger.info(f"📞 Transfer requested: {caller_name} - {reason} ({urgency})")
+
+            return {
+                "success": True,
+                "message": "I'll transfer you to a loan officer now.",
+                "transfer_initiated": True
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to log transfer: {e}")
+            db.rollback()
+            return {
+                "success": True,  # Still transfer even if logging fails
+                "message": "Transferring you now."
+            }
+
+    elif func_name == "take_message":
+        # Save the message
+        name = args.get('name', caller_name)
+        phone = args.get('phone', caller_phone)
+        message = args.get('message', '')
+        callback_urgency = args.get('callback_urgency', 'today')
+
+        try:
+            db.execute(text("""
+                INSERT INTO voice_messages (
+                    id, caller_name, caller_phone, message,
+                    callback_urgency, status, created_at, call_sid
+                ) VALUES (
+                    gen_random_uuid(), :caller_name, :caller_phone, :message,
+                    :callback_urgency, 'new', NOW(), :call_sid
+                )
+            """), {
+                "caller_name": name,
+                "caller_phone": phone,
+                "message": message,
+                "callback_urgency": callback_urgency,
+                "call_sid": call_context.get('call_sid')
+            })
+            db.commit()
+
+            logger.info(f"📝 Message saved: {name} - {message[:50]}...")
+
+            return {
+                "success": True,
+                "message": f"Got it! I've saved your message and someone will call you back {callback_urgency}.",
+                "callback_urgency": callback_urgency
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to save message: {e}")
+            db.rollback()
+            return {
+                "success": False,
+                "message": "I'm sorry, I had trouble saving your message. Could you repeat that?"
+            }
+
+    else:
+        logger.warning(f"Unknown function called: {func_name}")
+        return {
+            "success": False,
+            "message": "I'm not sure how to help with that. Let me connect you with someone who can."
+        }
 
 
 async def save_call_summary(call_context: dict, db: Session):
