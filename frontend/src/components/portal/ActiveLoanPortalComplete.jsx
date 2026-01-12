@@ -54,7 +54,7 @@ export default function ActiveLoanPortalComplete() {
       const [dashboardData, cotData, activityData] = await Promise.all([
         borrowerPortalApi.getDashboard(loanId),
         closeOnTimeApi.getCountdownData(loanId).catch(() => null),
-        borrowerPortalApi.getActivities(loanId, 10).catch(() => []),
+        borrowerPortalApi.getRecentActivity(loanId, 10).catch(() => []),
       ]);
 
       setPortalData(dashboardData);

@@ -42,30 +42,63 @@ class SalesforceOAuthConfig:
         redirect_uri: Optional[str] = None,
         use_sandbox: Optional[bool] = None
     ):
+        # Store passed values for lazy loading
+        self._client_id = client_id
+        self._client_secret = client_secret
+        self._redirect_uri = redirect_uri
+        self._use_sandbox = use_sandbox
+        self._initialized = False
+
+    def _ensure_initialized(self):
+        """Lazy initialize config when first accessed"""
+        if self._initialized:
+            return
+        self._initialized = True
+
         settings = _get_settings()
 
         # Use passed values, then settings, then env vars
-        self.client_id = client_id or (settings.SALESFORCE_CLIENT_ID if settings else None) or os.getenv("SALESFORCE_CLIENT_ID", "")
-        self.client_secret = client_secret or (settings.SALESFORCE_CLIENT_SECRET if settings else None) or os.getenv("SALESFORCE_CLIENT_SECRET", "")
+        self._resolved_client_id = self._client_id or (settings.SALESFORCE_CLIENT_ID if settings else None) or os.getenv("SALESFORCE_CLIENT_ID", "")
+        self._resolved_client_secret = self._client_secret or (settings.SALESFORCE_CLIENT_SECRET if settings else None) or os.getenv("SALESFORCE_CLIENT_SECRET", "")
 
         # Build default redirect URI if not specified
         base_url = (settings.BASE_URL if settings else None) or os.getenv("BASE_URL", "http://localhost:8000")
         default_redirect = f"{base_url}/api/integrations/salesforce/callback"
         sf_redirect = (settings.SALESFORCE_REDIRECT_URI if settings else None) or os.getenv("SALESFORCE_REDIRECT_URI")
-        self.redirect_uri = redirect_uri or sf_redirect or default_redirect
+        self._resolved_redirect_uri = self._redirect_uri or sf_redirect or default_redirect
 
         # Determine if using sandbox
-        if use_sandbox is not None:
-            is_sandbox = use_sandbox
+        if self._use_sandbox is not None:
+            is_sandbox = self._use_sandbox
         elif settings:
             is_sandbox = settings.SALESFORCE_SANDBOX
         else:
             is_sandbox = os.getenv("SALESFORCE_SANDBOX", "false").lower() == "true"
 
         if is_sandbox:
-            self.base_url = 'https://test.salesforce.com'
+            self._resolved_base_url = 'https://test.salesforce.com'
         else:
-            self.base_url = 'https://login.salesforce.com'
+            self._resolved_base_url = 'https://login.salesforce.com'
+
+    @property
+    def client_id(self):
+        self._ensure_initialized()
+        return self._resolved_client_id
+
+    @property
+    def client_secret(self):
+        self._ensure_initialized()
+        return self._resolved_client_secret
+
+    @property
+    def redirect_uri(self):
+        self._ensure_initialized()
+        return self._resolved_redirect_uri
+
+    @property
+    def base_url(self):
+        self._ensure_initialized()
+        return self._resolved_base_url
 
 
 class SalesforceOAuthService:

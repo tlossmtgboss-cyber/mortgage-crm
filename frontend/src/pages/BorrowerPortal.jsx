@@ -272,7 +272,7 @@ const ActivitySection = ({ loanId }) => {
 
   useEffect(() => {
     if (loanId) {
-      borrowerPortalApi.getActivities(loanId, 20)
+      borrowerPortalApi.getRecentActivity(loanId, 20)
         .then(data => setActivities(data || []))
         .catch(() => setActivities([]))
         .finally(() => setLoading(false));
@@ -359,7 +359,7 @@ function PortalContent({ portalData, hasMultiLoanContext = false }) {
   // Load activities
   useEffect(() => {
     if (loanId) {
-      borrowerPortalApi.getActivities(loanId, 10)
+      borrowerPortalApi.getRecentActivity(loanId, 10)
         .then(data => setActivities(data || []))
         .catch(() => setActivities([]));
     }
