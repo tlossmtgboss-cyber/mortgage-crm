@@ -331,19 +331,23 @@ const TeamContactsSection = ({ loanOfficer }) => {
 function PortalContent({ portalData, hasMultiLoanContext = false }) {
   // Always call the hook unconditionally to satisfy React's rules of hooks
   const portalContext = usePortal();
+  const [searchParams] = useSearchParams();
   // Only use the context values if we have multi-loan context
   const { currentLoan, switching } = hasMultiLoanContext ? portalContext : {};
+
+  // Test mode support - allows ?testStage=MUM to test MUM view
+  const testStage = searchParams.get('testStage');
+  const effectiveStage = testStage || portalData?.lifecycle?.stage || 'ACTIVE';
 
   const [activeTab, setActiveTab] = useState('overview');
   const [activities, setActivities] = useState([]);
   const [viewMode, setViewMode] = useState(() => {
     // Default to MUM if in MUM stage, otherwise active
-    const stage = portalData?.lifecycle?.stage;
-    return (stage === 'MUM' || stage === 'ANNUAL_REFRESH' || stage === 'FUNDED') ? 'mum' : 'active';
+    return (effectiveStage === 'MUM' || effectiveStage === 'ANNUAL_REFRESH' || effectiveStage === 'FUNDED') ? 'mum' : 'active';
   });
 
   const loanId = currentLoan?.id || portalData?.loan_id;
-  const stage = portalData?.lifecycle?.stage || 'ACTIVE';
+  const stage = effectiveStage;
 
   // Check if MUM view is available (funded loans can toggle)
   const isMumEligible = ['MUM', 'ANNUAL_REFRESH', 'FUNDED'].includes(stage);
