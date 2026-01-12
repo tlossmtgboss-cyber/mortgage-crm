@@ -203,6 +203,12 @@ export const NAVIGATION_ITEMS = {
     matchPaths: ['/voice/talk'],
     module: 'voice_os'  // Premium: Voice OS module
   },
+  powerDialer: {
+    path: '/dialer',
+    label: 'Power Dialer',
+    matchPaths: ['/dialer'],
+    module: 'voice_os'  // Premium: Voice OS module
+  },
   // Accounting System - with submenu structure
   accounting: {
     path: '/accounting',
@@ -308,6 +314,7 @@ export const ROLE_NAVIGATION = {
     'ivrMenus',
     'holdMusic',
     'talkToAgent',
+    'powerDialer',
     'productionPredictor',
     'dealAlerts'
   ],
@@ -329,7 +336,8 @@ export const ROLE_NAVIGATION = {
     'aiUnderwriter',
     'market',
     'profitability',
-    'partnerRecruiting'
+    'partnerRecruiting',
+    'powerDialer'
   ],
 
   // Production Assistant - Support role navigation
