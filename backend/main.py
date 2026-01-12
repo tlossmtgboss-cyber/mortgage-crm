@@ -61922,6 +61922,42 @@ async def fix_admin_onboarding_tables_migration(
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 
+@app.post("/api/v1/public/migrations/add-users-password-column", response_model=None)
+async def add_users_password_column_migration(
+    migration_key: str = "",
+    db: Session = Depends(get_db)
+):
+    """
+    Add password column to users table for admin onboarding signup
+    Public endpoint - requires migration key for security
+    """
+    if migration_key != "add-password-col":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    try:
+        # Check if column exists
+        result = db.execute(text("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'users' AND column_name = 'password'
+        """))
+
+        if result.fetchone():
+            return {"success": True, "message": "Password column already exists"}
+
+        # Add the column
+        db.execute(text("ALTER TABLE users ADD COLUMN password VARCHAR(255)"))
+        db.commit()
+
+        return {
+            "success": True,
+            "message": "Password column added to users table"
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Add password column error: {e}")
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
 @app.post("/api/v1/public/migrations/add-smart-docs-columns", response_model=None)
 async def add_smart_docs_columns_migration(
     migration_key: str = "",
