@@ -48,7 +48,7 @@ export default function ActiveLoanPortalComplete() {
   const reconnectTimeoutRef = useRef(null);
   const pollIntervalRef = useRef(null);
 
-  // Fetch all data
+  // Fetch all data - v2
   const fetchAllData = useCallback(async () => {
     try {
       const [dashboardData, cotData, activityData] = await Promise.all([

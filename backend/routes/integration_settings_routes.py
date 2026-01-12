@@ -663,24 +663,26 @@ async def connect_integration(
         int_info = INTEGRATIONS[integration_id]
 
         if int_info["auth_type"] == "oauth2":
-            # Handle Salesforce OAuth specially
+            # Handle Salesforce OAuth specially - use proper OAuth service with database state tokens
             if integration_id == "salesforce":
-                from integrations.salesforce_service import salesforce_client
-                if not salesforce_client.enabled:
+                from services.salesforce.oauth_service import salesforce_oauth
+                # Check if credentials are configured
+                if not salesforce_oauth.config.client_id or not salesforce_oauth.config.client_secret:
                     raise HTTPException(
                         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                         detail=error_response("Salesforce integration not configured", code="NOT_CONFIGURED")
                     )
-                # Get user_id for state parameter
+                # Get user_id for state token
                 user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
-                frontend_url = os.getenv("FRONTEND_URL", "https://www.perenniaai.com")
-                state = f"{user_id}:{frontend_url}/settings/integrations"
-                oauth_url = salesforce_client.get_authorization_url(state=state)
+                frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+                return_url = f"{frontend_url}/settings/integrations"
+                # Generate OAuth URL with secure database-stored state token
+                oauth_url = salesforce_oauth.generate_auth_url(db, user_id, return_url)
                 return success_response({
                     "integration_id": integration_id,
                     "auth_type": "oauth2",
                     "oauth_url": oauth_url,
-                    "redirect_uri": os.getenv("SALESFORCE_REDIRECT_URI", "https://api.perenniaai.com/api/v1/salesforce/callback")
+                    "redirect_uri": salesforce_oauth.config.redirect_uri
                 }, "OAuth flow initiated - redirect to Salesforce")
 
             # Handle HubSpot OAuth
