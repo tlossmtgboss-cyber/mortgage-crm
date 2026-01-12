@@ -209,6 +209,12 @@ export const NAVIGATION_ITEMS = {
     matchPaths: ['/dialer'],
     module: 'voice_os'  // Premium: Voice OS module
   },
+  callAnalytics: {
+    path: '/voice/analytics',
+    label: 'Call Analytics',
+    matchPaths: ['/voice/analytics'],
+    module: 'voice_os'  // Premium: Voice OS module
+  },
   // Accounting System - with submenu structure
   accounting: {
     path: '/accounting',
@@ -315,6 +321,7 @@ export const ROLE_NAVIGATION = {
     'holdMusic',
     'talkToAgent',
     'powerDialer',
+    'callAnalytics',
     'productionPredictor',
     'dealAlerts'
   ],
@@ -337,7 +344,8 @@ export const ROLE_NAVIGATION = {
     'market',
     'profitability',
     'partnerRecruiting',
-    'powerDialer'
+    'powerDialer',
+    'callAnalytics'
   ],
 
   // Production Assistant - Support role navigation
