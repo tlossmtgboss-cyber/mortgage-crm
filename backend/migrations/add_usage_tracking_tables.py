@@ -21,17 +21,211 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session
-from database import DATABASE_URL, Base
-from models.usage_tracking import (
-    AITokenUsageLog,
-    UserUsageSnapshot,
-    TeamUsageSnapshot,
-    OrgUsageSnapshot,
-    UsageForecast,
-    PricingRecommendation,
-    UsageAlert,
-    AIModelPricing
-)
+from database import DATABASE_URL
+
+
+def create_tables_raw_sql(engine):
+    """Create usage tracking tables using raw SQL to avoid FK resolution issues."""
+
+    sql_statements = [
+        # AI Token Usage Log
+        """
+        CREATE TABLE IF NOT EXISTS ai_token_usage_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            team_id INTEGER,
+            provider VARCHAR(50) NOT NULL,
+            model VARCHAR(100) NOT NULL,
+            feature VARCHAR(100),
+            input_tokens INTEGER NOT NULL DEFAULT 0,
+            output_tokens INTEGER NOT NULL DEFAULT 0,
+            total_tokens INTEGER NOT NULL DEFAULT 0,
+            input_cost DECIMAL(10, 6) NOT NULL DEFAULT 0,
+            output_cost DECIMAL(10, 6) NOT NULL DEFAULT 0,
+            total_cost DECIMAL(10, 6) NOT NULL DEFAULT 0,
+            request_id VARCHAR(100),
+            session_id VARCHAR(100),
+            latency_ms INTEGER,
+            success BOOLEAN DEFAULT 1,
+            error_message TEXT,
+            metadata_json TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_ai_token_org_user ON ai_token_usage_log(organization_id, user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_ai_token_timestamp ON ai_token_usage_log(timestamp)",
+        "CREATE INDEX IF NOT EXISTS idx_ai_token_model ON ai_token_usage_log(provider, model)",
+
+        # User Usage Snapshots
+        """
+        CREATE TABLE IF NOT EXISTS user_usage_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            team_id INTEGER,
+            snapshot_date DATE NOT NULL,
+            total_cost DECIMAL(12, 4) NOT NULL DEFAULT 0,
+            ai_tokens_cost DECIMAL(12, 4) NOT NULL DEFAULT 0,
+            ai_tokens_input INTEGER NOT NULL DEFAULT 0,
+            ai_tokens_output INTEGER NOT NULL DEFAULT 0,
+            ai_request_count INTEGER NOT NULL DEFAULT 0,
+            sms_cost DECIMAL(12, 4) NOT NULL DEFAULT 0,
+            sms_segments INTEGER NOT NULL DEFAULT 0,
+            voice_cost DECIMAL(12, 4) NOT NULL DEFAULT 0,
+            voice_minutes DECIMAL(10, 2) NOT NULL DEFAULT 0,
+            email_cost DECIMAL(12, 4) NOT NULL DEFAULT 0,
+            email_count INTEGER NOT NULL DEFAULT 0,
+            storage_cost DECIMAL(12, 4) NOT NULL DEFAULT 0,
+            storage_gb DECIMAL(10, 4) NOT NULL DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(organization_id, user_id, snapshot_date)
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_user_snapshot_date ON user_usage_snapshots(organization_id, snapshot_date)",
+
+        # Team Usage Snapshots
+        """
+        CREATE TABLE IF NOT EXISTS team_usage_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL,
+            team_id INTEGER NOT NULL,
+            snapshot_date DATE NOT NULL,
+            user_count INTEGER NOT NULL DEFAULT 0,
+            total_cost DECIMAL(12, 4) NOT NULL DEFAULT 0,
+            ai_tokens_cost DECIMAL(12, 4) NOT NULL DEFAULT 0,
+            communications_cost DECIMAL(12, 4) NOT NULL DEFAULT 0,
+            storage_cost DECIMAL(12, 4) NOT NULL DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(organization_id, team_id, snapshot_date)
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_team_snapshot_date ON team_usage_snapshots(organization_id, snapshot_date)",
+
+        # Org Usage Snapshots
+        """
+        CREATE TABLE IF NOT EXISTS org_usage_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL,
+            snapshot_date DATE NOT NULL,
+            user_count INTEGER NOT NULL DEFAULT 0,
+            team_count INTEGER NOT NULL DEFAULT 0,
+            active_user_count INTEGER NOT NULL DEFAULT 0,
+            total_cost DECIMAL(14, 4) NOT NULL DEFAULT 0,
+            ai_tokens_cost DECIMAL(14, 4) NOT NULL DEFAULT 0,
+            ai_tokens_input BIGINT NOT NULL DEFAULT 0,
+            ai_tokens_output BIGINT NOT NULL DEFAULT 0,
+            ai_request_count INTEGER NOT NULL DEFAULT 0,
+            communications_cost DECIMAL(14, 4) NOT NULL DEFAULT 0,
+            sms_segments INTEGER NOT NULL DEFAULT 0,
+            voice_minutes DECIMAL(12, 2) NOT NULL DEFAULT 0,
+            email_count INTEGER NOT NULL DEFAULT 0,
+            storage_cost DECIMAL(14, 4) NOT NULL DEFAULT 0,
+            storage_gb DECIMAL(12, 4) NOT NULL DEFAULT 0,
+            infrastructure_cost DECIMAL(14, 4) NOT NULL DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(organization_id, snapshot_date)
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_org_snapshot_date ON org_usage_snapshots(organization_id, snapshot_date)",
+
+        # Usage Forecasts
+        """
+        CREATE TABLE IF NOT EXISTS usage_forecasts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL,
+            scope_type VARCHAR(20) NOT NULL,
+            scope_id INTEGER,
+            forecast_date DATE NOT NULL,
+            target_date DATE NOT NULL,
+            period_days INTEGER NOT NULL,
+            projected_cost DECIMAL(14, 4) NOT NULL,
+            confidence_low DECIMAL(14, 4),
+            confidence_high DECIMAL(14, 4),
+            confidence_score INTEGER,
+            trend_direction VARCHAR(20),
+            trend_percentage DECIMAL(8, 2),
+            algorithm VARCHAR(50),
+            input_data_points INTEGER,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_forecast_scope ON usage_forecasts(organization_id, scope_type, scope_id)",
+
+        # Pricing Recommendations
+        """
+        CREATE TABLE IF NOT EXISTS pricing_recommendations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL,
+            recommendation_date DATE NOT NULL,
+            period_days INTEGER NOT NULL,
+            target_margin_pct DECIMAL(6, 2) NOT NULL,
+            total_actual_cost DECIMAL(14, 4) NOT NULL,
+            avg_cost_per_user DECIMAL(12, 4) NOT NULL,
+            recommended_base_price DECIMAL(12, 4) NOT NULL,
+            recommended_per_user_price DECIMAL(12, 4) NOT NULL,
+            projected_revenue DECIMAL(14, 4),
+            projected_profit DECIMAL(14, 4),
+            actual_margin_pct DECIMAL(8, 2),
+            cost_breakdown_json TEXT,
+            usage_fees_json TEXT,
+            recommendations_json TEXT,
+            created_by INTEGER,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+
+        # Usage Alerts
+        """
+        CREATE TABLE IF NOT EXISTS usage_alerts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL,
+            scope_type VARCHAR(20) NOT NULL,
+            scope_id INTEGER,
+            category VARCHAR(50) NOT NULL,
+            alert_type VARCHAR(50) NOT NULL,
+            severity VARCHAR(20) NOT NULL DEFAULT 'warning',
+            title VARCHAR(200) NOT NULL,
+            message TEXT,
+            threshold_value DECIMAL(14, 4),
+            actual_value DECIMAL(14, 4),
+            status VARCHAR(20) NOT NULL DEFAULT 'active',
+            acknowledged_by INTEGER,
+            acknowledged_at DATETIME,
+            resolved_at DATETIME,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_alert_status ON usage_alerts(organization_id, status)",
+
+        # AI Model Pricing
+        """
+        CREATE TABLE IF NOT EXISTS ai_model_pricing (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            provider VARCHAR(50) NOT NULL,
+            model_id VARCHAR(100) NOT NULL,
+            model_name VARCHAR(200),
+            input_price_per_1m DECIMAL(12, 6) NOT NULL,
+            output_price_per_1m DECIMAL(12, 6) NOT NULL,
+            is_active BOOLEAN DEFAULT 1,
+            effective_date DATE NOT NULL,
+            notes TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(provider, model_id, effective_date)
+        )
+        """
+    ]
+
+    with engine.connect() as conn:
+        for sql in sql_statements:
+            try:
+                conn.execute(text(sql))
+                conn.commit()
+            except Exception as e:
+                print(f"  Warning: {e}")
+
+    print("  ✅ All tables created successfully")
 
 
 def create_tables(engine):
@@ -120,14 +314,13 @@ def add_user_team_columns_to_service_usage(engine):
 
 def seed_ai_model_pricing(engine):
     """Seed default AI model pricing based on current provider rates."""
-    session = Session(bind=engine)
-
-    # Check if pricing already exists
-    existing = session.query(AIModelPricing).count()
-    if existing > 0:
-        print(f"AI model pricing already exists ({existing} records), skipping seed...")
-        session.close()
-        return
+    with engine.connect() as conn:
+        # Check if pricing already exists
+        result = conn.execute(text("SELECT COUNT(*) FROM ai_model_pricing"))
+        existing = result.scalar()
+        if existing > 0:
+            print(f"AI model pricing already exists ({existing} records), skipping seed...")
+            return
 
     print("Seeding AI model pricing...")
 
@@ -249,30 +442,26 @@ def seed_ai_model_pricing(engine):
         },
     ]
 
-    for pricing in pricing_data:
-        # Calculate per-token prices
-        input_per_token = pricing["input_price_per_1m"] / Decimal("1000000")
-        output_per_token = pricing["output_price_per_1m"] / Decimal("1000000")
+    with engine.connect() as conn:
+        for pricing in pricing_data:
+            conn.execute(text("""
+                INSERT INTO ai_model_pricing
+                (provider, model_id, model_name, input_price_per_1m, output_price_per_1m,
+                 is_active, effective_date, notes)
+                VALUES (:provider, :model_id, :model_name, :input_price, :output_price,
+                        1, :effective_date, :notes)
+            """), {
+                "provider": pricing["provider"],
+                "model_id": pricing["model_id"],
+                "model_name": pricing["model_name"],
+                "input_price": float(pricing["input_price_per_1m"]),
+                "output_price": float(pricing["output_price_per_1m"]),
+                "effective_date": str(pricing["effective_date"]),
+                "notes": pricing.get("notes"),
+            })
+        conn.commit()
 
-        model_pricing = AIModelPricing(
-            provider=pricing["provider"],
-            model_id=pricing["model_id"],
-            model_name=pricing["model_name"],
-            input_price_per_1m=pricing["input_price_per_1m"],
-            output_price_per_1m=pricing["output_price_per_1m"],
-            input_price_per_token=input_per_token,
-            output_price_per_token=output_per_token,
-            max_context_tokens=pricing.get("max_context_tokens"),
-            max_output_tokens=pricing.get("max_output_tokens"),
-            effective_date=pricing["effective_date"],
-            is_active=True,
-            notes=pricing.get("notes"),
-        )
-        session.add(model_pricing)
-
-    session.commit()
     print(f"Seeded {len(pricing_data)} AI model pricing records")
-    session.close()
 
 
 def run_migration():
@@ -281,8 +470,8 @@ def run_migration():
 
     engine = create_engine(DATABASE_URL)
 
-    # Create new tables
-    create_tables(engine)
+    # Create new tables using raw SQL to avoid FK resolution issues
+    create_tables_raw_sql(engine)
 
     # Add columns to existing service_usage_records table
     add_user_team_columns_to_service_usage(engine)

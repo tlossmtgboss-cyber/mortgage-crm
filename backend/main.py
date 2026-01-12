@@ -20798,6 +20798,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Salesforce user integration routes not loaded: {e}")
 
+# Calendar Sync routes (CRM ↔ Salesforce ↔ Outlook calendar synchronization)
+try:
+    from routes.calendar_sync_routes import router as calendar_sync_router
+    app.include_router(calendar_sync_router, tags=["Calendar Sync"])
+    logger.info("✅ Calendar sync routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Calendar sync routes not loaded: {e}")
+
 # HubSpot Integration routes (OAuth, CRM Sync)
 try:
     from routes.hubspot_routes import router as hubspot_router, set_dependencies as set_hubspot_deps
