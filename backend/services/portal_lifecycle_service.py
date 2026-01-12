@@ -94,29 +94,35 @@ class PortalLifecycleService:
 
     def get_portal_loan(self, loan_id: int) -> Optional[PortalLoan]:
         """Get or create portal loan record for a loan."""
-        # First try to find by primary key id
-        portal_loan = self.db.query(PortalLoan).filter(
-            PortalLoan.id == loan_id
-        ).first()
-
-        # If not found by id, try by crm_deal_id
-        if not portal_loan:
+        try:
+            # First try to find by primary key id
             portal_loan = self.db.query(PortalLoan).filter(
-                PortalLoan.crm_deal_id == loan_id
+                PortalLoan.id == loan_id
             ).first()
 
-        if not portal_loan:
-            # Create new portal loan with default stage
-            portal_loan = PortalLoan(
-                crm_deal_id=loan_id,
-                lifecycle_stage=LifecycleStage.PROSPECT,
-            )
-            self.db.add(portal_loan)
-            self.db.commit()
-            self.db.refresh(portal_loan)
-            logger.info(f"Created portal loan record for crm_deal_id={loan_id}")
+            # If not found by id, try by crm_deal_id
+            if not portal_loan:
+                portal_loan = self.db.query(PortalLoan).filter(
+                    PortalLoan.crm_deal_id == loan_id
+                ).first()
 
-        return portal_loan
+            if not portal_loan:
+                # Create new portal loan with default stage
+                portal_loan = PortalLoan(
+                    crm_deal_id=loan_id,
+                    lifecycle_stage=LifecycleStage.PROSPECT,
+                )
+                self.db.add(portal_loan)
+                self.db.commit()
+                self.db.refresh(portal_loan)
+                logger.info(f"Created portal loan record for crm_deal_id={loan_id}")
+
+            return portal_loan
+        except Exception as e:
+            # portal_loans table may not exist - rollback and return None
+            logger.warning(f"Could not get/create portal loan for {loan_id}: {e}")
+            self.db.rollback()
+            return None
 
     def get_portal_loan_by_token(self, access_token: str) -> Optional[PortalLoan]:
         """Get portal loan by partner access token."""
@@ -148,6 +154,18 @@ class PortalLifecycleService:
     def get_current_stage(self, loan_id: int) -> Dict[str, Any]:
         """Get current lifecycle stage with details."""
         portal_loan = self.get_portal_loan(loan_id)
+
+        # Handle case where portal_loans table doesn't exist
+        if not portal_loan:
+            return {
+                "stage": "ACTIVE",
+                "display_name": "Active",
+                "description": "Loan is currently active",
+                "color": "#10B981",
+                "entered_at": None,
+                "days_in_stage": 0,
+            }
+
         stage = portal_loan.lifecycle_stage
         stage_info = STAGE_INFO.get(stage, {})
 
@@ -423,25 +441,36 @@ class PortalLifecycleService:
         # Use portal_loan.id for milestone queries (not crm_deal_id)
         portal_loan_id = portal_loan.id if portal_loan else loan_id
 
-        # Get milestone progress
-        total_milestones = self.db.query(MilestoneInstance).filter(
-            MilestoneInstance.loan_id == portal_loan_id
-        ).count()
+        # Get milestone progress (with error handling for missing tables)
+        total_milestones = 0
+        completed_milestones = 0
+        try:
+            total_milestones = self.db.query(MilestoneInstance).filter(
+                MilestoneInstance.loan_id == portal_loan_id
+            ).count()
 
-        completed_milestones = self.db.query(MilestoneInstance).filter(
-            and_(
-                MilestoneInstance.loan_id == portal_loan_id,
-                MilestoneInstance.status == MilestoneStatus.COMPLETE
-            )
-        ).count()
+            completed_milestones = self.db.query(MilestoneInstance).filter(
+                and_(
+                    MilestoneInstance.loan_id == portal_loan_id,
+                    MilestoneInstance.status == MilestoneStatus.COMPLETE
+                )
+            ).count()
+        except Exception as e:
+            logger.warning(f"Could not query milestones for {loan_id}: {e}")
+            self.db.rollback()
 
-        # Get active risks
-        active_risks = self.db.query(RiskFlag).filter(
-            and_(
-                RiskFlag.loan_id == portal_loan_id,
-                RiskFlag.is_resolved == False
-            )
-        ).count()
+        # Get active risks (with error handling for missing tables)
+        active_risks = 0
+        try:
+            active_risks = self.db.query(RiskFlag).filter(
+                and_(
+                    RiskFlag.loan_id == portal_loan_id,
+                    RiskFlag.is_resolved == False
+                )
+            ).count()
+        except Exception as e:
+            logger.warning(f"Could not query risks for {loan_id}: {e}")
+            self.db.rollback()
 
         return {
             "loan_id": loan_id,
