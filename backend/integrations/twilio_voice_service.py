@@ -48,10 +48,22 @@ class TwilioVoiceClient:
             self.openai_enabled = False
             logger.warning("OpenAI API key not configured")
 
-    def create_greeting_response(self, business_name: str = "our office") -> VoiceResponse:
+    def create_greeting_response(
+        self,
+        business_name: str = "our office",
+        caller_name: str = None,
+        caller_phone: str = None,
+        caller_category: str = None
+    ) -> VoiceResponse:
         """
         Create initial greeting TwiML response
         Connects directly to Sam (OpenAI Realtime API) - Sam will greet the caller
+
+        Args:
+            business_name: Name of the business
+            caller_name: Known caller's name (if in system)
+            caller_phone: Caller's phone number
+            caller_category: Caller category (client, realtor, etc.)
         """
         response = VoiceResponse()
 
@@ -59,11 +71,23 @@ class TwilioVoiceClient:
         # Sam will greet the caller with his AI voice
         domain = os.getenv('PRODUCTION_DOMAIN') or os.getenv('RAILWAY_PUBLIC_DOMAIN', 'localhost')
         logger.info(f"Connecting to WebSocket at: wss://{domain}/api/v1/voice/ws/voice-stream")
+        logger.info(f"Caller info - Name: {caller_name}, Phone: {caller_phone}, Category: {caller_category}")
 
         connect = response.connect()
+
+        # Build custom parameters to pass caller info to WebSocket
+        from twilio.twiml.voice_response import Parameter
         stream = connect.stream(
             url=f"wss://{domain}/api/v1/voice/ws/voice-stream"
         )
+
+        # Add custom parameters for caller identification
+        if caller_name:
+            stream.parameter(name="caller_name", value=caller_name)
+        if caller_phone:
+            stream.parameter(name="caller_phone", value=caller_phone)
+        if caller_category:
+            stream.parameter(name="caller_category", value=caller_category)
 
         return response
 

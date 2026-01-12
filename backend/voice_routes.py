@@ -192,8 +192,13 @@ async def handle_incoming_call(request: Request, db: Session = Depends(get_db)):
                 logger.warning(f"Failed to log dashboard activity (non-critical): {log_error}")
                 db.rollback()
 
-            # Generate TwiML response to connect to AI
-            twiml = voice_client.create_greeting_response(ai_config.business_name)
+            # Generate TwiML response to connect to AI with caller info
+            twiml = voice_client.create_greeting_response(
+                business_name=ai_config.business_name,
+                caller_name=screening_result.caller_name,
+                caller_phone=caller_number,
+                caller_category=screening_result.category
+            )
             return Response(content=str(twiml), media_type="application/xml")
 
     except Exception as e:
@@ -783,6 +788,8 @@ async def voice_stream_websocket(websocket: WebSocket):
     call_context = {
         "call_sid": None,
         "caller_number": None,
+        "caller_name": None,      # Known caller's name from CRM
+        "caller_category": None,  # client, realtor, etc.
         "conversation_history": [],
         "lead_data": {},
         "intent": None,
@@ -813,12 +820,30 @@ async def voice_stream_websocket(websocket: WebSocket):
                 call_context['greeting_sent'] = True
                 logger.info("🎤 Both OpenAI session and Twilio ready - triggering AI greeting")
                 try:
-                    # Request a response with explicit instructions to greet
+                    # Build personalized greeting based on caller info
+                    caller_name = call_context.get('caller_name')
+                    caller_category = call_context.get('caller_category')
+
+                    if caller_name:
+                        # Known caller - personalized greeting
+                        if caller_category == 'client':
+                            greeting = f"Hi {caller_name}! This is Sam with CMG Home Loans. Great to hear from you! How can I help you today?"
+                        elif caller_category == 'realtor':
+                            greeting = f"Hi {caller_name}! This is Sam with CMG Home Loans. Thanks for calling! How can I help you today?"
+                        else:
+                            greeting = f"Hi {caller_name}! This is Sam with CMG Home Loans. Thanks for calling. How can I help you today?"
+                        logger.info(f"🎯 Using personalized greeting for {caller_name} ({caller_category})")
+                    else:
+                        # Unknown caller - generic greeting
+                        greeting = "Hi, this is Sam with CMG Home Loans! Thanks for calling. How can I help you today?"
+                        logger.info("🎯 Using generic greeting for unknown caller")
+
+                    # Request a response with the greeting
                     await openai_ws.send(json.dumps({
                         "type": "response.create",
                         "response": {
                             "modalities": ["text", "audio"],
-                            "instructions": "Greet the caller warmly. Say: Hi, this is Sam with CMG Home Loans! Thanks for calling. How can I help you today?"
+                            "instructions": f"Greet the caller warmly. Say exactly: {greeting}"
                         }
                     }))
                     logger.info("✅ Greeting response requested with instructions")
@@ -835,8 +860,15 @@ async def voice_stream_websocket(websocket: WebSocket):
                     if data['event'] == 'start':
                         call_context['call_sid'] = data['start']['callSid']
                         call_context['stream_sid'] = data['start']['streamSid']  # Capture stream SID
-                        call_context['caller_number'] = data['start'].get('customParameters', {}).get('From')
+
+                        # Extract caller info from custom parameters
+                        custom_params = data['start'].get('customParameters', {})
+                        call_context['caller_number'] = custom_params.get('caller_phone') or custom_params.get('From')
+                        call_context['caller_name'] = custom_params.get('caller_name')
+                        call_context['caller_category'] = custom_params.get('caller_category')
+
                         logger.info(f"📞 Call started: {call_context['call_sid']}, stream: {call_context['stream_sid']}")
+                        logger.info(f"👤 Caller: {call_context['caller_name'] or 'Unknown'} ({call_context['caller_number']}), Category: {call_context['caller_category']}")
 
                         # Mark Twilio as ready, try to trigger greeting
                         call_context['twilio_ready'] = True
