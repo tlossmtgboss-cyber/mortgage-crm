@@ -1846,36 +1846,49 @@ def debug_list_portal_loans(
     limit: int = Query(10, description="Number of loans to return"),
 ):
     """Debug endpoint to list portal loans. Remove after testing."""
-    from models.portal_models import PortalLoan
     from sqlalchemy import text
 
     results = []
 
-    # Try portal_loans table
+    # Check what tables exist
     try:
-        loans = db.query(PortalLoan).limit(limit).all()
-        for loan in loans:
-            results.append({
-                "source": "portal_loans",
-                "id": loan.id,
-                "crm_deal_id": loan.crm_deal_id,
-                "borrower_name": getattr(loan, 'borrower_name', None),
-                "loan_number": getattr(loan, 'loan_number', None),
-            })
+        tables_result = db.execute(text("""
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public'
+            AND table_name LIKE '%loan%' OR table_name LIKE '%purl%' OR table_name LIKE '%deal%'
+            ORDER BY table_name
+        """))
+        tables = [row[0] for row in tables_result]
+        results.append({"source": "tables", "tables": tables})
     except Exception as e:
-        results.append({"source": "portal_loans", "error": str(e)})
+        results.append({"source": "tables", "error": str(e)})
 
-    # Try purl_loans table
+    # Try deals table
     try:
-        purl_result = db.execute(text("SELECT id, loan_number, workspace_id FROM purl_loans LIMIT :limit"), {"limit": limit})
-        for row in purl_result:
+        db.rollback()  # Clear any failed transaction
+        deals_result = db.execute(text("SELECT id, contact_id, loan_number FROM deals LIMIT :limit"), {"limit": limit})
+        for row in deals_result:
             results.append({
-                "source": "purl_loans",
+                "source": "deals",
                 "id": row.id,
+                "contact_id": row.contact_id,
                 "loan_number": row.loan_number,
-                "workspace_id": row.workspace_id,
             })
     except Exception as e:
-        results.append({"source": "purl_loans", "error": str(e)})
+        results.append({"source": "deals", "error": str(e)})
+
+    # Try purl_workspaces table
+    try:
+        db.rollback()
+        ws_result = db.execute(text("SELECT id, slug, loan_id FROM purl_workspaces LIMIT :limit"), {"limit": limit})
+        for row in ws_result:
+            results.append({
+                "source": "purl_workspaces",
+                "id": row.id,
+                "slug": row.slug,
+                "loan_id": row.loan_id,
+            })
+    except Exception as e:
+        results.append({"source": "purl_workspaces", "error": str(e)})
 
     return {"loans": results, "count": len(results)}
