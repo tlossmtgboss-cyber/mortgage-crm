@@ -18,6 +18,7 @@ from salesforce_integration_models import (
     SyncQueueItem,
     IntegrationEvent
 )
+from models.calendar_sync_models import CalendarSyncSettings
 
 logger = logging.getLogger(__name__)
 
@@ -148,6 +149,9 @@ class SalesforceOAuthService:
             identity
         )
 
+        # Initialize calendar sync settings for this user
+        self._initialize_calendar_sync_settings(db, oauth_state.user_id)
+
         # Queue schema discovery
         self._queue_schema_discovery(db, profile.id)
 
@@ -244,6 +248,39 @@ class SalesforceOAuthService:
         db.commit()
         db.refresh(profile)
         return profile
+
+    def _initialize_calendar_sync_settings(self, db: Session, user_id: int):
+        """Initialize calendar sync settings for a user when they connect Salesforce."""
+        # Check if settings already exist for this user
+        existing = db.query(CalendarSyncSettings).filter(
+            CalendarSyncSettings.user_id == user_id
+        ).first()
+
+        if existing:
+            # Settings already exist, just ensure sync is enabled
+            if not existing.sync_enabled:
+                existing.sync_enabled = True
+                db.commit()
+            logger.info(f"Calendar sync settings already exist for user {user_id}")
+            return existing
+
+        # Create new calendar sync settings with defaults
+        settings = CalendarSyncSettings(
+            user_id=user_id,
+            sync_enabled=True,
+            sync_direction='bidirectional',
+            conflict_policy='last_write_wins',
+            delete_policy='soft_cancel',
+            echo_ignore_window_seconds=60,
+            polling_enabled=True,
+            polling_interval_seconds=120,  # 2 minutes
+            batch_size=50
+        )
+        db.add(settings)
+        db.commit()
+
+        logger.info(f"Created calendar sync settings for user {user_id}")
+        return settings
 
     def _queue_schema_discovery(self, db: Session, integration_profile_id: int):
         """Queue schema discovery after connection"""
