@@ -448,6 +448,12 @@ export const borrowerPortalApi = {
    */
   getMumDashboard: (loanId) =>
     apiRequest(`/api/portal/borrower/${loanId}/mum-dashboard`),
+
+  /**
+   * Get recent activity
+   */
+  getRecentActivity: (loanId, limit = 20, borrowerVisibleOnly = false) =>
+    apiRequest(`/api/portal/loans/${loanId}/activity?limit=${limit}&borrower_visible_only=${borrowerVisibleOnly}`),
 };
 
 // =============================================================================

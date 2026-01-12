@@ -5,6 +5,8 @@ Handles per-user Salesforce authentication and token management
 import os
 import secrets
 import logging
+import hashlib
+import base64
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, Tuple
 import httpx
@@ -107,6 +109,17 @@ class SalesforceOAuthService:
     def __init__(self, config: Optional[SalesforceOAuthConfig] = None):
         self.config = config or SalesforceOAuthConfig()
 
+    def _generate_pkce(self) -> Tuple[str, str]:
+        """Generate PKCE code verifier and challenge"""
+        # Generate a random code verifier (43-128 characters)
+        code_verifier = secrets.token_urlsafe(64)
+
+        # Create code challenge using S256 method
+        code_challenge_bytes = hashlib.sha256(code_verifier.encode('utf-8')).digest()
+        code_challenge = base64.urlsafe_b64encode(code_challenge_bytes).decode('utf-8').rstrip('=')
+
+        return code_verifier, code_challenge
+
     def generate_auth_url(self, db: Session, user_id: int, return_url: Optional[str] = None) -> str:
         """
         Step 1: Generate OAuth authorization URL
@@ -115,26 +128,34 @@ class SalesforceOAuthService:
         # Generate secure state token
         state_token = secrets.token_hex(32)
 
-        # Store state for CSRF protection
+        # Generate PKCE values
+        code_verifier, code_challenge = self._generate_pkce()
+
+        # Store state for CSRF protection (include code_verifier for token exchange)
         oauth_state = OAuthState(
             state_token=state_token,
             user_id=user_id,
             provider='salesforce',
             expires_at=datetime.utcnow() + timedelta(minutes=15),
             return_url=return_url,
-            state_metadata={'created_from': 'user_settings'}
+            state_metadata={
+                'created_from': 'user_settings',
+                'code_verifier': code_verifier  # Store for token exchange
+            }
         )
         db.add(oauth_state)
         db.commit()
 
-        # Build authorization URL
+        # Build authorization URL with PKCE
         params = {
             'response_type': 'code',
             'client_id': self.config.client_id,
             'redirect_uri': self.config.redirect_uri,
             'state': state_token,
             'scope': 'api refresh_token',
-            'prompt': 'consent'  # Force consent to ensure refresh token
+            'prompt': 'consent',  # Force consent to ensure refresh token
+            'code_challenge': code_challenge,
+            'code_challenge_method': 'S256'
         }
 
         query_string = '&'.join(f"{k}={v}" for k, v in params.items())
@@ -168,8 +189,13 @@ class SalesforceOAuthService:
         oauth_state.used = True
         db.commit()
 
+        # Get code_verifier from state metadata for PKCE
+        code_verifier = None
+        if oauth_state.state_metadata and isinstance(oauth_state.state_metadata, dict):
+            code_verifier = oauth_state.state_metadata.get('code_verifier')
+
         # Exchange code for tokens
-        tokens = await self._exchange_code_for_tokens(code)
+        tokens = await self._exchange_code_for_tokens(code, code_verifier)
 
         # Get user identity from Salesforce
         identity = await self._get_user_identity(tokens['access_token'], tokens['id'])
@@ -194,18 +220,24 @@ class SalesforceOAuthService:
             'return_url': oauth_state.return_url
         }
 
-    async def _exchange_code_for_tokens(self, code: str) -> Dict[str, Any]:
+    async def _exchange_code_for_tokens(self, code: str, code_verifier: Optional[str] = None) -> Dict[str, Any]:
         """Exchange authorization code for access/refresh tokens"""
+        data = {
+            'grant_type': 'authorization_code',
+            'code': code,
+            'client_id': self.config.client_id,
+            'client_secret': self.config.client_secret,
+            'redirect_uri': self.config.redirect_uri
+        }
+
+        # Add code_verifier for PKCE if present
+        if code_verifier:
+            data['code_verifier'] = code_verifier
+
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{self.config.base_url}/services/oauth2/token",
-                data={
-                    'grant_type': 'authorization_code',
-                    'code': code,
-                    'client_id': self.config.client_id,
-                    'client_secret': self.config.client_secret,
-                    'redirect_uri': self.config.redirect_uri
-                },
+                data=data,
                 headers={'Content-Type': 'application/x-www-form-urlencoded'}
             )
 
