@@ -184,6 +184,78 @@
   font-size: 15px;
 }
 
+/* Tab Content Area */
+.portal-content {
+  flex: 1;
+  background: var(--portal-bg-main, #f8fafc);
+}
+
+.tab-content {
+  padding: 0;
+}
+
+.overview-tab .portal-dashboard-layout {
+  padding: 24px;
+}
+
+/* Section Headers */
+.portal-section h2 {
+  font-size: 22px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 20px 0;
+}
+
+/* Contact LO Card - Additional local styles */
+.contact-lo-card {
+  background: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%);
+  border-radius: 16px;
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  color: white;
+  margin-bottom: 20px;
+}
+
+.contact-lo-content h3 {
+  margin: 0 0 6px 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.contact-lo-content p {
+  margin: 0;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.schedule-call-btn {
+  background: white;
+  color: #0f766e;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.schedule-call-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.schedule-call-btn .btn-icon {
+  font-size: 16px;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .portal-container {
@@ -218,5 +290,20 @@
 
   .portal-error-card h1 {
     font-size: 20px;
+  }
+
+  .contact-lo-card {
+    flex-direction: column;
+    text-align: center;
+    padding: 20px;
+  }
+
+  .schedule-call-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .overview-tab .portal-dashboard-layout {
+    padding: 16px;
   }
 }
