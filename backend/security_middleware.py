@@ -205,6 +205,7 @@ def is_websocket_request(request: Request) -> bool:
     # Check if it's a WebSocket path
     websocket_paths = [
         "/api/v1/voice/ws/voice-stream",
+        "/api/v1/meetings/ws/",  # Video meeting signaling
         "/ws/",
         "/websocket/"
     ]
