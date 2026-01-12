@@ -290,18 +290,20 @@ export const NAVIGATION_ITEMS = {
 // =============================================================================
 
 export const ROLE_NAVIGATION = {
-  // Admin - Full access to everything, Admin Panel first
+  // Admin - Full access to everything, no restrictions
   admin: [
     'adminPanel',           // Admin Panel link - admin only
     'dashboard',
     'leads',
     'activeLoans',
     'portfolio',
+    'closedLoans',          // Closed loans access
     'tasks',
     'reconciliation',
     'smartDocs',
     'marketing',
     'calendar',
+    'scorecard',            // Scorecard
     'partners',
     'aiUnderwriter',
     'market',
@@ -313,6 +315,8 @@ export const ROLE_NAVIGATION = {
     'partnerRecruiting',
     'conversationIntelligence',
     'liveCallWhisper',
+    'videoOs',              // Video OS
+    'integrations',         // Integrations
     'voiceAgents',
     'voiceLive',
     'callQueues',
@@ -441,10 +445,12 @@ export const ROLE_NAVIGATION = {
 // =============================================================================
 
 export const ROLE_DASHBOARD_CONTAINERS = {
-  // Admin Dashboard - Full access to all containers
+  // Admin Dashboard - Full access to ALL containers, no restrictions
   admin: [
     'ai-alerts',           // AI Alerts (lead alerts, follow-ups)
     'production-tracker',  // Monthly Production Tracker
+    'production-predictor', // Production Predictor
+    'deal-alerts',         // Deal Alerts
     'profitability',       // Profitability Intelligence
     'efficiency',          // Pipeline Efficiency Monitor
     'workflow-scorecards', // Workflow Scorecards

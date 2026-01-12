@@ -58,11 +58,14 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
 
   // Get navigation items for the current role, with module lock status
   // Don't show locked state while modules are still loading to avoid flash of upgrade badges
+  // ADMIN users have full access - never lock any items for them
   const navItems = useMemo(() => {
     const items = getNavigationForRole(effectiveRole);
+    const isAdmin = effectiveRole === 'admin';
     return items.map(item => ({
       ...item,
-      isLocked: !modulesLoading && item.module && !hasModule(item.module)
+      // Admin users bypass all module restrictions
+      isLocked: !isAdmin && !modulesLoading && item.module && !hasModule(item.module)
     }));
   }, [effectiveRole, hasModule, modulesLoading]);
 
