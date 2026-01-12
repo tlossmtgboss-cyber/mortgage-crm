@@ -558,21 +558,22 @@ class PortalDocumentService:
 
     def get_document_summary(self, loan_id: int) -> Dict[str, Any]:
         """Get document upload summary for a loan."""
-        # Resolve loan_id to portal_loan.id
-        from models.portal_models import PortalLoan
-        portal_loan = self.db.query(PortalLoan).filter(
-            PortalLoan.crm_deal_id == loan_id
-        ).first()
-        if not portal_loan:
+        resolved_loan_id = loan_id
+
+        try:
+            # Resolve loan_id to portal_loan.id
+            from models.portal_models import PortalLoan
             portal_loan = self.db.query(PortalLoan).filter(
-                PortalLoan.id == loan_id
+                PortalLoan.crm_deal_id == loan_id
             ).first()
-
-        resolved_loan_id = portal_loan.id if portal_loan else loan_id
-
-        docs = self.db.query(PortalDocument).filter(
-            PortalDocument.loan_id == resolved_loan_id
-        ).all()
+            if not portal_loan:
+                portal_loan = self.db.query(PortalLoan).filter(
+                    PortalLoan.id == loan_id
+                ).first()
+            resolved_loan_id = portal_loan.id if portal_loan else loan_id
+        except Exception as e:
+            logger.warning(f"Could not resolve loan_id {loan_id} for document summary: {e}")
+            self.db.rollback()
 
         by_status = {
             "pending": 0,
@@ -581,21 +582,31 @@ class PortalDocumentService:
             "rejected": 0,
         }
 
-        for doc in docs:
-            # Determine status from extraction_status and is_verified
-            if doc.is_verified:
-                by_status["approved"] += 1
-            elif doc.extraction_status and doc.extraction_status.value in ["PROCESSING"]:
-                by_status["processing"] += 1
-            elif doc.extraction_status and doc.extraction_status.value == "FAILED":
-                by_status["rejected"] += 1
-            else:
-                by_status["pending"] += 1
+        try:
+            docs = self.db.query(PortalDocument).filter(
+                PortalDocument.loan_id == resolved_loan_id
+            ).all()
 
+            for doc in docs:
+                # Determine status from extraction_status and is_verified
+                if hasattr(doc, 'is_verified') and doc.is_verified:
+                    by_status["approved"] += 1
+                elif hasattr(doc, 'extraction_status') and doc.extraction_status and doc.extraction_status.value in ["PROCESSING"]:
+                    by_status["processing"] += 1
+                elif hasattr(doc, 'extraction_status') and doc.extraction_status and doc.extraction_status.value == "FAILED":
+                    by_status["rejected"] += 1
+                else:
+                    by_status["pending"] += 1
+        except Exception as e:
+            logger.warning(f"Could not get documents for loan {loan_id}: {e}")
+            self.db.rollback()
+            docs = []
+
+        total = len(docs) if docs else 0
         return {
-            "total": len(docs),
+            "total": total,
             "by_status": by_status,
             "pending_review": by_status["pending"] + by_status["processing"],
             "needs_reupload": by_status["rejected"],
-            "completion_rate": round((by_status["approved"] / len(docs) * 100) if docs else 0, 1),
+            "completion_rate": round((by_status["approved"] / total * 100) if total > 0 else 0, 1),
         }

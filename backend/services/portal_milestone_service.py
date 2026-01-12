@@ -28,21 +28,25 @@ class PortalMilestoneService:
 
     def _resolve_loan_id(self, loan_id: int) -> int:
         """Resolve crm_deal_id to portal_loan.id."""
-        # First try to find by portal_loan.id
-        portal_loan = self.db.query(PortalLoan).filter(
-            PortalLoan.id == loan_id
-        ).first()
+        try:
+            # First try to find by portal_loan.id
+            portal_loan = self.db.query(PortalLoan).filter(
+                PortalLoan.id == loan_id
+            ).first()
 
-        if portal_loan:
-            return portal_loan.id
+            if portal_loan:
+                return portal_loan.id
 
-        # Try by crm_deal_id
-        portal_loan = self.db.query(PortalLoan).filter(
-            PortalLoan.crm_deal_id == loan_id
-        ).first()
+            # Try by crm_deal_id
+            portal_loan = self.db.query(PortalLoan).filter(
+                PortalLoan.crm_deal_id == loan_id
+            ).first()
 
-        if portal_loan:
-            return portal_loan.id
+            if portal_loan:
+                return portal_loan.id
+        except Exception as e:
+            logger.warning(f"Could not resolve loan_id {loan_id}: {e}")
+            self.db.rollback()
 
         # Return original if not found (will return empty results)
         return loan_id
@@ -200,20 +204,25 @@ class PortalMilestoneService:
         borrower_view: bool = False,
     ) -> List[Dict[str, Any]]:
         """Get all milestones for a loan with optional task details."""
-        resolved_loan_id = self._resolve_loan_id(loan_id)
-        query = self.db.query(MilestoneInstance).filter(
-            MilestoneInstance.loan_id == resolved_loan_id
-        )
-
-        if borrower_view:
-            query = query.join(MilestoneTemplate).filter(
-                MilestoneTemplate.visible_to_borrower == True
+        try:
+            resolved_loan_id = self._resolve_loan_id(loan_id)
+            query = self.db.query(MilestoneInstance).filter(
+                MilestoneInstance.loan_id == resolved_loan_id
             )
 
-        milestones = query.join(MilestoneTemplate).order_by(
-            MilestoneTemplate.stage,
-            MilestoneTemplate.display_order
-        ).all()
+            if borrower_view:
+                query = query.join(MilestoneTemplate).filter(
+                    MilestoneTemplate.visible_to_borrower == True
+                )
+
+            milestones = query.join(MilestoneTemplate).order_by(
+                MilestoneTemplate.stage,
+                MilestoneTemplate.display_order
+            ).all()
+        except Exception as e:
+            logger.warning(f"Could not get milestones for loan {loan_id}: {e}")
+            self.db.rollback()
+            return []
 
         result = []
         for m in milestones:
@@ -262,10 +271,15 @@ class PortalMilestoneService:
 
     def get_milestone_progress(self, loan_id: int) -> Dict[str, Any]:
         """Get overall milestone progress for a loan."""
-        resolved_loan_id = self._resolve_loan_id(loan_id)
-        milestones = self.db.query(MilestoneInstance).filter(
-            MilestoneInstance.loan_id == resolved_loan_id
-        ).all()
+        try:
+            resolved_loan_id = self._resolve_loan_id(loan_id)
+            milestones = self.db.query(MilestoneInstance).filter(
+                MilestoneInstance.loan_id == resolved_loan_id
+            ).all()
+        except Exception as e:
+            logger.warning(f"Could not get milestones for loan {loan_id}: {e}")
+            self.db.rollback()
+            milestones = []
 
         if not milestones:
             return {
@@ -467,25 +481,30 @@ class PortalMilestoneService:
 
     def get_pending_borrower_tasks(self, loan_id: int) -> List[Dict[str, Any]]:
         """Get tasks requiring borrower action."""
-        resolved_loan_id = self._resolve_loan_id(loan_id)
-        tasks = self.db.query(TaskInstance).join(MilestoneInstance).filter(
-            and_(
-                MilestoneInstance.loan_id == resolved_loan_id,
-                TaskInstance.owner_role == PortalUserRole.BORROWER,
-                TaskInstance.status.in_([TaskStatus.TODO, TaskStatus.IN_PROGRESS]),
-            )
-        ).all()
+        try:
+            resolved_loan_id = self._resolve_loan_id(loan_id)
+            tasks = self.db.query(TaskInstance).join(MilestoneInstance).filter(
+                and_(
+                    MilestoneInstance.loan_id == resolved_loan_id,
+                    TaskInstance.owner_role == PortalUserRole.BORROWER,
+                    TaskInstance.status.in_([TaskStatus.TODO, TaskStatus.IN_PROGRESS]),
+                )
+            ).all()
 
-        return [
-            {
-                "id": t.id,
-                "title": t.title,
-                "instructions": t.instructions,
-                "milestone_name": t.milestone.template.name if t.milestone and t.milestone.template else None,
-                "status": t.status.value if t.status else None,
-            }
-            for t in tasks
-        ]
+            return [
+                {
+                    "id": t.id,
+                    "title": t.title,
+                    "instructions": t.instructions,
+                    "milestone_name": t.milestone.template.name if t.milestone and t.milestone.template else None,
+                    "status": t.status.value if t.status else None,
+                }
+                for t in tasks
+            ]
+        except Exception as e:
+            logger.warning(f"Could not get pending borrower tasks for loan {loan_id}: {e}")
+            self.db.rollback()
+            return []
 
     # =========================================================================
     # VISUALIZATION DATA

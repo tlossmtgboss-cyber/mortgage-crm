@@ -324,31 +324,35 @@ class PortalLifecycleService:
         """Get recent activity for loan heartbeat display."""
         # Get the portal loan to get the correct loan_id for activity log
         portal_loan = self.get_portal_loan(loan_id)
-        if not portal_loan:
+        resolved_id = portal_loan.id if portal_loan else loan_id
+
+        try:
+            query = self.db.query(LoanActivityLog).filter(
+                LoanActivityLog.loan_id == resolved_id
+            )
+
+            if borrower_visible_only:
+                query = query.filter(LoanActivityLog.visible_to_borrower == True)
+
+            activities = query.order_by(
+                LoanActivityLog.created_at.desc()
+            ).limit(limit).all()
+
+            return [
+                {
+                    "id": a.id,
+                    "activity_type": a.activity_type,
+                    "description": a.activity_description or a.activity_title,
+                    "metadata": a.extra_data,
+                    "actor": f"User {a.actor_id}" if a.actor_id else (a.actor_role.value if a.actor_role else None),
+                    "created_at": a.created_at.isoformat() if a.created_at else None,
+                }
+                for a in activities
+            ]
+        except Exception as e:
+            logger.warning(f"Could not get activity for loan {loan_id}: {e}")
+            self.db.rollback()
             return []
-
-        query = self.db.query(LoanActivityLog).filter(
-            LoanActivityLog.loan_id == portal_loan.id
-        )
-
-        if borrower_visible_only:
-            query = query.filter(LoanActivityLog.visible_to_borrower == True)
-
-        activities = query.order_by(
-            LoanActivityLog.created_at.desc()
-        ).limit(limit).all()
-
-        return [
-            {
-                "id": a.id,
-                "activity_type": a.activity_type,
-                "description": a.activity_description or a.activity_title,
-                "metadata": a.extra_data,
-                "actor": f"User {a.actor_id}" if a.actor_id else (a.actor_role.value if a.actor_role else None),
-                "created_at": a.created_at.isoformat() if a.created_at else None,
-            }
-            for a in activities
-        ]
 
     # =========================================================================
     # RISK RADAR
@@ -408,27 +412,32 @@ class PortalLifecycleService:
 
     def get_active_risks(self, loan_id: int) -> List[Dict[str, Any]]:
         """Get active risk flags for a loan."""
-        risks = self.db.query(RiskFlag).filter(
-            and_(
-                RiskFlag.loan_id == loan_id,
-                RiskFlag.is_resolved == False
-            )
-        ).order_by(
-            RiskFlag.severity.desc(),
-            RiskFlag.created_at.desc()
-        ).all()
+        try:
+            risks = self.db.query(RiskFlag).filter(
+                and_(
+                    RiskFlag.loan_id == loan_id,
+                    RiskFlag.is_resolved == False
+                )
+            ).order_by(
+                RiskFlag.severity.desc(),
+                RiskFlag.created_at.desc()
+            ).all()
 
-        return [
-            {
-                "id": r.id,
-                "risk_type": r.risk_type,
-                "severity": r.severity,
-                "description": r.description,
-                "recommended_action": r.recommended_action,
-                "created_at": r.created_at.isoformat(),
-            }
-            for r in risks
-        ]
+            return [
+                {
+                    "id": r.id,
+                    "risk_type": r.risk_type,
+                    "severity": r.severity,
+                    "description": r.description,
+                    "recommended_action": r.recommended_action,
+                    "created_at": r.created_at.isoformat(),
+                }
+                for r in risks
+            ]
+        except Exception as e:
+            logger.warning(f"Could not get risks for loan {loan_id}: {e}")
+            self.db.rollback()
+            return []
 
     # =========================================================================
     # PORTAL STATUS
