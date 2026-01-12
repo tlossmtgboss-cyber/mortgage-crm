@@ -4,8 +4,9 @@
  */
 
 import { getAuthHeaders } from '../utils/auth';
+import { API_BASE_URL } from './api';
 
-const API_BASE = 'https://api.perenniaai.com';
+const API_BASE = API_BASE_URL;
 
 // ============== ONBOARDING WIZARD ==============
 
