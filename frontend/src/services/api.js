@@ -690,6 +690,49 @@ export const calendarAPI = {
   },
 };
 
+// CRM Calendar Sync API (syncs with Salesforce)
+export const crmCalendarAPI = {
+  getAll: async (params = {}) => {
+    const response = await api.get('/api/calendar/events', { params });
+    return ensureArray(response.data, 'events');
+  },
+  getById: async (id) => {
+    const response = await api.get(`/api/calendar/events/${id}`);
+    return response.data;
+  },
+  create: async (data) => {
+    const response = await api.post('/api/calendar/events', data);
+    return response.data;
+  },
+  update: async (id, data) => {
+    const response = await api.put(`/api/calendar/events/${id}`, data);
+    return response.data;
+  },
+  delete: async (id) => {
+    await api.delete(`/api/calendar/events/${id}`);
+  },
+  // Force resync an event to Salesforce
+  resync: async (id) => {
+    const response = await api.post(`/api/calendar/events/${id}/resync`);
+    return response.data;
+  },
+  // Get sync status for all events
+  getSyncStatus: async () => {
+    const response = await api.get('/api/calendar/sync/status');
+    return response.data;
+  },
+  // Get sync history
+  getSyncHistory: async (params = {}) => {
+    const response = await api.get('/api/calendar/sync/history', { params });
+    return response.data;
+  },
+  // Trigger manual sync
+  triggerSync: async () => {
+    const response = await api.post('/api/calendar/sync/trigger');
+    return response.data;
+  },
+};
+
 // Scheduler Appointments API
 export const schedulerAPI = {
   getAppointments: async (params = {}) => {

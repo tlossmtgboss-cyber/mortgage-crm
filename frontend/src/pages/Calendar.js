@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { calendarAPI, schedulerAPI } from '../services/api';
+import { calendarAPI, schedulerAPI, crmCalendarAPI } from '../services/api';
 import './Calendar.css';
 
 // Mock calendar events generator
@@ -162,6 +162,26 @@ function Calendar() {
     booked_via: appt.booked_via
   });
 
+  // Convert CRM calendar event (synced with Salesforce) to display format
+  const crmEventToEvent = (event) => ({
+    id: `crm-${event.id}`,
+    title: event.title || event.subject || 'CRM Event',
+    description: event.description || '',
+    start_time: event.start_time,
+    end_time: event.end_time,
+    event_type: event.event_type || 'meeting',
+    location: event.location || '',
+    related_lead_id: event.related_lead_id,
+    related_loan_id: event.related_loan_id,
+    related_contact_id: event.related_contact_id,
+    isCrmEvent: true,
+    crmEventId: event.id,
+    attendees: event.attendees || [],
+    sync_status: event.sync_status,
+    salesforce_event_id: event.salesforce_event_id,
+    source: 'crm_calendar'
+  });
+
   const loadEvents = async () => {
     try {
       setLoading(true);
@@ -169,8 +189,8 @@ function Calendar() {
       const startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
       const endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59);
 
-      // Fetch both calendar events and scheduler appointments
-      const [calendarData, appointmentsData] = await Promise.all([
+      // Fetch calendar events, scheduler appointments, and CRM calendar events
+      const [calendarData, appointmentsData, crmEventsData] = await Promise.all([
         calendarAPI.getAll({
           start_date: startDate.toISOString(),
           end_date: endDate.toISOString(),
@@ -178,15 +198,24 @@ function Calendar() {
         schedulerAPI.getAppointments({
           start_date: startDate.toISOString(),
           end_date: endDate.toISOString(),
+        }).catch(() => []),
+        crmCalendarAPI.getAll({
+          start_date: startDate.toISOString(),
+          end_date: endDate.toISOString(),
         }).catch(() => [])
       ]);
 
-      // Convert appointments to event format and combine
+      // Convert appointments to event format
       const appointmentEvents = (appointmentsData || [])
         .filter(appt => appt.status !== 'CANCELLED')
         .map(appointmentToEvent);
 
-      setEvents([...(calendarData || []), ...appointmentEvents]);
+      // Convert CRM calendar events to event format
+      const crmEvents = (crmEventsData || [])
+        .filter(event => event.status !== 'cancelled')
+        .map(crmEventToEvent);
+
+      setEvents([...(calendarData || []), ...appointmentEvents, ...crmEvents]);
     } catch (error) {
       console.error('Failed to load events:', error);
       // Load mock events on error
@@ -211,8 +240,8 @@ function Calendar() {
       const endDate = new Date();
       endDate.setMonth(endDate.getMonth() + 6);
 
-      // Fetch both calendar events and scheduler appointments
-      const [calendarData, appointmentsData] = await Promise.all([
+      // Fetch calendar events, scheduler appointments, and CRM calendar events
+      const [calendarData, appointmentsData, crmEventsData] = await Promise.all([
         calendarAPI.getAll({
           start_date: startDate.toISOString(),
           end_date: endDate.toISOString(),
@@ -220,15 +249,24 @@ function Calendar() {
         schedulerAPI.getAppointments({
           start_date: startDate.toISOString(),
           end_date: endDate.toISOString(),
+        }).catch(() => []),
+        crmCalendarAPI.getAll({
+          start_date: startDate.toISOString(),
+          end_date: endDate.toISOString(),
         }).catch(() => [])
       ]);
 
-      // Convert appointments to event format and combine
+      // Convert appointments to event format
       const appointmentEvents = (appointmentsData || [])
         .filter(appt => appt.status !== 'CANCELLED')
         .map(appointmentToEvent);
 
-      setAllEvents([...(calendarData || []), ...appointmentEvents]);
+      // Convert CRM calendar events to event format
+      const crmEvents = (crmEventsData || [])
+        .filter(event => event.status !== 'cancelled')
+        .map(crmEventToEvent);
+
+      setAllEvents([...(calendarData || []), ...appointmentEvents, ...crmEvents]);
     } catch (error) {
       console.error('Failed to load all events:', error);
       // Load mock events on error

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { schedulerAPI } from '../services/api';
+import { schedulerAPI, crmCalendarAPI } from '../services/api';
 import './CalendarSidebar.css';
 
 // v1.5 - Fixed timezone handling for appointments
@@ -23,6 +23,7 @@ function CalendarSidebar({ leadId, loanId, children }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [appointments, setAppointments] = useState([]);
+  const [crmEvents, setCrmEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isDragOver, setIsDragOver] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
@@ -68,30 +69,45 @@ function CalendarSidebar({ leadId, loanId, children }) {
       console.log('[CalendarSidebar] Date range:', startDateStr, 'to', endDateStr);
       console.log('[CalendarSidebar] Filters - lead_id:', leadId, 'loan_id:', loanId);
 
-      const data = await schedulerAPI.getAppointments({
-        start_date: startDateStr,
-        end_date: endDateStr,
-        lead_id: leadId || undefined,
-        loan_id: loanId || undefined,
-      });
+      // Fetch both scheduler appointments and CRM calendar events
+      const [appointmentsData, crmEventsData] = await Promise.all([
+        schedulerAPI.getAppointments({
+          start_date: startDateStr,
+          end_date: endDateStr,
+          lead_id: leadId || undefined,
+          loan_id: loanId || undefined,
+        }).catch(err => {
+          console.error('[CalendarSidebar] Failed to load scheduler appointments:', err);
+          return [];
+        }),
+        crmCalendarAPI.getAll({
+          start_date: startDate.toISOString(),
+          end_date: endDate.toISOString(),
+        }).catch(err => {
+          console.error('[CalendarSidebar] Failed to load CRM events:', err);
+          return [];
+        })
+      ]);
 
-      console.log('[CalendarSidebar] Raw API response:', data);
-      console.log('[CalendarSidebar] Appointments count:', data?.length || 0);
+      console.log('[CalendarSidebar] Appointments count:', appointmentsData?.length || 0);
+      console.log('[CalendarSidebar] CRM events count:', crmEventsData?.length || 0);
 
       // Filter out cancelled appointments and sort by date
-      const filteredAppointments = (data || [])
+      const filteredAppointments = (appointmentsData || [])
         .filter(appt => appt.status !== 'CANCELLED')
         .sort((a, b) => new Date(normalizeUTCDate(a.scheduled_start)) - new Date(normalizeUTCDate(b.scheduled_start)));
 
-      console.log('[CalendarSidebar] Filtered appointments:', filteredAppointments.length);
-      if (filteredAppointments.length > 0) {
-        console.log('[CalendarSidebar] First appointment:', filteredAppointments[0]);
-      }
+      // Filter out cancelled CRM events and sort by date
+      const filteredCrmEvents = (crmEventsData || [])
+        .filter(event => event.status !== 'cancelled')
+        .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
 
       setAppointments(filteredAppointments);
+      setCrmEvents(filteredCrmEvents);
     } catch (error) {
       console.error('[CalendarSidebar] Failed to load appointments:', error);
       setAppointments([]);
+      setCrmEvents([]);
     } finally {
       setLoading(false);
     }
@@ -139,10 +155,17 @@ function CalendarSidebar({ leadId, loanId, children }) {
 
   const hasAppointmentsOnDate = (date) => {
     if (!date) return false;
-    return appointments.some(appt => {
+    // Check scheduler appointments
+    const hasAppt = appointments.some(appt => {
       const apptDate = new Date(normalizeUTCDate(appt.scheduled_start));
       return apptDate.toDateString() === date.toDateString();
     });
+    // Check CRM calendar events
+    const hasCrmEvent = crmEvents.some(event => {
+      const eventDate = new Date(event.start_time);
+      return eventDate.toDateString() === date.toDateString();
+    });
+    return hasAppt || hasCrmEvent;
   };
 
   const isToday = (date) => {
@@ -163,10 +186,39 @@ function CalendarSidebar({ leadId, loanId, children }) {
   };
 
   const getAppointmentsForSelectedDate = () => {
-    return appointments.filter(appt => {
+    // Get scheduler appointments for selected date
+    const appts = appointments.filter(appt => {
       const apptDate = new Date(normalizeUTCDate(appt.scheduled_start));
       return apptDate.toDateString() === selectedDate.toDateString();
-    });
+    }).map(appt => ({
+      ...appt,
+      sourceType: 'scheduler',
+      displayTime: appt.scheduled_start
+    }));
+
+    // Get CRM calendar events for selected date
+    const events = crmEvents.filter(event => {
+      const eventDate = new Date(event.start_time);
+      return eventDate.toDateString() === selectedDate.toDateString();
+    }).map(event => ({
+      id: `crm-${event.id}`,
+      title: event.title || event.subject || 'CRM Event',
+      scheduled_start: event.start_time,
+      scheduled_end: event.end_time,
+      attendee_name: event.attendees?.length > 0 ? event.attendees[0].name : null,
+      meeting_mode: event.event_type === 'video_call' ? 'VIDEO' :
+                    event.event_type === 'phone_call' ? 'PHONE' :
+                    event.event_type === 'meeting' ? 'IN_PERSON' : 'OTHER',
+      sourceType: 'crm_calendar',
+      crmEventId: event.id,
+      sync_status: event.sync_status,
+      displayTime: event.start_time
+    }));
+
+    // Combine and sort by time
+    return [...appts, ...events].sort((a, b) =>
+      new Date(a.displayTime) - new Date(b.displayTime)
+    );
   };
 
   const formatTime = (dateString) => {
@@ -220,8 +272,37 @@ function CalendarSidebar({ leadId, loanId, children }) {
 
   const getUpcomingAppointments = () => {
     const now = new Date();
-    return appointments
+
+    // Get upcoming scheduler appointments
+    const upcomingAppts = appointments
       .filter(appt => new Date(normalizeUTCDate(appt.scheduled_start)) >= now)
+      .map(appt => ({
+        ...appt,
+        sourceType: 'scheduler',
+        displayTime: appt.scheduled_start
+      }));
+
+    // Get upcoming CRM calendar events
+    const upcomingCrmEvents = crmEvents
+      .filter(event => new Date(event.start_time) >= now)
+      .map(event => ({
+        id: `crm-${event.id}`,
+        title: event.title || event.subject || 'CRM Event',
+        scheduled_start: event.start_time,
+        scheduled_end: event.end_time,
+        attendee_name: event.attendees?.length > 0 ? event.attendees[0].name : null,
+        meeting_mode: event.event_type === 'video_call' ? 'VIDEO' :
+                      event.event_type === 'phone_call' ? 'PHONE' :
+                      event.event_type === 'meeting' ? 'IN_PERSON' : 'OTHER',
+        sourceType: 'crm_calendar',
+        crmEventId: event.id,
+        sync_status: event.sync_status,
+        displayTime: event.start_time
+      }));
+
+    // Combine, sort by time, and take first 5
+    return [...upcomingAppts, ...upcomingCrmEvents]
+      .sort((a, b) => new Date(a.displayTime) - new Date(b.displayTime))
       .slice(0, 5);
   };
 
