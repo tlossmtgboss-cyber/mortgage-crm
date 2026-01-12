@@ -256,6 +256,366 @@
   font-size: 16px;
 }
 
+/* View Mode Toggle */
+.view-mode-toggle {
+  display: flex;
+  background: #f1f5f9;
+  border-radius: 12px;
+  padding: 4px;
+  gap: 4px;
+}
+
+.view-mode-toggle .toggle-btn {
+  padding: 10px 20px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.view-mode-toggle .toggle-btn:hover {
+  color: #334155;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.view-mode-toggle .toggle-btn.active {
+  background: white;
+  color: #0f766e;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* Portal Info Bar */
+.portal-info-bar {
+  background: white;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 20px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.lo-info-section {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.lo-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 20px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.lo-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.lo-details h2 {
+  margin: 0 0 4px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.lo-details .nmls {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.loan-details-section {
+  display: flex;
+  gap: 32px;
+  align-items: center;
+}
+
+.loan-detail-item {
+  text-align: center;
+}
+
+.loan-detail-item .label {
+  display: block;
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.loan-detail-item .value {
+  display: block;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+/* Milestone Progress */
+.milestone-progress {
+  background: white;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 24px;
+}
+
+.milestone-steps {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.milestone-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  position: relative;
+}
+
+.milestone-step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 16px;
+  left: calc(50% + 20px);
+  width: calc(100% - 40px);
+  height: 3px;
+  background: #e2e8f0;
+}
+
+.milestone-step.completed:not(:last-child)::after {
+  background: #10b981;
+}
+
+.milestone-step.active:not(:last-child)::after {
+  background: linear-gradient(90deg, #10b981 50%, #e2e8f0 50%);
+}
+
+.step-indicator {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: #94a3b8;
+  margin-bottom: 8px;
+  position: relative;
+  z-index: 1;
+  transition: all 0.3s ease;
+}
+
+.milestone-step.completed .step-indicator {
+  background: #10b981;
+  color: white;
+}
+
+.milestone-step.active .step-indicator {
+  background: #0f766e;
+  color: white;
+  box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.2);
+}
+
+.step-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748b;
+  text-align: center;
+}
+
+.milestone-step.completed .step-label,
+.milestone-step.active .step-label {
+  color: #1e293b;
+}
+
+/* Portal Dashboard Layout */
+.portal-dashboard-layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 24px;
+  padding: 24px;
+}
+
+.portal-main-content {
+  min-width: 0;
+}
+
+.portal-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Days Counter Card */
+.days-counter-card {
+  background: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%);
+  border-radius: 16px;
+  padding: 24px;
+  color: white;
+  text-align: center;
+}
+
+.days-counter-card .counter-value {
+  font-size: 48px;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.days-counter-card .counter-label {
+  font-size: 14px;
+  opacity: 0.9;
+  margin-bottom: 16px;
+}
+
+.days-counter-card .counter-sublabel {
+  font-size: 13px;
+  opacity: 0.75;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Recent Activity Sidebar */
+.recent-activity-card {
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.recent-activity-card h3 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.activity-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.activity-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.activity-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.activity-content p {
+  margin: 0 0 2px 0;
+  font-size: 14px;
+  color: #334155;
+  line-height: 1.4;
+}
+
+.activity-content .activity-time {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.no-activity {
+  text-align: center;
+  color: #94a3b8;
+  font-size: 14px;
+  padding: 20px 0;
+}
+
+/* Tab Navigation */
+.portal-tabs {
+  display: flex;
+  background: white;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 0 24px;
+  overflow-x: auto;
+}
+
+.tab-button {
+  padding: 16px 24px;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  position: relative;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.tab-button:hover {
+  color: #334155;
+  background: #f8fafc;
+}
+
+.tab-button.active {
+  color: #0f766e;
+}
+
+.tab-button.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: #0f766e;
+  border-radius: 3px 3px 0 0;
+}
+
+/* Portal Sections */
+.portal-section {
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.portal-section:last-child {
+  margin-bottom: 0;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .portal-container {
@@ -305,5 +665,60 @@
 
   .overview-tab .portal-dashboard-layout {
     padding: 16px;
+  }
+
+  .portal-info-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 16px;
+  }
+
+  .loan-details-section {
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .loan-detail-item .value {
+    font-size: 16px;
+  }
+
+  .milestone-progress {
+    padding: 16px;
+    overflow-x: auto;
+  }
+
+  .milestone-steps {
+    min-width: 500px;
+  }
+
+  .portal-dashboard-layout {
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+
+  .portal-sidebar {
+    order: -1;
+  }
+
+  .days-counter-card .counter-value {
+    font-size: 36px;
+  }
+
+  .view-mode-toggle {
+    width: 100%;
+  }
+
+  .view-mode-toggle .toggle-btn {
+    flex: 1;
+    text-align: center;
+  }
+
+  .portal-tabs {
+    padding: 0 16px;
+  }
+
+  .tab-button {
+    padding: 12px 16px;
+    font-size: 13px;
   }
 }
