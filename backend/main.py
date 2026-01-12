@@ -61928,33 +61928,58 @@ async def add_users_password_column_migration(
     db: Session = Depends(get_db)
 ):
     """
-    Add password column to users table for admin onboarding signup
+    Add all missing columns to users table for admin onboarding signup
     Public endpoint - requires migration key for security
     """
     if migration_key != "add-password-col":
         raise HTTPException(status_code=403, detail="Invalid migration key")
 
     try:
-        # Check if column exists
-        result = db.execute(text("""
-            SELECT column_name FROM information_schema.columns
-            WHERE table_name = 'users' AND column_name = 'password'
-        """))
+        added_columns = []
 
-        if result.fetchone():
-            return {"success": True, "message": "Password column already exists"}
+        # List of columns needed for onboarding
+        columns_to_add = [
+            ("password", "VARCHAR(255)"),
+            ("full_name", "VARCHAR(255)"),
+            ("first_name", "VARCHAR(100)"),
+            ("last_name", "VARCHAR(100)"),
+            ("role", "VARCHAR(50) DEFAULT 'user'"),
+            ("is_active", "BOOLEAN DEFAULT true"),
+            ("tenant_account_id", "UUID"),
+            ("onboarding_completed", "BOOLEAN DEFAULT false"),
+            ("headshot_url", "VARCHAR(500)"),
+            ("job_title", "VARCHAR(100)"),
+            ("phone", "VARCHAR(20)"),
+            ("nmls_id", "VARCHAR(50)"),
+            ("timezone", "VARCHAR(50) DEFAULT 'America/New_York'"),
+        ]
 
-        # Add the column
-        db.execute(text("ALTER TABLE users ADD COLUMN password VARCHAR(255)"))
+        for col_name, col_type in columns_to_add:
+            # Check if column exists
+            result = db.execute(text("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_name = 'users' AND column_name = :col_name
+            """), {"col_name": col_name})
+
+            if not result.fetchone():
+                db.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}"))
+                added_columns.append(col_name)
+
         db.commit()
 
-        return {
-            "success": True,
-            "message": "Password column added to users table"
-        }
+        if added_columns:
+            return {
+                "success": True,
+                "message": f"Added columns: {', '.join(added_columns)}"
+            }
+        else:
+            return {
+                "success": True,
+                "message": "All columns already exist"
+            }
     except Exception as e:
         db.rollback()
-        logger.error(f"Add password column error: {e}")
+        logger.error(f"Add user columns error: {e}")
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 
