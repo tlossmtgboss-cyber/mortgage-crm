@@ -351,18 +351,18 @@ async def start_onboarding(
 
         user_result = db.execute(text("""
             INSERT INTO users (
-                email, password, full_name, first_name, last_name,
+                email, hashed_password, full_name, first_name, last_name,
                 role, is_active, tenant_account_id,
                 created_at, updated_at
             ) VALUES (
-                :email, :password, :full_name, :first_name, :last_name,
+                :email, :hashed_password, :full_name, :first_name, :last_name,
                 'admin', true, :tenant_id,
                 NOW(), NOW()
             )
             RETURNING id
         """), {
             'email': request.email,
-            'password': hashed_password,
+            'hashed_password': hashed_password,
             'full_name': contact_name or request.email.split('@')[0],
             'first_name': name_parts[0] if len(name_parts) > 0 else '',
             'last_name': name_parts[1] if len(name_parts) > 1 else '',
