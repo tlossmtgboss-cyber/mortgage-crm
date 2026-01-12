@@ -61952,6 +61952,8 @@ async def add_users_password_column_migration(
             ("phone", "VARCHAR(20)"),
             ("nmls_id", "VARCHAR(50)"),
             ("timezone", "VARCHAR(50) DEFAULT 'America/New_York'"),
+            ("created_at", "TIMESTAMP DEFAULT NOW()"),
+            ("updated_at", "TIMESTAMP DEFAULT NOW()"),
         ]
 
         for col_name, col_type in columns_to_add:
