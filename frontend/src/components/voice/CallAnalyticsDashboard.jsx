@@ -2,12 +2,97 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './CallAnalyticsDashboard.css';
 
+// Mock data for testing
+const MOCK_DATA = {
+  dailySummary: {
+    total_calls: 147,
+    connected_calls: 52,
+    connect_rate: 0.354,
+    total_talk_time_minutes: 186,
+    average_call_duration_seconds: 214,
+    voicemails_left: 38,
+    callbacks_scheduled: 12
+  },
+  performance: {
+    summary: {
+      total_calls: 892,
+      connected_calls: 298,
+      connect_rate: 0.334,
+      total_talk_time_minutes: 1245,
+      average_call_duration_seconds: 251,
+      average_calls_per_day: 127
+    },
+    daily_trend: [
+      { date: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], calls: 118, connected: 42, connect_rate: 0.356 },
+      { date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], calls: 134, connected: 45, connect_rate: 0.336 },
+      { date: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], calls: 142, connected: 51, connect_rate: 0.359 },
+      { date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], calls: 128, connected: 38, connect_rate: 0.297 },
+      { date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], calls: 156, connected: 58, connect_rate: 0.372 },
+      { date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], calls: 167, connected: 52, connect_rate: 0.311 },
+      { date: new Date().toISOString().split('T')[0], calls: 147, connected: 52, connect_rate: 0.354 }
+    ]
+  },
+  dispositionBreakdown: {
+    total_calls: 892,
+    breakdown: [
+      { disposition: 'connected', count: 298, percentage: 33.4 },
+      { disposition: 'voicemail', count: 267, percentage: 29.9 },
+      { disposition: 'no_answer', count: 178, percentage: 20.0 },
+      { disposition: 'busy', count: 71, percentage: 8.0 },
+      { disposition: 'callback', count: 45, percentage: 5.0 },
+      { disposition: 'bad_number', count: 33, percentage: 3.7 }
+    ]
+  },
+  hourlyStats: {
+    hourly_stats: [
+      { hour: 8, hour_label: '8 AM', total_calls: 45, connected: 12, connect_rate: 0.267 },
+      { hour: 9, hour_label: '9 AM', total_calls: 78, connected: 28, connect_rate: 0.359 },
+      { hour: 10, hour_label: '10 AM', total_calls: 92, connected: 38, connect_rate: 0.413 },
+      { hour: 11, hour_label: '11 AM', total_calls: 86, connected: 32, connect_rate: 0.372 },
+      { hour: 12, hour_label: '12 PM', total_calls: 54, connected: 15, connect_rate: 0.278 },
+      { hour: 13, hour_label: '1 PM', total_calls: 67, connected: 22, connect_rate: 0.328 },
+      { hour: 14, hour_label: '2 PM', total_calls: 89, connected: 35, connect_rate: 0.393 },
+      { hour: 15, hour_label: '3 PM', total_calls: 95, connected: 41, connect_rate: 0.432 },
+      { hour: 16, hour_label: '4 PM', total_calls: 102, connected: 45, connect_rate: 0.441 },
+      { hour: 17, hour_label: '5 PM', total_calls: 88, connected: 32, connect_rate: 0.364 },
+      { hour: 18, hour_label: '6 PM', total_calls: 62, connected: 18, connect_rate: 0.290 },
+      { hour: 19, hour_label: '7 PM', total_calls: 24, connected: 6, connect_rate: 0.250 },
+      { hour: 20, hour_label: '8 PM', total_calls: 10, connected: 2, connect_rate: 0.200 }
+    ],
+    best_hours: [
+      { hour: 16, hour_label: '4 PM', connect_rate: 0.441 },
+      { hour: 15, hour_label: '3 PM', connect_rate: 0.432 },
+      { hour: 10, hour_label: '10 AM', connect_rate: 0.413 }
+    ]
+  },
+  sessionStats: {
+    summary: {
+      total_sessions: 24,
+      total_tasks: 892,
+      total_completed: 743,
+      overall_completion_rate: 0.833,
+      avg_session_duration_minutes: 52
+    },
+    sessions: [
+      { session_id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', started_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), status: 'completed', total_tasks: 45, completed_tasks: 42, completion_rate: 0.933, duration_minutes: 58 },
+      { session_id: 'b2c3d4e5-f6a7-8901-bcde-f12345678901', started_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), status: 'completed', total_tasks: 38, completed_tasks: 35, completion_rate: 0.921, duration_minutes: 47 },
+      { session_id: 'c3d4e5f6-a7b8-9012-cdef-123456789012', started_at: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(), status: 'completed', total_tasks: 52, completed_tasks: 44, completion_rate: 0.846, duration_minutes: 62 },
+      { session_id: 'd4e5f6a7-b8c9-0123-defa-234567890123', started_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), status: 'completed', total_tasks: 41, completed_tasks: 38, completion_rate: 0.927, duration_minutes: 51 },
+      { session_id: 'e5f6a7b8-c9d0-1234-efab-345678901234', started_at: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString(), status: 'paused', total_tasks: 33, completed_tasks: 22, completion_rate: 0.667, duration_minutes: 35 },
+      { session_id: 'f6a7b8c9-d0e1-2345-fabc-456789012345', started_at: new Date(Date.now() - 28 * 60 * 60 * 1000).toISOString(), status: 'completed', total_tasks: 48, completed_tasks: 45, completion_rate: 0.938, duration_minutes: 55 },
+      { session_id: 'a7b8c9d0-e1f2-3456-abcd-567890123456', started_at: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(), status: 'cancelled', total_tasks: 25, completed_tasks: 12, completion_rate: 0.480, duration_minutes: 18 },
+      { session_id: 'b8c9d0e1-f2a3-4567-bcde-678901234567', started_at: new Date(Date.now() - 50 * 60 * 60 * 1000).toISOString(), status: 'completed', total_tasks: 56, completed_tasks: 52, completion_rate: 0.929, duration_minutes: 67 }
+    ]
+  }
+};
+
 const CallAnalyticsDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [dateRange, setDateRange] = useState('last_7_days');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
+  const [useMockData, setUseMockData] = useState(false);
 
   // Data states
   const [dailySummary, setDailySummary] = useState(null);
@@ -149,10 +234,29 @@ const CallAnalyticsDashboard = () => {
     }
   }, [API_BASE_URL, getDateRangeParams]);
 
+  // Load mock data
+  const loadMockData = useCallback(() => {
+    setDailySummary(MOCK_DATA.dailySummary);
+    setPerformance(MOCK_DATA.performance);
+    setDispositionBreakdown(MOCK_DATA.dispositionBreakdown);
+    setHourlyStats(MOCK_DATA.hourlyStats);
+    setSessionStats(MOCK_DATA.sessionStats);
+  }, []);
+
   // Fetch all data
   const fetchAllData = useCallback(async () => {
     setLoading(true);
     setError(null);
+
+    if (useMockData) {
+      // Use mock data for testing
+      setTimeout(() => {
+        loadMockData();
+        setLoading(false);
+      }, 500); // Simulate loading delay
+      return;
+    }
+
     try {
       await Promise.all([
         fetchDailySummary(),
@@ -166,12 +270,19 @@ const CallAnalyticsDashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, [fetchDailySummary, fetchPerformance, fetchDispositionBreakdown, fetchHourlyStats, fetchSessionStats]);
+  }, [useMockData, loadMockData, fetchDailySummary, fetchPerformance, fetchDispositionBreakdown, fetchHourlyStats, fetchSessionStats]);
 
-  // Initial load and refresh on date range change
+  // Initial load and refresh on date range change or mock data toggle
   useEffect(() => {
     fetchAllData();
   }, [fetchAllData]);
+
+  // Reload when mock data toggle changes
+  useEffect(() => {
+    if (useMockData) {
+      loadMockData();
+    }
+  }, [useMockData, loadMockData]);
 
   // Format duration
   const formatDuration = (seconds) => {
@@ -258,6 +369,13 @@ const CallAnalyticsDashboard = () => {
           )}
           <button className="ca-btn ca-btn-secondary" onClick={fetchAllData}>
             Refresh
+          </button>
+          <button
+            className={`ca-btn ${useMockData ? 'ca-btn-mock-active' : 'ca-btn-secondary'}`}
+            onClick={() => setUseMockData(!useMockData)}
+            title="Toggle mock data for testing"
+          >
+            {useMockData ? 'Mock Data ON' : 'Use Mock Data'}
           </button>
         </div>
       </div>

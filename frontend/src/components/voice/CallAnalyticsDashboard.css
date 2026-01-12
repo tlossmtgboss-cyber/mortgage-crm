@@ -106,6 +106,22 @@
   background: #f9fafb;
 }
 
+.ca-btn-mock-active {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: white;
+  border: none;
+  animation: ca-pulse-mock 2s infinite;
+}
+
+.ca-btn-mock-active:hover {
+  background: linear-gradient(135deg, #d97706, #b45309);
+}
+
+@keyframes ca-pulse-mock {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(245, 158, 11, 0); }
+}
+
 /* Loading */
 .ca-loading {
   display: flex;
