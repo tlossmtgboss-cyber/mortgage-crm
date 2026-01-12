@@ -173,6 +173,12 @@ export const NAVIGATION_ITEMS = {
     matchPaths: ['/voice/live'],
     module: 'voice_os'  // Premium: Voice OS module
   },
+  callQueues: {
+    path: '/voice/queues',
+    label: 'Call Queues',
+    matchPaths: ['/voice/queues'],
+    module: 'voice_os'  // Premium: Voice OS module
+  },
   // Accounting System - with submenu structure
   accounting: {
     path: '/accounting',
@@ -273,6 +279,7 @@ export const ROLE_NAVIGATION = {
     'liveCallWhisper',
     'voiceAgents',
     'voiceLive',
+    'callQueues',
     'productionPredictor',
     'dealAlerts'
   ],

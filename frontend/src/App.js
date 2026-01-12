@@ -84,6 +84,7 @@ const VoiceOSDashboard = lazy(() => import('./pages/VoiceOSDashboard'));
 const VoiceAgentStudio = lazy(() => import('./components/voice/AgentStudio'));
 const VoiceLiveCallsMonitor = lazy(() => import('./components/voice/LiveCallsMonitor'));
 const VoiceAgentBuilder = lazy(() => import('./components/voice/AgentBuilder'));
+const VoiceCallQueueDashboard = lazy(() => import('./components/voice/CallQueueDashboard'));
 const AILandingPage = lazy(() => import('./pages/AILandingPage'));
 const WorkflowDashboard = lazy(() => import('./pages/WorkflowDashboard'));
 const WorkflowStagePage = lazy(() => import('./pages/WorkflowStagePage'));
@@ -1473,6 +1474,28 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><VoiceLiveCallsMonitor /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/voice/queues"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><VoiceCallQueueDashboard /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
