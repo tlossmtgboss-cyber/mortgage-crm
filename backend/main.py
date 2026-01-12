@@ -41946,6 +41946,35 @@ async def get_lead(lead_id: int, db: Session = Depends(get_db), current_user: Us
         "appraisal_value": lead.appraisal_value,
         "ltv": lead.ltv,
         "dti": lead.dti,
+        "cltv": lead.cltv,
+        # Salesforce Sync Fields - Property Details
+        "occupancy_type": lead.occupancy_type,
+        "property_county": lead.property_county,
+        "property_ownership_type": lead.property_ownership_type,
+        "property_units": lead.property_units,
+        # Salesforce Sync Fields - 1st Loan Financial Details
+        "rate_type": lead.rate_type,
+        "monthly_payment": lead.monthly_payment,
+        "property_tax": lead.property_tax,
+        "hazard_insurance": lead.hazard_insurance,
+        "mortgage_insurance": lead.mortgage_insurance,
+        "hoa_amount": lead.hoa_amount,
+        "origination_fee": lead.origination_fee,
+        "estimated_prepaid_interest": lead.estimated_prepaid_interest,
+        "index_rate": lead.index_rate,
+        "margin": lead.margin,
+        # Salesforce Sync Fields - LTV/CLTV and Purpose
+        "loan_purpose": lead.loan_purpose,
+        "file_state": lead.file_state,
+        # Salesforce Sync Fields - 2nd Loan Details
+        "second_loan_amount": lead.second_loan_amount,
+        "second_loan_rate": lead.second_loan_rate,
+        "second_loan_payment": lead.second_loan_payment,
+        # Salesforce Sync Fields - Present vs Proposed Housing
+        "present_housing_expense": lead.present_housing_expense,
+        "proposed_housing_expense": lead.proposed_housing_expense,
+        "present_monthly_payment": lead.present_monthly_payment,
+        "proposed_monthly_payment": lead.proposed_monthly_payment,
         # Timestamps
         "created_at": lead.created_at.isoformat() if lead.created_at else None,
         "updated_at": lead.updated_at.isoformat() if lead.updated_at else None,
