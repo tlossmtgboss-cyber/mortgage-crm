@@ -1742,6 +1742,7 @@ def get_portal_by_loan_id(
     """
     from models.portal_models import PortalLoan
     from services.purl_token_service import PURLTokenService
+    from sqlalchemy import text
 
     # Try to find portal loan by ID first, then by crm_deal_id
     portal_loan = db.query(PortalLoan).filter(PortalLoan.id == loan_id).first()
