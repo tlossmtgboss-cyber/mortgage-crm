@@ -86,14 +86,32 @@ const MeetingRoom = () => {
   // Remote streams state (for rendering)
   const [remoteStreams, setRemoteStreams] = useState({}); // {participantId: {stream, displayName, audioEnabled, videoEnabled}}
 
-  // WebRTC configuration
-  const rtcConfig = {
+  // WebRTC configuration - fetched from server
+  const [rtcConfig, setRtcConfig] = useState({
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
-      { urls: 'stun:stun2.l.google.com:19302' },
     ]
-  };
+  });
+
+  // Fetch ICE servers (including TURN) from backend
+  useEffect(() => {
+    const fetchIceServers = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/v1/meetings/ice-servers`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.iceServers && data.iceServers.length > 0) {
+            setRtcConfig({ iceServers: data.iceServers });
+            console.log('Loaded ICE servers:', data.iceServers.length, 'servers');
+          }
+        }
+      } catch (err) {
+        console.warn('Could not fetch ICE servers, using defaults:', err);
+      }
+    };
+    fetchIceServers();
+  }, []);
 
   // Fetch meeting info
   useEffect(() => {

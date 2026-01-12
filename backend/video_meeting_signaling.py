@@ -283,3 +283,87 @@ async def get_signaling_status(room_code: str):
         "participant_count": meeting_manager.get_participant_count(room_code),
         "participants": meeting_manager.get_room_participants(room_code)
     }
+
+
+@router.get("/ice-servers")
+async def get_ice_servers():
+    """
+    Get ICE servers for WebRTC connections.
+    Returns STUN servers and Twilio TURN servers if configured.
+    """
+    import os
+
+    # Always include STUN servers
+    ice_servers = [
+        {"urls": "stun:stun.l.google.com:19302"},
+        {"urls": "stun:stun1.l.google.com:19302"},
+        {"urls": "stun:stun2.l.google.com:19302"},
+        {"urls": "stun:stun3.l.google.com:19302"},
+        {"urls": "stun:stun4.l.google.com:19302"},
+    ]
+
+    # Try to get Twilio TURN servers if credentials are available
+    twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
+    twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
+
+    if twilio_sid and twilio_token:
+        try:
+            from twilio.rest import Client
+            client = Client(twilio_sid, twilio_token)
+
+            # Get Network Traversal Service tokens
+            token = client.tokens.create()
+
+            # Add Twilio's ICE servers (includes TURN)
+            if token.ice_servers:
+                for server in token.ice_servers:
+                    ice_server = {"urls": server.urls if isinstance(server.urls, str) else server.urls}
+                    if hasattr(server, 'username') and server.username:
+                        ice_server["username"] = server.username
+                    if hasattr(server, 'credential') and server.credential:
+                        ice_server["credential"] = server.credential
+                    ice_servers.append(ice_server)
+
+                logger.info(f"Added {len(token.ice_servers)} Twilio ICE servers")
+        except Exception as e:
+            logger.warning(f"Could not get Twilio TURN servers: {e}")
+            # Add free TURN servers as fallback
+            ice_servers.extend([
+                {
+                    "urls": "turn:openrelay.metered.ca:80",
+                    "username": "openrelayproject",
+                    "credential": "openrelayproject"
+                },
+                {
+                    "urls": "turn:openrelay.metered.ca:443",
+                    "username": "openrelayproject",
+                    "credential": "openrelayproject"
+                },
+                {
+                    "urls": "turn:openrelay.metered.ca:443?transport=tcp",
+                    "username": "openrelayproject",
+                    "credential": "openrelayproject"
+                }
+            ])
+    else:
+        # No Twilio - use free TURN servers
+        logger.info("No Twilio credentials - using free TURN servers")
+        ice_servers.extend([
+            {
+                "urls": "turn:openrelay.metered.ca:80",
+                "username": "openrelayproject",
+                "credential": "openrelayproject"
+            },
+            {
+                "urls": "turn:openrelay.metered.ca:443",
+                "username": "openrelayproject",
+                "credential": "openrelayproject"
+            },
+            {
+                "urls": "turn:openrelay.metered.ca:443?transport=tcp",
+                "username": "openrelayproject",
+                "credential": "openrelayproject"
+            }
+        ])
+
+    return {"iceServers": ice_servers}
