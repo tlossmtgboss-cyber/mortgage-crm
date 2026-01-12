@@ -1582,6 +1582,59 @@ async def update_notes(
         raise DatabaseException(f"Failed to update notes: {str(e)}")
 
 
+@router.delete("/accounts/{account_id}")
+async def delete_account(
+    account_id: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Permanently delete an account and all associated data"""
+    try:
+        current_user = await get_user_from_request(request, db)
+        require_master_admin(current_user)
+
+        # Get account info for logging
+        account = db.execute(text("""
+            SELECT name, status FROM tenant_accounts
+            WHERE id = :account_id AND is_deleted = false
+        """), {'account_id': account_id}).fetchone()
+
+        if not account:
+            raise NotFoundException(f"Account {account_id} not found")
+
+        account_name = account[0]
+
+        # Delete associated users first
+        db.execute(text("""
+            DELETE FROM users WHERE tenant_account_id = :account_id
+        """), {'account_id': account_id})
+
+        # Delete the account (or soft delete)
+        db.execute(text("""
+            UPDATE tenant_accounts
+            SET is_deleted = true,
+                status = 'deleted',
+                updated_at = NOW()
+            WHERE id = :account_id
+        """), {'account_id': account_id})
+
+        db.commit()
+
+        log_admin_action(db, current_user, 'account.deleted', 'account',
+                        account_id, account_name, request=request)
+
+        return success_response(
+            data={'account_id': account_id, 'name': account_name},
+            message=f"Account '{account_name}' deleted successfully"
+        )
+    except (PermissionException, NotFoundException):
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting account: {e}")
+        db.rollback()
+        raise DatabaseException(f"Failed to delete account: {str(e)}")
+
+
 # =============================================================================
 # Account Users
 # =============================================================================

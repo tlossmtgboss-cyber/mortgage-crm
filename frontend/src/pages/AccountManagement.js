@@ -1058,6 +1058,7 @@ const AccountRow = ({ account, onClick, onAction }) => {
     account.status === 'suspended' && { id: 'reinstate', label: 'Reinstate Account' },
     (account.status === 'active' || account.status === 'suspended') && { id: 'cancel', label: 'Cancel Account', danger: true },
     { id: 'addNote', label: 'Add Internal Note' },
+    { id: 'delete', label: 'Delete Account', danger: true },
   ].filter(Boolean);
 
   return (
@@ -2568,6 +2569,9 @@ const AccountManagement = () => {
       case 'addNote':
         setModal({ type: 'note', account: target });
         break;
+      case 'delete':
+        setModal({ type: 'delete', account: target });
+        break;
       default:
         break;
     }
@@ -2657,12 +2661,15 @@ const AccountManagement = () => {
       } else if (type === 'note') {
         endpoint = `/api/v1/admin/account-management/accounts/${modal.account.id}/notes`;
         method = 'PUT';
+      } else if (type === 'delete') {
+        endpoint = `/api/v1/admin/account-management/accounts/${modal.account.id}`;
+        method = 'DELETE';
       }
 
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         method,
         headers: getAuthHeaders(),
-        body: JSON.stringify({ reason, notes: reason })
+        body: method !== 'DELETE' ? JSON.stringify({ reason, notes: reason }) : undefined
       });
 
       if (response.ok) {
@@ -2904,6 +2911,18 @@ const AccountManagement = () => {
         submitLabel="Cancel Account"
         variant="danger"
         loading={actionLoading}
+      />
+
+      <ReasonModal
+        isOpen={modal.type === 'delete'}
+        onClose={closeModal}
+        onSubmit={handleModalSubmit}
+        title="Delete Account"
+        description={`Permanently delete "${modal.account?.name || ''}"? This will remove the account and all associated users. This action cannot be undone.`}
+        submitLabel="Delete Permanently"
+        variant="danger"
+        loading={actionLoading}
+        requireReason={false}
       />
 
       <ReasonModal
