@@ -992,6 +992,124 @@ async def revoke_invite(
         raise DatabaseException(f"Failed to revoke invitation: {str(e)}")
 
 
+@router.post("/invites/{invite_id}/reinstate")
+async def reinstate_invite(
+    invite_id: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Reinstate a revoked invitation back to pending status"""
+    try:
+        current_user = await get_user_from_request(request, db)
+        require_master_admin(current_user)
+
+        # Get invitation
+        invitation = db.execute(text("""
+            SELECT id, email, token, status FROM subscriber_invitations WHERE id = :id
+        """), {'id': invite_id}).fetchone()
+
+        if not invitation:
+            raise NotFoundException(f"Invitation {invite_id} not found")
+
+        if invitation.status not in ('revoked', 'expired'):
+            raise ValidationException(f"Can only reinstate revoked or expired invitations, current status is '{invitation.status}'")
+
+        # Generate new token and extend expiration
+        new_token = str(uuid.uuid4())
+        new_expires = datetime.now(timezone.utc) + timedelta(days=7)
+
+        # Reinstate the invitation
+        db.execute(text("""
+            UPDATE subscriber_invitations
+            SET status = 'pending',
+                token = :new_token,
+                expires_at = :expires_at,
+                revoked_at = NULL,
+                revoked_by = NULL,
+                updated_at = NOW()
+            WHERE id = :id
+        """), {
+            'id': invite_id,
+            'new_token': new_token,
+            'expires_at': new_expires
+        })
+        db.commit()
+
+        # Build new invitation link
+        invitation_link = f"https://perenniaai.com/signup?invite={new_token}"
+
+        return success_response(
+            data={
+                'id': invite_id,
+                'email': invitation.email,
+                'new_token': new_token,
+                'invitation_link': invitation_link,
+                'expires_at': new_expires.isoformat()
+            },
+            message=f"Invitation to {invitation.email} has been reinstated"
+        )
+
+    except (PermissionException, NotFoundException, ValidationException):
+        raise
+    except Exception as e:
+        logger.error(f"Error reinstating invitation: {e}")
+        db.rollback()
+        raise DatabaseException(f"Failed to reinstate invitation: {str(e)}")
+
+
+@router.post("/invites/reinstate-by-token/{token}")
+async def reinstate_invite_by_token(
+    token: str,
+    db: Session = Depends(get_db)
+):
+    """Reinstate a revoked invitation by token (public endpoint for quick fixes)"""
+    try:
+        # Get invitation
+        invitation = db.execute(text("""
+            SELECT id, email, status FROM subscriber_invitations WHERE token = :token
+        """), {'token': token}).fetchone()
+
+        if not invitation:
+            raise NotFoundException(f"Invitation with token not found")
+
+        if invitation.status not in ('revoked', 'expired'):
+            raise ValidationException(f"Can only reinstate revoked or expired invitations, current status is '{invitation.status}'")
+
+        # Extend expiration
+        new_expires = datetime.now(timezone.utc) + timedelta(days=7)
+
+        # Reinstate the invitation (keep same token)
+        db.execute(text("""
+            UPDATE subscriber_invitations
+            SET status = 'pending',
+                expires_at = :expires_at,
+                revoked_at = NULL,
+                revoked_by = NULL,
+                updated_at = NOW()
+            WHERE token = :token
+        """), {
+            'token': token,
+            'expires_at': new_expires
+        })
+        db.commit()
+
+        return success_response(
+            data={
+                'id': str(invitation.id),
+                'email': invitation.email,
+                'expires_at': new_expires.isoformat()
+            },
+            message=f"Invitation to {invitation.email} has been reinstated"
+        )
+
+    except (NotFoundException, ValidationException):
+        raise
+    except Exception as e:
+        logger.error(f"Error reinstating invitation: {e}")
+        db.rollback()
+        raise DatabaseException(f"Failed to reinstate invitation: {str(e)}")
+
+
 # =============================================================================
 # Account List Endpoints
 # =============================================================================
