@@ -56,7 +56,10 @@ async def import_from_retr(
     body = await request.body()
 
     # Verify signature if configured
-    if RETR_WEBHOOK_SECRET and x_webhook_signature:
+    if RETR_WEBHOOK_SECRET:
+        if not x_webhook_signature:
+            logger.warning("Missing webhook signature")
+            raise HTTPException(status_code=401, detail="Missing webhook signature")
         if not verify_webhook_signature(body, x_webhook_signature):
             logger.warning("Invalid webhook signature received")
             raise HTTPException(status_code=401, detail="Invalid webhook signature")

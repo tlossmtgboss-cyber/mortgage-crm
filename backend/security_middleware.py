@@ -304,30 +304,6 @@ class IPAccessControlMiddleware(BaseHTTPMiddleware):
                 if client_ip.startswith("100.64."):
                     return await call_next(request)
 
-                # Allow authenticated requests from our frontend (Vercel/pipeline360.io)
-                origin = request.headers.get("origin", "")
-                referer = request.headers.get("referer", "")
-                auth_header = request.headers.get("authorization", "")
-
-                allowed_origins = [
-                    "https://www.perenniaai.com",
-                    "https://perenniaai.com",
-                    "https://app.perenniaai.com",
-                    "https://api.perenniaai.com",
-                    "http://localhost:3000",
-                    "http://localhost:3001",
-                ]
-
-                is_allowed_origin = any(
-                    origin.startswith(ao) or referer.startswith(ao)
-                    for ao in allowed_origins
-                )
-
-                # If request is from our frontend with auth, allow it
-                if is_allowed_origin and auth_header.startswith("Bearer "):
-                    logger.info(f"Admin access granted via frontend origin: {origin or referer}")
-                    return await call_next(request)
-
                 logger.warning(f"Admin access denied for IP {client_ip}: {request.method} {path}")
                 return JSONResponse(
                     status_code=403,

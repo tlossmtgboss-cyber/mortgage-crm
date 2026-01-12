@@ -58,6 +58,20 @@ def error_response(message: str, errors: List[Dict] = None) -> Dict:
     return {"success": False, "message": message, "errors": errors or []}
 
 
+def require_admin_user(current_user: Any) -> None:
+    if current_user is None:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    is_admin = bool(getattr(current_user, "is_admin", False))
+    role = getattr(current_user, "role", None)
+    permission_role = getattr(current_user, "permission_role", None)
+
+    if is_admin or role == "admin" or permission_role in {"admin", "leadership", "management"}:
+        return
+
+    raise PermissionException()
+
+
 # =============================================================================
 # Pydantic Models
 # =============================================================================
@@ -433,9 +447,10 @@ async def get_api_key_usage(key_id: str, days: int = 30, current_user = None):
 # =============================================================================
 
 @router.get("/webhooks/endpoints")
-async def get_webhook_endpoints(current_user = None):
+async def get_webhook_endpoints(current_user=Depends(get_current_user)):
     """Get all webhook endpoints"""
     try:
+        require_admin_user(current_user)
         webhooks = list(webhooks_store.values())
         return success_response(webhooks, f"Retrieved {len(webhooks)} webhook endpoints")
     except Exception as e:
@@ -443,9 +458,10 @@ async def get_webhook_endpoints(current_user = None):
 
 
 @router.post("/webhooks/endpoints")
-async def create_webhook_endpoint(webhook: WebhookEndpoint, current_user = None):
+async def create_webhook_endpoint(webhook: WebhookEndpoint, current_user=Depends(get_current_user)):
     """Create a new webhook endpoint"""
     try:
+        require_admin_user(current_user)
         webhook_id = f"wh_{secrets.token_hex(8)}"
         webhook_secret = f"whsec_{secrets.token_hex(24)}"
 
@@ -475,9 +491,10 @@ async def create_webhook_endpoint(webhook: WebhookEndpoint, current_user = None)
 
 
 @router.put("/webhooks/endpoints/{webhook_id}")
-async def update_webhook_endpoint(webhook_id: str, webhook: WebhookEndpoint, current_user = None):
+async def update_webhook_endpoint(webhook_id: str, webhook: WebhookEndpoint, current_user=Depends(get_current_user)):
     """Update a webhook endpoint"""
     try:
+        require_admin_user(current_user)
         if webhook_id not in webhooks_store:
             raise HTTPException(status_code=404, detail="Webhook endpoint not found")
 
@@ -499,9 +516,10 @@ async def update_webhook_endpoint(webhook_id: str, webhook: WebhookEndpoint, cur
 
 
 @router.delete("/webhooks/endpoints/{webhook_id}")
-async def delete_webhook_endpoint(webhook_id: str, current_user = None):
+async def delete_webhook_endpoint(webhook_id: str, current_user=Depends(get_current_user)):
     """Delete a webhook endpoint"""
     try:
+        require_admin_user(current_user)
         if webhook_id not in webhooks_store:
             raise HTTPException(status_code=404, detail="Webhook endpoint not found")
 
@@ -515,9 +533,10 @@ async def delete_webhook_endpoint(webhook_id: str, current_user = None):
 
 
 @router.post("/webhooks/endpoints/{webhook_id}/test")
-async def test_webhook_endpoint(webhook_id: str, current_user = None):
+async def test_webhook_endpoint(webhook_id: str, current_user=Depends(get_current_user)):
     """Send a test event to a webhook endpoint"""
     try:
+        require_admin_user(current_user)
         if webhook_id not in webhooks_store:
             raise HTTPException(status_code=404, detail="Webhook endpoint not found")
 
@@ -538,9 +557,10 @@ async def test_webhook_endpoint(webhook_id: str, current_user = None):
 
 
 @router.get("/webhooks/endpoints/{webhook_id}/logs")
-async def get_webhook_logs(webhook_id: str, limit: int = 50, current_user = None):
+async def get_webhook_logs(webhook_id: str, limit: int = 50, current_user=Depends(get_current_user)):
     """Get delivery logs for a webhook endpoint"""
     try:
+        require_admin_user(current_user)
         if webhook_id not in webhooks_store:
             raise HTTPException(status_code=404, detail="Webhook endpoint not found")
 

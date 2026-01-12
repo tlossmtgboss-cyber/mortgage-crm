@@ -9,7 +9,7 @@ Handles webhook receivers for:
 - WebSocket broadcast triggers
 """
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Header
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Header, Request
 from sqlalchemy.orm import Session
 from typing import Optional, Dict, Any, List
 from datetime import datetime, date
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/crm-webhooks", tags=["CRM Webhooks"])
 
 # Webhook secret for signature verification
-WEBHOOK_SECRET = os.getenv("CRM_WEBHOOK_SECRET", "development-secret-key")
+WEBHOOK_SECRET = os.getenv("CRM_WEBHOOK_SECRET", "")
 
 
 # =============================================================================
@@ -108,10 +108,14 @@ def verify_webhook_signature(
         payload,
         hashlib.sha256
     ).hexdigest()
-    return hmac.compare_digest(f"sha256={expected_signature}", signature)
+    normalized_signature = signature
+    if signature.startswith("sha256="):
+        normalized_signature = signature.split("sha256=", 1)[1]
+    return hmac.compare_digest(expected_signature, normalized_signature)
 
 
 async def get_verified_payload(
+    request: Request,
     x_webhook_signature: Optional[str] = Header(None, alias="X-Webhook-Signature"),
 ) -> bool:
     """Dependency to verify webhook signatures in production."""
@@ -119,8 +123,16 @@ async def get_verified_payload(
     if os.getenv("ENVIRONMENT", "development") == "development":
         return True
 
+    if not WEBHOOK_SECRET:
+        logger.warning("CRM_WEBHOOK_SECRET not configured - blocking webhook")
+        raise HTTPException(status_code=503, detail="Webhook secret not configured")
+
     if not x_webhook_signature:
         raise HTTPException(status_code=401, detail="Missing webhook signature")
+
+    payload = await request.body()
+    if not verify_webhook_signature(payload, x_webhook_signature):
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
     return True
 
