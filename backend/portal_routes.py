@@ -1850,18 +1850,17 @@ def debug_list_portal_loans(
 
     results = []
 
-    # Check what tables exist
+    # Check purl_loans columns
     try:
-        tables_result = db.execute(text("""
-            SELECT table_name FROM information_schema.tables
-            WHERE table_schema = 'public'
-            AND table_name LIKE '%loan%' OR table_name LIKE '%purl%' OR table_name LIKE '%deal%'
-            ORDER BY table_name
+        cols_result = db.execute(text("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'purl_loans'
+            ORDER BY ordinal_position
         """))
-        tables = [row[0] for row in tables_result]
-        results.append({"source": "tables", "tables": tables})
+        cols = [row[0] for row in cols_result]
+        results.append({"source": "purl_loans_columns", "columns": cols})
     except Exception as e:
-        results.append({"source": "tables", "error": str(e)})
+        results.append({"source": "purl_loans_columns", "error": str(e)})
 
     # Try deals table
     try:
