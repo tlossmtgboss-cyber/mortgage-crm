@@ -43131,22 +43131,14 @@ async def get_loan(loan_id: int, db: Session = Depends(get_db), current_user: Us
                    closing_date, days_in_stage, sla_status, created_at,
                    loan_officer_name, loan_officer_email, processor, processor_email,
                    underwriter, underwriter_email, closer, closer_email,
-                   -- Property Details (Salesforce sync)
+                   -- Property Details
                    property_address, property_city, property_state, property_zip,
-                   property_type, occupancy_type, property_county, property_ownership_type,
-                   property_units, appraisal_value, purchase_price,
-                   -- 1st Loan Details
-                   interest_rate, rate_type, loan_type,
-                   property_tax, hazard_insurance, mortgage_insurance, hoa_amount,
-                   origination_fee, estimated_prepaid_interest, points,
-                   monthly_payment, index_rate, margin,
-                   -- LTV/CLTV
-                   ltv, cltv, loan_purpose, file_state,
-                   -- 2nd Loan
-                   second_loan_amount, second_loan_rate, second_loan_payment,
-                   -- Present vs Proposed
-                   present_housing_expense, proposed_housing_expense,
-                   present_monthly_payment, proposed_monthly_payment
+                   appraisal_value, purchase_price,
+                   -- Loan Details
+                   loan_type, term, down_payment, lender,
+                   lock_date, lock_expiration_date,
+                   -- Loan Officer
+                   loan_officer_id
             FROM loans
             WHERE {where_sql}
         """
