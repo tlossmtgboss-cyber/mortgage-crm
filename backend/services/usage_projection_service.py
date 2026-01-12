@@ -656,7 +656,7 @@ class UsageProjectionService:
         result = self.db.execute(text("""
             SELECT
                 uus.user_id,
-                u.name,
+                u.full_name,
                 u.email,
                 COALESCE(SUM(uus.total_cost), 0) as total_cost,
                 COALESCE(SUM(uus.ai_tokens_input + uus.ai_tokens_output), 0) as total_tokens,
@@ -666,7 +666,7 @@ class UsageProjectionService:
             JOIN users u ON u.id = uus.user_id
             WHERE uus.organization_id = :org_id
             AND uus.snapshot_date BETWEEN :start_date AND :end_date
-            GROUP BY uus.user_id, u.name, u.email
+            GROUP BY uus.user_id, u.full_name, u.email
             ORDER BY total_cost DESC
             LIMIT :limit
         """), {
