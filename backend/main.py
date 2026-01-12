@@ -36303,6 +36303,132 @@ async def debug_complete_onboarding_by_email(
     }
 
 
+@app.post("/api/v1/admin/run-salesforce-migration")
+async def run_salesforce_migration(
+    secret: str = Query(..., description="Admin secret key"),
+    db: Session = Depends(get_db)
+):
+    """Run Salesforce sync fields migration - adds columns to loans and leads tables"""
+    # Verify admin secret
+    admin_secret = os.getenv("ADMIN_SECRET", "perennia-admin-2025")
+    if secret != admin_secret:
+        raise HTTPException(status_code=401, detail="Invalid admin secret")
+
+    # Columns to add to LOANS table
+    loan_columns = [
+        # Property Details
+        ("property_type", "VARCHAR"),
+        ("occupancy_type", "VARCHAR"),
+        ("property_county", "VARCHAR"),
+        ("property_ownership_type", "VARCHAR"),
+        ("property_units", "INTEGER"),
+        # 1st Loan Financial Details
+        ("rate_type", "VARCHAR"),
+        ("monthly_payment", "FLOAT"),
+        ("property_tax", "FLOAT"),
+        ("hazard_insurance", "FLOAT"),
+        ("mortgage_insurance", "FLOAT"),
+        ("hoa_amount", "FLOAT"),
+        ("origination_fee", "FLOAT"),
+        ("estimated_prepaid_interest", "FLOAT"),
+        ("points", "FLOAT"),
+        ("index_rate", "FLOAT"),
+        ("margin", "FLOAT"),
+        # LTV/CLTV
+        ("ltv", "FLOAT"),
+        ("cltv", "FLOAT"),
+        ("loan_purpose", "VARCHAR"),
+        ("file_state", "VARCHAR"),
+        # 2nd Loan Details
+        ("second_loan_amount", "FLOAT"),
+        ("second_loan_rate", "FLOAT"),
+        ("second_loan_payment", "FLOAT"),
+        # Present vs Proposed Housing
+        ("present_housing_expense", "FLOAT"),
+        ("proposed_housing_expense", "FLOAT"),
+        ("present_monthly_payment", "FLOAT"),
+        ("proposed_monthly_payment", "FLOAT"),
+    ]
+
+    # Columns to add to LEADS table
+    lead_columns = [
+        ("occupancy_type", "VARCHAR"),
+        ("property_county", "VARCHAR"),
+        ("property_ownership_type", "VARCHAR"),
+        ("property_units", "INTEGER"),
+        ("rate_type", "VARCHAR"),
+        ("monthly_payment", "FLOAT"),
+        ("property_tax", "FLOAT"),
+        ("hazard_insurance", "FLOAT"),
+        ("mortgage_insurance", "FLOAT"),
+        ("hoa_amount", "FLOAT"),
+        ("origination_fee", "FLOAT"),
+        ("estimated_prepaid_interest", "FLOAT"),
+        ("index_rate", "FLOAT"),
+        ("margin", "FLOAT"),
+        ("loan_purpose", "VARCHAR"),
+        ("file_state", "VARCHAR"),
+        ("second_loan_amount", "FLOAT"),
+        ("second_loan_rate", "FLOAT"),
+        ("second_loan_payment", "FLOAT"),
+        ("present_housing_expense", "FLOAT"),
+        ("proposed_housing_expense", "FLOAT"),
+        ("present_monthly_payment", "FLOAT"),
+        ("proposed_monthly_payment", "FLOAT"),
+        ("cltv", "FLOAT"),
+    ]
+
+    results = {"loans_added": [], "loans_skipped": [], "leads_added": [], "leads_skipped": [], "errors": []}
+
+    try:
+        # Get existing columns for LOANS
+        loan_cols_result = db.execute(text("""
+            SELECT column_name FROM information_schema.columns WHERE table_name = 'loans'
+        """))
+        existing_loan_cols = {row[0] for row in loan_cols_result}
+
+        # Add missing columns to LOANS
+        for col_name, col_type in loan_columns:
+            if col_name in existing_loan_cols:
+                results["loans_skipped"].append(col_name)
+            else:
+                try:
+                    db.execute(text(f"ALTER TABLE loans ADD COLUMN {col_name} {col_type}"))
+                    results["loans_added"].append(col_name)
+                except Exception as e:
+                    results["errors"].append(f"loans.{col_name}: {str(e)}")
+
+        # Get existing columns for LEADS
+        lead_cols_result = db.execute(text("""
+            SELECT column_name FROM information_schema.columns WHERE table_name = 'leads'
+        """))
+        existing_lead_cols = {row[0] for row in lead_cols_result}
+
+        # Add missing columns to LEADS
+        for col_name, col_type in lead_columns:
+            if col_name in existing_lead_cols:
+                results["leads_skipped"].append(col_name)
+            else:
+                try:
+                    db.execute(text(f"ALTER TABLE leads ADD COLUMN {col_name} {col_type}"))
+                    results["leads_added"].append(col_name)
+                except Exception as e:
+                    results["errors"].append(f"leads.{col_name}: {str(e)}")
+
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": f"Migration complete: {len(results['loans_added'])} loan columns added, {len(results['leads_added'])} lead columns added",
+            "results": results
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Migration failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
 @app.post("/api/v1/debug/test-two-way-email")
 async def debug_test_two_way_email(
     to_email: str = "tloss@me.com",
