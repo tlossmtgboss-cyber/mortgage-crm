@@ -483,7 +483,7 @@ async def debug_modules(
             # Enable all modules if requested
             if enable_all:
                 premium_modules = [
-                    'ai_assistant', 'partner_portals', 'video_os',
+                    'ai_assistant', 'partner_portals', 'video_os', 'voice_os',
                     'recruiting_suite', 'conversation_intelligence',
                     'advanced_analytics', 'integrations'
                 ]
@@ -585,6 +585,7 @@ async def enable_all_modules(
             'ai_assistant',
             'partner_portals',
             'video_os',
+            'voice_os',
             'recruiting_suite',
             'conversation_intelligence',
             'advanced_analytics',

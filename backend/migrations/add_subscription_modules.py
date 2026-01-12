@@ -88,6 +88,27 @@ MODULE_DEFINITIONS = [
         "sort_order": 3,
     },
     {
+        "module_key": "voice_os",
+        "module_name": "Voice OS",
+        "description": "AI-powered voice features including agents, call queues, IVR, power dialer, and analytics",
+        "category": "premium",
+        "monthly_price": 149.00,
+        "annual_price": 1490.00,
+        "included_features": [
+            "Voice Agents",
+            "Live Calls Dashboard",
+            "Call Queues",
+            "Conference Rooms",
+            "IVR Menus",
+            "Hold Music",
+            "Talk to Agent",
+            "Power Dialer",
+            "Call Analytics"
+        ],
+        "gated_routes": ["/voice/agents", "/voice/live", "/voice/queues", "/voice/conferences", "/voice/ivr", "/voice/hold-music", "/voice/talk", "/dialer", "/voice/analytics"],
+        "sort_order": 4,
+    },
+    {
         "module_key": "recruiting_suite",
         "module_name": "Recruiting Suite",
         "description": "Full recruiting pipeline with DISC assessments and candidate management",
@@ -102,7 +123,7 @@ MODULE_DEFINITIONS = [
             "Recruiting Analytics"
         ],
         "gated_routes": ["/master-manager/recruiting", "/recruiting"],
-        "sort_order": 4,
+        "sort_order": 5,
     },
     {
         "module_key": "conversation_intelligence",
@@ -119,7 +140,7 @@ MODULE_DEFINITIONS = [
             "Real-time Assist"
         ],
         "gated_routes": ["/conversation-intelligence"],
-        "sort_order": 5,
+        "sort_order": 6,
     },
     {
         "module_key": "advanced_analytics",
@@ -136,7 +157,7 @@ MODULE_DEFINITIONS = [
             "Deal Alerts"
         ],
         "gated_routes": ["/profitability", "/market", "/decision-lab"],
-        "sort_order": 6,
+        "sort_order": 7,
     },
     {
         "module_key": "integrations",
@@ -152,7 +173,7 @@ MODULE_DEFINITIONS = [
             "Custom Webhooks"
         ],
         "gated_routes": ["/integrations", "/settings/integrations"],
-        "sort_order": 7,
+        "sort_order": 8,
     },
 ]
 
