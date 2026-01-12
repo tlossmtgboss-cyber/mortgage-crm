@@ -2350,6 +2350,188 @@ async def revoke_token_by_id(
 
 
 # =============================================================================
+# RESEND PORTAL INVITE
+# =============================================================================
+
+@purl_admin_router.post(
+    "/workspaces/{workspace_id}/resend-invite",
+    summary="Resend portal invite",
+    description="Generate a new token and resend portal invite email to borrower"
+)
+async def resend_portal_invite(
+    workspace_id: int = Path(..., description="Workspace ID"),
+    background_tasks: BackgroundTasks = None,
+    current_user: User = Depends(get_authenticated_user()),
+    db: Session = Depends(get_db)
+):
+    """Resend portal invite with a fresh token."""
+    from services.purl_email_service import email_service
+
+    org_id = get_user_org_id(current_user)
+
+    # Get workspace
+    workspace = db.query(PURLWorkspace).filter(
+        PURLWorkspace.id == workspace_id,
+        PURLWorkspace.organization_id == org_id
+    ).first()
+
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    # Get borrower contact
+    borrower = db.query(PURLContact).filter(
+        PURLContact.workspace_id == workspace_id,
+        PURLContact.contact_type == "borrower"
+    ).first()
+
+    if not borrower or not borrower.email:
+        raise HTTPException(
+            status_code=400,
+            detail="No borrower contact with email found for this workspace"
+        )
+
+    # Create new token
+    token_service = PURLTokenService(db)
+    token_id, full_token = token_service.create_token(
+        organization_id=org_id,
+        workspace_id=workspace_id,
+        scope=TokenScope.WRITE,
+        contact_id=borrower.id,
+        created_by=current_user.id
+    )
+
+    # Get loan officer info for the email
+    lo_name = current_user.full_name or current_user.email
+    lo_email = current_user.email
+
+    # Send the welcome email with portal link
+    email_sent = await email_service.send_welcome_email(
+        to_email=borrower.email,
+        first_name=borrower.first_name or "there",
+        workspace_slug=workspace.slug,
+        token=full_token,
+        loan_officer_name=lo_name,
+        loan_officer_email=lo_email
+    )
+
+    # Log action
+    audit_log = PURLAuditLog(
+        organization_id=org_id,
+        workspace_id=workspace_id,
+        action="portal_invite_resent",
+        actor_type="user",
+        actor_id=current_user.id,
+        metadata={
+            "token_id": token_id,
+            "sent_to": borrower.email,
+            "email_sent": email_sent
+        }
+    )
+    db.add(audit_log)
+    db.commit()
+
+    portal_url = f"https://app.perenniaai.com/portal/{workspace.slug}?token={full_token}"
+
+    return {
+        "success": True,
+        "message": f"Portal invite sent to {borrower.email}",
+        "portal_url": portal_url,
+        "email_sent": email_sent,
+        "token_id": token_id
+    }
+
+
+@purl_admin_router.post(
+    "/workspaces/by-slug/{slug}/resend-invite",
+    summary="Resend portal invite by slug",
+    description="Generate a new token and resend portal invite email to borrower (lookup by slug)"
+)
+async def resend_portal_invite_by_slug(
+    slug: str = Path(..., description="Workspace slug"),
+    background_tasks: BackgroundTasks = None,
+    current_user: User = Depends(get_authenticated_user()),
+    db: Session = Depends(get_db)
+):
+    """Resend portal invite by workspace slug."""
+    from services.purl_email_service import email_service
+
+    org_id = get_user_org_id(current_user)
+
+    # Get workspace by slug
+    workspace = db.query(PURLWorkspace).filter(
+        PURLWorkspace.slug == slug,
+        PURLWorkspace.organization_id == org_id
+    ).first()
+
+    if not workspace:
+        raise HTTPException(status_code=404, detail=f"Workspace '{slug}' not found")
+
+    # Get borrower contact
+    borrower = db.query(PURLContact).filter(
+        PURLContact.workspace_id == workspace.id,
+        PURLContact.contact_type == "borrower"
+    ).first()
+
+    if not borrower or not borrower.email:
+        raise HTTPException(
+            status_code=400,
+            detail="No borrower contact with email found for this workspace"
+        )
+
+    # Create new token
+    token_service = PURLTokenService(db)
+    token_id, full_token = token_service.create_token(
+        organization_id=org_id,
+        workspace_id=workspace.id,
+        scope=TokenScope.WRITE,
+        contact_id=borrower.id,
+        created_by=current_user.id
+    )
+
+    # Get loan officer info for the email
+    lo_name = current_user.full_name or current_user.email
+    lo_email = current_user.email
+
+    # Send the welcome email with portal link
+    email_sent = await email_service.send_welcome_email(
+        to_email=borrower.email,
+        first_name=borrower.first_name or "there",
+        workspace_slug=workspace.slug,
+        token=full_token,
+        loan_officer_name=lo_name,
+        loan_officer_email=lo_email
+    )
+
+    # Log action
+    audit_log = PURLAuditLog(
+        organization_id=org_id,
+        workspace_id=workspace.id,
+        action="portal_invite_resent",
+        actor_type="user",
+        actor_id=current_user.id,
+        metadata={
+            "token_id": token_id,
+            "sent_to": borrower.email,
+            "email_sent": email_sent
+        }
+    )
+    db.add(audit_log)
+    db.commit()
+
+    portal_url = f"https://app.perenniaai.com/portal/{workspace.slug}?token={full_token}"
+
+    return {
+        "success": True,
+        "message": f"Portal invite sent to {borrower.email}",
+        "portal_url": portal_url,
+        "email_sent": email_sent,
+        "token_id": token_id,
+        "borrower_name": f"{borrower.first_name or ''} {borrower.last_name or ''}".strip(),
+        "borrower_email": borrower.email
+    }
+
+
+# =============================================================================
 # HEALTH CHECK
 # =============================================================================
 
