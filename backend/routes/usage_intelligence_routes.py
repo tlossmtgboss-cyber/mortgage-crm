@@ -14,56 +14,50 @@ from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from database import get_db
-from utils.auth import require_admin
+# OAuth2 scheme for token extraction
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+# Database and user dependencies - injected from main app
+_get_db = None
+_get_current_user = None
 
 
-async def get_current_user(request: Request, db: Session = Depends(get_db)):
-    """Get current user from session/token."""
-    user_id = None
+def set_dependencies(get_db_func, get_current_user_func):
+    """Set the database and user dependencies from main app."""
+    global _get_db, _get_current_user
+    _get_db = get_db_func
+    _get_current_user = get_current_user_func
 
-    # Check session first (safely)
-    try:
-        if "session" in request.scope:
-            user_id = request.session.get("user_id")
-    except:
-        pass
 
-    if not user_id:
-        # Try to get from Authorization header
-        auth_header = request.headers.get("Authorization", "")
-        if auth_header.startswith("Bearer "):
-            # For now, just extract user_id from a simple token format
-            # In production, this would validate a JWT
-            token = auth_header.replace("Bearer ", "")
-            try:
-                # Simple token format: user_id or JWT
-                user_id = int(token) if token.isdigit() else 1
-            except:
-                user_id = 1  # Default to admin for testing
+def get_db():
+    """Wrapper for database dependency."""
+    if _get_db is None:
+        raise RuntimeError("Database dependency not configured. Call set_dependencies first.")
+    yield from _get_db()
 
-    if not user_id:
+
+async def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    request: Request = None,
+    db: Session = Depends(get_db)
+):
+    """Async wrapper for current user dependency."""
+    if _get_current_user is None:
+        raise RuntimeError("User dependency not configured. Call set_dependencies first.")
+    return await _get_current_user(token=token, request=request, db=db)
+
+
+async def require_owner(current_user = Depends(get_current_user)):
+    """Require owner/admin role for access."""
+    if current_user is None:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    # Get user from database
-    result = db.execute(text("SELECT id, full_name, email, role FROM users WHERE id = :id"), {"id": user_id})
-    user = result.fetchone()
-
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-
-    return {"id": user[0], "name": user[1] or "User", "email": user[2], "role": user[3] or "admin"}
-
-
-async def require_owner(
-    current_user: dict = Depends(get_current_user)
-):
-    """Require owner/admin role for access."""
-    role = current_user.get("role", "").lower()
-    if role not in ["admin", "owner", "leadership"]:
+    role = getattr(current_user, 'role', '') or ''
+    if role.lower() not in ["admin", "owner", "leadership"]:
         raise HTTPException(status_code=403, detail="Owner access required")
     return current_user
 

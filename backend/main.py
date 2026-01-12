@@ -20009,7 +20009,8 @@ except Exception as e:
 
 # Include Usage Intelligence routes for cost tracking (Owner-only)
 try:
-    from routes.usage_intelligence_routes import router as usage_intelligence_router
+    from routes.usage_intelligence_routes import router as usage_intelligence_router, set_dependencies as set_usage_deps
+    set_usage_deps(get_db, get_current_user)
     app.include_router(usage_intelligence_router, tags=["Usage Intelligence"])
     logger.info("✅ Usage Intelligence routes loaded")
 except Exception as e:
