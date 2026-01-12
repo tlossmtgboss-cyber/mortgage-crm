@@ -62141,6 +62141,36 @@ async def grant_master_admin(
         raise HTTPException(status_code=500, detail=f"Failed to grant master admin: {str(e)}")
 
 
+@app.post("/api/v1/public/migrations/delete-user", response_model=None)
+async def delete_user_migration(
+    migration_key: str = "",
+    email: str = "",
+    db: Session = Depends(get_db)
+):
+    """Delete a user by email"""
+    if migration_key != "delete-user-2026":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
+
+    try:
+        result = db.execute(text("""
+            DELETE FROM users WHERE email = :email RETURNING id, email
+        """), {"email": email})
+
+        user = result.fetchone()
+
+        if not user:
+            return {"success": False, "message": f"User {email} not found"}
+
+        db.commit()
+        return {"success": True, "message": f"User {email} deleted", "user_id": user[0]}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/v1/migrations/add-user-compliance-columns", response_model=None)
 async def add_user_compliance_columns_migration(
     migration_key: str = "",
