@@ -1110,6 +1110,83 @@ async def reinstate_invite_by_token(
         raise DatabaseException(f"Failed to reinstate invitation: {str(e)}")
 
 
+@router.post("/invites/resend-by-token/{token}")
+async def resend_invite_by_token(
+    token: str,
+    db: Session = Depends(get_db)
+):
+    """Resend invitation email by token (public endpoint for quick fixes)"""
+    try:
+        # Get invitation
+        invitation = db.execute(text("""
+            SELECT id, token, email, company_name, contact_name, plan, seats,
+                   promo_code, personal_message, expires_at, status
+            FROM subscriber_invitations
+            WHERE token = :token
+        """), {'token': token}).fetchone()
+
+        if not invitation:
+            raise NotFoundException(f"Invitation with token not found")
+
+        if invitation.status != 'pending':
+            raise ValidationException(f"Cannot resend invitation with status '{invitation.status}'")
+
+        # Extend expiration
+        new_expires = datetime.now(timezone.utc) + timedelta(days=7)
+
+        db.execute(text("""
+            UPDATE subscriber_invitations
+            SET expires_at = :new_expires,
+                updated_at = NOW()
+            WHERE token = :token
+        """), {
+            'token': token,
+            'new_expires': new_expires
+        })
+        db.commit()
+
+        # Build invitation link
+        invitation_link = f"https://perenniaai.com/signup?invite={token}"
+        if invitation.promo_code:
+            invitation_link += f"&promo={invitation.promo_code}"
+
+        # Send the invitation email
+        email_sent = False
+        try:
+            email_sent = await send_subscription_invite_email(
+                to_email=invitation.email,
+                company_name=invitation.company_name,
+                contact_name=invitation.contact_name,
+                plan=invitation.plan,
+                seats=invitation.seats,
+                invitation_token=token,
+                personal_message=invitation.personal_message,
+                expires_days=7,
+                promo_code=invitation.promo_code
+            )
+        except Exception as email_err:
+            logger.error(f"Error sending invitation email: {email_err}")
+
+        return success_response(
+            data={
+                'id': str(invitation.id),
+                'email': invitation.email,
+                'company_name': invitation.company_name,
+                'invitation_link': invitation_link,
+                'expires_at': new_expires.isoformat(),
+                'email_sent': email_sent
+            },
+            message=f"Invitation email {'sent' if email_sent else 'failed to send'} to {invitation.email}"
+        )
+
+    except (NotFoundException, ValidationException):
+        raise
+    except Exception as e:
+        logger.error(f"Error resending invitation: {e}")
+        db.rollback()
+        raise DatabaseException(f"Failed to resend invitation: {str(e)}")
+
+
 # =============================================================================
 # Account List Endpoints
 # =============================================================================
