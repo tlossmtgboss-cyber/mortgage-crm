@@ -2,7 +2,8 @@
  * AdminOnboarding - Admin Subscription Signup Wizard
  *
  * Quick Start flow for administrators signing up via subscription invitation.
- * 6 Steps: Welcome/Password → Company Profile → Your Profile → Team Invites → Payment → Complete
+ * 5 Steps: Welcome/Password → Company Profile → Your Profile → Team Invites → Modules → Complete
+ * Updated: 2026-01-12 - Fixed token storage, removed industry dropdown
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
