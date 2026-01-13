@@ -62217,6 +62217,7 @@ async def delete_user_migration(
         db.execute(text("DELETE FROM scheduler_booking_links WHERE user_id = :id"), {"id": user_id})
         db.execute(text("DELETE FROM ai_feedback_logs WHERE user_id = :id"), {"id": user_id})
         db.execute(text("UPDATE microsoft_app_config SET created_by = NULL WHERE created_by = :id"), {"id": user_id})
+        db.execute(text("DELETE FROM purl_workspaces WHERE owner_user_id = :id"), {"id": user_id})
 
         # Now delete the user
         db.execute(text("DELETE FROM users WHERE id = :id"), {"id": user_id})
