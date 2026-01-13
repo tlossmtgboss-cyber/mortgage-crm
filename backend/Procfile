@@ -1,0 +1,4 @@
+# Procfile for Railway deployment
+# Runs migrations before starting the application
+
+web: python run_migrations.py && uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}

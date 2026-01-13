@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 # revision identifiers
 revision = '002_agent_orchestration'
-down_revision = '001_telephony_tables'
+down_revision = '001_telephony'
 branch_labels = None
 depends_on = None
 
