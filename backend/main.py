@@ -62186,6 +62186,7 @@ async def delete_user_migration(
         db.execute(text("DELETE FROM user_settings WHERE user_id = :id"), {"id": user_id})
         db.execute(text("DELETE FROM integration_credentials WHERE user_id = :id"), {"id": user_id})
         db.execute(text("UPDATE incoming_data_events SET user_id = NULL WHERE user_id = :id"), {"id": user_id})
+        db.execute(text("UPDATE merge_ai_models SET user_id = NULL WHERE user_id = :id"), {"id": user_id})
 
         # Now delete the user
         db.execute(text("DELETE FROM users WHERE id = :id"), {"id": user_id})
