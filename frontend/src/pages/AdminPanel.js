@@ -17,7 +17,7 @@ import './AdminPanel.css';
 
 const AdminPanel = () => {
   const navigate = useNavigate();
-  const { userRole, hasPermission, hasAnyPermission, loading: permissionsLoading } = usePermissions();
+  const { userRole, hasPermission, hasAnyPermission, isPlatformAdmin, isSiteAdmin, loading: permissionsLoading } = usePermissions();
 
   // Get user info from localStorage as fallback (in case PermissionContext has stale data)
   const getLocalStorageRole = () => {
@@ -27,25 +27,43 @@ const AdminPanel = () => {
         const user = JSON.parse(userStr);
         return {
           role: user.role,
-          permission_role: user.permission_role
+          permission_role: user.permission_role,
+          organization_id: user.organization_id
         };
       }
     } catch (e) {}
-    return { role: null, permission_role: null };
+    return { role: null, permission_role: null, organization_id: null };
   };
 
   const localUser = getLocalStorageRole();
 
-  // Permission check - require admin access
+  // Permission check - require admin access (platform admin OR site admin)
   // Check both PermissionContext and localStorage for admin role
   const canAccessAdmin = hasAnyPermission(['admin.view', 'admin.manage', 'system.admin']) ||
                          userRole === 'admin' ||
+                         userRole === 'site_admin' ||
                          userRole === 'management' ||
                          localUser.permission_role === 'admin' ||
+                         localUser.permission_role === 'site_admin' ||
                          localUser.role === 'admin';
 
+  // Determine admin type: Platform Admin (developer) or Site Administrator (licensee)
+  const isCurrentUserPlatformAdmin = isPlatformAdmin ||
+                                      localUser.permission_role === 'admin' ||
+                                      (localUser.role === 'admin' && !localUser.organization_id);
+  const isCurrentUserSiteAdmin = isSiteAdmin ||
+                                  localUser.permission_role === 'site_admin' ||
+                                  (userRole === 'management' && localUser.organization_id);
+
   // Debug logging
-  console.log('AdminPanel permissions:', { userRole, canAccessAdmin, permissionsLoading, localUser });
+  console.log('AdminPanel permissions:', {
+    userRole,
+    canAccessAdmin,
+    isCurrentUserPlatformAdmin,
+    isCurrentUserSiteAdmin,
+    permissionsLoading,
+    localUser
+  });
 
   // State
   const [loading, setLoading] = useState(true);
@@ -117,6 +135,7 @@ const AdminPanel = () => {
     email: '',
     phone: '',
     role: 'user',
+    permission_role: 'sales',
     company: '',
     nmls_id: '',
     slug: '',
@@ -347,6 +366,7 @@ const AdminPanel = () => {
       email: user.email || '',
       phone: user.phone || '',
       role: user.role || 'user',
+      permission_role: user.permission_role || 'sales',
       company: user.company || '',
       nmls_id: user.nmls_id || '',
       slug: user.slug || '',
@@ -365,6 +385,7 @@ const AdminPanel = () => {
       email: '',
       phone: '',
       role: 'user',
+      permission_role: 'sales',
       company: '',
       nmls_id: '',
       slug: '',
@@ -563,8 +584,24 @@ const AdminPanel = () => {
       {/* Header */}
       <header className="admin-header">
         <div className="header-left">
-          <h1>Admin Panel</h1>
-          <p>Manage users, loan officers, and system settings</p>
+          <h1>
+            Admin Panel
+            {isCurrentUserPlatformAdmin && (
+              <span className="admin-type-badge platform-admin" title="Platform Administrator - Full system access across all organizations">
+                Platform Admin
+              </span>
+            )}
+            {isCurrentUserSiteAdmin && !isCurrentUserPlatformAdmin && (
+              <span className="admin-type-badge site-admin" title="Site Administrator - Manage users and settings for your organization">
+                Site Administrator
+              </span>
+            )}
+          </h1>
+          <p>
+            {isCurrentUserPlatformAdmin
+              ? 'Full platform access - Manage all organizations, users, and system settings'
+              : 'Manage users, loan officers, and settings for your organization'}
+          </p>
         </div>
         <div className="header-right">
           {/* Impersonate User - shows active seats/users to impersonate */}
@@ -2056,6 +2093,27 @@ const AdminPanel = () => {
                     <option value="admin">Admin</option>
                   </select>
                 </div>
+                <div className="form-group">
+                  <label htmlFor="permission_role">Permission Level *</label>
+                  <select
+                    id="permission_role"
+                    name="permission_role"
+                    value={userForm.permission_role}
+                    onChange={handleUserInput}
+                    required
+                  >
+                    {isPlatformAdmin && <option value="admin">Platform Admin</option>}
+                    <option value="site_admin">Site Admin</option>
+                    <option value="leadership">Leadership</option>
+                    <option value="management">Management</option>
+                    <option value="sales">Sales</option>
+                    <option value="processing">Processing</option>
+                    <option value="operations">Operations</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-row">
                 <div className="form-group">
                   <label htmlFor="company">Company</label>
                   <input
