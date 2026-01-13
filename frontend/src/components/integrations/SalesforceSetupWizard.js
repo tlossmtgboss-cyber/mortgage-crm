@@ -32,6 +32,10 @@ function SalesforceSetupWizard({ onComplete }) {
   const [mappings, setMappings] = useState([]);
   const [mappingStats, setMappingStats] = useState(null);
   const [syncHistory, setSyncHistory] = useState([]);
+  const [emailSyncStatus, setEmailSyncStatus] = useState(null);
+  const [calendarSyncStatus, setCalendarSyncStatus] = useState(null);
+  const [syncingEmails, setSyncingEmails] = useState(false);
+  const [syncingCalendar, setSyncingCalendar] = useState(false);
 
   const token = localStorage.getItem('token');
 
@@ -60,6 +64,8 @@ function SalesforceSetupWizard({ onComplete }) {
           loadMappings();
           loadMappingStats();
           loadSyncHistory();
+          loadEmailSyncStatus();
+          loadCalendarSyncStatus();
           setStep(4);
         }
       }
@@ -218,6 +224,76 @@ function SalesforceSetupWizard({ onComplete }) {
     } catch (err) {
       console.error('Failed to load sync history:', err);
     }
+  };
+
+  const loadEmailSyncStatus = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/integrations/salesforce/email-sync-status`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setEmailSyncStatus(data);
+      }
+    } catch (err) {
+      console.error('Failed to load email sync status:', err);
+    }
+  };
+
+  const loadCalendarSyncStatus = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/integrations/salesforce/calendar-sync-status`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCalendarSyncStatus(data);
+      }
+    } catch (err) {
+      console.error('Failed to load calendar sync status:', err);
+    }
+  };
+
+  const syncEmails = async () => {
+    setSyncingEmails(true);
+    try {
+      const res = await fetch(`${API_URL}/api/integrations/salesforce/sync-emails`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        toast.success(data.message || `Synced ${data.emails_synced} emails`);
+        await loadEmailSyncStatus();
+      } else {
+        const error = await res.json();
+        toast.error(error.detail || 'Email sync failed');
+      }
+    } catch (err) {
+      toast.error('Email sync failed');
+    }
+    setSyncingEmails(false);
+  };
+
+  const syncCalendar = async () => {
+    setSyncingCalendar(true);
+    try {
+      const res = await fetch(`${API_URL}/api/integrations/salesforce/sync-calendar`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        toast.success(data.message || `Synced ${data.events_synced} events`);
+        await loadCalendarSyncStatus();
+      } else {
+        const error = await res.json();
+        toast.error(error.detail || 'Calendar sync failed');
+      }
+    } catch (err) {
+      toast.error('Calendar sync failed');
+    }
+    setSyncingCalendar(false);
   };
 
   const activateIntegration = async () => {
@@ -512,22 +588,76 @@ function SalesforceSetupWizard({ onComplete }) {
       </div>
 
       <div className="sync-controls">
-        <h3>Sync Controls</h3>
-        <div className="button-group">
-          <button
-            className="btn btn-primary"
-            onClick={() => triggerSync(false)}
-            disabled={loading}
-          >
-            {loading ? 'Syncing...' : 'Incremental Sync'}
-          </button>
-          <button
-            className="btn btn-outline-primary"
-            onClick={() => triggerSync(true)}
-            disabled={loading}
-          >
-            Full Sync
-          </button>
+        <h3>Data Sync</h3>
+        <div className="sync-section">
+          <div className="sync-type">
+            <h4>Leads & Opportunities</h4>
+            <p className="sync-description">Sync contacts, leads, and opportunities from Salesforce</p>
+            <div className="button-group">
+              <button
+                className="btn btn-primary"
+                onClick={() => triggerSync(false)}
+                disabled={loading}
+              >
+                {loading ? 'Syncing...' : 'Incremental Sync'}
+              </button>
+              <button
+                className="btn btn-outline-primary"
+                onClick={() => triggerSync(true)}
+                disabled={loading}
+              >
+                Full Sync
+              </button>
+            </div>
+          </div>
+
+          <div className="sync-type">
+            <h4>Emails</h4>
+            <p className="sync-description">
+              Sync email history from Salesforce to client profiles
+              {emailSyncStatus?.total_synced_emails > 0 && (
+                <span className="sync-stat"> ({emailSyncStatus.total_synced_emails} synced)</span>
+              )}
+            </p>
+            <div className="button-group">
+              <button
+                className="btn btn-primary"
+                onClick={syncEmails}
+                disabled={syncingEmails}
+              >
+                {syncingEmails ? 'Syncing Emails...' : 'Sync Emails'}
+              </button>
+            </div>
+            {emailSyncStatus?.last_sync && (
+              <p className="last-sync-info">
+                Last sync: {new Date(emailSyncStatus.last_sync.timestamp).toLocaleString()}
+              </p>
+            )}
+          </div>
+
+          <div className="sync-type">
+            <h4>Calendar</h4>
+            <p className="sync-description">
+              Sync calendar events and tasks from Salesforce
+              {calendarSyncStatus?.total_synced_events > 0 && (
+                <span className="sync-stat"> ({calendarSyncStatus.total_synced_events} events, {calendarSyncStatus.total_synced_tasks} tasks synced)</span>
+              )}
+            </p>
+            <div className="button-group">
+              <button
+                className="btn btn-primary"
+                onClick={syncCalendar}
+                disabled={syncingCalendar}
+              >
+                {syncingCalendar ? 'Syncing Calendar...' : 'Sync Calendar'}
+              </button>
+            </div>
+            {calendarSyncStatus?.last_sync && (
+              <p className="last-sync-info">
+                Last sync: {new Date(calendarSyncStatus.last_sync.timestamp).toLocaleString()}
+              </p>
+            )}
+          </div>
         </div>
       </div>
 

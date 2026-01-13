@@ -803,3 +803,106 @@ async def get_email_sync_status(
             "timestamp": last_sync[2].isoformat() if last_sync else None
         } if last_sync else None
     }
+
+
+# ============ Calendar Sync Endpoints ============
+
+@router.post("/sync-calendar")
+async def sync_salesforce_calendar(
+    request: Request,
+    days_back: int = Query(30, description="Number of days to sync back"),
+    days_forward: int = Query(90, description="Number of days to sync forward"),
+    limit: int = Query(500, description="Maximum events to sync"),
+    db: Session = Depends(get_db)
+):
+    """
+    Sync calendar events from Salesforce to CRM.
+
+    Pulls Event records and scheduled Task records from Salesforce
+    and creates corresponding records in the CRM calendar.
+    """
+    user_id = require_user(request, db)
+    profile = get_integration_profile(db, user_id)
+
+    if not profile:
+        raise HTTPException(status_code=400, detail="Salesforce not connected")
+
+    if profile.status != 'active':
+        raise HTTPException(status_code=400, detail="Salesforce integration is not active")
+
+    try:
+        from services.salesforce.calendar_sync_service import salesforce_calendar_sync
+
+        result = await salesforce_calendar_sync.sync_calendar(
+            db=db,
+            integration_profile_id=profile.id,
+            days_back=days_back,
+            days_forward=days_forward,
+            limit=limit
+        )
+
+        return {
+            "status": "success" if result['success'] else "partial",
+            "events_synced": result['events_synced'],
+            "events_skipped": result['events_skipped'],
+            "tasks_synced": result['tasks_synced'],
+            "tasks_skipped": result['tasks_skipped'],
+            "errors": result['errors'][:5] if result['errors'] else None,
+            "message": f"Synced {result['events_synced']} events and {result['tasks_synced']} tasks from Salesforce"
+        }
+    except Exception as e:
+        logger.error(f"Calendar sync failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Calendar sync failed: {str(e)}")
+
+
+@router.get("/calendar-sync-status")
+async def get_calendar_sync_status(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Get the status of calendar sync for the current user."""
+    user_id = require_user(request, db)
+    profile = get_integration_profile(db, user_id)
+
+    if not profile:
+        return {
+            "connected": False,
+            "calendar_sync_available": False,
+            "message": "Salesforce not connected"
+        }
+
+    # Get last calendar sync event
+    last_sync = db.execute(text("""
+        SELECT event_type, event_data, created_at
+        FROM integration_events
+        WHERE integration_profile_id = :profile_id
+        AND event_type IN ('calendar_sync_completed', 'calendar_sync_failed')
+        ORDER BY created_at DESC
+        LIMIT 1
+    """), {"profile_id": profile.id}).fetchone()
+
+    # Count synced events
+    event_count = db.execute(text("""
+        SELECT COUNT(*) FROM calendar_events
+        WHERE user_id = :user_id
+        AND meta_data->>'source' = 'salesforce_sync'
+    """), {"user_id": user_id}).scalar()
+
+    # Count synced tasks
+    task_count = db.execute(text("""
+        SELECT COUNT(*) FROM tasks
+        WHERE user_id = :user_id
+        AND meta_data->>'source' = 'salesforce_sync'
+    """), {"user_id": user_id}).scalar()
+
+    return {
+        "connected": profile.status == 'active',
+        "calendar_sync_available": True,
+        "total_synced_events": event_count or 0,
+        "total_synced_tasks": task_count or 0,
+        "last_sync": {
+            "status": last_sync[0] if last_sync else None,
+            "data": last_sync[1] if last_sync else None,
+            "timestamp": last_sync[2].isoformat() if last_sync else None
+        } if last_sync else None
+    }
