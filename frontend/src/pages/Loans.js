@@ -339,11 +339,20 @@ function Loans() {
   };
 
   const handleDelete = async (id) => {
+    // Find the loan name for the confirmation
+    const loan = loans.find(l => l.id === id);
+    const loanIdentifier = loan?.loan_number || loan?.borrower_name || `Loan #${id}`;
+
+    if (!window.confirm(`Are you sure you want to delete "${loanIdentifier}"? This action cannot be undone.`)) {
+      return;
+    }
+
     try {
       await loansAPI.delete(id);
       loadLoans();
     } catch (err) {
-      alert('Failed to delete loan');
+      console.error('Failed to delete loan:', err);
+      alert('Failed to delete loan: ' + (err.response?.data?.detail || err.message));
     }
   };
 

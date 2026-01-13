@@ -1143,6 +1143,14 @@ function Tasks() {
   };
 
   const handleDelete = async (taskId) => {
+    // Find task title for confirmation (check all possible task lists)
+    const allTasks = [...getTasksForTab()];
+    const task = allTasks.find(t => t.id === taskId);
+    const taskTitle = task?.title || `Task #${taskId}`;
+
+    if (!window.confirm(`Are you sure you want to delete "${taskTitle}"? This action cannot be undone.`)) {
+      return;
+    }
 
     try {
       // Check if this is a mock/demo task

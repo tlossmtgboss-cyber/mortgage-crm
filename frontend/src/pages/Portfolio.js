@@ -123,11 +123,20 @@ function Portfolio() {
   };
 
   const handleDeleteClient = async (id) => {
+    // Find the client name for the confirmation
+    const client = clients.find(c => c.id === id);
+    const clientName = client?.name || `Client #${id}`;
+
+    if (!window.confirm(`Are you sure you want to delete "${clientName}"? This action cannot be undone.`)) {
+      return;
+    }
+
     try {
       await mumAPI.delete(id);
       loadData();
     } catch (error) {
       console.error('Failed to delete client:', error);
+      alert('Failed to delete client: ' + (error.response?.data?.detail || error.message));
     }
   };
 

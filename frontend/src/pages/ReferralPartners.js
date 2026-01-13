@@ -90,11 +90,21 @@ function ReferralPartners() {
 
   const handleDeletePartner = async (id, e) => {
     e.stopPropagation();
+
+    // Find partner name for confirmation
+    const partner = partners.find(p => p.id === id);
+    const partnerName = partner?.name || partner?.company || `Partner #${id}`;
+
+    if (!window.confirm(`Are you sure you want to delete "${partnerName}"? This action cannot be undone.`)) {
+      return;
+    }
+
     try {
       await partnersAPI.delete(id);
       loadPartners();
     } catch (error) {
       console.error('Failed to delete partner:', error);
+      alert('Failed to delete partner: ' + (error.response?.data?.detail || error.message));
     }
   };
 

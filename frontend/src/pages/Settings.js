@@ -1665,6 +1665,14 @@ const API_BASE_URL = isProduction
       return;
     }
 
+    // Find user name for confirmation
+    const userToDelete = users.find(u => u.id === userId);
+    const userName = userToDelete?.name || userToDelete?.email || `User #${userId}`;
+
+    if (!window.confirm(`Are you sure you want to delete user "${userName}"? This action cannot be undone and will remove all their data.`)) {
+      return;
+    }
+
     try {
       const token = localStorage.getItem('token');
 
