@@ -712,3 +712,94 @@ async def update_integration_settings(
         "status": "success",
         "message": "Settings updated"
     }
+
+
+# ============ Email Sync Endpoints ============
+
+@router.post("/sync-emails")
+async def sync_salesforce_emails(
+    request: Request,
+    days_back: int = Query(90, description="Number of days to sync back"),
+    limit: int = Query(500, description="Maximum emails to sync"),
+    db: Session = Depends(get_db)
+):
+    """
+    Sync email history from Salesforce to CRM client profiles.
+
+    Pulls EmailMessage records and Email Task activities from Salesforce
+    and creates corresponding records in the CRM, linked to leads/loans.
+    """
+    user_id = require_user(request, db)
+    profile = get_integration_profile(db, user_id)
+
+    if not profile:
+        raise HTTPException(status_code=400, detail="Salesforce not connected")
+
+    if profile.status != 'active':
+        raise HTTPException(status_code=400, detail="Salesforce integration is not active")
+
+    try:
+        from services.salesforce.email_sync_service import salesforce_email_sync
+
+        result = await salesforce_email_sync.sync_emails(
+            db=db,
+            integration_profile_id=profile.id,
+            days_back=days_back,
+            limit=limit
+        )
+
+        return {
+            "status": "success" if result['success'] else "partial",
+            "emails_synced": result['emails_synced'],
+            "emails_skipped": result['emails_skipped'],
+            "errors": result['errors'][:5] if result['errors'] else None,
+            "message": f"Synced {result['emails_synced']} emails from Salesforce"
+        }
+    except Exception as e:
+        logger.error(f"Email sync failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Email sync failed: {str(e)}")
+
+
+@router.get("/email-sync-status")
+async def get_email_sync_status(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Get the status of email sync for the current user."""
+    user_id = require_user(request, db)
+    profile = get_integration_profile(db, user_id)
+
+    if not profile:
+        return {
+            "connected": False,
+            "email_sync_available": False,
+            "message": "Salesforce not connected"
+        }
+
+    # Get last email sync event
+    last_sync = db.execute(text("""
+        SELECT event_type, event_data, created_at
+        FROM integration_events
+        WHERE integration_profile_id = :profile_id
+        AND event_type IN ('email_sync_completed', 'email_sync_failed')
+        ORDER BY created_at DESC
+        LIMIT 1
+    """), {"profile_id": profile.id}).fetchone()
+
+    # Count synced emails
+    email_count = db.execute(text("""
+        SELECT COUNT(*) FROM email_messages
+        WHERE user_id = :user_id
+        AND meta_data->>'source' IN ('salesforce_sync', 'salesforce_task_sync')
+    """), {"user_id": user_id}).scalar()
+
+    return {
+        "connected": profile.status == 'active',
+        "email_sync_available": True,
+        "total_synced_emails": email_count or 0,
+        "last_sync": {
+            "status": last_sync[0] if last_sync else None,
+            "data": last_sync[1] if last_sync else None,
+            "timestamp": last_sync[2].isoformat() if last_sync else None
+        } if last_sync else None
+    }
