@@ -62211,6 +62211,7 @@ async def delete_user_migration(
         db.execute(text("DELETE FROM email_signatures WHERE user_id = :id"), {"id": user_id})
         db.execute(text("DELETE FROM agent_telephony_settings WHERE user_id = :id"), {"id": user_id})
         db.execute(text("DELETE FROM verified_caller_ids WHERE user_id = :id"), {"id": user_id})
+        db.execute(text("UPDATE onboarding_audit_log SET performed_by = NULL WHERE performed_by = :id"), {"id": user_id})
 
         # Now delete the user
         db.execute(text("DELETE FROM users WHERE id = :id"), {"id": user_id})
