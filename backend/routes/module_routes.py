@@ -635,3 +635,87 @@ async def enable_all_modules(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to enable modules: {str(e)}")
+
+
+@router.post("/admin/clear-demo-data")
+async def clear_demo_data(
+    admin_key: str = Query(..., description="Admin API key"),
+    confirm: bool = Query(False, description="Must be true to confirm deletion"),
+):
+    """
+    Clear all demo/sample data from the CRM.
+    Removes leads, loans, tasks, MUM data, reconciliation tasks, smart docs, etc.
+    Preserves system users and settings.
+    """
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    if not confirm:
+        return {
+            "success": False,
+            "message": "Add confirm=true to actually delete data. This will remove all leads, loans, tasks, etc.",
+            "warning": "This action cannot be undone!"
+        }
+
+    try:
+        from database import engine
+        from sqlalchemy import text
+
+        deleted = {}
+        errors = []
+
+        with engine.connect() as conn:
+            # List of tables to clear (order matters due to foreign keys)
+            tables_to_clear = [
+                # First clear tables with foreign key dependencies
+                ("task_comments", "DELETE FROM task_comments"),
+                ("task_attachments", "DELETE FROM task_attachments"),
+                ("loan_notes", "DELETE FROM loan_notes"),
+                ("loan_documents", "DELETE FROM loan_documents"),
+                ("loan_conditions", "DELETE FROM loan_conditions"),
+                ("loan_milestones", "DELETE FROM loan_milestones"),
+                ("reconciliation_tasks", "DELETE FROM reconciliation_tasks"),
+                ("reconciliation_items", "DELETE FROM reconciliation_items"),
+                ("smart_doc_extractions", "DELETE FROM smart_doc_extractions"),
+                ("smart_documents", "DELETE FROM smart_documents"),
+                ("lead_activities", "DELETE FROM lead_activities"),
+                ("lead_notes", "DELETE FROM lead_notes"),
+                ("activity_logs", "DELETE FROM activity_logs WHERE entity_type IN ('lead', 'loan', 'task')"),
+
+                # Then clear main entities
+                ("tasks", "DELETE FROM tasks"),
+                ("loans", "DELETE FROM loans"),
+                ("leads", "DELETE FROM leads"),
+
+                # Clear related lookup data that might have demo entries
+                ("mum_portfolio_entries", "DELETE FROM mum_portfolio_entries"),
+                ("client_communications", "DELETE FROM client_communications"),
+            ]
+
+            for table_name, query in tables_to_clear:
+                try:
+                    result = conn.execute(text(query))
+                    conn.commit()
+                    deleted[table_name] = result.rowcount
+                except Exception as e:
+                    try:
+                        conn.rollback()
+                    except:
+                        pass
+                    # Table might not exist, that's ok
+                    if "does not exist" not in str(e).lower() and "undefined table" not in str(e).lower():
+                        errors.append(f"{table_name}: {str(e)[:100]}")
+                    else:
+                        deleted[table_name] = "table not found"
+
+        total_deleted = sum(v for v in deleted.values() if isinstance(v, int))
+
+        return {
+            "success": True,
+            "total_records_deleted": total_deleted,
+            "details": deleted,
+            "errors": errors if errors else None,
+            "message": f"Cleared {total_deleted} records from the CRM"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to clear demo data: {str(e)}")
