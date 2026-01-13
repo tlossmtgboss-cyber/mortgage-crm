@@ -61,12 +61,35 @@ const AdminPanel = () => {
   const [aiMetricsLoading, setAiMetricsLoading] = useState(false);
   const [aiMetricsLastUpdate, setAiMetricsLastUpdate] = useState(null);
 
-  // Role preview state
-  const [selectedViewRole, setSelectedViewRole] = useState(null);
+  // Impersonation state
+  const [selectedUserToImpersonate, setSelectedUserToImpersonate] = useState(null);
   const [impersonating, setImpersonating] = useState(false);
 
   // Employee roles fetched from the system
   const [employeeRoles, setEmployeeRoles] = useState([]);
+
+  // Get current user ID to exclude from impersonation list
+  const getCurrentUserId = () => {
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        return user.id;
+      }
+    } catch (e) {}
+    return null;
+  };
+
+  // Get users available for impersonation (active seats excluding current user)
+  const getImpersonatableUsers = () => {
+    const currentUserId = getCurrentUserId();
+    return users.filter(u =>
+      u.id !== currentUserId &&
+      u.is_active !== false &&
+      u.status !== 'inactive' &&
+      u.status !== 'disabled'
+    );
+  };
 
   // Security monitoring state
   const [securityData, setSecurityData] = useState(null);
@@ -544,90 +567,103 @@ const AdminPanel = () => {
           <p>Manage users, loan officers, and system settings</p>
         </div>
         <div className="header-right">
-          {/* Full Impersonation - switches JWT tokens and redirects */}
-          {/* Note: Quick role preview is available in the navigation bar dropdown */}
-          <div className="user-selector-wrapper">
-            <label className="user-selector-label" title="Full impersonation switches tokens and redirects to dashboard">
-              Impersonate:
-            </label>
-            <select
-              className="user-selector role-selector"
-              value={selectedViewRole ? `role:${selectedViewRole.id}:${selectedViewRole.name}` : ''}
-              onChange={(e) => {
-                const value = e.target.value;
-                if (value === '') {
-                  setSelectedViewRole(null);
-                  setImpersonating(false);
-                } else if (value.startsWith('role:')) {
-                  // Role selected - parse "role:id:name"
-                  const parts = value.split(':');
-                  const roleId = parseInt(parts[1], 10);
-                  const roleName = parts.slice(2).join(':'); // Handle names with colons
-                  setSelectedViewRole({ id: roleId, name: roleName });
-                }
-              }}
-            >
-              <option value="">Select role...</option>
-              {employeeRoles.length > 0 && (
-                <optgroup label="── Impersonate by Role ──">
-                  {employeeRoles.map(role => (
-                    <option key={role.id} value={`role:${role.id}:${role.name}`}>
-                      {role.name}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
-            {selectedViewRole && !impersonating && (
-              <button
-                className="btn-impersonate"
-                title="Preview this role's dashboard view"
-                onClick={() => {
-                  try {
-                    setImpersonating(true);
-
-                    // Role simulation - directly preview the role without needing a specific user
-                    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-
-                    // Save original user info if not already saved
-                    if (!localStorage.getItem('original_user_backup')) {
-                      localStorage.setItem('original_user_backup', JSON.stringify(currentUser));
-                      localStorage.setItem('original_token_backup', localStorage.getItem('token'));
-                    }
-
-                    // Store role preview info
-                    localStorage.setItem('role_preview', JSON.stringify({
-                      role_id: selectedViewRole.id,
-                      role_name: selectedViewRole.name,
-                      started_at: new Date().toISOString(),
-                      original_user_id: currentUser.id
-                    }));
-
-                    // Update user object with the preview role for dashboard rendering
-                    const previewUser = {
-                      ...currentUser,
-                      role: selectedViewRole.name.toLowerCase().replace(/\s+/g, '_'),
-                      permission_role: selectedViewRole.name.toLowerCase().replace(/\s+/g, '_'),
-                      display_role: selectedViewRole.name,
-                      is_role_preview: true,
-                      original_role: currentUser.role
-                    };
-                    localStorage.setItem('user', JSON.stringify(previewUser));
-
-                    // Redirect to dashboard to see the role's view
-                    window.location.href = '/dashboard';
-                  } catch (err) {
-                    console.error('Role preview failed:', err);
-                    alert('Failed to preview role: ' + err.message);
+          {/* Impersonate User - shows active seats/users to impersonate */}
+          {getImpersonatableUsers().length > 0 && (
+            <div className="user-selector-wrapper">
+              <label className="user-selector-label" title="Impersonate a team member to view the CRM as they see it">
+                Impersonate:
+              </label>
+              <select
+                className="user-selector role-selector"
+                value={selectedUserToImpersonate ? `user:${selectedUserToImpersonate.id}` : ''}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === '') {
+                    setSelectedUserToImpersonate(null);
                     setImpersonating(false);
+                  } else if (value.startsWith('user:')) {
+                    const userId = parseInt(value.split(':')[1], 10);
+                    const user = users.find(u => u.id === userId);
+                    setSelectedUserToImpersonate(user);
                   }
                 }}
-                disabled={impersonating}
               >
-                {impersonating ? 'Switching...' : 'Preview Role'}
-              </button>
-            )}
-          </div>
+                <option value="">Select user...</option>
+                {getImpersonatableUsers().map(user => {
+                  // Format: "Role - Full Name" (e.g., "Production Assistant 2 - Janene Thomas")
+                  const roleName = user.display_role || user.permission_role || user.role || 'User';
+                  const displayRole = roleName.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                  const fullName = user.full_name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email;
+                  return (
+                    <option key={user.id} value={`user:${user.id}`}>
+                      {displayRole} - {fullName}
+                    </option>
+                  );
+                })}
+              </select>
+              {selectedUserToImpersonate && !impersonating && (
+                <button
+                  className="btn-impersonate"
+                  title={`Impersonate ${selectedUserToImpersonate.full_name || selectedUserToImpersonate.email}`}
+                  onClick={async () => {
+                    try {
+                      setImpersonating(true);
+
+                      // Call the impersonation API
+                      const response = await api.post('/api/v1/impersonation/start', {
+                        employee_id: selectedUserToImpersonate.employee_id || selectedUserToImpersonate.id,
+                        mode: 'read_only',
+                        reason_category: 'training',
+                        reason_notes: 'Admin impersonation from admin panel',
+                        duration_minutes: 60,
+                        notify_employee: false
+                      });
+
+                      if (response.data?.session_token) {
+                        // Store the impersonation session
+                        const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+
+                        // Save original user info if not already saved
+                        if (!localStorage.getItem('original_user_backup')) {
+                          localStorage.setItem('original_user_backup', JSON.stringify(currentUser));
+                          localStorage.setItem('original_token_backup', localStorage.getItem('token'));
+                        }
+
+                        // Store impersonation session info
+                        localStorage.setItem('impersonation_session', JSON.stringify({
+                          session_token: response.data.session_token,
+                          impersonated_user: selectedUserToImpersonate,
+                          started_at: new Date().toISOString(),
+                          expires_at: response.data.scheduled_end_at,
+                          original_user_id: currentUser.id
+                        }));
+
+                        // Update user object with impersonated user info
+                        const impersonatedUser = {
+                          ...selectedUserToImpersonate,
+                          is_impersonation: true,
+                          original_user: currentUser
+                        };
+                        localStorage.setItem('user', JSON.stringify(impersonatedUser));
+
+                        // Redirect to dashboard
+                        window.location.href = '/dashboard';
+                      } else {
+                        throw new Error('Failed to start impersonation session');
+                      }
+                    } catch (err) {
+                      console.error('Impersonation failed:', err);
+                      alert('Failed to impersonate user: ' + (err.response?.data?.detail || err.message));
+                      setImpersonating(false);
+                    }
+                  }}
+                  disabled={impersonating}
+                >
+                  {impersonating ? 'Switching...' : 'Impersonate'}
+                </button>
+              )}
+            </div>
+          )}
           <button className="btn-test-account" onClick={openTestAccountModal} title="Create a test account to test the software as a paid user">
             Create Test Account
           </button>
