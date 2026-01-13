@@ -38199,6 +38199,162 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+# Password Reset Token Configuration
+PASSWORD_RESET_TOKEN_EXPIRE_MINUTES = 60  # 1 hour
+
+def create_password_reset_token(email: str) -> str:
+    """Create a JWT token for password reset"""
+    expire = datetime.now(timezone.utc) + timedelta(minutes=PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
+    to_encode = {
+        "sub": email,
+        "exp": expire,
+        "type": "password_reset"
+    }
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+def verify_password_reset_token(token: str) -> Optional[str]:
+    """Verify password reset token and return email if valid"""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("type") != "password_reset":
+            return None
+        return payload.get("sub")
+    except jwt.ExpiredSignatureError:
+        return None
+    except jwt.JWTError:
+        return None
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+@app.post("/api/v1/auth/forgot-password")
+async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    """
+    Request a password reset email.
+    Always returns success to prevent email enumeration attacks.
+    """
+    try:
+        # Check if user exists
+        user = db.query(User).filter(User.email == request.email).first()
+
+        if user:
+            # Generate reset token
+            reset_token = create_password_reset_token(request.email)
+
+            # Build reset URL
+            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+            reset_url = f"{frontend_url}/reset-password?token={reset_token}"
+
+            # Send email
+            try:
+                from email_service import EmailService
+                email_service = EmailService()
+
+                html_body = f"""
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h2 style="color: #218D8D;">Reset Your Password</h2>
+                    <p>Hi {user.full_name or 'there'},</p>
+                    <p>We received a request to reset your password. Click the button below to create a new password:</p>
+                    <p style="text-align: center; margin: 30px 0;">
+                        <a href="{reset_url}"
+                           style="background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
+                                  color: white;
+                                  padding: 14px 32px;
+                                  text-decoration: none;
+                                  border-radius: 8px;
+                                  font-weight: 600;">
+                            Reset Password
+                        </a>
+                    </p>
+                    <p style="color: #666; font-size: 14px;">
+                        This link will expire in 1 hour. If you didn't request this, you can safely ignore this email.
+                    </p>
+                    <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+                    <p style="color: #999; font-size: 12px;">
+                        Perennia AI - Mortgage CRM
+                    </p>
+                </div>
+                """
+
+                email_service.send_html_email(
+                    to_email=request.email,
+                    subject="Reset Your Password - Perennia AI",
+                    html_body=html_body,
+                    plain_text_body=f"Reset your password by visiting: {reset_url}"
+                )
+                logger.info(f"Password reset email sent to {request.email}")
+            except Exception as e:
+                logger.error(f"Failed to send password reset email: {str(e)}")
+                # Still return success to prevent email enumeration
+        else:
+            logger.info(f"Password reset requested for non-existent email: {request.email}")
+
+        # Always return success to prevent email enumeration
+        return {
+            "message": "If an account exists with this email, you will receive a password reset link shortly.",
+            "success": True
+        }
+    except Exception as e:
+        logger.error(f"Forgot password error: {str(e)}")
+        # Return success even on error to prevent information leakage
+        return {
+            "message": "If an account exists with this email, you will receive a password reset link shortly.",
+            "success": True
+        }
+
+@app.post("/api/v1/auth/reset-password")
+async def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
+    """
+    Reset password using a valid reset token.
+    """
+    try:
+        # Verify token
+        email = verify_password_reset_token(request.token)
+        if not email:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid or expired reset token. Please request a new password reset."
+            )
+
+        # Find user
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid reset token."
+            )
+
+        # Validate password strength
+        if len(request.new_password) < 6:
+            raise HTTPException(
+                status_code=400,
+                detail="Password must be at least 6 characters long."
+            )
+
+        # Update password
+        user.hashed_password = get_password_hash(request.new_password)
+        db.commit()
+
+        logger.info(f"Password reset successful for {email}")
+
+        return {
+            "message": "Password has been reset successfully. You can now log in with your new password.",
+            "success": True
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Reset password error: {str(e)}")
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred while resetting your password. Please try again."
+        )
+
 @app.post("/api/v1/setup-admin")
 async def setup_admin_user(db: Session = Depends(get_db)):
     """

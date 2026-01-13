@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { authAPI, API_BASE_URL } from '../services/api';
 import { setAuth } from '../utils/auth';
@@ -95,6 +95,10 @@ function Login() {
               required
               disabled={loading}
             />
+          </div>
+
+          <div className="forgot-password-link">
+            <Link to="/forgot-password">Forgot Password?</Link>
           </div>
 
           {error && <div className="error-message">{error}</div>}

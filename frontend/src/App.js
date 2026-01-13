@@ -23,6 +23,8 @@ import Registration from './pages/Registration';
 import AccountVerification from './pages/AccountVerification';
 import EmailVerificationSent from './pages/EmailVerificationSent';
 import Login from './pages/Login';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import AdminOnboarding from './pages/AdminOnboarding';
 import ApplicationSubmitted from './pages/ApplicationSubmitted';
 
@@ -389,6 +391,8 @@ function App() {
           <Route path="/verify-account" element={<AccountVerification />} />
           <Route path="/verify-email-sent" element={<EmailVerificationSent />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/signup" element={<AdminOnboarding />} />
           <Route path="/application-submitted" element={<ApplicationSubmitted />} />
           <Route path="/privacy-policy" element={<LazyPage><PrivacyPolicy /></LazyPage>} />
