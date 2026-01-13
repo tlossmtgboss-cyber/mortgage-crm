@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { teamAPI, agentAPI } from '../services/api';
 import { getAuthHeaders } from '../utils/auth';
+import { usePermissions } from '../contexts/PermissionContext';
 import AIReceptionist from '../components/AIReceptionist';
 import TaskWorkflowManager from '../components/TaskWorkflowManager';
 import DocumentIntakeManager from '../components/DocumentIntakeManager';
@@ -326,6 +327,7 @@ const DialerSettingsSection = () => {
 
 function Settings() {
   const navigate = useNavigate();
+  const { isAdmin } = usePermissions();
 
   // Get current user from localStorage
   const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
@@ -346,23 +348,23 @@ function Settings() {
   // Default sidebar items order
   const defaultSidebarItems = [
     { id: 'user-profile', label: 'User Profile', type: 'parent', section: 'userProfile' },
-    { id: 'organizational', label: 'Organizational Settings', type: 'parent', section: 'organizational' },
-    { id: 'workflow', label: 'Workflow', type: 'standalone', section: 'workflow', navigate: '/workflow' },
-    { id: 'sla-tracking', label: 'SLA Tracking', type: 'standalone', section: 'sla-tracking', navigate: '/sla-tracking' },
-    { id: 'agent-governance', label: 'Agent Governance', type: 'parent', section: 'agentGovernance' },
-    { id: 'document-intake', label: 'Document Intake', type: 'standalone', section: 'document-intake' },
-    { id: 'email-monitor', label: 'Email Monitor', type: 'standalone', section: 'email-monitor' },
+    { id: 'organizational', label: 'Organizational Settings', type: 'parent', section: 'organizational', adminOnly: true },
+    { id: 'workflow', label: 'Workflow', type: 'standalone', section: 'workflow', navigate: '/workflow', adminOnly: true },
+    { id: 'sla-tracking', label: 'SLA Tracking', type: 'standalone', section: 'sla-tracking', navigate: '/sla-tracking', adminOnly: true },
+    { id: 'agent-governance', label: 'Agent Governance', type: 'parent', section: 'agentGovernance', adminOnly: true },
+    { id: 'document-intake', label: 'Document Intake', type: 'standalone', section: 'document-intake', adminOnly: true },
+    { id: 'email-monitor', label: 'Email Monitor', type: 'standalone', section: 'email-monitor', adminOnly: true },
     { id: 'it-helpdesk', label: 'IT Helpdesk', type: 'standalone', section: 'it-helpdesk' },
     { id: 'production', label: 'Production Widgets', type: 'parent', section: 'production' },
-    { id: 'client-portals', label: 'Client Portals (PURL)', type: 'standalone', section: 'client-portals' },
-    { id: 'client-portal-settings', label: 'Client Portal Settings', type: 'standalone', section: 'client-portal-settings', navigate: '/settings/client-portal' },
-    { id: 'lead-capture', label: 'Lead Capture', type: 'standalone', section: 'lead-capture', navigate: '/settings/lead-capture' },
-    { id: 'communication-preferences', label: 'Communication Preferences', type: 'standalone', section: 'communication-preferences', navigate: '/settings/communication' },
+    { id: 'client-portals', label: 'Client Portals (PURL)', type: 'standalone', section: 'client-portals', adminOnly: true },
+    { id: 'client-portal-settings', label: 'Client Portal Settings', type: 'standalone', section: 'client-portal-settings', navigate: '/settings/client-portal', adminOnly: true },
+    { id: 'lead-capture', label: 'Lead Capture', type: 'standalone', section: 'lead-capture', navigate: '/settings/lead-capture', adminOnly: true },
+    { id: 'communication-preferences', label: 'Communication Preferences', type: 'standalone', section: 'communication-preferences', navigate: '/settings/communication', adminOnly: true },
     { id: 'integration-settings', label: 'Integrations', type: 'standalone', section: 'integration-settings' },
-    { id: 'api-keys-settings', label: 'API Keys & Webhooks', type: 'standalone', section: 'api-keys-settings', navigate: '/settings/api-keys' },
-    { id: 'company-branding', label: 'Company & Branding', type: 'standalone', section: 'company-branding', navigate: '/settings/company-branding' },
-    { id: 'data-management', label: 'Data Management', type: 'standalone', section: 'data-management', navigate: '/data-upload' },
-    { id: 'master-admin', label: 'Master Administrator', type: 'parent', section: 'masterAdmin' },
+    { id: 'api-keys-settings', label: 'API Keys & Webhooks', type: 'standalone', section: 'api-keys-settings', navigate: '/settings/api-keys', adminOnly: true },
+    { id: 'company-branding', label: 'Company & Branding', type: 'standalone', section: 'company-branding', navigate: '/settings/company-branding', adminOnly: true },
+    { id: 'data-management', label: 'Data Management', type: 'standalone', section: 'data-management', navigate: '/data-upload', adminOnly: true },
+    { id: 'master-admin', label: 'Master Administrator', type: 'parent', section: 'masterAdmin', adminOnly: true },
     { id: 'admin-settings', label: 'Admin Settings', type: 'standalone', section: 'admin-settings', navigate: '/admin/settings', adminOnly: true },
     { id: 'custom-domains', label: 'Custom Domains', type: 'standalone', section: 'custom-domains', navigate: '/admin/domains', adminOnly: true },
     { id: 'call-routing', label: 'Call Routing', type: 'standalone', section: 'call-routing', navigate: '/call-routing-config', adminOnly: true }
@@ -2745,8 +2747,9 @@ const API_BASE_URL = isProduction
               );
             }
 
-            // Render Organizational Settings parent with children
+            // Render Organizational Settings parent with children (admin-only)
             if (item.id === 'organizational') {
+              if (item.adminOnly && !isAdmin) return null;
               return (
                 <div key={item.id}>
                   <button
@@ -2776,8 +2779,9 @@ const API_BASE_URL = isProduction
               );
             }
 
-            // Render Agent Governance parent with children
+            // Render Agent Governance parent with children (admin-only)
             if (item.id === 'agent-governance') {
+              if (item.adminOnly && !isAdmin) return null;
               return (
                 <div key={item.id}>
                   <button
@@ -2840,8 +2844,9 @@ const API_BASE_URL = isProduction
               );
             }
 
-            // Render Master Administrator parent with children
+            // Render Master Administrator parent with children (admin-only)
             if (item.id === 'master-admin') {
+              if (item.adminOnly && !isAdmin) return null;
               return (
                 <div key={item.id}>
                   <button
@@ -2874,7 +2879,7 @@ const API_BASE_URL = isProduction
             }
 
             // Skip adminOnly items if user is not admin/management
-            if (item.adminOnly && currentUser.role !== 'admin' && currentUser.role !== 'management') {
+            if (item.adminOnly && !isAdmin) {
               return null;
             }
 

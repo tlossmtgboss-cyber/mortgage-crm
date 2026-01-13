@@ -78,19 +78,21 @@
 .communication-preferences .tabs-container {
   margin-bottom: 24px;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .communication-preferences .tabs {
   display: flex;
   gap: 4px;
   background: #f1f5f9;
-  padding: 4px;
-  border-radius: 10px;
+  padding: 6px;
+  border-radius: 12px;
   min-width: fit-content;
+  flex-wrap: wrap;
 }
 
 .communication-preferences .tab {
-  padding: 10px 20px;
+  padding: 12px 24px;
   background: transparent;
   border: none;
   border-radius: 8px;
@@ -99,18 +101,45 @@
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
 }
 
 .communication-preferences .tab:hover {
-  color: #3b82f6;
-  background: rgba(59, 130, 246, 0.05);
+  color: #334155;
+  background: rgba(255, 255, 255, 0.5);
 }
 
 .communication-preferences .tab.active {
-  background: white;
-  color: #3b82f6;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  background: #fff;
+  color: #1e293b;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.communication-preferences .tab:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+.communication-preferences .tab:focus:not(:focus-visible) {
+  box-shadow: none;
+}
+
+.communication-preferences .tab:focus-visible {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+/* Responsive tabs on small screens */
+@media (max-width: 768px) {
+  .communication-preferences .tabs {
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .communication-preferences .tab {
+    padding: 10px 16px;
+    font-size: 13px;
+  }
 }
 
 /* Settings Content */
