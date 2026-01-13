@@ -666,47 +666,88 @@ async def clear_demo_data(
 
         with engine.connect() as conn:
             # List of tables to clear (order matters due to foreign keys)
-            tables_to_clear = [
-                # First clear tables with foreign key dependencies
-                ("task_comments", "DELETE FROM task_comments"),
-                ("task_attachments", "DELETE FROM task_attachments"),
-                ("loan_notes", "DELETE FROM loan_notes"),
-                ("loan_documents", "DELETE FROM loan_documents"),
-                ("loan_conditions", "DELETE FROM loan_conditions"),
-                ("loan_milestones", "DELETE FROM loan_milestones"),
-                ("reconciliation_tasks", "DELETE FROM reconciliation_tasks"),
-                ("reconciliation_items", "DELETE FROM reconciliation_items"),
-                ("smart_doc_extractions", "DELETE FROM smart_doc_extractions"),
-                ("smart_documents", "DELETE FROM smart_documents"),
-                ("lead_activities", "DELETE FROM lead_activities"),
-                ("lead_notes", "DELETE FROM lead_notes"),
-                ("activity_logs", "DELETE FROM activity_logs WHERE entity_type IN ('lead', 'loan', 'task')"),
-
-                # Then clear main entities
-                ("tasks", "DELETE FROM tasks"),
-                ("loans", "DELETE FROM loans"),
-                ("leads", "DELETE FROM leads"),
-
-                # Clear related lookup data that might have demo entries
-                ("mum_portfolio_entries", "DELETE FROM mum_portfolio_entries"),
-                ("client_communications", "DELETE FROM client_communications"),
+            # Using TRUNCATE with CASCADE for faster deletion and to handle FK constraints
+            tables_to_truncate = [
+                # Child tables first (for safety, though CASCADE should handle it)
+                "task_comments",
+                "task_attachments",
+                "loan_notes",
+                "loan_documents",
+                "loan_conditions",
+                "loan_milestones",
+                "loan_portal_configs",
+                "loan_close_schedules",
+                "loan_property_baselines",
+                "loan_property_costs",
+                "loan_lifecycle_history",
+                "loan_risk_flags",
+                "loan_heartbeat_activities",
+                "reconciliation_tasks",
+                "reconciliation_items",
+                "smart_doc_extractions",
+                "smart_documents",
+                "lead_activities",
+                "lead_notes",
+                "borrower_portal_accesses",
+                "partner_portal_accesses",
+                "mum_portfolio_entries",
+                "client_communications",
+                "email_threads",
+                "email_messages",
             ]
 
-            for table_name, query in tables_to_clear:
+            # First try TRUNCATE with CASCADE on main tables
+            main_tables = ["tasks", "loans", "leads"]
+
+            for table_name in main_tables:
                 try:
-                    result = conn.execute(text(query))
+                    # Get count before truncate
+                    count_result = conn.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
+                    count = count_result.scalar()
+
+                    # Use TRUNCATE with CASCADE to handle FK constraints
+                    conn.execute(text(f"TRUNCATE TABLE {table_name} CASCADE"))
                     conn.commit()
-                    deleted[table_name] = result.rowcount
+                    deleted[table_name] = count
                 except Exception as e:
                     try:
                         conn.rollback()
                     except:
                         pass
-                    # Table might not exist, that's ok
-                    if "does not exist" not in str(e).lower() and "undefined table" not in str(e).lower():
-                        errors.append(f"{table_name}: {str(e)[:100]}")
-                    else:
+                    error_str = str(e).lower()
+                    if "does not exist" in error_str or "undefined table" in error_str:
                         deleted[table_name] = "table not found"
+                    else:
+                        errors.append(f"{table_name}: {str(e)[:100]}")
+
+            # Then clear child tables (many might already be empty due to CASCADE)
+            for table_name in tables_to_truncate:
+                try:
+                    count_result = conn.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
+                    count = count_result.scalar()
+                    if count > 0:
+                        conn.execute(text(f"TRUNCATE TABLE {table_name} CASCADE"))
+                        conn.commit()
+                        deleted[table_name] = count
+                except Exception as e:
+                    try:
+                        conn.rollback()
+                    except:
+                        pass
+                    error_str = str(e).lower()
+                    if "does not exist" not in error_str and "undefined table" not in error_str:
+                        # Don't log if table doesn't exist
+                        pass
+
+            # Also clear activity logs for deleted entities
+            try:
+                result = conn.execute(text(
+                    "DELETE FROM activity_logs WHERE entity_type IN ('lead', 'loan', 'task')"
+                ))
+                conn.commit()
+                deleted["activity_logs"] = result.rowcount
+            except:
+                pass
 
         total_deleted = sum(v for v in deleted.values() if isinstance(v, int))
 
