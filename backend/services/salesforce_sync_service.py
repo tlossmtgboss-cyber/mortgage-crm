@@ -526,6 +526,7 @@ class SalesforceSyncService:
         Trigger SLA workflows based on changed date fields from Salesforce sync.
 
         This is the post-sync hook that connects Salesforce updates to SLA task generation.
+        Now also creates tasks in the main tasks table with SLA tracking columns.
         """
         try:
             sla_service = get_sla_trigger_service(self.db)
@@ -553,6 +554,53 @@ class SalesforceSyncService:
         except Exception as e:
             # Don't fail the sync if SLA trigger fails
             logger.error(f"Error triggering SLA workflows for loan {loan_id}: {e}")
+
+        # Also create SLA tasks in the main tasks table (single source of truth)
+        try:
+            import asyncio
+            from services.sla_task_hook_service import SLATaskHookService
+
+            # Determine which SLA fields changed
+            sla_trigger_fields = {
+                'application_date', 'uw_received_date', 'conditions_for_review_date',
+                'loan_approved_date', 'clear_to_close_date', 'scheduled_closing_date',
+                'funded_date', 'appraisal_ordered_date', 'cd_sent_to_borrower_date',
+                'lock_date', 'lock_expiration_date', 'prospect_date', 'preapproval_date',
+                'contract_received_date', 'closing_date'
+            }
+
+            changed_fields = set()
+            for field in sla_trigger_fields:
+                old_val = old_data.get(field)
+                new_val = new_data.get(field)
+                if old_val is None and new_val is not None:
+                    changed_fields.add(field)
+
+            if changed_fields:
+                # Get loan owner for task assignment
+                loan_owner = self.db.execute(
+                    text("SELECT loan_officer_id FROM loans WHERE id = :loan_id"),
+                    {"loan_id": loan_id}
+                ).fetchone()
+                owner_id = loan_owner[0] if loan_owner and loan_owner[0] else 1
+
+                # Fire async task creation (non-blocking)
+                asyncio.create_task(SLATaskHookService.on_loan_updated(
+                    loan_id=loan_id,
+                    changed_fields=changed_fields,
+                    user_id=owner_id,
+                    old_stage=old_data.get("stage"),
+                    new_stage=new_data.get("stage"),
+                ))
+
+                logger.info(
+                    f"Salesforce sync triggered SLA task creation for loan {loan_id}: "
+                    f"fields={changed_fields}"
+                )
+
+        except Exception as e:
+            # Don't fail the sync if task creation fails
+            logger.error(f"Error creating SLA tasks for loan {loan_id}: {e}")
 
     def process_webhook(self, payload: Dict[str, Any]) -> SyncResult:
         """
