@@ -511,8 +511,10 @@ async def debug_modules(
                     conn.execute(text("""
                         UPDATE users SET permission_role = 'admin', role = 'admin' WHERE id = :user_id
                     """), {"user_id": set_admin_user})
+                    conn.commit()  # Commit immediately so role update is saved
+                    results["admin_set"] = f"User {set_admin_user} set as admin"
 
-                    # Grant admin permissions in user_permission_overrides table
+                    # Try to grant admin permissions in user_permission_overrides table
                     admin_perms = ['admin.view', 'admin.manage', 'system.admin', 'permissions.view_all', 'team.manage_permissions']
                     for perm in admin_perms:
                         try:
@@ -523,12 +525,19 @@ async def debug_modules(
                                 ON CONFLICT (user_id, permission_key)
                                 DO UPDATE SET granted = true, granted_at = NOW()
                             """), {"user_id": set_admin_user, "perm_key": perm})
+                            conn.commit()
                         except Exception as inner_e:
+                            try:
+                                conn.rollback()  # Rollback failed permission insert
+                            except:
+                                pass
                             results.setdefault("perm_errors", []).append(f"{perm}: {str(inner_e)[:50]}")
 
-                    conn.commit()
-                    results["admin_set"] = f"User {set_admin_user} set as admin with permissions"
                 except Exception as e:
+                    try:
+                        conn.rollback()
+                    except:
+                        pass
                     results["admin_error"] = str(e)
 
             # Check if table exists
