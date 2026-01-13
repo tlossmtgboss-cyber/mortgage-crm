@@ -420,7 +420,7 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     full_name = Column(String)
     role = Column(String, default="loan_officer")  # Legacy role field
-    permission_role = Column(String, default="sales")  # Phase 2: 'admin', 'leadership', 'management', 'sales', 'processing', or 'operations'
+    permission_role = Column(String, default="sales")  # Phase 2: 'admin' (platform), 'site_admin' (licensee), 'leadership', 'management', 'sales', 'processing', or 'operations'
     branch_id = Column(Integer, ForeignKey("branches.id"))
     organization_id = Column(Integer, ForeignKey("organizations.id"))  # Multi-tenant: user's organization
     is_active = Column(Boolean, default=True)
@@ -20290,6 +20290,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Could not load Page Permissions routes: {e}")
 
+# Include User Roles routes (Multi-role user system)
+try:
+    from routes.user_roles_routes import router as user_roles_router
+    app.include_router(user_roles_router, tags=["User Roles"])
+    logger.info("✅ User Roles routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load User Roles routes: {e}")
+
 # Include Master Manager routes (Talent & Capacity OS)
 try:
     from routes.master_manager_routes import router as master_manager_router
@@ -30502,7 +30510,7 @@ async def list_organizations(
     """List all organizations (admin only)"""
     try:
         # Check if user is admin
-        if current_user.permission_role not in ['admin', 'leadership']:
+        if current_user.permission_role not in ['admin', 'site_admin', 'leadership']:
             raise HTTPException(status_code=403, detail="Admin access required")
 
         orgs = db.query(Organization).filter(Organization.is_active == True).all()
@@ -30587,7 +30595,7 @@ async def create_organization(
     """Create a new organization (admin only)"""
     try:
         # Check if user is admin
-        if current_user.permission_role not in ['admin', 'leadership']:
+        if current_user.permission_role not in ['admin', 'site_admin', 'leadership']:
             raise HTTPException(status_code=403, detail="Admin access required")
 
         # Generate slug from name if not provided
@@ -30645,7 +30653,7 @@ async def update_organization(
     """Update an organization (admin only)"""
     try:
         # Check if user is admin
-        if current_user.permission_role not in ['admin', 'leadership']:
+        if current_user.permission_role not in ['admin', 'site_admin', 'leadership']:
             raise HTTPException(status_code=403, detail="Admin access required")
 
         org = db.query(Organization).filter(Organization.id == org_id).first()
@@ -30699,7 +30707,7 @@ async def assign_user_to_organization(
     """Assign a user to an organization (admin only)"""
     try:
         # Check if user is admin
-        if current_user.permission_role not in ['admin', 'leadership']:
+        if current_user.permission_role not in ['admin', 'site_admin', 'leadership']:
             raise HTTPException(status_code=403, detail="Admin access required")
 
         org = db.query(Organization).filter(Organization.id == org_id).first()
@@ -53187,6 +53195,17 @@ def require_permission_or_403(user_id: int, permission_key: str, db: Session) ->
     # Master admin (user ID 1) always has permission
     if user_id == 1:
         return
+
+    # Check if user is an admin by permission_role - admins have full access
+    try:
+        result = db.execute(text("""
+            SELECT permission_role FROM users WHERE id = :user_id
+        """), {'user_id': user_id})
+        user_row = result.fetchone()
+        if user_row and user_row[0] and user_row[0].lower() == 'admin':
+            return  # Admin users bypass all permission checks
+    except Exception as e:
+        logger.warning(f"Error checking admin status for user {user_id}: {e}")
 
     if not has_permission(user_id, permission_key, db):
         raise HTTPException(
