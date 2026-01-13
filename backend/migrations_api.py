@@ -1368,3 +1368,56 @@ async def run_call_screening_migration(
     except Exception as e:
         logger.error(f"Call screening migration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/add-multi-role-system")
+async def run_multi_role_migration(
+    admin: Any = Depends(verify_admin_access)
+):
+    """
+    Run the multi-role system migration
+    Creates user_assigned_roles and user_active_role tables
+    for supporting users with multiple roles and role switching
+    """
+    try:
+        from migrations.add_multi_role_system import run_migration
+
+        logger.info("Starting multi-role system migration...")
+        success = run_migration()
+
+        if success:
+            return {
+                "status": "success",
+                "message": "Multi-role system tables created successfully",
+                "tables_created": [
+                    "user_assigned_roles",
+                    "user_active_role"
+                ]
+            }
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail="Migration failed - check logs for details"
+            )
+
+    except Exception as e:
+        logger.error(f"Multi-role system migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/multi-role-system/status")
+async def check_multi_role_migration_status(
+    admin: Any = Depends(verify_admin_access)
+):
+    """
+    Check if the multi-role system migration has been applied
+    """
+    try:
+        from migrations.add_multi_role_system import check_migration_status
+
+        status = check_migration_status()
+        return status
+
+    except Exception as e:
+        logger.error(f"Multi-role status check error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

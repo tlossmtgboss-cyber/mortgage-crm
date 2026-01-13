@@ -290,7 +290,7 @@ export const NAVIGATION_ITEMS = {
 // =============================================================================
 
 export const ROLE_NAVIGATION = {
-  // Admin - Full access to everything, no restrictions
+  // Admin - Platform developer with full access to everything across all orgs
   // Note: Voice/Call Center tools moved to Marketing page
   admin: [
     'adminPanel',           // Admin Panel link - admin only
@@ -316,6 +316,36 @@ export const ROLE_NAVIGATION = {
     'partnerRecruiting',
     'videoOs',              // Video OS
     'integrations',         // Integrations
+    'productionPredictor',
+    'dealAlerts'
+  ],
+
+  // Site Administrator - Licensee who manages their organization's users
+  // Has access to admin panel (org-scoped) but not platform-level features
+  site_admin: [
+    'adminPanel',           // Admin Panel link - manages their org users
+    'dashboard',
+    'leads',
+    'activeLoans',
+    'portfolio',
+    'closedLoans',
+    'tasks',
+    'reconciliation',
+    'smartDocs',
+    'marketing',
+    'calendar',
+    'scorecard',
+    'partners',
+    'aiUnderwriter',
+    'market',
+    'profitability',
+    'usageIntelligence',    // Org owner sees their usage costs
+    'accounting',
+    'capacity',
+    'recruiting',
+    'partnerRecruiting',
+    'videoOs',
+    'integrations',
     'productionPredictor',
     'dealAlerts'
   ],
@@ -433,13 +463,28 @@ export const ROLE_NAVIGATION = {
 // =============================================================================
 
 export const ROLE_DASHBOARD_CONTAINERS = {
-  // Admin Dashboard - Full access to ALL containers, no restrictions
+  // Admin Dashboard - Platform developer, full access to ALL containers
   admin: [
     'ai-alerts',           // AI Alerts (lead alerts, follow-ups)
     'production-tracker',  // Monthly Production Tracker
     'production-predictor', // Production Predictor
     'deal-alerts',         // Deal Alerts
     'profitability',       // Profitability Intelligence
+    'efficiency',          // Pipeline Efficiency Monitor
+    'workflow-scorecards', // Workflow Scorecards
+    'ai-tasks',           // AI Prioritized Tasks
+    'pipeline',           // Live Loan Pipeline
+    'referrals',          // Referral Scoreboard
+    'team'                // Team Performance
+  ],
+
+  // Site Admin Dashboard - Licensee/org owner, same dashboard access as admin
+  site_admin: [
+    'ai-alerts',           // AI Alerts (lead alerts, follow-ups)
+    'production-tracker',  // Monthly Production Tracker
+    'production-predictor', // Production Predictor
+    'deal-alerts',         // Deal Alerts
+    'profitability',       // Profitability Intelligence (org view)
     'efficiency',          // Pipeline Efficiency Monitor
     'workflow-scorecards', // Workflow Scorecards
     'ai-tasks',           // AI Prioritized Tasks
@@ -525,6 +570,7 @@ export const ROLE_DASHBOARD_CONTAINERS = {
 
 export const ROLE_DEFAULT_ROUTES = {
   admin: '/admin',
+  site_admin: '/admin',     // Site Administrator lands on Admin Panel (org-scoped)
   loan_officer: '/dashboard',
   production_assistant: '/dashboard',
   concierge: '/dashboard',  // Same as Production Assistant
@@ -593,7 +639,9 @@ export const getUserEffectiveRole = (permissionRole, legacyRole) => {
 
     switch (normalizedPermission) {
       case 'admin':
-        return 'admin';       // Admin gets full access
+        return 'admin';       // Platform Admin (developer) - full access across all orgs
+      case 'site_admin':
+        return 'site_admin';  // Site Administrator (licensee) - manages their org
       case 'leadership':
         return 'executive';
       case 'management':
@@ -610,6 +658,87 @@ export const getUserEffectiveRole = (permissionRole, legacyRole) => {
   }
 
   // Default to loan officer
+  return 'loan_officer';
+};
+
+/**
+ * Maps onboarding_roles table role names to effectiveRole keys used in the UI
+ * This is used by the multi-role system to convert database role names to UI role keys
+ * @param {string} roleName - The role name from onboarding_roles table (e.g., "Site Administrator", "Loan Officer")
+ * @returns {string} The effective role key for UI purposes (e.g., "admin", "loan_officer")
+ */
+export const mapRoleNameToEffective = (roleName) => {
+  if (!roleName) return 'loan_officer';
+
+  const normalized = roleName.toLowerCase().replace(/\s+/g, '_');
+
+  // Map onboarding role names to effective role keys
+  const roleMapping = {
+    // Administrator roles
+    'site_administrator': 'admin',
+    'site_admin': 'admin',
+    'administrator': 'admin',
+    'admin': 'admin',
+    'platform_admin': 'admin',
+
+    // Management roles
+    'manager': 'manager',
+    'branch_manager': 'manager',
+    'sales_manager': 'manager',
+    'team_lead': 'manager',
+    'team_manager': 'manager',
+
+    // Executive roles
+    'executive': 'executive',
+    'owner': 'executive',
+    'ceo': 'executive',
+    'coo': 'executive',
+    'cfo': 'executive',
+
+    // Sales roles
+    'loan_officer': 'loan_officer',
+    'lo': 'loan_officer',
+    'senior_loan_officer': 'loan_officer',
+    'sr_loan_officer': 'loan_officer',
+    'junior_loan_officer': 'loan_officer',
+    'jr_loan_officer': 'loan_officer',
+    'jr_lo': 'loan_officer',
+    'mortgage_loan_originator': 'loan_officer',
+    'mlo': 'loan_officer',
+
+    // Support roles
+    'production_assistant': 'production_assistant',
+    'production_assistant_1': 'production_assistant',
+    'production_assistant_2': 'production_assistant',
+    'concierge': 'production_assistant',
+    'loan_coordinator': 'production_assistant',
+
+    // Operations roles
+    'processor': 'processor',
+    'loan_processor': 'processor',
+    'underwriter': 'underwriter',
+    'closer': 'closer',
+    'funder': 'closer',
+    'post_closer': 'closer',
+    'post-closer': 'closer'
+  };
+
+  // Check direct mapping first
+  if (roleMapping[normalized]) {
+    return roleMapping[normalized];
+  }
+
+  // Check for partial matches
+  if (normalized.includes('admin')) return 'admin';
+  if (normalized.includes('manager')) return 'manager';
+  if (normalized.includes('executive') || normalized.includes('owner')) return 'executive';
+  if (normalized.includes('production_assistant') || normalized.includes('concierge')) return 'production_assistant';
+  if (normalized.includes('processor')) return 'processor';
+  if (normalized.includes('underwriter')) return 'underwriter';
+  if (normalized.includes('closer') || normalized.includes('funder')) return 'closer';
+  if (normalized.includes('loan_officer') || normalized.includes('_lo')) return 'loan_officer';
+
+  // Default to loan_officer
   return 'loan_officer';
 };
 
@@ -659,7 +788,8 @@ export const getDefaultRouteForRole = (effectiveRole) => {
 // =============================================================================
 
 export const PROFITABILITY_VIEW_TYPES = {
-  admin: 'company',              // Admin sees company-wide profitability
+  admin: 'company',              // Platform Admin sees company-wide profitability (all orgs)
+  site_admin: 'company',         // Site Admin sees their organization's profitability
   loan_officer: 'personal',      // LO sees their own profitability
   manager: 'team',               // Manager sees team profitability
   executive: 'company'           // Executive sees company-wide profitability

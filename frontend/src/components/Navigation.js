@@ -6,6 +6,7 @@ import { getNavigationForRole, roleHasDashboard } from '../config/roleConfig';
 import { usePrefetch } from '../hooks/useQueries';
 import NotificationBell from './NotificationBell';
 import UpgradeModal from './UpgradeModal';
+import RoleSwitcher from './RoleSwitcher';
 import './Navigation.css';
 
 /**
@@ -248,6 +249,8 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
 
           <div className="nav-actions">
             <NotificationBell />
+            {/* Multi-Role Switcher - shows when user has multiple assigned roles */}
+            <RoleSwitcher />
             {/* Team Members - requires team permissions or management/admin role */}
             {canViewTeam && (
               <Link
@@ -258,7 +261,7 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
                 Team
               </Link>
             )}
-            {/* Role Preview Selector - admin only */}
+            {/* Role Preview Selector - admin only (legacy - kept for backwards compatibility) */}
             {isAdmin && (
               <div className={`role-preview-selector ${viewAsRole && viewAsRole !== 'default' ? 'active' : ''}`}>
                 <select

@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import { useImpersonation } from './ImpersonationContext';
 import { API_BASE_URL } from '../services/api';
-import { getUserEffectiveRole } from '../config/roleConfig';
+import { getUserEffectiveRole, mapRoleNameToEffective } from '../config/roleConfig';
 
 const PermissionContext = createContext();
 
@@ -22,6 +22,32 @@ export const PermissionProvider = ({ children }) => {
       return savedRole || 'sales';
     } catch {
       return 'sales';
+    }
+  });
+
+  // Multi-role system state
+  const [assignedRoles, setAssignedRoles] = useState(() => {
+    try {
+      const saved = localStorage.getItem('assignedRoles');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [activeRole, setActiveRole] = useState(() => {
+    try {
+      const saved = localStorage.getItem('activeRole');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [canSwitchRoles, setCanSwitchRoles] = useState(() => {
+    try {
+      const saved = localStorage.getItem('canSwitchRoles');
+      return saved === 'true';
+    } catch {
+      return false;
     }
   });
   // Legacy role from user object (more specific role like processor, underwriter, closer)
@@ -60,8 +86,8 @@ export const PermissionProvider = ({ children }) => {
     }
   });
 
-  // Compute effective role for UI purposes (combines permission_role + legacy role)
-  // If viewAsRole is set and user can switch views (admin or manager), use that instead
+  // Compute effective role for UI purposes (combines permission_role + legacy role + activeRole from multi-role system)
+  // Priority: 1. Role preview mode, 2. Active role from multi-role system, 3. viewAsRole for admin switching, 4. Base role
   // IMPORTANT: Role preview mode takes highest priority
   const effectiveRole = useMemo(() => {
     // If in role preview mode, use the preview role
@@ -73,6 +99,13 @@ export const PermissionProvider = ({ children }) => {
         return 'production_assistant';
       }
       return previewRoleName;
+    }
+
+    // If user has multi-role and has selected an active role, use that for UI
+    if (canSwitchRoles && activeRole && activeRole.name) {
+      const mappedRole = mapRoleNameToEffective(activeRole.name);
+      console.log('Multi-role active, using role:', activeRole.name, '-> mapped to:', mappedRole);
+      return mappedRole;
     }
 
     const baseRole = getUserEffectiveRole(userRole, legacyRole);
@@ -95,7 +128,7 @@ export const PermissionProvider = ({ children }) => {
       return viewAsRole;
     }
     return baseRole;
-  }, [userRole, legacyRole, viewAsRole, rolePreview]);
+  }, [userRole, legacyRole, viewAsRole, rolePreview, activeRole, canSwitchRoles]);
 
   // Fetch permissions whenever impersonation state changes
   useEffect(() => {
@@ -200,10 +233,114 @@ export const PermissionProvider = ({ children }) => {
     }
   };
 
+  // Fetch user's assigned roles (multi-role system)
+  const fetchUserRoles = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.warn('PermissionContext: No token for fetching roles');
+        return;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/v1/users/me/roles`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        // If endpoint doesn't exist yet (404), silently continue
+        if (response.status === 404) {
+          console.log('Multi-role endpoint not available yet');
+          return;
+        }
+        throw new Error(`Failed to fetch user roles: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      setAssignedRoles(data.assigned_roles || []);
+      setActiveRole(data.active_role || null);
+      setCanSwitchRoles(data.can_switch_roles || false);
+
+      // Persist to localStorage
+      try {
+        localStorage.setItem('assignedRoles', JSON.stringify(data.assigned_roles || []));
+        localStorage.setItem('activeRole', JSON.stringify(data.active_role || null));
+        localStorage.setItem('canSwitchRoles', String(data.can_switch_roles || false));
+      } catch (e) {
+        console.warn('Could not save roles to localStorage:', e);
+      }
+
+      console.log('User roles loaded:', {
+        assignedRoles: data.assigned_roles?.length || 0,
+        activeRole: data.active_role?.name,
+        canSwitchRoles: data.can_switch_roles
+      });
+    } catch (error) {
+      console.error('Error fetching user roles:', error);
+    }
+  }, []);
+
+  // Switch active role for UI view (multi-role system)
+  const switchRole = useCallback(async (roleId) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token');
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/v1/users/me/roles/switch`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ role_id: roleId })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to switch role');
+      }
+
+      const data = await response.json();
+
+      // Update active role state
+      const newActiveRole = {
+        id: data.active_role.id,
+        name: data.active_role.name,
+        is_primary: assignedRoles.find(r => r.id === data.active_role.id)?.is_primary || false
+      };
+      setActiveRole(newActiveRole);
+
+      // Persist to localStorage
+      try {
+        localStorage.setItem('activeRole', JSON.stringify(newActiveRole));
+      } catch (e) {
+        console.warn('Could not save activeRole to localStorage:', e);
+      }
+
+      console.log('Switched to role:', data.active_role.name);
+      return { success: true, message: data.message };
+    } catch (error) {
+      console.error('Error switching role:', error);
+      return { success: false, error: error.message };
+    }
+  }, [assignedRoles]);
+
+  // Fetch user roles when permissions load
+  useEffect(() => {
+    if (!loading && currentUserId) {
+      fetchUserRoles();
+    }
+  }, [loading, currentUserId, fetchUserRoles]);
+
   // Check if user has a specific permission
   const hasPermission = (permissionKey) => {
-    // Admin and management roles have all permissions
-    if (userRole === 'admin' || userRole === 'management') {
+    // Admin (platform), site_admin (org), and management roles have all permissions
+    if (userRole === 'admin' || userRole === 'site_admin' || userRole === 'management') {
       return true;
     }
 
@@ -213,8 +350,8 @@ export const PermissionProvider = ({ children }) => {
 
   // Check if user has ANY of the provided permissions
   const hasAnyPermission = (permissionKeys) => {
-    // Admin and management roles have all permissions
-    if (userRole === 'admin' || userRole === 'management') {
+    // Admin (platform), site_admin (org), and management roles have all permissions
+    if (userRole === 'admin' || userRole === 'site_admin' || userRole === 'management') {
       return true;
     }
 
@@ -223,8 +360,8 @@ export const PermissionProvider = ({ children }) => {
 
   // Check if user has ALL of the provided permissions
   const hasAllPermissions = (permissionKeys) => {
-    // Admin and management roles have all permissions
-    if (userRole === 'admin' || userRole === 'management') {
+    // Admin (platform), site_admin (org), and management roles have all permissions
+    if (userRole === 'admin' || userRole === 'site_admin' || userRole === 'management') {
       return true;
     }
 
@@ -259,8 +396,8 @@ export const PermissionProvider = ({ children }) => {
   // Get the data scope for a resource type (what data can user see)
   // Returns: 'all', 'team', 'own', or 'none'
   const getDataScope = (resourceType) => {
-    // Admin and management roles see all
-    if (userRole === 'admin' || userRole === 'management') {
+    // Admin (platform), site_admin (org), and management roles see all (within their scope)
+    if (userRole === 'admin' || userRole === 'site_admin' || userRole === 'management') {
       return 'all';
     }
 
@@ -297,13 +434,25 @@ export const PermissionProvider = ({ children }) => {
     }
   };
 
-  // Check if user can switch role views (admin or management)
+  // Check if user can switch role views (admin, site_admin, or management)
   const isAdmin = useMemo(() => {
     const baseRole = getUserEffectiveRole(userRole, legacyRole);
     return baseRole === 'admin' ||
+           baseRole === 'site_admin' ||
            baseRole === 'manager' ||
            userRole === 'admin' ||
+           userRole === 'site_admin' ||
            userRole === 'management';
+  }, [userRole, legacyRole]);
+
+  // Check if user is a platform admin (developer) vs site admin (licensee)
+  const isPlatformAdmin = useMemo(() => {
+    return userRole === 'admin' || getUserEffectiveRole(userRole, legacyRole) === 'admin';
+  }, [userRole, legacyRole]);
+
+  // Check if user is a site administrator (licensee managing their org)
+  const isSiteAdmin = useMemo(() => {
+    return userRole === 'site_admin' || getUserEffectiveRole(userRole, legacyRole) === 'site_admin';
   }, [userRole, legacyRole]);
 
   // Exit role preview mode and restore original user
@@ -337,9 +486,11 @@ export const PermissionProvider = ({ children }) => {
     permissions,
     userRole,
     legacyRole,
-    effectiveRole,  // Computed role for UI (combines permission_role + legacy role + viewAsRole)
-    viewAsRole,     // Current view-as role selection (for admin role switching)
-    isAdmin,        // Whether user is admin (can switch views)
+    effectiveRole,  // Computed role for UI (combines permission_role + legacy role + viewAsRole + activeRole)
+    viewAsRole,     // Current view-as role selection (for admin role switching - legacy)
+    isAdmin,        // Whether user is admin (can switch views) - includes both platform & site admins
+    isPlatformAdmin, // Whether user is platform admin (developer with god-mode)
+    isSiteAdmin,    // Whether user is site admin (licensee managing their org)
     loading,
     currentUserId,
     hasPermission,
@@ -348,12 +499,18 @@ export const PermissionProvider = ({ children }) => {
     isReadOnlyMode,
     canPerformAction,
     getDataScope,
-    updateViewAsRole,  // Function to update view-as role
+    updateViewAsRole,  // Function to update view-as role (legacy)
     refetchPermissions: fetchPermissions,
     // Role preview mode
     rolePreview,       // Current role preview info (if any)
     isRolePreview: !!rolePreview,  // Boolean flag for easy checking
-    exitRolePreview    // Function to exit role preview mode
+    exitRolePreview,   // Function to exit role preview mode
+    // Multi-role system
+    assignedRoles,     // List of roles assigned to user [{id, name, is_primary, assigned_at}]
+    activeRole,        // Currently active role for UI view {id, name, is_primary}
+    canSwitchRoles,    // Whether user has multiple roles and can switch between them
+    switchRole,        // Function to switch active role: switchRole(roleId) -> {success, message/error}
+    refetchUserRoles: fetchUserRoles  // Function to refresh user roles
   };
 
   return (
