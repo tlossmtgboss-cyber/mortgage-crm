@@ -62174,6 +62174,12 @@ async def delete_user_migration(
         db.execute(text("UPDATE mm_candidates SET status_changed_by = NULL WHERE status_changed_by = :id"), {"id": user_id})
         db.execute(text("UPDATE mm_interviews SET primary_interviewer_id = NULL WHERE primary_interviewer_id = :id"), {"id": user_id})
         db.execute(text("UPDATE mm_interviews SET created_by = NULL WHERE created_by = :id"), {"id": user_id})
+        db.execute(text("UPDATE mm_candidate_activities SET performed_by = NULL WHERE performed_by = :id"), {"id": user_id})
+        db.execute(text("DELETE FROM mm_talent_capacity WHERE user_id = :id"), {"id": user_id})
+        db.execute(text("DELETE FROM mm_talent_state WHERE user_id = :id"), {"id": user_id})
+        db.execute(text("DELETE FROM mm_talent_state_history WHERE user_id = :id"), {"id": user_id})
+        db.execute(text("DELETE FROM mm_talent_performance WHERE user_id = :id"), {"id": user_id})
+        db.execute(text("DELETE FROM mm_coverage_map WHERE primary_user_id = :id"), {"id": user_id})
         db.execute(text("UPDATE loans SET loan_officer_id = NULL WHERE loan_officer_id = :id"), {"id": user_id})
 
         # Now delete the user
