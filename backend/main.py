@@ -62174,7 +62174,7 @@ async def delete_user_migration(
 
         # Clear foreign key references
         db.execute(text("UPDATE tenant_accounts SET owner_user_id = NULL WHERE owner_user_id = :id"), {"id": user_id})
-        db.execute(text("DELETE FROM impersonation_sessions WHERE target_user_id = :id OR admin_user_id = :id"), {"id": user_id})
+        db.execute(text("DELETE FROM impersonation_sessions WHERE target_user_id = :id OR admin_user_id = :id OR manager_id = :id"), {"id": user_id})
         db.execute(text("UPDATE referral_partners SET owner_id = NULL WHERE owner_id = :id"), {"id": user_id})
         db.execute(text("DELETE FROM user_sessions WHERE user_id = :id"), {"id": user_id})
         db.execute(text("DELETE FROM user_invitations WHERE invited_by = :id"), {"id": user_id})
