@@ -104,7 +104,7 @@ async def salesforce_connect(
             detail="Salesforce integration not configured. Set SALESFORCE_CLIENT_ID and SALESFORCE_CLIENT_SECRET."
         )
 
-    user_id = get_current_user_id(request)
+    user_id = get_current_user_id(request, db)
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
 
@@ -262,7 +262,7 @@ async def salesforce_status(
     db: Session = Depends(get_db)
 ):
     """Check Salesforce connection status for current user."""
-    user_id = get_current_user_id(request)
+    user_id = get_current_user_id(request, db)
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
 
@@ -280,18 +280,25 @@ async def salesforce_status(
     if integration[1] and "instance_url:" in integration[1]:
         instance_url = integration[1].split("instance_url:")[1].split(",")[0]
 
-    # Get last sync time
-    last_sync = db.execute(text("""
-        SELECT MAX(completed_at) FROM salesforce_sync_logs
-        WHERE user_id = :user_id AND status = 'success'
-    """), {"user_id": user_id}).fetchone()
+    # Get last sync time (table may not exist yet)
+    last_sync_time = None
+    try:
+        last_sync = db.execute(text("""
+            SELECT MAX(completed_at) FROM salesforce_sync_logs
+            WHERE user_id = :user_id AND status = 'success'
+        """), {"user_id": user_id}).fetchone()
+        if last_sync and last_sync[0]:
+            last_sync_time = last_sync[0].isoformat()
+    except Exception:
+        # Table doesn't exist yet - that's ok
+        pass
 
     return SalesforceConnectionStatus(
         connected=True,
         instance_url=instance_url,
         user_email=integration[2],
         connected_at=integration[3].isoformat() if integration[3] else None,
-        last_sync_at=last_sync[0].isoformat() if last_sync and last_sync[0] else None,
+        last_sync_at=last_sync_time,
     )
 
 
@@ -301,7 +308,7 @@ async def salesforce_disconnect(
     db: Session = Depends(get_db)
 ):
     """Disconnect Salesforce integration."""
-    user_id = get_current_user_id(request)
+    user_id = get_current_user_id(request, db)
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
 
@@ -432,7 +439,7 @@ async def salesforce_full_sync(
     Perform a full sync from Salesforce.
     Fetches all MtgPlanner_CRM__Transaction_Property__c records.
     """
-    user_id = get_current_user_id(request)
+    user_id = get_current_user_id(request, db)
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
 
@@ -485,7 +492,7 @@ async def salesforce_sync_history(
     db: Session = Depends(get_db)
 ):
     """Get recent sync history."""
-    user_id = get_current_user_id(request)
+    user_id = get_current_user_id(request, db)
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
 
@@ -527,7 +534,7 @@ async def get_field_mappings(
     db: Session = Depends(get_db)
 ):
     """Get current field mappings for Salesforce sync."""
-    user_id = get_current_user_id(request)
+    user_id = get_current_user_id(request, db)
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
 
@@ -585,7 +592,7 @@ async def create_field_mapping(
     db: Session = Depends(get_db)
 ):
     """Create or update a field mapping."""
-    user_id = get_current_user_id(request)
+    user_id = get_current_user_id(request, db)
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
 
@@ -627,7 +634,7 @@ async def test_salesforce_connection(
     db: Session = Depends(get_db)
 ):
     """Test Salesforce connection by querying a simple object."""
-    user_id = get_current_user_id(request)
+    user_id = get_current_user_id(request, db)
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
 
