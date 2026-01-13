@@ -11,6 +11,7 @@ Key responsibilities:
 - Handle workflow state transitions
 - Cancel sibling tasks when contact is made
 - Track AI confidence for autonomous execution
+- Update SLA milestones and loan dates on task completion
 """
 
 import logging
@@ -20,6 +21,9 @@ from typing import Optional, List, Dict, Any, Tuple, Union
 from sqlalchemy import and_, or_, text
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+
+# Import the Task-SLA Bridge Service for connecting task completion to SLA tracking
+from services.task_sla_bridge_service import get_task_sla_bridge_service
 
 logger = logging.getLogger(__name__)
 
@@ -413,12 +417,38 @@ class WorkflowSLAService:
 
             self.db.commit()
 
+            # =========================================================================
+            # SLA TRACKING INTEGRATION
+            # Update SLA milestone and loan date fields when task is completed
+            # This bridges the gap between workflow tasks and SLA compliance tracking
+            # =========================================================================
+            sla_result = {"milestone_completed": False, "loan_date_updated": False}
+            try:
+                bridge_service = get_task_sla_bridge_service(self.db)
+                notes = outcome.get('notes') if outcome else None
+                sla_result = bridge_service.on_task_completed(
+                    task_instance_id=task_instance_id,
+                    completed_by_id=completed_by_id,
+                    notes=notes
+                )
+                logger.info(
+                    f"SLA bridge for task {task_instance_id}: "
+                    f"milestone={sla_result.get('milestone_completed')}, "
+                    f"loan_date={sla_result.get('loan_date_updated')}"
+                )
+            except Exception as sla_error:
+                # Don't fail the task completion if SLA update fails
+                logger.warning(f"SLA bridge update failed for task {task_instance_id}: {sla_error}")
+
             logger.info(f"Task instance {task_instance_id} completed ({completion_source}), {siblings_cancelled} siblings cancelled")
 
             return {
                 "success": True,
                 "message": "Task completed",
-                "siblings_cancelled": siblings_cancelled
+                "siblings_cancelled": siblings_cancelled,
+                "sla_milestone_completed": sla_result.get("milestone_completed", False),
+                "sla_loan_date_updated": sla_result.get("loan_date_updated", False),
+                "sla_date_field": sla_result.get("date_field")
             }
 
         except Exception as e:
