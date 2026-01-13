@@ -1421,3 +1421,300 @@ async def check_multi_role_migration_status(
     except Exception as e:
         logger.error(f"Multi-role status check error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/add-sla-milestone-type-columns")
+async def run_sla_milestone_type_migration(
+    admin: Any = Depends(verify_admin_access)
+):
+    """
+    Add SLA milestone tracking columns to the tasks table.
+
+    Adds columns for:
+    - sla_milestone_id: References the SLA milestone definition
+    - sla_milestone_type: Type identifier (disclosure, appraisal, closing, etc.)
+    - sla_date_field: Which date field triggers the SLA
+    - milestone_date: The actual date/deadline for this milestone
+    - sla_days_allowed: Number of days allowed to complete this SLA
+    - sla_status: Tracking SLA compliance (on_track, at_risk, overdue, completed)
+
+    Also creates performance indexes for SLA queries.
+    """
+    try:
+        from pathlib import Path
+        from database import engine
+        from sqlalchemy import text
+
+        logger.info("Starting SLA milestone type columns migration...")
+
+        # Read the migration file
+        migration_path = Path(__file__).parent / "migrations" / "add_sla_milestone_type_column.sql"
+        if not migration_path.exists():
+            raise HTTPException(
+                status_code=500,
+                detail=f"Migration file not found at {migration_path}"
+            )
+
+        sql = migration_path.read_text()
+
+        # Execute the migration
+        with engine.connect() as conn:
+            # For DO $$ blocks, we need to execute the whole thing
+            # Split carefully - execute DO blocks as single statements
+            executed = 0
+            skipped = 0
+            errors = []
+
+            # Split by "DO $$" to handle PL/pgSQL blocks
+            parts = sql.split('DO $$')
+
+            for i, part in enumerate(parts):
+                if i == 0:
+                    # First part is comments/header - skip if empty
+                    clean_part = part.strip()
+                    if not clean_part or clean_part.startswith('--'):
+                        continue
+                else:
+                    # This is a DO block - reconstruct it
+                    # Find where the DO block ends (at "END $$;")
+                    if 'END $$;' in part:
+                        do_block_end = part.index('END $$;') + len('END $$;')
+                        do_block = 'DO $$' + part[:do_block_end]
+                        remainder = part[do_block_end:]
+
+                        # Execute the DO block
+                        try:
+                            conn.execute(text(do_block))
+                            executed += 1
+                            logger.info(f"Executed DO block {i}")
+                        except Exception as e:
+                            if "already exists" in str(e).lower():
+                                skipped += 1
+                            else:
+                                errors.append(f"DO block {i}: {str(e)[:100]}")
+                                logger.error(f"DO block {i} error: {e}")
+
+                        # Execute remaining statements (CREATE INDEX, etc.)
+                        if remainder.strip():
+                            for stmt in remainder.split(';'):
+                                stmt = stmt.strip()
+                                if stmt and not stmt.startswith('--') and stmt != 'RAISE NOTICE':
+                                    # Skip standalone RAISE NOTICE
+                                    if 'RAISE NOTICE' in stmt and 'DO' not in stmt:
+                                        continue
+                                    try:
+                                        conn.execute(text(stmt))
+                                        executed += 1
+                                        logger.info(f"Executed: {stmt[:50]}...")
+                                    except Exception as e:
+                                        if "already exists" in str(e).lower():
+                                            skipped += 1
+                                        else:
+                                            errors.append(f"Statement: {str(e)[:100]}")
+
+            conn.commit()
+
+            # Verify columns were created
+            result = conn.execute(text("""
+                SELECT column_name, data_type
+                FROM information_schema.columns
+                WHERE table_name = 'tasks'
+                AND column_name IN ('sla_milestone_id', 'sla_milestone_type', 'sla_date_field',
+                                   'milestone_date', 'sla_days_allowed', 'sla_status')
+                ORDER BY column_name
+            """))
+            columns = [{"name": row[0], "type": row[1]} for row in result.fetchall()]
+
+        logger.info(f"SLA migration completed. Executed: {executed}, Skipped: {skipped}")
+
+        return {
+            "status": "success",
+            "message": "SLA milestone type columns migration completed",
+            "statements_executed": executed,
+            "statements_skipped": skipped,
+            "columns_verified": columns,
+            "errors": errors if errors else None
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"SLA milestone type migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/delete-sample-data")
+async def delete_sample_data_endpoint(
+    admin: Any = Depends(verify_admin_access)
+):
+    """
+    Delete all sample/test data from the database.
+    This removes:
+    - All tasks
+    - All extracted_data (reconciliation items)
+    - All referral_partners
+    - All team_members
+    - Sample users (Sarah Johnson, Michael Chen, Emily Davis, James Wilson)
+    - Sample leads and loans with test/sample names
+    """
+    try:
+        from database import SessionLocal
+        from sqlalchemy import text
+
+        db = SessionLocal()
+        results = {
+            "tasks_deleted": 0,
+            "extracted_data_deleted": 0,
+            "incoming_events_deleted": 0,
+            "referral_partners_deleted": 0,
+            "team_members_deleted": 0,
+            "users_deleted": 0,
+            "leads_deleted": 0,
+            "loans_deleted": 0,
+            "workflow_instances_deleted": 0,
+            "workflow_tasks_deleted": 0,
+            "errors": []
+        }
+
+        try:
+            # Delete in the correct order to avoid FK violations
+
+            # 1. Delete all tasks (no FK dependencies typically)
+            try:
+                result = db.execute(text("DELETE FROM tasks"))
+                results["tasks_deleted"] = result.rowcount
+                db.commit()
+            except Exception as e:
+                results["errors"].append(f"tasks: {str(e)[:100]}")
+                db.rollback()
+
+            # 2. Delete workflow_tasks first (has FK to workflow_instances)
+            try:
+                result = db.execute(text("DELETE FROM workflow_tasks"))
+                results["workflow_tasks_deleted"] = result.rowcount
+                db.commit()
+            except Exception as e:
+                results["errors"].append(f"workflow_tasks: {str(e)[:100]}")
+                db.rollback()
+
+            # 3. Delete workflow_instances
+            try:
+                result = db.execute(text("DELETE FROM workflow_instances"))
+                results["workflow_instances_deleted"] = result.rowcount
+                db.commit()
+            except Exception as e:
+                results["errors"].append(f"workflow_instances: {str(e)[:100]}")
+                db.rollback()
+
+            # 4. Delete ai_training_events FIRST (references extracted_data)
+            try:
+                result = db.execute(text("DELETE FROM ai_training_events"))
+                results["ai_training_events_deleted"] = result.rowcount
+                db.commit()
+            except Exception as e:
+                results["errors"].append(f"ai_training_events: {str(e)[:100]}")
+                db.rollback()
+
+            # 5. Delete extracted_data (references incoming_data_events)
+            try:
+                result = db.execute(text("DELETE FROM extracted_data"))
+                results["extracted_data_deleted"] = result.rowcount
+                db.commit()
+            except Exception as e:
+                results["errors"].append(f"extracted_data: {str(e)[:100]}")
+                db.rollback()
+
+            # 6. Delete incoming_data_events LAST
+            try:
+                result = db.execute(text("DELETE FROM incoming_data_events"))
+                results["incoming_events_deleted"] = result.rowcount
+                db.commit()
+            except Exception as e:
+                results["errors"].append(f"incoming_data_events: {str(e)[:100]}")
+                db.rollback()
+
+            # 6. Delete referral partners
+            try:
+                result = db.execute(text("DELETE FROM referral_partners"))
+                results["referral_partners_deleted"] = result.rowcount
+                db.commit()
+            except Exception as e:
+                results["errors"].append(f"referral_partners: {str(e)[:100]}")
+                db.rollback()
+
+            # 7. Delete team_members
+            try:
+                result = db.execute(text("DELETE FROM team_members"))
+                results["team_members_deleted"] = result.rowcount
+                db.commit()
+            except Exception as e:
+                results["errors"].append(f"team_members: {str(e)[:100]}")
+                db.rollback()
+
+            # 8. Delete team_member_profiles (separate table)
+            try:
+                result = db.execute(text("DELETE FROM team_member_profiles"))
+                results["team_member_profiles_deleted"] = result.rowcount
+                db.commit()
+            except Exception as e:
+                results["errors"].append(f"team_member_profiles: {str(e)[:100]}")
+                db.rollback()
+
+            # 9. Delete sample users (Sarah, Michael, Emily, James)
+            sample_emails = [
+                'sjohnson@cmgfi.com', 'mchen@cmgfi.com', 'edavis@cmgfi.com', 'jwilson@cmgfi.com',
+                'sarah@cmghomeloans.com', 'michael@cmghomeloans.com',
+                'emily@cmghomeloans.com', 'james@cmghomeloans.com'
+            ]
+            try:
+                result = db.execute(
+                    text("DELETE FROM users WHERE email = ANY(:emails)"),
+                    {"emails": sample_emails}
+                )
+                results["users_deleted"] = result.rowcount
+                db.commit()
+            except Exception as e:
+                results["errors"].append(f"users: {str(e)[:100]}")
+                db.rollback()
+
+            # 10. Delete sample leads
+            try:
+                result = db.execute(text("""
+                    DELETE FROM leads WHERE
+                    first_name IN ('Test', 'Sample', 'Demo', 'John', 'Jane') AND
+                    last_name IN ('User', 'Lead', 'Test', 'Sample', 'Doe')
+                """))
+                results["leads_deleted"] = result.rowcount
+                db.commit()
+            except Exception as e:
+                results["errors"].append(f"leads: {str(e)[:100]}")
+                db.rollback()
+
+            # 11. Delete sample loans
+            try:
+                result = db.execute(text("""
+                    DELETE FROM loans WHERE
+                    borrower_name LIKE '%Test%' OR
+                    borrower_name LIKE '%Sample%' OR
+                    borrower_name LIKE '%Demo%'
+                """))
+                results["loans_deleted"] = result.rowcount
+                db.commit()
+            except Exception as e:
+                results["errors"].append(f"loans: {str(e)[:100]}")
+                db.rollback()
+
+            logger.info(f"Sample data cleanup completed: {results}")
+
+            return {
+                "status": "success",
+                "message": "Sample data deleted successfully",
+                "results": results
+            }
+
+        finally:
+            db.close()
+
+    except Exception as e:
+        logger.error(f"Sample data deletion error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
