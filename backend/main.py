@@ -20968,6 +20968,16 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ HubSpot routes not loaded: {e}")
 
+# Follow Up Boss Integration routes (CRM Sync, Webhooks)
+try:
+    from routes.followupboss_routes import router as followupboss_router
+    from routes.followupboss_webhook_routes import router as followupboss_webhook_router
+    app.include_router(followupboss_router, prefix="/api/v1", tags=["Follow Up Boss Integration"])
+    app.include_router(followupboss_webhook_router, prefix="/api", tags=["Follow Up Boss Webhooks"])
+    logger.info("✅ Follow Up Boss routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Follow Up Boss routes not loaded: {e}")
+
 # Google Calendar Integration routes (OAuth, Calendar Sync)
 try:
     from routes.google_calendar_routes import router as google_calendar_router, set_dependencies as set_google_calendar_deps
@@ -62170,6 +62180,7 @@ async def delete_user_migration(
         db.execute(text("DELETE FROM user_invitations WHERE invited_by = :id"), {"id": user_id})
         db.execute(text("UPDATE subscriber_invitations SET accepted_by_user_id = NULL WHERE accepted_by_user_id = :id"), {"id": user_id})
         db.execute(text("UPDATE subscriber_invitations SET invited_by = NULL WHERE invited_by = :id"), {"id": user_id})
+        db.execute(text("UPDATE subscriber_invitations SET revoked_by = NULL WHERE revoked_by = :id"), {"id": user_id})
         db.execute(text("UPDATE mm_candidates SET referrer_user_id = NULL WHERE referrer_user_id = :id"), {"id": user_id})
         db.execute(text("UPDATE mm_candidates SET status_changed_by = NULL WHERE status_changed_by = :id"), {"id": user_id})
         db.execute(text("UPDATE mm_interviews SET primary_interviewer_id = NULL WHERE primary_interviewer_id = :id"), {"id": user_id})
