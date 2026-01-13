@@ -62190,6 +62190,7 @@ async def delete_user_migration(
         db.execute(text("DELETE FROM microsoft_oauth_tokens WHERE user_id = :id"), {"id": user_id})
         db.execute(text("UPDATE tasks SET owner_id = NULL WHERE owner_id = :id"), {"id": user_id})
         db.execute(text("UPDATE extracted_data SET reviewed_by = NULL WHERE reviewed_by = :id"), {"id": user_id})
+        db.execute(text("DELETE FROM ai_training_events WHERE user_id = :id"), {"id": user_id})
 
         # Now delete the user
         db.execute(text("DELETE FROM users WHERE id = :id"), {"id": user_id})
