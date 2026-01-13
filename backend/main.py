@@ -38355,6 +38355,114 @@ async def reset_password(request: ResetPasswordRequest, db: Session = Depends(ge
             detail="An error occurred while resetting your password. Please try again."
         )
 
+# ============================================================================
+# PUSH NOTIFICATIONS
+# ============================================================================
+
+class DeviceToken(Base):
+    """Store device tokens for push notifications."""
+    __tablename__ = "device_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    device_token = Column(String(500), nullable=False)
+    platform = Column(String(20), nullable=False)  # 'ios' or 'android'
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Unique constraint to prevent duplicate tokens per user
+    __table_args__ = (
+        UniqueConstraint('user_id', 'device_token', name='uq_user_device_token'),
+    )
+
+    user = relationship("User", backref="device_tokens")
+
+class PushRegisterRequest(BaseModel):
+    device_token: str
+    platform: str = "ios"
+
+@app.post("/api/v1/push/register")
+async def register_push_token(
+    request: PushRegisterRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Register a device token for push notifications.
+    Called from the mobile app after getting APNs token.
+    """
+    try:
+        # Check if token already exists for this user
+        existing = db.query(DeviceToken).filter(
+            DeviceToken.user_id == current_user.id,
+            DeviceToken.device_token == request.device_token
+        ).first()
+
+        if existing:
+            # Update existing token
+            existing.is_active = True
+            existing.platform = request.platform
+            existing.updated_at = datetime.now(timezone.utc)
+        else:
+            # Deactivate old tokens for this user on this platform (optional - one device per platform)
+            # db.query(DeviceToken).filter(
+            #     DeviceToken.user_id == current_user.id,
+            #     DeviceToken.platform == request.platform
+            # ).update({"is_active": False})
+
+            # Create new token
+            new_token = DeviceToken(
+                user_id=current_user.id,
+                device_token=request.device_token,
+                platform=request.platform,
+                is_active=True
+            )
+            db.add(new_token)
+
+        db.commit()
+        logger.info(f"Push token registered for user {current_user.id} on {request.platform}")
+
+        return {
+            "success": True,
+            "message": "Device token registered successfully"
+        }
+    except Exception as e:
+        logger.error(f"Error registering push token: {str(e)}")
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to register device token"
+        )
+
+@app.delete("/api/v1/push/unregister")
+async def unregister_push_token(
+    device_token: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Unregister a device token (e.g., on logout).
+    """
+    try:
+        db.query(DeviceToken).filter(
+            DeviceToken.user_id == current_user.id,
+            DeviceToken.device_token == device_token
+        ).update({"is_active": False})
+        db.commit()
+
+        return {
+            "success": True,
+            "message": "Device token unregistered"
+        }
+    except Exception as e:
+        logger.error(f"Error unregistering push token: {str(e)}")
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to unregister device token"
+        )
+
 @app.post("/api/v1/setup-admin")
 async def setup_admin_user(db: Session = Depends(get_db)):
     """
@@ -39771,6 +39879,7 @@ async def get_all_users(
         "email": user.email,
         "full_name": user.full_name,
         "role": user.role,
+        "permission_role": user.permission_role,
         "is_active": user.is_active,
         "email_verified": user.email_verified,
         "onboarding_completed": user.onboarding_completed,
@@ -39779,13 +39888,14 @@ async def get_all_users(
     } for user in users]
 
 @app.patch("/api/v1/admin/users/{user_id}")
+@app.put("/api/v1/admin/users/{user_id}")
 async def update_user(
     user_id: int,
     updates: dict,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Update user (admin only)"""
+    """Update user (admin only) - supports both PUT and PATCH"""
     from utils.auth import require_admin
     require_admin(current_user)
 
@@ -43697,8 +43807,24 @@ async def update_loan(loan_id: int, loan_update: LoanUpdate, db: Session = Depen
         new_stage = loan_update.stage if loan_update.stage else old_stage
         new_stage_str = new_stage.value if hasattr(new_stage, 'value') else str(new_stage) if new_stage else None
 
+        # Track old values of SLA-triggering fields before update
+        sla_trigger_fields = {
+            'application_date', 'uw_received_date', 'conditions_for_review_date',
+            'loan_approved_date', 'clear_to_close_date', 'scheduled_closing_date',
+            'funded_date', 'appraisal_ordered_date', 'cd_sent_to_borrower_date'
+        }
+        old_sla_values = {field: getattr(loan, field, None) for field in sla_trigger_fields}
+
         for key, value in loan_update.dict(exclude_unset=True).items():
             setattr(loan, key, value)
+
+        # Determine which SLA fields changed
+        changed_sla_fields = set()
+        for field in sla_trigger_fields:
+            old_val = old_sla_values.get(field)
+            new_val = getattr(loan, field, None)
+            if old_val is None and new_val is not None:
+                changed_sla_fields.add(field)
 
         # Track stage change in history if stage changed
         if old_stage_str != new_stage_str and new_stage_str:
@@ -43754,6 +43880,21 @@ async def update_loan(loan_id: int, loan_update: LoanUpdate, db: Session = Depen
                 logger.info(f"Loan status change trigger fired for loan {loan.id}: {old_stage_str} → {new_stage_str}")
             except Exception as trigger_error:
                 logger.error(f"Error firing loan status trigger: {trigger_error}")
+
+        # Fire SLA task creation hook for date field or stage changes
+        if changed_sla_fields or (old_stage_str != new_stage_str):
+            try:
+                from services.sla_task_hook_service import SLATaskHookService
+                asyncio.create_task(SLATaskHookService.on_loan_updated(
+                    loan_id=loan.id,
+                    changed_fields=changed_sla_fields,
+                    user_id=current_user.id,
+                    old_stage=old_stage_str,
+                    new_stage=new_stage_str,
+                ))
+                logger.info(f"SLA task hook fired for loan {loan.id}: fields={changed_sla_fields}, stage={old_stage_str}→{new_stage_str}")
+            except Exception as sla_error:
+                logger.error(f"Error firing SLA task hook: {sla_error}")
 
         return loan
     except HTTPException:
@@ -59653,6 +59794,14 @@ async def startup_event():
         logger.info("✅ SLA Tracking scheduler jobs added")
     except Exception as e:
         logger.warning(f"⚠️ SLA Tracking scheduler not loaded: {e}")
+
+    # Add SLA Task Hook backfill scheduler (creates SLA tasks for loans missing them)
+    try:
+        from services.sla_task_hook_service import setup_sla_task_hook_scheduler
+        setup_sla_task_hook_scheduler(scheduler)
+        logger.info("✅ SLA Task Hook backfill scheduler added (runs at 2 AM daily)")
+    except Exception as e:
+        logger.warning(f"⚠️ SLA Task Hook scheduler not loaded: {e}")
 
     # Initialize notification scheduler for borrower application reminders
     try:

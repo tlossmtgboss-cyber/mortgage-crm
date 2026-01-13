@@ -1423,6 +1423,48 @@ async def check_multi_role_migration_status(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/backfill-sla-tasks")
+async def backfill_sla_tasks_endpoint(
+    limit: int = 100,
+    admin: Any = Depends(verify_admin_access)
+):
+    """
+    Backfill SLA tasks for existing loans that don't have them.
+
+    This endpoint creates SLA tasks for loans that:
+    - Have an application_date set
+    - Are not in final stages (FUNDED, CANCELLED, DENIED, WITHDRAWN)
+    - Don't already have SLA tasks
+
+    Args:
+        limit: Maximum number of loans to process (default 100)
+
+    Returns:
+        Dict with backfill results including tasks created
+    """
+    try:
+        from services.sla_task_hook_service import backfill_sla_tasks_batch
+
+        logger.info(f"Starting SLA task backfill (limit={limit})...")
+
+        # Run the backfill
+        result = await backfill_sla_tasks_batch(limit=limit)
+
+        logger.info(f"SLA task backfill completed: {result}")
+
+        return {
+            "status": "success",
+            "message": f"Processed {result.get('loans_processed', 0)} loans",
+            "loans_processed": result.get("loans_processed", 0),
+            "tasks_created": result.get("tasks_created", 0),
+            "errors": result.get("errors", []) if result.get("errors") else None
+        }
+
+    except Exception as e:
+        logger.error(f"SLA task backfill error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/add-sla-milestone-type-columns")
 async def run_sla_milestone_type_migration(
     admin: Any = Depends(verify_admin_access)
