@@ -62207,6 +62207,7 @@ async def delete_user_migration(
         db.execute(text("DELETE FROM voice_workflow_sessions WHERE user_id = :id"), {"id": user_id})
         db.execute(text("DELETE FROM ai_delegated_tasks WHERE user_id = :id"), {"id": user_id})
         db.execute(text("DELETE FROM mum_clients WHERE user_id = :id"), {"id": user_id})
+        db.execute(text("DELETE FROM voicemail_templates WHERE user_id = :id"), {"id": user_id})
 
         # Now delete the user
         db.execute(text("DELETE FROM users WHERE id = :id"), {"id": user_id})
