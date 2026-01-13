@@ -27,6 +27,22 @@ const RoleSwitcher = () => {
   const [isSwitching, setIsSwitching] = useState(false);
   const [error, setError] = useState(null);
 
+  // Close dropdown when clicking outside - must be before early return to satisfy hooks rules
+  React.useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest('.role-switcher')) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('click', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [isOpen]);
+
   // Don't render if user can't switch roles or data is loading
   if (loading || !canSwitchRoles || !assignedRoles || assignedRoles.length <= 1) {
     return null;
@@ -60,22 +76,6 @@ const RoleSwitcher = () => {
       setError(null);
     }
   };
-
-  // Close dropdown when clicking outside
-  const handleClickOutside = (e) => {
-    if (!e.target.closest('.role-switcher')) {
-      setIsOpen(false);
-    }
-  };
-
-  React.useEffect(() => {
-    if (isOpen) {
-      document.addEventListener('click', handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener('click', handleClickOutside);
-    };
-  }, [isOpen]);
 
   return (
     <div className="role-switcher">
