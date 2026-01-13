@@ -637,6 +637,49 @@ async def enable_all_modules(
         raise HTTPException(status_code=500, detail=f"Failed to enable modules: {str(e)}")
 
 
+@router.get("/admin/check-integrations")
+async def check_integrations_config(
+    admin_key: str = Query(..., description="Admin API key"),
+):
+    """Check if integration credentials are configured."""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    import os
+
+    integrations_status = {
+        "salesforce": {
+            "client_id_set": bool(os.getenv("SALESFORCE_CLIENT_ID")),
+            "client_secret_set": bool(os.getenv("SALESFORCE_CLIENT_SECRET")),
+            "redirect_uri": os.getenv("SALESFORCE_REDIRECT_URI", "not set"),
+        },
+        "hubspot": {
+            "client_id_set": bool(os.getenv("HUBSPOT_CLIENT_ID")),
+            "client_secret_set": bool(os.getenv("HUBSPOT_CLIENT_SECRET")),
+        },
+        "google_calendar": {
+            "client_id_set": bool(os.getenv("GOOGLE_CLIENT_ID")),
+            "client_secret_set": bool(os.getenv("GOOGLE_CLIENT_SECRET")),
+        },
+        "slack": {
+            "client_id_set": bool(os.getenv("SLACK_CLIENT_ID")),
+            "client_secret_set": bool(os.getenv("SLACK_CLIENT_SECRET")),
+        },
+        "openai": {
+            "api_key_set": bool(os.getenv("OPENAI_API_KEY")),
+        },
+        "anthropic": {
+            "api_key_set": bool(os.getenv("ANTHROPIC_API_KEY")),
+        },
+    }
+
+    return {
+        "integrations": integrations_status,
+        "frontend_url": os.getenv("FRONTEND_URL", "not set"),
+        "base_url": os.getenv("BASE_URL", "not set"),
+    }
+
+
 @router.post("/admin/clear-demo-data")
 async def clear_demo_data(
     admin_key: str = Query(..., description="Admin API key"),
