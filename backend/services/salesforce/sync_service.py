@@ -280,6 +280,9 @@ class SalesforceSyncService:
         for target_entity, entity_maps in entity_mappings.items():
             transformed_data = self._transform_record(record, entity_maps)
 
+            # Always include the Salesforce ID
+            transformed_data['salesforce_id'] = record.get('Id')
+
             # Upsert into CRM
             await self._upsert_record(
                 db=db,
@@ -397,8 +400,11 @@ class SalesforceSyncService:
     ) -> Optional[int]:
         """
         Upsert record into the appropriate CRM table.
-        This is a placeholder that should be customized based on your CRM schema.
+        Handles leads and loans from Salesforce.
         """
+        from sqlalchemy import text
+        from datetime import datetime, timezone
+
         # Get user who owns this integration
         profile = db.query(IntegrationProfile).filter(
             IntegrationProfile.id == integration_profile_id
@@ -407,36 +413,224 @@ class SalesforceSyncService:
         if not profile:
             raise ValueError("Integration profile not found")
 
-        # Add user ownership and source tracking
-        data['user_id'] = profile.user_id
-        data['integration_tracking_id'] = tracking_id
-        data['source'] = 'salesforce'
+        user_id = profile.user_id
+        salesforce_id = data.pop('salesforce_id', None)
 
-        # The actual upsert logic depends on your CRM schema
-        # Here's a placeholder that logs the operation
-        logger.info(f"Upserting to {target_entity}: {json.dumps(data, default=str)[:200]}...")
+        logger.info(f"Upserting to {target_entity}: salesforce_id={salesforce_id}")
 
-        # In production, you would:
-        # 1. Look up the appropriate model based on target_entity
-        # 2. Find existing record by email/phone/unique identifier
-        # 3. Create or update the record
+        if target_entity == 'lead':
+            return await self._upsert_lead(db, user_id, salesforce_id, data)
+        elif target_entity == 'loan':
+            return await self._upsert_loan(db, user_id, salesforce_id, data)
+        elif target_entity == 'borrower':
+            # Borrower data goes into loan record
+            return await self._upsert_loan(db, user_id, salesforce_id, data)
+        else:
+            logger.warning(f"Unknown target entity: {target_entity}")
+            return None
 
-        # Example for borrower entity:
-        # if target_entity == 'borrower':
-        #     borrower = db.query(Borrower).filter(
-        #         Borrower.email == data.get('email')
-        #     ).first()
-        #     if borrower:
-        #         for key, value in data.items():
-        #             if hasattr(borrower, key):
-        #                 setattr(borrower, key, value)
-        #     else:
-        #         borrower = Borrower(**data)
-        #         db.add(borrower)
-        #     db.commit()
-        #     return borrower.id
+    async def _upsert_lead(
+        self,
+        db: Session,
+        user_id: int,
+        salesforce_id: str,
+        data: Dict[str, Any]
+    ) -> Optional[int]:
+        """Upsert a lead from Salesforce"""
+        from sqlalchemy import text
+        from datetime import datetime, timezone
 
-        return None
+        # Check if lead exists by salesforce_id or email
+        existing = None
+        if salesforce_id:
+            existing = db.execute(text("""
+                SELECT id FROM leads
+                WHERE salesforce_id = :sf_id OR meta_data->>'salesforce_id' = :sf_id
+                LIMIT 1
+            """), {"sf_id": salesforce_id}).fetchone()
+
+        if not existing and data.get('email'):
+            existing = db.execute(text("""
+                SELECT id FROM leads
+                WHERE LOWER(email) = LOWER(:email) AND owner_id = :user_id
+                LIMIT 1
+            """), {"email": data.get('email'), "user_id": user_id}).fetchone()
+
+        # Map Salesforce fields to CRM fields
+        lead_data = {
+            "first_name": data.get('first_name') or data.get('FirstName', ''),
+            "last_name": data.get('last_name') or data.get('LastName', ''),
+            "email": data.get('email') or data.get('Email', ''),
+            "phone": data.get('phone') or data.get('Phone', ''),
+            "company": data.get('company') or data.get('Company', ''),
+            "source": data.get('source') or data.get('LeadSource', 'Salesforce'),
+        }
+
+        # Remove empty values
+        lead_data = {k: v for k, v in lead_data.items() if v}
+
+        if existing:
+            # Update existing lead
+            lead_id = existing[0]
+            set_clauses = ", ".join([f"{k} = :{k}" for k in lead_data.keys()])
+            if set_clauses:
+                lead_data['lead_id'] = lead_id
+                lead_data['salesforce_id'] = salesforce_id
+                db.execute(text(f"""
+                    UPDATE leads SET {set_clauses},
+                        salesforce_id = :salesforce_id,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = :lead_id
+                """), lead_data)
+            logger.info(f"Updated lead {lead_id} from Salesforce {salesforce_id}")
+            return lead_id
+        else:
+            # Create new lead
+            lead_data['owner_id'] = user_id
+            lead_data['salesforce_id'] = salesforce_id
+            lead_data['stage'] = 'new'
+
+            columns = ", ".join(lead_data.keys())
+            placeholders = ", ".join([f":{k}" for k in lead_data.keys()])
+
+            result = db.execute(text(f"""
+                INSERT INTO leads ({columns}, created_at, updated_at)
+                VALUES ({placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                RETURNING id
+            """), lead_data)
+
+            lead_id = result.fetchone()[0]
+            logger.info(f"Created lead {lead_id} from Salesforce {salesforce_id}")
+            return lead_id
+
+    async def _upsert_loan(
+        self,
+        db: Session,
+        user_id: int,
+        salesforce_id: str,
+        data: Dict[str, Any]
+    ) -> Optional[int]:
+        """Upsert a loan from Salesforce Opportunity"""
+        from sqlalchemy import text
+        from datetime import datetime, timezone
+        import uuid
+
+        # Check if loan exists by salesforce_id
+        existing = None
+        if salesforce_id:
+            existing = db.execute(text("""
+                SELECT id FROM loans
+                WHERE salesforce_id = :sf_id
+                LIMIT 1
+            """), {"sf_id": salesforce_id}).fetchone()
+
+        # Map Salesforce Opportunity fields to CRM loan fields
+        loan_data = {
+            "borrower_name": data.get('borrower_name') or data.get('Name', ''),
+            "borrower_email": data.get('borrower_email') or data.get('Email__c', ''),
+            "borrower_phone": data.get('borrower_phone') or data.get('Phone__c', ''),
+            "amount": float(data.get('amount') or data.get('Amount', 0) or 0),
+            "property_address": data.get('property_address') or data.get('Property_Address__c', ''),
+            "loan_type": data.get('loan_type') or data.get('Loan_Type__c', ''),
+            "program": data.get('program') or data.get('Loan_Program__c', ''),
+        }
+
+        # Handle closing date
+        closing_date = data.get('closing_date') or data.get('CloseDate')
+        if closing_date:
+            if isinstance(closing_date, str):
+                try:
+                    loan_data['closing_date'] = closing_date
+                except:
+                    pass
+
+        # Map stage from Salesforce StageName
+        sf_stage = data.get('stage') or data.get('StageName', '')
+        loan_data['stage'] = self._map_salesforce_stage(sf_stage)
+
+        # Remove empty values but keep amount even if 0
+        loan_data = {k: v for k, v in loan_data.items() if v or k == 'amount'}
+
+        if existing:
+            # Update existing loan
+            loan_id = existing[0]
+            set_clauses = ", ".join([f"{k} = :{k}" for k in loan_data.keys() if k != 'amount'])
+            if 'amount' in loan_data:
+                if set_clauses:
+                    set_clauses += ", amount = :amount"
+                else:
+                    set_clauses = "amount = :amount"
+
+            if set_clauses:
+                loan_data['loan_id'] = loan_id
+                loan_data['salesforce_id'] = salesforce_id
+                db.execute(text(f"""
+                    UPDATE loans SET {set_clauses},
+                        salesforce_id = :salesforce_id,
+                        salesforce_last_synced_at = CURRENT_TIMESTAMP,
+                        salesforce_sync_status = 'synced',
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = :loan_id
+                """), loan_data)
+            logger.info(f"Updated loan {loan_id} from Salesforce {salesforce_id}")
+            return loan_id
+        else:
+            # Create new loan - need loan_number
+            loan_number = f"SF-{str(uuid.uuid4())[:8].upper()}"
+            loan_data['loan_number'] = loan_number
+            loan_data['loan_officer_id'] = user_id
+            loan_data['salesforce_id'] = salesforce_id
+            loan_data['salesforce_sync_status'] = 'synced'
+
+            # Ensure required fields have defaults
+            if not loan_data.get('borrower_name'):
+                loan_data['borrower_name'] = 'Unknown Borrower'
+            if not loan_data.get('amount'):
+                loan_data['amount'] = 0
+            if not loan_data.get('stage'):
+                loan_data['stage'] = 'Application'
+
+            columns = ", ".join(loan_data.keys())
+            placeholders = ", ".join([f":{k}" for k in loan_data.keys()])
+
+            result = db.execute(text(f"""
+                INSERT INTO loans ({columns}, salesforce_last_synced_at, created_at, updated_at)
+                VALUES ({placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                RETURNING id
+            """), loan_data)
+
+            loan_id = result.fetchone()[0]
+            logger.info(f"Created loan {loan_id} ({loan_number}) from Salesforce {salesforce_id}")
+            return loan_id
+
+    def _map_salesforce_stage(self, sf_stage: str) -> str:
+        """Map Salesforce Opportunity stage to CRM loan stage"""
+        stage_mapping = {
+            # Common Salesforce stages
+            'Prospecting': 'Application',
+            'Qualification': 'Application',
+            'Needs Analysis': 'Application',
+            'Value Proposition': 'Processing',
+            'Id. Decision Makers': 'Processing',
+            'Perception Analysis': 'Processing',
+            'Proposal/Price Quote': 'Submitted',
+            'Negotiation/Review': 'Underwriting',
+            'Closed Won': 'Funded',
+            'Closed Lost': 'Application',
+            # Mortgage-specific stages
+            'Application': 'Application',
+            'Processing': 'Processing',
+            'Submitted': 'Submitted',
+            'Underwriting': 'Underwriting',
+            'Conditional Approval': 'Conditional Approval',
+            'Approved': 'Approved',
+            'Clear to Close': 'CTC',
+            'CTC': 'CTC',
+            'Docs Out': 'Docs Out',
+            'Closing': 'Closing',
+            'Funded': 'Funded',
+        }
+        return stage_mapping.get(sf_stage, 'Application')
 
     def _group_mappings_by_object(
         self,
