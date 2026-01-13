@@ -47494,8 +47494,8 @@ async def get_default_role_assignments(
             LEFT JOIN default_role_assignments dra ON dra.role_id = r.id
                 AND dra.organization_id = :org_id
             LEFT JOIN users u ON u.id = dra.user_id
-            WHERE r.is_active = 1
-            ORDER BY r.id
+            WHERE r.is_active = true
+            ORDER BY r.name
         """), {"org_id": current_user.organization_id or 1}).fetchall()
 
         assignments = []
@@ -47615,6 +47615,134 @@ async def remove_default_role_assignment(
     except Exception as e:
         db.rollback()
         logger.error(f"Error removing default role assignment: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# SEED WORKFLOW ROLES ENDPOINT
+# ============================================================================
+
+# All workflow roles from the Active Loan Workflow page
+WORKFLOW_ROLES = [
+    {"name": "Admin", "code": "ADM", "description": "System administrator with full access"},
+    {"name": "Application Analysis", "code": "AA", "description": "Analyzes and processes loan applications"},
+    {"name": "Branch Manager", "code": "BM", "description": "Branch manager overseeing branch operations"},
+    {"name": "Closer", "code": "CLO", "description": "Handles loan closing process"},
+    {"name": "Concierge", "code": "CON", "description": "Client-facing concierge support"},
+    {"name": "Executive Management", "code": "EM", "description": "Executive management team"},
+    {"name": "Funder", "code": "FUN", "description": "Handles loan funding process"},
+    {"name": "Jr. Loan Officer", "code": "JLO", "description": "Junior loan officer in training"},
+    {"name": "Jr. Processor", "code": "JP", "description": "Junior processor in training"},
+    {"name": "Loan Officer", "code": "LO", "description": "Primary loan officer handling client relationships"},
+    {"name": "Loan Officer Assistant", "code": "LOA", "description": "Assists loan officer with administrative tasks"},
+    {"name": "Management", "code": "MAN", "description": "Management role with oversight responsibilities"},
+    {"name": "Operations Manager", "code": "OM", "description": "Oversees daily operations"},
+    {"name": "Processing Assistant", "code": "PA", "description": "Assists processor with loan processing tasks"},
+    {"name": "Processor", "code": "PRO", "description": "Handles loan processing and documentation"},
+    {"name": "Production Assistant 1", "code": "PA1", "description": "First level production assistant"},
+    {"name": "Production Assistant 2", "code": "PA2", "description": "Second level production assistant"},
+    {"name": "Site Admin", "code": "SA", "description": "Site-level administrator"},
+    {"name": "Underwriter", "code": "UND", "description": "Reviews and approves loan applications"},
+]
+
+
+@app.post("/api/v1/settings/seed-workflow-roles")
+async def seed_workflow_roles(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Seed workflow roles into the database."""
+    from sqlalchemy import text
+
+    try:
+        # Ensure the roles table exists
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS roles (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(100) NOT NULL UNIQUE,
+                code VARCHAR(10),
+                description TEXT,
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+
+        # Ensure the default_role_assignments table exists
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS default_role_assignments (
+                id SERIAL PRIMARY KEY,
+                organization_id INTEGER NOT NULL DEFAULT 1,
+                role_id INTEGER NOT NULL,
+                user_id INTEGER,
+                assigned_by_id INTEGER,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(organization_id, role_id)
+            )
+        """))
+
+        db.commit()
+
+        added_count = 0
+        updated_count = 0
+        skipped_count = 0
+
+        for role in WORKFLOW_ROLES:
+            # Check if role already exists
+            existing = db.execute(
+                text("SELECT id, code FROM roles WHERE name = :name"),
+                {"name": role["name"]}
+            ).fetchone()
+
+            if existing:
+                # Update code if needed
+                if existing[1] != role["code"]:
+                    db.execute(
+                        text("""
+                            UPDATE roles SET code = :code, description = :description,
+                            updated_at = CURRENT_TIMESTAMP WHERE name = :name
+                        """),
+                        {
+                            "name": role["name"],
+                            "code": role["code"],
+                            "description": role["description"],
+                        }
+                    )
+                    updated_count += 1
+                else:
+                    skipped_count += 1
+            else:
+                # Insert new role
+                db.execute(
+                    text("""
+                        INSERT INTO roles (name, code, description, is_active, created_at, updated_at)
+                        VALUES (:name, :code, :description, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    """),
+                    {
+                        "name": role["name"],
+                        "code": role["code"],
+                        "description": role["description"],
+                    }
+                )
+                added_count += 1
+
+        db.commit()
+
+        # Get total count
+        total = db.execute(text("SELECT COUNT(*) FROM roles WHERE is_active = true")).scalar()
+
+        return {
+            "success": True,
+            "message": f"Workflow roles seeded: {added_count} added, {updated_count} updated, {skipped_count} skipped",
+            "added": added_count,
+            "updated": updated_count,
+            "skipped": skipped_count,
+            "total_roles": total
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error seeding workflow roles: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

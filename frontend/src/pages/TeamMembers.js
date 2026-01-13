@@ -41,6 +41,7 @@ function TeamMembers() {
   const [workflowRoles, setWorkflowRoles] = useState([]);
   const [roleAssignments, setRoleAssignments] = useState({}); // { memberId: roleId }
   const [savingWorkflowRole, setSavingWorkflowRole] = useState({}); // { memberId: true/false }
+  const [seedingRoles, setSeedingRoles] = useState(false);
 
   const getAuthHeaders = useCallback(() => ({
     'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -231,6 +232,32 @@ function TeamMembers() {
       toast.error('Failed to update workflow role');
     } finally {
       setSavingWorkflowRole(prev => ({ ...prev, [memberId]: false }));
+    }
+  };
+
+  // Seed workflow roles if none exist
+  const seedWorkflowRoles = async () => {
+    setSeedingRoles(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/settings/seed-workflow-roles`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        toast.success(data.message || 'Workflow roles seeded successfully');
+        // Reload the workflow roles
+        await loadWorkflowRoles();
+      } else {
+        const error = await response.json();
+        toast.error(error.detail || 'Failed to seed workflow roles');
+      }
+    } catch (error) {
+      console.error('Error seeding workflow roles:', error);
+      toast.error('Failed to seed workflow roles');
+    } finally {
+      setSeedingRoles(false);
     }
   };
 
@@ -597,18 +624,41 @@ function TeamMembers() {
       <div style={{
         marginTop: '16px',
         padding: '12px 16px',
-        background: '#f0f9ff',
+        background: workflowRoles.length === 0 ? '#fef3c7' : '#f0f9ff',
         borderRadius: '8px',
-        border: '1px solid #bae6fd',
+        border: `1px solid ${workflowRoles.length === 0 ? '#f59e0b' : '#bae6fd'}`,
         display: 'flex',
         alignItems: 'center',
-        gap: '8px'
+        gap: '8px',
+        flexWrap: 'wrap'
       }}>
-        <span style={{ fontSize: '16px' }}>ℹ️</span>
-        <span style={{ color: '#0369a1', fontSize: '14px' }}>
-          {assignedCount} of {workflowRoles.length} workflow roles assigned.
-          Workflow roles determine default team member assignments for new loans and leads.
+        <span style={{ fontSize: '16px' }}>{workflowRoles.length === 0 ? '⚠️' : 'ℹ️'}</span>
+        <span style={{ color: workflowRoles.length === 0 ? '#92400e' : '#0369a1', fontSize: '14px', flex: 1 }}>
+          {workflowRoles.length === 0 ? (
+            'No workflow roles configured. Click the button to set up workflow roles for your team.'
+          ) : (
+            `${assignedCount} of ${workflowRoles.length} workflow roles assigned. Workflow roles determine default team member assignments for new loans and leads.`
+          )}
         </span>
+        {workflowRoles.length === 0 && canEditTeam && (
+          <button
+            onClick={seedWorkflowRoles}
+            disabled={seedingRoles}
+            style={{
+              padding: '8px 16px',
+              background: '#0066cc',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: seedingRoles ? 'wait' : 'pointer',
+              fontSize: '14px',
+              fontWeight: '500',
+              opacity: seedingRoles ? 0.7 : 1
+            }}
+          >
+            {seedingRoles ? 'Setting up roles...' : 'Set Up Workflow Roles'}
+          </button>
+        )}
       </div>
 
       {/* Add/Edit Modal */}
