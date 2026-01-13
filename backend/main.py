@@ -70754,6 +70754,29 @@ async def run_database_migration(
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 
+@app.post("/api/v1/public/migrations/add-followupboss-tables", response_model=None)
+async def add_followupboss_tables_migration(
+    migration_key: str = "",
+    db: Session = Depends(get_db)
+):
+    """Run the Follow Up Boss tables migration."""
+    if migration_key != "fub-migration-2026":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    try:
+        from migrations.add_followupboss_tables import run_migration
+        success = run_migration()
+        if success:
+            return {"status": "success", "message": "Follow Up Boss tables created successfully"}
+        else:
+            raise HTTPException(status_code=500, detail="Migration failed - check logs")
+    except ImportError as e:
+        raise HTTPException(status_code=500, detail=f"Migration module not found: {str(e)}")
+    except Exception as e:
+        logger.error(f"FUB migration error: {e}")
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
 # ============================================================================
 # MAIN
 # ============================================================================
