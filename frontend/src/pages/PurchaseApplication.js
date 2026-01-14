@@ -2691,6 +2691,31 @@ export default function PurchaseApplication() {
               <li>Receive updates from your loan officer</li>
             </ul>
           </div>
+
+          {/* Demo Mode Button - Skip account creation */}
+          {isDemoMode && (
+            <div style={{ marginTop: '24px', textAlign: 'center' }}>
+              <button
+                onClick={() => setCurrentStage('declarations')}
+                style={{
+                  padding: '12px 32px',
+                  background: '#6366f1',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                Continue in Demo Mode
+              </button>
+              <p style={{ marginTop: '8px', fontSize: '12px', color: '#9ca3af' }}>
+                Skip account creation for testing purposes
+              </p>
+            </div>
+          )}
         </div>
       </div>
     );
