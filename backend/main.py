@@ -53876,6 +53876,19 @@ async def get_user_permissions_endpoint(
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
+        # Auto-fix admin permission_role if user is admin but doesn't have correct permission_role
+        # This handles: admin@perenniaai.com, users with is_admin=True, or role='admin'
+        if user.permission_role not in ('admin', 'site_admin'):
+            is_admin_user = (
+                user.email == 'admin@perenniaai.com' or
+                getattr(user, 'is_admin', False) or
+                getattr(user, 'role', '') == 'admin'
+            )
+            if is_admin_user:
+                user.permission_role = 'admin'
+                db.commit()
+                logger.info(f"Auto-fixed permission_role to 'admin' for user {user.email}")
+
         # Get permissions
         permissions = get_user_permissions(user_id, db)
 
@@ -59676,6 +59689,36 @@ async def startup_event():
                         logger.info("✅ sla_measures.stage_type column already exists")
                 except Exception as sla_st_e:
                     logger.warning(f"⚠️ sla_measures.stage_type column creation skipped: {sla_st_e}")
+
+                # Fix admin user permissions - ensure admin@perenniaai.com has permission_role='admin'
+                try:
+                    result = db.execute(text("""
+                        UPDATE users
+                        SET permission_role = 'admin'
+                        WHERE email = 'admin@perenniaai.com'
+                        AND (permission_role IS NULL OR permission_role != 'admin')
+                        RETURNING id, email
+                    """))
+                    updated = result.fetchone()
+                    if updated:
+                        db.commit()
+                        logger.info(f"✅ Fixed admin permission_role for user: {updated[1]}")
+                    else:
+                        # Also check if any user with is_admin=true or role='admin' needs permission_role fixed
+                        result2 = db.execute(text("""
+                            UPDATE users
+                            SET permission_role = 'admin'
+                            WHERE (is_admin = true OR role = 'admin')
+                            AND (permission_role IS NULL OR permission_role NOT IN ('admin', 'site_admin'))
+                            RETURNING id, email
+                        """))
+                        fixed_users = result2.fetchall()
+                        if fixed_users:
+                            db.commit()
+                            for u in fixed_users:
+                                logger.info(f"✅ Fixed admin permission_role for user: {u[1]}")
+                except Exception as admin_fix_e:
+                    logger.warning(f"⚠️ Admin permission fix skipped: {admin_fix_e}")
 
             except Exception as e:
                 logger.warning(f"⚠️ Sample data/permission seeding skipped: {e}")
