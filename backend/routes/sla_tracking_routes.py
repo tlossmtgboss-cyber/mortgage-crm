@@ -399,16 +399,17 @@ async def list_sla_measures(
                 SELECT workflow_configuration_id FROM sla_measures LIMIT 1
             """))
         except Exception:
+            db.rollback()  # Clear error state from failed SELECT
             logger.info("Adding workflow_configuration_id column to sla_measures...")
             try:
                 db.execute(text("""
                     ALTER TABLE sla_measures
-                    ADD COLUMN workflow_configuration_id INTEGER
+                    ADD COLUMN IF NOT EXISTS workflow_configuration_id INTEGER
                 """))
                 db.commit()
                 logger.info("Successfully added workflow_configuration_id column")
             except Exception as alter_err:
-                logger.warning(f"Could not add workflow_configuration_id column: {alter_err}")
+                logger.warning(f"Could not add workflow_configuration_id column (may already exist): {alter_err}")
                 db.rollback()
 
         measures = get_all_sla_measures(db, active_only=active_only)
