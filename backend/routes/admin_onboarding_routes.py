@@ -352,12 +352,12 @@ async def start_onboarding(
         user_result = db.execute(text("""
             INSERT INTO users (
                 email, hashed_password, full_name, first_name, last_name,
-                role, is_active, tenant_account_id,
-                created_at, updated_at
+                role, permission_role, is_active, is_admin, email_verified,
+                tenant_account_id, created_at, updated_at
             ) VALUES (
                 :email, :hashed_password, :full_name, :first_name, :last_name,
-                'admin', true, :tenant_id,
-                NOW(), NOW()
+                'site_admin', 'site_admin', true, true, true,
+                :tenant_id, NOW(), NOW()
             )
             RETURNING id
         """), {
@@ -395,15 +395,22 @@ async def start_onboarding(
 
         db.commit()
 
-        # Generate auth token
+        # Generate auth token - use SECRET_KEY (same as main.py) for consistency
         try:
             import jwt
+            # SECRET_KEY fallback matches main.py default
+            secret_key = os.getenv('SECRET_KEY', 'dev-only-09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7')
             token = jwt.encode(
-                {'sub': request.email, 'exp': datetime.utcnow() + timedelta(hours=24)},
-                os.getenv('JWT_SECRET', 'your-secret-key'),
+                {
+                    'sub': request.email,
+                    'user_id': user_id,
+                    'exp': datetime.utcnow() + timedelta(hours=24)
+                },
+                secret_key,
                 algorithm='HS256'
             )
-        except:
+        except Exception as jwt_err:
+            logger.warning(f"JWT generation failed: {jwt_err}")
             token = session_id  # Fallback
 
         return success_response(

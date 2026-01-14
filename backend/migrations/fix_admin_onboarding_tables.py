@@ -257,6 +257,38 @@ def run_migration():
         else:
             print("users.password column already exists")
 
+        # 8b. Add is_admin column to users table if not exists
+        print("Checking users.is_admin column...")
+        result = conn.execute(text("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'users' AND column_name = 'is_admin'
+        """))
+
+        if not result.fetchone():
+            print("Adding is_admin column to users table...")
+            conn.execute(text("""
+                ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT false;
+            """))
+            print("Added is_admin column")
+        else:
+            print("users.is_admin column already exists")
+
+        # 8c. Add email_verified column to users table if not exists
+        print("Checking users.email_verified column...")
+        result = conn.execute(text("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'users' AND column_name = 'email_verified'
+        """))
+
+        if not result.fetchone():
+            print("Adding email_verified column to users table...")
+            conn.execute(text("""
+                ALTER TABLE users ADD COLUMN email_verified BOOLEAN DEFAULT false;
+            """))
+            print("Added email_verified column")
+        else:
+            print("users.email_verified column already exists")
+
         # 9. Create user_invitations table if not exists (for team invites)
         print("Checking user_invitations table...")
         result = conn.execute(text("""
