@@ -1698,6 +1698,13 @@ export default function PurchaseApplication() {
     }
   }, [searchParams, STORAGE_KEY]);
 
+  // Skip account stage in demo mode
+  useEffect(() => {
+    if (isDemoMode && currentStage === 'account') {
+      setCurrentStage('declarations');
+    }
+  }, [isDemoMode, currentStage]);
+
   // Auto-save to localStorage whenever data changes
   useEffect(() => {
     // Don't save on initial mount or if on account stage
