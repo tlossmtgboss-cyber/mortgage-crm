@@ -109,6 +109,8 @@ const EmployeeOnboardingAdmin = lazy(() => import('./pages/EmployeeOnboardingAdm
 const AcceptInvite = lazy(() => import('./pages/AcceptInvite'));
 const MortgagePlannerQuestionnaire = lazy(() => import('./pages/MortgagePlannerQuestionnaire'));
 const KnowledgeBase = lazy(() => import('./pages/KnowledgeBase'));
+const Support = lazy(() => import('./pages/Support'));
+const AriaVoiceApp = lazy(() => import('./pages/AriaVoiceApp'));
 const PowerDialer = lazy(() => import('./pages/PowerDialer'));
 const UserCreationWizard = lazy(() => import('./pages/UserCreationWizard'));
 const UserBulkUpload = lazy(() => import('./pages/UserBulkUpload'));
@@ -374,10 +376,10 @@ function App() {
             <ImpersonationBanner />
             <div className="app">
         <Routes>
-          {/* Public routes - Mobile app skips landing page */}
+          {/* Public routes - Mobile app launches Aria voice assistant */}
           <Route path="/" element={
             Capacitor.isNativePlatform()
-              ? (isAuthenticated() ? <RoleBasedRedirect /> : <Navigate to="/login" />)
+              ? <Navigate to="/aria" />
               : <LandingPage />
           } />
           <Route path="/apply" element={<BuyerIntake />} />
@@ -391,6 +393,7 @@ function App() {
           <Route path="/verify-account" element={<AccountVerification />} />
           <Route path="/verify-email-sent" element={<EmailVerificationSent />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/aria" element={<LazyPage><AriaVoiceApp /></LazyPage>} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/signup" element={<AdminOnboarding />} />
@@ -443,8 +446,8 @@ function App() {
           {/* Magic link verification - redirects to backend API */}
           <Route path="/apply/verify" element={<LazyPage><ApplyVerify /></LazyPage>} />
 
-          {/* Borrower Application Start (after social login) - New Adaptive URLA */}
-          <Route path="/apply/start" element={<LazyPage><AdaptiveURLA /></LazyPage>} />
+          {/* Borrower Application Start - Demo mode of PurchaseApplication */}
+          <Route path="/apply/start" element={<LazyPage><PurchaseApplication /></LazyPage>} />
 
           {/* Purpose-specific applications */}
           <Route path="/apply/purchase" element={<LazyPage><PurchaseApplication /></LazyPage>} />
@@ -3454,6 +3457,28 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><KnowledgeBase /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/support"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><Support /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
