@@ -87,10 +87,28 @@ def check_master_admin(user) -> bool:
     """Check if user is a master administrator"""
     if not user:
         return False
+
     role = getattr(user, 'role', None)
     permission_role = getattr(user, 'permission_role', None)
     is_master = getattr(user, 'is_master_admin', False)
-    return role == 'master_admin' or is_master or role == 'admin' or permission_role == 'admin'
+    is_admin = getattr(user, 'is_admin', False)
+
+    # Check is_master_admin or is_admin flags
+    if is_master or is_admin:
+        return True
+
+    # Admin roles that have master admin access (case-insensitive)
+    admin_roles = ['admin', 'master_admin', 'site_admin']
+
+    # Check permission_role (Phase 2)
+    if permission_role and permission_role.lower() in admin_roles:
+        return True
+
+    # Check legacy role
+    if role and role.lower() in admin_roles:
+        return True
+
+    return False
 
 
 def require_master_admin(user):

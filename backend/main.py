@@ -22501,7 +22501,8 @@ async def add_missing_employee_roles(
     Adds: Admin, Site Admin, Executive Management, Management, Operations Manager,
           Branch Manager, Underwriter, Closer, Funder
     """
-    if current_user.role != 'admin' and current_user.permission_role != 'admin':
+    from utils.auth import check_admin_permission
+    if not check_admin_permission(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
 
     try:
@@ -37509,7 +37510,8 @@ async def clear_cache_endpoint(
 
     Use with caution - will slow down queries until cache rebuilds
     """
-    if current_user.role != 'admin':
+    from utils.auth import check_admin_permission
+    if not check_admin_permission(current_user):
         raise HTTPException(status_code=403, detail="Admin only")
 
     try:
@@ -37531,7 +37533,8 @@ async def invalidate_user_cache_endpoint(
 ):
     """Invalidate cache for a specific user"""
     # Only allow users to invalidate their own cache (or admins)
-    if str(current_user.id) != user_id and current_user.role != 'admin':
+    from utils.auth import check_admin_permission
+    if str(current_user.id) != user_id and not check_admin_permission(current_user):
         raise HTTPException(status_code=403, detail="Cannot invalidate other user's cache")
 
     try:
@@ -70204,7 +70207,8 @@ async def admin_export_mismo_xml(
         raise HTTPException(status_code=404, detail="Application not found")
 
     # Check access (must be assigned LO or admin)
-    if current_user.role != "admin" and application.assigned_to_id != current_user.id:
+    from utils.auth import check_admin_permission
+    if not check_admin_permission(current_user) and application.assigned_to_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
 
     try:
