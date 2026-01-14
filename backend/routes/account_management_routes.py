@@ -11,6 +11,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 import logging
+import os
 import uuid
 
 from database import get_db
@@ -21,7 +22,7 @@ from utils.error_handling import (
     DatabaseException,
     success_response
 )
-from email_service import send_subscription_invite_email
+from email_service import send_subscription_invite_email, email_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/admin/account-management", tags=["Account Management"])
@@ -750,9 +751,21 @@ async def invite_subscriber(
             # Continue anyway - email failure shouldn't block the invitation creation
 
         # Build invitation link with promo code if present
-        invitation_link = f"https://perenniaai.com/signup?invite={invitation_token}"
+        base_url = os.getenv('FRONTEND_URL', 'https://perenniaai.com')
+        invitation_link = f"{base_url}/signup?invite={invitation_token}"
         if invite.promo_code:
             invitation_link += f"&promo={invite.promo_code}"
+
+        # Check if running in demo mode (no real email service configured)
+        is_demo_mode = email_service.demo_mode and not email_service.has_email_config
+
+        # Build appropriate message
+        if email_sent and not is_demo_mode:
+            message = f"Invitation email sent to {invite.email}"
+        elif email_sent and is_demo_mode:
+            message = f"Invitation created for {invite.email} (Demo Mode - share the link manually)"
+        else:
+            message = f"Invitation created for {invite.email} (email delivery pending)"
 
         return success_response(
             data={
@@ -764,9 +777,11 @@ async def invite_subscriber(
                 'invitation_token': invitation_token,
                 'expires_at': expires_at.isoformat(),
                 'invitation_link': invitation_link,
-                'email_sent': email_sent
+                'email_sent': email_sent,
+                'demo_mode': is_demo_mode,
+                'copy_link_message': 'Copy and share this link with the invitee:' if is_demo_mode else None
             },
-            message=f"Invitation {'sent' if email_sent else 'created (email pending)'} to {invite.email}"
+            message=message
         )
 
     except PermissionException:

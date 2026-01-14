@@ -46,12 +46,40 @@ class EmailService:
         self.from_email = os.getenv('FROM_EMAIL', 'sarah@reply.perenniaai.com')
         self.from_name = os.getenv('FROM_NAME', 'Sarah from Perennia AI')
 
+        # Development/demo mode - log emails to console instead of sending
+        self.demo_mode = os.getenv('EMAIL_DEMO_MODE', 'true').lower() in ('true', '1', 'yes')
+        self.has_email_config = self.use_sendgrid or bool(self.smtp_user)
+
         if self.use_sendgrid:
             logger.info("Email service initialized with SendGrid")
         elif self.smtp_user:
             logger.info("Email service initialized with SMTP fallback")
+        elif self.demo_mode:
+            logger.info("Email service running in DEMO MODE - emails will be logged but not sent")
         else:
             logger.warning("No email credentials configured (SENDGRID_API_KEY or SMTP_USER)")
+
+    def _log_email_to_console(
+        self,
+        to_email: str,
+        subject: str,
+        html_body: str,
+        plain_text_body: Optional[str] = None
+    ) -> bool:
+        """Log email to console for development/demo mode"""
+        logger.info("=" * 60)
+        logger.info("📧 DEMO MODE - EMAIL LOGGED (not sent)")
+        logger.info("=" * 60)
+        logger.info(f"To: {to_email}")
+        logger.info(f"From: {self.from_name} <{self.from_email}>")
+        logger.info(f"Subject: {subject}")
+        logger.info("-" * 60)
+        if plain_text_body:
+            # Log first 500 chars of plain text
+            preview = plain_text_body[:500] + "..." if len(plain_text_body) > 500 else plain_text_body
+            logger.info(f"Body Preview:\n{preview}")
+        logger.info("=" * 60)
+        return True  # Return True so invitation flow completes successfully
 
     def send_html_email(
         self,
@@ -72,8 +100,14 @@ class EmailService:
         """
         if self.use_sendgrid:
             return self._send_via_sendgrid(to_email, subject, html_body, plain_text_body, attachments, headers, reply_to, from_email)
-        else:
+        elif self.smtp_user:
             return self._send_via_smtp(to_email, subject, html_body, plain_text_body, attachments, headers, reply_to, from_email)
+        elif self.demo_mode:
+            # Demo mode - log email instead of sending
+            return self._log_email_to_console(to_email, subject, html_body, plain_text_body)
+        else:
+            logger.error(f"Cannot send email to {to_email}: No email service configured")
+            return False
 
     def _send_via_sendgrid(
         self,
