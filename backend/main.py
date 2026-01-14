@@ -20071,6 +20071,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Could not load State Recording Rules routes: {e}")
 
+# Include Quote Language Presets routes (compliant language management for AI calls)
+try:
+    from routes.quote_language_routes import router as quote_language_router
+    app.include_router(quote_language_router, tags=["Quote Language Presets"])
+    logger.info("✅ Quote Language Presets routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load Quote Language Presets routes: {e}")
+
 # Include Voice OS API routes (agents, phone numbers, call sessions, analytics)
 from voice_os_routes import router as voice_os_router, set_auth_dependency as set_voice_os_auth
 set_voice_os_auth(get_current_user)
