@@ -2200,10 +2200,11 @@ const UserDetailPage = ({ user, loginHistory, onBack, onAction }) => {
 const AccountManagement = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { userRole, hasAnyPermission } = usePermissions();
+  const { userRole, hasAnyPermission, isAdmin, isPlatformAdmin } = usePermissions();
 
   // Permission check - require admin/account management access
-  const canAccessAccountMgmt = hasAnyPermission(['admin.manage', 'accounts.manage', 'accounts.view', 'system.admin']) || userRole === 'admin' || userRole === 'management';
+  // Use isAdmin from context which has robust admin detection (checks permission_role, is_admin flag, legacy role)
+  const canAccessAccountMgmt = isAdmin || isPlatformAdmin || hasAnyPermission(['admin.manage', 'accounts.manage', 'accounts.view', 'system.admin']);
 
   // State
   const [view, setView] = useState({ type: 'list' });

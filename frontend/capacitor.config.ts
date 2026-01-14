@@ -5,8 +5,11 @@ const config: CapacitorConfig = {
   appName: 'Perennia AI',
   webDir: 'build',
   server: {
-    // Allow the app to make requests to the Railway backend
-    allowNavigation: ['mortgage-crm-production-7a9a.up.railway.app'],
+    // For development: point to local dev server
+    url: 'http://192.168.1.240:3000',
+    cleartext: true,
+    // Allow the app to make requests to the production backend
+    allowNavigation: ['perenniaai.com', 'api.perenniaai.com', 'www.perenniaai.com', 'localhost', '127.0.0.1', '192.168.1.240'],
   },
   ios: {
     contentInset: 'automatic',

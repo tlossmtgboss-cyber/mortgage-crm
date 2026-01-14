@@ -17,7 +17,7 @@ import './AdminPanel.css';
 
 const AdminPanel = () => {
   const navigate = useNavigate();
-  const { userRole, hasPermission, hasAnyPermission, isPlatformAdmin, isSiteAdmin, loading: permissionsLoading } = usePermissions();
+  const { userRole, hasPermission, hasAnyPermission, isPlatformAdmin, isSiteAdmin, isAdmin, loading: permissionsLoading } = usePermissions();
 
   // Get user info from localStorage as fallback (in case PermissionContext has stale data)
   const getLocalStorageRole = () => {
@@ -38,14 +38,13 @@ const AdminPanel = () => {
   const localUser = getLocalStorageRole();
 
   // Permission check - require admin access (platform admin OR site admin)
-  // Check both PermissionContext and localStorage for admin role
-  const canAccessAdmin = hasAnyPermission(['admin.view', 'admin.manage', 'system.admin']) ||
-                         userRole === 'admin' ||
-                         userRole === 'site_admin' ||
-                         userRole === 'management' ||
+  // Use isAdmin from context which has robust admin detection including localStorage fallback
+  const canAccessAdmin = isAdmin || isPlatformAdmin || isSiteAdmin ||
+                         hasAnyPermission(['admin.view', 'admin.manage', 'system.admin']) ||
                          localUser.permission_role === 'admin' ||
                          localUser.permission_role === 'site_admin' ||
-                         localUser.role === 'admin';
+                         localUser.role === 'admin' ||
+                         localUser.is_admin === true;
 
   // Determine admin type: Platform Admin (developer) or Site Administrator (licensee)
   const isCurrentUserPlatformAdmin = isPlatformAdmin ||

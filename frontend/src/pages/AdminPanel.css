@@ -42,6 +42,32 @@
   font-weight: 700;
   color: #111827;
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Admin Type Badge - distinguishes Platform Admin vs Site Administrator */
+.admin-type-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  letter-spacing: 0.02em;
+}
+
+.admin-type-badge.platform-admin {
+  background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
+  color: white;
+  box-shadow: 0 2px 4px rgba(124, 58, 237, 0.3);
+}
+
+.admin-type-badge.site-admin {
+  background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%);
+  color: white;
+  box-shadow: 0 2px 4px rgba(13, 148, 136, 0.3);
 }
 
 .admin-header p {

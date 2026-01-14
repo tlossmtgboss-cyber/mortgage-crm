@@ -275,6 +275,27 @@ export const NAVIGATION_ITEMS = {
       },
     ]
   },
+  // Voice & Calls - dropdown with all voice/call center items
+  voiceCalls: {
+    path: '/voice',
+    label: 'Voice & Calls',
+    matchPaths: ['/voice', '/dialer', '/conversation-intelligence', '/live-call-whisper'],
+    module: 'voice_os',
+    children: [
+      { path: '/voice/studio', label: 'Agent Studio', icon: 'fa-robot' },
+      { path: '/voice/agents', label: 'Voice Agents', icon: 'fa-user-headset' },
+      { path: '/dialer', label: 'Power Dialer', icon: 'fa-phone-volume' },
+      { path: '/voice/calls', label: 'Live Calls', icon: 'fa-broadcast-tower' },
+      { path: '/voice/analytics', label: 'Call Analytics', icon: 'fa-chart-bar' },
+      { path: '/conversation-intelligence', label: 'Call Intelligence', icon: 'fa-brain' },
+      { path: '/live-call-whisper', label: 'Live Whisper', icon: 'fa-comment-dots' },
+      { path: '/voice/queues', label: 'Call Queues', icon: 'fa-users' },
+      { path: '/voice/conferences', label: 'Conference Rooms', icon: 'fa-users-class' },
+      { path: '/voice/ivr', label: 'IVR Menus', icon: 'fa-sitemap' },
+      { path: '/voice/hold-music', label: 'Hold Music', icon: 'fa-music' },
+      { path: '/voice/talk', label: 'Talk to Agent', icon: 'fa-microphone' },
+    ]
+  },
   // Admin-only navigation items
   adminPanel: {
     path: '/admin',
@@ -291,7 +312,7 @@ export const NAVIGATION_ITEMS = {
 
 export const ROLE_NAVIGATION = {
   // Admin - Platform developer with full access to everything across all orgs
-  // Note: Voice/Call Center tools moved to Marketing page
+  // Includes ALL features for full visibility and testing
   admin: [
     'adminPanel',           // Admin Panel link - admin only
     'dashboard',
@@ -302,7 +323,7 @@ export const ROLE_NAVIGATION = {
     'tasks',
     'reconciliation',
     'smartDocs',
-    'marketing',            // Marketing page now includes Voice & Call Center
+    'marketing',            // Marketing page
     'calendar',
     'scorecard',            // Scorecard
     'partners',
@@ -314,6 +335,7 @@ export const ROLE_NAVIGATION = {
     'capacity',
     'recruiting',
     'partnerRecruiting',
+    'voiceCalls',           // Voice & Calls dropdown (all voice/call center items)
     'videoOs',              // Video OS
     'integrations',         // Integrations
     'productionPredictor',
@@ -344,6 +366,7 @@ export const ROLE_NAVIGATION = {
     'capacity',
     'recruiting',
     'partnerRecruiting',
+    'voiceCalls',           // Voice & Calls dropdown
     'videoOs',
     'integrations',
     'productionPredictor',

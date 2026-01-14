@@ -425,7 +425,7 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
 
     # Permission check helper - allow admin, leadership, managers, and sales to access user management
     # Note: In production, you'd restrict this more - for demo purposes we allow broader access
-    ALLOWED_PERMISSION_ROLES = ['admin', 'leadership', 'management', 'sales']  # Phase 2 permission_role values
+    ALLOWED_PERMISSION_ROLES = ['admin', 'site_admin', 'leadership', 'management', 'sales']  # Phase 2 permission_role values
     ALLOWED_LEGACY_ROLES = ['admin', 'manager', 'loan_officer']  # Legacy role values
 
     def check_admin_permission(user):

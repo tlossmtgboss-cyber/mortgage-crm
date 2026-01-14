@@ -2835,3 +2835,62 @@ def _format_time_ago(dt):
         return f'{days} day ago' if days == 1 else f'{days} days ago'
     else:
         return dt.strftime('%b %d, %Y')
+
+
+# =============================================================================
+# Data Cleanup Endpoints
+# =============================================================================
+
+@router.delete("/cleanup/sample-data")
+async def cleanup_sample_data(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Delete all sample/demo data from account management tables"""
+    try:
+        current_user = await get_user_from_request(request, db)
+        require_master_admin(current_user)
+
+        deleted_counts = {}
+
+        # Delete in order to respect foreign key constraints
+        tables_to_clean = [
+            'subscription_events',
+            'account_subscriptions',
+            'account_invoices',
+            'cost_ledger_monthly',
+            'usage_events',
+            'login_events',
+            'admin_audit_log',
+            'impersonation_sessions',
+            'user_activity_stats',
+            'account_kpi_snapshots',
+            'account_user_roles',
+            'subscriber_invitations',
+            'tenant_accounts'
+        ]
+
+        for table in tables_to_clean:
+            try:
+                result = db.execute(text(f"DELETE FROM {table}"))
+                deleted_counts[table] = result.rowcount
+                logger.info(f"Deleted {result.rowcount} rows from {table}")
+            except Exception as e:
+                logger.warning(f"Could not delete from {table}: {e}")
+                deleted_counts[table] = f"error: {str(e)}"
+
+        db.commit()
+
+        return success_response(
+            data={
+                'deleted_counts': deleted_counts,
+                'tables_cleaned': len([k for k, v in deleted_counts.items() if isinstance(v, int)])
+            },
+            message="Sample data cleanup completed"
+        )
+    except PermissionException:
+        raise
+    except Exception as e:
+        logger.error(f"Error cleaning up sample data: {e}")
+        db.rollback()
+        raise DatabaseException(f"Failed to cleanup sample data: {str(e)}")

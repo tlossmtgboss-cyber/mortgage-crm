@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { authAPI, API_BASE_URL } from '../services/api';
 import { setAuth } from '../utils/auth';
 import { getUserEffectiveRole, getDefaultRouteForRole } from '../config/roleConfig';
+import { useBiometricLogin } from '../hooks/useBiometricLogin';
+import { haptics } from '../services/nativeServices';
 import './Login.css';
 
 function Login() {
@@ -11,7 +13,78 @@ function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showEnableBiometric, setShowEnableBiometric] = useState(false);
+  const [pendingCredentials, setPendingCredentials] = useState(null);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirectTo = searchParams.get('redirect') || null;
+
+  const {
+    isAvailable: biometricAvailable,
+    biometryDisplayName,
+    hasStoredCredentials,
+    isNative,
+    authenticateWithBiometrics,
+    enableBiometricLogin,
+  } = useBiometricLogin();
+
+  // Try biometric login on mount if available
+  useEffect(() => {
+    if (biometricAvailable && hasStoredCredentials) {
+      handleBiometricLogin();
+    }
+  }, [biometricAvailable, hasStoredCredentials]);
+
+  const handleBiometricLogin = async () => {
+    setError('');
+    setLoading(true);
+
+    try {
+      const credentials = await authenticateWithBiometrics();
+
+      if (credentials) {
+        // Login with stored credentials
+        await performLogin(credentials.username, credentials.password);
+        haptics.success();
+      }
+    } catch (err) {
+      console.error('Biometric login error:', err);
+      haptics.error();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const performLogin = async (loginEmail, loginPassword) => {
+    const data = await authAPI.login(loginEmail, loginPassword);
+    console.log('Login successful:', data);
+
+    if (!data.access_token) {
+      throw new Error('No token received from server');
+    }
+
+    await setAuth(data.access_token, data.user);
+
+    const savedToken = localStorage.getItem('token');
+    if (!savedToken) {
+      throw new Error('Could not save authentication');
+    }
+
+    // Check for redirect parameter first, then use role-based default route
+    if (redirectTo) {
+      console.log('Redirecting to:', redirectTo);
+      navigate(redirectTo);
+      return;
+    }
+
+    // Determine role-based default route
+    const permissionRole = data.user?.permission_role || 'sales';
+    const legacyRole = data.user?.role || null;
+    const effectiveRole = getUserEffectiveRole(permissionRole, legacyRole);
+    const defaultRoute = getDefaultRouteForRole(effectiveRole);
+
+    navigate(defaultRoute);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -21,46 +94,83 @@ function Login() {
     console.log('Attempting login with:', email);
 
     try {
-      const data = await authAPI.login(email, password);
-      console.log('Login successful:', data);
-      console.log('Token received:', data.access_token ? 'Yes (length: ' + data.access_token.length + ')' : 'NO TOKEN!');
-      console.log('User received:', data.user);
+      await performLogin(email, password);
 
-      // Validate token exists before saving
-      if (!data.access_token) {
-        console.error('Login response missing access_token!', data);
-        setError('Login failed: No token received from server');
+      // If biometric is available but not set up, offer to enable it
+      if (biometricAvailable && !hasStoredCredentials) {
+        setPendingCredentials({ email, password });
+        setShowEnableBiometric(true);
+        setLoading(false);
         return;
       }
 
-      await setAuth(data.access_token, data.user);
-
-      // Verify token was saved
-      const savedToken = localStorage.getItem('token');
-      console.log('Token saved to localStorage:', savedToken ? 'Yes' : 'NO!');
-      if (!savedToken) {
-        console.error('Token failed to save to localStorage!');
-        setError('Login failed: Could not save authentication');
-        return;
-      }
-
-      // Determine role-based default route
-      const permissionRole = data.user?.permission_role || 'sales';
-      const legacyRole = data.user?.role || null;
-      const effectiveRole = getUserEffectiveRole(permissionRole, legacyRole);
-      const defaultRoute = getDefaultRouteForRole(effectiveRole);
-      console.log('Role-based redirect:', { permissionRole, legacyRole, effectiveRole, defaultRoute });
-      // Use full page reload instead of navigate() to ensure all contexts reinitialize with the new token
-      window.location.href = defaultRoute;
+      haptics.success();
     } catch (err) {
       console.error('Login error:', err);
-      console.error('Error response:', err.response);
       const errorMessage = err.response?.data?.detail || err.message || 'Login failed. Please check your credentials and try again.';
       setError(errorMessage);
+      haptics.error();
     } finally {
       setLoading(false);
     }
   };
+
+  const handleEnableBiometric = async () => {
+    if (pendingCredentials) {
+      const enabled = await enableBiometricLogin(pendingCredentials.email, pendingCredentials.password);
+      if (enabled) {
+        haptics.success();
+      }
+    }
+    // Continue with login regardless
+    setShowEnableBiometric(false);
+    if (pendingCredentials) {
+      navigate(redirectTo || '/dashboard');
+    }
+  };
+
+  const handleSkipBiometric = () => {
+    setShowEnableBiometric(false);
+    if (pendingCredentials) {
+      navigate(redirectTo || '/dashboard');
+    }
+  };
+
+  // Show biometric enable prompt
+  if (showEnableBiometric) {
+    return (
+      <div className="login-container">
+        <div className="login-box">
+          <div className="login-header">
+            <h1>Enable {biometryDisplayName}?</h1>
+            <p>Sign in faster next time</p>
+          </div>
+
+          <div className="biometric-prompt">
+            <div className="biometric-icon">
+              {biometryDisplayName === 'Face ID' ? '👤' : '👆'}
+            </div>
+            <p>Would you like to enable {biometryDisplayName} for quick sign in?</p>
+
+            <button
+              className="btn-primary"
+              onClick={handleEnableBiometric}
+            >
+              Enable {biometryDisplayName}
+            </button>
+
+            <button
+              className="btn-secondary"
+              onClick={handleSkipBiometric}
+              style={{ marginTop: '12px' }}
+            >
+              Not Now
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="login-container">
@@ -69,6 +179,23 @@ function Login() {
           <h1>Mortgage CRM</h1>
           <p>Agentic AI Platform</p>
         </div>
+
+        {/* Biometric Login Button */}
+        {biometricAvailable && hasStoredCredentials && (
+          <div className="biometric-login-section">
+            <button
+              className="btn-biometric"
+              onClick={handleBiometricLogin}
+              disabled={loading}
+            >
+              <span className="biometric-icon">
+                {biometryDisplayName === 'Face ID' ? '👤' : '👆'}
+              </span>
+              Sign in with {biometryDisplayName}
+            </button>
+            <div className="divider">or</div>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="login-form">
           <div className="form-group">

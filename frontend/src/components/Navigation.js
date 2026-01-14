@@ -16,7 +16,7 @@ import './Navigation.css';
  */
 function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen, taskCounts = {} }) {
   const location = useLocation();
-  const { effectiveRole, userRole, hasAnyPermission, viewAsRole, updateViewAsRole } = usePermissions();
+  const { effectiveRole, userRole, hasAnyPermission } = usePermissions();
   const { hasModule, getModule, loading: modulesLoading } = useModules();
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const [selectedModule, setSelectedModule] = useState(null);
@@ -61,7 +61,6 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
   // Don't show locked state while modules are still loading to avoid flash of upgrade badges
   // ADMIN users have full access - never lock any items for them
   const navItems = useMemo(() => {
-    const items = getNavigationForRole(effectiveRole);
     // Check if user is admin by any role indicator
     // This ensures admin always has full access regardless of module subscriptions
     const adminRoles = ['admin', 'site_admin', 'super_admin', 'owner'];
@@ -69,6 +68,13 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
     const normalizedUserRole = userRole?.toLowerCase();
     const isAdmin = adminRoles.includes(normalizedEffectiveRole) ||
                     adminRoles.includes(normalizedUserRole);
+
+    // IMPORTANT: Admin users (by userRole) always see admin navigation items
+    // This allows admins to view as other roles but still have full navigation access
+    // The effectiveRole only affects which items are highlighted/active, not which are shown
+    const navigationRole = isAdmin ? 'admin' : effectiveRole;
+    const items = getNavigationForRole(navigationRole);
+
     return items.map(item => ({
       ...item,
       // Admin users bypass all module restrictions - no locked items ever
@@ -116,18 +122,6 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
   const canViewTeam = hasAnyPermission(['team.view_all', 'team.view_team', 'team.manage_permissions']) ||
     userRole === 'management' || userRole === 'admin';
 
-  // Check if user is admin (can switch role views)
-  const isAdmin = userRole === 'admin' || userRole === 'management';
-
-  // Available roles for preview
-  const previewRoles = [
-    { value: 'default', label: 'Admin View' },
-    { value: 'loan_officer', label: 'Loan Officer' },
-    { value: 'processor', label: 'Processor' },
-    { value: 'production_assistant', label: 'Production Assistant' },
-    { value: 'concierge', label: 'Concierge' },
-    { value: 'manager', label: 'Manager' },
-  ];
 
   // Render a dropdown submenu item
   const renderDropdownItem = (child, parentKey, index) => {
@@ -261,22 +255,13 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
                 Team
               </Link>
             )}
-            {/* Role Preview Selector - admin only (legacy - kept for backwards compatibility) */}
-            {isAdmin && (
-              <div className={`role-preview-selector ${viewAsRole && viewAsRole !== 'default' ? 'active' : ''}`}>
-                <select
-                  value={viewAsRole || 'default'}
-                  onChange={(e) => updateViewAsRole(e.target.value === 'default' ? null : e.target.value)}
-                  title="Preview as different role"
-                >
-                  {previewRoles.map(role => (
-                    <option key={role.value} value={role.value}>
-                      {role.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
+            <Link
+              to="/support"
+              className={`settings-link ${isActive('/support') ? 'active' : ''}`}
+              title="Support"
+            >
+              Support
+            </Link>
             <Link
               to="/settings"
               className={`settings-link ${isActive('/settings') ? 'active' : ''}`}

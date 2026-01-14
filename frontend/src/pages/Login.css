@@ -56,6 +56,10 @@
   border-radius: 8px;
   font-size: 15px;
   transition: border-color 0.3s;
+  color: #333;
+  background-color: #fff;
+  -webkit-text-fill-color: #333;
+  opacity: 1;
 }
 
 .form-group input:focus {
@@ -265,4 +269,57 @@
 .demo-credentials .note strong {
   font-size: 14px;
   color: #0c4a6e;
+}
+
+/* Biometric Login Styles */
+.biometric-login-section {
+  margin-bottom: 20px;
+}
+
+.btn-biometric {
+  width: 100%;
+  padding: 14px;
+  border: 2px solid #218D8D;
+  background: white;
+  color: #218D8D;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.btn-biometric:hover:not(:disabled) {
+  background: #218D8D;
+  color: white;
+}
+
+.btn-biometric:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-biometric .biometric-icon {
+  font-size: 24px;
+}
+
+.biometric-prompt {
+  text-align: center;
+  padding: 20px 0;
+}
+
+.biometric-prompt .biometric-icon {
+  font-size: 64px;
+  margin-bottom: 20px;
+}
+
+.biometric-prompt p {
+  color: #666;
+  font-size: 15px;
+  margin-bottom: 24px;
+  line-height: 1.5;
 }

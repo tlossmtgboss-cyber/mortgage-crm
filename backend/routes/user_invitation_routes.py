@@ -264,7 +264,7 @@ def get_user_invitation_routes(
 
         Only admins and leadership can view invitations.
         """
-        if current_user.permission_role not in ['admin', 'leadership']:
+        if current_user.permission_role not in ['admin', 'site_admin', 'leadership']:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Only admins and leadership can view invitations"
@@ -320,7 +320,7 @@ def get_user_invitation_routes(
         """
         Resend an invitation email to a pending user.
         """
-        if current_user.permission_role not in ['admin', 'leadership']:
+        if current_user.permission_role not in ['admin', 'site_admin', 'leadership']:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Only admins and leadership can resend invitations"
@@ -348,7 +348,7 @@ def get_user_invitation_routes(
         """
         Revoke a pending invitation by deleting the user.
         """
-        if current_user.permission_role not in ['admin', 'leadership']:
+        if current_user.permission_role not in ['admin', 'site_admin', 'leadership']:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Only admins and leadership can revoke invitations"

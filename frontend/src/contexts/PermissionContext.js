@@ -435,19 +435,55 @@ export const PermissionProvider = ({ children }) => {
   };
 
   // Check if user can switch role views (admin, site_admin, or management)
+  // Also checks localStorage user object as fallback for is_admin flag or role='admin'
   const isAdmin = useMemo(() => {
     const baseRole = getUserEffectiveRole(userRole, legacyRole);
-    return baseRole === 'admin' ||
-           baseRole === 'site_admin' ||
-           baseRole === 'manager' ||
-           userRole === 'admin' ||
-           userRole === 'site_admin' ||
-           userRole === 'management';
+
+    // Check computed roles
+    if (baseRole === 'admin' || baseRole === 'site_admin' || baseRole === 'manager') {
+      return true;
+    }
+    if (userRole === 'admin' || userRole === 'site_admin' || userRole === 'management') {
+      return true;
+    }
+
+    // Fallback: check localStorage user object for is_admin flag or admin role
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        if (user.is_admin === true || user.role === 'admin' || user.permission_role === 'admin') {
+          return true;
+        }
+      }
+    } catch (e) {
+      // Ignore localStorage errors
+    }
+
+    return false;
   }, [userRole, legacyRole]);
 
   // Check if user is a platform admin (developer) vs site admin (licensee)
+  // Also checks localStorage user object as fallback
   const isPlatformAdmin = useMemo(() => {
-    return userRole === 'admin' || getUserEffectiveRole(userRole, legacyRole) === 'admin';
+    if (userRole === 'admin' || getUserEffectiveRole(userRole, legacyRole) === 'admin') {
+      return true;
+    }
+
+    // Fallback: check localStorage user object
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        if (user.is_admin === true || user.role === 'admin' || user.permission_role === 'admin') {
+          return true;
+        }
+      }
+    } catch (e) {
+      // Ignore localStorage errors
+    }
+
+    return false;
   }, [userRole, legacyRole]);
 
   // Check if user is a site administrator (licensee managing their org)

@@ -47,6 +47,19 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Perennia AI needs camera access to capture documents and photos for your loan applications.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Perennia AI needs photo library access to upload documents for your loan applications.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Perennia AI needs to save photos to your library.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Perennia AI uses Face ID for secure, quick login to your account.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>remote-notification</string>
+	</array>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
@@ -62,5 +75,13 @@
 			</dict>
 		</dict>
 	</dict>
+	<!-- App Store Compliance -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>tel</string>
+		<string>mailto</string>
+	</array>
 </dict>
 </plist>

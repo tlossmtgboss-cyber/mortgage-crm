@@ -1,0 +1,430 @@
+/* Aria Voice App - Full Screen Voice Interface */
+
+.aria-app {
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
+  background: linear-gradient(180deg, #0a0a1a 0%, #1a1a3a 50%, #0a0a1a 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  padding-top: env(safe-area-inset-top, 20px);
+  padding-bottom: env(safe-area-inset-bottom, 20px);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #fff;
+  overflow: hidden;
+}
+
+.aria-container {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+/* Header */
+.aria-header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.aria-title {
+  font-size: 42px;
+  font-weight: 700;
+  margin: 0;
+  background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 50%, #f472b6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.aria-subtitle {
+  font-size: 16px;
+  color: #94a3b8;
+  margin: 8px 0 0 0;
+}
+
+/* Logo/Orb for login screen */
+.aria-logo {
+  margin-bottom: 20px;
+}
+
+.aria-logo .aria-orb {
+  width: 120px;
+  height: 120px;
+}
+
+.aria-logo .aria-icon {
+  font-size: 48px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Main Voice Orb */
+.aria-orb-container {
+  position: relative;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.aria-orb {
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  position: relative;
+  z-index: 2;
+}
+
+.aria-orb-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Orb States */
+.aria-orb-idle {
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  box-shadow: 0 0 40px rgba(96, 165, 250, 0.2);
+}
+
+.aria-orb-idle:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 60px rgba(96, 165, 250, 0.4);
+}
+
+.aria-orb-connecting {
+  background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+  box-shadow: 0 0 40px rgba(59, 130, 246, 0.5);
+  animation: pulse-connect 1.5s ease-in-out infinite;
+}
+
+.aria-orb-listening {
+  background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+  box-shadow: 0 0 60px rgba(16, 185, 129, 0.6);
+  animation: pulse-listen 2s ease-in-out infinite;
+}
+
+.aria-orb-processing {
+  background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%);
+  box-shadow: 0 0 40px rgba(245, 158, 11, 0.5);
+  animation: pulse-process 1s ease-in-out infinite;
+}
+
+.aria-orb-speaking {
+  background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
+  box-shadow: 0 0 60px rgba(167, 139, 250, 0.6);
+  animation: pulse-speak 0.8s ease-in-out infinite;
+}
+
+.aria-orb-error {
+  background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
+  box-shadow: 0 0 40px rgba(239, 68, 68, 0.5);
+}
+
+/* Ring around orb */
+.aria-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  z-index: 1;
+  transition: all 0.3s ease;
+}
+
+.aria-ring-listening {
+  border-color: rgba(16, 185, 129, 0.4);
+  animation: ring-pulse 2s ease-in-out infinite;
+}
+
+.aria-ring-speaking {
+  border-color: rgba(167, 139, 250, 0.4);
+  animation: ring-pulse 1s ease-in-out infinite;
+}
+
+/* Icons */
+.aria-mic-icon {
+  font-size: 64px;
+}
+
+.aria-error-icon {
+  font-size: 48px;
+}
+
+/* Spinner for connecting */
+.aria-spinner {
+  width: 60px;
+  height: 60px;
+  border: 4px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* Waves for listening */
+.aria-waves {
+  width: 80px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.aria-waves::before,
+.aria-waves::after,
+.aria-waves {
+  content: '';
+}
+
+.aria-waves::before,
+.aria-waves::after {
+  width: 6px;
+  height: 30px;
+  background: #fff;
+  border-radius: 3px;
+  animation: wave 1s ease-in-out infinite;
+}
+
+.aria-waves::before {
+  animation-delay: 0s;
+}
+
+.aria-waves::after {
+  animation-delay: 0.2s;
+}
+
+/* Dots for processing */
+.aria-dots {
+  display: flex;
+  gap: 12px;
+}
+
+.aria-dots::before,
+.aria-dots::after {
+  content: '';
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  animation: dot-bounce 1.4s ease-in-out infinite;
+}
+
+.aria-dots::before {
+  animation-delay: 0s;
+}
+
+.aria-dots::after {
+  animation-delay: 0.2s;
+}
+
+/* Pulse for speaking */
+.aria-pulse {
+  width: 60px;
+  height: 60px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  animation: pulse-inner 0.8s ease-in-out infinite;
+}
+
+/* Status Text */
+.aria-status {
+  font-size: 18px;
+  color: #94a3b8;
+  text-align: center;
+  min-height: 24px;
+}
+
+/* Live Transcript */
+.aria-transcript {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 16px 24px;
+  border-radius: 16px;
+  width: 100%;
+  text-align: center;
+}
+
+.aria-transcript p {
+  margin: 0;
+  font-size: 16px;
+  color: #e2e8f0;
+  font-style: italic;
+}
+
+/* Conversation History */
+.aria-conversation {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 0 4px;
+}
+
+.aria-message {
+  padding: 12px 16px;
+  border-radius: 16px;
+  max-width: 90%;
+}
+
+.aria-message-user {
+  background: rgba(96, 165, 250, 0.2);
+  align-self: flex-end;
+  border-bottom-right-radius: 4px;
+}
+
+.aria-message-assistant {
+  background: rgba(167, 139, 250, 0.2);
+  align-self: flex-start;
+  border-bottom-left-radius: 4px;
+}
+
+.aria-message-role {
+  font-size: 12px;
+  color: #94a3b8;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.aria-message-content {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Action Buttons */
+.aria-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.aria-stop-btn {
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  color: #fca5a5;
+  padding: 12px 32px;
+  border-radius: 24px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.aria-stop-btn:hover {
+  background: rgba(239, 68, 68, 0.3);
+}
+
+/* Login Button */
+.aria-login-btn {
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  border: none;
+  color: #fff;
+  padding: 16px 48px;
+  border-radius: 28px;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 40px;
+}
+
+.aria-login-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 30px rgba(139, 92, 246, 0.5);
+}
+
+/* Footer */
+.aria-footer {
+  margin-top: auto;
+  padding-top: 40px;
+}
+
+.aria-footer p {
+  margin: 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+/* Animations */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse-connect {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.8; }
+}
+
+@keyframes pulse-listen {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+@keyframes pulse-process {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(0.95); }
+}
+
+@keyframes pulse-speak {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+@keyframes ring-pulse {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
+  50% { transform: translate(-50%, -50%) scale(1.1); opacity: 0.2; }
+}
+
+@keyframes wave {
+  0%, 100% { height: 20px; }
+  50% { height: 40px; }
+}
+
+@keyframes dot-bounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes pulse-inner {
+  0%, 100% { transform: scale(0.8); opacity: 0.5; }
+  50% { transform: scale(1.2); opacity: 1; }
+}
+
+/* Scrollbar styling */
+.aria-conversation::-webkit-scrollbar {
+  width: 4px;
+}
+
+.aria-conversation::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.aria-conversation::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+}
+
+/* Safe area for notched devices */
+@supports (padding-top: env(safe-area-inset-top)) {
+  .aria-app {
+    padding-top: max(20px, env(safe-area-inset-top));
+    padding-bottom: max(20px, env(safe-area-inset-bottom));
+  }
+}

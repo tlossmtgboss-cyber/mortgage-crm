@@ -380,8 +380,9 @@ function App() {
             <div className="app">
         <Routes>
           {/* Public routes - Mobile app launches Aria voice assistant */}
+          {/* Check for native platform OR loading from local IP (dev mode on device) */}
           <Route path="/" element={
-            Capacitor.isNativePlatform()
+            (Capacitor.isNativePlatform() || window.location.hostname.startsWith('192.168.'))
               ? <Navigate to="/aria" />
               : <LandingPage />
           } />

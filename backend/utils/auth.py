@@ -1,17 +1,32 @@
 """
 Authentication and Authorization Utilities
 Provides role checking and permission verification for FastAPI endpoints.
+
+Role Hierarchy:
+- admin: Platform Administrator (developer/engineer) - full access across all organizations
+- site_admin: Site Administrator (licensee) - full access within their organization only
+- leadership: Organization leadership (VP, Director level)
+- management: Department/team management
+- sales: Sales team members
+- processing: Loan processors
+- operations: General operations staff
 """
 from typing import Optional, List
 from fastapi import HTTPException, Depends
 from functools import wraps
 
-# Admin-level roles for user management operations
-ADMIN_PERMISSION_ROLES = ['admin', 'leadership', 'management']
+# Platform admin - developer/engineer with god-mode access across all organizations
+PLATFORM_ADMIN_ROLES = ['admin']
+
+# Site admin - licensee/organization owner with admin access within their org
+SITE_ADMIN_ROLES = ['site_admin']
+
+# Admin-level roles for user management operations (includes both platform and site admins)
+ADMIN_PERMISSION_ROLES = ['admin', 'site_admin', 'leadership', 'management']
 ADMIN_LEGACY_ROLES = ['admin', 'manager']
 
 # Power user roles for elevated access
-POWER_USER_PERMISSION_ROLES = ['admin', 'leadership', 'management', 'sales']
+POWER_USER_PERMISSION_ROLES = ['admin', 'site_admin', 'leadership', 'management', 'sales']
 POWER_USER_LEGACY_ROLES = ['admin', 'manager', 'senior_loan_officer']
 
 
@@ -169,3 +184,122 @@ def get_user_role_tier(user) -> str:
     if check_power_user_permission(user):
         return 'power_user'
     return 'standard'
+
+
+def is_platform_admin(user) -> bool:
+    """
+    Check if user is a Platform Administrator (developer/engineer).
+
+    Platform admins have god-mode access across all organizations.
+    They typically don't have an organization_id set.
+
+    Args:
+        user: User object with permission_role and organization_id attributes
+
+    Returns:
+        True if user is a platform admin
+    """
+    permission_role = getattr(user, 'permission_role', None)
+    if permission_role and permission_role.lower() in [r.lower() for r in PLATFORM_ADMIN_ROLES]:
+        return True
+
+    # Check legacy admin role without organization
+    legacy_role = getattr(user, 'role', None)
+    org_id = getattr(user, 'organization_id', None)
+    if legacy_role and legacy_role.lower() == 'admin' and not org_id:
+        return True
+
+    return False
+
+
+def is_site_admin(user) -> bool:
+    """
+    Check if user is a Site Administrator (licensee/organization owner).
+
+    Site admins have admin access within their own organization only.
+    They have an organization_id set.
+
+    Args:
+        user: User object with permission_role and organization_id attributes
+
+    Returns:
+        True if user is a site admin
+    """
+    permission_role = getattr(user, 'permission_role', None)
+    if permission_role and permission_role.lower() in [r.lower() for r in SITE_ADMIN_ROLES]:
+        return True
+
+    return False
+
+
+def check_org_scoped_admin(user, target_org_id: int = None) -> bool:
+    """
+    Check if user has admin access to a specific organization.
+
+    - Platform admins have access to all organizations
+    - Site admins only have access to their own organization
+
+    Args:
+        user: User object
+        target_org_id: The organization ID to check access for
+
+    Returns:
+        True if user has admin access to the target organization
+    """
+    # Platform admins have access to everything
+    if is_platform_admin(user):
+        return True
+
+    # Site admins can only access their own organization
+    if is_site_admin(user):
+        user_org_id = getattr(user, 'organization_id', None)
+        if target_org_id is None:
+            return True  # No specific org required
+        return user_org_id == target_org_id
+
+    # Other admin-level roles with org check
+    if check_admin_permission(user):
+        user_org_id = getattr(user, 'organization_id', None)
+        if target_org_id is None:
+            return True
+        return user_org_id == target_org_id
+
+    return False
+
+
+def require_platform_admin(current_user) -> None:
+    """
+    Verify current user is a Platform Administrator. Raises HTTPException if not.
+
+    Platform admins are developers/engineers with full system access.
+
+    Args:
+        current_user: The authenticated user object
+
+    Raises:
+        HTTPException: 403 Forbidden if user is not a platform admin
+    """
+    if not is_platform_admin(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="Platform Administrator access required. This action requires developer-level permissions."
+        )
+
+
+def require_site_admin(current_user) -> None:
+    """
+    Verify current user is at least a Site Administrator. Raises HTTPException if not.
+
+    Allows both platform admins and site admins.
+
+    Args:
+        current_user: The authenticated user object
+
+    Raises:
+        HTTPException: 403 Forbidden if user is not an admin
+    """
+    if not (is_platform_admin(current_user) or is_site_admin(current_user)):
+        raise HTTPException(
+            status_code=403,
+            detail="Site Administrator access required. You must be an organization administrator to perform this action."
+        )

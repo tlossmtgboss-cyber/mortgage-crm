@@ -16,10 +16,12 @@ const TalkToAgent = ({ agent, isOpen, onClose }) => {
   const isPlayingRef = useRef(false);
 
   // API base URL - use voice endpoint with browser-voice WebSocket
-  const API_BASE_URL = typeof window !== 'undefined' &&
-    (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
-    ? 'wss://api.perenniaai.com'
-    : 'ws://localhost:8000';
+  const isLocalDev = typeof window !== 'undefined' && (
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1' ||
+    window.location.hostname.startsWith('192.168.')
+  );
+  const API_BASE_URL = isLocalDev ? 'ws://192.168.1.240:8000' : 'wss://api.perenniaai.com';
 
   // WebSocket endpoint for browser voice
   const WS_ENDPOINT = '/api/v1/voice/ws/browser-voice';

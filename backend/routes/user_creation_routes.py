@@ -232,7 +232,7 @@ def get_user_creation_routes(
         Used by the UserCreationWizard frontend component.
         """
         # Check permission
-        if current_user.permission_role not in ['admin', 'leadership']:
+        if current_user.permission_role not in ['admin', 'site_admin', 'leadership']:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to create users"
@@ -401,7 +401,7 @@ def get_user_creation_routes(
         Returns user_id and onboarding_session_id for subsequent steps
         """
         # Check permission (manage_users)
-        if current_user.permission_role not in ['admin', 'leadership']:
+        if current_user.permission_role not in ['admin', 'site_admin', 'leadership']:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to create users"
@@ -498,7 +498,7 @@ def get_user_creation_routes(
         """
         Step 2: Save role, categories, and responsibilities for a single user
         """
-        if current_user.permission_role not in ['admin', 'leadership']:
+        if current_user.permission_role not in ['admin', 'site_admin', 'leadership']:
             raise HTTPException(status_code=403, detail="Permission denied")
 
         # Validate session
@@ -593,7 +593,7 @@ def get_user_creation_routes(
         """
         Step 3: Save permission configuration for a single user
         """
-        if current_user.permission_role not in ['admin', 'leadership']:
+        if current_user.permission_role not in ['admin', 'site_admin', 'leadership']:
             raise HTTPException(status_code=403, detail="Permission denied")
 
         # Validate session
@@ -691,7 +691,7 @@ def get_user_creation_routes(
         """
         Step 4: Get the complete review summary before finalization
         """
-        if current_user.permission_role not in ['admin', 'leadership']:
+        if current_user.permission_role not in ['admin', 'site_admin', 'leadership']:
             raise HTTPException(status_code=403, detail="Permission denied")
 
         user = db.query(User).filter(User.id == user_id).first()
@@ -788,7 +788,7 @@ def get_user_creation_routes(
         """
         Final step: Generate scorecard, create activation token, send email
         """
-        if current_user.permission_role not in ['admin', 'leadership']:
+        if current_user.permission_role not in ['admin', 'site_admin', 'leadership']:
             raise HTTPException(status_code=403, detail="Permission denied")
 
         # Validate session
@@ -900,7 +900,7 @@ def get_user_creation_routes(
         current_user = Depends(get_current_user)
     ):
         """List all available roles"""
-        if current_user.permission_role not in ['admin', 'leadership']:
+        if current_user.permission_role not in ['admin', 'site_admin', 'leadership']:
             raise HTTPException(status_code=403, detail="Permission denied")
 
         roles = db.query(Role).filter(Role.is_active == True).order_by(Role.name).all()
@@ -926,7 +926,7 @@ def get_user_creation_routes(
         current_user = Depends(get_current_user)
     ):
         """Get default categories, responsibilities, and permission template for a role"""
-        if current_user.permission_role not in ['admin', 'leadership']:
+        if current_user.permission_role not in ['admin', 'site_admin', 'leadership']:
             raise HTTPException(status_code=403, detail="Permission denied")
 
         role = db.query(Role).filter(Role.id == role_id).first()
@@ -985,7 +985,7 @@ def get_user_creation_routes(
         current_user = Depends(get_current_user)
     ):
         """List all available categories"""
-        if current_user.permission_role not in ['admin', 'leadership']:
+        if current_user.permission_role not in ['admin', 'site_admin', 'leadership']:
             raise HTTPException(status_code=403, detail="Permission denied")
 
         categories = db.query(Category).filter(
@@ -1013,7 +1013,7 @@ def get_user_creation_routes(
         current_user = Depends(get_current_user)
     ):
         """Get responsibilities filtered by categories and optionally role"""
-        if current_user.permission_role not in ['admin', 'leadership']:
+        if current_user.permission_role not in ['admin', 'site_admin', 'leadership']:
             raise HTTPException(status_code=403, detail="Permission denied")
 
         query = db.query(Responsibility).filter(
@@ -1047,7 +1047,7 @@ def get_user_creation_routes(
         current_user = Depends(get_current_user)
     ):
         """List all permission templates"""
-        if current_user.permission_role not in ['admin', 'leadership']:
+        if current_user.permission_role not in ['admin', 'site_admin', 'leadership']:
             raise HTTPException(status_code=403, detail="Permission denied")
 
         templates = db.query(PermissionTemplate).order_by(
@@ -1077,7 +1077,7 @@ def get_user_creation_routes(
         current_user = Depends(get_current_user)
     ):
         """Get full details of a permission template including permissions JSON"""
-        if current_user.permission_role not in ['admin', 'leadership']:
+        if current_user.permission_role not in ['admin', 'site_admin', 'leadership']:
             raise HTTPException(status_code=403, detail="Permission denied")
 
         template = db.query(PermissionTemplate).filter(
