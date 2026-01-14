@@ -1451,8 +1451,8 @@ export default function PurchaseApplication() {
   const { token } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  // Only show demo mode for explicit /apply/start - /apply/purchase is a real application entry point
-  const isDemoMode = token === 'start';
+  // Demo mode: /apply/start OR ?demo=true query parameter
+  const isDemoMode = token === 'start' || searchParams.get('demo') === 'true';
 
   // API Configuration
   const isProduction = window.location.hostname !== 'localhost';
