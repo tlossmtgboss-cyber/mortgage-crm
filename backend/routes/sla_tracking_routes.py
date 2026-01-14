@@ -393,6 +393,24 @@ async def list_sla_measures(
 ):
     """Get all SLA measures for the organization. Auto-initializes defaults if none exist."""
     try:
+        # Auto-add workflow_configuration_id column if it doesn't exist (migration)
+        try:
+            db.execute(text("""
+                SELECT workflow_configuration_id FROM sla_measures LIMIT 1
+            """))
+        except Exception:
+            logger.info("Adding workflow_configuration_id column to sla_measures...")
+            try:
+                db.execute(text("""
+                    ALTER TABLE sla_measures
+                    ADD COLUMN workflow_configuration_id INTEGER
+                """))
+                db.commit()
+                logger.info("Successfully added workflow_configuration_id column")
+            except Exception as alter_err:
+                logger.warning(f"Could not add workflow_configuration_id column: {alter_err}")
+                db.rollback()
+
         measures = get_all_sla_measures(db, active_only=active_only)
 
         # Auto-initialize default measures if none exist
