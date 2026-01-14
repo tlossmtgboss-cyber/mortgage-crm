@@ -171,6 +171,10 @@ class SLAMeasure(Base):
     # Values: 'lead', 'loan', or null (auto-detect from milestone_type)
     stage_type = Column(String(20), nullable=True)
 
+    # Workflow configuration - which workflow to trigger when this milestone is reached
+    # Foreign key to workflow_configurations table (no import to avoid circular dependency)
+    workflow_configuration_id = Column(Integer, ForeignKey("workflow_configurations.id", ondelete="SET NULL"), nullable=True, index=True)
+
     # Relationships
     history_records = relationship("LoanMilestoneHistory", back_populates="sla_measure")
 

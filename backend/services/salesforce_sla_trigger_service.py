@@ -400,6 +400,29 @@ class SalesforceSLATriggerService:
 
         return triggers
 
+    def _get_workflow_from_sla_measure(self, milestone_type: str) -> Optional[str]:
+        """
+        Look up the workflow_key from sla_measures table based on milestone type.
+        Returns the workflow_key if a workflow_configuration_id is set, otherwise None.
+        """
+        try:
+            result = self.db.execute(text("""
+                SELECT wc.workflow_key
+                FROM sla_measures sm
+                JOIN workflow_configurations wc ON wc.id = sm.workflow_configuration_id
+                WHERE sm.milestone_type = :milestone_type
+                AND sm.is_active = true
+                AND wc.is_active = true
+                LIMIT 1
+            """), {"milestone_type": milestone_type}).fetchone()
+
+            if result:
+                return result[0]
+            return None
+        except Exception as e:
+            logger.warning(f"Could not look up workflow from sla_measures: {e}")
+            return None
+
     def _process_date_trigger(
         self,
         entity_type: str,
@@ -409,9 +432,37 @@ class SalesforceSLATriggerService:
     ) -> Dict[str, Any]:
         """
         Process a date field trigger and enroll in SLA workflow.
+        First checks sla_measures table for workflow assignment, then falls back to hardcoded config.
         """
         config = trigger["config"]
-        workflow_key = config["workflow_key"]
+
+        # Try to get workflow from database first (SLA Measures Configuration)
+        # Map the trigger field to a milestone type for lookup
+        field_to_milestone = {
+            "prospect_date": "lead_response",
+            "credit_only_date": "pre_qualified",
+            "preapproval_date": "preapproval",
+            "contract_received_date": "contract_received",
+            "uw_received_date": "submitted_to_uw",
+            "loan_approved_date": "approved",
+            "clear_to_close_date": "clear_to_close",
+            "funded_date": "funded",
+            "appraisal_ordered_date": "appraisal_ordered",
+            "appraisal_received_date": "appraisal_received",
+            "docs_out_date": "closing_docs_out",
+        }
+
+        milestone_type = field_to_milestone.get(trigger["field_name"])
+        db_workflow_key = None
+        if milestone_type:
+            db_workflow_key = self._get_workflow_from_sla_measure(milestone_type)
+
+        # Use database workflow if found, otherwise fall back to hardcoded config
+        workflow_key = db_workflow_key or config["workflow_key"]
+
+        logger.info(f"Processing trigger {trigger['field_name']}: "
+                   f"db_workflow={db_workflow_key}, config_workflow={config['workflow_key']}, "
+                   f"using={workflow_key}")
 
         try:
             # Check if already enrolled in this workflow

@@ -354,6 +354,38 @@ async def add_trigger_from_columns(db: Session = Depends(get_db)):
 # SLA Measure Configuration Routes
 # ============================================================================
 
+@router.get("/workflows")
+async def list_available_workflows(
+    db: Session = Depends(get_db)
+):
+    """
+    Get all available workflow configurations for the workflow dropdown.
+    Returns a list of workflows that can be assigned to SLA measures.
+    """
+    try:
+        workflows = db.execute(text("""
+            SELECT id, workflow_key, workflow_name, description, entity_type
+            FROM workflow_configurations
+            WHERE is_active = true
+            ORDER BY workflow_name ASC
+        """)).fetchall()
+
+        return [
+            {
+                "id": w[0],
+                "workflow_key": w[1],
+                "workflow_name": w[2],
+                "description": w[3],
+                "entity_type": w[4]
+            }
+            for w in workflows
+        ]
+    except Exception as e:
+        logger.error(f"Error fetching workflows: {e}")
+        # Return empty list on error instead of failing
+        return []
+
+
 @router.get("/measures", response_model=List[SLAMeasureResponse])
 async def list_sla_measures(
     active_only: bool = Query(True, description="Only return active measures"),
@@ -375,9 +407,25 @@ async def list_sla_measures(
                 import traceback
                 logger.error(traceback.format_exc())
 
+        # Get workflow configurations for mapping workflow_configuration_id to workflow_key/name
+        workflow_map = {}
+        try:
+            workflows = db.execute(text("""
+                SELECT id, workflow_key, workflow_name
+                FROM workflow_configurations
+                WHERE is_active = true
+            """)).fetchall()
+            workflow_map = {w[0]: {"workflow_key": w[1], "workflow_name": w[2]} for w in workflows}
+        except Exception as wf_err:
+            logger.warning(f"Could not load workflow configurations: {wf_err}")
+
         # Convert to response models manually to avoid enum serialization issues
         response = []
         for m in measures:
+            # Get workflow info if workflow_configuration_id is set
+            workflow_id = getattr(m, 'workflow_configuration_id', None)
+            workflow_info = workflow_map.get(workflow_id, {}) if workflow_id else {}
+
             response.append(SLAMeasureResponse(
                 id=m.id,
                 organization_id=m.organization_id,
@@ -396,6 +444,9 @@ async def list_sla_measures(
                 is_active=m.is_active if m.is_active is not None else True,
                 display_order=m.display_order or 0,
                 stage_type=getattr(m, 'stage_type', None),  # Stage override for moving between Lead/Loan stages
+                workflow_configuration_id=workflow_id,
+                workflow_key=workflow_info.get("workflow_key"),
+                workflow_name=workflow_info.get("workflow_name"),
                 created_at=m.created_at,
                 updated_at=m.updated_at,
             ))

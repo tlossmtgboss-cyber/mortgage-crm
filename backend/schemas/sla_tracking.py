@@ -132,6 +132,7 @@ class SLAMeasureBase(BaseModel):
     applies_to_channels: Optional[List[str]] = None
     business_hours_only: bool = True
     is_active: bool = True
+    workflow_configuration_id: Optional[int] = None  # Which workflow to trigger when milestone is reached
 
 
 class SLAMeasureCreate(SLAMeasureBase):
@@ -154,6 +155,17 @@ class SLAMeasureUpdate(BaseModel):
     business_hours_only: Optional[bool] = None
     is_active: Optional[bool] = None
     display_order: Optional[int] = None
+    workflow_configuration_id: Optional[int] = None  # Which workflow to trigger when milestone is reached
+
+
+class WorkflowOptionResponse(BaseModel):
+    """Schema for workflow option in dropdown."""
+    id: int
+    workflow_key: str
+    workflow_name: str
+
+    class Config:
+        from_attributes = True
 
 
 class SLAMeasureResponse(SLAMeasureBase):
@@ -164,6 +176,9 @@ class SLAMeasureResponse(SLAMeasureBase):
     trigger_from_is_default: bool = False
     display_order: int = 0
     stage_type: Optional[str] = None  # Override stage: 'lead' or 'loan', null = auto-detect
+    workflow_configuration_id: Optional[int] = None
+    workflow_key: Optional[str] = None  # Populated from join for display
+    workflow_name: Optional[str] = None  # Populated from join for display
     created_at: datetime
     updated_at: datetime
 

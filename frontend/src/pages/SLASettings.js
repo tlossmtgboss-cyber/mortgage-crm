@@ -48,6 +48,9 @@ const SLASettings = () => {
   const [reportHistory, setReportHistory] = useState([]);
   const [sendingReport, setSendingReport] = useState(false);
 
+  // Workflow options for dropdown
+  const [workflows, setWorkflows] = useState([]);
+
   const fetchDashboard = useCallback(async () => {
     try {
       setLoading(true);
@@ -109,6 +112,18 @@ const SLASettings = () => {
       } catch (e) {
         // Users endpoint might not exist, use empty array
         setTeamMembers([]);
+      }
+
+      // Fetch available workflows for measure assignment dropdown
+      try {
+        const workflowsRes = await fetch(`${API_BASE_URL}/api/v1/sla/workflows`, { headers });
+        if (workflowsRes.ok) {
+          const workflowsData = await workflowsRes.json();
+          setWorkflows(workflowsData || []);
+        }
+      } catch (e) {
+        // Workflows endpoint might not exist yet
+        setWorkflows([]);
       }
 
       setError(null);
@@ -214,9 +229,22 @@ const SLASettings = () => {
       }
     }));
     // Update local state immediately for responsive UI
-    setMeasures(prev => prev.map(m =>
-      m.id === measureId ? { ...m, [field]: value } : m
-    ));
+    // For workflow changes, also update the display name
+    if (field === 'workflow_configuration_id') {
+      const selectedWorkflow = workflows.find(wf => wf.id === value);
+      setMeasures(prev => prev.map(m =>
+        m.id === measureId ? {
+          ...m,
+          [field]: value,
+          workflow_name: selectedWorkflow?.workflow_name || null,
+          workflow_key: selectedWorkflow?.workflow_key || null
+        } : m
+      ));
+    } else {
+      setMeasures(prev => prev.map(m =>
+        m.id === measureId ? { ...m, [field]: value } : m
+      ));
+    }
   };
 
   const saveInlineEdit = async (measureId, field) => {
@@ -540,6 +568,7 @@ const SLASettings = () => {
     const isEditingTarget = editingCell?.measureId === measure.id && editingCell?.field === 'target';
     const isEditingTrigger = editingCell?.measureId === measure.id && editingCell?.field === 'trigger';
     const isEditingWarning = editingCell?.measureId === measure.id && editingCell?.field === 'warning';
+    const isEditingWorkflow = editingCell?.measureId === measure.id && editingCell?.field === 'workflow';
     const hasPendingChanges = pendingChanges[measure.id] && Object.keys(pendingChanges[measure.id]).length > 0;
 
     return (
@@ -785,6 +814,75 @@ const SLASettings = () => {
               paddingBottom: '2px'
             }}>
               {measure.warning_threshold_pct}%
+            </span>
+          )}
+        </td>
+
+        {/* Inline editable Workflow column */}
+        <td
+          onClick={() => !isEditingWorkflow && setEditingCell({ measureId: measure.id, field: 'workflow' })}
+          style={{ cursor: 'pointer' }}
+          title="Click to assign workflow"
+        >
+          {isEditingWorkflow ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <select
+                value={measure.workflow_configuration_id || ''}
+                onChange={(e) => handleInlineEdit(measure.id, 'workflow_configuration_id', e.target.value ? parseInt(e.target.value) : null)}
+                style={{
+                  padding: '4px 6px',
+                  border: '1px solid #218D8D',
+                  borderRadius: '4px',
+                  fontSize: '13px',
+                  minWidth: '120px'
+                }}
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') saveInlineEdit(measure.id, 'workflow');
+                  if (e.key === 'Escape') cancelInlineEdit(measure.id);
+                }}
+              >
+                <option value="">-- None --</option>
+                {workflows.map(wf => (
+                  <option key={wf.id} value={wf.id}>{wf.workflow_name}</option>
+                ))}
+              </select>
+              <button
+                onClick={(e) => { e.stopPropagation(); saveInlineEdit(measure.id, 'workflow'); }}
+                style={{
+                  padding: '4px 8px',
+                  background: '#218D8D',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '11px'
+                }}
+              >
+                ✓
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); cancelInlineEdit(measure.id); }}
+                style={{
+                  padding: '4px 8px',
+                  background: '#f3f4f6',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '11px'
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          ) : (
+            <span style={{
+              fontSize: '13px',
+              color: measure.workflow_name ? '#4b5563' : '#9ca3af',
+              borderBottom: '1px dashed #9ca3af',
+              paddingBottom: '2px'
+            }}>
+              {measure.workflow_name || '-- None --'}
             </span>
           )}
         </td>
@@ -1115,6 +1213,7 @@ const SLASettings = () => {
                   <th>Target</th>
                   <th>Trigger From</th>
                   <th>Warning At</th>
+                  <th>Workflow</th>
                   <th>Status</th>
                   <th>Actions</th>
                 </tr>
