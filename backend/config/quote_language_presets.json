@@ -1,0 +1,165 @@
+{
+  "version": "1.0.0",
+  "description": "Quote-safe language presets for AI Mortgage Review Caller. Ensures compliant, approved language for rate discussions.",
+  "rules": {
+    "range_only": {
+      "description": "Use when borrower is eligible and we can provide an indicative rate range",
+      "opener": [
+        "Based on what we know so far, I can share an estimated range — not a commitment — and Tim will confirm the exact terms on the review.",
+        "I can give you a rough range that's common for similar scenarios, and then Tim will validate what you actually qualify for.",
+        "Looking at the general picture, I can give you a ballpark range — the exact rate depends on details Tim will confirm during your review."
+      ],
+      "range_phrase": [
+        "Something like {rate_range_text} depending on details like credit, equity, and the property.",
+        "Typically we're seeing something in the {rate_range_text} range for situations like yours, but that depends on the specifics.",
+        "For scenarios like yours, rates generally fall in the {rate_range_text} area — Tim will nail down exactly where you land."
+      ],
+      "close": [
+        "If you want, we can lock in a quick {duration}-minute review to confirm it precisely.",
+        "The fastest way to get your exact number is a quick {duration}-minute review with Tim.",
+        "Want to set up a {duration}-minute call with Tim to lock in your actual rate?"
+      ]
+    },
+    "ballpark": {
+      "description": "Use when we don't have enough detail to quote even a range",
+      "opener": [
+        "I don't have enough detail to quote even a range yet, but I can explain the direction and what we'd need to confirm.",
+        "Without a few more details, I can't responsibly give you numbers — but I can tell you what factors into it.",
+        "I want to be straight with you — I'd need a bit more info before I could even ballpark this, but here's how it works."
+      ],
+      "close": [
+        "The fastest way is a quick {duration}-minute review — Tim can confirm numbers with your exact profile.",
+        "A short {duration}-minute review with Tim is the best way to get you real numbers.",
+        "If you've got {duration} minutes, Tim can run through your specifics and give you something concrete."
+      ]
+    },
+    "no_quote": {
+      "description": "Use when we cannot or should not quote any numbers",
+      "opener": [
+        "I can't responsibly quote numbers off this call without a couple key details and Tim's review — I don't want to mislead you.",
+        "I'd rather not throw out numbers without the full picture — that wouldn't be fair to you.",
+        "Without reviewing your specific situation, any number I give you would just be a guess, and I don't want to do that."
+      ],
+      "close": [
+        "If it's worth it, we'll find out fast in a quick {duration}-minute review.",
+        "The only way to know for sure is a quick {duration}-minute review — no pressure, just clarity.",
+        "A {duration}-minute review with Tim will tell you exactly where you stand."
+      ]
+    }
+  },
+  "goal_overrides": {
+    "annual_mortgage_review": {
+      "description": "Annual check-up for existing mortgage holders",
+      "value_prop": [
+        "This is more of a check-up than a sales call — we'll confirm whether anything improves your plan, and if not, we'll say so quickly.",
+        "Think of this as a quick health check on your mortgage — we'll see if anything's changed that could benefit you, and if not, no harm done.",
+        "We do these reviews to make sure you're still in the best position — sometimes things change, sometimes they don't."
+      ]
+    },
+    "rate_term_refi_review": {
+      "description": "Standard rate and term refinance opportunity",
+      "value_prop": [
+        "Rates and pricing move; this is a quick review to see if there's a realistic benefit or if staying put is best.",
+        "The goal here is simple — see if current rates would actually save you money, or if your current loan is still the smart play.",
+        "We're looking at whether the math works for a refi — sometimes it does, sometimes it doesn't, and we'll tell you straight."
+      ]
+    },
+    "cash_out_planning": {
+      "description": "Cash-out refinance for equity access",
+      "value_prop": [
+        "This is a strategy review — not just rate — to map payment, cash needs, and options without guessing.",
+        "Cash-out is more than just rate — it's about what you need the money for and how that affects your overall plan.",
+        "We'll look at how much you could access, what it would cost, and whether it actually makes sense for your situation."
+      ]
+    },
+    "purchase_preapproval": {
+      "description": "Pre-approval for home purchase",
+      "value_prop": [
+        "Getting pre-approved gives you a real number to shop with — sellers take you seriously and you know your budget.",
+        "This is about knowing exactly what you qualify for before you fall in love with a house you can't get.",
+        "Pre-approval puts you in the driver's seat — you'll know your rate, your payment, and your buying power."
+      ]
+    }
+  },
+  "segment_overrides": {
+    "arm_safety_review": {
+      "description": "ARM holders approaching adjustment period",
+      "value_prop": [
+        "This is a safety review before the adjustment window — the goal is to avoid surprises.",
+        "Your rate is going to adjust soon, and we want to make sure you know your options before that happens.",
+        "Let's look at what your payment could become and whether there's a smarter move before the adjustment hits."
+      ]
+    },
+    "equity_strategy_review": {
+      "description": "High equity homeowners for strategic planning",
+      "value_prop": [
+        "Equity changes over time; this is a quick strategy map of options and tradeoffs.",
+        "You've built up significant equity — let's look at what you could do with it and whether any of it makes sense for you.",
+        "This is about understanding your options — consolidation, improvements, investments — and the real costs of each."
+      ]
+    },
+    "mortgage_tune_up": {
+      "description": "General mortgage optimization check",
+      "value_prop": [
+        "Think of this as a tune-up — we'll check if anything's changed that could save you money or reduce risk.",
+        "Markets move, your situation changes — this is a quick check to see if your mortgage is still optimized.",
+        "We're just making sure you're not leaving money on the table with your current setup."
+      ]
+    },
+    "rate_watch": {
+      "description": "Borrowers actively watching rates for opportunity",
+      "value_prop": [
+        "You've been watching rates — let's see if we've hit the number that makes sense for your situation.",
+        "The market's been moving — this is a good time to check if the math finally works for you.",
+        "We've hit some interesting rate levels — worth a quick look to see if now's the time."
+      ]
+    }
+  },
+  "disclaimer_templates": {
+    "default": "This is an estimate, not a commitment to lend. Final terms depend on your application, documentation, and underwriting.",
+    "short": "Estimate only — final terms depend on full review.",
+    "detailed": "This is an estimate for discussion purposes only, not a commitment to lend. Actual rates, payments, and terms are subject to credit approval, property appraisal, and verification of income and assets. Terms may change based on market conditions.",
+    "state_specific": {
+      "TX": "This is an estimate only. Texas home equity loans are subject to specific requirements including the 80% combined loan-to-value limit.",
+      "CA": "This is an estimate only. California requires specific disclosures which will be provided as part of the formal application process."
+    }
+  },
+  "transition_phrases": {
+    "to_booking": [
+      "Sound like something worth exploring?",
+      "Want to take the next step?",
+      "Should we get you on Tim's calendar?",
+      "Ready to see what your numbers actually look like?"
+    ],
+    "objection_handling": {
+      "too_busy": [
+        "I get it — that's exactly why we keep it to {duration} minutes. If it's not worth your time, we'll know fast.",
+        "Totally understand. The review is quick — {duration} minutes — and you'll have clarity either way."
+      ],
+      "not_interested": [
+        "Fair enough. Mind if I ask what changed since you reached out?",
+        "No problem at all. Just curious — is it timing, or did you find something better?"
+      ],
+      "need_to_think": [
+        "Absolutely. What would help you decide?",
+        "Of course. Is there specific information that would help you think it through?"
+      ]
+    }
+  },
+  "compliance_notes": {
+    "never_say": [
+      "I guarantee",
+      "You will definitely get",
+      "This is your rate",
+      "I promise",
+      "100% certain",
+      "Locked in"
+    ],
+    "always_include": [
+      "Subject to approval",
+      "Estimate/estimated/ballpark/range",
+      "Final terms depend on review"
+    ],
+    "rate_context": "Always present rates as ranges or estimates. Never quote a single rate as if it's guaranteed. Use phrases like 'typically', 'generally', 'in the range of'."
+  }
+}

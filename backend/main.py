@@ -20055,6 +20055,22 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Could not load Call Screening routes: {e}")
 
+# Include Twilio Status Callback routes (webhook handlers for call status + recordings)
+try:
+    from routes.twilio_status_callback_routes import router as twilio_status_callback_router
+    app.include_router(twilio_status_callback_router, tags=["Twilio Webhooks"])
+    logger.info("✅ Twilio Status Callback routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load Twilio Status Callback routes: {e}")
+
+# Include State Recording Rules routes (state-specific recording disclosure requirements)
+try:
+    from routes.state_recording_rules_routes import router as state_recording_rules_router
+    app.include_router(state_recording_rules_router, tags=["State Recording Rules"])
+    logger.info("✅ State Recording Rules routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load State Recording Rules routes: {e}")
+
 # Include Voice OS API routes (agents, phone numbers, call sessions, analytics)
 from voice_os_routes import router as voice_os_router, set_auth_dependency as set_voice_os_auth
 set_voice_os_auth(get_current_user)
