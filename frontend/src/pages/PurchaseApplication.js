@@ -1475,7 +1475,12 @@ export default function PurchaseApplication() {
   const [lastSavedAt, setLastSavedAt] = useState(null);
 
   // State - All useState declarations must come before useEffect hooks that reference them
-  const [currentStage, setCurrentStage] = useState('account');
+  // Initialize stage based on demo mode - check URL directly for initial state
+  const [currentStage, setCurrentStage] = useState(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const isDemo = urlParams.get('demo') === 'true' || window.location.pathname.includes('/apply/start');
+    return isDemo ? 'declarations' : 'account';
+  });
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [declarations, setDeclarations] = useState({});
   const [profileData, setProfileData] = useState({});
