@@ -114,10 +114,10 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
 
   // Check if user can see team-related actions
   const canViewTeam = hasAnyPermission(['team.view_all', 'team.view_team', 'team.manage_permissions']) ||
-    userRole === 'management' || userRole === 'admin';
+    userRole === 'management' || userRole === 'admin' || userRole === 'site_admin';
 
   // Check if user is admin (can switch role views)
-  const isAdmin = userRole === 'admin' || userRole === 'management';
+  const isAdmin = userRole === 'admin' || userRole === 'site_admin' || userRole === 'management';
 
   // Available roles for preview
   const previewRoles = [
