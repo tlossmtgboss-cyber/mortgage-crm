@@ -27,10 +27,13 @@ const TalkToAgent = ({ agent, isOpen, onClose }) => {
   const WS_ENDPOINT = '/api/v1/voice/ws/browser-voice';
 
   // Initialize audio context
+  // OpenAI Realtime API uses 24000 Hz sample rate for PCM16 audio
+  const OPENAI_SAMPLE_RATE = 24000;
+
   const initAudioContext = useCallback(() => {
     if (!audioContextRef.current) {
       audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({
-        sampleRate: 16000
+        sampleRate: OPENAI_SAMPLE_RATE
       });
     }
     return audioContextRef.current;
@@ -65,8 +68,8 @@ const TalkToAgent = ({ agent, isOpen, onClose }) => {
         float32Array[i] = int16Array[i] / 32768.0;
       }
 
-      // Create audio buffer
-      const audioBuffer = audioContext.createBuffer(1, float32Array.length, 16000);
+      // Create audio buffer at OpenAI's sample rate (24kHz)
+      const audioBuffer = audioContext.createBuffer(1, float32Array.length, OPENAI_SAMPLE_RATE);
       audioBuffer.copyToChannel(float32Array, 0);
 
       // Queue the audio
@@ -198,9 +201,10 @@ const TalkToAgent = ({ agent, isOpen, onClose }) => {
     try {
       console.log('[TalkToAgent] Starting audio capture...');
 
+      // Request audio - the AudioContext will resample to match its sample rate (24kHz)
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          sampleRate: 16000,
+          sampleRate: OPENAI_SAMPLE_RATE,
           channelCount: 1,
           echoCancellation: true,
           noiseSuppression: true,

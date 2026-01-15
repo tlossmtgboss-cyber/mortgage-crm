@@ -734,16 +734,14 @@ async def connect_to_openai_realtime_browser():
     initial_response = await asyncio.wait_for(ws.recv(), timeout=5.0)
     logger.info(f"OpenAI Realtime connected: {initial_response[:200]}")
 
-    # Configure session for browser audio (PCM16)
+    # Configure session for browser audio (PCM16 at 24kHz)
+    # Use same voice and settings as phone for consistent experience
     await ws.send(json.dumps({
         "type": "session.update",
         "session": {
             "modalities": ["text", "audio"],
-            "instructions": """You are Sam, a friendly and professional AI receptionist for CMG Home Loans.
-Keep responses concise and conversational.
-Help callers with questions about mortgages, rates, and scheduling appointments with loan officers.
-Be warm, helpful, and professional.""",
-            "voice": "alloy",
+            "instructions": ai_config.system_prompt.format(business_name=ai_config.business_name),
+            "voice": "coral",  # Same warm, natural voice as phone calls
             "input_audio_format": "pcm16",
             "output_audio_format": "pcm16",
             "input_audio_transcription": {

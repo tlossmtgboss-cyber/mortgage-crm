@@ -83,6 +83,7 @@ const BottleneckLoans = lazy(() => import('./pages/BottleneckLoans'));
 const AIReceptionistDashboard = lazy(() => import('./pages/AIReceptionistDashboard'));
 const CallRoutingConfig = lazy(() => import('./pages/CallRoutingConfig'));
 const VoiceOSDashboard = lazy(() => import('./pages/VoiceOSDashboard'));
+const VideoOS = lazy(() => import('./pages/VideoOS'));
 const VoiceAgentStudio = lazy(() => import('./components/voice/AgentStudio'));
 const VoiceLiveCallsMonitor = lazy(() => import('./components/voice/LiveCallsMonitor'));
 const VoiceAgentBuilder = lazy(() => import('./components/voice/AgentBuilder'));
@@ -1424,6 +1425,28 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><VoiceOSDashboard /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/video-os"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><VideoOS /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
