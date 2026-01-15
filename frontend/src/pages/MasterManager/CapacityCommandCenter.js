@@ -15,10 +15,11 @@ import './MasterManager.css';
 
 const CapacityCommandCenter = () => {
   const navigate = useNavigate();
-  const { userRole, hasAnyPermission } = usePermissions();
+  const { userRole, hasAnyPermission, isAdmin } = usePermissions();
 
   // Permission check - require capacity/team management access
-  const canAccessCapacity = hasAnyPermission(['team.view_all', 'team.manage_permissions', 'capacity.view', 'capacity.manage']) || userRole === 'management' || userRole === 'admin';
+  // Use isAdmin from context which has robust admin detection
+  const canAccessCapacity = isAdmin || hasAnyPermission(['team.view_all', 'team.manage_permissions', 'capacity.view', 'capacity.manage']) || userRole === 'management' || userRole === 'admin';
 
   const [overview, setOverview] = useState(null);
   const [byRole, setByRole] = useState([]);

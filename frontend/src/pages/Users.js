@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { formatPhoneNumber } from '../utils/phoneUtils';
+import { usePermissions } from '../contexts/PermissionContext';
 import './Users.css';
 
 // Use HTTPS Railway URL in production, localhost for development
@@ -25,6 +27,13 @@ const DEFAULT_ROLES = [
 ];
 
 function Users() {
+  const navigate = useNavigate();
+  const { userRole, hasAnyPermission, isAdmin } = usePermissions();
+
+  // Permission check - require user management access
+  // Use isAdmin from context which has robust admin detection (checks permission_role, is_admin flag, legacy role)
+  const canAccessUsers = isAdmin || hasAnyPermission(['users.view', 'users.manage', 'team.view_all', 'team.manage']) || userRole === 'management' || userRole === 'admin';
+
   const [teamMembers, setTeamMembers] = useState([]);
   const [availableRoles, setAvailableRoles] = useState(DEFAULT_ROLES);
   const [loading, setLoading] = useState(true);
@@ -114,6 +123,21 @@ function Users() {
     const updatedRoles = availableRoles.filter(role => role.id !== roleId);
     saveRoles(updatedRoles);
   };
+
+  // Access denied if user doesn't have user management permissions
+  if (!canAccessUsers) {
+    return (
+      <div className="users-page">
+        <div className="access-denied" style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <h2>Access Denied</h2>
+          <p>You don't have permission to manage users.</p>
+          <button className="btn-primary" onClick={() => navigate('/dashboard')}>
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return <div className="users-page"><div className="loading">Loading team members...</div></div>;

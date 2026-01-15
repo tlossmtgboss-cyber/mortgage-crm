@@ -2894,3 +2894,68 @@ async def cleanup_sample_data(
         logger.error(f"Error cleaning up sample data: {e}")
         db.rollback()
         raise DatabaseException(f"Failed to cleanup sample data: {str(e)}")
+
+
+@router.delete("/cleanup/users")
+async def cleanup_users(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Delete all users except the current admin user"""
+    try:
+        current_user = await get_user_from_request(request, db)
+        require_master_admin(current_user)
+
+        deleted_counts = {}
+
+        # First, delete from tables that reference users
+        related_tables = [
+            ('user_settings', 'user_id'),
+            ('user_notifications', 'user_id'),
+            ('user_invitations', 'invited_by'),
+            ('loan_officer_profiles', 'user_id'),
+            ('conversations', 'user_id'),
+            ('ai_conversation_messages', 'user_id'),
+            ('subscriber_invitations', 'invited_by'),
+            ('subscriber_invitations', 'accepted_by_user_id'),
+            ('subscriber_invitations', 'revoked_by'),
+            ('admin_audit_log', 'actor_admin_id'),
+            ('login_events', 'user_id'),
+            ('user_activity_stats', 'user_id'),
+        ]
+
+        for table, column in related_tables:
+            try:
+                result = db.execute(text(f"""
+                    DELETE FROM {table}
+                    WHERE {column} IS NOT NULL AND {column} != :admin_id
+                """), {'admin_id': current_user.id})
+                deleted_counts[f"{table}.{column}"] = result.rowcount
+            except Exception as e:
+                logger.warning(f"Could not clean {table}.{column}: {e}")
+                deleted_counts[f"{table}.{column}"] = f"skipped: {str(e)[:50]}"
+
+        # Now delete all users except the current admin
+        result = db.execute(text("""
+            DELETE FROM users WHERE id != :admin_id
+        """), {'admin_id': current_user.id})
+        deleted_counts['users'] = result.rowcount
+
+        db.commit()
+
+        return success_response(
+            data={
+                'deleted_counts': deleted_counts,
+                'preserved_admin': {
+                    'id': current_user.id,
+                    'email': current_user.email
+                }
+            },
+            message=f"Deleted {deleted_counts.get('users', 0)} users. Admin account preserved."
+        )
+    except PermissionException:
+        raise
+    except Exception as e:
+        logger.error(f"Error cleaning up users: {e}")
+        db.rollback()
+        raise DatabaseException(f"Failed to cleanup users: {str(e)}")

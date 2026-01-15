@@ -7,10 +7,11 @@ import './SLASettings.css';
 
 const SLASettings = () => {
   const navigate = useNavigate();
-  const { userRole, hasAnyPermission } = usePermissions();
+  const { userRole, hasAnyPermission, isAdmin } = usePermissions();
 
   // Permission check - allow SLA access to managers, admins, and loan officers
-  const canAccessSLA = hasAnyPermission(['settings.sla', 'settings.manage', 'admin.manage', 'sla.view', 'sla.manage']) ||
+  // Use isAdmin from context which has robust admin detection (checks permission_role, is_admin flag, legacy role)
+  const canAccessSLA = isAdmin || hasAnyPermission(['settings.sla', 'settings.manage', 'admin.manage', 'sla.view', 'sla.manage']) ||
     ['management', 'admin', 'loan_officer', 'sales', 'processor', 'underwriter'].includes(userRole);
 
   const [activeTab, setActiveTab] = useState('dashboard');

@@ -24,7 +24,7 @@ const HoldMusicDashboard = lazy(() => import('../components/voice/HoldMusicDashb
 const TalkToAgentPage = lazy(() => import('../components/voice/TalkToAgentPage'));
 const CallAnalyticsDashboard = lazy(() => import('../components/voice/CallAnalyticsDashboard'));
 
-// Marketing settings components (inline for now, can be extracted)
+// Marketing settings components
 const LandingPagesSettings = lazy(() => import('./marketing/LandingPagesSettings'));
 const EmailMarketingSettings = lazy(() => import('./marketing/EmailMarketingSettings'));
 const TextMarketingSettings = lazy(() => import('./marketing/TextMarketingSettings'));
@@ -33,18 +33,22 @@ const MicrositeSettings = lazy(() => import('./marketing/MicrositeSettings'));
 const PreApprovalLetterSettings = lazy(() => import('./marketing/PreApprovalLetterSettings'));
 const ApplicationSlidesSettings = lazy(() => import('./marketing/ApplicationSlidesSettings'));
 
-// Tool categories and items
-const MARKETING_TOOLS = [
-  {
-    category: 'Outreach & Communication',
+// Main category tabs with their tools
+const MARKETING_CATEGORIES = {
+  'outreach-communication': {
+    id: 'outreach-communication',
+    name: 'Outreach & Communication',
+    icon: '💬',
     tools: [
       { id: 'ai-outreach', name: 'AI Outreach', description: 'Automated AI-powered outreach campaigns' },
       { id: 'communication', name: 'Communication Hub', description: 'Email and SMS management' },
       { id: 'deal-alerts', name: 'Deal Alerts', description: 'Proactive pipeline monitoring and alerts' },
     ]
   },
-  {
-    category: 'Voice & Call Center',
+  'voice-call-center': {
+    id: 'voice-call-center',
+    name: 'Voice & Call Center',
+    icon: '📞',
     tools: [
       { id: 'ai-receptionist', name: 'AI Receptionist', description: 'AI-powered phone receptionist' },
       { id: 'voice-agents', name: 'Voice Agents', description: 'Create and manage AI voice agents' },
@@ -61,23 +65,29 @@ const MARKETING_TOOLS = [
       { id: 'call-qa', name: 'Call QA', description: 'Call quality analysis and coaching' },
     ]
   },
-  {
-    category: 'Content & Media',
+  'content-media': {
+    id: 'content-media',
+    name: 'Content & Media',
+    icon: '🎬',
     tools: [
       { id: 'avatar-studio', name: 'Avatar Studio', description: 'AI video avatar creation' },
       { id: 'ai-blog', name: 'AI Blog', description: 'AI-generated blog content' },
     ]
   },
-  {
-    category: 'Lead Generation',
+  'lead-generation': {
+    id: 'lead-generation',
+    name: 'Lead Generation',
+    icon: '🎯',
     tools: [
       { id: 'acquisition', name: 'Acquisition Engine', description: 'Lead acquisition campaigns' },
       { id: 'landing-pages', name: 'Landing Pages', description: 'Create and manage landing pages' },
       { id: 'microsite', name: 'Microsite Builder', description: 'Personal marketing microsites' },
     ]
   },
-  {
-    category: 'Templates & Assets',
+  'templates-assets': {
+    id: 'templates-assets',
+    name: 'Templates & Assets',
+    icon: '📋',
     tools: [
       { id: 'email-marketing', name: 'Email Templates', description: 'Email marketing templates' },
       { id: 'text-marketing', name: 'SMS Templates', description: 'Text message templates' },
@@ -86,7 +96,17 @@ const MARKETING_TOOLS = [
       { id: 'application-slides', name: 'Application Slides', description: 'Loan application presentation' },
     ]
   }
-];
+};
+
+// Get category from tool ID
+const getCategoryFromTool = (toolId) => {
+  for (const [categoryId, category] of Object.entries(MARKETING_CATEGORIES)) {
+    if (category.tools.some(t => t.id === toolId)) {
+      return categoryId;
+    }
+  }
+  return 'outreach-communication';
+};
 
 // Loading spinner component
 const LoadingSpinner = () => (
@@ -107,24 +127,38 @@ const ComingSoonPlaceholder = ({ toolName }) => (
 
 function Marketing() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [activeTool, setActiveTool] = useState(searchParams.get('tool') || 'ai-outreach');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const initialTool = searchParams.get('tool') || 'ai-outreach';
+  const initialCategory = searchParams.get('category') || getCategoryFromTool(initialTool);
+
+  const [activeCategory, setActiveCategory] = useState(initialCategory);
+  const [activeTool, setActiveTool] = useState(initialTool);
 
   // Update URL when tool changes
   useEffect(() => {
-    setSearchParams({ tool: activeTool });
-  }, [activeTool, setSearchParams]);
+    setSearchParams({ category: activeCategory, tool: activeTool });
+  }, [activeCategory, activeTool, setSearchParams]);
+
+  // Handle category change
+  const handleCategoryChange = (categoryId) => {
+    setActiveCategory(categoryId);
+    // Set first tool in category as active
+    const firstTool = MARKETING_CATEGORIES[categoryId].tools[0];
+    if (firstTool) {
+      setActiveTool(firstTool.id);
+    }
+  };
 
   // Get active tool info
   const getActiveToolInfo = () => {
-    for (const category of MARKETING_TOOLS) {
-      const tool = category.tools.find(t => t.id === activeTool);
-      if (tool) return tool;
+    const category = MARKETING_CATEGORIES[activeCategory];
+    if (category) {
+      return category.tools.find(t => t.id === activeTool);
     }
     return null;
   };
 
   const activeToolInfo = getActiveToolInfo();
+  const currentCategory = MARKETING_CATEGORIES[activeCategory];
 
   // Render the active tool component
   const renderActiveTool = () => {
@@ -197,53 +231,51 @@ function Marketing() {
   };
 
   return (
-    <div className={`marketing-page ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
-      {/* Sidebar */}
-      <aside className="marketing-sidebar">
-        <div className="sidebar-header">
-          <h2>Marketing Lab</h2>
-          <button
-            className="collapse-btn"
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            {sidebarCollapsed ? '→' : '←'}
-          </button>
-        </div>
+    <div className="marketing-page tabbed-layout">
+      {/* Page Header */}
+      <div className="marketing-header">
+        <h1>Marketing Lab</h1>
+      </div>
 
-        <nav className="sidebar-nav">
-          {MARKETING_TOOLS.map((category) => (
-            <div key={category.category} className="nav-category">
-              <h3 className="category-title">{category.category}</h3>
-              <ul className="category-tools">
-                {category.tools.map((tool) => (
-                  <li key={tool.id}>
-                    <button
-                      className={`tool-btn ${activeTool === tool.id ? 'active' : ''}`}
-                      onClick={() => setActiveTool(tool.id)}
-                      title={tool.description}
-                    >
-                      <span className="tool-name">{tool.name}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
+      {/* Main Category Tabs */}
+      <div className="marketing-category-tabs">
+        {Object.values(MARKETING_CATEGORIES).map((category) => (
+          <button
+            key={category.id}
+            className={`category-tab ${activeCategory === category.id ? 'active' : ''}`}
+            onClick={() => handleCategoryChange(category.id)}
+          >
+            <span className="tab-icon">{category.icon}</span>
+            <span className="tab-name">{category.name}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Sub-Navigation Bar */}
+      <div className="marketing-sub-nav">
+        <div className="sub-nav-scroll">
+          {currentCategory?.tools.map((tool) => (
+            <button
+              key={tool.id}
+              className={`sub-nav-item ${activeTool === tool.id ? 'active' : ''}`}
+              onClick={() => setActiveTool(tool.id)}
+              title={tool.description}
+            >
+              {tool.name}
+            </button>
           ))}
-        </nav>
-      </aside>
+        </div>
+      </div>
+
+      {/* Tool Description */}
+      {activeToolInfo && (
+        <div className="tool-description-bar">
+          <span className="tool-desc">{activeToolInfo.description}</span>
+        </div>
+      )}
 
       {/* Main Content */}
-      <main className="marketing-main">
-        <div className="main-header">
-          <div className="header-info">
-            <div>
-              <h1>{activeToolInfo?.name}</h1>
-              <p className="header-description">{activeToolInfo?.description}</p>
-            </div>
-          </div>
-        </div>
-
+      <main className="marketing-main tabbed">
         <div className="main-content">
           <Suspense fallback={<LoadingSpinner />}>
             {renderActiveTool()}

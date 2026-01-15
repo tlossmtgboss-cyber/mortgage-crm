@@ -5,10 +5,18 @@
  * Supports filtering, bulk actions, and detailed document preview.
  */
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
+import { usePermissions } from '../contexts/PermissionContext';
 import './AdminDocumentReviewQueue.css';
 
 const AdminDocumentReviewQueue = () => {
+  const navigate = useNavigate();
+  const { userRole, hasAnyPermission, isAdmin } = usePermissions();
+
+  // Permission check - require document review access
+  const canAccessDocReview = isAdmin || hasAnyPermission(['admin.manage', 'documents.review', 'documents.manage', 'system.admin']) || userRole === 'admin' || userRole === 'management';
+
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -162,6 +170,21 @@ const AdminDocumentReviewQueue = () => {
     'purchase_contract',
     'appraisal',
   ];
+
+  // Access denied if user doesn't have document review permissions
+  if (!canAccessDocReview) {
+    return (
+      <div className="admin-document-review-page">
+        <div className="access-denied" style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <h2>Access Denied</h2>
+          <p>You don't have permission to review documents.</p>
+          <button className="btn-primary" onClick={() => navigate('/dashboard')}>
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="admin-document-review-page">

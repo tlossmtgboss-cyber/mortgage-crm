@@ -1,9 +1,17 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
+import { usePermissions } from '../contexts/PermissionContext';
 import { toast } from '../utils/toast';
 import './AdminSettings.css';
 
 const AdminSettings = () => {
+  const navigate = useNavigate();
+  const { userRole, hasAnyPermission, isAdmin } = usePermissions();
+
+  // Permission check - require admin access
+  const canAccessAdminSettings = isAdmin || hasAnyPermission(['admin.manage', 'settings.manage', 'system.admin']) || userRole === 'admin';
+
   const [running, setRunning] = useState({});
   const [results, setResults] = useState({});
 
@@ -48,6 +56,21 @@ const AdminSettings = () => {
       setRunning({ ...running, [jobType]: false });
     }
   };
+
+  // Access denied if user doesn't have admin permissions
+  if (!canAccessAdminSettings) {
+    return (
+      <div className="admin-settings-page">
+        <div className="access-denied" style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <h2>Access Denied</h2>
+          <p>You don't have permission to access Admin Settings.</p>
+          <button className="btn-primary" onClick={() => navigate('/dashboard')}>
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="admin-settings-page">

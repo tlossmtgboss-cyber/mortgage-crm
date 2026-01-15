@@ -6,10 +6,11 @@ import './ComplianceDashboard.css';
 
 const ComplianceDashboard = () => {
   const navigate = useNavigate();
-  const { userRole, hasPermission } = usePermissions();
+  const { userRole, hasPermission, isAdmin } = usePermissions();
 
   // Permission check - require compliance access
-  const canViewCompliance = hasPermission('compliance.view') || userRole === 'management' || userRole === 'admin';
+  // Use isAdmin from context which has robust admin detection (checks permission_role, is_admin flag, legacy role)
+  const canViewCompliance = isAdmin || hasPermission('compliance.view') || userRole === 'management' || userRole === 'admin';
 
   const [overview, setOverview] = useState(null);
   const [departmentData, setDepartmentData] = useState([]);

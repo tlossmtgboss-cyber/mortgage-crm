@@ -87,10 +87,11 @@ const DEMO_SUGGESTED_QUESTIONS = [
 const ProfitabilityDashboard = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { hasPermission, userRole } = usePermissions();
+  const { hasPermission, userRole, isAdmin } = usePermissions();
 
   // Permission check - require profitability/reports access
-  const canAccessProfitability = hasPermission('reports.profitability') || userRole === 'management' || userRole === 'admin';
+  // Use isAdmin from context which has robust admin detection (checks permission_role, is_admin flag, legacy role)
+  const canAccessProfitability = isAdmin || hasPermission('reports.profitability') || userRole === 'management' || userRole === 'admin';
 
   // Get metric from URL or default to null (show overview)
   const urlMetric = searchParams.get('metric');

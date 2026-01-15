@@ -16,10 +16,11 @@ import './SmartDocs.css';
 
 function SmartDocs() {
   const navigate = useNavigate();
-  const { userRole, hasAnyPermission } = usePermissions();
+  const { userRole, hasAnyPermission, isAdmin } = usePermissions();
 
   // Permission check - require documents/loans access
-  const canAccessSmartDocs = hasAnyPermission(['documents.view', 'documents.manage', 'loans.view', 'loans.manage']) || userRole === 'sales' || userRole === 'management' || userRole === 'admin';
+  // Use isAdmin from context which has robust admin detection (checks permission_role, is_admin flag, legacy role)
+  const canAccessSmartDocs = isAdmin || hasAnyPermission(['documents.view', 'documents.manage', 'loans.view', 'loans.manage']) || userRole === 'sales' || userRole === 'management' || userRole === 'admin';
 
   const [activeTab, setActiveTab] = useState('documents-owed');
   const [summary, setSummary] = useState(null);

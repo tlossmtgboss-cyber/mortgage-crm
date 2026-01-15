@@ -2681,12 +2681,12 @@ const AccountManagement = () => {
           fetchAccountDetail(selectedAccount.id);
         }
       } else {
-        const error = await response.json();
-        toast.error(error.message || 'Action failed');
+        const errorData = await response.json();
+        toast.error(errorData.detail || errorData.message || errorData.error?.message || 'Action failed');
       }
     } catch (err) {
       console.error('Action error:', err);
-      toast.error('Failed to complete action');
+      toast.error(err.message || 'Failed to complete action');
     } finally {
       setActionLoading(false);
     }
@@ -2712,12 +2712,12 @@ const AccountManagement = () => {
         closeModal();
         // In a real app, you would redirect to the app with impersonation banner
       } else {
-        const error = await response.json();
-        toast.error(error.message || 'Failed to start impersonation');
+        const errorData = await response.json();
+        toast.error(errorData.detail || errorData.message || errorData.error?.message || 'Failed to start impersonation');
       }
     } catch (err) {
       console.error('Impersonation error:', err);
-      toast.error('Failed to start impersonation');
+      toast.error(err.message || 'Failed to start impersonation');
     } finally {
       setActionLoading(false);
     }
@@ -2756,12 +2756,13 @@ const AccountManagement = () => {
           fetchAccounts();
         }
       } else {
-        const error = await response.json();
-        toast.error(error.detail || error.message || 'Failed to send invitation');
+        const errorData = await response.json();
+        const errorMessage = errorData.detail || errorData.message || errorData.error?.message || 'Failed to send invitation';
+        toast.error(errorMessage);
       }
     } catch (err) {
       console.error('Invitation error:', err);
-      toast.error('Failed to send invitation. Please try again.');
+      toast.error(err.message || 'Failed to send invitation. Please try again.');
     } finally {
       setActionLoading(false);
     }

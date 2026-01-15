@@ -5,10 +5,18 @@
  * and borrower portal interactions across all loans.
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
+import { usePermissions } from '../contexts/PermissionContext';
 import './AdminActivityFeed.css';
 
 const AdminActivityFeed = () => {
+  const navigate = useNavigate();
+  const { userRole, hasAnyPermission, isAdmin } = usePermissions();
+
+  // Permission check - require admin access
+  const canAccessAdminFeed = isAdmin || hasAnyPermission(['admin.view', 'admin.manage', 'system.admin']) || userRole === 'admin' || userRole === 'management';
+
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -289,6 +297,21 @@ const AdminActivityFeed = () => {
     { id: 'message_sent', label: 'Messages Sent' },
     { id: 'reminder_sent', label: 'Reminders Sent' },
   ];
+
+  // Access denied if user doesn't have admin permissions
+  if (!canAccessAdminFeed) {
+    return (
+      <div className="admin-activity-feed-page">
+        <div className="access-denied" style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <h2>Access Denied</h2>
+          <p>You don't have permission to view the Activity Feed.</p>
+          <button className="btn-primary" onClick={() => navigate('/dashboard')}>
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="admin-activity-feed-page">

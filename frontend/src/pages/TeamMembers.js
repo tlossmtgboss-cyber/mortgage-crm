@@ -11,11 +11,12 @@ console.log('[DEBUG] TeamMembers API_BASE_URL:', API_BASE_URL);
 
 function TeamMembers() {
   const navigate = useNavigate();
-  const { userRole, hasAnyPermission } = usePermissions();
+  const { userRole, hasAnyPermission, isAdmin } = usePermissions();
 
   // Permission check - require team management access
-  const canViewTeam = hasAnyPermission(['team.view_all', 'team.view_team', 'team.manage_permissions']) || userRole === 'management' || userRole === 'admin';
-  const canEditTeam = hasAnyPermission(['team.manage', 'team.manage_permissions']) || userRole === 'management' || userRole === 'admin';
+  // Use isAdmin from context which has robust admin detection (checks permission_role, is_admin flag, legacy role)
+  const canViewTeam = isAdmin || hasAnyPermission(['team.view_all', 'team.view_team', 'team.manage_permissions']) || userRole === 'management' || userRole === 'admin';
+  const canEditTeam = isAdmin || hasAnyPermission(['team.manage', 'team.manage_permissions']) || userRole === 'management' || userRole === 'admin';
 
   // Team Members state
   const [members, setMembers] = useState([]);

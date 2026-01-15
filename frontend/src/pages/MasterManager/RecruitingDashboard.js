@@ -43,10 +43,11 @@ const PARTNER_STATUSES = [
 
 const RecruitingDashboard = () => {
   const navigate = useNavigate();
-  const { userRole, hasAnyPermission } = usePermissions();
+  const { userRole, hasAnyPermission, isAdmin } = usePermissions();
 
   // Permission check - require team management or recruiting access
-  const canAccessRecruiting = hasAnyPermission(['team.view_all', 'team.manage_permissions', 'recruiting.view', 'recruiting.manage', 'capacity.view']) || userRole === 'management' || userRole === 'admin';
+  // Use isAdmin from context which has robust admin detection
+  const canAccessRecruiting = isAdmin || hasAnyPermission(['team.view_all', 'team.manage_permissions', 'recruiting.view', 'recruiting.manage', 'capacity.view']) || userRole === 'management' || userRole === 'admin';
 
   // Main tab: 'employee' or 'partner'
   const [mainTab, setMainTab] = useState('employee');

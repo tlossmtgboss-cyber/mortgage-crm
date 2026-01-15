@@ -12,10 +12,11 @@ import './Leads.css';
 
 function Leads() {
   const navigate = useNavigate();
-  const { canPerformAction, isReadOnlyMode, hasAnyPermission, userRole } = usePermissions();
+  const { canPerformAction, isReadOnlyMode, hasAnyPermission, userRole, isAdmin } = usePermissions();
 
   // Permission check - require leads access
-  const canAccessLeads = hasAnyPermission(['leads.view', 'leads.view_all', 'leads.manage']) || userRole === 'sales' || userRole === 'management' || userRole === 'admin';
+  // Use isAdmin from context which has robust admin detection (checks permission_role, is_admin flag, legacy role)
+  const canAccessLeads = isAdmin || hasAnyPermission(['leads.view', 'leads.view_all', 'leads.manage']) || userRole === 'sales' || userRole === 'management' || userRole === 'admin';
 
   // Use React Query for cached data fetching - instant on revisit!
   const { data: leadsData, isLoading: loading, refetch: refetchLeads } = useLeads();
