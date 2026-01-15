@@ -1,9 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { usePermissions } from '../../contexts/PermissionContext';
 import './SocialMediaManager.css';
 
 const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
 const SocialMediaManager = () => {
+  const navigate = useNavigate();
+  const { userRole, hasAnyPermission, isAdmin } = usePermissions();
+  const canAccessSocial = isAdmin || hasAnyPermission(['marketing.manage', 'social.manage', 'admin.manage']) || userRole === 'admin' || userRole === 'management';
   const [connections, setConnections] = useState({
     facebook: { connected: false, configured: false },
     linkedin: { connected: false, configured: false },
@@ -151,6 +156,20 @@ const SocialMediaManager = () => {
       <div className="social-manager-loading">
         <div className="spinner"></div>
         <p>Loading social media manager...</p>
+      </div>
+    );
+  }
+
+  if (!canAccessSocial) {
+    return (
+      <div className="social-media-manager">
+        <div className="access-denied" style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <h2>Access Denied</h2>
+          <p>You don't have permission to access Social Media Manager.</p>
+          <button className="btn-primary" onClick={() => navigate('/dashboard')}>
+            Return to Dashboard
+          </button>
+        </div>
       </div>
     );
   }

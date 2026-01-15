@@ -12,11 +12,16 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { usePermissions } from '../../contexts/PermissionContext';
 import './TwilioSetup.css';
 
 const API_URL = process.env.REACT_APP_API_URL || '';
 
 const TwilioSetup = () => {
+  const navigate = useNavigate();
+  const { userRole, hasAnyPermission, isAdmin } = usePermissions();
+  const canAccessSettings = isAdmin || hasAnyPermission(['settings.manage', 'admin.manage', 'system.admin']) || userRole === 'admin';
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
@@ -251,6 +256,20 @@ const TwilioSetup = () => {
       <div className="twilio-setup-page">
         <div className="setup-content" style={{ textAlign: 'center', padding: '60px' }}>
           <p>Loading setup status...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!canAccessSettings) {
+    return (
+      <div className="twilio-setup-page">
+        <div className="access-denied" style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <h2>Access Denied</h2>
+          <p>You don't have permission to access Twilio Setup.</p>
+          <button className="btn-primary" onClick={() => navigate('/dashboard')}>
+            Return to Dashboard
+          </button>
         </div>
       </div>
     );

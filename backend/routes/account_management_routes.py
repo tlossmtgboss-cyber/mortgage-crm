@@ -2972,3 +2972,85 @@ async def cleanup_users(
         logger.error(f"Error cleaning up users: {e}")
         db.rollback()
         raise DatabaseException(f"Failed to cleanup users: {str(e)}")
+
+
+@router.post("/emergency-admin-reset")
+async def emergency_admin_reset(
+    request: Request,
+    email: str = Query(..., description="Admin email address"),
+    password: str = Query(..., description="New password"),
+    secret_key: str = Query(..., description="Emergency reset key"),
+    db: Session = Depends(get_db)
+):
+    """Emergency endpoint to create or reset admin user password.
+    Requires secret key for security.
+    """
+    import os
+    import bcrypt
+
+    # Verify secret key
+    expected_key = os.getenv("EMERGENCY_ADMIN_KEY", "perennia-emergency-2024")
+    if secret_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid secret key")
+
+    try:
+        # Hash the new password
+        salt = bcrypt.gensalt()
+        hashed_password = bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
+
+        # Check if user exists
+        existing_user = db.execute(text("""
+            SELECT id, email FROM users WHERE email = :email
+        """), {'email': email}).fetchone()
+
+        if existing_user:
+            # Update existing user's password and ensure admin role
+            db.execute(text("""
+                UPDATE users
+                SET hashed_password = :password,
+                    role = 'admin',
+                    permission_role = 'admin',
+                    is_active = true,
+                    updated_at = NOW()
+                WHERE email = :email
+            """), {'email': email, 'password': hashed_password})
+
+            db.commit()
+
+            return success_response(
+                data={
+                    'action': 'password_reset',
+                    'user_id': existing_user.id,
+                    'email': email
+                },
+                message=f"Password reset for {email}"
+            )
+        else:
+            # Create new admin user
+            result = db.execute(text("""
+                INSERT INTO users (
+                    email, hashed_password, full_name, role, permission_role,
+                    is_active, created_at, updated_at
+                ) VALUES (
+                    :email, :password, 'Administrator', 'admin', 'admin',
+                    true, NOW(), NOW()
+                )
+                RETURNING id
+            """), {'email': email, 'password': hashed_password})
+
+            new_user_id = result.fetchone()[0]
+            db.commit()
+
+            return success_response(
+                data={
+                    'action': 'user_created',
+                    'user_id': new_user_id,
+                    'email': email
+                },
+                message=f"Admin user created: {email}"
+            )
+
+    except Exception as e:
+        logger.error(f"Emergency admin reset failed: {e}")
+        db.rollback()
+        raise DatabaseException(f"Failed to reset admin: {str(e)}")

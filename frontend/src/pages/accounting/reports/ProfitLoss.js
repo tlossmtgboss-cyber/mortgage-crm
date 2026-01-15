@@ -1,10 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { accountingAPI } from '../../../services/accountingApi';
+import { usePermissions } from '../../../contexts/PermissionContext';
 import '../AccountingShared.css';
 
 function ProfitLoss() {
   const navigate = useNavigate();
+  const { userRole, hasAnyPermission, isAdmin } = usePermissions();
+  const canAccessAccounting = isAdmin || hasAnyPermission(['accounting.view', 'accounting.manage', 'finance.view', 'admin.manage']) || userRole === 'admin' || userRole === 'management';
   const [loading, setLoading] = useState(true);
   const [reportData, setReportData] = useState(null);
   const [expandedSections, setExpandedSections] = useState(new Set(['revenue', 'expenses']));
@@ -208,6 +211,20 @@ function ProfitLoss() {
   const expenses = reportData?.expenses || { total: 0, categories: [] };
   const grossProfit = reportData?.gross_profit || 0;
   const netIncome = reportData?.net_income || 0;
+
+  if (!canAccessAccounting) {
+    return (
+      <div className="accounting-page financial-report profit-loss">
+        <div className="access-denied" style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <h2>Access Denied</h2>
+          <p>You don't have permission to access Profit & Loss Statement.</p>
+          <button className="btn-primary" onClick={() => navigate('/dashboard')}>
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="accounting-page financial-report profit-loss">

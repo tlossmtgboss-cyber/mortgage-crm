@@ -1,10 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { accountingAPI } from '../../services/accountingApi';
+import { usePermissions } from '../../contexts/PermissionContext';
 import './AccountingDashboard.css';
 
 function AccountingDashboard() {
   const navigate = useNavigate();
+  const { userRole, hasAnyPermission, isAdmin } = usePermissions();
+
+  // Permission check - require accounting/finance access
+  const canAccessAccounting = isAdmin || hasAnyPermission(['accounting.view', 'accounting.manage', 'finance.view', 'admin.manage']) || userRole === 'admin' || userRole === 'management';
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -174,6 +180,21 @@ function AccountingDashboard() {
   const totalCash = bankAccounts.reduce((sum, acc) => sum + (acc.current_balance || 0), 0);
   const totalAR = arAging?.total_outstanding || 0;
   const totalAP = apAging?.total_outstanding || 0;
+
+  // Access denied check
+  if (!canAccessAccounting) {
+    return (
+      <div className="accounting-dashboard">
+        <div className="access-denied" style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <h2>Access Denied</h2>
+          <p>You don't have permission to access Accounting.</p>
+          <button className="btn-primary" onClick={() => navigate('/dashboard')}>
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="accounting-dashboard">

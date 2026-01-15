@@ -1820,6 +1820,22 @@ class Subscription(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
+class PromoCode(Base):
+    """Promotional codes for registration discounts"""
+    __tablename__ = "promo_codes"
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String, unique=True, index=True, nullable=False)
+    description = Column(String)
+    discount_type = Column(String, default="percentage")  # percentage, fixed, trial_extension
+    discount_value = Column(Float, default=0)  # percentage (0-100) or fixed dollar amount
+    trial_days = Column(Integer, default=0)  # additional trial days
+    max_uses = Column(Integer)  # null = unlimited
+    current_uses = Column(Integer, default=0)
+    valid_from = Column(DateTime)
+    valid_until = Column(DateTime)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
 class TeamMember(Base):
     __tablename__ = "team_members"
     id = Column(Integer, primary_key=True, index=True)
@@ -38378,6 +38394,233 @@ async def reset_password(request: ResetPasswordRequest, db: Session = Depends(ge
             status_code=500,
             detail="An error occurred while resetting your password. Please try again."
         )
+
+
+# ============================================================================
+# PUBLIC REGISTRATION
+# ============================================================================
+
+class RegisterRequest(BaseModel):
+    """Request schema for public registration"""
+    full_name: str
+    email: EmailStr
+    password: str
+    company_name: Optional[str] = None
+    phone: Optional[str] = None
+    plan: Optional[str] = "professional"
+    promo_code: Optional[str] = None
+
+class ValidatePromoCodeRequest(BaseModel):
+    code: str
+
+@app.post("/api/v1/auth/register")
+async def register_account(
+    request: RegisterRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Public registration endpoint for new accounts.
+    Creates a new organization and admin user.
+    """
+    try:
+        # Validate email doesn't already exist
+        existing_user = db.query(User).filter(User.email == request.email).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=400,
+                detail="An account with this email already exists. Please log in or use a different email."
+            )
+
+        # Validate password strength
+        if len(request.password) < 8:
+            raise HTTPException(
+                status_code=400,
+                detail="Password must be at least 8 characters long."
+            )
+
+        # Validate promo code if provided
+        promo = None
+        promo_discount = None
+        if request.promo_code:
+            promo = db.query(PromoCode).filter(
+                PromoCode.code == request.promo_code.upper(),
+                PromoCode.is_active == True
+            ).first()
+
+            if not promo:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid promo code. Please check and try again."
+                )
+
+            # Check if promo is valid
+            now = datetime.now(timezone.utc)
+            if promo.valid_from and promo.valid_from > now:
+                raise HTTPException(
+                    status_code=400,
+                    detail="This promo code is not yet active."
+                )
+            if promo.valid_until and promo.valid_until < now:
+                raise HTTPException(
+                    status_code=400,
+                    detail="This promo code has expired."
+                )
+            if promo.max_uses and promo.current_uses >= promo.max_uses:
+                raise HTTPException(
+                    status_code=400,
+                    detail="This promo code has reached its maximum uses."
+                )
+
+            promo_discount = {
+                "code": promo.code,
+                "type": promo.discount_type,
+                "value": promo.discount_value,
+                "trial_days": promo.trial_days,
+                "description": promo.description
+            }
+
+        # Create organization if company name provided
+        organization = None
+        if request.company_name:
+            # Generate a URL-friendly slug
+            import re
+            slug = re.sub(r'[^a-z0-9]+', '-', request.company_name.lower()).strip('-')
+            # Add random suffix to ensure uniqueness
+            slug = f"{slug}-{secrets.token_hex(4)}"
+
+            organization = Organization(
+                name=request.company_name,
+                slug=slug,
+                subscription_tier=request.plan or "professional",
+                is_active=True
+            )
+            db.add(organization)
+            db.flush()
+
+        # Create user
+        new_user = User(
+            email=request.email,
+            hashed_password=get_password_hash(request.password),
+            full_name=request.full_name,
+            phone=request.phone,
+            role="site_admin",
+            permission_role="site_admin",
+            organization_id=organization.id if organization else None,
+            is_active=True,
+            onboarding_completed=False,
+            user_metadata={
+                "registered_at": datetime.now(timezone.utc).isoformat(),
+                "plan": request.plan,
+                "promo_code": request.promo_code.upper() if request.promo_code else None
+            }
+        )
+        db.add(new_user)
+        db.flush()
+
+        # Create subscription
+        trial_days = 14  # Default trial
+        if promo and promo.trial_days:
+            trial_days += promo.trial_days
+
+        # Find the plan
+        plan = db.query(SubscriptionPlan).filter(
+            SubscriptionPlan.name.ilike(f"%{request.plan}%")
+        ).first()
+
+        subscription = Subscription(
+            user_id=new_user.id,
+            plan_id=plan.id if plan else None,
+            status="trialing",
+            trial_end=datetime.now(timezone.utc) + timedelta(days=trial_days),
+            current_period_start=datetime.now(timezone.utc),
+            current_period_end=datetime.now(timezone.utc) + timedelta(days=trial_days)
+        )
+        db.add(subscription)
+
+        # Increment promo code usage
+        if promo:
+            promo.current_uses += 1
+
+        db.commit()
+
+        # Generate access token
+        access_token = create_access_token(data={"sub": new_user.email})
+
+        logger.info(f"New account registered: {request.email} (org: {request.company_name})")
+
+        return {
+            "success": True,
+            "message": "Account created successfully!",
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user": {
+                "id": new_user.id,
+                "email": new_user.email,
+                "full_name": new_user.full_name,
+                "role": new_user.role,
+                "permission_role": new_user.permission_role,
+                "onboarding_completed": new_user.onboarding_completed,
+                "organization_id": organization.id if organization else None
+            },
+            "trial_days": trial_days,
+            "promo_applied": promo_discount
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Registration error: {str(e)}")
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred during registration. Please try again."
+        )
+
+@app.post("/api/v1/auth/validate-promo")
+async def validate_promo_code(
+    request: ValidatePromoCodeRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Validate a promo code before registration.
+    """
+    promo = db.query(PromoCode).filter(
+        PromoCode.code == request.code.upper(),
+        PromoCode.is_active == True
+    ).first()
+
+    if not promo:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid promo code."
+        )
+
+    now = datetime.now(timezone.utc)
+    if promo.valid_from and promo.valid_from > now:
+        raise HTTPException(
+            status_code=400,
+            detail="This promo code is not yet active."
+        )
+    if promo.valid_until and promo.valid_until < now:
+        raise HTTPException(
+            status_code=400,
+            detail="This promo code has expired."
+        )
+    if promo.max_uses and promo.current_uses >= promo.max_uses:
+        raise HTTPException(
+            status_code=400,
+            detail="This promo code has reached its maximum uses."
+        )
+
+    return {
+        "valid": True,
+        "code": promo.code,
+        "description": promo.description,
+        "discount_type": promo.discount_type,
+        "discount_value": promo.discount_value,
+        "trial_days": promo.trial_days
+    }
+
 
 # ============================================================================
 # PUSH NOTIFICATIONS

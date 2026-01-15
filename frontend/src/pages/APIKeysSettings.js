@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAsyncOperation, useFormSubmit, APIError } from '../utils/errorHandling';
+import { usePermissions } from '../contexts/PermissionContext';
 import { toast } from '../utils/toast';
 import './APIKeysSettings.css';
 
@@ -10,6 +11,11 @@ const API_BASE_URL = window.location.hostname === 'localhost' || window.location
 
 const APIKeysSettings = () => {
   const navigate = useNavigate();
+  const { userRole, hasAnyPermission, isAdmin } = usePermissions();
+
+  // Permission check - require admin access for API key management
+  const canAccessAPIKeys = isAdmin || hasAnyPermission(['admin.manage', 'api.manage', 'system.admin']) || userRole === 'admin';
+
   const [activeTab, setActiveTab] = useState('keys');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -325,6 +331,21 @@ const APIKeysSettings = () => {
         <div className="error-container">
           <p>Error loading settings: {error}</p>
           <button onClick={loadData}>Retry</button>
+        </div>
+      </div>
+    );
+  }
+
+  // Access denied if user doesn't have admin permissions
+  if (!canAccessAPIKeys) {
+    return (
+      <div className="api-keys-settings">
+        <div className="access-denied" style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <h2>Access Denied</h2>
+          <p>You don't have permission to manage API keys.</p>
+          <button className="btn-primary" onClick={() => navigate('/dashboard')}>
+            Return to Dashboard
+          </button>
         </div>
       </div>
     );

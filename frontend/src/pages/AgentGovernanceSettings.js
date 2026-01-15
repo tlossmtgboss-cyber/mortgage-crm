@@ -13,6 +13,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAsyncOperation, useFormSubmit } from '../hooks/useAsyncOperation';
 import { APIError, ValidationError } from '../utils/api/errors';
+import { usePermissions } from '../contexts/PermissionContext';
 import { toast } from '../utils/toast';
 import { API_BASE_URL } from '../services/api';
 import './AgentGovernanceSettings.css';
@@ -78,6 +79,10 @@ const calculateMonthlyCost = (settings, avgExecutions = 100) => {
 function AgentGovernanceSettings() {
   const { agentId } = useParams();
   const navigate = useNavigate();
+  const { userRole, hasAnyPermission, isAdmin } = usePermissions();
+
+  // Permission check - require admin access
+  const canAccessGovernance = isAdmin || hasAnyPermission(['admin.manage', 'agents.manage', 'system.admin']) || userRole === 'admin';
 
   // State
   const [agent, setAgent] = useState(null);
@@ -312,6 +317,21 @@ function AgentGovernanceSettings() {
           <p>The requested agent could not be found or you don't have permission to view it.</p>
           <button onClick={() => navigate('/agents')} className="btn-primary">
             Back to Agents
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Access denied if user doesn't have admin permissions
+  if (!canAccessGovernance) {
+    return (
+      <div className="agent-settings-page">
+        <div className="access-denied" style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <h2>Access Denied</h2>
+          <p>You don't have permission to manage agent governance settings.</p>
+          <button className="btn-primary" onClick={() => navigate('/dashboard')}>
+            Return to Dashboard
           </button>
         </div>
       </div>

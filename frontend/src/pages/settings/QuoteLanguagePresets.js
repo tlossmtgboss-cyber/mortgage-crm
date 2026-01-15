@@ -11,6 +11,8 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { usePermissions } from '../../contexts/PermissionContext';
 import './QuoteLanguagePresets.css';
 
 const API_URL = process.env.REACT_APP_API_URL || '';
@@ -45,6 +47,9 @@ const DEFAULT_PRESETS = {
 };
 
 const QuoteLanguagePresets = () => {
+  const navigate = useNavigate();
+  const { userRole, hasAnyPermission, isAdmin } = usePermissions();
+  const canAccessSettings = isAdmin || hasAnyPermission(['settings.manage', 'admin.manage', 'system.admin']) || userRole === 'admin';
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [presets, setPresets] = useState(DEFAULT_PRESETS);
@@ -217,6 +222,20 @@ const QuoteLanguagePresets = () => {
         <div className="loading-container">
           <div className="spinner"></div>
           <p>Loading Quote Language Presets...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!canAccessSettings) {
+    return (
+      <div className="quote-language-presets">
+        <div className="access-denied" style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <h2>Access Denied</h2>
+          <p>You don't have permission to access Quote Language Presets.</p>
+          <button className="btn-primary" onClick={() => navigate('/dashboard')}>
+            Return to Dashboard
+          </button>
         </div>
       </div>
     );

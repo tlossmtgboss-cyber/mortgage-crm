@@ -378,3 +378,86 @@
   font-size: 14px;
   opacity: 0.9;
 }
+
+/* Promo Code Styles */
+.promo-group {
+  position: relative;
+}
+
+.promo-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.promo-input-wrapper input {
+  padding-right: 80px;
+  text-transform: uppercase;
+}
+
+.promo-input-wrapper input.valid {
+  border-color: #10b981;
+  background-color: #f0fdf4;
+}
+
+.promo-input-wrapper input.invalid {
+  border-color: #ef4444;
+  background-color: #fef2f2;
+}
+
+.promo-status {
+  position: absolute;
+  right: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.promo-status.validating {
+  color: #6b7280;
+}
+
+.promo-status.valid {
+  color: #10b981;
+}
+
+.promo-status.invalid {
+  color: #ef4444;
+}
+
+.promo-info-box {
+  margin-top: 10px;
+  padding: 12px 14px;
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.promo-badge {
+  font-size: 14px;
+  color: #059669;
+  font-weight: 600;
+}
+
+.promo-benefit {
+  font-size: 12px;
+  color: #047857;
+  background: white;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 500px) {
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+}

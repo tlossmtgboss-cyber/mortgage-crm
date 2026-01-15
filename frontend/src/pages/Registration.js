@@ -23,13 +23,17 @@ function Registration() {
     last_name: '',
     company_name: '',
     phone: '',
-    plan: selectedPlan
+    plan: selectedPlan,
+    promo_code: ''
   });
 
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [step, setStep] = useState(1); // 1: Account Info, 2: Company Info, 3: Payment
+  const [promoValid, setPromoValid] = useState(null);
+  const [promoInfo, setPromoInfo] = useState(null);
+  const [promoValidating, setPromoValidating] = useState(false);
 
   useEffect(() => {
     loadPlans();
@@ -43,6 +47,42 @@ function Registration() {
       console.error('Failed to load plans:', error);
     }
   };
+
+  // Validate promo code
+  const validatePromoCode = async (code) => {
+    if (!code || !code.trim()) {
+      setPromoValid(null);
+      setPromoInfo(null);
+      return;
+    }
+
+    setPromoValidating(true);
+    try {
+      const response = await axios.post(`${API_BASE_URL}/api/v1/auth/validate-promo`, {
+        code: code.toUpperCase()
+      });
+      setPromoValid(true);
+      setPromoInfo(response.data);
+    } catch (err) {
+      setPromoValid(false);
+      setPromoInfo(null);
+    } finally {
+      setPromoValidating(false);
+    }
+  };
+
+  // Debounce promo code validation
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (formData.promo_code.trim()) {
+        validatePromoCode(formData.promo_code);
+      } else {
+        setPromoValid(null);
+        setPromoInfo(null);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [formData.promo_code]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -110,13 +150,14 @@ function Registration() {
     setError('');
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/v1/register`, {
+      const response = await axios.post(`${API_BASE_URL}/api/v1/auth/register`, {
         email: formData.email,
         password: formData.password,
         full_name: `${formData.first_name} ${formData.last_name}`.trim(),
         company_name: formData.company_name || '',
         phone: formData.phone || '',
-        plan: formData.plan || 'professional'
+        plan: formData.plan || 'professional',
+        promo_code: formData.promo_code || null
       });
 
       // Check for successful registration response
@@ -331,6 +372,34 @@ function Registration() {
                       </option>
                     ))}
                   </select>
+                </div>
+
+                <div className="form-group promo-group">
+                  <label>Promo Code (optional)</label>
+                  <div className="promo-input-wrapper">
+                    <input
+                      type="text"
+                      name="promo_code"
+                      value={formData.promo_code}
+                      onChange={(e) => setFormData(prev => ({ ...prev, promo_code: e.target.value.toUpperCase() }))}
+                      placeholder="Enter promo code"
+                      className={promoValid === true ? 'valid' : promoValid === false ? 'invalid' : ''}
+                    />
+                    {promoValidating && <span className="promo-status validating">Checking...</span>}
+                    {promoValid === true && <span className="promo-status valid">✓ Valid</span>}
+                    {promoValid === false && <span className="promo-status invalid">✗ Invalid</span>}
+                  </div>
+                  {promoInfo && promoValid && (
+                    <div className="promo-info-box">
+                      <span className="promo-badge">🎉 {promoInfo.description || 'Promo Applied!'}</span>
+                      {promoInfo.trial_days > 0 && (
+                        <span className="promo-benefit">+{promoInfo.trial_days} extra trial days</span>
+                      )}
+                      {promoInfo.discount_value > 0 && promoInfo.discount_type === 'percentage' && (
+                        <span className="promo-benefit">{promoInfo.discount_value}% off</span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="form-buttons">
