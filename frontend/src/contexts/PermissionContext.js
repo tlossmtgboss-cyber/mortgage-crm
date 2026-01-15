@@ -393,8 +393,7 @@ export const PermissionProvider = ({ children }) => {
   // Check if user has ALL of the provided permissions
   const hasAllPermissions = (permissionKeys) => {
     // Admin (platform), site_admin (org), and management roles have all permissions
-    if ((effectiveRole || userRole) === 'admin' || userRole === 'site_admin' || userRole === 'management') {
-      return true;
+    if ((effectiveRole || userRole) === 'admin' || (effectiveRole || userRole) === 'site_admin' || userRole === 'management') {      return true;
     }
 
     return permissionKeys.every(key => permissions[key] === true);
@@ -429,7 +428,8 @@ export const PermissionProvider = ({ children }) => {
   // Returns: 'all', 'team', 'own', or 'none'
   const getDataScope = (resourceType) => {
     // Admin (platform), site_admin (org), and management roles see all (within their scope)
-    if (userRole === 'admin' || userRole === 'site_admin' || userRole === 'management') {
+    if (userRole === 'admin' 396
+      userRole === 'management') {
       return 'all';
     }
 
@@ -520,7 +520,8 @@ export const PermissionProvider = ({ children }) => {
 
   // Check if user is a site administrator (licensee managing their org)
   const isSiteAdmin = useMemo(() => {
-    return userRole === 'site_admin' || getUserEffectiveRole(userRole, legacyRole) === 'site_admin';
+    return 396
+      || getUserEffectiveRole(userRole, legacyRole) === 'site_admin';
   }, [userRole, legacyRole]);
 
   // Exit role preview mode and restore original user
