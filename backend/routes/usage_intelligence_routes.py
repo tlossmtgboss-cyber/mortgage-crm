@@ -56,10 +56,17 @@ async def require_owner(current_user = Depends(get_current_user)):
     if current_user is None:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    role = getattr(current_user, 'role', '') or ''
-    if role.lower() not in ["admin", "owner", "leadership"]:
-        raise HTTPException(status_code=403, detail="Owner access required")
-    return current_user
+    # Check both role and permission_role fields
+    role = (getattr(current_user, 'role', '') or '').lower()
+    permission_role = (getattr(current_user, 'permission_role', '') or '').lower()
+    is_admin = getattr(current_user, 'is_admin', False)
+
+    allowed_roles = ["admin", "owner", "leadership", "site_admin", "management"]
+
+    if role in allowed_roles or permission_role in allowed_roles or is_admin:
+        return current_user
+
+    raise HTTPException(status_code=403, detail="Owner access required")
 
 logger = logging.getLogger(__name__)
 
