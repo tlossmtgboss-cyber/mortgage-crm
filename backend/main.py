@@ -38625,10 +38625,65 @@ async def validate_promo_code(
 class CreatePromoCodeRequest(BaseModel):
     code: str
     description: Optional[str] = None
-    discount_type: str = "percentage"  # percentage, fixed, trial_extension
+    discount_type: str = "percentage"  # percentage, fixed, trial_extension, free_access
     discount_value: float = 0
     trial_days: int = 0
     max_uses: Optional[int] = None
+
+class UpdatePromoCodeRequest(BaseModel):
+    description: Optional[str] = None
+    discount_type: Optional[str] = None
+    discount_value: Optional[float] = None
+    trial_days: Optional[int] = None
+    max_uses: Optional[int] = None
+    is_active: Optional[bool] = None
+
+@app.put("/api/v1/admin/promo-codes/{code}")
+async def update_promo_code(
+    code: str,
+    request: UpdatePromoCodeRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update an existing promo code."""
+    from utils.auth import require_admin
+    require_admin(current_user)
+
+    promo = db.query(PromoCode).filter(PromoCode.code == code.upper()).first()
+    if not promo:
+        raise HTTPException(status_code=404, detail="Promo code not found")
+
+    if request.description is not None:
+        promo.description = request.description
+    if request.discount_type is not None:
+        promo.discount_type = request.discount_type
+    if request.discount_value is not None:
+        promo.discount_value = request.discount_value
+    if request.trial_days is not None:
+        promo.trial_days = request.trial_days
+    if request.max_uses is not None:
+        promo.max_uses = request.max_uses
+    if request.is_active is not None:
+        promo.is_active = request.is_active
+
+    db.commit()
+    db.refresh(promo)
+
+    logger.info(f"Promo code updated: {promo.code} by {current_user.email}")
+
+    return {
+        "success": True,
+        "promo_code": {
+            "id": promo.id,
+            "code": promo.code,
+            "description": promo.description,
+            "discount_type": promo.discount_type,
+            "discount_value": promo.discount_value,
+            "trial_days": promo.trial_days,
+            "max_uses": promo.max_uses,
+            "is_active": promo.is_active
+        }
+    }
 
 @app.post("/api/v1/admin/promo-codes")
 async def create_promo_code(
