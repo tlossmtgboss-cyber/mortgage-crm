@@ -38302,19 +38302,24 @@ async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(
                     <h2 style="color: #218D8D;">Reset Your Password</h2>
                     <p>Hi {user.full_name or 'there'},</p>
                     <p>We received a request to reset your password. Click the button below to create a new password:</p>
-                    <p style="text-align: center; margin: 30px 0;">
-                        <a href="{reset_url}"
-                           style="background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
-                                  color: white;
-                                  padding: 14px 32px;
-                                  text-decoration: none;
-                                  border-radius: 8px;
-                                  font-weight: 600;">
-                            Reset Password
-                        </a>
-                    </p>
+
+                    <!-- Outlook-compatible button using table -->
+                    <table cellpadding="0" cellspacing="0" border="0" style="margin: 30px auto;">
+                        <tr>
+                            <td align="center" bgcolor="#218D8D" style="border-radius: 8px;">
+                                <a href="{reset_url}" target="_blank" style="display: inline-block; padding: 14px 32px; font-family: Arial, sans-serif; font-size: 16px; color: #ffffff; text-decoration: none; font-weight: bold; border-radius: 8px;">
+                                    Reset Password
+                                </a>
+                            </td>
+                        </tr>
+                    </table>
+
                     <p style="color: #666; font-size: 14px;">
                         This link will expire in 1 hour. If you didn't request this, you can safely ignore this email.
+                    </p>
+                    <p style="color: #666; font-size: 14px;">
+                        If the button doesn't work, copy and paste this link into your browser:<br>
+                        <a href="{reset_url}" style="color: #218D8D; word-break: break-all;">{reset_url}</a>
                     </p>
                     <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
                     <p style="color: #999; font-size: 12px;">
