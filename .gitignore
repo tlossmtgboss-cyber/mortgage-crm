@@ -76,3 +76,7 @@ postgres_data/
 RAILWAY_CREDENTIALS_SETUP.md
 landing-page/
 .vercel
+
+# Playwright
+frontend/playwright-report/
+frontend/test-results/
