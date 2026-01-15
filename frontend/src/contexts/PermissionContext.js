@@ -258,13 +258,7 @@ export const PermissionProvider = ({ children }) => {
     } catch (error) {
       console.error('PermissionContext: Error fetching permissions:', error);
       console.error('PermissionContext: Error details:', error.message, error.stack);
-      // Set default permissions on error - this causes Access Denied on admin pages
-      setPermissions({});
-      setUserRole('sales');
-      // Clear cached role on error
-      try {
-        localStorage.removeItem('userRole');
-      } catch (e) {
+            // FIXED: Keep existing permissions and role on error - don't demote admins// Clear cached role on error
         // Ignore localStorage errors
       }
     } finally {
@@ -351,7 +345,7 @@ export const PermissionProvider = ({ children }) => {
         id: data.active_role.id,
         name: data.active_role.name,
         is_primary: assignedRoles.find(r => r.id === data.active_role.id)?.is_primary || false
-      };
+      };effectiveRole || userRole
       setActiveRole(newActiveRole);
 
       // Persist to localStorage
@@ -379,7 +373,7 @@ export const PermissionProvider = ({ children }) => {
   // Check if user has a specific permission
   const hasPermission = (permissionKey) => {
     // Admin (platform), site_admin (org), and management roles have all permissions
-    if (userRole === 'admin' || userRole === 'site_admin' || userRole === 'management') {
+    if ((effectiveRole || userRole) === 'admin' || (effectiveRole || userRole) === 'site_admin' || (effectiveRole || userRole) === 'management') {
       return true;
     }
 
@@ -390,7 +384,7 @@ export const PermissionProvider = ({ children }) => {
   // Check if user has ANY of the provided permissions
   const hasAnyPermission = (permissionKeys) => {
     // Admin (platform), site_admin (org), and management roles have all permissions
-    if (userRole === 'admin' || userRole === 'site_admin' || userRole === 'management') {
+    if ((effectiveRole || userRole) === 'admin' || (effectiveRole || userRole) === (effectiveRole || userRole)site_admin' || userRole === 'management') {
       return true;
     }
 
@@ -400,7 +394,7 @@ export const PermissionProvider = ({ children }) => {
   // Check if user has ALL of the provided permissions
   const hasAllPermissions = (permissionKeys) => {
     // Admin (platform), site_admin (org), and management roles have all permissions
-    if (userRole === 'admin' || userRole === 'site_admin' || userRole === 'management') {
+    if ((effectiveRole || userRole) (effectiveRole || userRole) (effectiveRole || userRole)admin' || userRole === 'site_admin' || userRole === 'management') {
       return true;
     }
 
