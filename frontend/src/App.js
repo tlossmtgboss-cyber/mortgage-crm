@@ -330,6 +330,33 @@ function App() {
     setTaskCounts(prev => ({ ...prev, unifiedTasks: count }));
   };
 
+  // Clear React Query cache on login/logout to prevent stale data
+  useEffect(() => {
+    const handleAuthChange = (event) => {
+      const { type } = event.detail || {};
+      console.log('[App] Auth change detected:', type);
+
+      // Clear all cached queries on login or logout
+      queryClient.clear();
+
+      // Reset task counts on logout
+      if (type === 'logout') {
+        setTaskCounts({
+          leads: 0,
+          loans: 0,
+          portfolio: 0,
+          tasks: 0,
+          urgentTasks: 0,
+          partners: 0,
+          unifiedTasks: 0
+        });
+      }
+    };
+
+    window.addEventListener('authChange', handleAuthChange);
+    return () => window.removeEventListener('authChange', handleAuthChange);
+  }, []);
+
   // Fetch task counts for navigation badges
   useEffect(() => {
     const fetchTaskCounts = async () => {

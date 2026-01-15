@@ -135,6 +135,45 @@ export const PermissionProvider = ({ children }) => {
     fetchPermissions();
   }, [isImpersonating]);
 
+  // Listen for auth changes (login/logout) to refresh permissions and clear stale state
+  useEffect(() => {
+    const handleAuthChange = (event) => {
+      const { type } = event.detail || {};
+      console.log('[PermissionContext] Auth change detected:', type);
+
+      if (type === 'logout') {
+        // Clear all permission state on logout
+        setPermissions({});
+        setUserRole('sales');
+        setLegacyRole(null);
+        setAssignedRoles([]);
+        setActiveRole(null);
+        setCanSwitchRoles(false);
+        setViewAsRole(null);
+        setRolePreview(null);
+        setCurrentUserId(null);
+
+        // Clear localStorage
+        try {
+          localStorage.removeItem('userRole');
+          localStorage.removeItem('assignedRoles');
+          localStorage.removeItem('activeRole');
+          localStorage.removeItem('canSwitchRoles');
+          localStorage.removeItem('viewAsRole');
+          localStorage.removeItem('role_preview');
+        } catch (e) {
+          // Ignore localStorage errors
+        }
+      } else if (type === 'login') {
+        // Re-fetch permissions on login
+        fetchPermissions();
+      }
+    };
+
+    window.addEventListener('authChange', handleAuthChange);
+    return () => window.removeEventListener('authChange', handleAuthChange);
+  }, []);
+
   const fetchPermissions = async () => {
     try {
       setLoading(true);
