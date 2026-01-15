@@ -1996,16 +1996,18 @@ export default function PurchaseApplication() {
     }));
   };
 
-  // Calculate progress
+  // Calculate progress (use visibleStages to exclude hidden stages like 'account')
   const getProgress = useCallback(() => {
-    const stageIndex = enabledStages.findIndex(s => s.id === currentStage);
-    const stageProgress = (stageIndex / enabledStages.length) * 100;
+    const stageIndex = visibleStages.findIndex(s => s.id === currentStage);
+    // If current stage is hidden (like 'account'), return 0
+    if (stageIndex === -1) return 0;
+    const stageProgress = (stageIndex / visibleStages.length) * 100;
     if (currentStage === 'declarations') {
-      const questionProgress = (currentQuestionIndex / enabledQuestions.length) * (100 / enabledStages.length);
+      const questionProgress = (currentQuestionIndex / enabledQuestions.length) * (100 / visibleStages.length);
       return Math.round(stageProgress + questionProgress);
     }
     return Math.round(stageProgress);
-  }, [currentStage, currentQuestionIndex, enabledStages, enabledQuestions]);
+  }, [currentStage, currentQuestionIndex, visibleStages, enabledQuestions]);
 
   // Helper to check if a question should be shown based on conditions
   const shouldShowQuestion = useCallback((question, currentDeclarations) => {
