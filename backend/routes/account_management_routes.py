@@ -2854,6 +2854,7 @@ async def cleanup_sample_data(
         deleted_counts = {}
 
         # Delete in order to respect foreign key constraints
+        # Use TRUNCATE CASCADE for faster deletion with FK handling
         tables_to_clean = [
             'subscription_events',
             'account_subscriptions',
@@ -2870,21 +2871,33 @@ async def cleanup_sample_data(
             'tenant_accounts'
         ]
 
-        for table in tables_to_clean:
-            try:
-                result = db.execute(text(f"DELETE FROM {table}"))
-                deleted_counts[table] = result.rowcount
-                logger.info(f"Deleted {result.rowcount} rows from {table}")
-            except Exception as e:
-                logger.warning(f"Could not delete from {table}: {e}")
-                deleted_counts[table] = f"error: {str(e)}"
+        # First, try to truncate tenant_accounts with CASCADE to handle all FKs
+        try:
+            db.execute(text("TRUNCATE TABLE tenant_accounts CASCADE"))
+            db.commit()
+            deleted_counts['tenant_accounts_cascade'] = 'truncated with cascade'
+            logger.info("Truncated tenant_accounts with CASCADE")
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"CASCADE truncate failed, trying individual deletes: {e}")
 
-        db.commit()
+            # Fall back to individual table deletes
+            for table in tables_to_clean:
+                try:
+                    # Start fresh for each table
+                    result = db.execute(text(f"DELETE FROM {table}"))
+                    db.commit()
+                    deleted_counts[table] = result.rowcount
+                    logger.info(f"Deleted {result.rowcount} rows from {table}")
+                except Exception as table_e:
+                    db.rollback()
+                    logger.warning(f"Could not delete from {table}: {table_e}")
+                    deleted_counts[table] = f"skipped"
 
         return success_response(
             data={
                 'deleted_counts': deleted_counts,
-                'tables_cleaned': len([k for k, v in deleted_counts.items() if isinstance(v, int)])
+                'tables_cleaned': len([k for k, v in deleted_counts.items() if isinstance(v, int) or v == 'truncated with cascade'])
             },
             message="Sample data cleanup completed"
         )
