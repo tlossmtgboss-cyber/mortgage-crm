@@ -28,6 +28,9 @@ def seed_user_onboarding_data(db, Role, Category, Responsibility, PermissionTemp
     # ========================================================================
     roles_data = [
         {
+                                "name": "Site Administrator",
+                                "description": "Site-level administrator with full system access and multi-role capabilities"
+                            },
             "name": "Application Analysis",
             "description": "Analyzes and reviews loan applications for eligibility and risk"
         },
@@ -849,6 +852,7 @@ def seed_user_onboarding_data(db, Role, Category, Responsibility, PermissionTemp
     # LINK ROLES TO DEFAULT PERMISSION TEMPLATES
     # ========================================================================
     role_template_mapping = {
+              "Site Administrator": "Admin - Full Control",
         "Loan Officer": "Loan Officer - Full Access",
         "Processor": "Processor - Standard",
         "Concierge": "Concierge - Communication Focus",
