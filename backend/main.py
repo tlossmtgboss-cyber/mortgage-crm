@@ -38622,6 +38622,62 @@ async def validate_promo_code(
     }
 
 
+class CreatePromoCodeRequest(BaseModel):
+    code: str
+    description: Optional[str] = None
+    discount_type: str = "percentage"  # percentage, fixed, trial_extension
+    discount_value: float = 0
+    trial_days: int = 0
+    max_uses: Optional[int] = None
+
+@app.post("/api/v1/admin/promo-codes")
+async def create_promo_code(
+    request: CreatePromoCodeRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Admin endpoint to create promo codes.
+    Requires admin role.
+    """
+    from utils.auth import require_admin
+    require_admin(current_user)
+
+    # Check if code already exists
+    existing = db.query(PromoCode).filter(PromoCode.code == request.code.upper()).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Promo code already exists")
+
+    promo = PromoCode(
+        code=request.code.upper(),
+        description=request.description,
+        discount_type=request.discount_type,
+        discount_value=request.discount_value,
+        trial_days=request.trial_days,
+        max_uses=request.max_uses,
+        current_uses=0,
+        is_active=True
+    )
+    db.add(promo)
+    db.commit()
+    db.refresh(promo)
+
+    logger.info(f"Promo code created: {promo.code} by {current_user.email}")
+
+    return {
+        "success": True,
+        "promo_code": {
+            "id": promo.id,
+            "code": promo.code,
+            "description": promo.description,
+            "discount_type": promo.discount_type,
+            "discount_value": promo.discount_value,
+            "trial_days": promo.trial_days,
+            "max_uses": promo.max_uses
+        }
+    }
+
+
 # ============================================================================
 # PUSH NOTIFICATIONS
 # ============================================================================
