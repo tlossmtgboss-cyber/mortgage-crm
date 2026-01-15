@@ -38294,6 +38294,9 @@ async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(
                 from email_service import EmailService
                 email_service = EmailService()
 
+                # Log email service configuration status
+                logger.info(f"Email service config - SendGrid: {email_service.use_sendgrid}, SMTP User: {bool(email_service.smtp_user)}")
+
                 html_body = f"""
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                     <h2 style="color: #218D8D;">Reset Your Password</h2>
@@ -38320,13 +38323,16 @@ async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(
                 </div>
                 """
 
-                email_service.send_html_email(
+                email_sent = email_service.send_html_email(
                     to_email=request.email,
                     subject="Reset Your Password - Perennia AI",
                     html_body=html_body,
                     plain_text_body=f"Reset your password by visiting: {reset_url}"
                 )
-                logger.info(f"Password reset email sent to {request.email}")
+                if email_sent:
+                    logger.info(f"Password reset email sent successfully to {request.email}")
+                else:
+                    logger.warning(f"Password reset email FAILED to send to {request.email} - Check SENDGRID_API_KEY or SMTP credentials")
             except Exception as e:
                 logger.error(f"Failed to send password reset email: {str(e)}")
                 # Still return success to prevent email enumeration
