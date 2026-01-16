@@ -65,7 +65,7 @@ def get_workspace_by_slug(db: Session, slug: str) -> Optional[Dict[str, Any]]:
         # Try PURL workspace first
         result = db.execute(text("""
             SELECT pw.id as workspace_id, pw.slug, pw.organization_id,
-                   pl.lead_id
+                   pl.main_loan_id
             FROM purl_workspaces pw
             LEFT JOIN purl_loans pl ON pl.workspace_id = pw.id
             WHERE pw.slug = :slug
@@ -74,11 +74,21 @@ def get_workspace_by_slug(db: Session, slug: str) -> Optional[Dict[str, Any]]:
         row = result.fetchone()
 
         if row:
+            # Try to get lead_id from main loan if linked
+            lead_id = None
+            if row.main_loan_id:
+                lead_result = db.execute(text("""
+                    SELECT lead_id FROM loans WHERE id = :loan_id
+                """), {"loan_id": row.main_loan_id})
+                lead_row = lead_result.fetchone()
+                if lead_row:
+                    lead_id = lead_row.lead_id
+
             return {
                 "workspace_id": row.workspace_id,
                 "slug": row.slug,
                 "organization_id": row.organization_id,
-                "lead_id": row.lead_id
+                "lead_id": lead_id
             }
         return None
     except Exception as e:
@@ -118,7 +128,7 @@ def sync_documents_to_workspace(
                     UPDATE purl_document_requests
                     SET description = :description,
                         is_required = :is_required,
-                        updated_at = NOW()
+                        updated_at = CURRENT_TIMESTAMP
                     WHERE id = :id
                 """), {
                     "id": existing.id,
@@ -139,7 +149,7 @@ def sync_documents_to_workspace(
                      description, is_required, status, created_at, updated_at)
                     VALUES
                     (:org_id, :workspace_id, :doc_type, :category,
-                     :description, :is_required, 'pending', NOW(), NOW())
+                     :description, :is_required, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                     RETURNING id
                 """), {
                     "org_id": organization_id,
@@ -194,7 +204,7 @@ def sync_documents_to_lead(
                     UPDATE lead_conditions
                     SET description = :description,
                         priority = :priority,
-                        updated_at = NOW()
+                        updated_at = CURRENT_TIMESTAMP
                     WHERE id = :id
                 """), {
                     "id": existing.id,
@@ -213,7 +223,7 @@ def sync_documents_to_lead(
                     INSERT INTO lead_conditions
                     (lead_id, name, description, category, priority, status, is_new, created_at, updated_at)
                     VALUES
-                    (:lead_id, :name, :description, :category, :priority, 'pending', true, NOW(), NOW())
+                    (:lead_id, :name, :description, :category, :priority, 'pending', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                     RETURNING id
                 """), {
                     "lead_id": lead_id,
@@ -388,6 +398,14 @@ async def get_workspace_documents(
 
         documents = []
         for row in result.fetchall():
+            # Handle timestamps - SQLite returns strings, PostgreSQL returns datetime
+            created_at = row.created_at
+            updated_at = row.updated_at
+            if created_at and hasattr(created_at, 'isoformat'):
+                created_at = created_at.isoformat()
+            if updated_at and hasattr(updated_at, 'isoformat'):
+                updated_at = updated_at.isoformat()
+
             documents.append({
                 "id": row.id,
                 "name": row.name,
@@ -395,8 +413,8 @@ async def get_workspace_documents(
                 "description": row.description,
                 "status": row.status,
                 "priority": "required" if row.is_required else "optional",
-                "created_at": row.created_at.isoformat() if row.created_at else None,
-                "updated_at": row.updated_at.isoformat() if row.updated_at else None
+                "created_at": created_at,
+                "updated_at": updated_at
             })
 
         return {
