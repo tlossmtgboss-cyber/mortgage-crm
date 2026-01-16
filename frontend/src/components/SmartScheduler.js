@@ -1,2304 +1,161 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { getAuthHeaders } from '../utils/auth';
-import CalendarManagement from './CalendarManagement';
 import './SmartScheduler.css';
 
-// Use HTTPS Railway URL in production, localhost for development
-const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-const API_BASE = isProduction
+const API_BASE = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
   ? 'https://api.perenniaai.com'
   : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
-const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType }) => {
-  const [view, setView] = useState('types'); // types, booking-links, settings, reminders, landing-page, calendar-management, tutorial
+function SmartScheduler({
+  onSelect,
+  selectedSlot,
+  appointmentType = 'pre-qualification-call',
+  durationMinutes = 30,
+  daysAhead = 14,
+  title = "Select a Date & Time",
+  subtitle = "Choose a convenient time for your consultation"
+}) {
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [slotsByDate, setSlotsByDate] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Data states
-  const [appointments, setAppointments] = useState([]);
-  const [appointmentTypes, setAppointmentTypes] = useState([]);
-  const [availableSlots, setAvailableSlots] = useState([]);
-  const [bookingLinks, setBookingLinks] = useState([]);
-  const [config, setConfig] = useState(null);
+  // Generate calendar days
+  const generateCalendarDays = useCallback(() => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
 
-  // Selection states
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [selectedType, setSelectedType] = useState(preselectedType || null);
-  const [selectedSlot, setSelectedSlot] = useState(null);
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-
-  // Booking form
-  const [bookingForm, setBookingForm] = useState({
-    title: '',
-    attendee_name: '',
-    attendee_email: '',
-    attendee_phone: '',
-    duration_minutes: 30,
-    meeting_mode: 'video',
-    notes: ''
-  });
-
-  // Modal states
-  const [showBookingModal, setShowBookingModal] = useState(false);
-  const [showNewTypeModal, setShowNewTypeModal] = useState(false);
-  const [showNewLinkModal, setShowNewLinkModal] = useState(false);
-  const [editingType, setEditingType] = useState(null);
-
-  // Settings sub-tab state
-  const [settingsTab, setSettingsTab] = useState('working-hours'); // working-hours, booking, ai
-  const [editableConfig, setEditableConfig] = useState(null);
-  const [savingSettings, setSavingSettings] = useState(false);
-
-  // Landing page settings state
-  const [landingPageSettings, setLandingPageSettings] = useState({
-    logo_url: '',
-    profile_picture_url: '',
-    video_url: '',
-    video_type: 'youtube', // youtube, vimeo, loom, custom
-    headline: 'Schedule a Meeting',
-    subheadline: 'Choose a time that works for you',
-    description: '',
-    show_profile: true,
-    profile_name: '',
-    profile_title: '',
-    profile_bio: '',
-    accent_color: '#217F8D',
-    background_style: 'white', // white, light, gradient
-    show_company_logo: true,
-    show_social_proof: false,
-    testimonial_text: '',
-    testimonial_author: ''
-  });
-  const [savingLandingPage, setSavingLandingPage] = useState(false);
-  const [previewMode, setPreviewMode] = useState(false);
-
-  // Reminder settings state
-  const [reminderSettings, setReminderSettings] = useState({
-    enabled: true,
-    bookingConfirmation: {
-      enabled: true,
-      method: 'both',
-      emailSubject: 'Your Appointment is Confirmed',
-      message: 'Your appointment has been confirmed for {{appointment_date}} at {{appointment_time}}. We look forward to speaking with you!'
-    },
-    reminders: [
-      { id: 1, timing: 24, unit: 'hours', method: 'both', enabled: true, message: 'This is a reminder about your upcoming appointment scheduled for {{appointment_time}} on {{appointment_date}}. Please let us know if you need to reschedule.' },
-      { id: 2, timing: 1, unit: 'hours', method: 'sms', enabled: true, message: 'Reminder: Your appointment is in 1 hour at {{appointment_time}}. Reply CONFIRM to confirm or RESCHEDULE to change.' },
-      { id: 3, timing: 15, unit: 'minutes', method: 'sms', enabled: false, message: 'Your appointment starts in 15 minutes. See you soon!' }
-    ],
-    default_email_subject: 'Reminder: Your Upcoming Appointment',
-    include_calendar_link: true,
-    include_reschedule_link: true,
-    include_cancel_link: true
-  });
-  const [savingReminders, setSavingReminders] = useState(false);
-
-  // New link form state
-  const [linkForm, setLinkForm] = useState({
-    slug: '',
-    link_name: '',
-    description: '',
-    appointment_type_ids: []
-  });
-
-  // Appointment type form state
-  const [typeForm, setTypeForm] = useState({
-    type_name: '',
-    type_key: '',
-    description: '',
-    default_duration_minutes: 30,
-    allowed_durations: [15, 30, 45, 60],
-    color: '#10b981',
-    icon: 'calendar',
-    is_public: true,
-    requires_confirmation: false,
-    buffer_before_minutes: 5,
-    buffer_after_minutes: 5
-  });
-
-  // Fetch initial data
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [configRes, typesRes, appointmentsRes, linksRes] = await Promise.all([
-        fetch(`${API_BASE}/api/v1/scheduler/config`, { headers: getAuthHeaders() }),
-        fetch(`${API_BASE}/api/v1/scheduler/appointment-types`, { headers: getAuthHeaders() }),
-        fetch(`${API_BASE}/api/v1/scheduler/appointments?limit=100`, { headers: getAuthHeaders() }),
-        fetch(`${API_BASE}/api/v1/scheduler/booking-links`, { headers: getAuthHeaders() })
-      ]);
-
-      if (configRes.ok) {
-        const configData = await configRes.json();
-        const loadedConfig = configData.config || configData.defaults;
-        setConfig(loadedConfig);
-        // Initialize editable config with current values
-        setEditableConfig(JSON.parse(JSON.stringify(loadedConfig)));
-      }
-
-      if (typesRes.ok) {
-        const typesData = await typesRes.json();
-        setAppointmentTypes(typesData.appointment_types || []);
-      }
-
-      if (appointmentsRes.ok) {
-        const appointmentsData = await appointmentsRes.json();
-        setAppointments(appointmentsData.appointments || []);
-      }
-
-      if (linksRes.ok) {
-        const linksData = await linksRes.json();
-        setBookingLinks(linksData.booking_links || []);
-      }
-    } catch (err) {
-      setError('Failed to load scheduler data');
-      console.error('Scheduler fetch error:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Fetch available slots for selected date range
-  const fetchAvailableSlots = async (startDate, endDate, typeId = null) => {
-    try {
-      const response = await fetch(`${API_BASE}/api/v1/scheduler/available-slots`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          start_date: startDate.toISOString().split('T')[0],
-          end_date: endDate.toISOString().split('T')[0],
-          duration_minutes: bookingForm.duration_minutes,
-          appointment_type_id: typeId,
-          lead_id: leadId,
-          loan_id: loanId
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setAvailableSlots(data.available_slots || []);
-      }
-    } catch (err) {
-      console.error('Failed to fetch available slots:', err);
-    }
-  };
-
-  // Book appointment
-  const handleBookAppointment = async () => {
-    if (!selectedSlot) return;
-
-    try {
-      const response = await fetch(`${API_BASE}/api/v1/scheduler/appointments`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          appointment_type_id: selectedType?.id,
-          title: bookingForm.title || `${selectedType?.type_name || 'Meeting'} with ${bookingForm.attendee_name}`,
-          scheduled_start: selectedSlot.start,
-          duration_minutes: bookingForm.duration_minutes,
-          meeting_mode: bookingForm.meeting_mode,
-          attendee_name: bookingForm.attendee_name,
-          attendee_email: bookingForm.attendee_email,
-          attendee_phone: bookingForm.attendee_phone,
-          attendee_notes: bookingForm.notes,
-          lead_id: leadId,
-          loan_id: loanId,
-          contact_id: contactId
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setShowBookingModal(false);
-        setSelectedSlot(null);
-        resetBookingForm();
-        fetchData(); // Refresh appointments
-        alert(`Appointment booked successfully!`);
-      } else {
-        const err = await response.json();
-        alert(`Failed to book: ${err.detail}`);
-      }
-    } catch (err) {
-      console.error('Booking error:', err);
-      alert('Failed to book appointment');
-    }
-  };
-
-  // Cancel appointment
-  const handleCancelAppointment = async (appointmentId, reason = '') => {
-    try {
-      const response = await fetch(`${API_BASE}/api/v1/scheduler/appointments/${appointmentId}/cancel?reason=${encodeURIComponent(reason)}`, {
-        method: 'POST',
-        headers: getAuthHeaders()
-      });
-
-      if (response.ok) {
-        fetchData();
-      } else {
-        alert('Failed to cancel appointment');
-      }
-    } catch (err) {
-      console.error('Cancel error:', err);
-    }
-  };
-
-  // Seed default appointment types
-  const handleSeedDefaults = async () => {
-    try {
-      const response = await fetch(`${API_BASE}/api/v1/scheduler/seed-defaults`, {
-        method: 'POST',
-        headers: getAuthHeaders()
-      });
-
-      if (response.ok) {
-        fetchData();
-        alert('Default appointment types created!');
-      }
-    } catch (err) {
-      console.error('Seed error:', err);
-    }
-  };
-
-  // Create or update appointment type
-  const handleSaveAppointmentType = async () => {
-    try {
-      const isEditing = editingType !== null;
-      const url = isEditing
-        ? `${API_BASE}/api/v1/scheduler/appointment-types/${editingType.id}`
-        : `${API_BASE}/api/v1/scheduler/appointment-types`;
-
-      const response = await fetch(url, {
-        method: isEditing ? 'PUT' : 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          ...typeForm,
-          type_key: typeForm.type_key || typeForm.type_name.toLowerCase().replace(/\s+/g, '_')
-        })
-      });
-
-      if (response.ok) {
-        setShowNewTypeModal(false);
-        setEditingType(null);
-        resetTypeForm();
-        fetchData();
-        alert(isEditing ? 'Appointment type updated!' : 'Appointment type created!');
-      } else {
-        const err = await response.json();
-        alert(`Failed to save: ${err.detail}`);
-      }
-    } catch (err) {
-      console.error('Save type error:', err);
-      alert('Failed to save appointment type');
-    }
-  };
-
-  // Delete appointment type
-  const handleDeleteAppointmentType = async (typeId) => {
-    try {
-      const response = await fetch(`${API_BASE}/api/v1/scheduler/appointment-types/${typeId}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders()
-      });
-
-      if (response.ok) {
-        fetchData();
-        alert('Appointment type deleted!');
-      } else {
-        const err = await response.json();
-        alert(`Failed to delete: ${err.detail}`);
-      }
-    } catch (err) {
-      console.error('Delete type error:', err);
-    }
-  };
-
-  // Open edit modal for appointment type
-  const handleEditType = (type) => {
-    setEditingType(type);
-    setTypeForm({
-      type_name: type.type_name || '',
-      type_key: type.type_key || '',
-      description: type.description || '',
-      default_duration_minutes: type.default_duration_minutes || 30,
-      allowed_durations: type.allowed_durations || [15, 30, 45, 60],
-      color: type.color || '#10b981',
-      icon: type.icon || 'calendar',
-      is_public: type.is_public !== false,
-      requires_confirmation: type.requires_confirmation || false,
-      buffer_before_minutes: type.buffer_before_minutes || 5,
-      buffer_after_minutes: type.buffer_after_minutes || 5
-    });
-    setShowNewTypeModal(true);
-  };
-
-  // Reset type form
-  const resetTypeForm = () => {
-    setTypeForm({
-      type_name: '',
-      type_key: '',
-      description: '',
-      default_duration_minutes: 30,
-      allowed_durations: [15, 30, 45, 60],
-      color: '#10b981',
-      icon: 'calendar',
-      is_public: true,
-      requires_confirmation: false,
-      buffer_before_minutes: 5,
-      buffer_after_minutes: 5
-    });
-  };
-
-  // Create booking link
-  const handleCreateBookingLink = async (linkData) => {
-    try {
-      const response = await fetch(`${API_BASE}/api/v1/scheduler/booking-links`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(linkData)
-      });
-
-      if (response.ok) {
-        setShowNewLinkModal(false);
-        fetchData();
-      } else {
-        const err = await response.json();
-        alert(`Failed to create link: ${err.detail}`);
-      }
-    } catch (err) {
-      console.error('Create link error:', err);
-    }
-  };
-
-  const resetBookingForm = () => {
-    setBookingForm({
-      title: '',
-      attendee_name: '',
-      attendee_email: '',
-      attendee_phone: '',
-      duration_minutes: 30,
-      meeting_mode: 'video',
-      notes: ''
-    });
-  };
-
-  // Save settings to backend
-  const handleSaveSettings = async () => {
-    if (!editableConfig) return;
-
-    setSavingSettings(true);
-    try {
-      const response = await fetch(`${API_BASE}/api/v1/scheduler/config`, {
-        method: 'PUT',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(editableConfig)
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setConfig(data.config || editableConfig);
-        alert('Settings saved successfully!');
-      } else {
-        const err = await response.json();
-        alert(`Failed to save: ${err.detail}`);
-      }
-    } catch (err) {
-      console.error('Save settings error:', err);
-      alert('Failed to save settings');
-    } finally {
-      setSavingSettings(false);
-    }
-  };
-
-  // Update working hours for a specific day
-  const updateWorkingHours = (day, field, value) => {
-    setEditableConfig(prev => ({
-      ...prev,
-      working_hours: {
-        ...prev.working_hours,
-        [day]: {
-          ...prev.working_hours[day],
-          [field]: value
-        }
-      }
-    }));
-  };
-
-  // Update a general config field
-  const updateConfigField = (field, value) => {
-    setEditableConfig(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
-  // Calendar helpers
-  const getDaysInMonth = (date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
-    const days = [];
+    const startOffset = firstDay.getDay();
 
-    // Add empty days for alignment
-    for (let i = 0; i < firstDay.getDay(); i++) {
-      days.push(null);
+    const days = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const maxDate = new Date();
+    maxDate.setDate(maxDate.getDate() + daysAhead);
+
+    // Add empty cells for days before the first of the month
+    for (let i = 0; i < startOffset; i++) {
+      days.push({ empty: true });
     }
 
-    for (let i = 1; i <= lastDay.getDate(); i++) {
-      days.push(new Date(year, month, i));
+    // Add days of the month
+    for (let day = 1; day <= lastDay.getDate(); day++) {
+      const date = new Date(year, month, day);
+      const dateStr = date.toISOString().split('T')[0];
+      const isPast = date < today;
+      const isTooFar = date > maxDate;
+      const hasSlots = slotsByDate[dateStr] && slotsByDate[dateStr].length > 0;
+
+      days.push({
+        date,
+        day,
+        dateStr,
+        isPast,
+        isTooFar,
+        hasSlots,
+        isToday: date.toDateString() === today.toDateString(),
+        isSelected: selectedDate && date.toDateString() === selectedDate.toDateString()
+      });
     }
 
     return days;
-  };
+  }, [currentMonth, daysAhead, selectedDate, slotsByDate]);
 
-  const getAppointmentsForDate = (date) => {
-    if (!date) return [];
-    const dateStr = date.toISOString().split('T')[0];
-    return appointments.filter(a => a.scheduled_start.startsWith(dateStr));
-  };
+  // Fetch available slots
+  useEffect(() => {
+    const fetchSlots = async () => {
+      setLoading(true);
+      setError(null);
 
-  const formatTime = (isoString) => {
-    const date = new Date(isoString);
-    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-  };
-
-  const formatDate = (isoString) => {
-    const date = new Date(isoString);
-    return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-  };
-
-  // Render calendar view
-  const renderCalendarView = () => (
-    <div className="scheduler-calendar-view">
-      <div className="calendar-header">
-        <button
-          className="calendar-nav-btn"
-          onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}
-        >
-          &lt;
-        </button>
-        <h3>{currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h3>
-        <button
-          className="calendar-nav-btn"
-          onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))}
-        >
-          &gt;
-        </button>
-      </div>
-
-      <div className="calendar-weekdays">
-        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-          <div key={day} className="weekday">{day}</div>
-        ))}
-      </div>
-
-      <div className="calendar-days">
-        {getDaysInMonth(currentMonth).map((day, idx) => (
-          <div
-            key={idx}
-            className={`calendar-day ${day ? '' : 'empty'} ${day && day.toDateString() === selectedDate?.toDateString() ? 'selected' : ''} ${day && day.toDateString() === new Date().toDateString() ? 'today' : ''}`}
-            onClick={() => day && setSelectedDate(day)}
-          >
-            {day && (
-              <>
-                <span className="day-number">{day.getDate()}</span>
-                {getAppointmentsForDate(day).length > 0 && (
-                  <div className="appointment-dots">
-                    {getAppointmentsForDate(day).slice(0, 3).map((_, i) => (
-                      <span key={i} className="dot"></span>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {selectedDate && (
-        <div className="day-appointments">
-          <h4>{selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</h4>
-
-          {getAppointmentsForDate(selectedDate).length === 0 ? (
-            <p className="no-appointments">No appointments scheduled</p>
-          ) : (
-            <div className="appointments-list">
-              {getAppointmentsForDate(selectedDate).map(appt => (
-                <div key={appt.id} className={`appointment-card status-${appt.status}`}>
-                  <div className="appointment-time">{formatTime(appt.scheduled_start)}</div>
-                  <div className="appointment-details">
-                    <div className="appointment-title">{appt.title}</div>
-                    <div className="appointment-meta">
-                      <span className="meeting-mode">{appt.meeting_mode}</span>
-                      <span className="duration">{appt.duration_minutes}min</span>
-                      {appt.attendee_name && <span className="attendee">{appt.attendee_name}</span>}
-                    </div>
-                  </div>
-                  <div className="appointment-actions">
-                    {appt.video_link && (
-                      <a href={appt.video_link} target="_blank" rel="noopener noreferrer" className="join-btn">Join</a>
-                    )}
-                    {appt.status === 'booked' && (
-                      <button
-                        className="cancel-btn"
-                        onClick={() => handleCancelAppointment(appt.id)}
-                      >
-                        Cancel
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <button
-            className="new-appointment-btn"
-            onClick={() => {
-              fetchAvailableSlots(selectedDate, selectedDate);
-              setShowBookingModal(true);
-            }}
-          >
-            + New Appointment
-          </button>
-        </div>
-      )}
-    </div>
-  );
-
-  // Render appointment types view
-  const renderTypesView = () => (
-    <div className="scheduler-types-view">
-      <div className="types-header">
-        <h3>Appointment Types</h3>
-        <div className="types-actions">
-          <button className="seed-btn" onClick={handleSeedDefaults}>
-            Seed Defaults
-          </button>
-          <button className="add-type-btn" onClick={() => {
-            setEditingType(null);
-            resetTypeForm();
-            setShowNewTypeModal(true);
-          }}>
-            + New Type
-          </button>
-        </div>
-      </div>
-
-      {appointmentTypes.length === 0 ? (
-        <div className="empty-state">
-          <p>No appointment types configured</p>
-          <button onClick={handleSeedDefaults}>Create Default Types</button>
-        </div>
-      ) : (
-        <div className="types-grid">
-          {appointmentTypes.map(type => (
-            <div
-              key={type.id || type.type_key}
-              className="type-card clickable"
-              style={{ borderLeftColor: type.color }}
-              onClick={() => handleEditType(type)}
-            >
-              <div className="type-header">
-                <h4>{type.type_name}</h4>
-              </div>
-              <p className="type-description">{type.description}</p>
-              <div className="type-meta">
-                <span>{type.default_duration_minutes} min</span>
-                <span className={`public-badge ${type.is_public ? 'public' : 'private'}`}>
-                  {type.is_public ? 'Public' : 'Private'}
-                </span>
-              </div>
-              <div className="type-durations">
-                {type.allowed_durations?.map(d => (
-                  <span key={d} className="duration-chip">{d}m</span>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-
-  // Render booking links view
-  const renderBookingLinksView = () => (
-    <div className="scheduler-links-view">
-      <div className="links-header">
-        <h3>Booking Links</h3>
-        <button className="add-link-btn" onClick={() => setShowNewLinkModal(true)}>
-          + New Link
-        </button>
-      </div>
-
-      {bookingLinks.length === 0 ? (
-        <div className="empty-state">
-          <p>No booking links created</p>
-          <p className="hint">Create shareable links for clients to book appointments</p>
-        </div>
-      ) : (
-        <div className="links-list">
-          {bookingLinks.map(link => (
-            <div key={link.id} className="link-card">
-              <div className="link-info">
-                <h4>{link.link_name}</h4>
-                <p className="link-url">/book/{link.slug}</p>
-                {link.description && <p className="link-description">{link.description}</p>}
-              </div>
-              <div className="link-stats">
-                <span className="stat">
-                  <span className="stat-value">{link.view_count}</span>
-                  <span className="stat-label">Views</span>
-                </span>
-                <span className="stat">
-                  <span className="stat-value">{link.booking_count}</span>
-                  <span className="stat-label">Bookings</span>
-                </span>
-              </div>
-              <div className="link-actions">
-                <button
-                  className="copy-btn"
-                  onClick={() => {
-                    navigator.clipboard.writeText(`${window.location.origin}/book/${link.slug}`);
-                    alert('Link copied!');
-                  }}
-                >
-                  Copy Link
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-
-  // Generate time options for select dropdowns (5:00 AM to 10:00 PM)
-  const timeOptions = [];
-  for (let h = 5; h <= 22; h++) {
-    for (let m = 0; m < 60; m += 30) {
-      const hour = h.toString().padStart(2, '0');
-      const minute = m.toString().padStart(2, '0');
-      const time24 = `${hour}:${minute}`;
-      const hour12 = h > 12 ? h - 12 : (h === 0 ? 12 : h);
-      const ampm = h >= 12 ? 'PM' : 'AM';
-      const label = `${hour12}:${minute.padStart(2, '0')} ${ampm}`;
-      timeOptions.push({ value: time24, label });
-    }
-  }
-
-  // Render working hours tab content
-  const renderWorkingHoursTab = () => {
-    const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-    const dayLabels = {
-      sunday: 'Sunday',
-      monday: 'Monday',
-      tuesday: 'Tuesday',
-      wednesday: 'Wednesday',
-      thursday: 'Thursday',
-      friday: 'Friday',
-      saturday: 'Saturday'
-    };
-
-    return (
-      <div className="settings-tab-content">
-        <p className="settings-description">Configure which days and hours you're available for appointments.</p>
-        <div className="working-hours-editor">
-          {days.map(day => {
-            const hours = editableConfig?.working_hours?.[day] || { enabled: false, start: '09:00', end: '17:00' };
-            return (
-              <div key={day} className={`day-row ${hours.enabled ? 'enabled' : 'disabled'}`}>
-                <div className="day-toggle">
-                  <label className="toggle-switch">
-                    <input
-                      type="checkbox"
-                      checked={hours.enabled}
-                      onChange={(e) => updateWorkingHours(day, 'enabled', e.target.checked)}
-                    />
-                    <span className="toggle-slider"></span>
-                  </label>
-                  <span className="day-label">{dayLabels[day]}</span>
-                </div>
-                {hours.enabled ? (
-                  <div className="time-range">
-                    <select
-                      value={hours.start}
-                      onChange={(e) => updateWorkingHours(day, 'start', e.target.value)}
-                    >
-                      {timeOptions.map(opt => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                    <span className="time-separator">to</span>
-                    <select
-                      value={hours.end}
-                      onChange={(e) => updateWorkingHours(day, 'end', e.target.value)}
-                    >
-                      {timeOptions.map(opt => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                ) : (
-                  <div className="time-range-off">
-                    <span>Unavailable</span>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
-
-  // Render booking settings tab content
-  const renderBookingTab = () => (
-    <div className="settings-tab-content">
-      <p className="settings-description">Configure default booking behavior and limits.</p>
-      <div className="booking-settings-form">
-        <div className="form-group">
-          <label>Default Duration</label>
-          <select
-            value={editableConfig?.default_duration_minutes || 30}
-            onChange={(e) => updateConfigField('default_duration_minutes', parseInt(e.target.value))}
-          >
-            <option value={15}>15 minutes</option>
-            <option value={20}>20 minutes</option>
-            <option value={30}>30 minutes</option>
-            <option value={45}>45 minutes</option>
-            <option value={60}>60 minutes</option>
-            <option value={90}>90 minutes</option>
-          </select>
-        </div>
-
-        <div className="form-row">
-          <div className="form-group">
-            <label>Buffer Before (minutes)</label>
-            <input
-              type="number"
-              value={editableConfig?.buffer_before_minutes || 0}
-              onChange={(e) => updateConfigField('buffer_before_minutes', parseInt(e.target.value) || 0)}
-              min="0"
-              max="60"
-            />
-            <span className="help-text">Time before appointments for preparation</span>
-          </div>
-
-          <div className="form-group">
-            <label>Buffer After (minutes)</label>
-            <input
-              type="number"
-              value={editableConfig?.buffer_after_minutes || 0}
-              onChange={(e) => updateConfigField('buffer_after_minutes', parseInt(e.target.value) || 0)}
-              min="0"
-              max="60"
-            />
-            <span className="help-text">Time after appointments for follow-up</span>
-          </div>
-        </div>
-
-        <div className="form-row">
-          <div className="form-group">
-            <label>Minimum Notice (hours)</label>
-            <input
-              type="number"
-              value={editableConfig?.min_notice_hours || 1}
-              onChange={(e) => updateConfigField('min_notice_hours', parseInt(e.target.value) || 1)}
-              min="1"
-              max="168"
-            />
-            <span className="help-text">How far in advance clients must book</span>
-          </div>
-
-          <div className="form-group">
-            <label>Max Advance Booking (days)</label>
-            <input
-              type="number"
-              value={editableConfig?.max_advance_days || 30}
-              onChange={(e) => updateConfigField('max_advance_days', parseInt(e.target.value) || 30)}
-              min="1"
-              max="365"
-            />
-            <span className="help-text">How far in the future clients can book</span>
-          </div>
-        </div>
-
-        <div className="form-group">
-          <label>Max Meetings Per Day</label>
-          <input
-            type="number"
-            value={editableConfig?.max_meetings_per_day || 8}
-            onChange={(e) => updateConfigField('max_meetings_per_day', parseInt(e.target.value) || 8)}
-            min="1"
-            max="20"
-          />
-          <span className="help-text">Maximum number of appointments per day</span>
-        </div>
-      </div>
-    </div>
-  );
-
-  // Render AI settings tab content
-  const renderAITab = () => (
-    <div className="settings-tab-content">
-      <p className="settings-description">Configure AI-powered scheduling features.</p>
-      <div className="ai-settings-form">
-        <div className="form-group checkbox-group">
-          <label className="toggle-label">
-            <label className="toggle-switch">
-              <input
-                type="checkbox"
-                checked={editableConfig?.ai_scheduling_enabled || false}
-                onChange={(e) => updateConfigField('ai_scheduling_enabled', e.target.checked)}
-              />
-              <span className="toggle-slider"></span>
-            </label>
-            <div className="toggle-info">
-              <span className="toggle-title">AI Smart Scheduling</span>
-              <span className="toggle-description">Let AI suggest optimal meeting times based on your patterns and client preferences</span>
-            </div>
-          </label>
-        </div>
-
-        <div className="form-group checkbox-group">
-          <label className="toggle-label">
-            <label className="toggle-switch">
-              <input
-                type="checkbox"
-                checked={editableConfig?.auto_reschedule_enabled || false}
-                onChange={(e) => updateConfigField('auto_reschedule_enabled', e.target.checked)}
-              />
-              <span className="toggle-slider"></span>
-            </label>
-            <div className="toggle-info">
-              <span className="toggle-title">Auto-Reschedule Suggestions</span>
-              <span className="toggle-description">Automatically suggest better times when conflicts arise</span>
-            </div>
-          </label>
-        </div>
-
-        <div className="form-group checkbox-group">
-          <label className="toggle-label">
-            <label className="toggle-switch">
-              <input
-                type="checkbox"
-                checked={editableConfig?.smart_reminders_enabled || false}
-                onChange={(e) => updateConfigField('smart_reminders_enabled', e.target.checked)}
-              />
-              <span className="toggle-slider"></span>
-            </label>
-            <div className="toggle-info">
-              <span className="toggle-title">Smart Reminders</span>
-              <span className="toggle-description">AI-optimized reminder timing based on client engagement</span>
-            </div>
-          </label>
-        </div>
-      </div>
-    </div>
-  );
-
-  // Render settings view with sub-tabs
-  const renderSettingsView = () => (
-    <div className="scheduler-settings-view">
-      {editableConfig ? (
-        <>
-          <div className="settings-sub-tabs">
-            <button
-              className={`sub-tab ${settingsTab === 'working-hours' ? 'active' : ''}`}
-              onClick={() => setSettingsTab('working-hours')}
-            >
-              Working Hours
-            </button>
-            <button
-              className={`sub-tab ${settingsTab === 'booking' ? 'active' : ''}`}
-              onClick={() => setSettingsTab('booking')}
-            >
-              Booking Settings
-            </button>
-            <button
-              className={`sub-tab ${settingsTab === 'ai' ? 'active' : ''}`}
-              onClick={() => setSettingsTab('ai')}
-            >
-              AI Settings
-            </button>
-          </div>
-
-          {settingsTab === 'working-hours' && renderWorkingHoursTab()}
-          {settingsTab === 'booking' && renderBookingTab()}
-          {settingsTab === 'ai' && renderAITab()}
-
-          <div className="settings-actions">
-            <button
-              className="save-settings-btn"
-              onClick={handleSaveSettings}
-              disabled={savingSettings}
-            >
-              {savingSettings ? 'Saving...' : 'Save Settings'}
-            </button>
-            <button
-              className="reset-settings-btn"
-              onClick={() => setEditableConfig(JSON.parse(JSON.stringify(config)))}
-              disabled={savingSettings}
-            >
-              Reset Changes
-            </button>
-          </div>
-        </>
-      ) : (
-        <div className="empty-state">
-          <p>No configuration found</p>
-          <button onClick={handleSeedDefaults}>Initialize Scheduler</button>
-        </div>
-      )}
-    </div>
-  );
-
-  // Render reminders view
-  const renderRemindersView = () => {
-    const addReminder = () => {
-      const newId = Math.max(...reminderSettings.reminders.map(r => r.id), 0) + 1;
-      setReminderSettings(prev => ({
-        ...prev,
-        reminders: [...prev.reminders, {
-          id: newId,
-          timing: 24,
-          unit: 'hours',
-          method: 'email',
-          enabled: true,
-          message: 'Reminder: Your appointment is coming up on {{appointment_date}} at {{appointment_time}}.'
-        }]
-      }));
-    };
-
-    const updateReminder = (id, field, value) => {
-      setReminderSettings(prev => ({
-        ...prev,
-        reminders: prev.reminders.map(r =>
-          r.id === id ? { ...r, [field]: value } : r
-        )
-      }));
-    };
-
-    const deleteReminder = (id) => {
-      setReminderSettings(prev => ({
-        ...prev,
-        reminders: prev.reminders.filter(r => r.id !== id)
-      }));
-    };
-
-    const handleSaveReminders = async () => {
-      setSavingReminders(true);
       try {
-        const response = await fetch(`${API_BASE}/api/v1/scheduler/reminder-settings`, {
-          method: 'PUT',
-          headers: getAuthHeaders(),
-          body: JSON.stringify(reminderSettings)
+        const startDate = new Date();
+        const endDate = new Date();
+        endDate.setDate(endDate.getDate() + daysAhead);
+
+        const response = await fetch(`${API_BASE}/api/v1/scheduler/public/available-slots`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            start_date: startDate.toISOString().split('T')[0],
+            end_date: endDate.toISOString().split('T')[0],
+            duration_minutes: durationMinutes,
+            appointment_type: appointmentType
+          })
         });
 
         if (response.ok) {
-          alert('Reminder settings saved successfully!');
+          const data = await response.json();
+          const slots = data.available_slots || [];
+
+          // Group slots by date
+          const grouped = {};
+          slots.forEach(slot => {
+            const dateStr = new Date(slot.start_time).toISOString().split('T')[0];
+            if (!grouped[dateStr]) grouped[dateStr] = [];
+            grouped[dateStr].push(slot);
+          });
+          setSlotsByDate(grouped);
         } else {
-          const err = await response.json();
-          alert(`Failed to save: ${err.detail || 'Unknown error'}`);
+          setError('Unable to load available times');
         }
       } catch (err) {
-        console.error('Save reminders error:', err);
-        alert('Reminder settings saved locally. Backend sync coming soon.');
+        console.error('Failed to fetch slots:', err);
+        setError('Unable to load available times');
       } finally {
-        setSavingReminders(false);
+        setLoading(false);
       }
     };
 
-    return (
-      <div className="scheduler-reminders-view">
-        <div className="reminders-header">
-          <div className="header-content">
-            <h3>Appointment Reminders</h3>
-            <p className="description">Configure automatic reminder messages to reduce no-shows and keep clients informed about their upcoming appointments.</p>
-          </div>
-          <label className="master-toggle">
-            <span>Reminders {reminderSettings.enabled ? 'Enabled' : 'Disabled'}</span>
-            <label className="toggle-switch">
-              <input
-                type="checkbox"
-                checked={reminderSettings.enabled}
-                onChange={(e) => setReminderSettings(prev => ({ ...prev, enabled: e.target.checked }))}
-              />
-              <span className="toggle-slider"></span>
-            </label>
-          </label>
-        </div>
+    fetchSlots();
+  }, [appointmentType, durationMinutes, daysAhead]);
 
-        {reminderSettings.enabled && (
-          <>
-            <div className="reminders-list">
-              <div className="list-header">
-                <h4>Reminder Schedule</h4>
-                <button className="add-reminder-btn" onClick={addReminder}>+ Add Reminder</button>
-              </div>
-
-              {/* Booking Confirmation - Always First */}
-              <div className={`reminder-card booking-confirmation ${reminderSettings.bookingConfirmation?.enabled ? '' : 'disabled'}`}>
-                <div className="reminder-header">
-                  <div className="reminder-number">Booking Confirmation</div>
-                  <div className="reminder-controls">
-                    <label className="toggle-switch small">
-                      <input
-                        type="checkbox"
-                        checked={reminderSettings.bookingConfirmation?.enabled ?? true}
-                        onChange={(e) => setReminderSettings(prev => ({
-                          ...prev,
-                          bookingConfirmation: { ...prev.bookingConfirmation, enabled: e.target.checked }
-                        }))}
-                      />
-                      <span className="toggle-slider"></span>
-                    </label>
-                  </div>
-                </div>
-
-                <div className="reminder-config">
-                  <div className="timing-row">
-                    <label>Send</label>
-                    <span className="confirmation-timing">immediately after booking</span>
-                    <span>via</span>
-                    <select
-                      value={reminderSettings.bookingConfirmation?.method || 'both'}
-                      onChange={(e) => setReminderSettings(prev => ({
-                        ...prev,
-                        bookingConfirmation: { ...prev.bookingConfirmation, method: e.target.value }
-                      }))}
-                      className="method-select"
-                    >
-                      <option value="email">Email</option>
-                      <option value="sms">SMS</option>
-                      <option value="both">Both</option>
-                    </select>
-                  </div>
-
-                  <div className="message-row">
-                    <label>Message</label>
-                    <textarea
-                      value={reminderSettings.bookingConfirmation?.message || ''}
-                      onChange={(e) => setReminderSettings(prev => ({
-                        ...prev,
-                        bookingConfirmation: { ...prev.bookingConfirmation, message: e.target.value }
-                      }))}
-                      placeholder="Enter confirmation message..."
-                      rows={3}
-                    />
-                    <div className="message-help">
-                      <span className="help-label">Available variables:</span>
-                      <code>{'{{appointment_date}}'}</code>
-                      <code>{'{{appointment_time}}'}</code>
-                      <code>{'{{attendee_name}}'}</code>
-                      <code>{'{{appointment_type}}'}</code>
-                      <code>{'{{meeting_link}}'}</code>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {reminderSettings.reminders.map((reminder, index) => (
-                <div key={reminder.id} className={`reminder-card ${reminder.enabled ? '' : 'disabled'}`}>
-                  <div className="reminder-header">
-                    <div className="reminder-number">Reminder {index + 1}</div>
-                    <div className="reminder-controls">
-                      <label className="toggle-switch small">
-                        <input
-                          type="checkbox"
-                          checked={reminder.enabled}
-                          onChange={(e) => updateReminder(reminder.id, 'enabled', e.target.checked)}
-                        />
-                        <span className="toggle-slider"></span>
-                      </label>
-                      <button
-                        className="delete-reminder-btn"
-                        onClick={() => deleteReminder(reminder.id)}
-                        title="Delete reminder"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="reminder-config">
-                    <div className="timing-row">
-                      <label>Send</label>
-                      <input
-                        type="number"
-                        value={reminder.timing}
-                        onChange={(e) => updateReminder(reminder.id, 'timing', parseInt(e.target.value) || 1)}
-                        min="1"
-                        max="168"
-                        className="timing-input"
-                      />
-                      <select
-                        value={reminder.unit}
-                        onChange={(e) => updateReminder(reminder.id, 'unit', e.target.value)}
-                        className="unit-select"
-                      >
-                        <option value="minutes">minutes</option>
-                        <option value="hours">hours</option>
-                        <option value="days">days</option>
-                      </select>
-                      <span>before appointment via</span>
-                      <select
-                        value={reminder.method}
-                        onChange={(e) => updateReminder(reminder.id, 'method', e.target.value)}
-                        className="method-select"
-                      >
-                        <option value="email">Email</option>
-                        <option value="sms">SMS</option>
-                        <option value="both">Both</option>
-                      </select>
-                    </div>
-
-                    <div className="message-row">
-                      <label>Message</label>
-                      <textarea
-                        value={reminder.message}
-                        onChange={(e) => updateReminder(reminder.id, 'message', e.target.value)}
-                        placeholder="Enter reminder message..."
-                        rows={3}
-                      />
-                      <div className="message-help">
-                        <span className="help-label">Available variables:</span>
-                        <code>{'{{appointment_date}}'}</code>
-                        <code>{'{{appointment_time}}'}</code>
-                        <code>{'{{attendee_name}}'}</code>
-                        <code>{'{{appointment_type}}'}</code>
-                        <code>{'{{meeting_link}}'}</code>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-
-              {reminderSettings.reminders.length === 0 && (
-                <div className="empty-reminders">
-                  <p>No reminders configured. Add a reminder to reduce no-shows.</p>
-                  <button onClick={addReminder}>+ Add Your First Reminder</button>
-                </div>
-              )}
-            </div>
-
-            <div className="reminder-options">
-              <h4>Email Options</h4>
-
-              <div className="form-group">
-                <label>Default Email Subject</label>
-                <input
-                  type="text"
-                  value={reminderSettings.default_email_subject}
-                  onChange={(e) => setReminderSettings(prev => ({ ...prev, default_email_subject: e.target.value }))}
-                  placeholder="Reminder: Your Upcoming Appointment"
-                />
-              </div>
-
-              <div className="checkbox-options">
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={reminderSettings.include_calendar_link}
-                    onChange={(e) => setReminderSettings(prev => ({ ...prev, include_calendar_link: e.target.checked }))}
-                  />
-                  Include "Add to Calendar" link
-                </label>
-
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={reminderSettings.include_reschedule_link}
-                    onChange={(e) => setReminderSettings(prev => ({ ...prev, include_reschedule_link: e.target.checked }))}
-                  />
-                  Include reschedule link
-                </label>
-
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={reminderSettings.include_cancel_link}
-                    onChange={(e) => setReminderSettings(prev => ({ ...prev, include_cancel_link: e.target.checked }))}
-                  />
-                  Include cancellation link
-                </label>
-              </div>
-            </div>
-
-            <div className="reminders-actions">
-              <button
-                className="save-reminders-btn"
-                onClick={handleSaveReminders}
-                disabled={savingReminders}
-              >
-                {savingReminders ? 'Saving...' : 'Save Reminder Settings'}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    );
+  const handleDateClick = (dayInfo) => {
+    if (dayInfo.isPast || dayInfo.isTooFar || !dayInfo.hasSlots) return;
+    setSelectedDate(dayInfo.date);
   };
 
-  // Render booking modal
-  const renderBookingModal = () => (
-    <div className="scheduler-modal-overlay" onClick={() => setShowBookingModal(false)}>
-      <div className="scheduler-modal" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h3>Book Appointment</h3>
-          <button className="close-btn" onClick={() => setShowBookingModal(false)}>&times;</button>
-        </div>
-
-        <div className="modal-content">
-          {/* Appointment Type Selection */}
-          {!selectedType && (
-            <div className="type-selection">
-              <h4>Select Appointment Type</h4>
-              <div className="type-options">
-                {appointmentTypes.map(type => (
-                  <button
-                    key={type.id || type.type_key}
-                    className="type-option"
-                    style={{ borderColor: type.color }}
-                    onClick={() => setSelectedType(type)}
-                  >
-                    <span className="type-name">{type.type_name}</span>
-                    <span className="type-duration">{type.default_duration_minutes}min</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Slot Selection */}
-          {selectedType && !selectedSlot && (
-            <div className="slot-selection">
-              <h4>Select Time Slot</h4>
-              <div className="selected-type-info">
-                <span>{selectedType.type_name}</span>
-                <button className="change-type" onClick={() => setSelectedType(null)}>Change</button>
-              </div>
-
-              {availableSlots.length === 0 ? (
-                <p className="no-slots">No available slots for this date</p>
-              ) : (
-                <div className="slots-grid">
-                  {availableSlots.filter(s => s.date === selectedDate?.toISOString().split('T')[0]).map((slot, idx) => (
-                    <button
-                      key={idx}
-                      className="slot-btn"
-                      onClick={() => setSelectedSlot(slot)}
-                    >
-                      {formatTime(slot.start)}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Booking Form */}
-          {selectedSlot && (
-            <div className="booking-form">
-              <h4>Appointment Details</h4>
-              <div className="slot-summary">
-                <span className="slot-date">{formatDate(selectedSlot.start)}</span>
-                <span className="slot-time">{formatTime(selectedSlot.start)}</span>
-                <span className="slot-type">{selectedType?.type_name}</span>
-                <button className="change-slot" onClick={() => setSelectedSlot(null)}>Change</button>
-              </div>
-
-              <div className="form-group">
-                <label>Attendee Name *</label>
-                <input
-                  type="text"
-                  value={bookingForm.attendee_name}
-                  onChange={e => setBookingForm({ ...bookingForm, attendee_name: e.target.value })}
-                  placeholder="Enter name"
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Email *</label>
-                <input
-                  type="email"
-                  value={bookingForm.attendee_email}
-                  onChange={e => setBookingForm({ ...bookingForm, attendee_email: e.target.value })}
-                  placeholder="email@example.com"
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Phone</label>
-                <input
-                  type="tel"
-                  value={bookingForm.attendee_phone}
-                  onChange={e => setBookingForm({ ...bookingForm, attendee_phone: e.target.value })}
-                  placeholder="(555) 123-4567"
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Meeting Mode</label>
-                <select
-                  value={bookingForm.meeting_mode}
-                  onChange={e => setBookingForm({ ...bookingForm, meeting_mode: e.target.value })}
-                >
-                  <option value="video">Video Call</option>
-                  <option value="phone">Phone Call</option>
-                  <option value="in_person">In Person</option>
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label>Notes</label>
-                <textarea
-                  value={bookingForm.notes}
-                  onChange={e => setBookingForm({ ...bookingForm, notes: e.target.value })}
-                  placeholder="Any additional information..."
-                  rows={3}
-                />
-              </div>
-            </div>
-          )}
-        </div>
-
-        {selectedSlot && (
-          <div className="modal-footer">
-            <button className="cancel-btn" onClick={() => setShowBookingModal(false)}>Cancel</button>
-            <button
-              className="confirm-btn"
-              onClick={handleBookAppointment}
-              disabled={!bookingForm.attendee_name || !bookingForm.attendee_email}
-            >
-              Book Appointment
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
-  // Render new booking link modal
-  const renderNewLinkModal = () => {
-    return (
-      <div className="scheduler-modal-overlay" onClick={() => setShowNewLinkModal(false)}>
-        <div className="scheduler-modal" onClick={e => e.stopPropagation()}>
-          <div className="modal-header">
-            <h3>Create Booking Link</h3>
-            <button className="close-btn" onClick={() => setShowNewLinkModal(false)}>&times;</button>
-          </div>
-
-          <div className="modal-content">
-            <div className="form-group">
-              <label>Link Name *</label>
-              <input
-                type="text"
-                value={linkForm.link_name}
-                onChange={e => setLinkForm({ ...linkForm, link_name: e.target.value })}
-                placeholder="My Booking Link"
-              />
-            </div>
-
-            <div className="form-group">
-              <label>URL Slug *</label>
-              <div className="slug-input">
-                <span className="slug-prefix">/book/</span>
-                <input
-                  type="text"
-                  value={linkForm.slug}
-                  onChange={e => setLinkForm({ ...linkForm, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })}
-                  placeholder="my-link"
-                />
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label>Description</label>
-              <textarea
-                value={linkForm.description}
-                onChange={e => setLinkForm({ ...linkForm, description: e.target.value })}
-                placeholder="Optional description..."
-                rows={2}
-              />
-            </div>
-
-            <div className="form-group">
-              <label>Appointment Types</label>
-              <div className="type-checkboxes">
-                {appointmentTypes.map(type => (
-                  <label key={type.id || type.type_key} className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={linkForm.appointment_type_ids.includes(type.id)}
-                      onChange={e => {
-                        if (e.target.checked) {
-                          setLinkForm({ ...linkForm, appointment_type_ids: [...linkForm.appointment_type_ids, type.id] });
-                        } else {
-                          setLinkForm({ ...linkForm, appointment_type_ids: linkForm.appointment_type_ids.filter(id => id !== type.id) });
-                        }
-                      }}
-                    />
-                    {type.type_name}
-                  </label>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="modal-footer">
-            <button className="cancel-btn" onClick={() => setShowNewLinkModal(false)}>Cancel</button>
-            <button
-              className="confirm-btn"
-              onClick={() => handleCreateBookingLink(linkForm)}
-              disabled={!linkForm.slug || !linkForm.link_name}
-            >
-              Create Link
-            </button>
-          </div>
-        </div>
-      </div>
-    );
+  const handleSlotClick = (slot) => {
+    onSelect(slot);
   };
 
-  // Render appointment type modal
-  const renderTypeModal = () => {
-    const iconOptions = [
-      { value: 'phone', label: 'Phone' },
-      { value: 'document', label: 'Document' },
-      { value: 'clipboard', label: 'Clipboard' },
-      { value: 'folder', label: 'Folder' },
-      { value: 'lock', label: 'Lock' },
-      { value: 'home', label: 'Home' },
-      { value: 'users', label: 'Users' },
-      { value: 'calendar', label: 'Calendar' }
-    ];
-
-    const colorOptions = [
-      '#10b981', '#3b82f6', '#8b5cf6', '#f59e0b',
-      '#ef4444', '#ec4899', '#06b6d4', '#84cc16'
-    ];
-
-    const durationOptions = [15, 20, 30, 45, 60, 90, 120];
-
-    const toggleDuration = (duration) => {
-      const current = typeForm.allowed_durations || [];
-      if (current.includes(duration)) {
-        setTypeForm({ ...typeForm, allowed_durations: current.filter(d => d !== duration) });
-      } else {
-        setTypeForm({ ...typeForm, allowed_durations: [...current, duration].sort((a, b) => a - b) });
-      }
-    };
-
-    return (
-      <div className="scheduler-modal-overlay" onClick={() => {
-        setShowNewTypeModal(false);
-        setEditingType(null);
-      }}>
-        <div className="scheduler-modal type-modal" onClick={e => e.stopPropagation()}>
-          <div className="modal-header">
-            <h3>{editingType ? 'Edit Appointment Type' : 'New Appointment Type'}</h3>
-            <button className="close-btn" onClick={() => {
-              setShowNewTypeModal(false);
-              setEditingType(null);
-            }}>&times;</button>
-          </div>
-
-          <div className="modal-content">
-            <div className="form-group">
-              <label>Type Name *</label>
-              <input
-                type="text"
-                value={typeForm.type_name}
-                onChange={e => setTypeForm({ ...typeForm, type_name: e.target.value })}
-                placeholder="e.g., Discovery Call"
-              />
-            </div>
-
-            <div className="form-group">
-              <label>Description</label>
-              <textarea
-                value={typeForm.description}
-                onChange={e => setTypeForm({ ...typeForm, description: e.target.value })}
-                placeholder="Brief description of this appointment type..."
-                rows={2}
-              />
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label>Default Duration</label>
-                <select
-                  value={typeForm.default_duration_minutes}
-                  onChange={e => setTypeForm({ ...typeForm, default_duration_minutes: parseInt(e.target.value) })}
-                >
-                  {durationOptions.map(d => (
-                    <option key={d} value={d}>{d} minutes</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label>Icon</label>
-                <select
-                  value={typeForm.icon}
-                  onChange={e => setTypeForm({ ...typeForm, icon: e.target.value })}
-                >
-                  {iconOptions.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label>Allowed Durations</label>
-              <div className="duration-toggles">
-                {durationOptions.map(d => (
-                  <button
-                    key={d}
-                    type="button"
-                    className={`duration-toggle ${(typeForm.allowed_durations || []).includes(d) ? 'active' : ''}`}
-                    onClick={() => toggleDuration(d)}
-                  >
-                    {d}m
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label>Color</label>
-              <div className="color-options">
-                {colorOptions.map(color => (
-                  <button
-                    key={color}
-                    type="button"
-                    className={`color-option ${typeForm.color === color ? 'selected' : ''}`}
-                    style={{ backgroundColor: color }}
-                    onClick={() => setTypeForm({ ...typeForm, color })}
-                  />
-                ))}
-              </div>
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label>Buffer Before (min)</label>
-                <input
-                  type="number"
-                  value={typeForm.buffer_before_minutes}
-                  onChange={e => setTypeForm({ ...typeForm, buffer_before_minutes: parseInt(e.target.value) || 0 })}
-                  min="0"
-                  max="60"
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Buffer After (min)</label>
-                <input
-                  type="number"
-                  value={typeForm.buffer_after_minutes}
-                  onChange={e => setTypeForm({ ...typeForm, buffer_after_minutes: parseInt(e.target.value) || 0 })}
-                  min="0"
-                  max="60"
-                />
-              </div>
-            </div>
-
-            <div className="form-group checkbox-group">
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={typeForm.is_public}
-                  onChange={e => setTypeForm({ ...typeForm, is_public: e.target.checked })}
-                />
-                Public (visible on booking links)
-              </label>
-            </div>
-
-            <div className="form-group checkbox-group">
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={typeForm.requires_confirmation}
-                  onChange={e => setTypeForm({ ...typeForm, requires_confirmation: e.target.checked })}
-                />
-                Requires confirmation before booking
-              </label>
-            </div>
-          </div>
-
-          <div className="modal-footer">
-            {editingType && (
-              <button
-                className="delete-btn"
-                onClick={() => {
-                  handleDeleteAppointmentType(editingType.id);
-                  setShowNewTypeModal(false);
-                  setEditingType(null);
-                }}
-              >
-                Delete
-              </button>
-            )}
-            <div className="footer-right">
-              <button className="cancel-btn" onClick={() => {
-                setShowNewTypeModal(false);
-                setEditingType(null);
-              }}>Cancel</button>
-              <button
-                className="confirm-btn"
-                onClick={handleSaveAppointmentType}
-                disabled={!typeForm.type_name}
-              >
-                {editingType ? 'Save Changes' : 'Create Type'}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+  const navigateMonth = (direction) => {
+    const newMonth = new Date(currentMonth);
+    newMonth.setMonth(newMonth.getMonth() + direction);
+    setCurrentMonth(newMonth);
   };
 
-  // Handle landing page save
-  const handleSaveLandingPage = async () => {
-    setSavingLandingPage(true);
-    try {
-      const response = await fetch(`${API_BASE}/api/v1/scheduler/landing-page-settings`, {
-        method: 'PUT',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(landingPageSettings)
-      });
+  const calendarDays = generateCalendarDays();
+  const selectedDateStr = selectedDate ? selectedDate.toISOString().split('T')[0] : null;
+  const timeSlotsForDate = selectedDateStr ? (slotsByDate[selectedDateStr] || []) : [];
 
-      if (response.ok) {
-        alert('Landing page settings saved successfully!');
-      } else {
-        const err = await response.json();
-        alert(`Failed to save: ${err.detail || 'Unknown error'}`);
-      }
-    } catch (err) {
-      console.error('Save landing page error:', err);
-      alert('Landing page settings saved locally. Backend sync coming soon.');
-    } finally {
-      setSavingLandingPage(false);
-    }
-  };
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
 
-  // Update landing page field
-  const updateLandingPageField = (field, value) => {
-    setLandingPageSettings(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
-  // Extract video ID from URL
-  const getVideoEmbedUrl = (url, type) => {
-    if (!url) return null;
-
-    if (type === 'youtube') {
-      const match = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-      return match ? `https://www.youtube.com/embed/${match[1]}` : null;
-    } else if (type === 'vimeo') {
-      const match = url.match(/vimeo\.com\/(\d+)/);
-      return match ? `https://player.vimeo.com/video/${match[1]}` : null;
-    } else if (type === 'loom') {
-      const match = url.match(/loom\.com\/share\/([a-zA-Z0-9]+)/);
-      return match ? `https://www.loom.com/embed/${match[1]}` : null;
-    }
-    return url;
-  };
-
-  // Render Landing Page View
-  const renderLandingPageView = () => {
-    const embedUrl = getVideoEmbedUrl(landingPageSettings.video_url, landingPageSettings.video_type);
-
-    return (
-      <div className="scheduler-landing-page-view">
-        <div className="landing-page-header">
-          <div className="header-content">
-            <h3>Booking Page Customization</h3>
-            <p className="description">Customize how your public booking page looks to clients. Add your branding, a welcome video, and personal information.</p>
-          </div>
-          <div className="header-actions">
-            <button
-              className={`preview-toggle ${previewMode ? 'active' : ''}`}
-              onClick={() => setPreviewMode(!previewMode)}
-            >
-              {previewMode ? 'Edit Mode' : 'Preview'}
-            </button>
-          </div>
-        </div>
-
-        <div className="landing-page-content">
-          {previewMode ? (
-            /* Preview Mode */
-            <div className="landing-page-preview" style={{
-              background: landingPageSettings.background_style === 'gradient'
-                ? `linear-gradient(135deg, ${landingPageSettings.accent_color}15 0%, white 100%)`
-                : landingPageSettings.background_style === 'light' ? '#f9fafb' : 'white'
-            }}>
-              <div className="preview-container">
-                {/* Logo */}
-                {landingPageSettings.show_company_logo && landingPageSettings.logo_url && (
-                  <div className="preview-logo">
-                    <img src={landingPageSettings.logo_url} alt="Company Logo" />
-                  </div>
-                )}
-
-                {/* Video */}
-                {embedUrl && (
-                  <div className="preview-video">
-                    <iframe
-                      src={embedUrl}
-                      title="Welcome Video"
-                      frameBorder="0"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                    />
-                  </div>
-                )}
-
-                {/* Profile Section */}
-                {landingPageSettings.show_profile && (
-                  <div className="preview-profile">
-                    {landingPageSettings.profile_picture_url && (
-                      <img
-                        src={landingPageSettings.profile_picture_url}
-                        alt="Profile"
-                        className="profile-picture"
-                      />
-                    )}
-                    <div className="profile-info">
-                      <h2 style={{ color: landingPageSettings.accent_color }}>
-                        {landingPageSettings.profile_name || 'Your Name'}
-                      </h2>
-                      <p className="profile-title">{landingPageSettings.profile_title || 'Mortgage Loan Officer'}</p>
-                      {landingPageSettings.profile_bio && (
-                        <p className="profile-bio">{landingPageSettings.profile_bio}</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Headline */}
-                <div className="preview-headline">
-                  <h1>{landingPageSettings.headline}</h1>
-                  <p>{landingPageSettings.subheadline}</p>
-                </div>
-
-                {/* Description */}
-                {landingPageSettings.description && (
-                  <div className="preview-description">
-                    <p>{landingPageSettings.description}</p>
-                  </div>
-                )}
-
-                {/* Calendar Placeholder */}
-                <div className="preview-calendar-placeholder" style={{ borderColor: landingPageSettings.accent_color }}>
-                  <div className="calendar-mock">
-                    <div className="calendar-header-mock" style={{ background: landingPageSettings.accent_color }}>
-                      <span>December 2025</span>
-                    </div>
-                    <div className="calendar-grid-mock">
-                      {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
-                        <div key={i} className="day-header">{d}</div>
-                      ))}
-                      {[...Array(31)].map((_, i) => (
-                        <div key={i} className={`day-cell ${i === 5 ? 'selected' : ''}`}>{i + 1}</div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Testimonial */}
-                {landingPageSettings.show_social_proof && landingPageSettings.testimonial_text && (
-                  <div className="preview-testimonial">
-                    <p className="testimonial-text">"{landingPageSettings.testimonial_text}"</p>
-                    {landingPageSettings.testimonial_author && (
-                      <p className="testimonial-author">— {landingPageSettings.testimonial_author}</p>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            /* Edit Mode */
-            <div className="landing-page-editor">
-              {/* Branding Section */}
-              <div className="editor-section">
-                <h4>Branding</h4>
-
-                <div className="form-group">
-                  <label>Company Logo URL</label>
-                  <input
-                    type="url"
-                    value={landingPageSettings.logo_url}
-                    onChange={(e) => updateLandingPageField('logo_url', e.target.value)}
-                    placeholder="https://example.com/logo.png"
-                  />
-                  <span className="help-text">Recommended: 200x50px PNG or SVG with transparent background</span>
-                </div>
-
-                <div className="form-group checkbox-group">
-                  <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={landingPageSettings.show_company_logo}
-                      onChange={(e) => updateLandingPageField('show_company_logo', e.target.checked)}
-                    />
-                    Show company logo on booking page
-                  </label>
-                </div>
-
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Accent Color</label>
-                    <div className="color-input-group">
-                      <input
-                        type="color"
-                        value={landingPageSettings.accent_color}
-                        onChange={(e) => updateLandingPageField('accent_color', e.target.value)}
-                      />
-                      <input
-                        type="text"
-                        value={landingPageSettings.accent_color}
-                        onChange={(e) => updateLandingPageField('accent_color', e.target.value)}
-                        placeholder="#217F8D"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="form-group">
-                    <label>Background Style</label>
-                    <select
-                      value={landingPageSettings.background_style}
-                      onChange={(e) => updateLandingPageField('background_style', e.target.value)}
-                    >
-                      <option value="white">Clean White</option>
-                      <option value="light">Light Gray</option>
-                      <option value="gradient">Subtle Gradient</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* Video Section */}
-              <div className="editor-section">
-                <h4>Welcome Video</h4>
-                <p className="section-description">Add a personal video above the calendar to introduce yourself and set expectations for the meeting.</p>
-
-                <div className="form-row">
-                  <div className="form-group" style={{ flex: 1 }}>
-                    <label>Video Type</label>
-                    <select
-                      value={landingPageSettings.video_type}
-                      onChange={(e) => updateLandingPageField('video_type', e.target.value)}
-                    >
-                      <option value="youtube">YouTube</option>
-                      <option value="vimeo">Vimeo</option>
-                      <option value="loom">Loom</option>
-                      <option value="custom">Custom Embed URL</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label>Video URL</label>
-                  <input
-                    type="url"
-                    value={landingPageSettings.video_url}
-                    onChange={(e) => updateLandingPageField('video_url', e.target.value)}
-                    placeholder={
-                      landingPageSettings.video_type === 'youtube'
-                        ? 'https://youtube.com/watch?v=...'
-                        : landingPageSettings.video_type === 'vimeo'
-                        ? 'https://vimeo.com/...'
-                        : landingPageSettings.video_type === 'loom'
-                        ? 'https://loom.com/share/...'
-                        : 'https://...'
-                    }
-                  />
-                  <span className="help-text">
-                    {landingPageSettings.video_type === 'loom'
-                      ? 'Tip: Loom videos are great for personal introductions!'
-                      : 'Paste the share URL of your video'}
-                  </span>
-                </div>
-
-                {embedUrl && (
-                  <div className="video-preview">
-                    <label>Preview:</label>
-                    <iframe
-                      src={embedUrl}
-                      title="Video Preview"
-                      frameBorder="0"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Profile Section */}
-              <div className="editor-section">
-                <h4>Your Profile</h4>
-
-                <div className="form-group checkbox-group">
-                  <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={landingPageSettings.show_profile}
-                      onChange={(e) => updateLandingPageField('show_profile', e.target.checked)}
-                    />
-                    Show profile section on booking page
-                  </label>
-                </div>
-
-                {landingPageSettings.show_profile && (
-                  <>
-                    <div className="form-group">
-                      <label>Profile Picture URL</label>
-                      <input
-                        type="url"
-                        value={landingPageSettings.profile_picture_url}
-                        onChange={(e) => updateLandingPageField('profile_picture_url', e.target.value)}
-                        placeholder="https://example.com/profile.jpg"
-                      />
-                      <span className="help-text">Recommended: Square image, at least 200x200px</span>
-                    </div>
-
-                    <div className="form-row">
-                      <div className="form-group">
-                        <label>Your Name</label>
-                        <input
-                          type="text"
-                          value={landingPageSettings.profile_name}
-                          onChange={(e) => updateLandingPageField('profile_name', e.target.value)}
-                          placeholder="John Smith"
-                        />
-                      </div>
-
-                      <div className="form-group">
-                        <label>Title</label>
-                        <input
-                          type="text"
-                          value={landingPageSettings.profile_title}
-                          onChange={(e) => updateLandingPageField('profile_title', e.target.value)}
-                          placeholder="Senior Loan Officer"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="form-group">
-                      <label>Short Bio</label>
-                      <textarea
-                        value={landingPageSettings.profile_bio}
-                        onChange={(e) => updateLandingPageField('profile_bio', e.target.value)}
-                        placeholder="Tell clients a bit about yourself and what to expect from the meeting..."
-                        rows={3}
-                      />
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Content Section */}
-              <div className="editor-section">
-                <h4>Page Content</h4>
-
-                <div className="form-group">
-                  <label>Headline</label>
-                  <input
-                    type="text"
-                    value={landingPageSettings.headline}
-                    onChange={(e) => updateLandingPageField('headline', e.target.value)}
-                    placeholder="Schedule a Meeting"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Subheadline</label>
-                  <input
-                    type="text"
-                    value={landingPageSettings.subheadline}
-                    onChange={(e) => updateLandingPageField('subheadline', e.target.value)}
-                    placeholder="Choose a time that works for you"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Description / Appointment Agenda</label>
-                  <textarea
-                    value={landingPageSettings.description}
-                    onChange={(e) => updateLandingPageField('description', e.target.value)}
-                    placeholder="Describe what clients can expect from the meeting. Include agenda items, what to prepare, etc."
-                    rows={4}
-                  />
-                  <span className="help-text">This appears above the calendar to set expectations</span>
-                </div>
-              </div>
-
-              {/* Social Proof Section */}
-              <div className="editor-section">
-                <h4>Social Proof</h4>
-
-                <div className="form-group checkbox-group">
-                  <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={landingPageSettings.show_social_proof}
-                      onChange={(e) => updateLandingPageField('show_social_proof', e.target.checked)}
-                    />
-                    Show testimonial on booking page
-                  </label>
-                </div>
-
-                {landingPageSettings.show_social_proof && (
-                  <>
-                    <div className="form-group">
-                      <label>Testimonial</label>
-                      <textarea
-                        value={landingPageSettings.testimonial_text}
-                        onChange={(e) => updateLandingPageField('testimonial_text', e.target.value)}
-                        placeholder="Working with [Name] made my home buying journey so much easier..."
-                        rows={3}
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label>Author</label>
-                      <input
-                        type="text"
-                        value={landingPageSettings.testimonial_author}
-                        onChange={(e) => updateLandingPageField('testimonial_author', e.target.value)}
-                        placeholder="Happy Customer"
-                      />
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="landing-page-actions">
-          <button
-            className="save-landing-page-btn"
-            onClick={handleSaveLandingPage}
-            disabled={savingLandingPage}
-          >
-            {savingLandingPage ? 'Saving...' : 'Save Landing Page Settings'}
-          </button>
-        </div>
-      </div>
-    );
-  };
-
-  // Render Tutorial View
-  const renderTutorialView = () => (
-    <div className="scheduler-tutorial-view">
-      <div className="tutorial-header">
-        <h3>Smart Scheduler Tutorial</h3>
-        <p className="tutorial-intro">Learn how to maximize productivity with our AI-powered scheduling system</p>
-      </div>
-
-      <div className="tutorial-sections">
-        {/* Quick Start */}
-        <div className="tutorial-section">
-          <div className="section-icon">🚀</div>
-          <h4>Quick Start Guide</h4>
-          <div className="section-content">
-            <ol>
-              <li><strong>Create Appointment Types:</strong> Go to "Appointment Types" tab and click "Seed Defaults" to create standard mortgage appointment types (Discovery Call, Pre-Approval Review, Document Collection, etc.)</li>
-              <li><strong>Set Your Hours:</strong> Navigate to "Settings" tab and configure your working hours for each day of the week</li>
-              <li><strong>Book Appointments:</strong> Click on any date in the Calendar view and select "+ New Appointment" to schedule a meeting</li>
-              <li><strong>Share Booking Links:</strong> Create public booking links in the "Booking Links" tab that clients can use to self-schedule</li>
-            </ol>
-          </div>
-        </div>
-
-        {/* Calendar Features */}
-        <div className="tutorial-section">
-          <div className="section-icon">📅</div>
-          <h4>Calendar Features</h4>
-          <div className="section-content">
-            <ul>
-              <li><strong>Month Navigation:</strong> Use the arrow buttons to move between months</li>
-              <li><strong>Day Selection:</strong> Click on any date to see appointments for that day</li>
-              <li><strong>Appointment Dots:</strong> Blue dots indicate days with scheduled appointments</li>
-              <li><strong>Today Indicator:</strong> The current date is highlighted with a red circle</li>
-              <li><strong>Quick Actions:</strong> Join video calls directly or cancel appointments from the day view</li>
-            </ul>
-          </div>
-        </div>
-
-        {/* Appointment Types */}
-        <div className="tutorial-section">
-          <div className="section-icon">📋</div>
-          <h4>Appointment Types</h4>
-          <div className="section-content">
-            <p>Customize appointment types for different meeting purposes:</p>
-            <ul>
-              <li><strong>Discovery Call:</strong> Initial consultation with new leads (15-30 min)</li>
-              <li><strong>Pre-Approval Review:</strong> Review pre-approval documents and terms (30-45 min)</li>
-              <li><strong>Document Collection:</strong> Gather required mortgage documents (30-60 min)</li>
-              <li><strong>Rate Lock Discussion:</strong> Review market conditions and lock options (20-30 min)</li>
-              <li><strong>Closing Prep:</strong> Final walkthrough before closing (45-60 min)</li>
-            </ul>
-            <p className="tip">Tip: Click on any appointment type card to edit its settings, durations, and colors.</p>
-          </div>
-        </div>
-
-        {/* Booking Links */}
-        <div className="tutorial-section">
-          <div className="section-icon">🔗</div>
-          <h4>Booking Links</h4>
-          <div className="section-content">
-            <p>Create shareable links for clients to book directly:</p>
-            <ul>
-              <li><strong>Custom URL Slugs:</strong> Create memorable URLs like /book/john-smith</li>
-              <li><strong>Type Filtering:</strong> Limit which appointment types are available on each link</li>
-              <li><strong>Analytics:</strong> Track views and bookings for each link</li>
-              <li><strong>Easy Sharing:</strong> Copy links with one click to share via email or text</li>
-            </ul>
-          </div>
-        </div>
-
-        {/* AI Features */}
-        <div className="tutorial-section highlight">
-          <div className="section-icon">🤖</div>
-          <h4>AI-Powered Features</h4>
-          <div className="section-content">
-            <p>The Smart Scheduler includes advanced AI capabilities:</p>
-            <ul>
-              <li><strong>Smart Scheduling:</strong> AI suggests optimal meeting times based on your patterns and client preferences</li>
-              <li><strong>Auto-Reschedule:</strong> Automatically suggests better times when conflicts arise</li>
-              <li><strong>Smart Reminders:</strong> AI-optimized reminder timing based on client engagement history</li>
-              <li><strong>No-Show Detection:</strong> Automatically detects missed appointments and initiates recovery workflows</li>
-              <li><strong>Load Balancing:</strong> Distributes appointments evenly across team members based on capacity</li>
-            </ul>
-            <p className="tip">Enable AI features in Settings → AI Settings tab</p>
-          </div>
-        </div>
-
-        {/* Resource Management */}
-        <div className="tutorial-section">
-          <div className="section-icon">👥</div>
-          <h4>Resource Management (Teams)</h4>
-          <div className="section-content">
-            <p>For organizations with multiple loan officers:</p>
-            <ul>
-              <li><strong>Staff Profiles:</strong> Configure skills, languages, and licensed states for each team member</li>
-              <li><strong>Capacity Management:</strong> Set daily appointment limits per person</li>
-              <li><strong>Smart Routing:</strong> Automatically route appointments to available team members</li>
-              <li><strong>SLA Monitoring:</strong> Track team utilization and response times</li>
-            </ul>
-          </div>
-        </div>
-
-        {/* Soft Holds */}
-        <div className="tutorial-section">
-          <div className="section-icon">⏳</div>
-          <h4>Soft Hold System</h4>
-          <div className="section-content">
-            <p>Prevent double-booking during AI conversations:</p>
-            <ul>
-              <li><strong>Temporary Holds:</strong> When AI is discussing appointment times with a client, slots are temporarily reserved</li>
-              <li><strong>Auto-Release:</strong> Holds automatically expire after 5 minutes if not confirmed</li>
-              <li><strong>Convert to Booking:</strong> Once the client confirms, the hold converts to a real appointment</li>
-            </ul>
-          </div>
-        </div>
-
-        {/* Group Sessions */}
-        <div className="tutorial-section">
-          <div className="section-icon">🎓</div>
-          <h4>Group Sessions & Workshops</h4>
-          <div className="section-content">
-            <p>Host educational sessions for multiple attendees:</p>
-            <ul>
-              <li><strong>First-Time Homebuyer Workshops:</strong> Educational seminars with capacity limits</li>
-              <li><strong>Rate Watch Webinars:</strong> Group sessions on market conditions</li>
-              <li><strong>Waitlist Management:</strong> Automatically manage overflow registrations</li>
-              <li><strong>Virtual/In-Person:</strong> Support for both meeting formats</li>
-            </ul>
-          </div>
-        </div>
-
-        {/* Campaign Tracking */}
-        <div className="tutorial-section">
-          <div className="section-icon">📊</div>
-          <h4>Campaign Attribution</h4>
-          <div className="section-content">
-            <p>Track the effectiveness of your outreach:</p>
-            <ul>
-              <li><strong>Voicemail Drops:</strong> Track appointments booked from voicemail campaigns</li>
-              <li><strong>SMS Campaigns:</strong> Measure reply-to-booking conversion rates</li>
-              <li><strong>Full Funnel:</strong> Track from initial contact through to funded loan</li>
-              <li><strong>ROI Analysis:</strong> Understand which channels drive the most closings</li>
-            </ul>
-          </div>
-        </div>
-
-        {/* Analytics */}
-        <div className="tutorial-section">
-          <div className="section-icon">📈</div>
-          <h4>Analytics & Insights</h4>
-          <div className="section-content">
-            <p>Data-driven scheduling optimization:</p>
-            <ul>
-              <li><strong>Show Rate Tracking:</strong> Monitor appointment attendance rates</li>
-              <li><strong>Best Times Analysis:</strong> Discover when clients are most likely to show up</li>
-              <li><strong>Channel Performance:</strong> Compare booking sources (web, phone, AI)</li>
-              <li><strong>Day/Hour Heatmaps:</strong> Visualize your busiest times</li>
-            </ul>
-          </div>
-        </div>
-
-        {/* Best Practices */}
-        <div className="tutorial-section best-practices">
-          <div className="section-icon">💡</div>
-          <h4>Best Practices</h4>
-          <div className="section-content">
-            <ul>
-              <li><strong>Buffer Time:</strong> Add 5-15 minute buffers between appointments for notes and preparation</li>
-              <li><strong>Minimum Notice:</strong> Require at least 2-4 hours notice for new bookings to prevent last-minute chaos</li>
-              <li><strong>Confirmation Emails:</strong> Enable automatic confirmations to reduce no-shows</li>
-              <li><strong>Video Links:</strong> Use integrated video meeting links for seamless virtual appointments</li>
-              <li><strong>Regular Review:</strong> Check your analytics weekly to optimize your schedule</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      <div className="tutorial-footer">
-        <p>Need more help? Contact support or visit our documentation.</p>
-        <div className="tutorial-actions">
-          <button className="start-btn" onClick={() => setView('types')}>
-            Appointment Types
-          </button>
-          <button className="setup-btn" onClick={() => setView('settings')}>
-            Configure Settings
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+  const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   if (loading) {
     return (
-      <div className="smart-scheduler loading">
-        <div className="loader"></div>
-        <p>Loading scheduler...</p>
+      <div className="smart-scheduler">
+        <div className="scheduler-loading">
+          <div className="loading-spinner"></div>
+          <p>Loading available times...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="smart-scheduler">
+        <div className="scheduler-error">
+          <p>{error}</p>
+          <button onClick={() => window.location.reload()}>Try Again</button>
+        </div>
       </div>
     );
   }
@@ -2306,78 +163,140 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
   return (
     <div className="smart-scheduler">
       <div className="scheduler-header">
-        <h2>Smart Scheduler</h2>
-        <div className="scheduler-tabs">
-          <button
-            className={`tab ${view === 'types' ? 'active' : ''}`}
-            onClick={() => setView('types')}
-          >
-            Appointment Types
-          </button>
-          <button
-            className={`tab ${view === 'booking-links' ? 'active' : ''}`}
-            onClick={() => setView('booking-links')}
-          >
-            Booking Links
-          </button>
-          <button
-            className={`tab ${view === 'reminders' ? 'active' : ''}`}
-            onClick={() => setView('reminders')}
-          >
-            Reminders
-          </button>
-          <button
-            className={`tab ${view === 'landing-page' ? 'active' : ''}`}
-            onClick={() => setView('landing-page')}
-          >
-            Landing Page
-          </button>
-          <button
-            className={`tab ${view === 'settings' ? 'active' : ''}`}
-            onClick={() => setView('settings')}
-          >
-            Settings
-          </button>
-          <button
-            className={`tab ${view === 'calendar-management' ? 'active' : ''}`}
-            onClick={() => setView('calendar-management')}
-          >
-            Calendar Management
-          </button>
-          <button
-            className={`tab tutorial-tab ${view === 'tutorial' ? 'active' : ''}`}
-            onClick={() => setView('tutorial')}
-          >
-            Tutorial
-          </button>
-        </div>
-        {onClose && (
-          <button className="close-scheduler" onClick={onClose}>&times;</button>
-        )}
+        <h3>{title}</h3>
+        <p>{subtitle}</p>
       </div>
-
-      {error && (
-        <div className="scheduler-error">
-          <p>{error}</p>
-          <button onClick={fetchData}>Retry</button>
-        </div>
-      )}
 
       <div className="scheduler-content">
-        {view === 'types' && renderTypesView()}
-        {view === 'booking-links' && renderBookingLinksView()}
-        {view === 'reminders' && renderRemindersView()}
-        {view === 'landing-page' && renderLandingPageView()}
-        {view === 'settings' && renderSettingsView()}
-        {view === 'calendar-management' && <CalendarManagement />}
-        {view === 'tutorial' && renderTutorialView()}
+        {/* Calendar View */}
+        <div className="scheduler-calendar">
+          <div className="calendar-nav">
+            <button
+              className="nav-btn"
+              onClick={() => navigateMonth(-1)}
+              disabled={currentMonth.getMonth() === new Date().getMonth() &&
+                        currentMonth.getFullYear() === new Date().getFullYear()}
+            >
+              &#8249;
+            </button>
+            <span className="current-month">
+              {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+            </span>
+            <button
+              className="nav-btn"
+              onClick={() => navigateMonth(1)}
+            >
+              &#8250;
+            </button>
+          </div>
+
+          <div className="calendar-grid">
+            <div className="calendar-weekdays">
+              {weekDays.map(day => (
+                <div key={day} className="weekday">{day}</div>
+              ))}
+            </div>
+
+            <div className="calendar-days">
+              {calendarDays.map((dayInfo, idx) => (
+                <div
+                  key={idx}
+                  className={`calendar-day ${dayInfo.empty ? 'empty' : ''} ${dayInfo.isPast ? 'past' : ''} ${dayInfo.isTooFar ? 'too-far' : ''} ${dayInfo.hasSlots ? 'has-slots' : 'no-slots'} ${dayInfo.isToday ? 'today' : ''} ${dayInfo.isSelected ? 'selected' : ''}`}
+                  onClick={() => !dayInfo.empty && handleDateClick(dayInfo)}
+                >
+                  {!dayInfo.empty && (
+                    <>
+                      <span className="day-number">{dayInfo.day}</span>
+                      {dayInfo.hasSlots && <span className="slot-indicator"></span>}
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="calendar-legend">
+            <span className="legend-item">
+              <span className="legend-dot available"></span> Available
+            </span>
+            <span className="legend-item">
+              <span className="legend-dot unavailable"></span> Unavailable
+            </span>
+          </div>
+        </div>
+
+        {/* Time Slots */}
+        <div className="scheduler-times">
+          {selectedDate ? (
+            <>
+              <h4>
+                {selectedDate.toLocaleDateString('en-US', {
+                  weekday: 'long',
+                  month: 'long',
+                  day: 'numeric'
+                })}
+              </h4>
+
+              {timeSlotsForDate.length > 0 ? (
+                <div className="time-slots">
+                  {timeSlotsForDate.map((slot, idx) => {
+                    const time = new Date(slot.start_time);
+                    const isSelected = selectedSlot &&
+                      selectedSlot.start_time === slot.start_time;
+
+                    return (
+                      <button
+                        key={idx}
+                        className={`time-slot ${isSelected ? 'selected' : ''}`}
+                        onClick={() => handleSlotClick(slot)}
+                      >
+                        {time.toLocaleTimeString('en-US', {
+                          hour: 'numeric',
+                          minute: '2-digit',
+                          hour12: true
+                        })}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="no-times">No available times for this date</p>
+              )}
+            </>
+          ) : (
+            <div className="select-date-prompt">
+              <div className="calendar-icon">&#128197;</div>
+              <p>Select a date from the calendar to see available times</p>
+            </div>
+          )}
+        </div>
       </div>
 
-      {showBookingModal && renderBookingModal()}
-      {showNewLinkModal && renderNewLinkModal()}
-      {showNewTypeModal && renderTypeModal()}
+      {/* Selected Confirmation */}
+      {selectedSlot && (
+        <div className="scheduler-confirmation">
+          <div className="confirmation-icon">&#10003;</div>
+          <div className="confirmation-text">
+            <strong>
+              {new Date(selectedSlot.start_time).toLocaleDateString('en-US', {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric'
+              })}
+            </strong>
+            <span> at </span>
+            <strong>
+              {new Date(selectedSlot.start_time).toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+              })}
+            </strong>
+          </div>
+        </div>
+      )}
     </div>
   );
-};
+}
 
 export default SmartScheduler;

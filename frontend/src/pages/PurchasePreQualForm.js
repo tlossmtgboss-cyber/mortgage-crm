@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import SmartScheduler from '../components/SmartScheduler';
 import './PurchasePreQualForm.css';
 
 // API Base URL
@@ -94,10 +95,7 @@ function PurchasePreQualForm({ embedded = false, partnerId, realtorEmail, onSucc
   const [submissionResult, setSubmissionResult] = useState(null);
 
   // Calendar state
-  const [showCalendar, setShowCalendar] = useState(false);
-  const [availableSlots, setAvailableSlots] = useState([]);
   const [selectedSlot, setSelectedSlot] = useState(null);
-  const [loadingSlots, setLoadingSlots] = useState(false);
 
   // Form data
   const [formData, setFormData] = useState({
@@ -190,36 +188,6 @@ function PurchasePreQualForm({ embedded = false, partnerId, realtorEmail, onSucc
   const handleCurrencyChange = (e, fieldName) => {
     const raw = e.target.value.replace(/\D/g, '');
     setFormData(prev => ({ ...prev, [fieldName]: raw }));
-  };
-
-  // Fetch available calendar slots
-  const fetchCalendarSlots = async () => {
-    setLoadingSlots(true);
-    try {
-      const startDate = new Date();
-      const endDate = new Date();
-      endDate.setDate(endDate.getDate() + 14);
-
-      const response = await fetch(`${API_BASE}/api/v1/scheduler/public/available-slots`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          start_date: startDate.toISOString().split('T')[0],
-          end_date: endDate.toISOString().split('T')[0],
-          duration_minutes: 30,
-          appointment_type: 'pre-qualification-call'
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setAvailableSlots(data.available_slots || []);
-      }
-    } catch (err) {
-      console.error('Failed to fetch calendar slots:', err);
-    } finally {
-      setLoadingSlots(false);
-    }
   };
 
   // Validate current step
@@ -750,69 +718,17 @@ function PurchasePreQualForm({ embedded = false, partnerId, realtorEmail, onSucc
               </div>
             </div>
 
-            {/* Calendar Booking */}
+            {/* Calendar Booking - Smart Scheduler */}
             <div className="calendar-section">
-              <h3>Schedule Your Consultation (Optional)</h3>
-              <p>Book a time to speak with a mortgage specialist</p>
-
-              {!showCalendar ? (
-                <button
-                  type="button"
-                  className="btn-schedule"
-                  onClick={() => {
-                    setShowCalendar(true);
-                    fetchCalendarSlots();
-                  }}
-                >
-                  Choose a Time
-                </button>
-              ) : (
-                <div className="calendar-picker">
-                  {loadingSlots ? (
-                    <div className="loading-slots">Loading available times...</div>
-                  ) : availableSlots.length > 0 ? (
-                    <div className="slots-grid">
-                      {availableSlots.slice(0, 12).map((slot, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          className={`slot-btn ${selectedSlot === slot ? 'selected' : ''}`}
-                          onClick={() => setSelectedSlot(slot)}
-                        >
-                          <span className="slot-date">
-                            {new Date(slot.start_time).toLocaleDateString('en-US', {
-                              weekday: 'short',
-                              month: 'short',
-                              day: 'numeric'
-                            })}
-                          </span>
-                          <span className="slot-time">
-                            {new Date(slot.start_time).toLocaleTimeString('en-US', {
-                              hour: 'numeric',
-                              minute: '2-digit'
-                            })}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="no-slots">No available times found. We'll contact you to schedule.</p>
-                  )}
-
-                  {selectedSlot && (
-                    <div className="selected-time">
-                      Selected: {new Date(selectedSlot.start_time).toLocaleDateString('en-US', {
-                        weekday: 'long',
-                        month: 'long',
-                        day: 'numeric'
-                      })} at {new Date(selectedSlot.start_time).toLocaleTimeString('en-US', {
-                        hour: 'numeric',
-                        minute: '2-digit'
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
+              <SmartScheduler
+                onSelect={(slot) => setSelectedSlot(slot)}
+                selectedSlot={selectedSlot}
+                appointmentType="pre-qualification-call"
+                durationMinutes={30}
+                daysAhead={14}
+                title="Schedule Your Consultation (Optional)"
+                subtitle="Book a time to speak with a mortgage specialist"
+              />
             </div>
 
             {/* Consent */}
