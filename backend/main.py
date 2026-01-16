@@ -21307,6 +21307,14 @@ except Exception as e:
     purl_routes_error = traceback.format_exc()
     logger.warning(f"⚠️ PURL Portal routes not loaded: {e}")
 
+# Workspace Documents routes (for DocumentsNeeded component)
+try:
+    from routes.workspace_documents_routes import router as workspace_documents_router
+    app.include_router(workspace_documents_router, tags=["Workspace Documents"])
+    logger.info("✅ Workspace Documents routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Workspace Documents routes not loaded: {e}")
+
 # Estimate Parser routes (Loan Estimate comparison tool)
 try:
     from routes.estimate_parser_routes import router as estimate_parser_router

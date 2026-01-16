@@ -3,11 +3,13 @@
  * Provides progress bar, stage navigation, and layout structure
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, lazy, Suspense } from 'react';
 import { useApplication } from '../contexts/ApplicationContext';
 import { getStages, getVisibleStages, getStageById } from '../config/stageConfig';
-import { useDocumentChecklist } from '../hooks/useDocumentChecklist';
 import './ApplicationShell.css';
+
+// Lazy load DocumentsNeeded component for better performance
+const DocumentsNeeded = lazy(() => import('./DocumentsNeeded'));
 
 const ApplicationShell = ({
   children,
@@ -22,11 +24,11 @@ const ApplicationShell = ({
     currentQuestionIndex,
     formData,
     isDirty,
+    workspaceSlug,
   } = state;
 
-  // Document checklist state
-  const [isChecklistExpanded, setIsChecklistExpanded] = useState(false);
-  const { requiredDocuments, categories, totalRequired } = useDocumentChecklist(formData);
+  // Document sidebar toggle state
+  const [isChecklistExpanded, setIsChecklistExpanded] = useState(true);
 
   // Get stages based on application type
   const allStages = useMemo(() => getStages(applicationType), [applicationType]);
@@ -178,7 +180,7 @@ const ApplicationShell = ({
       </div>
 
       {/* Dynamic Document Checklist */}
-      {showDocumentChecklist && totalRequired > 0 && (
+      {showDocumentChecklist && (
         <div className={`document-checklist-sidebar ${isChecklistExpanded ? 'expanded' : ''}`}>
           <button
             type="button"
@@ -187,39 +189,18 @@ const ApplicationShell = ({
             aria-expanded={isChecklistExpanded}
           >
             <span className="checklist-icon">📋</span>
-            <span className="checklist-count">{totalRequired} Documents Needed</span>
+            <span className="checklist-count">Documents Needed</span>
             <span className="toggle-arrow">{isChecklistExpanded ? '▼' : '▶'}</span>
           </button>
 
           {isChecklistExpanded && (
             <div className="checklist-content">
-              <p className="checklist-intro">
-                Based on your answers, you'll need to provide these documents:
-              </p>
-
-              {Object.entries(categories).map(([category, docs]) => (
-                docs.length > 0 && (
-                  <div key={category} className="checklist-category">
-                    <h4 className="category-title">{category}</h4>
-                    <ul className="document-list">
-                      {docs.map((doc) => (
-                        <li key={doc.id} className={`document-item ${doc.priority === 'high' ? 'high-priority' : ''}`}>
-                          <span className="doc-name">{doc.name}</span>
-                          {doc.description && (
-                            <span className="doc-description">{doc.description}</span>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )
-              ))}
-
-              <div className="checklist-footer">
-                <p className="checklist-note">
-                  You'll be able to upload these after completing the application.
-                </p>
-              </div>
+              <Suspense fallback={<div className="checklist-loading">Loading...</div>}>
+                <DocumentsNeeded
+                  applicationData={formData}
+                  workspaceId={workspaceSlug}
+                />
+              </Suspense>
             </div>
           )}
         </div>
