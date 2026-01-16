@@ -1,0 +1,174 @@
+/* EmailInput Styles */
+
+.email-input-wrapper {
+  width: 100%;
+}
+
+.email-input-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.email-input-label .required {
+  color: #ef4444;
+  margin-left: 4px;
+}
+
+.email-input-container {
+  position: relative;
+}
+
+.email-input {
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 18px;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #111827;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.email-input::placeholder {
+  color: #9ca3af;
+}
+
+.email-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.email-input:disabled {
+  background: #f3f4f6;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+/* Error State */
+.email-input-wrapper.has-error .email-input {
+  border-color: #ef4444;
+}
+
+.email-input-wrapper.has-error .email-input:focus {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+/* Suggestion State */
+.email-input-wrapper.has-suggestion .email-input {
+  border-color: #f59e0b;
+}
+
+/* Typo Suggestion Banner */
+.email-typo-suggestion {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 12px 16px;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+}
+
+.email-typo-suggestion .suggestion-icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #f59e0b;
+}
+
+.email-typo-suggestion .suggestion-content {
+  flex: 1;
+}
+
+.email-typo-suggestion .suggestion-text {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: #92400e;
+}
+
+.email-typo-suggestion .suggestion-text strong {
+  color: #78350f;
+}
+
+.email-typo-suggestion .suggestion-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.email-typo-suggestion .suggestion-btn {
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.email-typo-suggestion .suggestion-btn.accept {
+  background: #f59e0b;
+  color: white;
+  border: none;
+}
+
+.email-typo-suggestion .suggestion-btn.accept:hover {
+  background: #d97706;
+}
+
+.email-typo-suggestion .suggestion-btn.dismiss {
+  background: white;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+}
+
+.email-typo-suggestion .suggestion-btn.dismiss:hover {
+  background: #f3f4f6;
+}
+
+/* Help Text */
+.email-input-help {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+/* Error Text */
+.email-input-error {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #ef4444;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .email-input {
+    padding: 12px 14px;
+    font-size: 16px;
+  }
+
+  .email-typo-suggestion {
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .email-typo-suggestion .suggestion-icon {
+    display: none;
+  }
+
+  .email-typo-suggestion .suggestion-actions {
+    flex-wrap: wrap;
+  }
+
+  .email-typo-suggestion .suggestion-btn {
+    flex: 1;
+    min-width: 100px;
+    text-align: center;
+  }
+}

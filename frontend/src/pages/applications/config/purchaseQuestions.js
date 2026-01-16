@@ -24,6 +24,9 @@ export const QuestionTypes = {
   CREDIT_AUTH: 'credit-auth', // Credit authorization agreement
   REALTOR_LOOKUP: 'realtor-lookup', // Realtor CRM lookup
   CALENDAR_SCHEDULER: 'calendar-scheduler', // Smart calendar appointment scheduling
+  DURATION: 'duration', // Combined years and months input
+  DOWNPAYMENT: 'downpayment', // Combined amount or percentage input
+  FILE_UPLOAD: 'file-upload', // File upload with document parsing
 };
 
 // ============================================
@@ -105,11 +108,12 @@ export const aboutYouQuestions = [
   {
     id: 'first_name',
     stage: 'about_you',
-    question: "What's your first name?",
+    question: "What's your legal first name?",
     type: QuestionTypes.TEXT,
-    placeholder: 'First name',
+    placeholder: 'Legal first name',
     required: true,
     borrowerSpecific: true,
+    helpText: 'Enter your name exactly as it appears on your government ID',
     order: 6,
   },
   {
@@ -301,44 +305,30 @@ export const aboutYouQuestions = [
     order: 21,
   },
   {
-    id: 'time_at_current_address_years',
+    id: 'time_at_current_address',
     stage: 'about_you',
     question: 'How long have you lived at your current address?',
-    subQuestion: 'Years',
-    type: QuestionTypes.NUMBER,
-    placeholder: '0',
-    min: 0,
-    max: 99,
+    type: QuestionTypes.DURATION,
     required: true,
     borrowerSpecific: true,
+    helpText: 'Enter years and months',
     order: 22,
-  },
-  {
-    id: 'time_at_current_address_months',
-    stage: 'about_you',
-    subQuestion: 'Months',
-    type: QuestionTypes.NUMBER,
-    placeholder: '0',
-    min: 0,
-    max: 11,
-    borrowerSpecific: true,
-    groupWith: 'time_at_current_address_years',
-    order: 23,
   },
   // Previous address (if less than 2 years at current)
   {
     id: 'needs_previous_address',
     stage: 'about_you',
     question: 'We need your previous address',
-    type: QuestionTypes.TEXT, // Display only
-    helpText: 'Lenders require 2 years of residence history',
+    type: QuestionTypes.INFO,
+    infoText: 'Lenders require 2 years of residence history',
     showIf: (data, borrower) => {
-      const years = parseInt(borrower.time_at_current_address_years || 0);
-      const months = parseInt(borrower.time_at_current_address_months || 0);
+      const duration = borrower.time_at_current_address || {};
+      const years = parseInt(duration.years || 0);
+      const months = parseInt(duration.months || 0);
       return (years * 12 + months) < 24;
     },
     borrowerSpecific: true,
-    order: 24,
+    order: 23,
   },
   {
     id: 'previous_address',
@@ -346,12 +336,13 @@ export const aboutYouQuestions = [
     question: "What's your previous address?",
     type: QuestionTypes.ADDRESS,
     showIf: (data, borrower) => {
-      const years = parseInt(borrower.time_at_current_address_years || 0);
-      const months = parseInt(borrower.time_at_current_address_months || 0);
+      const duration = borrower.time_at_current_address || {};
+      const years = parseInt(duration.years || 0);
+      const months = parseInt(duration.months || 0);
       return (years * 12 + months) < 24;
     },
     borrowerSpecific: true,
-    order: 25,
+    order: 24,
   },
 ];
 
@@ -441,21 +432,10 @@ export const newHomeQuestions = [
     id: 'down_payment',
     stage: 'new_home',
     question: 'How much are you putting down?',
-    type: QuestionTypes.CURRENCY,
-    placeholder: '$0',
+    type: QuestionTypes.DOWNPAYMENT,
+    helpText: 'Enter an amount or percentage',
     required: true,
     order: 8,
-  },
-  {
-    id: 'down_payment_percent',
-    stage: 'new_home',
-    question: 'Or enter as a percentage',
-    type: QuestionTypes.PERCENTAGE,
-    placeholder: '20%',
-    min: 0,
-    max: 99,
-    groupWith: 'down_payment',
-    order: 9,
   },
 ];
 
@@ -515,54 +495,65 @@ export const incomeQuestions = [
     order: 4,
   },
   {
-    id: 'years_at_job',
+    id: 'time_at_job',
     stage: 'income',
     question: 'How long have you worked there?',
-    subQuestion: 'Years',
-    type: QuestionTypes.NUMBER,
-    placeholder: '0',
-    min: 0,
-    max: 50,
+    type: QuestionTypes.DURATION,
     showIf: (data, borrower) => borrower.employment_status === 'employed',
     required: true,
     borrowerSpecific: true,
+    helpText: 'Enter years and months',
     order: 5,
-  },
-  {
-    id: 'months_at_job',
-    stage: 'income',
-    subQuestion: 'Months',
-    type: QuestionTypes.NUMBER,
-    placeholder: '0',
-    min: 0,
-    max: 11,
-    groupWith: 'years_at_job',
-    showIf: (data, borrower) => borrower.employment_status === 'employed',
-    borrowerSpecific: true,
-    order: 6,
   },
   {
     id: 'years_in_profession',
     stage: 'income',
     question: 'How long have you been in this line of work?',
-    type: QuestionTypes.NUMBER,
-    placeholder: '0',
-    min: 0,
-    max: 50,
+    type: QuestionTypes.DURATION,
     showIf: (data, borrower) => borrower.employment_status === 'employed',
     borrowerSpecific: true,
-    order: 7,
+    helpText: 'Enter years and months',
+    order: 6,
+  },
+  {
+    id: 'pay_type',
+    stage: 'income',
+    question: 'How are you paid?',
+    type: QuestionTypes.SINGLE_CHOICE,
+    options: [
+      { value: 'hourly', label: 'Hourly' },
+      { value: 'salary', label: 'Salary' },
+      { value: 'commission', label: '100% Commission' },
+      { value: 'tips', label: 'Tips' },
+      { value: 'other', label: 'Other' },
+    ],
+    showIf: (data, borrower) => borrower.employment_status === 'employed',
+    required: true,
+    borrowerSpecific: true,
+    order: 8,
+  },
+  {
+    id: 'pay_type_other',
+    stage: 'income',
+    question: 'Please describe how you are paid',
+    type: QuestionTypes.TEXT,
+    placeholder: 'Describe your pay structure',
+    showIf: (data, borrower) => borrower.employment_status === 'employed' && borrower.pay_type === 'other',
+    required: true,
+    borrowerSpecific: true,
+    order: 9,
   },
   {
     id: 'annual_base_income',
     stage: 'income',
-    question: "What's your annual base salary?",
+    question: "What's your annual base income?",
     type: QuestionTypes.CURRENCY,
     placeholder: '$0',
     showIf: (data, borrower) => borrower.employment_status === 'employed',
     required: true,
     borrowerSpecific: true,
-    order: 8,
+    helpText: (data, borrower) => borrower.pay_type === 'hourly' ? 'Enter your estimated annual income based on hourly rate' : 'Enter your annual salary',
+    order: 10,
   },
   {
     id: 'has_overtime',
@@ -953,6 +944,17 @@ export const realEstateOwnedQuestions = [
     showIf: (data) => data.owns_other_property === true && data.reo_property_1_use === 'investment',
     order: 9,
   },
+  {
+    id: 'reo_property_1_mortgage_statement',
+    stage: 'real_estate_owned',
+    question: 'Please upload your mortgage statement',
+    type: QuestionTypes.FILE_UPLOAD,
+    helpText: 'Upload a recent mortgage statement. We will automatically extract the loan details.',
+    acceptedTypes: '.pdf,.jpg,.jpeg,.png',
+    showIf: (data) => data.owns_other_property === true && data.reo_property_1_has_mortgage === true,
+    documentType: 'mortgage_statement',
+    order: 10,
+  },
   // Will sell current property
   {
     id: 'will_sell_current_property',
@@ -1097,7 +1099,7 @@ export const governmentMonitoringQuestions = [
     question: 'Government Monitoring Information',
     type: QuestionTypes.INFO, // Display only - no input
     infoText: 'The following information is requested by the federal government to monitor compliance with federal statutes. You are not required to furnish this information, but are encouraged to do so.',
-    infoStyle: { fontSize: '12pt' },
+    infoStyle: { fontSize: '16px', lineHeight: '1.6', fontWeight: '400' },
     order: 1,
   },
   {

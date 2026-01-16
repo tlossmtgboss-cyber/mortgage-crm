@@ -1,62 +1,44 @@
 /**
- * CalendarSchedulerInput - Integrated calendar scheduler for appointment booking
- * Uses the CRM's scheduler API to show available slots
+ * CalendarSchedulerInput - Smart scheduler matching original CRM design
+ * Shows time slots in card format with time/date, supports Calendly integration
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import './CalendarSchedulerInput.css';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || '';
 
-// Days of the week
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-// Generate time slots for a day
-const generateTimeSlots = (date) => {
+// Generate available time slots for next 5 business days
+const generateTimeSlots = () => {
   const slots = [];
-  const baseDate = new Date(date);
+  const today = new Date();
 
-  // Generate slots from 9 AM to 5 PM
-  for (let hour = 9; hour < 17; hour++) {
-    for (let minute of [0, 30]) {
-      const slotTime = new Date(baseDate);
-      slotTime.setHours(hour, minute, 0, 0);
+  for (let d = 1; d <= 7; d++) {
+    const date = new Date(today);
+    date.setDate(today.getDate() + d);
 
-      // Skip past times for today
-      if (slotTime > new Date()) {
-        slots.push({
-          time: slotTime,
-          label: slotTime.toLocaleTimeString('en-US', {
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true,
-          }),
-          value: slotTime.toISOString(),
-        });
-      }
-    }
+    // Skip weekends
+    if (date.getDay() === 0 || date.getDay() === 6) continue;
+
+    // Available times
+    const times = ['9:00 AM', '10:30 AM', '1:00 PM', '2:30 PM', '4:00 PM'];
+
+    times.forEach(time => {
+      slots.push({
+        id: `${date.toISOString().split('T')[0]}-${time}`,
+        date: date.toLocaleDateString('en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric'
+        }),
+        time: time,
+        datetime: date.toISOString(),
+      });
+    });
   }
 
-  return slots;
-};
-
-// Get calendar days for a month
-const getCalendarDays = (year, month) => {
-  const firstDay = new Date(year, month, 1);
-  const lastDay = new Date(year, month + 1, 0);
-  const days = [];
-
-  // Add padding for days before first of month
-  for (let i = 0; i < firstDay.getDay(); i++) {
-    days.push(null);
-  }
-
-  // Add all days of month
-  for (let day = 1; day <= lastDay.getDate(); day++) {
-    days.push(new Date(year, month, day));
-  }
-
-  return days;
+  // Return first 12 slots
+  return slots.slice(0, 12);
 };
 
 const CalendarSchedulerInput = ({
@@ -64,241 +46,155 @@ const CalendarSchedulerInput = ({
   onChange,
   error,
   helpText,
-  workspaceSlug,
+  disabled = false,
   appointmentType = 'consultation',
   duration = 30,
+  calendlyUrl = null,
 }) => {
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState(null);
-  const [selectedTime, setSelectedTime] = useState(null);
-  const [availableSlots, setAvailableSlots] = useState([]);
+  const [selectedSlot, setSelectedSlot] = useState(null);
+  const [apiSlots, setApiSlots] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [fetchError, setFetchError] = useState(null);
 
-  // Parse existing value
-  useEffect(() => {
-    if (value) {
-      const dateValue = typeof value === 'string' ? new Date(value) : value.datetime ? new Date(value.datetime) : null;
-      if (dateValue && !isNaN(dateValue)) {
-        setSelectedDate(new Date(dateValue.getFullYear(), dateValue.getMonth(), dateValue.getDate()));
-        setSelectedTime(dateValue.toISOString());
-      }
+  // Generate time slots (use API slots if available, otherwise generate)
+  const timeSlots = useMemo(() => {
+    if (apiSlots && apiSlots.length > 0) {
+      return apiSlots;
     }
-  }, []);
+    return generateTimeSlots();
+  }, [apiSlots]);
 
-  // Fetch available slots from API
-  const fetchAvailableSlots = useCallback(async (date) => {
-    if (!date) return;
+  // Try to fetch slots from API
+  useEffect(() => {
+    const fetchSlots = async () => {
+      if (!API_BASE_URL) return;
 
-    const dateStr = date.toISOString().split('T')[0];
-
-    // If we have a workspace, try to fetch from API
-    if (workspaceSlug && API_BASE_URL) {
       setIsLoading(true);
-      setFetchError(null);
-
       try {
         const response = await fetch(
-          `${API_BASE_URL}/api/v1/scheduler/available-slots?date=${dateStr}&type=${appointmentType}&duration=${duration}`,
-          {
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          }
+          `${API_BASE_URL}/api/v1/scheduler/available-slots?type=${appointmentType}&duration=${duration}`,
+          { headers: { 'Content-Type': 'application/json' } }
         );
 
         if (response.ok) {
           const data = await response.json();
-          setAvailableSlots(data.slots || []);
-        } else {
-          // Fallback to generated slots
-          setAvailableSlots(generateTimeSlots(date));
+          if (data.slots && data.slots.length > 0) {
+            setApiSlots(data.slots);
+          }
         }
       } catch (err) {
-        console.warn('Failed to fetch slots, using defaults:', err);
-        setAvailableSlots(generateTimeSlots(date));
+        // Silently fall back to generated slots
+        console.warn('Using generated time slots:', err.message);
       } finally {
         setIsLoading(false);
       }
-    } else {
-      // Use generated slots
-      setAvailableSlots(generateTimeSlots(date));
-    }
-  }, [workspaceSlug, appointmentType, duration]);
+    };
 
-  // Fetch slots when date changes
+    fetchSlots();
+  }, [appointmentType, duration]);
+
+  // Parse existing value
   useEffect(() => {
-    if (selectedDate) {
-      fetchAvailableSlots(selectedDate);
+    if (value && typeof value === 'object' && value.slot_id) {
+      setSelectedSlot(value.slot_id);
+    } else if (value && typeof value === 'string') {
+      setSelectedSlot(value);
     }
-  }, [selectedDate, fetchAvailableSlots]);
-
-  // Get calendar days for current month
-  const calendarDays = useMemo(
-    () => getCalendarDays(currentMonth.getFullYear(), currentMonth.getMonth()),
-    [currentMonth]
-  );
-
-  // Check if a date is selectable (not in past, not weekend for business hours)
-  const isDateSelectable = useCallback((date) => {
-    if (!date) return false;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return date >= today;
   }, []);
 
-  // Check if date is selected
-  const isDateSelected = useCallback((date) => {
-    if (!date || !selectedDate) return false;
-    return (
-      date.getDate() === selectedDate.getDate() &&
-      date.getMonth() === selectedDate.getMonth() &&
-      date.getFullYear() === selectedDate.getFullYear()
-    );
-  }, [selectedDate]);
+  // Handle slot selection
+  const handleSlotSelect = (slot) => {
+    if (disabled) return;
 
-  // Handle month navigation
-  const goToPrevMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
-  };
+    setSelectedSlot(slot.id);
 
-  const goToNextMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
-  };
-
-  // Handle date selection
-  const handleDateSelect = (date) => {
-    if (isDateSelectable(date)) {
-      setSelectedDate(date);
-      setSelectedTime(null); // Reset time when date changes
-    }
-  };
-
-  // Handle time selection
-  const handleTimeSelect = (slot) => {
-    setSelectedTime(slot.value);
-
-    // Notify parent with full selection
+    // Notify parent with selection
     onChange({
-      date: selectedDate.toISOString().split('T')[0],
-      time: slot.label,
-      datetime: slot.value,
-      duration,
+      slot_id: slot.id,
+      date: slot.date,
+      time: slot.time,
+      datetime: slot.datetime,
       appointmentType,
+      duration,
     });
   };
 
-  const monthYear = currentMonth.toLocaleDateString('en-US', {
-    month: 'long',
-    year: 'numeric',
-  });
-
-  return (
-    <div className="calendar-scheduler-input">
-      {/* Calendar Section */}
-      <div className="calendar-section">
-        <div className="calendar-header">
-          <button
-            type="button"
-            className="nav-arrow"
-            onClick={goToPrevMonth}
-            aria-label="Previous month"
-          >
-            ←
-          </button>
-          <span className="month-year">{monthYear}</span>
-          <button
-            type="button"
-            className="nav-arrow"
-            onClick={goToNextMonth}
-            aria-label="Next month"
-          >
-            →
-          </button>
+  // If Calendly is configured, show embed
+  if (calendlyUrl) {
+    return (
+      <div className="calendar-scheduler-input">
+        <div className="calendly-embed-container">
+          <iframe
+            src={`${calendlyUrl}?hide_gdpr_banner=1&hide_event_type_details=1`}
+            width="100%"
+            height="630"
+            frameBorder="0"
+            title="Schedule Consultation"
+            style={{ minWidth: '320px', borderRadius: '8px' }}
+          />
+          <div className="calendly-skip-option">
+            <p>After scheduling, click Continue to proceed with your application.</p>
+          </div>
         </div>
-
-        <div className="calendar-grid">
-          {/* Day headers */}
-          {DAYS.map((day) => (
-            <div key={day} className="day-header">
-              {day}
-            </div>
-          ))}
-
-          {/* Calendar days */}
-          {calendarDays.map((date, index) => (
-            <button
-              key={index}
-              type="button"
-              className={`calendar-day ${
-                !date ? 'empty' : ''
-              } ${
-                date && isDateSelected(date) ? 'selected' : ''
-              } ${
-                date && !isDateSelectable(date) ? 'disabled' : ''
-              } ${
-                date && date.toDateString() === new Date().toDateString() ? 'today' : ''
-              }`}
-              onClick={() => date && handleDateSelect(date)}
-              disabled={!date || !isDateSelectable(date)}
-            >
-              {date ? date.getDate() : ''}
-            </button>
-          ))}
-        </div>
+        {helpText && <p className="help-text">{helpText}</p>}
+        {error && <p className="error-text">{error}</p>}
       </div>
+    );
+  }
 
-      {/* Time Slots Section */}
-      {selectedDate && (
-        <div className="time-slots-section">
-          <h4 className="time-slots-title">
-            Available Times for {selectedDate.toLocaleDateString('en-US', {
-              weekday: 'long',
-              month: 'short',
-              day: 'numeric',
-            })}
-          </h4>
-
-          {isLoading ? (
-            <div className="loading-slots">
-              <div className="spinner"></div>
-              <span>Loading available times...</span>
-            </div>
-          ) : availableSlots.length > 0 ? (
-            <div className="time-slots-grid">
-              {availableSlots.map((slot, index) => (
-                <button
-                  key={index}
-                  type="button"
-                  className={`time-slot ${selectedTime === slot.value ? 'selected' : ''}`}
-                  onClick={() => handleTimeSelect(slot)}
-                >
-                  {slot.label}
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="no-slots">
-              <p>No available times for this date.</p>
-              <p className="hint">Try selecting a different date.</p>
-            </div>
-          )}
+  // Default: Show time slot grid matching original design
+  return (
+    <div className={`calendar-scheduler-input ${disabled ? 'disabled' : ''}`}>
+      <div className="calendar-placeholder">
+        <div className="cal-icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+            <line x1="16" y1="2" x2="16" y2="6" />
+            <line x1="8" y1="2" x2="8" y2="6" />
+            <line x1="3" y1="10" x2="21" y2="10" />
+            <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01" />
+          </svg>
         </div>
-      )}
+        <h4>Pick a Time That Works For You</h4>
+        <p>We want to coordinate a time to review the application with you. Choose a time that is most convenient for you.</p>
 
-      {/* Selected Appointment Summary */}
-      {selectedDate && selectedTime && (
-        <div className="appointment-summary">
-          <span className="summary-icon">✓</span>
-          <span className="summary-text">
-            Selected: {selectedDate.toLocaleDateString('en-US', {
-              weekday: 'long',
-              month: 'long',
-              day: 'numeric',
-            })} at {availableSlots.find(s => s.value === selectedTime)?.label}
-          </span>
-        </div>
-      )}
+        {isLoading ? (
+          <div className="loading-slots">
+            <div className="spinner"></div>
+            <span>Loading available times...</span>
+          </div>
+        ) : (
+          <div className="time-slots">
+            {timeSlots.map(slot => (
+              <div
+                key={slot.id}
+                className={`time-slot ${selectedSlot === slot.id ? 'selected' : ''} ${disabled ? 'disabled' : ''}`}
+                onClick={() => handleSlotSelect(slot)}
+                role="button"
+                tabIndex={disabled ? -1 : 0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleSlotSelect(slot);
+                  }
+                }}
+              >
+                <div className="time-slot-time">{slot.time}</div>
+                <div className="time-slot-date">{slot.date}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {selectedSlot && (
+          <div className="selected-confirmation">
+            <span className="check-icon">✓</span>
+            <span>
+              Appointment selected: {timeSlots.find(s => s.id === selectedSlot)?.time} on{' '}
+              {timeSlots.find(s => s.id === selectedSlot)?.date}
+            </span>
+          </div>
+        )}
+      </div>
 
       {helpText && <p className="help-text">{helpText}</p>}
       {error && <p className="error-text">{error}</p>}

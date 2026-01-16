@@ -1,0 +1,129 @@
+/* DownpaymentInput Styles */
+
+.downpayment-input {
+  width: 100%;
+}
+
+.downpayment-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.toggle-btn {
+  flex: 1;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.toggle-btn:hover:not(:disabled) {
+  border-color: #d1d5db;
+  background: #f9fafb;
+}
+
+.toggle-btn.active {
+  border-color: #3b82f6;
+  background: #eff6ff;
+  color: #3b82f6;
+}
+
+.toggle-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.downpayment-field {
+  width: 100%;
+}
+
+.input-with-prefix,
+.input-with-suffix {
+  display: flex;
+  align-items: center;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  background: #ffffff;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.input-with-prefix:focus-within,
+.input-with-suffix:focus-within {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.input-prefix,
+.input-suffix {
+  padding: 14px 12px;
+  font-size: 18px;
+  font-weight: 500;
+  color: #6b7280;
+  background: #f9fafb;
+}
+
+.input-prefix {
+  border-right: 1px solid #e5e7eb;
+}
+
+.input-suffix {
+  border-left: 1px solid #e5e7eb;
+}
+
+.downpayment-input-field {
+  flex: 1;
+  padding: 14px 16px;
+  font-size: 18px;
+  border: none;
+  background: transparent;
+  outline: none;
+}
+
+.downpayment-input-field:disabled {
+  background: #f3f4f6;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.downpayment-input.has-error .input-with-prefix,
+.downpayment-input.has-error .input-with-suffix {
+  border-color: #ef4444;
+}
+
+.downpayment-input .help-text {
+  margin: 8px 0 0 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.downpayment-input .error-text {
+  margin: 8px 0 0 0;
+  font-size: 13px;
+  color: #ef4444;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .toggle-btn {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+
+  .input-prefix,
+  .input-suffix {
+    padding: 12px 10px;
+    font-size: 16px;
+  }
+
+  .downpayment-input-field {
+    padding: 12px 14px;
+    font-size: 16px;
+  }
+}

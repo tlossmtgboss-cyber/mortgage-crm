@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react';
 /**
  * Hook to load and manage Google Places API
  *
+ * Uses the newer Places Autocomplete element API (not deprecated AutocompleteService)
+ *
  * Usage:
  * const { isLoaded, loadError } = useGooglePlaces();
  */
@@ -59,7 +61,7 @@ const loadGooglePlaces = () => {
       callbacks.length = 0;
     };
 
-    // Create and load script
+    // Create and load script - using places library for Autocomplete element
     const script = document.createElement('script');
     script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=__GOOGLE_PLACES_CALLBACK__`;
     script.async = true;
@@ -104,47 +106,6 @@ export function useGooglePlaces() {
   }, []);
 
   return { isLoaded, isLoading, error };
-}
-
-/**
- * Hook to create a Google Places Autocomplete service
- */
-export function usePlacesAutocomplete() {
-  const { isLoaded } = useGooglePlaces();
-  const [autocompleteService, setAutocompleteService] = useState(null);
-  const [placesService, setPlacesService] = useState(null);
-  const [sessionToken, setSessionToken] = useState(null);
-
-  useEffect(() => {
-    if (isLoaded && window.google && window.google.maps && window.google.maps.places) {
-      const service = new window.google.maps.places.AutocompleteService();
-      setAutocompleteService(service);
-
-      // PlacesService needs a DOM element
-      const dummyDiv = document.createElement('div');
-      const places = new window.google.maps.places.PlacesService(dummyDiv);
-      setPlacesService(places);
-
-      // Create session token for API billing optimization
-      const token = new window.google.maps.places.AutocompleteSessionToken();
-      setSessionToken(token);
-    }
-  }, [isLoaded]);
-
-  // Function to refresh session token (call after a selection)
-  const refreshSessionToken = () => {
-    if (window.google && window.google.maps && window.google.maps.places) {
-      setSessionToken(new window.google.maps.places.AutocompleteSessionToken());
-    }
-  };
-
-  return {
-    isLoaded,
-    autocompleteService,
-    placesService,
-    sessionToken,
-    refreshSessionToken,
-  };
 }
 
 export default useGooglePlaces;

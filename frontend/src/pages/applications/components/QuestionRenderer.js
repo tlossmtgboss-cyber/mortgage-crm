@@ -8,6 +8,7 @@ import { QuestionTypes } from '../config/purchaseQuestions';
 import {
   ChoiceInput,
   TextInput,
+  EmailInput,
   CurrencyInput,
   SSNInput,
   DateInput,
@@ -19,6 +20,9 @@ import {
   StateSelect,
   RealtorLookupInput,
   CalendarSchedulerInput,
+  DurationInput,
+  DownpaymentInput,
+  FileUploadInput,
 } from './inputs';
 import './QuestionRenderer.css';
 
@@ -178,11 +182,9 @@ const QuestionRenderer = ({
 
       case QuestionTypes.EMAIL:
         return (
-          <TextInput
+          <EmailInput
             ref={inputRef}
             {...commonProps}
-            type="email"
-            inputMode="email"
             onKeyDown={handleKeyDown}
           />
         );
@@ -373,6 +375,32 @@ const QuestionRenderer = ({
             {...commonProps}
             appointmentType={question.appointmentType || 'consultation'}
             duration={question.duration || 30}
+          />
+        );
+
+      case QuestionTypes.DURATION:
+        // Combined years and months input
+        return (
+          <DurationInput
+            {...commonProps}
+          />
+        );
+
+      case QuestionTypes.DOWNPAYMENT:
+        // Combined amount or percentage input
+        return (
+          <DownpaymentInput
+            {...commonProps}
+          />
+        );
+
+      case QuestionTypes.FILE_UPLOAD:
+        // File upload with document parsing
+        return (
+          <FileUploadInput
+            {...commonProps}
+            acceptedTypes={question.acceptedTypes || '.pdf,.jpg,.jpeg,.png'}
+            documentType={question.documentType || 'document'}
           />
         );
 

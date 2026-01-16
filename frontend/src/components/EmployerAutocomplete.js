@@ -5,6 +5,8 @@ import './EmployerAutocomplete.css';
 /**
  * EmployerAutocomplete - Google Places powered employer/business search
  *
+ * Uses the new Places Autocomplete element API (not deprecated AutocompleteService)
+ *
  * Features:
  * - Real-time business suggestions as user types
  * - Filters for businesses/establishments
@@ -25,151 +27,54 @@ const EmployerAutocomplete = ({
   country = 'us',
 }) => {
   const [inputValue, setInputValue] = useState(value);
-  const [suggestions, setSuggestions] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [selectedIndex, setSelectedIndex] = useState(-1);
   const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
 
   // Use the hook to trigger loading of Google Places script
   const { isLoaded: isGoogleScriptLoaded } = useGooglePlaces();
 
   const inputRef = useRef(null);
-  const dropdownRef = useRef(null);
-  const autocompleteService = useRef(null);
-  const placesService = useRef(null);
-  const sessionToken = useRef(null);
-  const debounceTimer = useRef(null);
+  const autocompleteRef = useRef(null);
 
-  // Initialize Google Places services when script is loaded
+  // Initialize Google Places Autocomplete when script is loaded
   useEffect(() => {
-    if (isGoogleScriptLoaded && window.google && window.google.maps && window.google.maps.places) {
-      autocompleteService.current = new window.google.maps.places.AutocompleteService();
-
-      const dummyDiv = document.createElement('div');
-      placesService.current = new window.google.maps.places.PlacesService(dummyDiv);
-      sessionToken.current = new window.google.maps.places.AutocompleteSessionToken();
-      setIsGoogleLoaded(true);
-    }
-  }, [isGoogleScriptLoaded]);
-
-  // Sync external value
-  useEffect(() => {
-    if (value !== inputValue) {
-      setInputValue(value);
-    }
-  }, [value]);
-
-  // Handle click outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target) &&
-        inputRef.current &&
-        !inputRef.current.contains(event.target)
-      ) {
-        setShowDropdown(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('touchstart', handleClickOutside);
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('touchstart', handleClickOutside);
-    };
-  }, []);
-
-  // Fetch suggestions
-  const fetchSuggestions = useCallback((query) => {
-    if (!autocompleteService.current || query.length < 2) {
-      setSuggestions([]);
+    if (!isGoogleScriptLoaded || !window.google || !window.google.maps || !window.google.maps.places) {
       return;
     }
 
-    setIsLoading(true);
-
-    const request = {
-      input: query,
-      sessionToken: sessionToken.current,
-      componentRestrictions: { country },
-      types: ['establishment'], // Search for businesses
-    };
-
-    autocompleteService.current.getPlacePredictions(request, (predictions, status) => {
-      setIsLoading(false);
-
-      if (status === window.google.maps.places.PlacesServiceStatus.OK && predictions) {
-        setSuggestions(predictions.map(p => ({
-          placeId: p.place_id,
-          description: p.description,
-          mainText: p.structured_formatting?.main_text || p.description,
-          secondaryText: p.structured_formatting?.secondary_text || '',
-          types: p.types || [],
-        })));
-        setShowDropdown(true);
-      } else {
-        setSuggestions([]);
-      }
-    });
-  }, [country]);
-
-  // Handle input change
-  const handleInputChange = (e) => {
-    const newValue = e.target.value;
-    setInputValue(newValue);
-    setSelectedIndex(-1);
-
-    if (onChange) {
-      onChange(newValue);
-    }
-
-    if (debounceTimer.current) {
-      clearTimeout(debounceTimer.current);
-    }
-
-    debounceTimer.current = setTimeout(() => {
-      fetchSuggestions(newValue);
-    }, 300);
-  };
-
-  // Select suggestion and get details
-  const handleSelectSuggestion = (suggestion) => {
-    if (!placesService.current) {
-      setInputValue(suggestion.mainText);
-      setShowDropdown(false);
-      if (onChange) onChange(suggestion.mainText);
-      if (onEmployerSelect) {
-        onEmployerSelect({
-          name: suggestion.mainText,
-          address: suggestion.secondaryText,
-        });
-      }
+    if (!inputRef.current) {
       return;
     }
 
-    const request = {
-      placeId: suggestion.placeId,
-      fields: ['name', 'formatted_address', 'address_components', 'formatted_phone_number', 'website', 'types'],
-      sessionToken: sessionToken.current,
-    };
+    // Check if Autocomplete class exists
+    if (typeof window.google.maps.places.Autocomplete !== 'function') {
+      console.warn('[Google Places] Autocomplete class not available');
+      return;
+    }
 
-    placesService.current.getDetails(request, (place, status) => {
-      console.log('[EmployerAutocomplete] getDetails status:', status);
-      console.log('[EmployerAutocomplete] place data:', place);
+    try {
+      // Create Autocomplete instance for establishments (businesses)
+      const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
+        types: ['establishment'],
+        componentRestrictions: { country: country },
+        fields: ['name', 'formatted_address', 'address_components', 'formatted_phone_number', 'website', 'types', 'geometry'],
+      });
 
-      if (status === window.google.maps.places.PlacesServiceStatus.OK && place) {
+      // Handle place selection
+      autocomplete.addListener('place_changed', () => {
+        const place = autocomplete.getPlace();
+
+        if (!place || !place.name) {
+          // User pressed Enter without selecting, or selection failed
+          return;
+        }
+
         const employerData = {
-          name: place.name || suggestion.mainText,
+          name: place.name,
           address: place.formatted_address || '',
           phone: place.formatted_phone_number || '',
           website: place.website || '',
           types: place.types || [],
         };
-
-        console.log('[EmployerAutocomplete] Built employerData:', employerData);
 
         // Parse address components for city/state/zip
         if (place.address_components) {
@@ -200,108 +105,52 @@ const EmployerAutocomplete = ({
           }
         }
 
-        // Update internal state
-        setInputValue(place.name || suggestion.mainText);
-        setShowDropdown(false);
-        setSuggestions([]);
-        sessionToken.current = new window.google.maps.places.AutocompleteSessionToken();
+        setInputValue(place.name);
 
-        // Only call onEmployerSelect (which includes name), skip separate onChange
-        // This prevents race conditions from two sequential state updates
         if (onEmployerSelect) {
-          console.log('[EmployerAutocomplete] Calling onEmployerSelect with:', employerData);
           onEmployerSelect(employerData);
         } else if (onChange) {
-          // Fallback to onChange if onEmployerSelect not provided
-          console.log('[EmployerAutocomplete] Falling back to onChange with:', place.name || suggestion.mainText);
-          onChange(place.name || suggestion.mainText);
+          onChange(place.name);
         }
-      } else {
-        // Handle case where getDetails fails - still update with what we have
-        console.warn('Google Places getDetails failed:', status);
-        setInputValue(suggestion.mainText);
-        setShowDropdown(false);
-        setSuggestions([]);
+      });
 
-        if (onEmployerSelect) {
-          onEmployerSelect({
-            name: suggestion.mainText,
-            address: suggestion.secondaryText || '',
-            phone: '',
-          });
-        } else if (onChange) {
-          onChange(suggestion.mainText);
-        }
+      autocompleteRef.current = autocomplete;
+      setIsGoogleLoaded(true);
+
+    } catch (err) {
+      console.warn('[Google Places] Failed to initialize Autocomplete:', err);
+    }
+
+    // Cleanup
+    return () => {
+      if (autocompleteRef.current && window.google && window.google.maps && window.google.maps.event) {
+        window.google.maps.event.clearInstanceListeners(autocompleteRef.current);
       }
-    });
+    };
+  }, [isGoogleScriptLoaded, country, onChange, onEmployerSelect]);
+
+  // Sync external value
+  useEffect(() => {
+    if (value !== inputValue) {
+      setInputValue(value);
+    }
+  }, [value]);
+
+  // Handle input change
+  const handleInputChange = (e) => {
+    const newValue = e.target.value;
+    setInputValue(newValue);
+
+    if (onChange) {
+      onChange(newValue);
+    }
   };
 
-  // Keyboard navigation
+  // Prevent form submission on Enter (Google handles it)
   const handleKeyDown = (e) => {
-    if (!showDropdown || suggestions.length === 0) {
-      if (e.key === 'ArrowDown' && inputValue.length >= 2) {
-        fetchSuggestions(inputValue);
-      }
-      return;
+    if (e.key === 'Enter' && isGoogleLoaded) {
+      e.preventDefault();
     }
-
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        setSelectedIndex(prev =>
-          prev < suggestions.length - 1 ? prev + 1 : prev
-        );
-        break;
-
-      case 'ArrowUp':
-        e.preventDefault();
-        setSelectedIndex(prev => (prev > 0 ? prev - 1 : -1));
-        break;
-
-      case 'Enter':
-        e.preventDefault();
-        if (selectedIndex >= 0 && suggestions[selectedIndex]) {
-          handleSelectSuggestion(suggestions[selectedIndex]);
-        }
-        break;
-
-      case 'Escape':
-        setShowDropdown(false);
-        setSelectedIndex(-1);
-        break;
-
-      default:
-        break;
-    }
-  };
-
-  const handleFocus = () => {
-    if (suggestions.length > 0) {
-      setShowDropdown(true);
-    }
-  };
-
-  // Get icon based on business type
-  const getBusinessIcon = (types) => {
-    if (types.includes('hospital') || types.includes('doctor') || types.includes('health')) {
-      return '🏥';
-    }
-    if (types.includes('school') || types.includes('university')) {
-      return '🎓';
-    }
-    if (types.includes('bank') || types.includes('finance')) {
-      return '🏦';
-    }
-    if (types.includes('store') || types.includes('shopping')) {
-      return '🏪';
-    }
-    if (types.includes('restaurant') || types.includes('food')) {
-      return '🍽️';
-    }
-    if (types.includes('lodging')) {
-      return '🏨';
-    }
-    return '🏢';
   };
 
   return (
@@ -320,54 +169,13 @@ const EmployerAutocomplete = ({
           value={inputValue}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
-          onFocus={handleFocus}
           placeholder={placeholder}
           disabled={disabled}
           className={`employer-input ${error ? 'has-error' : ''}`}
           autoComplete="off"
           aria-label={label || 'Employer name'}
-          aria-expanded={showDropdown}
-          aria-autocomplete="list"
-          role="combobox"
         />
-
-        {isLoading && (
-          <div className="input-spinner">
-            <div className="spinner-small"></div>
-          </div>
-        )}
       </div>
-
-      {/* Suggestions Dropdown */}
-      {showDropdown && suggestions.length > 0 && (
-        <div ref={dropdownRef} className="employer-dropdown" role="listbox">
-          {suggestions.map((suggestion, index) => (
-            <div
-              key={suggestion.placeId}
-              className={`employer-suggestion ${index === selectedIndex ? 'selected' : ''}`}
-              onClick={() => handleSelectSuggestion(suggestion)}
-              onMouseEnter={() => setSelectedIndex(index)}
-              role="option"
-              aria-selected={index === selectedIndex}
-            >
-              <span className="suggestion-icon">{getBusinessIcon(suggestion.types)}</span>
-              <div className="suggestion-content">
-                <span className="suggestion-name">{suggestion.mainText}</span>
-                {suggestion.secondaryText && (
-                  <span className="suggestion-location">{suggestion.secondaryText}</span>
-                )}
-              </div>
-            </div>
-          ))}
-          <div className="powered-by">
-            <img
-              src="https://developers.google.com/static/maps/documentation/images/google_on_white.png"
-              alt="Powered by Google"
-              height="14"
-            />
-          </div>
-        </div>
-      )}
 
       {error && <div className="employer-error">{error}</div>}
 
