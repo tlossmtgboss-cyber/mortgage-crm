@@ -136,6 +136,12 @@ export const aboutYouQuestions = [
     required: true,
     borrowerSpecific: true,
     helpText: "We'll send your loan updates here",
+    // Enable email validation with typo detection and carrier lookup
+    validation: {
+      checkTypos: true,
+      verifyDeliverable: true,
+      crossReference: 'phone', // Cross-reference with phone for data consistency
+    },
     order: 10,
   },
   {
@@ -146,6 +152,12 @@ export const aboutYouQuestions = [
     placeholder: '(555) 555-5555',
     required: true,
     borrowerSpecific: true,
+    // Enable phone validation with carrier lookup
+    validation: {
+      checkFormat: true,
+      lookupCarrier: true,
+      crossReference: 'email', // Cross-reference with email for data consistency
+    },
     order: 11,
   },
   {
@@ -301,15 +313,6 @@ export const currentMortgageQuestions = [
     order: 4,
   },
   {
-    id: 'original_loan_amount',
-    stage: 'current_mortgage',
-    question: 'What was your original loan amount?',
-    type: QuestionTypes.CURRENCY,
-    placeholder: '$0',
-    required: true,
-    order: 5,
-  },
-  {
     id: 'current_loan_balance',
     stage: 'current_mortgage',
     question: "What's your current loan balance?",
@@ -353,47 +356,6 @@ export const currentMortgageQuestions = [
     ],
     required: true,
     order: 9,
-  },
-  {
-    id: 'loan_start_date',
-    stage: 'current_mortgage',
-    question: 'When did your current mortgage start?',
-    type: QuestionTypes.DATE,
-    placeholder: 'MM/DD/YYYY',
-    helpText: 'Approximate date is fine',
-    order: 10,
-  },
-  {
-    id: 'current_loan_term',
-    stage: 'current_mortgage',
-    question: "What's the term of your current loan?",
-    type: QuestionTypes.SINGLE_CHOICE,
-    options: [
-      { value: '30', label: '30-year' },
-      { value: '20', label: '20-year' },
-      { value: '15', label: '15-year' },
-      { value: '10', label: '10-year' },
-      { value: 'other', label: 'Other' },
-    ],
-    required: true,
-    order: 11,
-  },
-  {
-    id: 'has_pmi',
-    stage: 'current_mortgage',
-    question: 'Are you currently paying mortgage insurance (PMI)?',
-    type: QuestionTypes.BOOLEAN,
-    helpText: 'Check your mortgage statement for PMI or MIP charges',
-    order: 12,
-  },
-  {
-    id: 'pmi_amount',
-    stage: 'current_mortgage',
-    question: 'How much is your monthly mortgage insurance?',
-    type: QuestionTypes.CURRENCY,
-    placeholder: '$0',
-    showIf: { has_pmi: true },
-    order: 13,
   },
   {
     id: 'has_second_mortgage',
@@ -441,15 +403,6 @@ export const secondMortgageQuestions = [
     showIf: { has_second_mortgage: true },
     required: true,
     order: 3,
-  },
-  {
-    id: 'second_mortgage_limit',
-    stage: 'second_mortgage',
-    question: "What's the credit limit? (for HELOC)",
-    type: QuestionTypes.CURRENCY,
-    placeholder: '$0',
-    showIf: { second_mortgage_type: 'heloc' },
-    order: 4,
   },
   {
     id: 'second_mortgage_payment',
@@ -540,15 +493,6 @@ export const propertyQuestions = [
     placeholder: 'MM/DD/YYYY',
     required: true,
     order: 5,
-  },
-  {
-    id: 'original_purchase_price',
-    stage: 'property',
-    question: 'What was the original purchase price?',
-    type: QuestionTypes.CURRENCY,
-    placeholder: '$0',
-    required: true,
-    order: 6,
   },
   {
     id: 'annual_property_tax',
@@ -660,57 +604,69 @@ export const incomeQuestions = [
     placeholder: '(555) 555-5555',
     showIf: (data, borrower) => ['employed', '1099_contractor'].includes(borrower.employment_status),
     borrowerSpecific: true,
+    autoPopulateFrom: { field: 'employer_name', property: 'phone' },
     order: 4,
   },
   {
-    id: 'years_at_job',
+    id: 'time_at_job',
     stage: 'income',
     question: 'How long have you worked there?',
-    subQuestion: 'Years',
-    type: QuestionTypes.NUMBER,
-    placeholder: '0',
-    min: 0,
-    max: 50,
+    type: QuestionTypes.DURATION,
     showIf: (data, borrower) => borrower.employment_status === 'employed',
     required: true,
     borrowerSpecific: true,
+    helpText: 'Enter years and months',
     order: 5,
-  },
-  {
-    id: 'months_at_job',
-    stage: 'income',
-    subQuestion: 'Months',
-    type: QuestionTypes.NUMBER,
-    placeholder: '0',
-    min: 0,
-    max: 11,
-    groupWith: 'years_at_job',
-    showIf: (data, borrower) => borrower.employment_status === 'employed',
-    borrowerSpecific: true,
-    order: 6,
   },
   {
     id: 'years_in_profession',
     stage: 'income',
     question: 'How long have you been in this line of work?',
-    type: QuestionTypes.NUMBER,
-    placeholder: '0',
-    min: 0,
-    max: 50,
+    type: QuestionTypes.DURATION,
     showIf: (data, borrower) => borrower.employment_status === 'employed',
+    borrowerSpecific: true,
+    helpText: 'Enter years and months',
+    order: 6,
+  },
+  {
+    id: 'pay_type',
+    stage: 'income',
+    question: 'How are you paid?',
+    type: QuestionTypes.SINGLE_CHOICE,
+    options: [
+      { value: 'hourly', label: 'Hourly' },
+      { value: 'salary', label: 'Salary' },
+      { value: 'commission', label: '100% Commission' },
+      { value: 'tips', label: 'Tips' },
+      { value: 'other', label: 'Other' },
+    ],
+    showIf: (data, borrower) => borrower.employment_status === 'employed',
+    required: true,
     borrowerSpecific: true,
     order: 7,
   },
   {
+    id: 'pay_type_other',
+    stage: 'income',
+    question: 'Please describe how you are paid',
+    type: QuestionTypes.TEXT,
+    placeholder: 'Describe your pay structure',
+    showIf: (data, borrower) => borrower.employment_status === 'employed' && borrower.pay_type === 'other',
+    required: true,
+    borrowerSpecific: true,
+    order: 8,
+  },
+  {
     id: 'annual_base_income',
     stage: 'income',
-    question: "What's your annual base salary?",
+    question: "What's your annual base income?",
     type: QuestionTypes.CURRENCY,
     placeholder: '$0',
     showIf: (data, borrower) => borrower.employment_status === 'employed',
     required: true,
     borrowerSpecific: true,
-    order: 8,
+    helpText: (data, borrower) => borrower.pay_type === 'hourly' ? 'Enter your estimated annual income based on hourly rate' : 'Enter your annual salary',
+    order: 9,
   },
   {
     id: 'has_overtime',
@@ -976,6 +932,117 @@ export const realEstateOwnedQuestions = [
     showIf: { owns_other_property: true },
     order: 2,
   },
+  {
+    id: 'reo_mortgage_statement',
+    stage: 'real_estate_owned',
+    question: 'Upload a mortgage statement for your other property',
+    type: QuestionTypes.FILE_UPLOAD,
+    showIf: { owns_other_property: true },
+    acceptedTypes: ['.pdf', '.jpg', '.jpeg', '.png'],
+    maxSize: 10, // MB
+    helpText: 'Upload your most recent mortgage statement. We will extract the property details automatically.',
+    parseDocument: true,
+    documentType: 'mortgage_statement',
+    order: 3,
+  },
+  {
+    id: 'reo_property_address',
+    stage: 'real_estate_owned',
+    question: 'What is the address of this property?',
+    type: QuestionTypes.ADDRESS,
+    showIf: { owns_other_property: true },
+    required: true,
+    autoPopulateFrom: { field: 'reo_mortgage_statement', property: 'property_address' },
+    helpText: 'Verify the address is correct',
+    order: 4,
+  },
+  {
+    id: 'reo_property_type',
+    stage: 'real_estate_owned',
+    question: 'What type of property is this?',
+    type: QuestionTypes.SINGLE_CHOICE,
+    options: [
+      { value: 'single_family', label: 'Single Family Home' },
+      { value: 'condo', label: 'Condominium' },
+      { value: 'townhouse', label: 'Townhouse' },
+      { value: 'multi_family', label: 'Multi-Family (2-4 units)' },
+      { value: 'commercial', label: 'Commercial' },
+      { value: 'land', label: 'Land' },
+    ],
+    showIf: { owns_other_property: true },
+    required: true,
+    order: 5,
+  },
+  {
+    id: 'reo_property_use',
+    stage: 'real_estate_owned',
+    question: 'How is this property used?',
+    type: QuestionTypes.SINGLE_CHOICE,
+    options: [
+      { value: 'primary_residence', label: 'Primary Residence' },
+      { value: 'second_home', label: 'Second Home' },
+      { value: 'investment', label: 'Investment/Rental Property' },
+    ],
+    showIf: { owns_other_property: true },
+    required: true,
+    order: 6,
+  },
+  {
+    id: 'reo_market_value',
+    stage: 'real_estate_owned',
+    question: 'What is the estimated market value?',
+    type: QuestionTypes.CURRENCY,
+    placeholder: '$0',
+    showIf: { owns_other_property: true },
+    required: true,
+    autoPopulateFrom: { field: 'reo_mortgage_statement', property: 'market_value' },
+    helpText: 'Verify the value is accurate',
+    order: 7,
+  },
+  {
+    id: 'reo_mortgage_balance',
+    stage: 'real_estate_owned',
+    question: 'What is the current mortgage balance?',
+    type: QuestionTypes.CURRENCY,
+    placeholder: '$0',
+    showIf: { owns_other_property: true },
+    required: true,
+    autoPopulateFrom: { field: 'reo_mortgage_statement', property: 'loan_balance' },
+    helpText: 'Verify the balance is correct',
+    order: 8,
+  },
+  {
+    id: 'reo_monthly_payment',
+    stage: 'real_estate_owned',
+    question: 'What is the monthly mortgage payment?',
+    type: QuestionTypes.CURRENCY,
+    placeholder: '$0',
+    showIf: { owns_other_property: true },
+    required: true,
+    autoPopulateFrom: { field: 'reo_mortgage_statement', property: 'monthly_payment' },
+    helpText: 'Include principal, interest, taxes, and insurance',
+    order: 9,
+  },
+  {
+    id: 'reo_rental_income',
+    stage: 'real_estate_owned',
+    question: 'What is the monthly rental income from this property?',
+    type: QuestionTypes.CURRENCY,
+    placeholder: '$0',
+    showIf: (data) => data.owns_other_property === true && data.reo_property_use === 'investment',
+    helpText: 'Enter gross monthly rent collected',
+    order: 10,
+  },
+  {
+    id: 'reo_info_accurate',
+    stage: 'real_estate_owned',
+    question: 'Please confirm the property information above is accurate',
+    type: QuestionTypes.BOOLEAN,
+    showIf: { owns_other_property: true },
+    required: true,
+    helpText: 'By confirming, you certify that the real estate information provided is correct to the best of your knowledge.',
+    order: 11,
+  },
 ];
 
 // ============================================
@@ -1107,8 +1174,9 @@ export const governmentMonitoringQuestions = [
     id: 'hmda_intro',
     stage: 'government_monitoring',
     question: 'Government Monitoring Information',
-    type: QuestionTypes.TEXT,
-    helpText: 'The following information is requested by the federal government to monitor compliance with federal statutes. You are not required to furnish this information, but are encouraged to do so.',
+    type: QuestionTypes.INFO, // Display only - no input
+    infoText: 'The following information is requested by the federal government to monitor compliance with federal statutes. You are not required to furnish this information, but are encouraged to do so.',
+    infoStyle: { fontSize: '16px', lineHeight: '1.6', fontWeight: '400' },
     order: 1,
   },
   {
@@ -1159,25 +1227,105 @@ export const governmentMonitoringQuestions = [
 ];
 
 // ============================================
-// STAGE 10: AUTHORIZATIONS
+// STAGE 10: SCHEDULE
+// ============================================
+export const scheduleQuestions = [
+  {
+    id: 'preferred_contact_time',
+    stage: 'schedule',
+    question: "When's the best time to reach you?",
+    type: QuestionTypes.SINGLE_CHOICE,
+    options: [
+      { value: 'morning', label: 'Morning (8am - 12pm)' },
+      { value: 'afternoon', label: 'Afternoon (12pm - 5pm)' },
+      { value: 'evening', label: 'Evening (5pm - 8pm)' },
+      { value: 'anytime', label: 'Anytime' },
+    ],
+    required: true,
+    order: 1,
+  },
+  {
+    id: 'consultation_appointment',
+    stage: 'schedule',
+    question: 'Schedule your consultation',
+    type: QuestionTypes.CALENDAR_SCHEDULER,
+    helpText: 'Select a date and time that works best for you to speak with a loan officer.',
+    appointmentType: 'consultation',
+    duration: 30, // 30 minutes
+    required: false,
+    order: 2,
+  },
+];
+
+// ============================================
+// STAGE 11: AUTHORIZATIONS
 // ============================================
 export const authorizationsQuestions = [
   {
     id: 'econsent_agreed',
     stage: 'authorizations',
     question: 'Electronic Consent',
-    type: QuestionTypes.BOOLEAN,
+    type: QuestionTypes.ECONSENT,
     required: true,
-    helpText: 'I agree to receive documents and communications electronically.',
+    // Full eConsent verbiage
+    eConsentContent: {
+      intro: `To use electronic signatures and receive documents electronically in connection with your use of this platform, you must read and consent to the terms outlined in this document, which require your ability to access and retain electronic documents.`,
+      sections: [
+        {
+          title: null,
+          content: `This eConsent, if you provide it, applies to your use of this Platform on any Access Device, including a desktop, laptop, tablet, mobile, or any other electronic device, and to any Document, including loan documents, disclosures (initial disclosures, pre-close disclosures, closing disclosures), records, and servicing notices, and any other loan documents that we provide to you in electronic form.
+
+If you provide eConsent, we will be able to provide electronic Documents to you within this platform, in other portals, and/or through other methods we may use for delivery of electronic Documents. With Your eConsent, You will also be able to sign and authorize these Documents electronically, rather than on paper. Anytime you are signing using a platform contracted with nCino Mortgage, you will be prompted to provide eConsent again.
+
+Before We can engage in this transaction electronically, it is important that You understand Your rights and responsibilities. Please read the following and affirm Your consent to conduct business with Us electronically. For purposes of this eConsent Agreement, 'You' and 'Your' mean the borrower(s) under the applicable loan to which such Documents apply, and 'We', 'Our' and 'Us' mean the applicable mortgage broker(s), loan processor(s), or mortgage banker(s) with whom You are transacting business for such loan(s).`
+        },
+        {
+          title: 'Your Consent',
+          content: `Your consent to participate in this transaction electronically will apply to all Loan Documents for the applicable loans for which You are applying. If You provide Your consent by clicking the 'I agree' button at the bottom of the page, We will conduct this transaction electronically, instead of providing You with the Loan Documents in paper form.
+
+If a document related to Your loan is not available in electronic form, a paper copy will be provided to You free of charge.
+
+Conducting this transaction electronically is an option. If You choose not to receive Documents electronically, paper Documents will be mailed to You. Additionally: You will not be required to pay a fee for receiving paper copies of the Documents.`
+        },
+        {
+          title: 'Withdrawal of Consent',
+          content: `You have the right to withdraw Your consent at any time. By declining or revoking Your consent to receive Documents electronically, We will provide You with the Documents in paper form.
+
+If You originally consent to receive Documents electronically, but later decide to withdraw Your consent, You can do so by clicking on the 'I do not agree' button, or by contacting Us by phone.
+
+If You originally consent to receive Documents electronically, but later withdraw Your consent, You will not be required to pay a fee for withdrawing consent and receiving paper copies of the Documents.`
+        },
+        {
+          title: 'Obtaining Paper Copies',
+          content: `After Your consent is given, You may request from Us paper copies of Your Loan Documents by contacting Us. If You request paper copies of the Loan Documents, You will not be required to pay a fee for receiving paper copies of the Loan Documents.`
+        },
+        {
+          title: 'System Requirements',
+          content: `In order to receive Documents electronically, You must have a computer with Internet access and an Internet email account and address; an Internet browser using 128-bit encryption or higher, Adobe Acrobat 7.0 or higher, SSL encryption and access to a printer or the ability to download information in order to keep copies of Your Documents electronically for Your records.
+
+If the software or hardware requirements change in the future, and You are unable to continue receiving Documents electronically, paper copies of such Loan Documents will be mailed to You once You notify Us that You are no longer able to access the Documents electronically because of the changed requirements. We will use commercially reasonable efforts to notify You before such requirements change. If You choose to withdraw Your consent upon notification of the change, You will be able to do so without penalty.`
+        },
+        {
+          title: 'How Can We Reach You',
+          content: `You must promptly notify Us if there is a change in Your email address or in other information needed to contact You electronically.
+
+We will not assume liability for non-receipt of notification of the availability of Documents electronically in the event Your email address on file is invalid; Your email or Internet service provider filters the notification as 'spam' or 'junk mail'; there is a malfunction in Your computer, browser, Internet service and/or software; or for other reasons beyond Our control.`
+        }
+      ]
+    },
     order: 1,
   },
   {
     id: 'credit_auth_agreed',
     stage: 'authorizations',
     question: 'Credit Authorization',
-    type: QuestionTypes.BOOLEAN,
+    type: QuestionTypes.CREDIT_AUTH,
     required: true,
-    helpText: 'I authorize the lender to verify information and obtain credit reports.',
+    // Full Credit Authorization verbiage
+    creditAuthContent: {
+      intro: `Your credit information will help us understand more about your personal and financial background and ensure we give you the most accurate mortgage options. To help us, we need the following authorization:`,
+      authorization: `I authorize my Lender to perform a credit check, via either a soft or hard pull of my credit; I understand this may affect my credit score. I acknowledge that any owner of a completed loan, its servicers, successors and assigns, may verify or re-verify any information contained in this form or obtain any information or data relating to a completed loan, for any legitimate purpose, through any source, including a source named in this form or a consumer reporting agency.`
+    },
     order: 2,
   },
 ];
@@ -1195,6 +1343,7 @@ export const allRefinanceQuestions = [
   ...realEstateOwnedQuestions,
   ...backgroundQuestions,
   ...governmentMonitoringQuestions,
+  ...scheduleQuestions,
   ...authorizationsQuestions,
 ].sort((a, b) => {
   // Sort by stage order first, then by question order
@@ -1208,7 +1357,8 @@ export const allRefinanceQuestions = [
     real_estate_owned: 7,
     background: 8,
     government_monitoring: 9,
-    authorizations: 10,
+    schedule: 10,
+    authorizations: 11,
   };
 
   const stageA = stageOrder[a.stage] || 99;

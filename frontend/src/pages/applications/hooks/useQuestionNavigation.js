@@ -179,9 +179,29 @@ export function useQuestionNavigation(questions, stageId = null) {
   const currentValue = useMemo(() => {
     if (!currentQuestion) return null;
 
-    return currentQuestion.borrowerSpecific
+    // Get the direct value for this field
+    const directValue = currentQuestion.borrowerSpecific
       ? currentBorrower[currentQuestion.id]
       : formData[currentQuestion.id];
+
+    // If there's a direct value, use it
+    if (directValue !== null && directValue !== undefined && directValue !== '') {
+      return directValue;
+    }
+
+    // Check for autoPopulateFrom config - allows fields to inherit values from other fields
+    // e.g., employer_phone can auto-populate from employer_name.phone
+    if (currentQuestion.autoPopulateFrom) {
+      const { field, property } = currentQuestion.autoPopulateFrom;
+      const sourceData = currentQuestion.borrowerSpecific ? currentBorrower : formData;
+      const sourceValue = sourceData[field];
+
+      if (sourceValue && property && sourceValue[property]) {
+        return sourceValue[property];
+      }
+    }
+
+    return directValue;
   }, [currentQuestion, formData, currentBorrower]);
 
   // Calculate progress within this stage

@@ -170,9 +170,18 @@ export const REFINANCE_STAGES = [
     shortLabel: 'HMDA',
     icon: 'chart',
     description: 'Government monitoring information (optional)',
-    progress: 85,
+    progress: 82,
     order: 9,
     optional: true,
+  },
+  {
+    id: 'schedule',
+    label: 'Schedule',
+    shortLabel: 'Schedule',
+    icon: 'calendar',
+    description: 'Schedule a consultation',
+    progress: 90,
+    order: 10,
   },
   {
     id: 'authorizations',
@@ -181,7 +190,7 @@ export const REFINANCE_STAGES = [
     icon: 'check',
     description: 'Review and authorize',
     progress: 95,
-    order: 10,
+    order: 11,
   },
 ];
 

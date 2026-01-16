@@ -492,6 +492,7 @@ export const incomeQuestions = [
     placeholder: '(555) 555-5555',
     showIf: (data, borrower) => ['employed', '1099_contractor'].includes(borrower.employment_status),
     borrowerSpecific: true,
+    autoPopulateFrom: { field: 'employer_name', property: 'phone' },
     order: 4,
   },
   {
