@@ -178,6 +178,15 @@ export const PermissionProvider = ({ children }) => {
     try {
       setLoading(true);
 
+      // Skip permission fetching on public routes (application pages, etc.)
+      const publicRoutes = ['/apply/', '/purl/', '/borrower-portal/'];
+      const currentPath = window.location.pathname;
+      if (publicRoutes.some(route => currentPath.startsWith(route))) {
+        console.log('PermissionContext: Skipping fetch on public route:', currentPath);
+        setLoading(false);
+        return;
+      }
+
       // Get the current user from localStorage
       const userStr = localStorage.getItem('user');
       if (!userStr) {
