@@ -11,6 +11,7 @@ FastAPI router for all portal-related endpoints including:
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Path, Body, Request
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from datetime import date, datetime
@@ -457,6 +458,112 @@ def get_close_calendar(
         loan_id=loan_id,
         start_date=start_date,
         weeks=weeks,
+    )
+
+
+@router.get("/loans/{loan_id}/milestone-calendar.ics")
+def generate_milestone_calendar(
+    loan_id: int = Path(..., description="Loan ID"),
+    db: Session = Depends(get_db),
+):
+    """
+    Generate and download an ICS calendar file with all loan milestones.
+
+    This creates a downloadable calendar file that can be imported into
+    Google Calendar, Apple Calendar, Outlook, etc.
+    """
+    from utils.calendar_invite import generate_milestone_calendar_ics
+    from models.portal_models import PortalLoan, CloseOnTimeSchedule, CloseOnTimeMilestone
+
+    # Get loan details
+    loan = db.query(PortalLoan).filter(PortalLoan.id == loan_id).first()
+    if not loan:
+        raise HTTPException(status_code=404, detail="Loan not found")
+
+    # Get borrower name
+    borrower_name = "Borrower"
+    if loan.borrower_id:
+        from models import Contact
+        contact = db.query(Contact).filter(Contact.id == loan.borrower_id).first()
+        if contact:
+            borrower_name = f"{contact.first_name or ''} {contact.last_name or ''}".strip() or "Borrower"
+
+    # Get loan officer name if available
+    loan_officer_name = None
+    if loan.assigned_lo_id:
+        from models import User
+        lo = db.query(User).filter(User.id == loan.assigned_lo_id).first()
+        if lo:
+            loan_officer_name = lo.name
+
+    # Get close-on-time schedule and milestones
+    schedule = db.query(CloseOnTimeSchedule).filter(
+        CloseOnTimeSchedule.loan_id == loan_id
+    ).first()
+
+    milestones = []
+    target_close_date = None
+
+    if schedule:
+        target_close_date = schedule.target_close_date
+
+        # Get all milestones for this schedule
+        schedule_milestones = db.query(CloseOnTimeMilestone).filter(
+            CloseOnTimeMilestone.schedule_id == schedule.id
+        ).order_by(CloseOnTimeMilestone.due_date).all()
+
+        for m in schedule_milestones:
+            milestones.append({
+                "name": m.milestone_name,
+                "description": m.milestone_description or "",
+                "due_date": m.due_date,
+                "status": m.status or "pending",
+            })
+
+    # Also get milestones from the MilestoneInstance table (lifecycle milestones)
+    from models.portal_models import MilestoneInstance
+    lifecycle_milestones = db.query(MilestoneInstance).filter(
+        MilestoneInstance.loan_id == loan_id
+    ).all()
+
+    for m in lifecycle_milestones:
+        if m.target_date:
+            status = "pending"
+            if m.status:
+                status = m.status.value if hasattr(m.status, 'value') else str(m.status)
+            milestones.append({
+                "name": m.name,
+                "description": m.description or "",
+                "due_date": m.target_date,
+                "status": status,
+            })
+
+    if not milestones and not target_close_date:
+        raise HTTPException(
+            status_code=404,
+            detail="No milestones found for this loan. Please set up a closing schedule first."
+        )
+
+    # Generate ICS content
+    ics_content = generate_milestone_calendar_ics(
+        loan_number=loan.loan_number or str(loan_id),
+        borrower_name=borrower_name,
+        property_address=loan.property_address,
+        milestones=milestones,
+        target_close_date=target_close_date,
+        loan_officer_name=loan_officer_name,
+    )
+
+    # Return as downloadable ICS file
+    filename = f"loan-{loan.loan_number or loan_id}-milestones.ics"
+
+    return Response(
+        content=ics_content,
+        media_type="text/calendar",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Type": "text/calendar; charset=utf-8",
+        }
     )
 
 

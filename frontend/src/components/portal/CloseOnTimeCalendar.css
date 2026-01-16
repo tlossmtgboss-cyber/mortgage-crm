@@ -414,6 +414,51 @@
 }
 
 /* =============================================================================
+   CALENDAR ACTIONS / DOWNLOAD BUTTON
+   ============================================================================= */
+
+.calendar-actions {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: center;
+}
+
+.download-calendar-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #218D8D;
+  background: white;
+  border: 2px solid #218D8D;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.download-calendar-btn:hover:not(:disabled) {
+  background: #218D8D;
+  color: white;
+}
+
+.download-calendar-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.download-calendar-btn .btn-icon {
+  font-size: 18px;
+}
+
+.download-calendar-btn .btn-text {
+  white-space: nowrap;
+}
+
+/* =============================================================================
    EMPTY STATE
    ============================================================================= */
 

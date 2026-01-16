@@ -5,10 +5,12 @@
  * business day calculation, and milestone deadlines.
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useCloseCountdown, useCloseCalendar } from '../../hooks/usePortalData';
 import { closeOnTimeApi } from '../../services/portalApi';
 import './CloseOnTimeCalendar.css';
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || '';
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -50,6 +52,46 @@ export default function CloseOnTimeCalendar({
   const { data: countdownData, loading: countdownLoading, refetch: refetchCountdown } = useCloseCountdown(loanId);
   const { data: calendarData, loading: calendarLoading, refetch: refetchCalendar } = useCloseCalendar(loanId);
   const [completingMilestone, setCompletingMilestone] = useState(null);
+  const [downloadingCalendar, setDownloadingCalendar] = useState(false);
+
+  const handleDownloadCalendar = useCallback(async () => {
+    if (!loanId) return;
+
+    try {
+      setDownloadingCalendar(true);
+
+      // Get auth token from localStorage
+      const token = localStorage.getItem('token');
+
+      const response = await fetch(`${API_BASE_URL}/api/portal/loans/${loanId}/milestone-calendar.ics`, {
+        method: 'GET',
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : '',
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Failed to generate calendar' }));
+        throw new Error(error.detail || 'Failed to generate calendar');
+      }
+
+      // Get the blob and create download link
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `loan-${loanId}-milestones.ics`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error('Failed to download calendar:', err);
+      alert(err.message || 'Failed to download milestone calendar');
+    } finally {
+      setDownloadingCalendar(false);
+    }
+  }, [loanId]);
 
   const handleCompleteMilestone = async (milestoneId) => {
     try {
@@ -114,6 +156,23 @@ export default function CloseOnTimeCalendar({
           <span>
             {countdownData.overdue_count} milestone{countdownData.overdue_count > 1 ? 's' : ''} overdue
           </span>
+        </div>
+      )}
+
+      {/* Download Calendar Button */}
+      {!compact && (
+        <div className="calendar-actions">
+          <button
+            className="download-calendar-btn"
+            onClick={handleDownloadCalendar}
+            disabled={downloadingCalendar}
+            title="Download milestones as calendar file (.ics)"
+          >
+            <span className="btn-icon">📅</span>
+            <span className="btn-text">
+              {downloadingCalendar ? 'Generating...' : 'Download Milestone Calendar'}
+            </span>
+          </button>
         </div>
       )}
     </div>
