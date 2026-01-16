@@ -133,6 +133,7 @@ const BorrowerApplication = lazy(() => import('./pages/BorrowerApplication'));
 const AdaptiveURLA = lazy(() => import('./pages/AdaptiveURLA'));
 const PurchaseApplication = lazy(() => import('./pages/PurchaseApplication'));
 const RefinanceApplication = lazy(() => import('./pages/RefinanceApplication'));
+const PurchasePreQualForm = lazy(() => import('./pages/PurchasePreQualForm'));
 
 // New enhanced applications (v2)
 const NewPurchaseApplication = lazy(() => import('./pages/applications/NewPurchaseApplication'));
@@ -489,6 +490,9 @@ function App() {
           {/* Purpose-specific applications */}
           <Route path="/apply/purchase" element={<LazyPage><PurchaseApplication /></LazyPage>} />
           <Route path="/apply/refinance" element={<LazyPage><RefinanceApplication /></LazyPage>} />
+
+          {/* Pre-Qualification Forms (public, embeddable) */}
+          <Route path="/prequal/purchase" element={<LazyPage><PurchasePreQualForm embedded={new URLSearchParams(window.location.search).get('embedded') === 'true'} /></LazyPage>} />
 
           {/* Enhanced applications (v2) */}
           <Route path="/apply/v2/purchase" element={<LazyPage><NewPurchaseApplication /></LazyPage>} />

@@ -20368,6 +20368,21 @@ except Exception as e:
     logger.error(f"⚠️ Could not load Smart Scheduler routes: {e}")
     logger.error(f"Smart Scheduler traceback: {traceback.format_exc()}")
 
+# Include Pre-Qualification routes (embeddable form submission)
+try:
+    from prequal_routes import router as prequal_router, set_dependencies as set_prequal_deps
+    from services.notification_service import notification_service
+
+    # Set dependencies
+    set_prequal_deps(get_db, notification_service)
+
+    # Include the router
+    app.include_router(prequal_router, tags=["Pre-Qualification"])
+    logger.info("✅ Pre-Qualification routes loaded")
+except Exception as e:
+    import traceback
+    logger.warning(f"⚠️ Could not load Pre-Qualification routes: {e}")
+
 # Include AI Smart Scheduler Setup routes (LO assignment configuration)
 try:
     from routes.smart_scheduler_routes import router as ai_scheduler_setup_router
