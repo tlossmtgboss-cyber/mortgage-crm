@@ -311,20 +311,20 @@
 }
 
 .econsent-btn.agree {
-  background: #22c55e;
+  background: #3b82f6;
   color: #ffffff;
-  border-color: #22c55e;
+  border-color: #3b82f6;
 }
 
 .econsent-btn.agree:hover {
-  background: #16a34a;
-  border-color: #16a34a;
+  background: #2563eb;
+  border-color: #2563eb;
 }
 
 .econsent-btn.agree.selected {
-  background: #15803d;
-  border-color: #15803d;
-  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.3);
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
 }
 
 .econsent-btn.disagree {

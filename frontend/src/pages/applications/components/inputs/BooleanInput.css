@@ -37,13 +37,13 @@
 }
 
 .boolean-option.selected {
-  border-color: #22c55e;
-  background: #f0fdf4;
-  color: #166534;
+  border-color: #3b82f6;
+  background: #eff6ff;
+  color: #1d4ed8;
 }
 
 .boolean-option.selected .boolean-icon {
-  background: #22c55e;
+  background: #3b82f6;
   color: #ffffff;
 }
 

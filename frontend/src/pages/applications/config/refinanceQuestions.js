@@ -233,6 +233,39 @@ export const aboutYouQuestions = [
     borrowerSpecific: true,
     order: 16,
   },
+
+  // Alimony/Child Support Receiving Questions (for divorced applicants)
+  {
+    id: 'receiving_alimony_child_support',
+    stage: 'about_you',
+    question: 'Are you receiving alimony or child support?',
+    type: QuestionTypes.BOOLEAN,
+    showIf: (data, borrower) => borrower.marital_status === 'divorced',
+    borrowerSpecific: true,
+    helpText: 'This income can help you qualify for a larger loan',
+    order: 16.1,
+  },
+  {
+    id: 'alimony_child_support_continues_3_years',
+    stage: 'about_you',
+    question: 'Will this income continue for at least 3 more years?',
+    type: QuestionTypes.BOOLEAN,
+    showIf: (data, borrower) => borrower.marital_status === 'divorced' && borrower.receiving_alimony_child_support === true,
+    borrowerSpecific: true,
+    helpText: 'Income must continue for 3+ years to be used for qualification',
+    order: 16.2,
+  },
+  {
+    id: 'alimony_child_support_monthly_income',
+    stage: 'about_you',
+    question: 'How much do you receive monthly?',
+    type: QuestionTypes.CURRENCY,
+    placeholder: '$0',
+    showIf: (data, borrower) => borrower.marital_status === 'divorced' && borrower.receiving_alimony_child_support === true && borrower.alimony_child_support_continues_3_years === true,
+    borrowerSpecific: true,
+    order: 16.3,
+  },
+
   {
     id: 'dependents_count',
     stage: 'about_you',
@@ -656,16 +689,46 @@ export const incomeQuestions = [
     borrowerSpecific: true,
     order: 8,
   },
+
+  // Hourly pay questions
+  {
+    id: 'hourly_rate',
+    stage: 'income',
+    question: "What's your hourly rate?",
+    type: QuestionTypes.CURRENCY,
+    placeholder: '$0.00',
+    showIf: (data, borrower) => borrower.employment_status === 'employed' && borrower.pay_type === 'hourly',
+    required: true,
+    borrowerSpecific: true,
+    helpText: 'Enter your regular hourly pay rate',
+    order: 8.1,
+  },
+  {
+    id: 'hours_per_week',
+    stage: 'income',
+    question: 'How many hours do you work per week?',
+    type: QuestionTypes.NUMBER,
+    placeholder: '40',
+    min: 1,
+    max: 80,
+    showIf: (data, borrower) => borrower.employment_status === 'employed' && borrower.pay_type === 'hourly',
+    required: true,
+    borrowerSpecific: true,
+    helpText: 'Enter your standard weekly hours (not including overtime)',
+    order: 8.2,
+  },
+
+  // Annual base income (only for non-hourly pay types)
   {
     id: 'annual_base_income',
     stage: 'income',
     question: "What's your annual base income?",
     type: QuestionTypes.CURRENCY,
     placeholder: '$0',
-    showIf: (data, borrower) => borrower.employment_status === 'employed',
+    showIf: (data, borrower) => borrower.employment_status === 'employed' && borrower.pay_type !== 'hourly',
     required: true,
     borrowerSpecific: true,
-    helpText: (data, borrower) => borrower.pay_type === 'hourly' ? 'Enter your estimated annual income based on hourly rate' : 'Enter your annual salary',
+    helpText: 'Enter your annual salary',
     order: 9,
   },
   {
@@ -675,17 +738,20 @@ export const incomeQuestions = [
     type: QuestionTypes.BOOLEAN,
     showIf: (data, borrower) => borrower.employment_status === 'employed',
     borrowerSpecific: true,
-    order: 9,
+    order: 10,
   },
   {
-    id: 'overtime_amount',
+    id: 'overtime_hours_weekly',
     stage: 'income',
-    question: 'How much overtime do you typically receive annually?',
-    type: QuestionTypes.CURRENCY,
-    placeholder: '$0',
+    question: 'How many hours of overtime do you work weekly?',
+    type: QuestionTypes.NUMBER,
+    placeholder: '0',
+    min: 0,
+    max: 40,
     showIf: (data, borrower) => borrower.has_overtime === true,
     borrowerSpecific: true,
-    order: 10,
+    helpText: 'Average weekly overtime hours',
+    order: 10.1,
   },
   {
     id: 'has_bonus',
@@ -1231,20 +1297,6 @@ export const governmentMonitoringQuestions = [
 // ============================================
 export const scheduleQuestions = [
   {
-    id: 'preferred_contact_time',
-    stage: 'schedule',
-    question: "When's the best time to reach you?",
-    type: QuestionTypes.SINGLE_CHOICE,
-    options: [
-      { value: 'morning', label: 'Morning (8am - 12pm)' },
-      { value: 'afternoon', label: 'Afternoon (12pm - 5pm)' },
-      { value: 'evening', label: 'Evening (5pm - 8pm)' },
-      { value: 'anytime', label: 'Anytime' },
-    ],
-    required: true,
-    order: 1,
-  },
-  {
     id: 'consultation_appointment',
     stage: 'schedule',
     question: 'Schedule your consultation',
@@ -1253,7 +1305,7 @@ export const scheduleQuestions = [
     appointmentType: 'consultation',
     duration: 30, // 30 minutes
     required: false,
-    order: 2,
+    order: 1,
   },
 ];
 
@@ -1267,6 +1319,8 @@ export const authorizationsQuestions = [
     question: 'Electronic Consent',
     type: QuestionTypes.ECONSENT,
     required: true,
+    defaultValue: true, // Pre-select "I agree" option
+    allowChoice: true, // Allow user to choose between agree/disagree
     // Full eConsent verbiage
     eConsentContent: {
       intro: `To use electronic signatures and receive documents electronically in connection with your use of this platform, you must read and consent to the terms outlined in this document, which require your ability to access and retain electronic documents.`,
@@ -1321,6 +1375,8 @@ We will not assume liability for non-receipt of notification of the availability
     question: 'Credit Authorization',
     type: QuestionTypes.CREDIT_AUTH,
     required: true,
+    defaultValue: true, // Pre-select "I agree" option
+    allowChoice: true, // Allow user to choose between agree/disagree
     // Full Credit Authorization verbiage
     creditAuthContent: {
       intro: `Your credit information will help us understand more about your personal and financial background and ensure we give you the most accurate mortgage options. To help us, we need the following authorization:`,

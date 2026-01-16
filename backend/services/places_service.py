@@ -63,8 +63,22 @@ class PlacesService:
             }
 
             # Add type filter if specified
+            # Map common type names to Google Places API (New) types
             if types:
-                payload["includedPrimaryTypes"] = types
+                type_mapping = {
+                    "address": ["street_address", "premise", "subpremise", "route"],
+                    "establishment": ["establishment"],
+                    "geocode": ["geocode"],
+                    "regions": ["locality", "administrative_area_level_1", "administrative_area_level_2", "postal_code", "country"]
+                }
+                mapped_types = []
+                for t in types:
+                    if t in type_mapping:
+                        mapped_types.extend(type_mapping[t])
+                    else:
+                        mapped_types.append(t)
+                if mapped_types:
+                    payload["includedPrimaryTypes"] = mapped_types
 
             # Add location bias if specified
             if location_bias:
@@ -167,6 +181,10 @@ class PlacesService:
                     data.get("addressComponents", [])
                 )
 
+                # Format phone number for US display
+                raw_phone = data.get("internationalPhoneNumber")
+                formatted_phone = self._format_us_phone(raw_phone) if raw_phone else None
+
                 return {
                     "place_id": data.get("id"),
                     "name": data.get("displayName", {}).get("text"),
@@ -174,7 +192,7 @@ class PlacesService:
                     "address_components": parsed_address,
                     "location": data.get("location"),
                     "types": data.get("types", []),
-                    "phone": data.get("internationalPhoneNumber"),
+                    "phone": formatted_phone,
                     "website": data.get("websiteUri"),
                     "raw": data
                 }
@@ -311,6 +329,40 @@ class PlacesService:
             parsed["street_address"] = parsed["street_name"]
 
         return parsed
+
+    def _format_us_phone(self, phone: str) -> str:
+        """Format phone number to include US country code (1) at the beginning.
+
+        Args:
+            phone: Phone number string (e.g., "+1 650-253-0000", "650-253-0000")
+
+        Returns:
+            Formatted phone number with 1 prefix (e.g., "1 (650) 253-0000")
+        """
+        import re
+
+        if not phone:
+            return phone
+
+        # Remove all non-numeric characters
+        digits = re.sub(r'\D', '', phone)
+
+        # If already has country code (11 digits starting with 1)
+        if len(digits) == 11 and digits.startswith('1'):
+            area = digits[1:4]
+            exchange = digits[4:7]
+            subscriber = digits[7:11]
+            return f"1 ({area}) {exchange}-{subscriber}"
+
+        # If 10 digits (US format without country code)
+        elif len(digits) == 10:
+            area = digits[0:3]
+            exchange = digits[3:6]
+            subscriber = digits[6:10]
+            return f"1 ({area}) {exchange}-{subscriber}"
+
+        # Return original if format not recognized
+        return phone
 
 
 # Singleton instance

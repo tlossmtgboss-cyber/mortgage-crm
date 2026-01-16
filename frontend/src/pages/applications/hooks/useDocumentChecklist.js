@@ -28,6 +28,7 @@ export const getRequiredDocuments = (formData = {}) => {
     // Borrower info
     borrower_count,
     citizenship_status,
+    citizenship, // Alternative field name from form
 
     // Primary borrower names
     first_name: borrowerFirstName = 'Primary Borrower',
@@ -108,7 +109,10 @@ export const getRequiredDocuments = (formData = {}) => {
   const maximizesDeductions = write_off_expenses === 'yes';
 
   // === IDENTITY DOCUMENTS ===
-  if (citizenship_status) {
+  // Use citizenship_status or citizenship field (depends on form)
+  const citizenshipValue = citizenship_status || citizenship;
+
+  if (citizenshipValue) {
     docs.push({
       id: 'id',
       name: `${borrowerFirstName}'s Government ID`,
@@ -120,22 +124,22 @@ export const getRequiredDocuments = (formData = {}) => {
   }
 
   // Citizenship-based documents
-  if (citizenship_status === 'permanent_resident') {
+  if (citizenshipValue === 'permanent_resident') {
     docs.push({
       id: 'green_card',
       name: `${borrowerFirstName}'s Green Card`,
-      description: 'Unexpired Permanent Resident Card',
+      description: 'Unexpired Permanent Resident Card (front and back)',
       category: DocumentCategories.IDENTITY,
       stage: 'about_you',
       required: true,
     });
   }
 
-  if (citizenship_status === 'non_permanent_resident' || citizenship_status === 'non_resident') {
+  if (citizenshipValue === 'non_permanent_resident' || citizenshipValue === 'non_resident') {
     docs.push({
       id: 'visa_docs',
       name: `${borrowerFirstName}'s Visa Documents`,
-      description: 'Current visa and work authorization',
+      description: 'Current visa, work authorization (EAD card if applicable), and I-94',
       category: DocumentCategories.IDENTITY,
       stage: 'about_you',
       required: true,
@@ -288,8 +292,8 @@ export const getRequiredDocuments = (formData = {}) => {
   }
 
   // === DIVORCE / CHILD SUPPORT DOCUMENTS ===
-  if ((marital_status === 'divorced' || marital_status === 'separated') &&
-      child_support_alimony && child_support_alimony !== 'neither') {
+  // Divorce decree is always required for divorced applicants
+  if (marital_status === 'divorced' || marital_status === 'separated') {
     docs.push({
       id: 'divorce_decree',
       name: `${borrowerFirstName}'s Divorce Decree`,
@@ -309,11 +313,13 @@ export const getRequiredDocuments = (formData = {}) => {
   }
 
   // === VETERAN DOCUMENTS ===
-  if (veteran_status === 'yes' || veteran_status === 'active' || veteran_status === 'spouse') {
+  // Match form values: 'veteran', 'active_duty', 'spouse_veteran', 'yes', 'active', 'spouse'
+  const isVeteran = ['veteran', 'active_duty', 'spouse_veteran', 'yes', 'active', 'spouse'].includes(veteran_status);
+  if (isVeteran) {
     docs.push({
       id: 'va_coe',
       name: `${borrowerFirstName}'s VA Certificate of Eligibility`,
-      description: 'VA COE - can be obtained from eBenefits portal',
+      description: 'VA COE - can be obtained from eBenefits portal or requested through lender',
       category: DocumentCategories.IDENTITY,
       stage: 'about_you',
       required: true,
