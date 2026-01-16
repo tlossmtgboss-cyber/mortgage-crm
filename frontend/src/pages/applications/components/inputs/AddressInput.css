@@ -1,0 +1,54 @@
+/* AddressInput Wrapper Styles */
+
+.address-input-wrapper {
+  width: 100%;
+}
+
+.address-input-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.address-input-label .required {
+  color: #ef4444;
+  margin-left: 2px;
+}
+
+.address-input-help {
+  color: #6b7280;
+  font-size: 13px;
+  margin-top: 6px;
+}
+
+.address-parsed {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+  border-radius: 6px;
+}
+
+.address-parsed-item {
+  font-size: 13px;
+  color: #166534;
+}
+
+/* Override default AddressAutocomplete styles */
+.address-input-wrapper .address-autocomplete .address-input {
+  padding: 14px 16px;
+  font-size: 16px;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+}
+
+.address-input-wrapper .address-autocomplete .address-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.address-input-wrapper.has-error .address-autocomplete .address-input {
+  border-color: #ef4444;
+}

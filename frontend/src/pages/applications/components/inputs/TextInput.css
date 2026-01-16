@@ -1,0 +1,102 @@
+/* TextInput Styles */
+
+.text-input-wrapper {
+  width: 100%;
+}
+
+.text-input-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.text-input-label .required {
+  color: #ef4444;
+  margin-left: 2px;
+}
+
+.text-input {
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 16px;
+  line-height: 1.5;
+  color: #111827;
+  background: #ffffff;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  transition: all 0.2s ease;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.text-input::placeholder {
+  color: #9ca3af;
+}
+
+.text-input:hover:not(:disabled) {
+  border-color: #9ca3af;
+}
+
+.text-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.text-input:disabled {
+  background: #f3f4f6;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+/* Error state */
+.text-input-wrapper.has-error .text-input {
+  border-color: #ef4444;
+}
+
+.text-input-wrapper.has-error .text-input:focus {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+}
+
+.text-input-error {
+  color: #ef4444;
+  font-size: 13px;
+  margin-top: 6px;
+}
+
+.text-input-help {
+  color: #6b7280;
+  font-size: 13px;
+  margin-top: 6px;
+}
+
+/* Large variant */
+.text-input-wrapper--large .text-input {
+  padding: 18px 20px;
+  font-size: 18px;
+}
+
+/* With icon */
+.text-input-wrapper--with-icon {
+  position: relative;
+}
+
+.text-input-wrapper--with-icon .text-input {
+  padding-left: 44px;
+}
+
+.text-input-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9ca3af;
+  font-size: 18px;
+  pointer-events: none;
+}
+
+.text-input-wrapper.has-label .text-input-icon {
+  top: calc(50% + 10px);
+}

@@ -1,0 +1,32 @@
+/* StageRenderer Styles */
+
+.stage-renderer {
+  width: 100%;
+}
+
+.stage-empty {
+  text-align: center;
+  padding: 60px 24px;
+}
+
+.stage-empty p {
+  font-size: 16px;
+  color: #6b7280;
+  margin-bottom: 24px;
+}
+
+.skip-btn {
+  padding: 14px 28px;
+  font-size: 16px;
+  font-weight: 600;
+  background: #3b82f6;
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.skip-btn:hover {
+  background: #2563eb;
+}

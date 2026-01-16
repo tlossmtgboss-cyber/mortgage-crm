@@ -133,6 +133,11 @@ const BorrowerApplication = lazy(() => import('./pages/BorrowerApplication'));
 const AdaptiveURLA = lazy(() => import('./pages/AdaptiveURLA'));
 const PurchaseApplication = lazy(() => import('./pages/PurchaseApplication'));
 const RefinanceApplication = lazy(() => import('./pages/RefinanceApplication'));
+
+// New enhanced applications (v2)
+const NewPurchaseApplication = lazy(() => import('./pages/applications/NewPurchaseApplication'));
+const NewRefinanceApplication = lazy(() => import('./pages/applications/NewRefinanceApplication'));
+const ApplicationDemo = lazy(() => import('./pages/applications/ApplicationDemo'));
 const CoborrowerApplication = lazy(() => import('./pages/CoborrowerApplication'));
 const BorrowerLogin = lazy(() => import('./pages/BorrowerLogin'));
 const ApplyVerify = lazy(() => import('./pages/ApplyVerify'));
@@ -484,6 +489,11 @@ function App() {
           {/* Purpose-specific applications */}
           <Route path="/apply/purchase" element={<LazyPage><PurchaseApplication /></LazyPage>} />
           <Route path="/apply/refinance" element={<LazyPage><RefinanceApplication /></LazyPage>} />
+
+          {/* Enhanced applications (v2) */}
+          <Route path="/apply/v2/purchase" element={<LazyPage><NewPurchaseApplication /></LazyPage>} />
+          <Route path="/apply/v2/refinance" element={<LazyPage><NewRefinanceApplication /></LazyPage>} />
+          <Route path="/apply/demo" element={<LazyPage><ApplicationDemo /></LazyPage>} />
 
           {/* Borrower OAuth Callbacks */}
           <Route path="/apply/oauth/:provider/callback" element={<LazyPage><BorrowerOAuthCallback /></LazyPage>} />

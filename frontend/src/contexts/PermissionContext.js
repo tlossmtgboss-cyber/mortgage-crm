@@ -428,7 +428,7 @@ export const PermissionProvider = ({ children }) => {
   // Returns: 'all', 'team', 'own', or 'none'
   const getDataScope = (resourceType) => {
     // Admin (platform), site_admin (org), and management roles see all (within their scope)
-    if (userRole === 'admin' 396
+    if (userRole === 'admin' || userRole === 'site_admin' ||
       userRole === 'management') {
       return 'all';
     }

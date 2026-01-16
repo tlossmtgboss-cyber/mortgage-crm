@@ -41,10 +41,9 @@ const loadGooglePlaces = () => {
     const apiKey = process.env.REACT_APP_GOOGLE_PLACES_API_KEY;
 
     if (!apiKey) {
-      // Silent fallback - Google Places is optional, manual entry works fine
-      // Only log in development if debugging address features
-      if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_PLACES) {
-        console.log('Google Places API key not configured - using manual entry');
+      // Log in development to help developers configure Places
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Google Places] API key not configured (REACT_APP_GOOGLE_PLACES_API_KEY). Address autocomplete will use manual entry mode.');
       }
       isScriptLoading = false;
       callbacks.forEach(cb => cb.resolve());

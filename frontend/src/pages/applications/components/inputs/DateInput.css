@@ -1,0 +1,90 @@
+/* DateInput Styles */
+
+.date-input-wrapper {
+  width: 100%;
+}
+
+.date-input-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.date-input-label .required {
+  color: #ef4444;
+  margin-left: 2px;
+}
+
+.date-input-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.date-icon {
+  position: absolute;
+  left: 14px;
+  font-size: 18px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.date-input {
+  width: 100%;
+  padding: 14px 16px 14px 44px;
+  font-size: 16px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+  letter-spacing: 1px;
+  line-height: 1.5;
+  color: #111827;
+  background: #ffffff;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  transition: all 0.2s ease;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.date-input::placeholder {
+  color: #9ca3af;
+  letter-spacing: 1px;
+}
+
+.date-input:hover:not(:disabled) {
+  border-color: #9ca3af;
+}
+
+.date-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.date-input:disabled {
+  background: #f3f4f6;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+/* Error state */
+.date-input-wrapper.has-error .date-input {
+  border-color: #ef4444;
+}
+
+.date-input-wrapper.has-error .date-input:focus {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+}
+
+.date-input-error {
+  color: #ef4444;
+  font-size: 13px;
+  margin-top: 6px;
+}
+
+.date-input-help {
+  color: #6b7280;
+  font-size: 13px;
+  margin-top: 6px;
+}
