@@ -1,4 +1,4 @@
-/* AddressInput Wrapper Styles */
+/* AddressInput Wrapper Styles - CRM Color Scheme */
 
 .address-input-wrapper {
   width: 100%;
@@ -8,17 +8,17 @@
   display: block;
   font-size: 14px;
   font-weight: 500;
-  color: #374151;
+  color: var(--color-text-primary, #1a1a1a);
   margin-bottom: 6px;
 }
 
 .address-input-label .required {
-  color: #ef4444;
+  color: var(--color-error, #C0152F);
   margin-left: 2px;
 }
 
 .address-input-help {
-  color: #6b7280;
+  color: var(--color-text-secondary, #666666);
   font-size: 13px;
   margin-top: 6px;
 }
@@ -26,29 +26,30 @@
 .address-parsed {
   margin-top: 8px;
   padding: 8px 12px;
-  background: #f0fdf4;
-  border: 1px solid #86efac;
-  border-radius: 6px;
+  background: rgba(33, 127, 141, 0.08);
+  border: 1px solid rgba(33, 127, 141, 0.25);
+  border-radius: var(--radius-sm, 6px);
 }
 
 .address-parsed-item {
   font-size: 13px;
-  color: #166534;
+  color: var(--color-primary, #217F8D);
 }
 
 /* Override default AddressAutocomplete styles */
 .address-input-wrapper .address-autocomplete .address-input {
   padding: 14px 16px;
   font-size: 16px;
-  border: 2px solid #e5e7eb;
-  border-radius: 10px;
+  border: 2px solid var(--color-border, rgba(139, 92, 68, 0.15));
+  border-radius: var(--radius-md, 10px);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .address-input-wrapper .address-autocomplete .address-input:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  border-color: var(--color-primary, #217F8D);
+  box-shadow: 0 0 0 3px rgba(33, 127, 141, 0.15);
 }
 
 .address-input-wrapper.has-error .address-autocomplete .address-input {
-  border-color: #ef4444;
+  border-color: var(--color-error, #C0152F);
 }

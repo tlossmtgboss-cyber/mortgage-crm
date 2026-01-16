@@ -1,4 +1,4 @@
-/* RealtorLookupInput Styles */
+/* RealtorLookupInput Styles - CRM Color Scheme */
 
 .realtor-lookup-input {
   position: relative;
@@ -13,25 +13,25 @@
   width: 100%;
   padding: 16px 20px;
   font-size: 18px;
-  border: 2px solid #e5e7eb;
-  border-radius: 12px;
-  background: #ffffff;
-  transition: all 0.2s ease;
+  border: 2px solid var(--color-border, rgba(139, 92, 68, 0.15));
+  border-radius: var(--radius-lg, 12px);
+  background: var(--color-bg-surface, #FFFFFF);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .search-input:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  border-color: var(--color-primary, #217F8D);
+  box-shadow: 0 0 0 3px rgba(33, 127, 141, 0.15);
 }
 
 .search-input.has-error {
-  border-color: #ef4444;
+  border-color: var(--color-error, #C0152F);
 }
 
 .search-input.agent-selected {
-  border-color: #22c55e;
-  background: #f0fdf4;
+  border-color: var(--color-primary, #217F8D);
+  background: rgba(33, 127, 141, 0.05);
 }
 
 .search-loading {
@@ -45,8 +45,8 @@
   display: inline-block;
   width: 20px;
   height: 20px;
-  border: 2px solid #e5e7eb;
-  border-top-color: #3b82f6;
+  border: 2px solid var(--color-border, rgba(139, 92, 68, 0.15));
+  border-top-color: var(--color-primary, #217F8D);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -64,7 +64,7 @@
   align-items: center;
   gap: 6px;
   padding: 4px 12px;
-  background: #22c55e;
+  background: var(--color-primary, #217F8D);
   color: #ffffff;
   font-size: 12px;
   font-weight: 600;
@@ -81,9 +81,9 @@
   top: calc(100% + 4px);
   left: 0;
   right: 0;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
+  background: var(--color-bg-surface, #FFFFFF);
+  border: 1px solid var(--color-border, rgba(139, 92, 68, 0.15));
+  border-radius: var(--radius-lg, 12px);
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
   max-height: 280px;
   overflow-y: auto;
@@ -93,7 +93,7 @@
 .suggestion-item {
   padding: 14px 16px;
   cursor: pointer;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--color-border-light, rgba(139, 92, 68, 0.08));
   transition: background 0.15s ease;
 }
 
@@ -102,24 +102,24 @@
 }
 
 .suggestion-item:hover {
-  background: #f0f9ff;
+  background: rgba(33, 127, 141, 0.05);
 }
 
 .agent-name {
   font-size: 15px;
   font-weight: 600;
-  color: #111827;
+  color: var(--color-text-primary, #1a1a1a);
 }
 
 .agent-company {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--color-text-secondary, #666666);
   margin-top: 2px;
 }
 
 .agent-contact {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--color-text-tertiary, #999999);
   margin-top: 2px;
 }
 
@@ -131,42 +131,42 @@
 .no-results p {
   margin: 0;
   font-size: 14px;
-  color: #6b7280;
+  color: var(--color-text-secondary, #666666);
 }
 
 .no-results .hint {
   margin-top: 8px;
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--color-text-tertiary, #999999);
 }
 
 /* Help & Error Text */
 .help-text {
   margin: 8px 0 0 0;
   font-size: 13px;
-  color: #6b7280;
+  color: var(--color-text-secondary, #666666);
 }
 
 .error-text {
   margin: 8px 0 0 0;
   font-size: 13px;
-  color: #ef4444;
+  color: var(--color-error, #C0152F);
 }
 
 /* Agent Details Card */
 .agent-details {
   margin-top: 16px;
   padding: 16px;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
+  background: var(--color-bg-secondary, rgba(139, 92, 68, 0.03));
+  border: 1px solid var(--color-border, rgba(139, 92, 68, 0.15));
+  border-radius: var(--radius-md, 10px);
 }
 
 .agent-info-row {
   display: flex;
   justify-content: space-between;
   padding: 8px 0;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--color-border-light, rgba(139, 92, 68, 0.08));
 }
 
 .agent-info-row:last-child {
@@ -175,13 +175,13 @@
 
 .agent-info-row .label {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--color-text-secondary, #666666);
 }
 
 .agent-info-row .value {
   font-size: 14px;
   font-weight: 500;
-  color: #111827;
+  color: var(--color-text-primary, #1a1a1a);
 }
 
 /* Responsive */

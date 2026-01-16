@@ -3,7 +3,7 @@
  * Defines all stages for purchase and refinance applications
  */
 
-// Purchase Application Stages (9 stages)
+// Purchase Application Stages (10 stages)
 export const PURCHASE_STAGES = [
   {
     id: 'about_you',
@@ -47,17 +47,26 @@ export const PURCHASE_STAGES = [
     shortLabel: 'REO',
     icon: 'building',
     description: 'Other properties you own',
-    progress: 65,
+    progress: 60,
     order: 5,
   },
   {
-    id: 'background',
-    label: 'Background',
-    shortLabel: 'History',
-    icon: 'clipboard',
-    description: 'Credit and financial history',
-    progress: 80,
+    id: 'credit',
+    label: 'Credit History',
+    shortLabel: 'Credit',
+    icon: 'credit-card',
+    description: 'Your credit history and score',
+    progress: 70,
     order: 6,
+  },
+  {
+    id: 'background',
+    label: 'Declarations',
+    shortLabel: 'Declarations',
+    icon: 'clipboard',
+    description: 'Financial declarations',
+    progress: 80,
+    order: 7,
   },
   {
     id: 'government_monitoring',
@@ -66,7 +75,7 @@ export const PURCHASE_STAGES = [
     icon: 'chart',
     description: 'Government monitoring information (optional)',
     progress: 85,
-    order: 7,
+    order: 8,
     optional: true,
   },
   {
@@ -76,7 +85,7 @@ export const PURCHASE_STAGES = [
     icon: 'calendar',
     description: 'Schedule a consultation',
     progress: 90,
-    order: 8,
+    order: 9,
   },
   {
     id: 'authorizations',
@@ -85,11 +94,11 @@ export const PURCHASE_STAGES = [
     icon: 'check',
     description: 'Review and authorize',
     progress: 95,
-    order: 9,
+    order: 10,
   },
 ];
 
-// Refinance Application Stages (10 stages - includes current mortgage)
+// Refinance Application Stages (12 stages - includes current mortgage and credit)
 export const REFINANCE_STAGES = [
   {
     id: 'about_you',
@@ -152,17 +161,26 @@ export const REFINANCE_STAGES = [
     shortLabel: 'REO',
     icon: 'building',
     description: 'Other properties you own',
-    progress: 70,
+    progress: 60,
     order: 7,
   },
   {
-    id: 'background',
-    label: 'Background',
-    shortLabel: 'History',
-    icon: 'clipboard',
-    description: 'Credit and financial history',
-    progress: 80,
+    id: 'credit',
+    label: 'Credit History',
+    shortLabel: 'Credit',
+    icon: 'credit-card',
+    description: 'Your credit history and score',
+    progress: 70,
     order: 8,
+  },
+  {
+    id: 'background',
+    label: 'Declarations',
+    shortLabel: 'Declarations',
+    icon: 'clipboard',
+    description: 'Financial declarations',
+    progress: 80,
+    order: 9,
   },
   {
     id: 'government_monitoring',
@@ -170,8 +188,8 @@ export const REFINANCE_STAGES = [
     shortLabel: 'HMDA',
     icon: 'chart',
     description: 'Government monitoring information (optional)',
-    progress: 82,
-    order: 9,
+    progress: 85,
+    order: 10,
     optional: true,
   },
   {
@@ -181,7 +199,7 @@ export const REFINANCE_STAGES = [
     icon: 'calendar',
     description: 'Schedule a consultation',
     progress: 90,
-    order: 10,
+    order: 11,
   },
   {
     id: 'authorizations',
@@ -190,7 +208,7 @@ export const REFINANCE_STAGES = [
     icon: 'check',
     description: 'Review and authorize',
     progress: 95,
-    order: 11,
+    order: 12,
   },
 ];
 

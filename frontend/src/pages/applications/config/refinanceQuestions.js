@@ -3,7 +3,7 @@
  * Defines all questions for the refinance mortgage application
  */
 
-import { QuestionTypes } from './purchaseQuestions';
+import { QuestionTypes, creditQuestions } from './purchaseQuestions';
 
 // ============================================
 // STAGE 1: ABOUT YOU
@@ -234,36 +234,46 @@ export const aboutYouQuestions = [
     order: 16,
   },
 
-  // Alimony/Child Support Receiving Questions (for divorced applicants)
+  // Alimony/Child Support Questions (for divorced/separated applicants)
   {
     id: 'receiving_alimony_child_support',
     stage: 'about_you',
     question: 'Are you receiving alimony or child support?',
     type: QuestionTypes.BOOLEAN,
-    showIf: (data, borrower) => borrower.marital_status === 'divorced',
+    showIf: (data, borrower) => ['divorced', 'separated'].includes(borrower.marital_status),
     borrowerSpecific: true,
     helpText: 'This income can help you qualify for a larger loan',
     order: 16.1,
   },
   {
-    id: 'alimony_child_support_continues_3_years',
-    stage: 'about_you',
-    question: 'Will this income continue for at least 3 more years?',
-    type: QuestionTypes.BOOLEAN,
-    showIf: (data, borrower) => borrower.marital_status === 'divorced' && borrower.receiving_alimony_child_support === true,
-    borrowerSpecific: true,
-    helpText: 'Income must continue for 3+ years to be used for qualification',
-    order: 16.2,
-  },
-  {
-    id: 'alimony_child_support_monthly_income',
+    id: 'receiving_alimony_amount',
     stage: 'about_you',
     question: 'How much do you receive monthly?',
     type: QuestionTypes.CURRENCY,
     placeholder: '$0',
-    showIf: (data, borrower) => borrower.marital_status === 'divorced' && borrower.receiving_alimony_child_support === true && borrower.alimony_child_support_continues_3_years === true,
+    showIf: (data, borrower) => ['divorced', 'separated'].includes(borrower.marital_status) && borrower.receiving_alimony_child_support === true,
     borrowerSpecific: true,
+    order: 16.2,
+  },
+  {
+    id: 'paying_alimony_child_support',
+    stage: 'about_you',
+    question: 'Are you paying alimony or child support?',
+    type: QuestionTypes.BOOLEAN,
+    showIf: (data, borrower) => ['divorced', 'separated'].includes(borrower.marital_status),
+    borrowerSpecific: true,
+    helpText: 'This obligation will be considered in your debt-to-income ratio',
     order: 16.3,
+  },
+  {
+    id: 'paying_alimony_amount',
+    stage: 'about_you',
+    question: 'How much do you pay monthly?',
+    type: QuestionTypes.CURRENCY,
+    placeholder: '$0',
+    showIf: (data, borrower) => ['divorced', 'separated'].includes(borrower.marital_status) && borrower.paying_alimony_child_support === true,
+    borrowerSpecific: true,
+    order: 16.4,
   },
 
   {
@@ -1188,23 +1198,7 @@ export const backgroundQuestions = [
     helpText: 'Student loans, tax liens, etc.',
     order: 8,
   },
-  {
-    id: 'has_alimony_obligation',
-    stage: 'background',
-    question: 'Are you obligated to pay alimony or child support?',
-    type: QuestionTypes.BOOLEAN,
-    required: true,
-    order: 9,
-  },
-  {
-    id: 'alimony_monthly_amount',
-    stage: 'background',
-    question: 'How much do you pay monthly?',
-    type: QuestionTypes.CURRENCY,
-    placeholder: '$0',
-    showIf: { has_alimony_obligation: true },
-    order: 10,
-  },
+  // Note: Alimony/child support questions moved to about_you stage for divorced/separated applicants
   {
     id: 'is_co_signer',
     stage: 'background',
@@ -1397,6 +1391,7 @@ export const allRefinanceQuestions = [
   ...incomeQuestions,
   ...assetsQuestions,
   ...realEstateOwnedQuestions,
+  ...creditQuestions,
   ...backgroundQuestions,
   ...governmentMonitoringQuestions,
   ...scheduleQuestions,
@@ -1411,10 +1406,11 @@ export const allRefinanceQuestions = [
     income: 5,
     assets: 6,
     real_estate_owned: 7,
-    background: 8,
-    government_monitoring: 9,
-    schedule: 10,
-    authorizations: 11,
+    credit: 8,
+    background: 9,
+    government_monitoring: 10,
+    schedule: 11,
+    authorizations: 12,
   };
 
   const stageA = stageOrder[a.stage] || 99;

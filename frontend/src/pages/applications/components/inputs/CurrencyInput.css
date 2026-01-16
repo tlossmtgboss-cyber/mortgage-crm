@@ -1,4 +1,4 @@
-/* CurrencyInput Styles */
+/* CurrencyInput Styles - CRM Color Scheme */
 
 .currency-input-wrapper {
   width: 100%;
@@ -8,12 +8,12 @@
   display: block;
   font-size: 14px;
   font-weight: 500;
-  color: #374151;
+  color: var(--color-text-primary, #1a1a1a);
   margin-bottom: 6px;
 }
 
 .currency-input-label .required {
-  color: #ef4444;
+  color: var(--color-error, #C0152F);
   margin-left: 2px;
 }
 
@@ -28,7 +28,7 @@
   left: 16px;
   font-size: 18px;
   font-weight: 500;
-  color: #6b7280;
+  color: var(--color-text-secondary, #666666);
   pointer-events: none;
   z-index: 1;
 }
@@ -39,53 +39,53 @@
   font-size: 18px;
   font-weight: 500;
   line-height: 1.5;
-  color: #111827;
-  background: #ffffff;
-  border: 2px solid #e5e7eb;
-  border-radius: 10px;
-  transition: all 0.2s ease;
+  color: var(--color-text-primary, #1a1a1a);
+  background: var(--color-bg-surface, #FFFFFF);
+  border: 2px solid var(--color-border, rgba(139, 92, 68, 0.15));
+  border-radius: var(--radius-md, 10px);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   appearance: none;
   -webkit-appearance: none;
 }
 
 .currency-input::placeholder {
-  color: #9ca3af;
+  color: var(--color-text-tertiary, #999999);
   font-weight: 400;
 }
 
 .currency-input:hover:not(:disabled) {
-  border-color: #9ca3af;
+  border-color: rgba(139, 92, 68, 0.25);
 }
 
 .currency-input:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  border-color: var(--color-primary, #217F8D);
+  box-shadow: 0 0 0 3px rgba(33, 127, 141, 0.15);
 }
 
 .currency-input:disabled {
-  background: #f3f4f6;
-  color: #9ca3af;
+  background: var(--color-bg-secondary, rgba(139, 92, 68, 0.05));
+  color: var(--color-text-tertiary, #999999);
   cursor: not-allowed;
 }
 
 /* Error state */
 .currency-input-wrapper.has-error .currency-input {
-  border-color: #ef4444;
+  border-color: var(--color-error, #C0152F);
 }
 
 .currency-input-wrapper.has-error .currency-input:focus {
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+  box-shadow: 0 0 0 3px rgba(192, 21, 47, 0.15);
 }
 
 .currency-input-error {
-  color: #ef4444;
+  color: var(--color-error, #C0152F);
   font-size: 13px;
   margin-top: 6px;
 }
 
 .currency-input-help {
-  color: #6b7280;
+  color: var(--color-text-secondary, #666666);
   font-size: 13px;
   margin-top: 6px;
 }

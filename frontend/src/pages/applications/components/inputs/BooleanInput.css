@@ -1,4 +1,4 @@
-/* BooleanInput Styles */
+/* BooleanInput Styles - CRM Color Scheme */
 
 .boolean-input {
   width: 100%;
@@ -16,45 +16,45 @@
   justify-content: center;
   gap: 10px;
   padding: 16px 24px;
-  background: #ffffff;
-  border: 2px solid #e5e7eb;
-  border-radius: 12px;
+  background: var(--color-bg-surface, #FFFFFF);
+  border: 2px solid var(--color-border, rgba(139, 92, 68, 0.15));
+  border-radius: var(--radius-lg, 12px);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   font-size: 16px;
   font-weight: 500;
 }
 
 .boolean-option:hover:not(.disabled) {
-  border-color: #9ca3af;
-  background: #f9fafb;
+  border-color: var(--color-primary, #217F8D);
+  background: rgba(33, 127, 141, 0.05);
 }
 
 .boolean-option:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  border-color: var(--color-primary, #217F8D);
+  box-shadow: 0 0 0 3px rgba(33, 127, 141, 0.15);
 }
 
 .boolean-option.selected {
-  border-color: #3b82f6;
-  background: #eff6ff;
-  color: #1d4ed8;
+  border-color: var(--color-primary, #217F8D);
+  background: rgba(33, 127, 141, 0.1);
+  color: var(--color-primary, #217F8D);
 }
 
 .boolean-option.selected .boolean-icon {
-  background: #3b82f6;
+  background: var(--color-primary, #217F8D);
   color: #ffffff;
 }
 
 .boolean-option.selected-no {
-  border-color: #6b7280;
-  background: #f9fafb;
-  color: #374151;
+  border-color: var(--color-text-secondary, #666666);
+  background: var(--color-bg-secondary, rgba(139, 92, 68, 0.05));
+  color: var(--color-text-primary, #1a1a1a);
 }
 
 .boolean-option.selected-no .boolean-icon {
-  background: #6b7280;
+  background: var(--color-text-secondary, #666666);
   color: #ffffff;
 }
 
@@ -70,11 +70,11 @@
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: #e5e7eb;
-  color: #6b7280;
+  background: var(--color-bg-secondary, rgba(139, 92, 68, 0.08));
+  color: var(--color-text-secondary, #666666);
   font-size: 14px;
   font-weight: bold;
-  transition: all 0.2s ease;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .boolean-label {
@@ -83,11 +83,11 @@
 
 /* Error state */
 .boolean-input.has-error .boolean-option {
-  border-color: #fca5a5;
+  border-color: var(--color-error, #C0152F);
 }
 
 .boolean-error {
-  color: #ef4444;
+  color: var(--color-error, #C0152F);
   font-size: 13px;
   margin-top: 8px;
   text-align: center;

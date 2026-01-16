@@ -1,4 +1,4 @@
-/* FileUploadInput Styles */
+/* FileUploadInput Styles - CRM Color Scheme */
 
 .file-upload-input {
   width: 100%;
@@ -15,16 +15,16 @@
   align-items: center;
   justify-content: center;
   padding: 32px 24px;
-  border: 2px dashed #d1d5db;
-  border-radius: 12px;
-  background: #f9fafb;
+  border: 2px dashed var(--color-border, rgba(139, 92, 68, 0.2));
+  border-radius: var(--radius-lg, 12px);
+  background: var(--color-bg-secondary, rgba(139, 92, 68, 0.03));
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .upload-dropzone:hover {
-  border-color: #3b82f6;
-  background: #eff6ff;
+  border-color: var(--color-primary, #217F8D);
+  background: rgba(33, 127, 141, 0.05);
 }
 
 .upload-dropzone.disabled {
@@ -33,33 +33,33 @@
 }
 
 .dropzone-icon {
-  color: #9ca3af;
+  color: var(--color-text-tertiary, #999999);
   margin-bottom: 12px;
 }
 
 .upload-dropzone:hover .dropzone-icon {
-  color: #3b82f6;
+  color: var(--color-primary, #217F8D);
 }
 
 .dropzone-text {
   margin: 0;
   font-size: 15px;
   font-weight: 500;
-  color: #374151;
+  color: var(--color-text-primary, #1a1a1a);
 }
 
 .dropzone-hint {
   margin: 6px 0 0 0;
   font-size: 13px;
-  color: #9ca3af;
+  color: var(--color-text-tertiary, #999999);
 }
 
 /* Uploaded File */
 .uploaded-file {
   padding: 16px;
-  border: 2px solid #e5e7eb;
-  border-radius: 12px;
-  background: #ffffff;
+  border: 2px solid var(--color-border, rgba(139, 92, 68, 0.15));
+  border-radius: var(--radius-lg, 12px);
+  background: var(--color-bg-surface, #FFFFFF);
 }
 
 .file-info {
@@ -74,9 +74,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #eff6ff;
-  border-radius: 10px;
-  color: #3b82f6;
+  background: rgba(33, 127, 141, 0.1);
+  border-radius: var(--radius-md, 10px);
+  color: var(--color-primary, #217F8D);
 }
 
 .file-details {
@@ -88,7 +88,7 @@
   margin: 0;
   font-size: 14px;
   font-weight: 500;
-  color: #111827;
+  color: var(--color-text-primary, #1a1a1a);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -97,7 +97,7 @@
 .file-size {
   margin: 2px 0 0 0;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--color-text-secondary, #666666);
 }
 
 .remove-btn {
@@ -108,16 +108,16 @@
   justify-content: center;
   padding: 0;
   border: none;
-  border-radius: 8px;
-  background: #f3f4f6;
-  color: #6b7280;
+  border-radius: var(--radius-base, 8px);
+  background: var(--color-bg-secondary, rgba(139, 92, 68, 0.05));
+  color: var(--color-text-secondary, #666666);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .remove-btn:hover {
-  background: #fee2e2;
-  color: #ef4444;
+  background: rgba(192, 21, 47, 0.1);
+  color: var(--color-error, #C0152F);
 }
 
 .remove-btn:disabled {
@@ -136,21 +136,21 @@
 .progress-bar {
   flex: 1;
   height: 6px;
-  background: #e5e7eb;
+  background: var(--color-bg-secondary, rgba(139, 92, 68, 0.08));
   border-radius: 3px;
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #3b82f6, #2563eb);
+  background: linear-gradient(90deg, #217F8D, #1a6670);
   border-radius: 3px;
   transition: width 0.3s ease;
 }
 
 .progress-text {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--color-text-secondary, #666666);
   white-space: nowrap;
 }
 
@@ -161,9 +161,9 @@
   gap: 6px;
   margin-top: 12px;
   padding: 8px 12px;
-  background: #f0fdf4;
-  border-radius: 8px;
-  color: #16a34a;
+  background: rgba(33, 127, 141, 0.1);
+  border-radius: var(--radius-base, 8px);
+  color: var(--color-primary, #217F8D);
   font-size: 13px;
   font-weight: 500;
 }
@@ -172,15 +172,15 @@
 .parsed-data {
   margin-top: 16px;
   padding: 12px;
-  background: #f9fafb;
-  border-radius: 8px;
+  background: var(--color-bg-secondary, rgba(139, 92, 68, 0.03));
+  border-radius: var(--radius-base, 8px);
 }
 
 .parsed-label {
   margin: 0 0 8px 0;
   font-size: 12px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--color-text-secondary, #666666);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -198,30 +198,30 @@
 }
 
 .parsed-key {
-  color: #6b7280;
+  color: var(--color-text-secondary, #666666);
   text-transform: capitalize;
 }
 
 .parsed-value {
   font-weight: 500;
-  color: #111827;
+  color: var(--color-text-primary, #1a1a1a);
 }
 
 /* Error State */
 .file-upload-input.has-error .upload-dropzone {
-  border-color: #ef4444;
+  border-color: var(--color-error, #C0152F);
 }
 
 .file-upload-input .help-text {
   margin: 8px 0 0 0;
   font-size: 13px;
-  color: #6b7280;
+  color: var(--color-text-secondary, #666666);
 }
 
 .file-upload-input .error-text {
   margin: 8px 0 0 0;
   font-size: 13px;
-  color: #ef4444;
+  color: var(--color-error, #C0152F);
 }
 
 /* Responsive */

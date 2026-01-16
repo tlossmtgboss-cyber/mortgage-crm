@@ -1,4 +1,4 @@
-/* DurationInput Styles */
+/* DurationInput Styles - CRM Color Scheme */
 
 .duration-input {
   width: 100%;
@@ -19,10 +19,10 @@
   width: 100%;
   padding: 14px 16px;
   font-size: 16px;
-  border: 2px solid #e5e7eb;
-  border-radius: 10px;
-  background: #ffffff;
-  transition: all 0.2s ease;
+  border: 2px solid var(--color-border, rgba(139, 92, 68, 0.15));
+  border-radius: var(--radius-md, 10px);
+  background: var(--color-bg-surface, #FFFFFF);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   text-align: center;
   -moz-appearance: textfield;
 }
@@ -35,13 +35,13 @@
 
 .duration-input-field:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--color-primary, #217F8D);
+  box-shadow: 0 0 0 3px rgba(33, 127, 141, 0.1);
 }
 
 .duration-input-field:disabled {
-  background: #f3f4f6;
-  color: #9ca3af;
+  background: var(--color-bg-secondary, rgba(139, 92, 68, 0.05));
+  color: var(--color-text-tertiary, #999999);
   cursor: not-allowed;
 }
 
@@ -49,24 +49,24 @@
   margin-top: 6px;
   font-size: 13px;
   font-weight: 500;
-  color: #6b7280;
+  color: var(--color-text-secondary, #666666);
   text-align: center;
 }
 
 .duration-input.has-error .duration-input-field {
-  border-color: #ef4444;
+  border-color: var(--color-error, #C0152F);
 }
 
 .duration-input .help-text {
   margin: 8px 0 0 0;
   font-size: 13px;
-  color: #6b7280;
+  color: var(--color-text-secondary, #666666);
 }
 
 .duration-input .error-text {
   margin: 8px 0 0 0;
   font-size: 13px;
-  color: #ef4444;
+  color: var(--color-error, #C0152F);
 }
 
 /* Responsive */
