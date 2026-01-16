@@ -2245,21 +2245,31 @@ const AccountManagement = () => {
       });
       if (response.ok) {
         const data = await response.json();
-        // Use demo data if API returns empty/null
-        if (data.data && Object.keys(data.data).length > 0 && data.data.totalActiveAccounts > 0) {
+        if (data.data && Object.keys(data.data).length > 0) {
           setKpis(data.data);
         } else {
-          // Calculate KPIs from demo accounts
-          setKpis(calculateKpisFromAccounts(DEMO_ACCOUNTS, DEMO_SUSPENDED_ACCOUNTS, DEMO_CANCELED_ACCOUNTS, DEMO_PENDING_INVITES));
+          // Show empty KPIs when no data
+          setKpis({
+            totalActiveAccounts: 0,
+            totalMRR: 0,
+            avgCostPerUser: 0,
+            avgMargin: 0,
+            atRiskCount: 0,
+            totalSuspended: 0,
+            totalCanceled: 0,
+            totalPendingInvites: 0,
+            seatUtilization: 0,
+            totalSeats: 0,
+            usedSeats: 0
+          });
         }
       } else {
-        // Use calculated demo KPIs on API error
-        setKpis(calculateKpisFromAccounts(DEMO_ACCOUNTS, DEMO_SUSPENDED_ACCOUNTS, DEMO_CANCELED_ACCOUNTS, DEMO_PENDING_INVITES));
+        // Show empty KPIs on API error
+        setKpis(null);
       }
     } catch (err) {
       console.error('Error fetching KPIs:', err);
-      // Use calculated demo KPIs on network error
-      setKpis(calculateKpisFromAccounts(DEMO_ACCOUNTS, DEMO_SUSPENDED_ACCOUNTS, DEMO_CANCELED_ACCOUNTS, DEMO_PENDING_INVITES));
+      setKpis(null);
     }
   }, []);
 
@@ -2280,34 +2290,14 @@ const AccountManagement = () => {
         if (response.ok) {
           const data = await response.json();
           const apiInvites = data.data?.invitations || data.data?.invites || [];
-          if (apiInvites.length > 0) {
-            setPendingInvites(apiInvites);
-          } else {
-            // Use demo data if API returns empty
-            let demoData = [...DEMO_PENDING_INVITES];
-            if (filters.search) {
-              const search = filters.search.toLowerCase();
-              demoData = demoData.filter(inv =>
-                inv.email.toLowerCase().includes(search) ||
-                inv.name?.toLowerCase().includes(search) ||
-                inv.organizationName?.toLowerCase().includes(search)
-              );
-            }
-            if (filters.inviteStatus) {
-              demoData = demoData.filter(inv => {
-                const isExpired = inv.status === 'expired' || new Date(inv.expiresAt) < new Date();
-                return filters.inviteStatus === 'expired' ? isExpired : !isExpired;
-              });
-            }
-            setPendingInvites(demoData);
-          }
+          setPendingInvites(apiInvites);
         } else {
-          // Use demo data on API error
-          setPendingInvites(DEMO_PENDING_INVITES);
+          // Show empty on API error
+          setPendingInvites([]);
         }
       } catch (err) {
         console.error('Error fetching pending invites:', err);
-        setPendingInvites(DEMO_PENDING_INVITES);
+        setPendingInvites([]);
       } finally {
         setLoading(false);
       }
@@ -2329,42 +2319,14 @@ const AccountManagement = () => {
       if (response.ok) {
         const data = await response.json();
         const apiAccounts = data.data?.accounts || [];
-        // Use demo data if API returns empty
-        if (apiAccounts.length > 0) {
-          setAccounts(apiAccounts);
-        } else {
-          // Return appropriate demo data based on tab
-          let demoData = [];
-          if (activeTab === 'active') {
-            demoData = DEMO_ACCOUNTS;
-          } else if (activeTab === 'suspended') {
-            demoData = DEMO_SUSPENDED_ACCOUNTS;
-          } else if (activeTab === 'canceled') {
-            demoData = DEMO_CANCELED_ACCOUNTS;
-          }
-          // Apply search filter to demo data
-          if (filters.search) {
-            const search = filters.search.toLowerCase();
-            demoData = demoData.filter(a =>
-              a.name.toLowerCase().includes(search) ||
-              a.ownerName.toLowerCase().includes(search) ||
-              a.ownerEmail.toLowerCase().includes(search)
-            );
-          }
-          setAccounts(demoData);
-        }
+        setAccounts(apiAccounts);
       } else {
-        // Use demo data on API error
-        let demoData = activeTab === 'active' ? DEMO_ACCOUNTS :
-                       activeTab === 'suspended' ? DEMO_SUSPENDED_ACCOUNTS : DEMO_CANCELED_ACCOUNTS;
-        setAccounts(demoData);
+        // Show empty on API error
+        setAccounts([]);
       }
     } catch (err) {
       console.error('Error fetching accounts:', err);
-      // Use demo data on network error
-      let demoData = activeTab === 'active' ? DEMO_ACCOUNTS :
-                     activeTab === 'suspended' ? DEMO_SUSPENDED_ACCOUNTS : DEMO_CANCELED_ACCOUNTS;
-      setAccounts(demoData);
+      setAccounts([]);
     } finally {
       setLoading(false);
     }
@@ -2372,12 +2334,6 @@ const AccountManagement = () => {
 
   // Fetch Account Detail
   const fetchAccountDetail = useCallback(async (accountId) => {
-    // Helper to find demo account by ID
-    const findDemoAccount = (id) => {
-      return [...DEMO_ACCOUNTS, ...DEMO_SUSPENDED_ACCOUNTS, ...DEMO_CANCELED_ACCOUNTS]
-        .find(a => a.id === id);
-    };
-
     try {
       const [accountRes, usersRes, invoicesRes, timelineRes, costRes, trendRes, auditRes] = await Promise.all([
         fetch(`${API_BASE_URL}/api/v1/admin/account-management/accounts/${accountId}`, { headers: getAuthHeaders() }),
@@ -2392,84 +2348,72 @@ const AccountManagement = () => {
       // Account data
       if (accountRes.ok) {
         const data = await accountRes.json();
-        if (data.data) {
-          setSelectedAccount(data.data);
-        } else {
-          setSelectedAccount(findDemoAccount(accountId) || DEMO_ACCOUNTS[0]);
-        }
+        setSelectedAccount(data.data || null);
       } else {
-        setSelectedAccount(findDemoAccount(accountId) || DEMO_ACCOUNTS[0]);
+        setSelectedAccount(null);
       }
 
       // Users data
       if (usersRes.ok) {
         const data = await usersRes.json();
-        const users = data.data?.users || [];
-        setAccountUsers(users.length > 0 ? users : DEMO_USERS);
+        setAccountUsers(data.data?.users || []);
       } else {
-        setAccountUsers(DEMO_USERS);
+        setAccountUsers([]);
       }
 
       // Invoices data
       if (invoicesRes.ok) {
         const data = await invoicesRes.json();
-        const invoices = data.data?.invoices || [];
-        setInvoices(invoices.length > 0 ? invoices : DEMO_INVOICES);
+        setInvoices(data.data?.invoices || []);
       } else {
-        setInvoices(DEMO_INVOICES);
+        setInvoices([]);
       }
 
       // Subscription timeline
       if (timelineRes.ok) {
         const data = await timelineRes.json();
-        const timeline = data.data?.timeline || [];
-        setSubscriptionTimeline(timeline.length > 0 ? timeline : DEMO_SUBSCRIPTION_TIMELINE);
+        setSubscriptionTimeline(data.data?.timeline || []);
       } else {
-        setSubscriptionTimeline(DEMO_SUBSCRIPTION_TIMELINE);
+        setSubscriptionTimeline([]);
       }
 
       // Cost breakdown
       if (costRes.ok) {
         const data = await costRes.json();
-        setCostBreakdown(data.data || DEMO_COST_BREAKDOWN);
+        setCostBreakdown(data.data || null);
       } else {
-        setCostBreakdown(DEMO_COST_BREAKDOWN);
+        setCostBreakdown(null);
       }
 
       // Cost trend
       if (trendRes.ok) {
         const data = await trendRes.json();
-        setCostTrend(data.data || DEMO_COST_TREND);
+        setCostTrend(data.data || null);
       } else {
-        setCostTrend(DEMO_COST_TREND);
+        setCostTrend(null);
       }
 
       // Audit log
       if (auditRes.ok) {
         const data = await auditRes.json();
-        const logs = data.data?.logs || [];
-        setAuditLog(logs.length > 0 ? logs : DEMO_AUDIT_LOG);
+        setAuditLog(data.data?.logs || []);
       } else {
-        setAuditLog(DEMO_AUDIT_LOG);
+        setAuditLog([]);
       }
     } catch (err) {
       console.error('Error fetching account detail:', err);
-      // Use demo data on error
-      setSelectedAccount(findDemoAccount(accountId) || DEMO_ACCOUNTS[0]);
-      setAccountUsers(DEMO_USERS);
-      setInvoices(DEMO_INVOICES);
-      setSubscriptionTimeline(DEMO_SUBSCRIPTION_TIMELINE);
-      setCostBreakdown(DEMO_COST_BREAKDOWN);
-      setCostTrend(DEMO_COST_TREND);
-      setAuditLog(DEMO_AUDIT_LOG);
+      setSelectedAccount(null);
+      setAccountUsers([]);
+      setInvoices([]);
+      setSubscriptionTimeline([]);
+      setCostBreakdown(null);
+      setCostTrend(null);
+      setAuditLog([]);
     }
   }, []);
 
   // Fetch User Detail
   const fetchUserDetail = useCallback(async (userId) => {
-    // Helper to find demo user by ID
-    const findDemoUser = (id) => DEMO_USERS.find(u => u.id === id);
-
     try {
       const [userRes, historyRes] = await Promise.all([
         fetch(`${API_BASE_URL}/api/v1/admin/account-management/users/${userId}`, { headers: getAuthHeaders() }),
@@ -2479,31 +2423,22 @@ const AccountManagement = () => {
       // User data
       if (userRes.ok) {
         const data = await userRes.json();
-        if (data.data) {
-          setSelectedUser(data.data);
-        } else {
-          const demoUser = findDemoUser(userId) || DEMO_USERS[0];
-          setSelectedUser({ ...demoUser, accountName: 'Pinnacle Mortgage Group' });
-        }
+        setSelectedUser(data.data || null);
       } else {
-        const demoUser = findDemoUser(userId) || DEMO_USERS[0];
-        setSelectedUser({ ...demoUser, accountName: 'Pinnacle Mortgage Group' });
+        setSelectedUser(null);
       }
 
       // Login history
       if (historyRes.ok) {
         const data = await historyRes.json();
-        const events = data.data?.events || [];
-        setLoginHistory(events.length > 0 ? events : DEMO_LOGIN_HISTORY);
+        setLoginHistory(data.data?.events || []);
       } else {
-        setLoginHistory(DEMO_LOGIN_HISTORY);
+        setLoginHistory([]);
       }
     } catch (err) {
       console.error('Error fetching user detail:', err);
-      // Use demo data on error
-      const demoUser = findDemoUser(userId) || DEMO_USERS[0];
-      setSelectedUser({ ...demoUser, accountName: 'Pinnacle Mortgage Group' });
-      setLoginHistory(DEMO_LOGIN_HISTORY);
+      setSelectedUser(null);
+      setLoginHistory([]);
     }
   }, []);
 
