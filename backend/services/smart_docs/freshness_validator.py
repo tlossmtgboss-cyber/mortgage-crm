@@ -63,7 +63,7 @@ class FreshnessValidator:
     # These can be overridden per-request
     DEFAULT_FRESHNESS_DAYS = {
         DocType.PAYSTUB: 30,
-        DocType.BANK_STATEMENT: 90,
+        DocType.BANK_STATEMENT: 60,  # Updated from 90 to 60 days per requirements
         DocType.INVESTMENT_STATEMENT: 90,
         DocType.PROFIT_LOSS: 90,
         DocType.BALANCE_SHEET: 90,

@@ -132,11 +132,12 @@ class DocumentReviewPipeline:
 
             # If screenshot detected with high confidence, reject early
             if screenshot_result.recommendation == "reject":
+                reason, instructions = self._get_screenshot_rejection_message(doc_type)
                 return self._reject_document(
                     document=document,
                     category=RejectionCategory.SCREENSHOT,
-                    reason=f"Document appears to be a screenshot (confidence: {screenshot_result.confidence:.1%})",
-                    fix_instructions="Please upload the original PDF document, not a screenshot or photo of it.",
+                    reason=f"{reason} (confidence: {screenshot_result.confidence:.1%})",
+                    fix_instructions=instructions,
                     screenshot_result=screenshot_result,
                 )
 
@@ -175,11 +176,12 @@ class DocumentReviewPipeline:
 
                 # If document is expired, reject
                 if freshness_result.status == FreshnessStatus.EXPIRED:
+                    reason, instructions = self._get_freshness_rejection_message(doc_type)
                     return self._reject_document(
                         document=document,
                         category=RejectionCategory.EXPIRED,
-                        reason=freshness_result.message,
-                        fix_instructions=self._get_freshness_fix_instructions(doc_type),
+                        reason=f"{reason} - dated {freshness_result.doc_date}",
+                        fix_instructions=instructions,
                         screenshot_result=screenshot_result,
                         date_result=date_result,
                         freshness_result=freshness_result,
@@ -468,18 +470,91 @@ class DocumentReviewPipeline:
         self.db.add(event)
         self.db.commit()
 
+    def _get_screenshot_rejection_message(
+        self, doc_type: Optional[DocType]
+    ) -> Tuple[str, str]:
+        """Get document-specific screenshot rejection message."""
+        messages = {
+            DocType.BANK_STATEMENT: (
+                "This appears to be a screenshot of a bank statement",
+                "We need the actual bank statement PDF downloaded from your bank's "
+                "website or mobile app. Screenshots cannot be accepted.",
+            ),
+            DocType.PAYSTUB: (
+                "This appears to be a screenshot of a pay stub",
+                "We need the actual pay stub PDF from your employer's payroll portal. "
+                "Screenshots cannot be accepted.",
+            ),
+            DocType.W2: (
+                "This appears to be a screenshot of a W-2",
+                "We need the actual W-2 PDF from your employer or the IRS. "
+                "Screenshots cannot be accepted.",
+            ),
+            DocType.TAX_RETURN: (
+                "This appears to be a screenshot of a tax return",
+                "We need the actual tax return PDF from your tax software or CPA. "
+                "Screenshots cannot be accepted.",
+            ),
+            DocType.INVESTMENT_STATEMENT: (
+                "This appears to be a screenshot of an investment statement",
+                "We need the actual statement PDF from your brokerage. "
+                "Screenshots cannot be accepted.",
+            ),
+        }
+        default = (
+            "This appears to be a screenshot",
+            "Please upload the original PDF document, not a screenshot. "
+            "Screenshots cannot be accepted.",
+        )
+        return messages.get(doc_type, default)
+
+    def _get_freshness_rejection_message(
+        self, doc_type: DocType
+    ) -> Tuple[str, str]:
+        """Get document-specific freshness rejection message."""
+        messages = {
+            DocType.PAYSTUB: (
+                "This pay stub is expired",
+                "Pay stubs must be dated within the last 30 days. "
+                "Please upload your most recent pay stub.",
+            ),
+            DocType.BANK_STATEMENT: (
+                "This bank statement is expired",
+                "Bank statements must be dated within the last 60 days. "
+                "Please upload a more recent statement from your bank.",
+            ),
+            DocType.INVESTMENT_STATEMENT: (
+                "This investment statement is expired",
+                "Investment statements must be dated within the last 90 days. "
+                "Please upload a more recent statement.",
+            ),
+        }
+        default = (
+            "This document is expired",
+            "Please upload a more recent version of this document.",
+        )
+        return messages.get(doc_type, default)
+
     def _get_freshness_fix_instructions(self, doc_type: DocType) -> str:
         """Get fix instructions for freshness rejection."""
         instructions = {
-            DocType.PAYSTUB: "Please upload your most recent pay stub dated within the last 30 days.",
-            DocType.BANK_STATEMENT: "Please upload a bank statement dated within the last 90 days. "
-                                   "The statement must show a complete statement period.",
-            DocType.INVESTMENT_STATEMENT: "Please upload an investment statement dated within the last 90 days.",
-            DocType.PROFIT_LOSS: "Please upload a current year-to-date profit and loss statement.",
+            DocType.PAYSTUB: (
+                "Please upload your most recent pay stub dated within the last 30 days."
+            ),
+            DocType.BANK_STATEMENT: (
+                "Please upload a bank statement dated within the last 60 days. "
+                "The statement must show a complete statement period."
+            ),
+            DocType.INVESTMENT_STATEMENT: (
+                "Please upload an investment statement dated within the last 90 days."
+            ),
+            DocType.PROFIT_LOSS: (
+                "Please upload a current year-to-date profit and loss statement."
+            ),
         }
         return instructions.get(
             doc_type,
-            "Please upload a more recent version of this document."
+            "Please upload a more recent version of this document.",
         )
 
     def reprocess_document(self, document_id: int) -> ProcessingResult:

@@ -120,7 +120,7 @@ const RejectionExplainer = ({
             <h5>Freshness requirements:</h5>
             <ul>
               <li>Pay stubs must be dated within the last 30 days</li>
-              <li>Bank statements must be dated within the last 90 days</li>
+              <li>Bank statements must be dated within the last 60 days</li>
               <li>Check the date on your document before uploading</li>
             </ul>
           </div>
