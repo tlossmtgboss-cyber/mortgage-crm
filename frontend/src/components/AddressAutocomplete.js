@@ -1,17 +1,18 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useGooglePlaces } from '../hooks/useGooglePlaces';
+import axios from 'axios';
 import './AddressAutocomplete.css';
 
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+
 /**
- * AddressAutocomplete - Google Places powered address input
- *
+ * AddressAutocomplete - Backend-powered address input
+ * 
  * Features:
- * - Real-time address suggestions as user types
+ * - Real-time address suggestions via backend API
  * - Parses full address into components (street, city, state, zip)
  * - Mobile-friendly with touch support
- * - Fallback to manual entry if Google API unavailable
+ * - No deprecated Google APIs
  */
-
 const AddressAutocomplete = ({
   value = '',
   onChange,
@@ -22,7 +23,7 @@ const AddressAutocomplete = ({
   disabled = false,
   error,
   className = '',
-  types = ['address'], // 'address', 'geocode', 'establishment', '(cities)'
+  types = ['address'],
   country = 'us',
 }) => {
   const [inputValue, setInputValue] = useState(value);
@@ -30,32 +31,16 @@ const AddressAutocomplete = ({
   const [isLoading, setIsLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
-  const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
-
-  // Use the hook to trigger loading of Google Places script
-  const { isLoaded: isGoogleScriptLoaded } = useGooglePlaces();
-
+  
   const inputRef = useRef(null);
   const dropdownRef = useRef(null);
-  const autocompleteService = useRef(null);
-  const placesService = useRef(null);
-  const sessionToken = useRef(null);
   const debounceTimer = useRef(null);
+  const sessionToken = useRef(generateSessionToken());
 
-  // Initialize Google Places services when script is loaded
-  useEffect(() => {
-    if (isGoogleScriptLoaded && window.google && window.google.maps && window.google.maps.places) {
-      autocompleteService.current = new window.google.maps.places.AutocompleteService();
-
-      // Create a dummy div for PlacesService (required but not displayed)
-      const dummyDiv = document.createElement('div');
-      placesService.current = new window.google.maps.places.PlacesService(dummyDiv);
-
-      // Create session token for billing optimization
-      sessionToken.current = new window.google.maps.places.AutocompleteSessionToken();
-      setIsGoogleLoaded(true);
-    }
-  }, [isGoogleScriptLoaded]);
+  // Generate a simple session token for billing optimization
+  function generateSessionToken() {
+    return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
 
   // Sync external value changes
   useEffect(() => {
@@ -86,38 +71,42 @@ const AddressAutocomplete = ({
     };
   }, []);
 
-  // Fetch suggestions from Google Places
-  const fetchSuggestions = useCallback((query) => {
-    if (!autocompleteService.current || query.length < 3) {
+  // Fetch suggestions from backend API
+  const fetchSuggestions = useCallback(async (query) => {
+    if (query.length < 3) {
       setSuggestions([]);
       return;
     }
 
     setIsLoading(true);
 
-    const request = {
-      input: query,
-      sessionToken: sessionToken.current,
-      componentRestrictions: { country },
-      types: types,
-    };
+    try {
+      const response = await axios.get(`${API_URL}/api/v1/places/autocomplete`, {
+        params: {
+          input: query,
+          types: types.join(','),
+          session_token: sessionToken.current,
+        },
+      });
 
-    autocompleteService.current.getPlacePredictions(request, (predictions, status) => {
-      setIsLoading(false);
-
-      if (status === window.google.maps.places.PlacesServiceStatus.OK && predictions) {
-        setSuggestions(predictions.map(p => ({
-          placeId: p.place_id,
-          description: p.description,
-          mainText: p.structured_formatting?.main_text || p.description,
-          secondaryText: p.structured_formatting?.secondary_text || '',
+      if (response.data.suggestions) {
+        setSuggestions(response.data.suggestions.map(s => ({
+          placeId: s.place_id,
+          description: s.description,
+          mainText: s.main_text || s.description,
+          secondaryText: s.secondary_text || '',
         })));
         setShowDropdown(true);
       } else {
         setSuggestions([]);
       }
-    });
-  }, [country, types]);
+    } catch (error) {
+      console.error('Error fetching address suggestions:', error);
+      setSuggestions([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [types]);
 
   // Handle input change with debounce
   const handleInputChange = (e) => {
@@ -140,9 +129,45 @@ const AddressAutocomplete = ({
   };
 
   // Get place details when user selects a suggestion
-  const handleSelectSuggestion = (suggestion) => {
-    if (!placesService.current) {
-      // Fallback if Places service not available
+  const handleSelectSuggestion = async (suggestion) => {
+    try {
+      const response = await axios.get(`${API_URL}/api/v1/places/details/${suggestion.placeId}`, {
+        params: {
+          session_token: sessionToken.current,
+        },
+      });
+
+      if (response.data) {
+        const place = response.data;
+        const addressData = {
+          formatted: place.formatted_address,
+          street: place.address_components?.street_address || '',
+          street_number: place.address_components?.street_number || '',
+          street_name: place.address_components?.street_name || '',
+          city: place.address_components?.city || '',
+          state: place.address_components?.state || '',
+          state_code: place.address_components?.state_code || '',
+          zip: place.address_components?.zip_code || '',
+          county: place.address_components?.county || '',
+          country: place.address_components?.country || '',
+          country_code: place.address_components?.country_code || '',
+          lat: place.location?.latitude,
+          lng: place.location?.longitude,
+        };
+
+        setInputValue(place.formatted_address);
+        setShowDropdown(false);
+        setSuggestions([]);
+
+        // Generate new session token for next search
+        sessionToken.current = generateSessionToken();
+
+        if (onChange) onChange(place.formatted_address);
+        if (onAddressSelect) onAddressSelect(addressData);
+      }
+    } catch (error) {
+      console.error('Error fetching place details:', error);
+      // Fallback to basic info
       setInputValue(suggestion.description);
       setShowDropdown(false);
       if (onChange) onChange(suggestion.description);
@@ -152,89 +177,7 @@ const AddressAutocomplete = ({
           street: suggestion.mainText,
         });
       }
-      return;
     }
-
-    const request = {
-      placeId: suggestion.placeId,
-      fields: ['address_components', 'formatted_address', 'geometry'],
-      sessionToken: sessionToken.current,
-    };
-
-    placesService.current.getDetails(request, (place, status) => {
-      if (status === window.google.maps.places.PlacesServiceStatus.OK && place) {
-        // Parse address components
-        const addressData = parseAddressComponents(place.address_components);
-        addressData.formatted = place.formatted_address;
-
-        // Add coordinates if available
-        if (place.geometry && place.geometry.location) {
-          addressData.lat = place.geometry.location.lat();
-          addressData.lng = place.geometry.location.lng();
-        }
-
-        setInputValue(place.formatted_address);
-        setShowDropdown(false);
-        setSuggestions([]);
-
-        // Create new session token for next search
-        sessionToken.current = new window.google.maps.places.AutocompleteSessionToken();
-
-        if (onChange) onChange(place.formatted_address);
-        if (onAddressSelect) onAddressSelect(addressData);
-      }
-    });
-  };
-
-  // Parse Google address components into structured data
-  const parseAddressComponents = (components) => {
-    const result = {
-      street_number: '',
-      street_name: '',
-      street: '',
-      city: '',
-      state: '',
-      state_code: '',
-      zip: '',
-      county: '',
-      country: '',
-      country_code: '',
-    };
-
-    if (!components) return result;
-
-    components.forEach(component => {
-      const types = component.types;
-
-      if (types.includes('street_number')) {
-        result.street_number = component.long_name;
-      }
-      if (types.includes('route')) {
-        result.street_name = component.long_name;
-      }
-      if (types.includes('locality')) {
-        result.city = component.long_name;
-      }
-      if (types.includes('administrative_area_level_1')) {
-        result.state = component.long_name;
-        result.state_code = component.short_name;
-      }
-      if (types.includes('postal_code')) {
-        result.zip = component.long_name;
-      }
-      if (types.includes('administrative_area_level_2')) {
-        result.county = component.long_name;
-      }
-      if (types.includes('country')) {
-        result.country = component.long_name;
-        result.country_code = component.short_name;
-      }
-    });
-
-    // Combine street number and name
-    result.street = `${result.street_number} ${result.street_name}`.trim();
-
-    return result;
   };
 
   // Keyboard navigation
@@ -253,24 +196,20 @@ const AddressAutocomplete = ({
           prev < suggestions.length - 1 ? prev + 1 : prev
         );
         break;
-
       case 'ArrowUp':
         e.preventDefault();
         setSelectedIndex(prev => (prev > 0 ? prev - 1 : -1));
         break;
-
       case 'Enter':
         e.preventDefault();
         if (selectedIndex >= 0 && suggestions[selectedIndex]) {
           handleSelectSuggestion(suggestions[selectedIndex]);
         }
         break;
-
       case 'Escape':
         setShowDropdown(false);
         setSelectedIndex(-1);
         break;
-
       default:
         break;
     }
@@ -315,12 +254,6 @@ const AddressAutocomplete = ({
             <div className="spinner-small"></div>
           </div>
         )}
-
-        {!isGoogleLoaded && inputValue.length >= 3 && (
-          <div className="input-icon manual">
-            <span title="Manual entry mode">✎</span>
-          </div>
-        )}
       </div>
 
       {/* Suggestions Dropdown */}
@@ -355,12 +288,6 @@ const AddressAutocomplete = ({
       )}
 
       {error && <div className="address-error">{error}</div>}
-
-      {!isGoogleLoaded && (
-        <div className="manual-entry-hint">
-          Enter address manually - autocomplete unavailable
-        </div>
-      )}
     </div>
   );
 };
