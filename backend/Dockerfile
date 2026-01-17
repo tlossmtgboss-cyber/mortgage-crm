@@ -25,8 +25,8 @@ COPY . .
 EXPOSE 8080
 
 # Health check for Railway
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:8080/ping || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=5 \
+    CMD curl -f http://localhost:8080/health/live || exit 1
 
 # Use start.py script for proper PORT handling and migrations
 CMD ["python", "start.py"]
