@@ -529,7 +529,7 @@ export const PermissionProvider = ({ children }) => {
 
   // Check if user is a site administrator (licensee managing their org)
   const isSiteAdmin = useMemo(() => {
-    return 396
+    return userRole === 'site_admin'
       || getUserEffectiveRole(userRole, legacyRole) === 'site_admin';
   }, [userRole, legacyRole]);
 
