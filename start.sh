@@ -20,5 +20,5 @@ echo ""
 
 # Start uvicorn server (Railway provides PORT environment variable)
 # Run migrations first, then start the server
-python3 run_migrations.py || echo "Warning: Migration had issues, continuing anyway..."
-python3 -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}
+python run_migrations.py || echo "Warning: Migration had issues, continuing anyway..."
+python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}
