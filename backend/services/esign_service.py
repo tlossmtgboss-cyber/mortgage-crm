@@ -7,6 +7,7 @@ and signing session validation.
 """
 
 import hashlib
+import json
 import secrets
 import logging
 from datetime import datetime, timezone, timedelta
@@ -1036,7 +1037,7 @@ class EsignService:
             "field_id": field_id,
             "action": action,
             "description": description,
-            "event_data": event_data,
+            "event_data": json.dumps(event_data) if event_data else None,
             "actor_type": actor_type,
             "actor_id": actor_id,
             "actor_email": actor_email,
