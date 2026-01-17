@@ -243,6 +243,52 @@ def hash_password(password: str) -> str:
 # Endpoints
 # =============================================================================
 
+@router.post("/test/create-invite")
+async def create_test_invite(
+    email: str = "test@example.com",
+    company_name: str = "Test Company",
+    test_key: str = "",
+    db: Session = Depends(get_db)
+):
+    """Create a test invitation (requires test key)"""
+    if test_key != "e2e-test-2024":
+        raise HTTPException(status_code=403, detail="Invalid test key")
+
+    try:
+        token = str(uuid.uuid4())
+        expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+
+        db.execute(text("""
+            INSERT INTO subscriber_invitations (
+                token, email, company_name, contact_name, plan, seats,
+                promo_code, status, expires_at, created_at, updated_at
+            ) VALUES (
+                :token, :email, :company_name, 'Test User', 'professional', 5,
+                'TEST2024', 'pending', :expires_at, NOW(), NOW()
+            )
+        """), {
+            'token': token,
+            'email': email,
+            'company_name': company_name,
+            'expires_at': expires_at
+        })
+        db.commit()
+
+        return success_response(
+            data={
+                'token': token,
+                'email': email,
+                'company_name': company_name,
+                'expires_at': expires_at.isoformat(),
+                'signup_url': f"https://www.perenniaai.com/signup?invite={token}&promo=TEST2024"
+            },
+            message="Test invitation created"
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/validate-invite/{token}")
 async def validate_invite(token: str, db: Session = Depends(get_db)):
     """Validate a subscription invitation token"""
