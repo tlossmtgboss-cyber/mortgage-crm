@@ -46,7 +46,47 @@ def add_onboarding_completed_column():
             conn.rollback()
             raise
 
+def add_user_roles_tables():
+    """Create user roles tables if they don't exist"""
+    print("Checking user roles tables...")
+    with engine.connect() as conn:
+        try:
+            # Check if user_assigned_roles table exists
+            result = conn.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_name = 'user_assigned_roles'
+                )
+            """))
+            
+            if not result.fetchone()[0]:
+                print("Creating user roles tables...")
+                # Read and execute the migration SQL
+                import os
+                migrations_dir = os.path.join(os.path.dirname(__file__), '..', 'migrations')
+                sql_file = os.path.join(migrations_dir, 'add_user_roles_tables.sql')
+                
+                with open(sql_file, 'r') as f:
+                    sql = f.read()
+                
+                # Execute each statement separately
+                for statement in sql.split(';'):
+                    statement = statement.strip()
+                    if statement:
+                        conn.execute(text(statement))
+                
+                conn.commit()
+                print("✓ User roles tables created successfully")
+            else:
+                print("✓ User roles tables already exist")
+        except Exception as e:
+            print(f"Error: {e}")
+            conn.rollback()
+            raise
+
+
 if __name__ == "__main__":
     print("Running database migration...")
     add_onboarding_completed_column()
+        add_user_roles_tables()
     print("Migration complete!")
