@@ -13,12 +13,11 @@ CREATE TABLE IF NOT EXISTS onboarding_roles (
 
 -- Insert default roles
 INSERT INTO onboarding_roles (name, description) VALUES
+        ('Site Administrator', 'Full platform administrator with access to all companies and settings'),
+    ('Company Admin', 'Company administrator with access to manage their organization'),
     ('Loan Officer', 'Primary role for licensed mortgage loan officers'),
-    ('Admin', 'Administrative access with full permissions'),
     ('Manager', 'Management role with oversight capabilities'),
-    ('Assistant', 'Support role with limited permissions')
 ON CONFLICT (name) DO NOTHING;
-
 -- Create user_assigned_roles table
 CREATE TABLE IF NOT EXISTS user_assigned_roles (
     id SERIAL PRIMARY KEY,
