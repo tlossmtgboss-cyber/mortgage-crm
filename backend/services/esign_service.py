@@ -124,7 +124,7 @@ class EsignService:
     def get_envelope(self, envelope_id: int) -> Optional[Dict[str, Any]]:
         """Get envelope with signers and fields."""
         envelope = self.db.execute(text("""
-            SELECT e.*, u.name as created_by_name, u.email as created_by_email
+            SELECT e.*, u.full_name as created_by_name, u.email as created_by_email
             FROM esign_envelopes e
             LEFT JOIN users u ON u.id = e.created_by_user_id
             WHERE e.id = :id
