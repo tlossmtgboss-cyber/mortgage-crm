@@ -1,5 +1,4 @@
 # Procfile for Railway deployment
-# Runs migrations before starting the application
-# Note: Railway provides PORT env variable that must be used
+# Uses start.py to handle PORT env variable properly
 
-web: sh -c "python run_migrations.py && uvicorn main:app --host 0.0.0.0 --port \${PORT:-8080}"
+web: python start.py
