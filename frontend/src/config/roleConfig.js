@@ -348,15 +348,14 @@ export const ROLE_NAVIGATION = {
   ],
 
   // Site Administrator - Licensee who manages their organization's users
-  // Has access to admin panel (org-scoped) but not platform-level features
+  // Has access to admin panel (org-scoped) + LO features, but NOT platform-level features
   site_admin: [
-    'adminPanel',           // Admin Panel link - manages their org users
+    'adminPanel',           // Admin Panel link - manages their org users only
     'dashboard',
     'leads',
     'activeLoans',
     'portfolio',
     'rateMonitor',          // Rate Monitor for refinance opportunities
-    'closedLoans',
     'tasks',
     'reconciliation',
     'smartDocs',
@@ -367,14 +366,9 @@ export const ROLE_NAVIGATION = {
     'aiUnderwriter',
     'market',
     'profitability',
-    'usageIntelligence',    // Org owner sees their usage costs
-    'accounting',
-    'capacity',
-    'recruiting',
     'partnerRecruiting',
-    'integrations',
-    'productionPredictor',
-    'dealAlerts'
+    'integrations'
+    // NOTE: No usageIntelligence, accounting, capacity, recruiting - these are platform admin only
   ],
 
   // Loan Officer - Full sales navigation
