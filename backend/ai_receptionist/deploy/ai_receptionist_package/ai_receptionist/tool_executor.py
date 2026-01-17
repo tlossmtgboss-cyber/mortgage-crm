@@ -1127,6 +1127,26 @@ class AIReceptionist:
             "Are you interested in purchasing a home, refinancing, or something else?"
         )
 
+    def get_metrics(self) -> Dict[str, Any]:
+        """Get receptionist metrics including tool execution stats."""
+        metrics = {
+            "active_calls": len(self._active_calls),
+            "config": {
+                "company_name": self.config.get("company_name"),
+                "receptionist_name": self.config.get("receptionist_name"),
+            },
+        }
+
+        # Add tool executor metrics
+        if hasattr(self.tools, 'get_metrics'):
+            metrics["tool_executor"] = self.tools.get_metrics()
+
+        # Add audio processor metrics
+        if hasattr(self.audio, 'get_metrics'):
+            metrics["audio"] = self.audio.get_metrics()
+
+        return metrics
+
     async def close(self) -> None:
         """Clean up resources."""
         if hasattr(self.audio, 'close'):
