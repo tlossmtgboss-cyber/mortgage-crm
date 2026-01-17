@@ -28,6 +28,9 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=5 \
     CMD curl -f http://localhost:8080/health/live || exit 1
 
+# Create python alias if needed and run start script
+RUN ln -sf /usr/bin/python3 /usr/bin/python || true
+
 # Use start.py script for proper PORT handling and migrations
-CMD ["python", "start.py"]
+CMD ["python3", "start.py"]
 # Force rebuild 1768653977
