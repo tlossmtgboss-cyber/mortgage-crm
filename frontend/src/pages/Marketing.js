@@ -24,6 +24,9 @@ const HoldMusicDashboard = lazy(() => import('../components/voice/HoldMusicDashb
 const TalkToAgentPage = lazy(() => import('../components/voice/TalkToAgentPage'));
 const CallAnalyticsDashboard = lazy(() => import('../components/voice/CallAnalyticsDashboard'));
 
+// Video OS component
+const VideoOS = lazy(() => import('./VideoOS'));
+
 // Marketing settings components
 const LandingPagesSettings = lazy(() => import('./marketing/LandingPagesSettings'));
 const EmailMarketingSettings = lazy(() => import('./marketing/EmailMarketingSettings'));
@@ -70,6 +73,7 @@ const MARKETING_CATEGORIES = {
     name: 'Content & Media',
     icon: '🎬',
     tools: [
+      { id: 'video-os', name: 'Video OS', description: 'Record and manage personalized video messages' },
       { id: 'avatar-studio', name: 'Avatar Studio', description: 'AI video avatar creation' },
       { id: 'ai-blog', name: 'AI Blog', description: 'AI-generated blog content' },
     ]
@@ -200,6 +204,8 @@ function Marketing() {
         return <ConversationIntelligence />;
 
       // Content & Media
+      case 'video-os':
+        return <VideoOS />;
       case 'avatar-studio':
         return <AvatarStudio />;
       case 'ai-blog':

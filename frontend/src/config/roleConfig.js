@@ -323,7 +323,7 @@ export const ROLE_NAVIGATION = {
     'tasks',
     'reconciliation',
     'smartDocs',
-    'marketing',            // Marketing page
+    'marketing',            // Marketing page (includes Voice & Call Center, Video OS)
     'calendar',
     'scorecard',            // Scorecard
     'partners',
@@ -335,8 +335,6 @@ export const ROLE_NAVIGATION = {
     'capacity',
     'recruiting',
     'partnerRecruiting',
-    'voiceCalls',           // Voice & Calls dropdown (all voice/call center items)
-    'videoOs',              // Video OS
     'integrations',         // Integrations
     'productionPredictor',
     'dealAlerts'
@@ -354,7 +352,7 @@ export const ROLE_NAVIGATION = {
     'tasks',
     'reconciliation',
     'smartDocs',
-    'marketing',
+    'marketing',            // Marketing page (includes Voice & Call Center, Video OS)
     'calendar',
     'scorecard',
     'partners',
@@ -366,8 +364,6 @@ export const ROLE_NAVIGATION = {
     'capacity',
     'recruiting',
     'partnerRecruiting',
-    'voiceCalls',           // Voice & Calls dropdown
-    'videoOs',
     'integrations',
     'productionPredictor',
     'dealAlerts'
