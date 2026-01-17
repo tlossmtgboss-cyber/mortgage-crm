@@ -33290,6 +33290,41 @@ async def add_rate_monitor_system_migration(db: Session = Depends(get_db)):
         }
 
 
+@app.post("/api/v1/migrations/add-rate-monitor-columns")
+async def add_rate_monitor_columns_migration(db: Session = Depends(get_db)):
+    """Migration: Add standalone borrower columns to rate_monitor_targets table"""
+    try:
+        from sqlalchemy import text as sql_text
+
+        sql_commands = [
+            "ALTER TABLE rate_monitor_targets ADD COLUMN IF NOT EXISTS borrower_name VARCHAR(255)",
+            "ALTER TABLE rate_monitor_targets ADD COLUMN IF NOT EXISTS borrower_phone VARCHAR(50)",
+            "ALTER TABLE rate_monitor_targets ADD COLUMN IF NOT EXISTS borrower_email VARCHAR(255)",
+            "ALTER TABLE rate_monitor_targets ADD COLUMN IF NOT EXISTS current_rate NUMERIC(5,3)",
+            "ALTER TABLE rate_monitor_targets ADD COLUMN IF NOT EXISTS current_loan_amount NUMERIC(12,2)",
+            "ALTER TABLE rate_monitor_targets DROP CONSTRAINT IF EXISTS rate_monitor_targets_mum_client_id_fkey",
+        ]
+
+        results = []
+        for sql in sql_commands:
+            try:
+                db.execute(sql_text(sql))
+                db.commit()
+                results.append({"sql": sql[:50] + "...", "status": "OK"})
+            except Exception as e:
+                db.rollback()
+                results.append({"sql": sql[:50] + "...", "status": "SKIP", "error": str(e)[:100]})
+
+        return {
+            "success": True,
+            "message": "Rate Monitor columns migration completed",
+            "results": results
+        }
+    except Exception as e:
+        logger.error(f"Rate Monitor columns migration failed: {e}")
+        return {"success": False, "error": str(e)}
+
+
 @app.post("/api/v1/migrations/add-workflow-system")
 async def add_workflow_system_migration(
     db: Session = Depends(get_db)
