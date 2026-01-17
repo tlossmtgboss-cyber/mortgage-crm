@@ -121,9 +121,10 @@ export const PermissionProvider = ({ children }) => {
       if (viewAsRole === 'production_assistant_1' || viewAsRole === 'production_assistant_2' || viewAsRole === 'concierge') {
         return 'production_assistant';
       }
-      // Map site_admin to admin for navigation purposes
+      // site_admin keeps its own role - NOT mapped to admin
+      // site_admin has limited access compared to platform admin
       if (viewAsRole === 'site_admin') {
-        return 'admin';
+        return 'site_admin';
       }
       return viewAsRole;
     }

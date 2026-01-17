@@ -696,12 +696,14 @@ export const mapRoleNameToEffective = (roleName) => {
 
   // Map onboarding role names to effective role keys
   const roleMapping = {
-    // Administrator roles
-    'site_administrator': 'admin',
-    'site_admin': 'admin',
+    // Platform Administrator roles (full access)
     'administrator': 'admin',
     'admin': 'admin',
     'platform_admin': 'admin',
+
+    // Site Administrator roles (org-level access, NOT full admin)
+    'site_administrator': 'site_admin',
+    'site_admin': 'site_admin',
 
     // Management roles
     'manager': 'manager',
