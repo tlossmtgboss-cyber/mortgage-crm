@@ -1,5 +1,5 @@
 [deploy]
-startCommand = "python start.py"
+startCommand = "python3 start.py"
 numReplicas = 1
 healthcheckPath = "/health/live"
 healthcheckTimeout = 300
