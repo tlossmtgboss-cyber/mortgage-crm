@@ -4,6 +4,7 @@ load_dotenv()
 
 # Suppress warnings in production to avoid Railway rate limiting (500 logs/sec limit)
 import warnings
+import sys
 import os as _os
 if _os.getenv("RAILWAY_ENVIRONMENT") or _os.getenv("ENVIRONMENT") == "production":
     warnings.filterwarnings("ignore")
