@@ -20505,6 +20505,13 @@ app.include_router(market_data_router, tags=["Market Data"])
 from routes.rate_lock_intelligence_routes import router as rate_lock_intelligence_router
 app.include_router(rate_lock_intelligence_router, tags=["Rate Lock Intelligence"])
 
+# Include Rate Monitor routes (MUM refinance opportunity tracking)
+try:
+    from rate_monitor_routes import router as rate_monitor_router
+    app.include_router(rate_monitor_router, tags=["Rate Monitor"])
+except Exception as e:
+    logger.warning(f"Could not load rate monitor routes: {e}")
+
 # Include Gmail Integration routes
 from gmail_routes import router as gmail_router
 app.include_router(gmail_router, tags=["Gmail Integration"])
@@ -22084,7 +22091,7 @@ async def debug_perennia_docs_status():
         "error": perennia_docs_error
     }
 
-# E-Signature Routes
+# E-Signature Routes - initialized
 esign_error = None
 try:
     from routes.esign_routes import router as esign_router, set_dependencies as set_esign_deps
@@ -60302,6 +60309,14 @@ async def startup_event():
         logger.info("✅ Notification scheduler started (application reminders, document expiration checks)")
     except Exception as e:
         logger.warning(f"⚠️ Notification scheduler not started: {e}")
+
+    # Add Rate Monitor scheduled job (checks MUM refinance opportunities)
+    try:
+        from jobs.rate_monitor_job import schedule_rate_monitor_job
+        schedule_rate_monitor_job(scheduler)
+        logger.info("✅ Rate Monitor scheduler added (runs every 15 minutes during business hours)")
+    except Exception as e:
+        logger.warning(f"⚠️ Rate Monitor scheduler not loaded: {e}")
 
     # Add Agent Monitoring scheduled jobs
     try:
