@@ -1,4 +1,5 @@
 [deploy]
+startCommand = "python start.py"
 numReplicas = 1
 healthcheckPath = "/ping"
 healthcheckTimeout = 300
@@ -6,3 +7,4 @@ restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
 
 [build]
+watchPatterns = ["**/*.py", "**/*.html", "**/*.css", "**/*.js"]
