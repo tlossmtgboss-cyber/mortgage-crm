@@ -2,6 +2,17 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+# Suppress warnings in production to avoid Railway rate limiting (500 logs/sec limit)
+import warnings
+import os as _os
+if _os.getenv("RAILWAY_ENVIRONMENT") or _os.getenv("ENVIRONMENT") == "production":
+    warnings.filterwarnings("ignore")
+    # Also suppress SQLAlchemy deprecation warnings
+    from sqlalchemy.exc import SAWarning
+    warnings.filterwarnings("ignore", category=SAWarning)
+    warnings.filterwarnings("ignore", category=DeprecationWarning)
+    warnings.filterwarnings("ignore", category=UserWarning)
+
 # ============================================================================
 # COMPLETE AGENTIC AI MORTGAGE CRM - FULLY FUNCTIONAL v2
 # Force Railway redeploy - 2025-11-30 v2 (Two-Way AI SMS + LangGraph + Body fix)
