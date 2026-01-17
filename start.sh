@@ -19,9 +19,6 @@ echo "🔐 Demo Login: admin@perenniaai.com / demo123"
 echo ""
 
 # Start uvicorn server (Railway provides PORT environment variable)
-# Try python3 first, fall back to python
-if command -v python3 &> /dev/null; then
-    python3 -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
-else
-    python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
-fi
+# Run migrations first, then start the server
+python3 run_migrations.py || echo "Warning: Migration had issues, continuing anyway..."
+python3 -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}
