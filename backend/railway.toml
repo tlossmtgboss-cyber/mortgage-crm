@@ -1,2 +1,10 @@
 [deploy]
 numReplicas = 1
+
+[build]
+
+[healthcheck]
+# Use an endpoint that responds quickly
+path = "/health"
+timeout = 300
+interval = 30
