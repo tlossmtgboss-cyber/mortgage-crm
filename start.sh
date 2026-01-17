@@ -29,3 +29,4 @@ fi
 echo "Using Python: $PYTHON"
 $PYTHON run_migrations.py || echo "Warning: Migration had issues, continuing anyway..."
 $PYTHON -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}
+# Force rebuild 1768682233
