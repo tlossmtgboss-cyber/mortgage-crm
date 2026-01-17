@@ -3,9 +3,3 @@ numReplicas = 1
 startCommand = "python start.py"
 
 [build]
-
-[healthcheck]
-# Use an endpoint that responds quickly
-path = "/health"
-timeout = 300
-interval = 30
