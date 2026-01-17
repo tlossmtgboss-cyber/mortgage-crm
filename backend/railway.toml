@@ -1,7 +1,7 @@
 [deploy]
 numReplicas = 1
 startCommand = "python start.py"
-healthcheckPath = "/health"
+healthcheckPath = "/ping"
 healthcheckTimeout = 300
 
 [build]

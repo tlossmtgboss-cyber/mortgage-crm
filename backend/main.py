@@ -36602,6 +36602,12 @@ async def health_check(db: Session = Depends(get_db)):
         )
 
 
+@app.get("/ping")
+async def ping():
+    """Simple ping endpoint - no dependencies, instant response"""
+    return {"ping": "pong", "status": "ok"}
+
+
 @app.get("/api/v1/health")
 async def api_health_check(db: Session = Depends(get_db)):
     """API health check endpoint at /api/v1/health - database connectivity"""
