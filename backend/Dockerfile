@@ -21,7 +21,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Expose port
-EXPOSE 8000
+EXPOSE 8080
 
 # Default CMD - Railway's RAILWAY_START_COMMAND env var will override this
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
