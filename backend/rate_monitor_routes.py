@@ -30,7 +30,12 @@ router = APIRouter(prefix="/api/v1/rate-monitor", tags=["rate-monitor"])
 
 class CreateTargetRequest(BaseModel):
     """Request to create a rate monitoring target."""
-    mum_client_id: int
+    mum_client_id: Optional[int] = None
+    borrower_name: Optional[str] = None
+    borrower_phone: Optional[str] = None
+    borrower_email: Optional[str] = None
+    current_rate: Optional[float] = None
+    current_loan_amount: Optional[float] = None
     target_type: str = Field(..., description="savings_threshold, rate_drop_percentage, or manual_target")
     monthly_savings_threshold: Optional[float] = Field(None, description="Monthly savings trigger (e.g., 200 for $200)")
     rate_drop_percentage: Optional[float] = Field(None, description="Rate drop trigger (e.g., 0.5 for 0.5%)")
@@ -208,14 +213,32 @@ async def create_target(
     if request.target_type == 'manual_target' and not request.target_rate:
         raise HTTPException(400, "target_rate required for manual_target type")
 
-    # Verify MUM client exists
-    try:
-        from main import MUMClient
-        mum_client = db.query(MUMClient).filter(MUMClient.id == request.mum_client_id).first()
-        if not mum_client:
-            raise HTTPException(404, f"MUM client {request.mum_client_id} not found")
-    except ImportError:
-        pass  # MUM client model not available
+    # Verify MUM client exists (if provided)
+    if request.mum_client_id:
+        try:
+            from main import MUMClient
+            mum_client = db.query(MUMClient).filter(MUMClient.id == request.mum_client_id).first()
+            if not mum_client:
+                raise HTTPException(404, f"MUM client {request.mum_client_id} not found")
+        except ImportError:
+            pass  # MUM client model not available
+
+    # Build notes with borrower info if standalone target
+    notes = request.notes or ""
+    if not request.mum_client_id:
+        standalone_info = []
+        if request.borrower_name:
+            standalone_info.append(f"Borrower: {request.borrower_name}")
+        if request.borrower_phone:
+            standalone_info.append(f"Phone: {request.borrower_phone}")
+        if request.borrower_email:
+            standalone_info.append(f"Email: {request.borrower_email}")
+        if request.current_rate:
+            standalone_info.append(f"Current Rate: {request.current_rate}%")
+        if request.current_loan_amount:
+            standalone_info.append(f"Loan Amount: ${request.current_loan_amount:,.0f}")
+        if standalone_info:
+            notes = " | ".join(standalone_info) + ("\n" + notes if notes else "")
 
     # Create target
     target = RateMonitorTarget(
@@ -231,7 +254,7 @@ async def create_target(
         notify_email=request.notify_email,
         notify_sms=request.notify_sms,
         notify_lo=request.notify_lo,
-        notes=request.notes,
+        notes=notes,
         status='active',
         is_active=True,
     )
