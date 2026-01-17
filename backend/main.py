@@ -104,7 +104,8 @@ from models.financial_intelligence import (
 )
 
 # Setup logging - reduce verbosity in production to avoid Railway rate limits
-_log_level = logging.WARNING if os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("ENVIRONMENT") == "production" else logging.INFO
+_is_production = os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("ENVIRONMENT") == "production"
+_log_level = logging.WARNING if _is_production else logging.INFO
 logging.basicConfig(
     level=_log_level,
     format='%(levelname)s:%(name)s:%(message)s'
@@ -120,6 +121,9 @@ if _log_level == logging.WARNING:
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
+
+# Import io for stdout suppression in production (Railway log rate limits)
+import io
 
 # ============================================================================
 # CONFIGURATION
@@ -59429,6 +59433,11 @@ def run_phase2_permission_migration():
 @app.on_event("startup")
 async def startup_event():
     """Initialize database on startup"""
+    # Suppress print() during startup in production to avoid Railway log rate limits
+    _original_stdout = sys.stdout
+    if _is_production:
+        sys.stdout = io.StringIO()
+
     logger.info("🚀 Starting Agentic AI Mortgage CRM...")
 
     # Initialize Redis cache for AI Agent tools
@@ -60599,6 +60608,10 @@ async def startup_event():
     logger.info("✅ CRM is ready!")
     logger.info("📚 API Documentation: http://localhost:8000/docs")
     logger.info("🔐 Admin Login: admin@perenniaai.com")
+
+    # Restore stdout after startup
+    if _is_production:
+        sys.stdout = _original_stdout
 
 # ============================================================================
 # TEMPORARY MIGRATION ENDPOINTS (Remove after AI system is initialized)
