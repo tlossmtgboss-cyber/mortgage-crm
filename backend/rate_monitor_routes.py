@@ -391,6 +391,102 @@ async def get_current_rates(
     }
 
 
+@router.post("/targets/{target_id}/check")
+async def check_target_opportunity(
+    target_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Check refinance opportunity for a specific rate monitor target.
+    Works with both MUM-linked and standalone targets.
+    """
+    target = db.query(RateMonitorTarget).filter(RateMonitorTarget.id == target_id).first()
+    if not target:
+        raise HTTPException(404, f"Target {target_id} not found")
+
+    # Get client rate and loan amount from target or MUM client
+    client_rate = None
+    loan_balance = None
+    client_name = target.borrower_name
+
+    if target.current_rate:
+        client_rate = float(target.current_rate)
+    if target.current_loan_amount:
+        loan_balance = float(target.current_loan_amount)
+
+    # If linked to MUM client, get data from there
+    if target.mum_client_id:
+        try:
+            from main import MUMClient
+            mum_client = db.query(MUMClient).filter(MUMClient.id == target.mum_client_id).first()
+            if mum_client:
+                client_name = mum_client.client_name
+                if not client_rate and mum_client.interest_rate:
+                    client_rate = float(mum_client.interest_rate)
+                if not loan_balance and mum_client.current_loan_amount:
+                    loan_balance = float(mum_client.current_loan_amount)
+        except ImportError:
+            pass
+
+    if not client_rate:
+        raise HTTPException(400, "No client rate available for this target")
+    if not loan_balance:
+        loan_balance = 400000  # Default if not specified
+
+    # Get current market rate
+    service = OptimalBlueService(db)
+    scenario = RateScenario(
+        loan_type=target.loan_type or 'conventional',
+        loan_term=target.loan_term or 30,
+        loan_amount=loan_balance,
+        credit_score=740,
+        ltv=80.0,
+    )
+    rate_result = await service.get_rate(scenario)
+
+    # Calculate savings
+    market_rate = rate_result.rate
+    monthly_savings = calculate_monthly_savings(client_rate, market_rate, loan_balance)
+    annual_savings = calculate_annual_savings(monthly_savings)
+    rate_difference = client_rate - market_rate
+
+    # Check if threshold is met based on target type
+    threshold_met = False
+    if target.target_type == 'savings_threshold' and target.monthly_savings_threshold:
+        threshold_met = monthly_savings >= float(target.monthly_savings_threshold)
+    elif target.target_type == 'rate_drop_percentage' and target.rate_drop_percentage:
+        threshold_met = rate_difference >= float(target.rate_drop_percentage)
+    elif target.target_type == 'manual_target' and target.target_rate:
+        threshold_met = market_rate <= float(target.target_rate)
+
+    # Determine opportunity strength
+    if monthly_savings >= 300:
+        opportunity_strength = 'strong'
+    elif monthly_savings >= 150:
+        opportunity_strength = 'moderate'
+    elif monthly_savings > 0:
+        opportunity_strength = 'weak'
+    else:
+        opportunity_strength = 'none'
+
+    return {
+        'target_id': target_id,
+        'client_name': client_name,
+        'client_rate': client_rate,
+        'market_rate': market_rate,
+        'rate_difference': round(rate_difference, 3),
+        'loan_balance': loan_balance,
+        'monthly_savings': monthly_savings,
+        'annual_savings': annual_savings,
+        'opportunity_strength': opportunity_strength,
+        'threshold_met': threshold_met,
+        'threshold_type': target.target_type,
+        'threshold_description': target.get_threshold_description(),
+        'market_rate_details': rate_result.to_dict(),
+        'recommendation': f"Potential savings of ${monthly_savings:,.0f}/month (${annual_savings:,.0f}/year)" if monthly_savings > 0 else "Current rate is competitive",
+    }
+
+
 @router.post("/check-opportunity/{mum_client_id}")
 async def check_opportunity(
     mum_client_id: int,
