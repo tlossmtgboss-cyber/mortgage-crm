@@ -135,8 +135,7 @@ export const completeOnboarding = async (inviteToken = null) => {
  * @param {string} token - The invite token
  */
 export const validateInviteToken = async (token) => {
-  const response = await fetch(`${API_BASE}/api/invite/${token}`);
-
+  const response = await fetch(`${API_BASE}/api/v1/invitations/validate/${token}`);
   if (response.status === 404) {
     return { valid: false, error: 'Invite not found' };
   }
@@ -160,11 +159,9 @@ export const validateInviteToken = async (token) => {
  * @param {Object} data - Object containing password
  */
 export const acceptInvite = async (token, data) => {
-  const response = await fetch(`${API_BASE}/api/invite/accept`, {
-    method: 'POST',
+  const response = await fetch(`${API_BASE}/api/v1/invitations/activate`, {    method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token, password: data.password })
-  });
+    body: JSON.stringify({ token: token, password: data.password, confirm_password: data.password })  });
 
   if (!response.ok) {
     const error = await response.json();
