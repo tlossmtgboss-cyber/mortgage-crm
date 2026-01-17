@@ -371,32 +371,32 @@ async def start_onboarding(
 
         user_id = user_result.fetchone()[0]
 
-                # Assign Site Administrator role (multi-role support)
-                try:
-                                # Look up Site Administrator role from onboarding_roles
-                                site_admin_role = db.execute(text("""
-                                                SELECT id FROM onboarding_roles WHERE name = 'Site Administrator' LIMIT 1
-                                                            """)).fetchone()
+        # Assign Site Administrator role (multi-role support)
+        try:
+            # Look up Site Administrator role from onboarding_roles
+            site_admin_role = db.execute(text("""
+                SELECT id FROM onboarding_roles WHERE name = 'Site Administrator' LIMIT 1
+            """)).fetchone()
 
-                    if site_admin_role:
-                                        role_id = site_admin_role[0]
+            if site_admin_role:
+                role_id = site_admin_role[0]
 
-                        # Assign Site Administrator role as primary
-                        db.execute(text("""
-                                            INSERT INTO user_assigned_roles (user_id, role_id, is_primary, assigned_at, assigned_by)
-                                                                VALUES (:user_id, :role_id, TRUE, NOW(), :user_id)
-                                                                                """), {'user_id': user_id, 'role_id': role_id})
+                # Assign Site Administrator role as primary
+                db.execute(text("""
+                    INSERT INTO user_assigned_roles (user_id, role_id, is_primary, assigned_at, assigned_by)
+                    VALUES (:user_id, :role_id, TRUE, NOW(), :user_id)
+                """), {'user_id': user_id, 'role_id': role_id})
 
-                        # Set Site Administrator as active role
-                        db.execute(text("""
-                                            INSERT INTO user_active_role (user_id, active_role_id, switched_at)
-                                                                VALUES (:user_id, :role_id, NOW())
-                                                                                """), {'user_id': user_id, 'role_id': role_id})
+                # Set Site Administrator as active role
+                db.execute(text("""
+                    INSERT INTO user_active_role (user_id, active_role_id, switched_at)
+                    VALUES (:user_id, :role_id, NOW())
+                """), {'user_id': user_id, 'role_id': role_id})
 
-                        logger.info(f"Assigned Site Administrator role (id={role_id}) to user {user_id}")
-                except Exception as e:
-                                logger.warning(f"Could not assign Site Administrator role: {e}")
-                                # Continue signup even if role assignment fails
+                logger.info(f"Assigned Site Administrator role (id={role_id}) to user {user_id}")
+        except Exception as e:
+            logger.warning(f"Could not assign Site Administrator role: {e}")
+            # Continue signup even if role assignment fails
 
         # Update tenant with owner
         db.execute(text("""
