@@ -243,6 +243,11 @@ async def create_target(
     # Create target
     target = RateMonitorTarget(
         mum_client_id=request.mum_client_id,
+        borrower_name=request.borrower_name,
+        borrower_phone=request.borrower_phone,
+        borrower_email=request.borrower_email,
+        current_rate=Decimal(str(request.current_rate)) if request.current_rate else None,
+        current_loan_amount=Decimal(str(request.current_loan_amount)) if request.current_loan_amount else None,
         target_type=request.target_type,
         monthly_savings_threshold=Decimal(str(request.monthly_savings_threshold)) if request.monthly_savings_threshold else None,
         rate_drop_percentage=Decimal(str(request.rate_drop_percentage)) if request.rate_drop_percentage else None,

@@ -25,8 +25,15 @@ class RateMonitorTarget(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    # Link to MUM client
-    mum_client_id = Column(Integer, ForeignKey('mum_clients.id', ondelete='CASCADE'), index=True)
+    # Link to MUM client (optional - can be standalone)
+    mum_client_id = Column(Integer, nullable=True, index=True)
+
+    # Standalone borrower info (when not linked to MUM client)
+    borrower_name = Column(String(255))
+    borrower_phone = Column(String(50))
+    borrower_email = Column(String(255))
+    current_rate = Column(Numeric(5, 3))
+    current_loan_amount = Column(Numeric(12, 2))
 
     # Target Type
     target_type = Column(String(50), nullable=False)  # savings_threshold, rate_drop_percentage, manual_target
@@ -76,6 +83,11 @@ class RateMonitorTarget(Base):
         return {
             'id': self.id,
             'mum_client_id': self.mum_client_id,
+            'borrower_name': self.borrower_name,
+            'borrower_phone': self.borrower_phone,
+            'borrower_email': self.borrower_email,
+            'current_rate': float(self.current_rate) if self.current_rate else None,
+            'current_loan_amount': float(self.current_loan_amount) if self.current_loan_amount else None,
             'target_type': self.target_type,
             'monthly_savings_threshold': float(self.monthly_savings_threshold) if self.monthly_savings_threshold else None,
             'rate_drop_percentage': float(self.rate_drop_percentage) if self.rate_drop_percentage else None,
