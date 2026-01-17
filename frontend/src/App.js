@@ -234,6 +234,10 @@ const PartnerPortalView = lazy(() => import('./components/Portal/PartnerPortalVi
 const PerenniaClientPortalUltimate = lazy(() => import('./components/Portal/PerenniaClientPortalUltimate'));
 const TotalCostAnalysis = lazy(() => import('./components/Portal/TotalCostAnalysis'));
 
+// E-Signature Components - Field placement builder and signing session
+const FieldPlacementBuilder = lazy(() => import('./components/esign/FieldPlacementBuilder'));
+const SigningSession = lazy(() => import('./pages/esign/SigningSession'));
+
 // Create a client with optimized defaults for instant navigation
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -536,6 +540,9 @@ function App() {
 
           {/* OAuth Callback (public) */}
           <Route path="/oauth/callback" element={<LazyPage><OAuthCallback /></LazyPage>} />
+
+          {/* E-Signature Signing Session (public - token-based auth) */}
+          <Route path="/sign/:token" element={<LazyPage><SigningSession /></LazyPage>} />
 
           {/* Onboarding redirect to wizard */}
           <Route
@@ -3192,6 +3199,30 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><SmartDocsClientDetail /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+
+          {/* E-Signature Field Placement Builder (staff - envelope management) */}
+          <Route
+            path="/esign/envelope/:envelopeId"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><FieldPlacementBuilder /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>

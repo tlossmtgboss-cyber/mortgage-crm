@@ -22084,6 +22084,34 @@ async def debug_perennia_docs_status():
         "error": perennia_docs_error
     }
 
+# E-Signature Routes
+esign_error = None
+try:
+    from routes.esign_routes import router as esign_router, set_dependencies as set_esign_deps
+    from models.esign_models import create_esign_models
+
+    # Create E-Sign models
+    esign_models = create_esign_models(Base)
+
+    # Set dependencies
+    set_esign_deps(get_db, get_current_user, User, esign_models)
+
+    app.include_router(esign_router, tags=["E-Signature"])
+    logger.info("✅ E-Signature routes loaded")
+except Exception as e:
+    esign_error = str(e)
+    import traceback
+    esign_error = traceback.format_exc()
+    logger.warning(f"⚠️ E-Signature routes not loaded: {e}")
+
+@app.get("/api/v1/debug/esign-status")
+async def debug_esign_status():
+    """Debug endpoint to check E-Signature routes loading status"""
+    return {
+        "esign_loaded": esign_error is None,
+        "error": esign_error
+    }
+
 # Portal AI Assistant Routes
 portal_ai_assistant_error = None
 try:
