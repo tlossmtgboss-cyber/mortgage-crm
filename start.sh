@@ -20,5 +20,12 @@ echo ""
 
 # Start uvicorn server (Railway provides PORT environment variable)
 # Run migrations first, then start the server
-python run_migrations.py || echo "Warning: Migration had issues, continuing anyway..."
-python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}
+# Find the correct Python executable
+PYTHON=$(command -v python3 || command -v python)
+if [ -z "$PYTHON" ]; then
+    echo "ERROR: No Python found! Trying /usr/bin/python3..."
+    PYTHON="/usr/bin/python3"
+fi
+echo "Using Python: $PYTHON"
+$PYTHON run_migrations.py || echo "Warning: Migration had issues, continuing anyway..."
+$PYTHON -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}

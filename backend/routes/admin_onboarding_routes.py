@@ -243,54 +243,6 @@ def hash_password(password: str) -> str:
 # Endpoints
 # =============================================================================
 
-@router.post("/debug/create-test-invite")
-async def create_test_invite(
-    email: str = "test@example.com",
-    company_name: str = "Test Company",
-    db: Session = Depends(get_db)
-):
-    """
-    DEBUG ONLY: Create a test invitation for verifying the signup flow.
-    Remove this endpoint in production or add authentication.
-    """
-    try:
-        token = str(uuid.uuid4())
-        expires_at = datetime.now(timezone.utc) + timedelta(days=7)
-
-        db.execute(text("""
-            INSERT INTO subscriber_invitations (
-                token, email, company_name, contact_name, plan, seats,
-                promo_code, status, expires_at, created_at, updated_at
-            ) VALUES (
-                :token, :email, :company_name, 'Test User', 'professional', 5,
-                'TEST2024', 'pending', :expires_at, NOW(), NOW()
-            )
-        """), {
-            'token': token,
-            'email': email,
-            'company_name': company_name,
-            'expires_at': expires_at
-        })
-        db.commit()
-
-        signup_url = f"https://www.perenniaai.com/signup?invite={token}&promo=TEST2024"
-
-        return success_response(
-            data={
-                'token': token,
-                'email': email,
-                'company_name': company_name,
-                'expires_at': expires_at.isoformat(),
-                'signup_url': signup_url
-            },
-            message="Test invitation created successfully"
-        )
-    except Exception as e:
-        logger.error(f"Error creating test invite: {e}")
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @router.get("/validate-invite/{token}")
 async def validate_invite(token: str, db: Session = Depends(get_db)):
     """Validate a subscription invitation token"""
