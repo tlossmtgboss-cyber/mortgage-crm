@@ -44,6 +44,7 @@ const ClosedLoans = lazy(() => import('./pages/ClosedLoans'));
 const PortfolioDetail = lazy(() => import('./pages/PortfolioDetail'));
 const MumClientDetail = lazy(() => import('./pages/MumClientDetail'));
 const YearOverYear = lazy(() => import('./pages/YearOverYear'));
+const RateMonitor = lazy(() => import('./pages/RateMonitor'));
 const Tasks = lazy(() => import('./pages/Tasks'));
 const Calendar = lazy(() => import('./pages/Calendar'));
 const Scorecard = lazy(() => import('./pages/Scorecard'));
@@ -1209,6 +1210,28 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><Portfolio /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/rate-monitor"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><RateMonitor /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>

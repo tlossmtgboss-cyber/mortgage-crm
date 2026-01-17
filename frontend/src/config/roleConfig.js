@@ -36,6 +36,12 @@ export const NAVIGATION_ITEMS = {
     label: 'MUM Clients',  // Mortgages Under Management - for Loan Officers only
     module: 'base'
   },
+  rateMonitor: {
+    path: '/rate-monitor',
+    label: 'Rate Monitor',
+    matchPaths: ['/rate-monitor'],
+    module: 'base'  // Available to roles with portfolio access
+  },
   closedClients: {
     path: '/closed-loans',
     label: 'Closed Loans',  // Simple closed loans list for Production Assistants
@@ -319,6 +325,7 @@ export const ROLE_NAVIGATION = {
     'leads',
     'activeLoans',
     'portfolio',
+    'rateMonitor',          // Rate Monitor for refinance opportunities
     'closedLoans',          // Closed loans access
     'tasks',
     'reconciliation',
@@ -348,6 +355,7 @@ export const ROLE_NAVIGATION = {
     'leads',
     'activeLoans',
     'portfolio',
+    'rateMonitor',          // Rate Monitor for refinance opportunities
     'closedLoans',
     'tasks',
     'reconciliation',
@@ -377,6 +385,7 @@ export const ROLE_NAVIGATION = {
     'leads',
     'activeLoans',
     'portfolio',
+    'rateMonitor',          // Rate Monitor for refinance opportunities
     'tasks',
     'reconciliation',
     'smartDocs',

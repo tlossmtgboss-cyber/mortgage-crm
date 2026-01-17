@@ -1,0 +1,400 @@
+.rate-monitor-widget {
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+}
+
+/* Full Widget Styles */
+.rate-monitor-widget.full {
+  padding: 20px;
+}
+
+.rate-monitor-widget.full .widget-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.rate-monitor-widget.full .widget-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a2e;
+}
+
+.rates-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+  align-items: center;
+}
+
+.rate-card {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #ebf8ff 0%, #bee3f8 100%);
+  border-radius: 8px;
+  flex: 1;
+}
+
+.rate-card .rate-term {
+  font-size: 12px;
+  color: #2c5282;
+  margin-bottom: 2px;
+}
+
+.rate-card .rate-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1a365d;
+}
+
+.mock-indicator {
+  font-size: 11px;
+  color: #718096;
+  background: #edf2f7;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px;
+  background: #f7fafc;
+  border-radius: 8px;
+}
+
+.stat-card.highlight {
+  background: linear-gradient(135deg, #fff5f5 0%, #fed7d7 100%);
+}
+
+.stat-card .stat-number {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1a1a2e;
+}
+
+.stat-card .stat-label {
+  font-size: 11px;
+  color: #718096;
+  text-align: center;
+}
+
+.alerts-section,
+.targets-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.alerts-section h4,
+.targets-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #4a5568;
+}
+
+.alerts-list,
+.targets-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.alert-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: #f7fafc;
+  border-radius: 8px;
+  border-left: 3px solid #e2e8f0;
+}
+
+.alert-item.priority-urgent {
+  border-left-color: #e53e3e;
+  background: linear-gradient(to right, #fff5f5, #f7fafc);
+}
+
+.alert-item.priority-high {
+  border-left-color: #ed8936;
+  background: linear-gradient(to right, #fffaf0, #f7fafc);
+}
+
+.alert-item.priority-medium {
+  border-left-color: #ecc94b;
+}
+
+.alert-item.priority-low {
+  border-left-color: #48bb78;
+}
+
+.alert-left {
+  display: flex;
+  flex-direction: column;
+}
+
+.alert-left .client-name {
+  font-weight: 600;
+  color: #1a1a2e;
+  font-size: 14px;
+}
+
+.alert-left .rate-info {
+  font-size: 12px;
+  color: #718096;
+}
+
+.alert-right {
+  text-align: right;
+}
+
+.alert-right .savings-amount {
+  font-size: 16px;
+  font-weight: 700;
+  color: #2c5282;
+}
+
+.alert-right .savings-label {
+  font-size: 11px;
+  color: #718096;
+}
+
+.target-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: #f7fafc;
+  border-radius: 8px;
+}
+
+.target-item .target-type {
+  text-transform: capitalize;
+  font-weight: 500;
+  color: #4a5568;
+  font-size: 13px;
+}
+
+.target-item .target-threshold {
+  flex: 1;
+  font-size: 13px;
+  color: #718096;
+}
+
+.target-item .target-status {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: #e2e8f0;
+  color: #718096;
+}
+
+.target-item .target-status.auto-call {
+  background: #c6f6d5;
+  color: #276749;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 24px;
+  color: #718096;
+}
+
+.empty-state p {
+  margin: 0 0 12px 0;
+}
+
+/* Compact Widget Styles */
+.rate-monitor-widget.compact {
+  padding: 16px;
+}
+
+.rate-monitor-widget.compact .widget-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.rate-monitor-widget.compact .widget-header h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a2e;
+}
+
+.view-all-link {
+  background: none;
+  border: none;
+  color: #2c5282;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.view-all-link:hover {
+  text-decoration: underline;
+}
+
+.compact-rates {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.rate-display {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.rate-display .rate-term {
+  font-size: 12px;
+  color: #718096;
+}
+
+.rate-display .rate-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: #2c5282;
+}
+
+.compact-stats {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.compact-stats .stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  padding: 8px;
+  background: #f7fafc;
+  border-radius: 6px;
+}
+
+.compact-stats .stat-item.highlight {
+  background: #fff5f5;
+}
+
+.compact-stats .stat-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1a1a2e;
+}
+
+.compact-stats .stat-label {
+  font-size: 10px;
+  color: #718096;
+}
+
+.top-alert {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: #f7fafc;
+  border-radius: 6px;
+}
+
+.alert-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e2e8f0;
+}
+
+.alert-indicator.priority-urgent {
+  background: #e53e3e;
+}
+
+.alert-indicator.priority-high {
+  background: #ed8936;
+}
+
+.alert-indicator.priority-medium {
+  background: #ecc94b;
+}
+
+.top-alert .alert-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.top-alert .client-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1a1a2e;
+}
+
+.top-alert .savings {
+  font-size: 11px;
+  color: #2c5282;
+}
+
+/* Loading State */
+.widget-loading {
+  padding: 24px;
+  text-align: center;
+  color: #718096;
+  font-size: 13px;
+}
+
+/* Buttons */
+.btn-link {
+  background: none;
+  border: none;
+  color: #2c5282;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.btn-link:hover {
+  text-decoration: underline;
+}
+
+.btn-primary-sm {
+  padding: 8px 16px;
+  background: #2c5282;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn-primary-sm:hover {
+  background: #2b6cb0;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .stats-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .rates-row {
+    flex-direction: column;
+  }
+
+  .rate-card {
+    width: 100%;
+  }
+}

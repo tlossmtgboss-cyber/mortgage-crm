@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { portfolioAPI, mumAPI } from '../services/api';
 import CalendarSidebar from '../components/CalendarSidebar';
+import RateMonitorWidget from '../components/RateMonitorWidget';
 import { getUserEffectiveRole } from '../config/roleConfig';
 import './Portfolio.css';
 
@@ -478,6 +479,13 @@ function Portfolio() {
               </span>
             </div>
           </div>
+
+          {/* Rate Monitor Widget */}
+          <div className="dashboard-section-header">
+            <h2>RATE MONITOR</h2>
+            <p>Track refinance opportunities when rates hit your targets</p>
+          </div>
+          <RateMonitorWidget />
         </div>
       )}
 

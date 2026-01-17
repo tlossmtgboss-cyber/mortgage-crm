@@ -2676,6 +2676,80 @@ export const salesforceAPI = {
   },
 };
 
+// Rate Monitor API
+export const rateMonitorAPI = {
+  // Dashboard
+  getDashboard: async () => {
+    const response = await api.get('/api/v1/rate-monitor/dashboard');
+    return response.data;
+  },
+
+  // Current rates
+  getCurrentRates: async (params = {}) => {
+    const response = await api.get('/api/v1/rate-monitor/current-rates', { params });
+    return response.data;
+  },
+
+  // Targets
+  getTargets: async (params = {}) => {
+    const response = await api.get('/api/v1/rate-monitor/targets', { params });
+    return response.data;
+  },
+
+  getTarget: async (targetId) => {
+    const response = await api.get(`/api/v1/rate-monitor/targets/${targetId}`);
+    return response.data;
+  },
+
+  createTarget: async (data) => {
+    const response = await api.post('/api/v1/rate-monitor/targets', data);
+    return response.data;
+  },
+
+  updateTarget: async (targetId, data) => {
+    const response = await api.patch(`/api/v1/rate-monitor/targets/${targetId}`, data);
+    return response.data;
+  },
+
+  deleteTarget: async (targetId) => {
+    const response = await api.delete(`/api/v1/rate-monitor/targets/${targetId}`);
+    return response.data;
+  },
+
+  // Check opportunity for a MUM client
+  checkOpportunity: async (mumClientId, params = {}) => {
+    const response = await api.post(`/api/v1/rate-monitor/check-opportunity/${mumClientId}`, params);
+    return response.data;
+  },
+
+  // Alerts
+  getAlerts: async (params = {}) => {
+    const response = await api.get('/api/v1/rate-monitor/alerts', { params });
+    return response.data;
+  },
+
+  getAlert: async (alertId) => {
+    const response = await api.get(`/api/v1/rate-monitor/alerts/${alertId}`);
+    return response.data;
+  },
+
+  updateAlert: async (alertId, data) => {
+    const response = await api.patch(`/api/v1/rate-monitor/alerts/${alertId}`, data);
+    return response.data;
+  },
+
+  initiateCall: async (alertId, data = {}) => {
+    const response = await api.post(`/api/v1/rate-monitor/alerts/${alertId}/initiate-call`, data);
+    return response.data;
+  },
+
+  // History
+  getHistory: async (params = {}) => {
+    const response = await api.get('/api/v1/rate-monitor/history', { params });
+    return response.data;
+  },
+};
+
 export default api;
 
 // Debug function for console - helps diagnose API issues

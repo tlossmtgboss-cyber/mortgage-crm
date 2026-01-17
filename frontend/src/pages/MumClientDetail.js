@@ -16,6 +16,7 @@ import ScheduleAppointmentModal from '../components/ScheduleAppointmentModal';
 import EmailComposerModal from '../components/EmailComposerModal';
 import EscalationModal from '../components/EscalationModal';
 import CalendarSidebar from '../components/CalendarSidebar';
+import RateMonitorWidget from '../components/RateMonitorWidget';
 import './LeadDetail.css';
 
 // Mock lead data generator (same as Leads.js)
@@ -759,6 +760,12 @@ function MumClientDetail() {
           onClick={() => setActiveTab('important-dates')}
         >
           SLA Dates
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'rate-monitor' ? 'active' : ''}`}
+          onClick={() => setActiveTab('rate-monitor')}
+        >
+          Rate Monitor
         </button>
         <button
           className={`tab-btn ${activeTab === 'team' ? 'active' : ''}`}
@@ -1891,6 +1898,15 @@ function MumClientDetail() {
                 </div>
               </>
             )}
+          </div>
+          )}
+
+          {/* Rate Monitor Tab */}
+          {activeTab === 'rate-monitor' && (
+          <div className="info-section">
+            <h2>Rate Monitor</h2>
+            <p className="section-description">Track refinance opportunities for this client. Set rate targets and get notified when market rates hit your thresholds.</p>
+            <RateMonitorWidget mumClientId={id} />
           </div>
           )}
 
