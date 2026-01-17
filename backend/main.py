@@ -92,9 +92,23 @@ from models.financial_intelligence import (
     LostDeal, CapitalRequirement, ComplianceRisk
 )
 
-# Setup logging
-logging.basicConfig(level=logging.INFO)
+# Setup logging - reduce verbosity in production to avoid Railway rate limits
+_log_level = logging.WARNING if os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("ENVIRONMENT") == "production" else logging.INFO
+logging.basicConfig(
+    level=_log_level,
+    format='%(levelname)s:%(name)s:%(message)s'
+)
 logger = logging.getLogger(__name__)
+
+# Suppress noisy loggers in production
+if _log_level == logging.WARNING:
+    logging.getLogger("apscheduler").setLevel(logging.WARNING)
+    logging.getLogger("apscheduler.scheduler").setLevel(logging.WARNING)
+    logging.getLogger("apscheduler.executors").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 # ============================================================================
 # CONFIGURATION
@@ -33077,6 +33091,181 @@ async def add_subscription_system_migration(
 
     except Exception as e:
         logger.error(f"Subscription migration failed: {e}")
+        db.rollback()
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e)
+        }
+
+
+@app.post("/api/v1/migrations/add-rate-monitor-system")
+async def add_rate_monitor_system_migration(db: Session = Depends(get_db)):
+    """Migration: Add Rate Monitor tables for MUM refinance opportunity tracking"""
+    try:
+        from sqlalchemy import text as sql_text
+
+        sql_commands = [
+            # Rate Monitor Targets
+            """CREATE TABLE IF NOT EXISTS rate_monitor_targets (
+                id SERIAL PRIMARY KEY,
+                mum_client_id INTEGER REFERENCES mum_clients(id) ON DELETE CASCADE,
+                target_type VARCHAR(50) NOT NULL,
+                monthly_savings_threshold DECIMAL(10, 2),
+                rate_drop_percentage DECIMAL(5, 3),
+                target_rate DECIMAL(5, 3),
+                loan_type VARCHAR(50) DEFAULT 'conventional',
+                loan_term INTEGER DEFAULT 30,
+                status VARCHAR(50) DEFAULT 'active',
+                is_active BOOLEAN DEFAULT TRUE,
+                auto_call_enabled BOOLEAN DEFAULT FALSE,
+                call_preference VARCHAR(50) DEFAULT 'business_hours',
+                last_triggered_at TIMESTAMP,
+                trigger_count INTEGER DEFAULT 0,
+                vapi_call_id VARCHAR(100),
+                last_call_status VARCHAR(50),
+                last_call_at TIMESTAMP,
+                appointment_scheduled BOOLEAN DEFAULT FALSE,
+                appointment_date TIMESTAMP,
+                notify_email BOOLEAN DEFAULT TRUE,
+                notify_sms BOOLEAN DEFAULT TRUE,
+                notify_lo BOOLEAN DEFAULT TRUE,
+                notes TEXT,
+                created_by INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )""",
+            # Rate Monitor History
+            """CREATE TABLE IF NOT EXISTS rate_monitor_history (
+                id SERIAL PRIMARY KEY,
+                target_id INTEGER REFERENCES rate_monitor_targets(id) ON DELETE CASCADE,
+                mum_client_id INTEGER REFERENCES mum_clients(id) ON DELETE SET NULL,
+                check_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                client_rate DECIMAL(5, 3),
+                market_rate DECIMAL(5, 3),
+                rate_difference DECIMAL(5, 3),
+                loan_balance DECIMAL(12, 2),
+                monthly_savings DECIMAL(10, 2),
+                annual_savings DECIMAL(12, 2),
+                threshold_met BOOLEAN DEFAULT FALSE,
+                threshold_type VARCHAR(50),
+                threshold_value DECIMAL(10, 3),
+                alert_generated BOOLEAN DEFAULT FALSE,
+                call_initiated BOOLEAN DEFAULT FALSE,
+                rate_source VARCHAR(100) DEFAULT 'optimal_blue',
+                rate_scenario JSONB
+            )""",
+            # Rate Monitor Alerts
+            """CREATE TABLE IF NOT EXISTS rate_monitor_alerts (
+                id SERIAL PRIMARY KEY,
+                target_id INTEGER REFERENCES rate_monitor_targets(id) ON DELETE CASCADE,
+                mum_client_id INTEGER REFERENCES mum_clients(id) ON DELETE SET NULL,
+                history_id INTEGER REFERENCES rate_monitor_history(id) ON DELETE SET NULL,
+                alert_type VARCHAR(50) NOT NULL,
+                priority VARCHAR(20) DEFAULT 'medium',
+                client_rate DECIMAL(5, 3),
+                market_rate DECIMAL(5, 3),
+                monthly_savings DECIMAL(10, 2),
+                annual_savings DECIMAL(12, 2),
+                status VARCHAR(50) DEFAULT 'pending',
+                auto_call_attempted BOOLEAN DEFAULT FALSE,
+                vapi_call_id VARCHAR(100),
+                call_status VARCHAR(50),
+                call_outcome VARCHAR(100),
+                call_duration INTEGER,
+                call_summary TEXT,
+                appointment_scheduled_at TIMESTAMP,
+                assigned_to INTEGER,
+                follow_up_notes TEXT,
+                follow_up_date DATE,
+                converted_to_application BOOLEAN DEFAULT FALSE,
+                application_id INTEGER,
+                conversion_date DATE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                acknowledged_at TIMESTAMP,
+                resolved_at TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )""",
+            # Optimal Blue Rate Cache
+            """CREATE TABLE IF NOT EXISTS optimal_blue_rate_cache (
+                id SERIAL PRIMARY KEY,
+                cache_key VARCHAR(255) UNIQUE NOT NULL,
+                loan_type VARCHAR(50) NOT NULL,
+                loan_term INTEGER NOT NULL,
+                loan_amount DECIMAL(12, 2),
+                ltv DECIMAL(5, 2),
+                credit_score INTEGER,
+                property_type VARCHAR(50),
+                occupancy VARCHAR(50),
+                state VARCHAR(2),
+                rate DECIMAL(5, 3) NOT NULL,
+                apr DECIMAL(5, 3),
+                points DECIMAL(5, 3),
+                lender_credits DECIMAL(10, 2),
+                rate_options JSONB,
+                source VARCHAR(50) DEFAULT 'optimal_blue',
+                is_mock BOOLEAN DEFAULT FALSE,
+                fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP,
+                raw_response JSONB
+            )""",
+            # Indexes
+            "CREATE INDEX IF NOT EXISTS idx_rate_targets_mum_client ON rate_monitor_targets(mum_client_id)",
+            "CREATE INDEX IF NOT EXISTS idx_rate_targets_status ON rate_monitor_targets(status)",
+            "CREATE INDEX IF NOT EXISTS idx_rate_targets_active ON rate_monitor_targets(is_active) WHERE is_active = TRUE",
+            "CREATE INDEX IF NOT EXISTS idx_rate_targets_auto_call ON rate_monitor_targets(auto_call_enabled) WHERE auto_call_enabled = TRUE",
+            "CREATE INDEX IF NOT EXISTS idx_rate_history_target ON rate_monitor_history(target_id)",
+            "CREATE INDEX IF NOT EXISTS idx_rate_history_client ON rate_monitor_history(mum_client_id)",
+            "CREATE INDEX IF NOT EXISTS idx_rate_history_timestamp ON rate_monitor_history(check_timestamp DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_rate_history_threshold_met ON rate_monitor_history(threshold_met) WHERE threshold_met = TRUE",
+            "CREATE INDEX IF NOT EXISTS idx_rate_alerts_target ON rate_monitor_alerts(target_id)",
+            "CREATE INDEX IF NOT EXISTS idx_rate_alerts_client ON rate_monitor_alerts(mum_client_id)",
+            "CREATE INDEX IF NOT EXISTS idx_rate_alerts_status ON rate_monitor_alerts(status)",
+            "CREATE INDEX IF NOT EXISTS idx_rate_alerts_pending ON rate_monitor_alerts(status) WHERE status = 'pending'",
+            "CREATE INDEX IF NOT EXISTS idx_rate_alerts_created ON rate_monitor_alerts(created_at DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_rate_cache_key ON optimal_blue_rate_cache(cache_key)",
+            "CREATE INDEX IF NOT EXISTS idx_rate_cache_expires ON optimal_blue_rate_cache(expires_at)",
+            "CREATE INDEX IF NOT EXISTS idx_rate_cache_scenario ON optimal_blue_rate_cache(loan_type, loan_term, credit_score)",
+            # Trigger function
+            """CREATE OR REPLACE FUNCTION update_rate_monitor_updated_at()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                NEW.updated_at = CURRENT_TIMESTAMP;
+                RETURN NEW;
+            END;
+            $$ language 'plpgsql'""",
+            "DROP TRIGGER IF EXISTS rate_targets_updated_at ON rate_monitor_targets",
+            """CREATE TRIGGER rate_targets_updated_at
+                BEFORE UPDATE ON rate_monitor_targets
+                FOR EACH ROW EXECUTE FUNCTION update_rate_monitor_updated_at()""",
+            "DROP TRIGGER IF EXISTS rate_alerts_updated_at ON rate_monitor_alerts",
+            """CREATE TRIGGER rate_alerts_updated_at
+                BEFORE UPDATE ON rate_monitor_alerts
+                FOR EACH ROW EXECUTE FUNCTION update_rate_monitor_updated_at()"""
+        ]
+
+        tables_created = []
+        for sql in sql_commands:
+            try:
+                db.execute(sql_text(sql))
+                db.commit()
+                # Track table creations
+                if "CREATE TABLE" in sql:
+                    table_name = sql.split("CREATE TABLE IF NOT EXISTS ")[1].split(" ")[0].strip()
+                    tables_created.append(table_name)
+            except Exception as cmd_error:
+                logger.warning(f"SQL command warning: {cmd_error}")
+                db.rollback()
+
+        logger.info(f"Rate Monitor migration completed. Tables: {tables_created}")
+        return {
+            "success": True,
+            "message": "Rate Monitor tables created successfully",
+            "tables_created": tables_created
+        }
+
+    except Exception as e:
+        logger.error(f"Rate Monitor migration failed: {e}")
         db.rollback()
         return {
             "success": False,
