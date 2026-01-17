@@ -59,26 +59,27 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
 
   // Get navigation items for the current role, with module lock status
   // Don't show locked state while modules are still loading to avoid flash of upgrade badges
-  // ADMIN users have full access - never lock any items for them
+  // Platform Admin users have full access - never lock any items for them
+  // Site Admin users get their own limited navigation (not full admin)
   const navItems = useMemo(() => {
-    // Check if user is admin by any role indicator
-    // This ensures admin always has full access regardless of module subscriptions
-    const adminRoles = ['admin', 'site_admin', 'super_admin', 'owner'];
+    // Check if user is PLATFORM admin (developer with god-mode)
+    // site_admin is NOT a platform admin - they get their own limited navigation
+    const platformAdminRoles = ['admin', 'super_admin'];
     const normalizedEffectiveRole = effectiveRole?.toLowerCase();
     const normalizedUserRole = userRole?.toLowerCase();
-    const isAdmin = adminRoles.includes(normalizedEffectiveRole) ||
-                    adminRoles.includes(normalizedUserRole);
+    const isPlatformAdmin = platformAdminRoles.includes(normalizedEffectiveRole) ||
+                            platformAdminRoles.includes(normalizedUserRole);
 
-    // IMPORTANT: Admin users (by userRole) always see admin navigation items
-    // This allows admins to view as other roles but still have full navigation access
-    // The effectiveRole only affects which items are highlighted/active, not which are shown
-    const navigationRole = isAdmin ? 'admin' : effectiveRole;
+    // Site admins and other roles use their own role-specific navigation
+    // Only platform admins get the full 'admin' navigation
+    const navigationRole = isPlatformAdmin ? 'admin' : effectiveRole;
     const items = getNavigationForRole(navigationRole);
 
     return items.map(item => ({
       ...item,
-      // Admin users bypass all module restrictions - no locked items ever
-      isLocked: !isAdmin && !modulesLoading && item.module && !hasModule(item.module)
+      // Platform admin users bypass all module restrictions - no locked items ever
+      // Site admins still respect module restrictions
+      isLocked: !isPlatformAdmin && !modulesLoading && item.module && !hasModule(item.module)
     }));
   }, [effectiveRole, userRole, hasModule, modulesLoading]);
 
