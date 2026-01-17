@@ -837,7 +837,12 @@ class EsignService:
                 text_value = date_value.strftime("%m/%d/%Y")
                 value_type = "date"
 
-            # Upsert field value
+            # Delete existing value (if any) then insert new value
+            self.db.execute(text("""
+                DELETE FROM esign_field_values
+                WHERE field_id = :field_id AND signer_id = :signer_id
+            """), {"field_id": field_id, "signer_id": signer.id})
+
             self.db.execute(text("""
                 INSERT INTO esign_field_values (
                     field_id, signer_id, value_type,
@@ -848,15 +853,6 @@ class EsignService:
                     :text_value, :boolean_value, :date_value,
                     NOW(), :ip, :ua, NOW()
                 )
-                ON CONFLICT (field_id, signer_id) DO UPDATE SET
-                    value_type = :value_type,
-                    text_value = :text_value,
-                    boolean_value = :boolean_value,
-                    date_value = :date_value,
-                    completed_at = NOW(),
-                    completed_ip = :ip,
-                    completed_user_agent = :ua,
-                    server_timestamp = NOW()
             """), {
                 "field_id": field_id,
                 "signer_id": signer.id,
