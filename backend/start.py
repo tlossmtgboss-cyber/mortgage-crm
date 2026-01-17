@@ -10,14 +10,17 @@ import sys
 
 def main():
     # Run migrations first
-    print("Running migrations...")
+    print("=" * 50, flush=True)
+    print("START.PY: Running migrations...", flush=True)
     result = subprocess.run([sys.executable, "run_migrations.py"], check=False)
     if result.returncode != 0:
-        print("Warning: Migration had issues, continuing anyway...")
+        print("START.PY: Warning: Migration had issues, continuing anyway...", flush=True)
 
     # Get port from environment or default to 8080
     port = os.environ.get("PORT", "8080")
-    print(f"Starting uvicorn on port {port}...")
+    print(f"START.PY: PORT env var = {os.environ.get('PORT', 'NOT SET')}", flush=True)
+    print(f"START.PY: Starting uvicorn on port {port}...", flush=True)
+    print("=" * 50, flush=True)
 
     # Start uvicorn
     os.execvp("uvicorn", [
