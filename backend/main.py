@@ -63171,6 +63171,31 @@ async def fix_company_admin_role_migration(
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 
+@app.post("/api/v1/public/migrations/add-multi-role-system", response_model=None)
+async def add_multi_role_system_migration(
+    migration_key: str = "",
+    db: Session = Depends(get_db)
+):
+    """
+    Add multi-role system tables (user_assigned_roles, user_active_role).
+    Public endpoint - requires migration key for security
+    """
+    if migration_key != "add-multi-role":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    try:
+        from migrations.add_multi_role_system import run_migration
+        result = run_migration()
+        return {
+            "success": True,
+            "message": "Multi-role system migration completed"
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Multi-role system migration error: {e}")
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
 @app.post("/api/v1/public/migrations/add-users-password-column", response_model=None)
 async def add_users_password_column_migration(
     migration_key: str = "",
