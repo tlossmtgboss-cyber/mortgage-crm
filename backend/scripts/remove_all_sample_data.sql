@@ -12,8 +12,7 @@ BEGIN;
 -- CRITICAL: Update this email to YOUR admin email address
 DO $$
 DECLARE
-    v_admin_email TEXT := 'YOUR_ADMIN_EMAIL_HERE';  -- CHANGE THIS!
-    v_admin_user_id UUID;
+    v_admin_email TEXT := 'admin@perenniaai.com';  -- Your admin email    v_admin_user_id UUID;
     v_admin_tenant_id UUID;
 BEGIN
     -- Get admin user and tenant IDs
