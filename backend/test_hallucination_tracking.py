@@ -9,7 +9,7 @@ import os
 import sys
 
 # Use production database
-os.environ["DATABASE_URL"] = "postgresql://postgres:RzXRIwJsZINuRwMQybDbZYqfFoHBaXRw@d3svitchback.proxy.rlwy.net:38467/railway"
+os.environ["DATABASE_URL"] = os.getenv("PROD_DATABASE_URL", "postgresql://postgres:RzXRIwJsZINuRwMQybbbZYqYFoHBaxRw@postgres.railway.internal:5432/railway")
 
 from datetime import datetime
 from database import SessionLocal

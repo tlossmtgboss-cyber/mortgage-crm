@@ -73,7 +73,8 @@ class DocumentVisibility(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # Relationships
-    last_changed_by_user = relationship("User", foreign_keys=[last_changed_by])
+    # Note: User relationship removed to avoid circular import issues
+    # Use last_changed_by ID to look up user separately if needed
     audit_entries = relationship("DocumentVisibilityAudit", back_populates="visibility", cascade="all, delete-orphan")
 
     __table_args__ = (
@@ -132,7 +133,7 @@ class DocumentVisibilityAudit(Base):
 
     # Relationships
     visibility = relationship("DocumentVisibility", back_populates="audit_entries")
-    changed_by_user = relationship("User", foreign_keys=[changed_by])
+    # Note: User relationship removed to avoid circular import issues
 
     __table_args__ = (
         Index('idx_doc_visibility_audit_doc', 'document_visibility_id', 'created_at'),

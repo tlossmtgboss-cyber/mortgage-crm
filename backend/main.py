@@ -22288,6 +22288,15 @@ except Exception as e:
     intake_engine_error = traceback.format_exc()
     logger.warning(f"⚠️ Intake Engine routes not loaded: {e}")
 
+# Document Visibility routes
+try:
+    from routes.document_visibility_routes import router as document_visibility_router, set_dependencies as set_doc_visibility_deps
+    set_doc_visibility_deps(get_db)
+    app.include_router(document_visibility_router, tags=["Document Visibility"])
+    logger.info("✅ Document Visibility routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Document Visibility routes not loaded: {e}")
+
 @app.get("/api/v1/debug/portal-services-status")
 async def debug_portal_services_status():
     """Debug endpoint to check all portal-related routes loading status"""

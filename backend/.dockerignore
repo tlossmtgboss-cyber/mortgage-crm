@@ -2,8 +2,12 @@
 venv/
 .venv/
 env/
+
+# Environment files - should not be in Docker builds
+.env
 .env.local
 .env.staging
+.env.production
 
 # Python cache
 __pycache__/

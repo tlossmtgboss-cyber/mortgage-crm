@@ -9,7 +9,7 @@ import sys
 from sqlalchemy import create_engine, text
 
 # Use production database
-DATABASE_URL = os.getenv("PROD_DATABASE_URL", "postgresql://postgres:RzXRIwJsZINuRwMQybDbZYqfFoHBaXRw@d3svitchback.proxy.rlwy.net:38467/railway")
+DATABASE_URL = os.getenv("PROD_DATABASE_URL", "postgresql://postgres:RzXRIwJsZINuRwMQybbbZYqYFoHBaxRw@postgres.railway.internal:5432/railway")
 
 def get_engine():
     return create_engine(DATABASE_URL)

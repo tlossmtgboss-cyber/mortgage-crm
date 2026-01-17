@@ -2,6 +2,8 @@
 Migration: Add Document Visibility Tables
 Creates document_visibility and document_visibility_audit tables for
 controlling document visibility to borrowers and partners with audit trail.
+
+Compatible with both SQLite and PostgreSQL.
 """
 
 import os
@@ -11,6 +13,23 @@ from datetime import datetime
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 
+def table_exists(conn, table_name: str, is_sqlite: bool) -> bool:
+    """Check if a table exists (works for both SQLite and PostgreSQL)."""
+    if is_sqlite:
+        result = conn.execute(text(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name=:table_name"
+        ), {"table_name": table_name})
+        return result.fetchone() is not None
+    else:
+        result = conn.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_name = :table_name
+            )
+        """), {"table_name": table_name})
+        return result.scalar()
+
+
 def run_migration():
     """Create document visibility tables."""
     if not DATABASE_URL:
@@ -18,51 +37,86 @@ def run_migration():
         return
 
     engine = create_engine(DATABASE_URL)
+    is_sqlite = "sqlite" in DATABASE_URL.lower()
+
+    if is_sqlite:
+        print("Detected SQLite database")
+    else:
+        print("Detected PostgreSQL database")
 
     with engine.connect() as conn:
         # Check if document_visibility table already exists
-        result = conn.execute(text("""
-            SELECT EXISTS (
-                SELECT FROM information_schema.tables
-                WHERE table_name = 'document_visibility'
-            )
-        """))
-        if result.scalar():
+        if table_exists(conn, "document_visibility", is_sqlite):
             print("document_visibility table already exists, skipping creation")
         else:
             print("Creating document_visibility table...")
-            conn.execute(text("""
-                CREATE TABLE document_visibility (
-                    id SERIAL PRIMARY KEY,
 
-                    -- Polymorphic document reference (supports multiple document tables)
-                    document_table VARCHAR(50) NOT NULL,
-                    document_id INTEGER NOT NULL,
-                    loan_id INTEGER NOT NULL,
+            if is_sqlite:
+                conn.execute(text("""
+                    CREATE TABLE document_visibility (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
 
-                    -- Visibility flags
-                    visible_to_borrower BOOLEAN NOT NULL DEFAULT true,
-                    visible_to_partner BOOLEAN NOT NULL DEFAULT true,
-                    visible_to_internal BOOLEAN NOT NULL DEFAULT true,
+                        -- Polymorphic document reference (supports multiple document tables)
+                        document_table VARCHAR(50) NOT NULL,
+                        document_id INTEGER NOT NULL,
+                        loan_id INTEGER NOT NULL,
 
-                    -- Release configuration
-                    release_mode VARCHAR(20) DEFAULT 'manual',
-                    release_milestone VARCHAR(50),
-                    release_at TIMESTAMP WITH TIME ZONE,
+                        -- Visibility flags
+                        visible_to_borrower BOOLEAN NOT NULL DEFAULT 1,
+                        visible_to_partner BOOLEAN NOT NULL DEFAULT 1,
+                        visible_to_internal BOOLEAN NOT NULL DEFAULT 1,
 
-                    -- Lock and reason
-                    visibility_locked BOOLEAN DEFAULT false,
-                    hidden_reason TEXT,
+                        -- Release configuration
+                        release_mode VARCHAR(20) DEFAULT 'manual',
+                        release_milestone VARCHAR(50),
+                        release_at TIMESTAMP,
 
-                    -- Change tracking
-                    last_changed_by INTEGER REFERENCES users(id),
-                    last_changed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                        -- Lock and reason
+                        visibility_locked BOOLEAN DEFAULT 0,
+                        hidden_reason TEXT,
 
-                    -- Unique constraint per document
-                    UNIQUE(document_table, document_id)
-                )
-            """))
+                        -- Change tracking
+                        last_changed_by INTEGER,
+                        last_changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+                        -- Unique constraint per document
+                        UNIQUE(document_table, document_id)
+                    )
+                """))
+            else:
+                conn.execute(text("""
+                    CREATE TABLE document_visibility (
+                        id SERIAL PRIMARY KEY,
+
+                        -- Polymorphic document reference (supports multiple document tables)
+                        document_table VARCHAR(50) NOT NULL,
+                        document_id INTEGER NOT NULL,
+                        loan_id INTEGER NOT NULL,
+
+                        -- Visibility flags
+                        visible_to_borrower BOOLEAN NOT NULL DEFAULT true,
+                        visible_to_partner BOOLEAN NOT NULL DEFAULT true,
+                        visible_to_internal BOOLEAN NOT NULL DEFAULT true,
+
+                        -- Release configuration
+                        release_mode VARCHAR(20) DEFAULT 'manual',
+                        release_milestone VARCHAR(50),
+                        release_at TIMESTAMP WITH TIME ZONE,
+
+                        -- Lock and reason
+                        visibility_locked BOOLEAN DEFAULT false,
+                        hidden_reason TEXT,
+
+                        -- Change tracking
+                        last_changed_by INTEGER REFERENCES users(id),
+                        last_changed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+
+                        -- Unique constraint per document
+                        UNIQUE(document_table, document_id)
+                    )
+                """))
             print("document_visibility table created")
 
             # Create indexes
@@ -70,54 +124,90 @@ def run_migration():
             conn.execute(text("""
                 CREATE INDEX idx_doc_visibility_loan ON document_visibility(loan_id)
             """))
-            conn.execute(text("""
-                CREATE INDEX idx_doc_visibility_borrower
-                ON document_visibility(visible_to_borrower)
-                WHERE visible_to_borrower = false
-            """))
-            conn.execute(text("""
-                CREATE INDEX idx_doc_visibility_partner
-                ON document_visibility(visible_to_partner)
-                WHERE visible_to_partner = false
-            """))
-            conn.execute(text("""
-                CREATE INDEX idx_doc_visibility_release
-                ON document_visibility(release_mode, release_milestone)
-                WHERE release_mode = 'milestone'
-            """))
+
+            if is_sqlite:
+                # SQLite: simple indexes without partial index syntax
+                conn.execute(text("""
+                    CREATE INDEX idx_doc_visibility_borrower
+                    ON document_visibility(visible_to_borrower)
+                """))
+                conn.execute(text("""
+                    CREATE INDEX idx_doc_visibility_partner
+                    ON document_visibility(visible_to_partner)
+                """))
+                conn.execute(text("""
+                    CREATE INDEX idx_doc_visibility_release
+                    ON document_visibility(release_mode, release_milestone)
+                """))
+            else:
+                # PostgreSQL: partial indexes for better performance
+                conn.execute(text("""
+                    CREATE INDEX idx_doc_visibility_borrower
+                    ON document_visibility(visible_to_borrower)
+                    WHERE visible_to_borrower = false
+                """))
+                conn.execute(text("""
+                    CREATE INDEX idx_doc_visibility_partner
+                    ON document_visibility(visible_to_partner)
+                    WHERE visible_to_partner = false
+                """))
+                conn.execute(text("""
+                    CREATE INDEX idx_doc_visibility_release
+                    ON document_visibility(release_mode, release_milestone)
+                    WHERE release_mode = 'milestone'
+                """))
             print("Indexes created")
 
         # Check if document_visibility_audit table already exists
-        result = conn.execute(text("""
-            SELECT EXISTS (
-                SELECT FROM information_schema.tables
-                WHERE table_name = 'document_visibility_audit'
-            )
-        """))
-        if result.scalar():
+        if table_exists(conn, "document_visibility_audit", is_sqlite):
             print("document_visibility_audit table already exists, skipping creation")
         else:
             print("Creating document_visibility_audit table...")
-            conn.execute(text("""
-                CREATE TABLE document_visibility_audit (
-                    id SERIAL PRIMARY KEY,
-                    document_visibility_id INTEGER REFERENCES document_visibility(id) ON DELETE CASCADE,
-                    loan_id INTEGER NOT NULL,
 
-                    -- Change details
-                    field_changed VARCHAR(50) NOT NULL,
-                    old_value BOOLEAN,
-                    new_value BOOLEAN,
+            if is_sqlite:
+                conn.execute(text("""
+                    CREATE TABLE document_visibility_audit (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        document_visibility_id INTEGER,
+                        loan_id INTEGER NOT NULL,
 
-                    -- Actor info
-                    change_source VARCHAR(50) NOT NULL,
-                    changed_by INTEGER REFERENCES users(id),
-                    change_reason TEXT,
+                        -- Change details
+                        field_changed VARCHAR(50) NOT NULL,
+                        old_value BOOLEAN,
+                        new_value BOOLEAN,
 
-                    -- Timestamp
-                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-                )
-            """))
+                        -- Actor info
+                        change_source VARCHAR(50) NOT NULL,
+                        changed_by INTEGER,
+                        change_reason TEXT,
+
+                        -- Timestamp
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+                        FOREIGN KEY (document_visibility_id) REFERENCES document_visibility(id) ON DELETE CASCADE
+                    )
+                """))
+            else:
+                conn.execute(text("""
+                    CREATE TABLE document_visibility_audit (
+                        id SERIAL PRIMARY KEY,
+                        document_visibility_id INTEGER REFERENCES document_visibility(id) ON DELETE CASCADE,
+                        loan_id INTEGER NOT NULL,
+
+                        -- Change details
+                        field_changed VARCHAR(50) NOT NULL,
+                        old_value BOOLEAN,
+                        new_value BOOLEAN,
+
+                        -- Actor info
+                        change_source VARCHAR(50) NOT NULL,
+                        changed_by INTEGER REFERENCES users(id),
+                        change_reason TEXT,
+
+                        -- Timestamp
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                    )
+                """))
             print("document_visibility_audit table created")
 
             # Create indexes for audit table
