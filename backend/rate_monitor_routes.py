@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from datetime import datetime, date
 from decimal import Decimal
 import logging
+import httpx
 
 from database import get_db
 from models.rate_monitor import (
@@ -794,6 +795,15 @@ async def test_call_target(
     if not phone:
         raise HTTPException(400, "No phone number available for this target")
 
+    # Format phone number to E.164 format if needed
+    phone_clean = ''.join(filter(str.isdigit, phone))
+    if len(phone_clean) == 10:
+        phone = f"+1{phone_clean}"
+    elif len(phone_clean) == 11 and phone_clean.startswith('1'):
+        phone = f"+{phone_clean}"
+    elif not phone.startswith('+'):
+        phone = f"+{phone_clean}"
+
     # Get current market rate for context
     service = OptimalBlueService(db)
     scenario = RateScenario(
@@ -841,8 +851,10 @@ async def test_call_target(
                 },
             }
 
-        # Get assistant ID from environment
+        # Get assistant ID and phone number ID from environment
         assistant_id = os.getenv('VAPI_REFINANCE_ASSISTANT_ID') or os.getenv('VAPI_ASSISTANT_ID')
+        phone_number_id = os.getenv('VAPI_PHONE_NUMBER_ID')
+
         if not assistant_id:
             return {
                 'status': 'not_configured',
@@ -860,41 +872,51 @@ async def test_call_target(
 
         # Build call context
         first_name = client_name.split()[0] if client_name else "there"
-        call_metadata = {
-            'target_id': target_id,
-            'call_type': 'refinance_opportunity',
-            'monthly_savings': monthly_savings,
-            'annual_savings': annual_savings,
-            'client_rate': client_rate,
-            'market_rate': market_rate,
+
+        # Create outbound call directly via VAPI API
+        vapi_payload = {
+            "assistantId": assistant_id,
+            "customer": {
+                "number": phone,
+                "name": client_name
+            },
+            "assistantOverrides": {
+                "firstMessage": f"Hi {first_name}, this is the AI assistant calling on behalf of Tim at CMG Home Loans. I'm reaching out because with recent rate changes, we've identified that you could potentially save around ${monthly_savings:,.0f} per month on your mortgage. Do you have a moment to discuss this opportunity?"
+            }
         }
 
-        # Use VapiService directly for the call
-        vapi_service = VapiService()
+        # Add phone number ID if available (required for outbound calls)
+        if phone_number_id:
+            vapi_payload["phoneNumberId"] = phone_number_id
 
-        # Create the outbound call using the vapi service's create_phone_call method
-        call_response = await vapi_service.create_phone_call(
-            assistant_id=assistant_id,
-            customer_number=phone,
-            customer_name=client_name,
-            metadata=call_metadata,
-        )
+        async with httpx.AsyncClient() as client:
+            call_response = await client.post(
+                "https://api.vapi.ai/call/phone",
+                headers={
+                    "Authorization": f"Bearer {vapi_api_key}",
+                    "Content-Type": "application/json"
+                },
+                json=vapi_payload,
+                timeout=30
+            )
+            call_response.raise_for_status()
+            call_result = call_response.json()
 
         # Update target with call info
         target.last_call_at = datetime.utcnow()
         target.last_call_status = 'initiated'
-        target.vapi_call_id = call_response.get('id')
+        target.vapi_call_id = call_result.get('id')
         target.trigger_count = (target.trigger_count or 0) + 1
         db.commit()
 
-        logger.info(f"Initiated test call for target {target_id} to {phone}")
+        logger.info(f"Initiated test call for target {target_id} to {phone}, call_id: {call_result.get('id')}")
 
         return {
             'status': 'call_initiated',
             'target_id': target_id,
             'phone': phone,
             'client_name': client_name,
-            'vapi_call_id': call_response.get('id'),
+            'vapi_call_id': call_result.get('id'),
             'savings_info': {
                 'client_rate': client_rate,
                 'market_rate': market_rate,
@@ -904,6 +926,16 @@ async def test_call_target(
             'message': f"AI call initiated to {phone} for {client_name}",
         }
 
+    except httpx.HTTPStatusError as e:
+        logger.error(f"VAPI API error: {e.response.status_code} - {e.response.text}")
+        return {
+            'status': 'vapi_error',
+            'target_id': target_id,
+            'phone': phone,
+            'error': f"VAPI API error: {e.response.status_code}",
+            'details': e.response.text[:500] if e.response.text else None,
+            'message': f"VAPI call failed: {e.response.status_code}",
+        }
     except ImportError as e:
         logger.warning(f"VAPI service not available: {e}")
         return {
