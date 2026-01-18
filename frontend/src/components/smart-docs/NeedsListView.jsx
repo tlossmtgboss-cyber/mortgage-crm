@@ -9,6 +9,7 @@ import React, { useState } from 'react';
 import { useSmartDocs } from '../../hooks/useSmartDocs';
 import SmartDocumentUpload from './SmartDocumentUpload';
 import DocumentStatusCard from './DocumentStatusCard';
+import { smartDocsAPI } from '../../services/smartDocsApi';
 import './NeedsListView.css';
 
 const NeedsListView = ({ loanId, borrowerId, onDocumentUploaded }) => {
@@ -25,6 +26,11 @@ const NeedsListView = ({ loanId, borrowerId, onDocumentUploaded }) => {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [activeTab, setActiveTab] = useState('open');
+  const [showDocuSignModal, setShowDocuSignModal] = useState(false);
+  const [docuSignLoading, setDocuSignLoading] = useState(false);
+  const [docuSignType, setDocuSignType] = useState('signature'); // 'signature' or 'loe'
+  const [loeSubject, setLoeSubject] = useState('');
+  const [loeInstructions, setLoeInstructions] = useState('');
 
   if (loading && !needsList) {
     return (
@@ -84,6 +90,39 @@ const NeedsListView = ({ loanId, borrowerId, onDocumentUploaded }) => {
     }
   };
 
+  const handleDocuSignClick = (request) => {
+    setSelectedRequest(request);
+    setDocuSignType('signature');
+    setLoeSubject('');
+    setLoeInstructions('');
+    setShowDocuSignModal(true);
+  };
+
+  const handleSendToPortal = async () => {
+    if (!selectedRequest) return;
+
+    setDocuSignLoading(true);
+    try {
+      await smartDocsAPI.sendToPortalForDocuSign(loanId, {
+        request_id: selectedRequest.id,
+        doc_type: selectedRequest.doc_type,
+        title: selectedRequest.title,
+        type: docuSignType,
+        loe_subject: docuSignType === 'loe' ? loeSubject : null,
+        loe_instructions: docuSignType === 'loe' ? loeInstructions : null,
+      });
+      setShowDocuSignModal(false);
+      setSelectedRequest(null);
+      refresh();
+      alert('Document request sent to client portal for signature!');
+    } catch (err) {
+      console.error('Failed to send to portal:', err);
+      alert('Failed to send to portal: ' + err.message);
+    } finally {
+      setDocuSignLoading(false);
+    }
+  };
+
   return (
     <div className="needs-list-view">
       {/* Header with Progress */}
@@ -135,6 +174,7 @@ const NeedsListView = ({ loanId, borrowerId, onDocumentUploaded }) => {
               request={request}
               onUpload={() => handleUploadClick(request)}
               onWaive={(reason) => handleWaive(request, reason)}
+              onDocuSign={() => handleDocuSignClick(request)}
               showActions={activeTab === 'open'}
             />
           ))
@@ -167,6 +207,98 @@ const NeedsListView = ({ loanId, borrowerId, onDocumentUploaded }) => {
           </div>
         </div>
       )}
+
+      {/* DocuSign / Send to Portal Modal */}
+      {showDocuSignModal && selectedRequest && (
+        <div className="upload-modal-overlay" onClick={() => setShowDocuSignModal(false)}>
+          <div className="upload-modal docusign-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Send to Client Portal</h3>
+              <button className="close-btn" onClick={() => setShowDocuSignModal(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <p className="docusign-description">
+                Send <strong>{selectedRequest.title}</strong> to the client portal for the borrower to complete.
+              </p>
+
+              <div className="docusign-type-selector">
+                <label className="type-option">
+                  <input
+                    type="radio"
+                    name="docuSignType"
+                    value="signature"
+                    checked={docuSignType === 'signature'}
+                    onChange={() => setDocuSignType('signature')}
+                  />
+                  <span className="type-label">
+                    <span className="type-icon">✍️</span>
+                    <span>
+                      <strong>Document for Signature</strong>
+                      <small>Client will sign via DocuSign</small>
+                    </span>
+                  </span>
+                </label>
+
+                <label className="type-option">
+                  <input
+                    type="radio"
+                    name="docuSignType"
+                    value="loe"
+                    checked={docuSignType === 'loe'}
+                    onChange={() => setDocuSignType('loe')}
+                  />
+                  <span className="type-label">
+                    <span className="type-icon">📝</span>
+                    <span>
+                      <strong>Letter of Explanation</strong>
+                      <small>Client will write and sign an LOE</small>
+                    </span>
+                  </span>
+                </label>
+              </div>
+
+              {docuSignType === 'loe' && (
+                <div className="loe-fields">
+                  <div className="form-group">
+                    <label>Subject/Topic</label>
+                    <input
+                      type="text"
+                      value={loeSubject}
+                      onChange={(e) => setLoeSubject(e.target.value)}
+                      placeholder="e.g., Large deposit explanation, Employment gap"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Instructions for Borrower</label>
+                    <textarea
+                      value={loeInstructions}
+                      onChange={(e) => setLoeInstructions(e.target.value)}
+                      placeholder="Explain what the borrower needs to address in their letter..."
+                      rows={3}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="docusign-actions">
+                <button
+                  className="cancel-btn"
+                  onClick={() => setShowDocuSignModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="send-btn"
+                  onClick={handleSendToPortal}
+                  disabled={docuSignLoading || (docuSignType === 'loe' && !loeSubject.trim())}
+                >
+                  {docuSignLoading ? 'Sending...' : '📤 Send to Portal'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -174,7 +306,7 @@ const NeedsListView = ({ loanId, borrowerId, onDocumentUploaded }) => {
 /**
  * Individual document request card
  */
-const DocumentRequestCard = ({ request, onUpload, onWaive, showActions }) => {
+const DocumentRequestCard = ({ request, onUpload, onWaive, onDocuSign, showActions }) => {
   const [showWaiveModal, setShowWaiveModal] = useState(false);
   const [waiveReason, setWaiveReason] = useState('');
 
@@ -234,6 +366,9 @@ const DocumentRequestCard = ({ request, onUpload, onWaive, showActions }) => {
         <div className="request-actions">
           <button className="upload-btn" onClick={onUpload}>
             <span>📤</span> Upload
+          </button>
+          <button className="docusign-btn" onClick={onDocuSign}>
+            <span>✍️</span> Send to Portal
           </button>
           <button className="waive-btn" onClick={() => setShowWaiveModal(true)}>
             Waive

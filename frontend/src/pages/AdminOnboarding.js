@@ -37,8 +37,8 @@ const TIMEZONES = [
   { value: 'Pacific/Honolulu', label: 'Hawaii Time' }
 ];
 
-// Role options for team invites
-const TEAM_ROLES = [
+// Default role options for team invites (will be replaced by API data)
+const DEFAULT_TEAM_ROLES = [
   { value: 'loan_officer', label: 'Loan Officer' },
   { value: 'processor', label: 'Processor' },
   { value: 'underwriter', label: 'Underwriter' },
@@ -46,6 +46,18 @@ const TEAM_ROLES = [
   { value: 'admin', label: 'Admin Staff' },
   { value: 'manager', label: 'Manager' }
 ];
+
+// Phone number formatting utility
+const formatPhoneNumber = (value) => {
+  if (!value) return value;
+  const phoneNumber = value.replace(/[^\d]/g, '');
+  const phoneNumberLength = phoneNumber.length;
+  if (phoneNumberLength < 4) return phoneNumber;
+  if (phoneNumberLength < 7) {
+    return `(${phoneNumber.slice(0, 3)}) ${phoneNumber.slice(3)}`;
+  }
+  return `(${phoneNumber.slice(0, 3)}) ${phoneNumber.slice(3, 6)}-${phoneNumber.slice(6, 10)}`;
+};
 
 // Special promo code for free Business plan access
 const FREE_ACCESS_PROMO_CODE = 'CHARLIE2016';
@@ -92,11 +104,36 @@ function AdminOnboarding() {
   // Step 4: Team Invites
   const [teamInvites, setTeamInvites] = useState([]);
   const [newInvite, setNewInvite] = useState({ email: '', role: 'loan_officer', first_name: '', last_name: '' });
+  const [teamRoles, setTeamRoles] = useState(DEFAULT_TEAM_ROLES);
+  const [rolesLoading, setRolesLoading] = useState(false);
 
   // Step 5: Module Selection
   const [availableModules, setAvailableModules] = useState([]);
   const [selectedModules, setSelectedModules] = useState([]);
   const [modulesLoading, setModulesLoading] = useState(false);
+
+  // Fetch available roles for team invites
+  const fetchTeamRoles = useCallback(async () => {
+    setRolesLoading(true);
+    try {
+      const response = await fetch('/api/v1/admin-onboarding/available-roles');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.data?.roles && data.data.roles.length > 0) {
+          setTeamRoles(data.data.roles.map(role => ({
+            value: role.value,
+            label: role.name,
+            description: role.description
+          })));
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch roles:', err);
+      // Keep default roles on error
+    } finally {
+      setRolesLoading(false);
+    }
+  }, []);
 
   // Fetch available modules when entering step 4
   const fetchModules = useCallback(async () => {
@@ -195,6 +232,13 @@ function AdminOnboarding() {
 
     validateInvitation();
   }, [inviteToken]);
+
+  // Fetch team roles when entering team invites step
+  useEffect(() => {
+    if (currentStep === 3) {
+      fetchTeamRoles();
+    }
+  }, [currentStep, fetchTeamRoles]);
 
   // Password strength checker
   useEffect(() => {
@@ -553,8 +597,9 @@ function AdminOnboarding() {
                 <input
                   type="tel"
                   value={companyPhone}
-                  onChange={(e) => setCompanyPhone(e.target.value)}
+                  onChange={(e) => setCompanyPhone(formatPhoneNumber(e.target.value))}
                   placeholder="(555) 555-5555"
+                  maxLength={14}
                 />
               </div>
 
@@ -653,8 +698,9 @@ function AdminOnboarding() {
                   <input
                     type="tel"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    onChange={(e) => setPhone(formatPhoneNumber(e.target.value))}
                     placeholder="(555) 555-5555"
+                    maxLength={14}
                   />
                 </div>
               </div>
@@ -722,10 +768,15 @@ function AdminOnboarding() {
                   <select
                     value={newInvite.role}
                     onChange={(e) => setNewInvite({...newInvite, role: e.target.value})}
+                    disabled={rolesLoading}
                   >
-                    {TEAM_ROLES.map(role => (
-                      <option key={role.value} value={role.value}>{role.label}</option>
-                    ))}
+                    {rolesLoading ? (
+                      <option>Loading roles...</option>
+                    ) : (
+                      teamRoles.map(role => (
+                        <option key={role.value} value={role.value}>{role.label}</option>
+                      ))
+                    )}
                   </select>
                 </div>
                 <div className="form-group btn-col">
@@ -742,7 +793,7 @@ function AdminOnboarding() {
                   <div key={invite.id} className="team-member">
                     <div className="member-info">
                       <span className="member-email">{invite.email}</span>
-                      <span className="member-role">{TEAM_ROLES.find(r => r.value === invite.role)?.label}</span>
+                      <span className="member-role">{teamRoles.find(r => r.value === invite.role)?.label || invite.role}</span>
                     </div>
                     <button
                       type="button"

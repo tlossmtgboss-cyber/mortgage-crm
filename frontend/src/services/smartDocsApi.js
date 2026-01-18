@@ -358,6 +358,44 @@ export async function sendReminder(loanId) {
 }
 
 // =============================================================================
+// DocuSign / Portal Integration
+// =============================================================================
+
+/**
+ * Send a document request to the client portal for DocuSign or LOE
+ */
+export async function sendToPortalForDocuSign(loanId, data) {
+  const response = await fetch(`${API_BASE}/portal/send-for-signature/${loanId}`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+}
+
+/**
+ * Analyze loan ID mismatches between Smart Docs and PURL system
+ */
+export async function analyzeLoanIdMismatches() {
+  const response = await fetch(`${API_BASE}/portal/loan-id-mismatches`, {
+    headers: getHeaders(),
+  });
+  return handleResponse(response);
+}
+
+/**
+ * Fix loan ID mismatches between Smart Docs and PURL system
+ * @param {boolean} dryRun - If true, only report what would be fixed
+ */
+export async function fixLoanIdMismatches(dryRun = true) {
+  const response = await fetch(`${API_BASE}/portal/fix-loan-id-mismatches?dry_run=${dryRun}`, {
+    method: 'POST',
+    headers: getHeaders(),
+  });
+  return handleResponse(response);
+}
+
+// =============================================================================
 // Export all functions
 // =============================================================================
 
@@ -396,6 +434,10 @@ export const smartDocsAPI = {
   getReminderSettings,
   updateReminderSettings,
   sendReminder,
+  // DocuSign / Portal
+  sendToPortalForDocuSign,
+  analyzeLoanIdMismatches,
+  fixLoanIdMismatches,
 };
 
 export default smartDocsAPI;

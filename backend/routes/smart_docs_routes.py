@@ -3150,3 +3150,430 @@ async def cleanup_all_orphan_documents(
         "cleaned_documents": cleaned,
         "message": f"Cleaned up {len(cleaned)} orphan documents"
     }
+
+
+# =============================================================================
+# Portal DocuSign Integration Endpoints
+# =============================================================================
+
+class SendToPortalForSignatureBody(BaseModel):
+    """Request to send a document request to the portal for DocuSign."""
+    request_id: Optional[int] = None
+    doc_type: Optional[str] = None
+    title: str
+    type: str  # 'signature' or 'loe' (letter of explanation)
+    loe_subject: Optional[str] = None
+    loe_instructions: Optional[str] = None
+
+
+@router.post("/portal/send-for-signature/{loan_id}")
+async def send_to_portal_for_signature(
+    loan_id: int,
+    body: SendToPortalForSignatureBody,
+    db: Session = Depends(get_db),
+):
+    """
+    Send a document request to the client portal for DocuSign or Letter of Explanation.
+
+    This endpoint:
+    1. Creates or updates a document request linked to the portal
+    2. Marks it for DocuSign signature or LOE completion
+    3. Ensures the document will appear in the client portal
+
+    The client will be able to:
+    - For 'signature' type: Sign a document via DocuSign
+    - For 'loe' type: Write and sign a letter of explanation
+    """
+    from sqlalchemy import text
+    from models.purl import PURLLoan, PURLWorkspace
+
+    logger.info(f"Sending document request to portal for loan {loan_id}: {body.title}, type={body.type}")
+
+    # Find the PURL loan record that links to this loan
+    purl_loan = db.query(PURLLoan).filter(
+        PURLLoan.main_loan_id == loan_id
+    ).first()
+
+    # If no PURL loan with main_loan_id, try to find by id
+    if not purl_loan:
+        purl_loan = db.query(PURLLoan).filter(
+            PURLLoan.id == loan_id
+        ).first()
+
+    if not purl_loan:
+        logger.warning(f"No PURL loan found for loan_id {loan_id}")
+        # Still create the request - it may be linked later
+        workspace_id = None
+    else:
+        workspace_id = purl_loan.workspace_id
+        # Ensure main_loan_id is set correctly
+        if not purl_loan.main_loan_id:
+            purl_loan.main_loan_id = loan_id
+            db.commit()
+            logger.info(f"Updated PURLLoan.main_loan_id to {loan_id}")
+
+    # Use the correct loan_id for Smart Docs (this should be the main loans table id)
+    smart_docs_loan_id = purl_loan.main_loan_id if purl_loan and purl_loan.main_loan_id else loan_id
+
+    # Map doc_type string to DocType enum
+    doc_type_enum = None
+    if body.doc_type:
+        try:
+            doc_type_enum = DocType(body.doc_type.upper())
+        except (ValueError, KeyError):
+            # Try to find by name
+            for dt in DocType:
+                if dt.name == body.doc_type.upper() or dt.value == body.doc_type.upper():
+                    doc_type_enum = dt
+                    break
+            if not doc_type_enum:
+                doc_type_enum = DocType.OTHER
+
+    # Determine title and description based on type
+    if body.type == 'loe':
+        title = body.loe_subject or body.title or "Letter of Explanation"
+        description = body.loe_instructions or "Please write a letter explaining the situation and sign it."
+        instructions = f"Please write a letter of explanation regarding: {body.loe_subject or 'the requested topic'}.\n\n{body.loe_instructions or ''}"
+        doc_type_enum = DocType.LOE if hasattr(DocType, 'LOE') else DocType.OTHER
+    else:
+        title = body.title
+        description = f"Document requires signature via DocuSign"
+        instructions = "Please review and sign this document electronically."
+
+    # Create or update the document request
+    if body.request_id:
+        # Update existing request
+        request = db.query(DocumentRequest).filter(
+            DocumentRequest.id == body.request_id
+        ).first()
+
+        if request:
+            request.status = RequestStatus.OPEN
+            request.is_active = True
+            if not request.metadata:
+                request.metadata = {}
+            request.metadata['portal_docusign'] = {
+                'type': body.type,
+                'loe_subject': body.loe_subject,
+                'loe_instructions': body.loe_instructions,
+                'sent_at': datetime.utcnow().isoformat(),
+            }
+            db.commit()
+            logger.info(f"Updated existing request {request.id} for portal DocuSign")
+        else:
+            raise HTTPException(status_code=404, detail=f"Request {body.request_id} not found")
+    else:
+        # Create new document request
+        request = DocumentRequest(
+            loan_id=smart_docs_loan_id,
+            doc_type=doc_type_enum,
+            title=title,
+            description=description,
+            instructions=instructions,
+            priority=RequestPriority.HIGH,
+            status=RequestStatus.OPEN,
+            is_active=True,
+        )
+        db.add(request)
+        db.commit()
+        db.refresh(request)
+        logger.info(f"Created new request {request.id} for portal DocuSign, loan_id={smart_docs_loan_id}")
+
+    # Log event
+    event = DocPolicyEvent(
+        event_type="PORTAL_DOCUSIGN_REQUEST",
+        loan_id=smart_docs_loan_id,
+        request_id=request.id,
+        message=f"Document request sent to portal for {body.type}: {title}",
+        data={
+            "type": body.type,
+            "title": title,
+            "loe_subject": body.loe_subject,
+            "workspace_id": workspace_id,
+        }
+    )
+    db.add(event)
+    db.commit()
+
+    return {
+        "success": True,
+        "request_id": request.id,
+        "loan_id": smart_docs_loan_id,
+        "workspace_id": workspace_id,
+        "type": body.type,
+        "title": title,
+        "message": f"Document request sent to client portal for {body.type}"
+    }
+
+
+# =============================================================================
+# Loan ID Mismatch Analysis & Fix Endpoints
+# =============================================================================
+
+@router.get("/portal/loan-id-mismatches")
+async def analyze_loan_id_mismatches(
+    db: Session = Depends(get_db),
+):
+    """
+    Analyze loan ID mismatches between Smart Docs and PURL system.
+
+    This helps identify document requests that won't show in the client portal
+    because of incorrect loan_id linkage.
+    """
+    from sqlalchemy import text
+    from models.purl import PURLLoan, PURLWorkspace
+
+    mismatches = []
+    fixable = []
+    orphaned_requests = []
+
+    # Get all active document requests
+    requests = db.query(DocumentRequest).filter(
+        DocumentRequest.is_active == True
+    ).all()
+
+    # Get all PURL loans
+    purl_loans = db.query(PURLLoan).all()
+
+    # Build lookup maps
+    purl_by_main_loan_id = {pl.main_loan_id: pl for pl in purl_loans if pl.main_loan_id}
+    purl_by_id = {pl.id: pl for pl in purl_loans}
+
+    # Check each document request
+    for req in requests:
+        loan_id = req.loan_id
+
+        # Check if this loan_id is a main_loan_id in PURL
+        purl_loan = purl_by_main_loan_id.get(loan_id)
+
+        if purl_loan:
+            # This is correct - loan_id matches a PURL main_loan_id
+            continue
+
+        # Check if this loan_id is a PURL loan id (without main_loan_id set)
+        purl_loan = purl_by_id.get(loan_id)
+
+        if purl_loan:
+            if not purl_loan.main_loan_id:
+                # PURL loan exists but main_loan_id not set - fixable
+                fixable.append({
+                    "request_id": req.id,
+                    "request_title": req.title,
+                    "request_loan_id": loan_id,
+                    "purl_loan_id": purl_loan.id,
+                    "workspace_id": purl_loan.workspace_id,
+                    "issue": "PURL loan exists but main_loan_id is not set",
+                    "fix": f"Set PURLLoan.main_loan_id = {loan_id}",
+                })
+            else:
+                # loan_id doesn't match main_loan_id - mismatch
+                mismatches.append({
+                    "request_id": req.id,
+                    "request_title": req.title,
+                    "request_loan_id": loan_id,
+                    "purl_loan_id": purl_loan.id,
+                    "purl_main_loan_id": purl_loan.main_loan_id,
+                    "workspace_id": purl_loan.workspace_id,
+                    "issue": "Document request loan_id doesn't match PURL main_loan_id",
+                    "fix": f"Update DocumentRequest.loan_id from {loan_id} to {purl_loan.main_loan_id}",
+                })
+        else:
+            # No PURL loan found at all - orphaned
+            orphaned_requests.append({
+                "request_id": req.id,
+                "request_title": req.title,
+                "request_loan_id": loan_id,
+                "issue": "No PURL loan found for this loan_id",
+                "fix": "Need to create PURL loan or link existing one",
+            })
+
+    # Also check for PURL loans that have requests with wrong loan_id
+    for purl_loan in purl_loans:
+        if purl_loan.main_loan_id and purl_loan.main_loan_id != purl_loan.id:
+            # Check if there are requests using purl_loan.id instead of main_loan_id
+            wrong_id_requests = [r for r in requests if r.loan_id == purl_loan.id]
+            for req in wrong_id_requests:
+                if req.id not in [m["request_id"] for m in mismatches]:
+                    mismatches.append({
+                        "request_id": req.id,
+                        "request_title": req.title,
+                        "request_loan_id": req.loan_id,
+                        "purl_loan_id": purl_loan.id,
+                        "purl_main_loan_id": purl_loan.main_loan_id,
+                        "workspace_id": purl_loan.workspace_id,
+                        "issue": "Request uses PURL loan ID instead of main_loan_id",
+                        "fix": f"Update DocumentRequest.loan_id from {req.loan_id} to {purl_loan.main_loan_id}",
+                    })
+
+    return {
+        "summary": {
+            "total_requests": len(requests),
+            "mismatches": len(mismatches),
+            "fixable_purl_loans": len(fixable),
+            "orphaned_requests": len(orphaned_requests),
+            "correctly_linked": len(requests) - len(mismatches) - len(fixable) - len(orphaned_requests),
+        },
+        "mismatches": mismatches,
+        "fixable_purl_loans": fixable,
+        "orphaned_requests": orphaned_requests,
+    }
+
+
+@router.post("/portal/fix-loan-id-mismatches")
+async def fix_loan_id_mismatches(
+    dry_run: bool = Query(True, description="If true, only report what would be fixed without making changes"),
+    db: Session = Depends(get_db),
+):
+    """
+    Fix loan ID mismatches between Smart Docs and PURL system.
+
+    This endpoint will:
+    1. Set PURLLoan.main_loan_id where it's missing
+    2. Update DocumentRequest.loan_id to match PURL main_loan_id
+
+    Set dry_run=false to actually apply the fixes.
+    """
+    from models.purl import PURLLoan
+
+    fixes_applied = []
+    errors = []
+
+    # Get all active document requests
+    requests = db.query(DocumentRequest).filter(
+        DocumentRequest.is_active == True
+    ).all()
+
+    # Get all PURL loans
+    purl_loans = db.query(PURLLoan).all()
+
+    # Build lookup maps
+    purl_by_main_loan_id = {pl.main_loan_id: pl for pl in purl_loans if pl.main_loan_id}
+    purl_by_id = {pl.id: pl for pl in purl_loans}
+
+    # Fix 1: Set main_loan_id on PURL loans where it's missing
+    for purl_loan in purl_loans:
+        if not purl_loan.main_loan_id:
+            # Check if there are document requests using this PURL loan id
+            related_requests = [r for r in requests if r.loan_id == purl_loan.id]
+            if related_requests:
+                fix_info = {
+                    "type": "set_purl_main_loan_id",
+                    "purl_loan_id": purl_loan.id,
+                    "workspace_id": purl_loan.workspace_id,
+                    "new_main_loan_id": purl_loan.id,
+                    "affected_requests": len(related_requests),
+                }
+
+                if not dry_run:
+                    try:
+                        purl_loan.main_loan_id = purl_loan.id
+                        fix_info["status"] = "applied"
+                    except Exception as e:
+                        fix_info["status"] = "error"
+                        fix_info["error"] = str(e)
+                        errors.append(fix_info)
+                        continue
+                else:
+                    fix_info["status"] = "dry_run"
+
+                fixes_applied.append(fix_info)
+
+    # Fix 2: Update DocumentRequest.loan_id to match main_loan_id
+    for req in requests:
+        loan_id = req.loan_id
+
+        # Skip if already correctly linked
+        if loan_id in purl_by_main_loan_id:
+            continue
+
+        # Check if using PURL loan id instead of main_loan_id
+        purl_loan = purl_by_id.get(loan_id)
+        if purl_loan and purl_loan.main_loan_id and purl_loan.main_loan_id != loan_id:
+            fix_info = {
+                "type": "update_request_loan_id",
+                "request_id": req.id,
+                "request_title": req.title,
+                "old_loan_id": loan_id,
+                "new_loan_id": purl_loan.main_loan_id,
+                "purl_loan_id": purl_loan.id,
+            }
+
+            if not dry_run:
+                try:
+                    req.loan_id = purl_loan.main_loan_id
+                    fix_info["status"] = "applied"
+                except Exception as e:
+                    fix_info["status"] = "error"
+                    fix_info["error"] = str(e)
+                    errors.append(fix_info)
+                    continue
+            else:
+                fix_info["status"] = "dry_run"
+
+            fixes_applied.append(fix_info)
+
+    # Also fix SmartDocument records
+    documents = db.query(SmartDocument).filter(
+        SmartDocument.status.notin_(["DELETED", "SUPERSEDED"])
+    ).all()
+
+    for doc in documents:
+        loan_id = doc.loan_id
+
+        # Skip if already correctly linked
+        if loan_id in purl_by_main_loan_id:
+            continue
+
+        # Check if using PURL loan id instead of main_loan_id
+        purl_loan = purl_by_id.get(loan_id)
+        if purl_loan and purl_loan.main_loan_id and purl_loan.main_loan_id != loan_id:
+            fix_info = {
+                "type": "update_document_loan_id",
+                "document_id": doc.id,
+                "file_name": doc.file_name,
+                "old_loan_id": loan_id,
+                "new_loan_id": purl_loan.main_loan_id,
+            }
+
+            if not dry_run:
+                try:
+                    doc.loan_id = purl_loan.main_loan_id
+                    fix_info["status"] = "applied"
+                except Exception as e:
+                    fix_info["status"] = "error"
+                    fix_info["error"] = str(e)
+                    errors.append(fix_info)
+                    continue
+            else:
+                fix_info["status"] = "dry_run"
+
+            fixes_applied.append(fix_info)
+
+    # Commit changes if not dry run
+    if not dry_run:
+        try:
+            db.commit()
+            logger.info(f"Applied {len(fixes_applied)} loan ID fixes")
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to commit loan ID fixes: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "fixes_attempted": len(fixes_applied),
+            }
+
+    return {
+        "success": True,
+        "dry_run": dry_run,
+        "summary": {
+            "total_fixes": len(fixes_applied),
+            "purl_main_loan_id_fixes": len([f for f in fixes_applied if f["type"] == "set_purl_main_loan_id"]),
+            "request_loan_id_fixes": len([f for f in fixes_applied if f["type"] == "update_request_loan_id"]),
+            "document_loan_id_fixes": len([f for f in fixes_applied if f["type"] == "update_document_loan_id"]),
+            "errors": len(errors),
+        },
+        "fixes": fixes_applied,
+        "errors": errors,
+        "message": "Dry run complete - set dry_run=false to apply fixes" if dry_run else f"Applied {len(fixes_applied)} fixes"
+    }
