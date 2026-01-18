@@ -762,3 +762,101 @@ async def list_available_voices():
         ])
 
     return {"voices": voices}
+
+
+# =============================================================================
+# User Voice Preference Endpoints
+# =============================================================================
+
+from auth import get_current_user_from_token
+from models import User
+
+
+@router.get("/user-voice-preference")
+async def get_user_voice_preference(
+    current_user: User = Depends(get_current_user_from_token),
+    db: Session = Depends(get_db)
+):
+    """Get user's saved voice preference for Aria conversations"""
+    try:
+        # Check user_settings table for tts_voice and tts_provider
+        result = db.execute(
+            text("""
+                SELECT setting_key, setting_value
+                FROM user_settings
+                WHERE user_id = :user_id AND setting_key IN ('tts_voice', 'tts_provider')
+            """),
+            {"user_id": current_user.id}
+        )
+
+        settings = {row[0]: row[1] for row in result.fetchall()}
+
+        return {
+            "voice_id": settings.get("tts_voice"),
+            "provider": settings.get("tts_provider"),
+            "has_preference": bool(settings.get("tts_voice"))
+        }
+    except Exception as e:
+        logger.error(f"[VoicePreference] Error getting preference: {e}")
+        return {
+            "voice_id": None,
+            "provider": None,
+            "has_preference": False
+        }
+
+
+@router.put("/user-voice-preference")
+async def save_user_voice_preference(
+    request: dict,
+    current_user: User = Depends(get_current_user_from_token),
+    db: Session = Depends(get_db)
+):
+    """Save user's voice preference for Aria conversations"""
+    voice_id = request.get("voice_id")
+    provider = request.get("provider")
+
+    if not voice_id or not provider:
+        raise HTTPException(400, "voice_id and provider are required")
+
+    # Validate provider
+    valid_providers = ["google", "elevenlabs", "openai"]
+    if provider not in valid_providers:
+        raise HTTPException(400, f"Invalid provider. Must be one of: {', '.join(valid_providers)}")
+
+    try:
+        # Upsert tts_voice setting
+        db.execute(
+            text("""
+                INSERT INTO user_settings (user_id, setting_key, setting_value, created_at, updated_at)
+                VALUES (:user_id, 'tts_voice', :voice_id, NOW(), NOW())
+                ON CONFLICT (user_id, setting_key)
+                DO UPDATE SET setting_value = :voice_id, updated_at = NOW()
+            """),
+            {"user_id": current_user.id, "voice_id": voice_id}
+        )
+
+        # Upsert tts_provider setting
+        db.execute(
+            text("""
+                INSERT INTO user_settings (user_id, setting_key, setting_value, created_at, updated_at)
+                VALUES (:user_id, 'tts_provider', :provider, NOW(), NOW())
+                ON CONFLICT (user_id, setting_key)
+                DO UPDATE SET setting_value = :provider, updated_at = NOW()
+            """),
+            {"user_id": current_user.id, "provider": provider}
+        )
+
+        db.commit()
+
+        logger.info(f"[VoicePreference] Saved preference for user {current_user.id}: {provider}/{voice_id}")
+
+        return {
+            "success": True,
+            "voice_id": voice_id,
+            "provider": provider,
+            "message": "Voice preference saved successfully"
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"[VoicePreference] Error saving preference: {e}")
+        raise HTTPException(500, f"Failed to save voice preference: {str(e)}")

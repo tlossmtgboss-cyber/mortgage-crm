@@ -1066,9 +1066,16 @@ async def get_available_roles(
 
         # Format roles for dropdown
         role_list = []
+        # Roles to exclude from team invites (admin-level roles)
+        excluded_roles = [
+            'Site Administrator',
+            'Site Admin',
+            'Company Admin',
+            'Admin',  # General admin role
+        ]
         for role in roles:
-            # Skip Site Administrator - that's for the account owner only
-            if role.name == 'Site Administrator':
+            # Skip admin-level roles - those are for account owners only
+            if role.name in excluded_roles:
                 continue
             role_list.append({
                 'id': role.id,
@@ -1084,14 +1091,14 @@ async def get_available_roles(
 
     except Exception as e:
         logger.error(f"Error fetching roles: {e}")
-        # Return default roles as fallback
+        # Return default roles as fallback (no admin roles)
         default_roles = [
             {'id': 0, 'name': 'Loan Officer', 'value': 'loan_officer', 'description': 'Originates and manages loans'},
             {'id': 0, 'name': 'Processor', 'value': 'processor', 'description': 'Processes loan applications'},
             {'id': 0, 'name': 'Underwriter', 'value': 'underwriter', 'description': 'Reviews and approves loans'},
             {'id': 0, 'name': 'Closer', 'value': 'closer', 'description': 'Handles loan closings'},
-            {'id': 0, 'name': 'Admin Staff', 'value': 'admin_staff', 'description': 'Administrative support'},
             {'id': 0, 'name': 'Manager', 'value': 'manager', 'description': 'Team management'},
+            {'id': 0, 'name': 'Loan Officer Assistant', 'value': 'loan_officer_assistant', 'description': 'Supports loan officers'},
         ]
         return success_response(
             data={'roles': default_roles, 'fallback': True},
