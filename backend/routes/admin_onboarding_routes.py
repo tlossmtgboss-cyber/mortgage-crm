@@ -504,9 +504,9 @@ async def save_company_profile(
         db.execute(text("""
             UPDATE tenant_accounts SET
                 name = :name,
-                settings = COALESCE(settings, '{}'::jsonb) || jsonb_build_object('company', :company_settings::jsonb),
+                settings = COALESCE(settings, '{}'::jsonb) || jsonb_build_object('company', CAST(:company_settings AS jsonb)),
                 updated_at = NOW()
-            WHERE id = :tenant_id::uuid
+            WHERE id = CAST(:tenant_id AS uuid)
         """), {
             'name': profile.company_name,
             'company_settings': company_settings,
