@@ -506,9 +506,16 @@ export const PermissionProvider = ({ children }) => {
   }, [userRole, legacyRole]);
 
   // Check if user is a platform admin (developer) vs site admin (licensee)
-  // Also checks localStorage user object as fallback
+  // Site admins are NOT platform admins - they only manage their own organization
   const isPlatformAdmin = useMemo(() => {
-    if (userRole === 'admin' || getUserEffectiveRole(userRole, legacyRole) === 'admin') {
+    // First check: site_admin is explicitly NOT a platform admin
+    const effectiveRole = getUserEffectiveRole(userRole, legacyRole);
+    if (userRole === 'site_admin' || effectiveRole === 'site_admin') {
+      return false;
+    }
+
+    // Check context role
+    if (userRole === 'admin' || effectiveRole === 'admin') {
       return true;
     }
 
@@ -517,7 +524,12 @@ export const PermissionProvider = ({ children }) => {
       const userStr = localStorage.getItem('user');
       if (userStr) {
         const user = JSON.parse(userStr);
-        if (user.is_admin === true || user.role === 'admin' || user.permission_role === 'admin') {
+        // site_admin in localStorage is NOT a platform admin
+        if (user.role === 'site_admin' || user.permission_role === 'site_admin') {
+          return false;
+        }
+        // Only true platform admins
+        if (user.role === 'admin' || user.permission_role === 'admin') {
           return true;
         }
       }

@@ -47,19 +47,28 @@ const AdminPanel = () => {
                          localUser.is_admin === true;
 
   // Determine admin type: Platform Admin (developer) or Site Administrator (licensee)
-  const isCurrentUserPlatformAdmin = isPlatformAdmin ||
+  // IMPORTANT: site_admin is NOT a platform admin - check this first
+  const userIsSiteAdmin = isSiteAdmin ||
+                          localUser.permission_role === 'site_admin' ||
+                          localUser.role === 'site_admin';
+
+  const isCurrentUserPlatformAdmin = !userIsSiteAdmin && (
+                                      isPlatformAdmin ||
                                       localUser.permission_role === 'admin' ||
-                                      (localUser.role === 'admin' && !localUser.organization_id);
-  const isCurrentUserSiteAdmin = isSiteAdmin ||
-                                  localUser.permission_role === 'site_admin' ||
+                                      (localUser.role === 'admin' && !localUser.organization_id)
+                                    );
+  const isCurrentUserSiteAdmin = userIsSiteAdmin ||
                                   (userRole === 'management' && localUser.organization_id);
 
   // Debug logging
   console.log('AdminPanel permissions:', {
     userRole,
     canAccessAdmin,
+    userIsSiteAdmin,
     isCurrentUserPlatformAdmin,
     isCurrentUserSiteAdmin,
+    isPlatformAdmin,
+    isSiteAdmin,
     permissionsLoading,
     localUser
   });
