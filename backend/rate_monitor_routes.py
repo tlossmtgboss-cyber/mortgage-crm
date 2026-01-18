@@ -754,6 +754,275 @@ async def initiate_call(
 
 
 # =============================================================================
+# Test Call Endpoint (Direct Call for Standalone Targets)
+# =============================================================================
+
+@router.post("/targets/{target_id}/test-call")
+async def test_call_target(
+    target_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Initiate a test AI call for a rate monitor target.
+    Works with both MUM-linked and standalone targets.
+    """
+    target = db.query(RateMonitorTarget).filter(RateMonitorTarget.id == target_id).first()
+    if not target:
+        raise HTTPException(404, f"Target {target_id} not found")
+
+    # Get phone number from target or MUM client
+    phone = target.borrower_phone
+    client_name = target.borrower_name or "Valued Client"
+    client_rate = float(target.current_rate) if target.current_rate else 7.5
+    loan_balance = float(target.current_loan_amount) if target.current_loan_amount else 400000
+
+    # If linked to MUM client, get data from there
+    if target.mum_client_id and not phone:
+        try:
+            from main import MUMClient
+            mum_client = db.query(MUMClient).filter(MUMClient.id == target.mum_client_id).first()
+            if mum_client:
+                phone = mum_client.phone
+                client_name = mum_client.client_name
+                if mum_client.interest_rate:
+                    client_rate = float(mum_client.interest_rate)
+                if mum_client.current_loan_amount:
+                    loan_balance = float(mum_client.current_loan_amount)
+        except ImportError:
+            pass
+
+    if not phone:
+        raise HTTPException(400, "No phone number available for this target")
+
+    # Get current market rate for context
+    service = OptimalBlueService(db)
+    scenario = RateScenario(
+        loan_type=target.loan_type or 'conventional',
+        loan_term=target.loan_term or 30,
+        loan_amount=loan_balance,
+        credit_score=740,
+        ltv=80.0,
+    )
+    rate_result = await service.get_rate(scenario)
+    market_rate = rate_result.rate
+
+    # Calculate savings
+    monthly_savings = calculate_monthly_savings(client_rate, market_rate, loan_balance)
+    annual_savings = calculate_annual_savings(monthly_savings)
+
+    # Create a simple client-like object for the call service
+    class StandaloneClient:
+        def __init__(self, id, name, phone):
+            self.id = id
+            self.client_name = name
+            self.phone = phone
+
+    client_obj = StandaloneClient(target_id, client_name, phone)
+
+    # Try to initiate call via VAPI
+    try:
+        from vapi_service import VapiCRMIntegration
+        vapi = VapiCRMIntegration(db)
+
+        # Build call context
+        first_name = client_name.split()[0] if client_name else "there"
+        call_metadata = {
+            'target_id': target_id,
+            'call_type': 'refinance_opportunity',
+            'monthly_savings': monthly_savings,
+            'annual_savings': annual_savings,
+            'client_rate': client_rate,
+            'market_rate': market_rate,
+        }
+
+        # Create the outbound call
+        call_response = await vapi.create_outbound_call(
+            phone_number=phone,
+            customer_name=client_name,
+            call_context={
+                'type': 'refinance_opportunity',
+                'monthly_savings': f"${monthly_savings:,.0f}",
+                'annual_savings': f"${annual_savings:,.0f}",
+                'current_rate': f"{client_rate:.3f}%",
+                'new_rate': f"{market_rate:.3f}%",
+                'first_name': first_name,
+            },
+            metadata=call_metadata,
+        )
+
+        # Update target with call info
+        target.last_call_at = datetime.utcnow()
+        target.last_call_status = 'initiated'
+        target.vapi_call_id = call_response.get('id')
+        target.trigger_count = (target.trigger_count or 0) + 1
+        db.commit()
+
+        logger.info(f"Initiated test call for target {target_id} to {phone}")
+
+        return {
+            'status': 'call_initiated',
+            'target_id': target_id,
+            'phone': phone,
+            'client_name': client_name,
+            'vapi_call_id': call_response.get('id'),
+            'savings_info': {
+                'client_rate': client_rate,
+                'market_rate': market_rate,
+                'monthly_savings': monthly_savings,
+                'annual_savings': annual_savings,
+            },
+            'message': f"AI call initiated to {phone} for {client_name}",
+        }
+
+    except ImportError as e:
+        logger.warning(f"VAPI service not available: {e}")
+        return {
+            'status': 'service_unavailable',
+            'target_id': target_id,
+            'phone': phone,
+            'client_name': client_name,
+            'message': 'VAPI service is not configured. Configure VAPI_API_KEY to enable AI calls.',
+            'savings_info': {
+                'client_rate': client_rate,
+                'market_rate': market_rate,
+                'monthly_savings': monthly_savings,
+                'annual_savings': annual_savings,
+            },
+        }
+    except Exception as e:
+        logger.error(f"Error initiating test call: {e}")
+        return {
+            'status': 'error',
+            'target_id': target_id,
+            'phone': phone,
+            'error': str(e),
+            'message': f"Failed to initiate call: {str(e)}",
+        }
+
+
+# =============================================================================
+# Migration Endpoint for Creating Tables
+# =============================================================================
+
+@router.post("/migrate-tables")
+async def migrate_rate_monitor_tables(
+    db: Session = Depends(get_db)
+):
+    """
+    Create rate_monitor_alerts and rate_monitor_history tables if they don't exist.
+    """
+    try:
+        from sqlalchemy import text as sql_text
+
+        # Create rate_monitor_history table
+        history_sql = """
+        CREATE TABLE IF NOT EXISTS rate_monitor_history (
+            id SERIAL PRIMARY KEY,
+            target_id INTEGER REFERENCES rate_monitor_targets(id) ON DELETE CASCADE,
+            mum_client_id INTEGER,
+            check_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            client_rate NUMERIC(5,3),
+            market_rate NUMERIC(5,3),
+            rate_difference NUMERIC(5,3),
+            loan_balance NUMERIC(12,2),
+            monthly_savings NUMERIC(10,2),
+            annual_savings NUMERIC(12,2),
+            threshold_met BOOLEAN DEFAULT FALSE,
+            threshold_type VARCHAR(50),
+            threshold_value NUMERIC(10,3),
+            alert_generated BOOLEAN DEFAULT FALSE,
+            call_initiated BOOLEAN DEFAULT FALSE,
+            rate_source VARCHAR(100) DEFAULT 'optimal_blue',
+            rate_scenario JSONB
+        )
+        """
+
+        # Create rate_monitor_alerts table
+        alerts_sql = """
+        CREATE TABLE IF NOT EXISTS rate_monitor_alerts (
+            id SERIAL PRIMARY KEY,
+            target_id INTEGER REFERENCES rate_monitor_targets(id) ON DELETE CASCADE,
+            mum_client_id INTEGER,
+            history_id INTEGER,
+            alert_type VARCHAR(50) NOT NULL,
+            priority VARCHAR(20) DEFAULT 'medium',
+            client_rate NUMERIC(5,3),
+            market_rate NUMERIC(5,3),
+            monthly_savings NUMERIC(10,2),
+            annual_savings NUMERIC(12,2),
+            status VARCHAR(50) DEFAULT 'pending',
+            auto_call_attempted BOOLEAN DEFAULT FALSE,
+            vapi_call_id VARCHAR(100),
+            call_status VARCHAR(50),
+            call_outcome VARCHAR(100),
+            call_duration INTEGER,
+            call_summary TEXT,
+            appointment_scheduled_at TIMESTAMP,
+            assigned_to INTEGER,
+            follow_up_notes TEXT,
+            follow_up_date DATE,
+            converted_to_application BOOLEAN DEFAULT FALSE,
+            application_id INTEGER,
+            conversion_date DATE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            acknowledged_at TIMESTAMP,
+            resolved_at TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+
+        # Create indexes
+        indexes_sql = [
+            "CREATE INDEX IF NOT EXISTS idx_rate_monitor_history_target_id ON rate_monitor_history(target_id)",
+            "CREATE INDEX IF NOT EXISTS idx_rate_monitor_history_check_timestamp ON rate_monitor_history(check_timestamp)",
+            "CREATE INDEX IF NOT EXISTS idx_rate_monitor_history_threshold_met ON rate_monitor_history(threshold_met)",
+            "CREATE INDEX IF NOT EXISTS idx_rate_monitor_alerts_target_id ON rate_monitor_alerts(target_id)",
+            "CREATE INDEX IF NOT EXISTS idx_rate_monitor_alerts_status ON rate_monitor_alerts(status)",
+            "CREATE INDEX IF NOT EXISTS idx_rate_monitor_alerts_created_at ON rate_monitor_alerts(created_at)",
+        ]
+
+        results = []
+
+        # Create history table
+        try:
+            db.execute(sql_text(history_sql))
+            db.commit()
+            results.append({"table": "rate_monitor_history", "status": "OK"})
+        except Exception as e:
+            db.rollback()
+            results.append({"table": "rate_monitor_history", "status": "SKIP", "error": str(e)[:100]})
+
+        # Create alerts table
+        try:
+            db.execute(sql_text(alerts_sql))
+            db.commit()
+            results.append({"table": "rate_monitor_alerts", "status": "OK"})
+        except Exception as e:
+            db.rollback()
+            results.append({"table": "rate_monitor_alerts", "status": "SKIP", "error": str(e)[:100]})
+
+        # Create indexes
+        for idx_sql in indexes_sql:
+            try:
+                db.execute(sql_text(idx_sql))
+                db.commit()
+                results.append({"index": idx_sql.split("IF NOT EXISTS ")[1].split(" ON")[0], "status": "OK"})
+            except Exception as e:
+                db.rollback()
+                results.append({"index": idx_sql[:50], "status": "SKIP", "error": str(e)[:50]})
+
+        return {
+            "success": True,
+            "message": "Rate monitor tables migration completed",
+            "results": results
+        }
+
+    except Exception as e:
+        logger.error(f"Rate monitor tables migration failed: {e}")
+        return {"success": False, "error": str(e)}
+
+
+# =============================================================================
 # Dashboard Endpoints
 # =============================================================================
 
