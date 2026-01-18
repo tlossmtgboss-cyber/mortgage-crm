@@ -859,3 +859,112 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Tab Badge for ticket counts */
+.tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #f44336;
+  color: white;
+  border-radius: 10px;
+  margin-left: 6px;
+}
+
+.tab-badge.completed {
+  background: #4caf50;
+}
+
+/* New Ticket Button in tabs */
+.new-ticket-btn {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #2196f3;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+  margin-bottom: 2px;
+}
+
+.new-ticket-btn:hover {
+  background: #1976d2;
+}
+
+/* New Ticket Form Section */
+.new-ticket-form-section {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 2px solid #2196f3;
+}
+
+.new-ticket-form-section .ticket-form-container {
+  max-width: 700px;
+}
+
+/* Complete Ticket Button */
+.btn-complete-ticket {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+  margin-left: auto;
+}
+
+.btn-complete-ticket:hover {
+  background: #388e3c;
+}
+
+.btn-complete-ticket:disabled {
+  background: #a5d6a7;
+  cursor: not-allowed;
+}
+
+/* Adjust ticket meta to accommodate complete button */
+.ticket-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+/* Responsive adjustments for new elements */
+@media (max-width: 768px) {
+  .new-ticket-btn span {
+    display: inline;
+  }
+
+  .btn-complete-ticket {
+    margin-left: 0;
+    margin-top: 12px;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .ticket-meta {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
