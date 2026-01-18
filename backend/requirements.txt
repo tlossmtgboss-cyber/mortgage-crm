@@ -105,4 +105,5 @@ bleach>=6.0.0
 google-auth
 google-auth-oauthlib
 google-api-python-client
+google-cloud-texttospeech>=2.17.2
 pdf2image>=1.16.0
