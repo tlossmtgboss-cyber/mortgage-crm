@@ -196,7 +196,13 @@ def get_invite_data(db: Session, token: str) -> Optional[dict]:
     # Parse the stored data
     try:
         if isinstance(audit_result.new_values, str):
-            data = eval(audit_result.new_values)  # It was stored as str(dict)
+            # Use ast.literal_eval for safe parsing (NOT eval which is dangerous)
+            import ast
+            try:
+                data = ast.literal_eval(audit_result.new_values)
+            except (ValueError, SyntaxError):
+                # Try JSON parsing as fallback
+                data = json.loads(audit_result.new_values)
         else:
             data = audit_result.new_values
     except:
