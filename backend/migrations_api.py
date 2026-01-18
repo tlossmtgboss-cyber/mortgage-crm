@@ -1760,3 +1760,91 @@ async def delete_sample_data_endpoint(
     except Exception as e:
         logger.error(f"Sample data deletion error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/add-missing-columns")
+async def add_missing_database_columns(
+    admin: Any = Depends(verify_admin_access)
+):
+    """
+    Add missing database columns that are causing 500 errors.
+    - loans.prospect_date and other Jungo date fields
+    - permission_key column for permissions
+    """
+    try:
+        db = get_raw_db_session()
+        results = {"columns_added": [], "errors": [], "skipped": []}
+
+        try:
+            # Add Jungo date fields to loans table
+            jungo_date_columns = [
+                "prospect_date", "application_date", "le_pending_date", "credit_only_date",
+                "file_received_date", "preapproval_date", "lock_date", "lock_expiration_date",
+                "uw_received_date", "conditions_for_review_date", "suspended_date",
+                "loan_approved_date", "approved_not_accepted_date", "approval_expires_date",
+                "appraisal_ordered_date", "appraisal_received_date", "appraisal_docs_expire_date",
+                "cd_requested_date", "cd_sent_to_borrower_date", "cd_acknowledged_date",
+                "clear_to_close_date", "docs_ordered_date", "docs_out_date", "credit_docs_expire_date",
+                "scheduled_closing_date", "scheduled_funding_date", "funds_ordered_date",
+                "funds_sent_date", "funded_date", "closing_date", "first_payment_date",
+                "investor_purchased_date"
+            ]
+
+            for col in jungo_date_columns:
+                try:
+                    db.execute(text(f"""
+                        ALTER TABLE loans ADD COLUMN IF NOT EXISTS {col} TIMESTAMP
+                    """))
+                    results["columns_added"].append(f"loans.{col}")
+                except Exception as e:
+                    if "already exists" in str(e).lower():
+                        results["skipped"].append(f"loans.{col}")
+                    else:
+                        results["errors"].append(f"loans.{col}: {str(e)[:100]}")
+
+            db.commit()
+
+            # Add permission_key to user_permissions if it exists
+            try:
+                db.execute(text("""
+                    ALTER TABLE user_permissions ADD COLUMN IF NOT EXISTS permission_key VARCHAR(100)
+                """))
+                results["columns_added"].append("user_permissions.permission_key")
+                db.commit()
+            except Exception as e:
+                if "already exists" in str(e).lower():
+                    results["skipped"].append("user_permissions.permission_key")
+                elif "does not exist" in str(e).lower():
+                    # Table doesn't exist, create it
+                    try:
+                        db.execute(text("""
+                            CREATE TABLE IF NOT EXISTS user_permissions (
+                                id SERIAL PRIMARY KEY,
+                                user_id INTEGER REFERENCES users(id),
+                                permission_key VARCHAR(100) NOT NULL,
+                                granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                granted_by INTEGER,
+                                UNIQUE(user_id, permission_key)
+                            )
+                        """))
+                        results["columns_added"].append("user_permissions (table created)")
+                        db.commit()
+                    except Exception as e2:
+                        results["errors"].append(f"user_permissions table: {str(e2)[:100]}")
+                else:
+                    results["errors"].append(f"user_permissions.permission_key: {str(e)[:100]}")
+
+            logger.info(f"Missing columns migration completed: {results}")
+
+            return {
+                "status": "success",
+                "message": "Missing columns migration completed",
+                "results": results
+            }
+
+        finally:
+            db.close()
+
+    except Exception as e:
+        logger.error(f"Missing columns migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
