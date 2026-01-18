@@ -193,7 +193,7 @@ if __name__ == "__main__":
         sys.exit(0 if success else 1)
     else:
         success = run_migrations()
-        # Run cleanup after migrations
-        if success:
-            run_sample_data_cleanup()
+        # Run cleanup after migrations (run regardless of migration success)
+        logger.info("Running sample data cleanup...")
+        run_sample_data_cleanup()
         sys.exit(0 if success else 1)
