@@ -824,6 +824,23 @@ async def test_call_target(
         import os
         from vapi_service import VapiCRMIntegration, VapiService
 
+        # Check for required VAPI configuration
+        vapi_api_key = os.getenv('VAPI_API_KEY')
+        if not vapi_api_key:
+            return {
+                'status': 'not_configured',
+                'target_id': target_id,
+                'phone': phone,
+                'client_name': client_name,
+                'message': 'VAPI_API_KEY not configured. Set this environment variable to enable AI calls.',
+                'savings_info': {
+                    'client_rate': client_rate,
+                    'market_rate': market_rate,
+                    'monthly_savings': monthly_savings,
+                    'annual_savings': annual_savings,
+                },
+            }
+
         # Get assistant ID from environment
         assistant_id = os.getenv('VAPI_REFINANCE_ASSISTANT_ID') or os.getenv('VAPI_ASSISTANT_ID')
         if not assistant_id:
