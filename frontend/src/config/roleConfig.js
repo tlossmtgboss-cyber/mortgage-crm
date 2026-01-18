@@ -833,6 +833,12 @@ export const isMasterAdmin = (email) => {
 export const MASTER_ADMIN_NAVIGATION = [
   // Standalone items for quick access (with badges)
   {
+    key: 'dashboard',
+    label: 'Dashboard',
+    path: '/dashboard',
+    isStandalone: true
+  },
+  {
     key: 'tasks',
     label: 'Tasks',
     path: '/tasks',
@@ -846,6 +852,18 @@ export const MASTER_ADMIN_NAVIGATION = [
     path: '/reconciliation',
     badgeKey: 'reconciliation',
     badgeClass: 'urgent',
+    isStandalone: true
+  },
+  {
+    key: 'integrations',
+    label: 'Integrations',
+    path: '/settings/integrations',
+    isStandalone: true
+  },
+  {
+    key: 'itTickets',
+    label: 'IT Tickets',
+    path: '/support',
     isStandalone: true
   },
   // Dropdown categories
@@ -916,11 +934,10 @@ export const MASTER_ADMIN_NAVIGATION = [
   {
     key: 'leadership',
     label: 'Leadership',
-    path: '/dashboard',
-    matchPaths: ['/dashboard', '/admin', '/market', '/profitability', '/production-predictor', '/deal-alerts', '/scorecard', '/team-members'],
+    path: '/admin',
+    matchPaths: ['/admin', '/market', '/profitability', '/production-predictor', '/deal-alerts', '/scorecard', '/team-members'],
     children: [
       { path: '/admin', label: 'Admin Panel', icon: 'fa-cog' },
-      { path: '/dashboard', label: 'Dashboard', icon: 'fa-tachometer-alt' },
       { path: '/market', label: 'Market', icon: 'fa-globe' },
       { path: '/profitability', label: 'Profitability', icon: 'fa-dollar-sign' },
       { path: '/production-predictor', label: 'Production Predictor', icon: 'fa-crystal-ball' },

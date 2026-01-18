@@ -221,6 +221,50 @@
   }
 }
 
+/* Master Admin grouped roles dropdown */
+.role-switcher-dropdown.master-admin-dropdown {
+  min-width: 280px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.role-switcher-grouped {
+  padding: 8px 0;
+}
+
+.role-group {
+  margin-bottom: 4px;
+}
+
+.role-group:last-child {
+  margin-bottom: 0;
+}
+
+.role-group-header {
+  padding: 8px 16px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.role-group .role-switcher-list {
+  padding: 0;
+}
+
+.role-group .role-switcher-option {
+  padding: 8px 16px 8px 24px;
+  font-size: 13px;
+}
+
+/* Light theme support for grouped roles */
+@media (prefers-color-scheme: light) {
+  .role-group-header {
+    color: rgba(0, 0, 0, 0.4);
+  }
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .role-switcher-label {
@@ -229,5 +273,9 @@
 
   .role-switcher-dropdown {
     min-width: 200px;
+  }
+
+  .role-switcher-dropdown.master-admin-dropdown {
+    min-width: 240px;
   }
 }

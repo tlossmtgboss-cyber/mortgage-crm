@@ -57,7 +57,7 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
     }
   }, [prefetchMap]);
 
-  // Get user email from localStorage to check for master admin
+  // Get user email to check for master admin
   const userEmail = useMemo(() => {
     try {
       const userStr = localStorage.getItem('user');
@@ -76,14 +76,32 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
     return isMasterAdmin(userEmail);
   }, [userEmail]);
 
+  // Get viewAsRole from localStorage for master admin preview mode
+  const viewAsRole = useMemo(() => {
+    try {
+      return localStorage.getItem('viewAsRole') || null;
+    } catch {
+      return null;
+    }
+  }, []);
+
   // Get navigation items for the current role, with module lock status
   // Don't show locked state while modules are still loading to avoid flash of upgrade badges
   // Platform Admin users have full access - never lock any items for them
   // Site Admin users get their own limited navigation (not full admin)
-  // Master Admin (admin@perenniaai.com) gets consolidated dropdown navigation
+  // Master Admin (admin@perenniaai.com) gets consolidated dropdown navigation (unless viewing as another role)
   const navItems = useMemo(() => {
-    // Master admin gets special consolidated navigation
-    if (isMasterAdminUser) {
+    // Master admin viewing as another role - show that role's navigation
+    if (isMasterAdminUser && viewAsRole && viewAsRole !== 'admin') {
+      const items = getNavigationForRole(viewAsRole);
+      return items.map(item => ({
+        ...item,
+        isLocked: false // Master admin bypass all module restrictions
+      }));
+    }
+
+    // Master admin (not viewing as another role) gets special consolidated navigation
+    if (isMasterAdminUser && (!viewAsRole || viewAsRole === 'admin')) {
       return getMasterAdminNavigation();
     }
 
@@ -106,7 +124,7 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
       // Site admins still respect module restrictions
       isLocked: !isPlatformAdmin && !modulesLoading && item.module && !hasModule(item.module)
     }));
-  }, [effectiveRole, userRole, hasModule, modulesLoading, isMasterAdminUser]);
+  }, [effectiveRole, userRole, hasModule, modulesLoading, isMasterAdminUser, viewAsRole]);
 
   // Handle click on locked nav item
   const handleLockedClick = useCallback((e, item) => {

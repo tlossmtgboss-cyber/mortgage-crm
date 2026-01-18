@@ -4,15 +4,34 @@
  * Dropdown component for users with multiple roles to switch between different views.
  * Only renders if the user has more than one role assigned.
  *
+ * For Master Admin (admin@perenniaai.com):
+ * - Shows ALL available roles to preview any user's view
+ * - Uses viewAs mode instead of actual role switching
+ *
  * When switching roles:
  * - Navigation sidebar changes to show items for the selected role
  * - Dashboard widgets change to match the selected role's view
  * - Permissions remain the same (user keeps highest permissions from all roles)
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { usePermissions } from '../contexts/PermissionContext';
+import { isMasterAdmin } from '../config/roleConfig';
 import './RoleSwitcher.css';
+
+// All available roles that master admin can preview
+const ALL_AVAILABLE_ROLES = [
+  { id: 'admin', name: 'Platform Admin', category: 'Admin' },
+  { id: 'site_admin', name: 'Site Administrator', category: 'Admin' },
+  { id: 'executive', name: 'Executive', category: 'Leadership' },
+  { id: 'manager', name: 'Manager', category: 'Management' },
+  { id: 'loan_officer', name: 'Loan Officer', category: 'Sales' },
+  { id: 'production_assistant', name: 'Production Assistant', category: 'Support' },
+  { id: 'concierge', name: 'Concierge', category: 'Support' },
+  { id: 'processor', name: 'Processor', category: 'Operations' },
+  { id: 'underwriter', name: 'Underwriter', category: 'Operations' },
+  { id: 'closer', name: 'Closer', category: 'Operations' },
+];
 
 const RoleSwitcher = () => {
   const {
@@ -20,12 +39,30 @@ const RoleSwitcher = () => {
     activeRole,
     canSwitchRoles,
     switchRole,
-    loading
+    loading,
+    viewAsRole,
+    setViewAsRole
   } = usePermissions();
 
   const [isOpen, setIsOpen] = useState(false);
   const [isSwitching, setIsSwitching] = useState(false);
   const [error, setError] = useState(null);
+
+  // Get user email to check if master admin
+  const userEmail = useMemo(() => {
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        return user.email || null;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const isMasterAdminUser = isMasterAdmin(userEmail);
 
   // Close dropdown when clicking outside - must be before early return to satisfy hooks rules
   React.useEffect(() => {
@@ -43,12 +80,45 @@ const RoleSwitcher = () => {
     };
   }, [isOpen]);
 
-  // Don't render if user can't switch roles or data is loading
-  if (loading || !canSwitchRoles || !assignedRoles || assignedRoles.length <= 1) {
+  // For master admin, always show the switcher with all roles
+  // For regular users, only show if they have multiple assigned roles
+  if (loading) {
     return null;
   }
 
+  if (!isMasterAdminUser && (!canSwitchRoles || !assignedRoles || assignedRoles.length <= 1)) {
+    return null;
+  }
+
+  // For master admin, handle view-as switching
+  const handleMasterAdminViewAs = (roleId) => {
+    if (roleId === viewAsRole) {
+      setIsOpen(false);
+      return;
+    }
+
+    setIsSwitching(true);
+
+    // Store viewAsRole in localStorage and context
+    localStorage.setItem('viewAsRole', roleId);
+    if (setViewAsRole) {
+      setViewAsRole(roleId);
+    }
+
+    setIsOpen(false);
+    setIsSwitching(false);
+
+    // Reload to apply the new view
+    window.location.reload();
+  };
+
   const handleRoleSwitch = async (roleId) => {
+    // For master admin, use view-as mode
+    if (isMasterAdminUser) {
+      handleMasterAdminViewAs(roleId);
+      return;
+    }
+
     if (roleId === activeRole?.id) {
       setIsOpen(false);
       return;
@@ -77,6 +147,27 @@ const RoleSwitcher = () => {
     }
   };
 
+  // Determine which roles to show
+  const rolesToShow = isMasterAdminUser ? ALL_AVAILABLE_ROLES : assignedRoles;
+  const currentRole = isMasterAdminUser ? (viewAsRole || 'admin') : activeRole?.id;
+  const currentRoleName = isMasterAdminUser
+    ? (ALL_AVAILABLE_ROLES.find(r => r.id === (viewAsRole || 'admin'))?.name || 'Platform Admin')
+    : (activeRole?.name || 'Select Role');
+
+  // Group roles by category for master admin
+  const groupedRoles = useMemo(() => {
+    if (!isMasterAdminUser) return null;
+
+    const groups = {};
+    ALL_AVAILABLE_ROLES.forEach(role => {
+      if (!groups[role.category]) {
+        groups[role.category] = [];
+      }
+      groups[role.category].push(role);
+    });
+    return groups;
+  }, [isMasterAdminUser]);
+
   return (
     <div className="role-switcher">
       <button
@@ -94,7 +185,7 @@ const RoleSwitcher = () => {
           </svg>
         </span>
         <span className="role-switcher-label">
-          {activeRole?.name || 'Select Role'}
+          {currentRoleName}
         </span>
         <span className={`role-switcher-arrow ${isOpen ? 'open' : ''}`}>
           <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -104,7 +195,7 @@ const RoleSwitcher = () => {
       </button>
 
       {isOpen && (
-        <div className="role-switcher-dropdown">
+        <div className={`role-switcher-dropdown ${isMasterAdminUser ? 'master-admin-dropdown' : ''}`}>
           <div className="role-switcher-header">
             Switch View As
           </div>
@@ -113,25 +204,55 @@ const RoleSwitcher = () => {
               {error}
             </div>
           )}
-          <ul className="role-switcher-list">
-            {assignedRoles.map((role) => (
-              <li key={role.id}>
-                <button
-                  className={`role-switcher-option ${role.id === activeRole?.id ? 'active' : ''}`}
-                  onClick={() => handleRoleSwitch(role.id)}
-                  disabled={isSwitching}
-                >
-                  <span className="role-option-name">{role.name}</span>
-                  {role.is_primary && (
-                    <span className="role-option-badge primary">Primary</span>
-                  )}
-                  {role.id === activeRole?.id && (
-                    <span className="role-option-badge active">Active</span>
-                  )}
-                </button>
-              </li>
-            ))}
-          </ul>
+
+          {isMasterAdminUser && groupedRoles ? (
+            // Master admin sees grouped roles
+            <div className="role-switcher-grouped">
+              {Object.entries(groupedRoles).map(([category, roles]) => (
+                <div key={category} className="role-group">
+                  <div className="role-group-header">{category}</div>
+                  <ul className="role-switcher-list">
+                    {roles.map((role) => (
+                      <li key={role.id}>
+                        <button
+                          className={`role-switcher-option ${role.id === currentRole ? 'active' : ''}`}
+                          onClick={() => handleRoleSwitch(role.id)}
+                          disabled={isSwitching}
+                        >
+                          <span className="role-option-name">{role.name}</span>
+                          {role.id === currentRole && (
+                            <span className="role-option-badge active">Active</span>
+                          )}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          ) : (
+            // Regular users see their assigned roles
+            <ul className="role-switcher-list">
+              {assignedRoles.map((role) => (
+                <li key={role.id}>
+                  <button
+                    className={`role-switcher-option ${role.id === activeRole?.id ? 'active' : ''}`}
+                    onClick={() => handleRoleSwitch(role.id)}
+                    disabled={isSwitching}
+                  >
+                    <span className="role-option-name">{role.name}</span>
+                    {role.is_primary && (
+                      <span className="role-option-badge primary">Primary</span>
+                    )}
+                    {role.id === activeRole?.id && (
+                      <span className="role-option-badge active">Active</span>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
           {isSwitching && (
             <div className="role-switcher-loading">
               <span className="spinner"></span>
