@@ -236,9 +236,16 @@ def format_account_response(account: dict, metrics: dict = None) -> dict:
 @router.post("/run-migration")
 async def run_account_management_migration(
     admin_key: str = None,
+    action: str = Query(default="migrate", description="Action: migrate or cleanup"),
+    keep_admin_email: str = Query(default="admin@perenniaai.com", description="Admin email to preserve (for cleanup action)"),
     db: Session = Depends(get_db)
 ):
-    """Run the account management tables migration."""
+    """Run the account management tables migration, or perform cleanup.
+
+    Actions:
+    - migrate: Create account management tables (default)
+    - cleanup: Delete all sample data, keeping only specified admin user
+    """
     import os
 
     # Verify admin key
@@ -246,6 +253,57 @@ async def run_account_management_migration(
     if admin_key != expected_key:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
+    # Handle cleanup action
+    if action == "cleanup":
+        try:
+            results = {'deleted': {}, 'errors': [], 'preserved_admin': keep_admin_email}
+
+            # Delete all tasks
+            for table in ['tasks', 'task_instances', 'purl_tasks']:
+                try:
+                    result = db.execute(text(f"DELETE FROM {table}"))
+                    results['deleted'][table] = result.rowcount
+                except Exception as e:
+                    results['errors'].append(f"{table}: {str(e)[:50]}")
+
+            # Delete team members/profiles
+            for table in ['team_members', 'team_member_profiles', 'extracted_data', 'referral_partners']:
+                try:
+                    result = db.execute(text(f"DELETE FROM {table}"))
+                    results['deleted'][table] = result.rowcount
+                except Exception:
+                    pass
+
+            # Get admin user ID
+            admin_row = db.execute(text("SELECT id FROM users WHERE email = :email"), {'email': keep_admin_email}).fetchone()
+            if not admin_row:
+                raise HTTPException(status_code=404, detail=f"Admin {keep_admin_email} not found")
+            admin_id = admin_row[0]
+
+            # Delete non-admin users
+            users_result = db.execute(text("SELECT email, full_name, role FROM users WHERE id != :admin_id"), {'admin_id': admin_id})
+            results['users_to_delete'] = [{'email': u[0], 'name': u[1], 'role': u[2]} for u in users_result.fetchall()]
+
+            result = db.execute(text("DELETE FROM users WHERE id != :admin_id"), {'admin_id': admin_id})
+            results['deleted']['users'] = result.rowcount
+
+            # Delete suspended/cancelled accounts
+            try:
+                result = db.execute(text("DELETE FROM tenant_accounts WHERE status IN ('suspended', 'canceled')"))
+                results['deleted']['suspended_cancelled_accounts'] = result.rowcount
+            except Exception:
+                pass
+
+            db.commit()
+            total = sum(v for v in results['deleted'].values() if isinstance(v, int))
+            return {"status": "success", "message": f"Cleanup done. Deleted {total} rows.", "data": results}
+        except HTTPException:
+            raise
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(e)}")
+
+    # Default: migration action
     try:
         # Check if tables already exist
         table_check = db.execute(text("""
