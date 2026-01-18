@@ -1037,3 +1037,63 @@ def get_plan_features(plan_key: str) -> List[str]:
         ]
     }
     return features.get(plan_key, features['professional'])
+
+
+@router.get("/available-roles")
+async def get_available_roles(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Get available roles for team member invites"""
+    try:
+        # Get roles from onboarding_roles table
+        roles = db.execute(text("""
+            SELECT id, name, description
+            FROM onboarding_roles
+            WHERE is_active = true
+            ORDER BY
+                CASE name
+                    WHEN 'Site Administrator' THEN 1
+                    WHEN 'Loan Officer' THEN 2
+                    WHEN 'Processor' THEN 3
+                    WHEN 'Underwriter' THEN 4
+                    WHEN 'Closer' THEN 5
+                    WHEN 'Manager' THEN 6
+                    ELSE 100
+                END,
+                name ASC
+        """)).fetchall()
+
+        # Format roles for dropdown
+        role_list = []
+        for role in roles:
+            # Skip Site Administrator - that's for the account owner only
+            if role.name == 'Site Administrator':
+                continue
+            role_list.append({
+                'id': role.id,
+                'name': role.name,
+                'value': role.name.lower().replace(' ', '_'),
+                'description': role.description
+            })
+
+        return success_response(
+            data={'roles': role_list},
+            message=f"{len(role_list)} roles available"
+        )
+
+    except Exception as e:
+        logger.error(f"Error fetching roles: {e}")
+        # Return default roles as fallback
+        default_roles = [
+            {'id': 0, 'name': 'Loan Officer', 'value': 'loan_officer', 'description': 'Originates and manages loans'},
+            {'id': 0, 'name': 'Processor', 'value': 'processor', 'description': 'Processes loan applications'},
+            {'id': 0, 'name': 'Underwriter', 'value': 'underwriter', 'description': 'Reviews and approves loans'},
+            {'id': 0, 'name': 'Closer', 'value': 'closer', 'description': 'Handles loan closings'},
+            {'id': 0, 'name': 'Admin Staff', 'value': 'admin_staff', 'description': 'Administrative support'},
+            {'id': 0, 'name': 'Manager', 'value': 'manager', 'description': 'Team management'},
+        ]
+        return success_response(
+            data={'roles': default_roles, 'fallback': True},
+            message="Default roles returned"
+        )
