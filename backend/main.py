@@ -63249,10 +63249,12 @@ async def cleanup_tim_loss_account_migration(
 
         logger.info(f"Cleaning up user: id={user_id}, tenant_id={tenant_id}")
 
-        # Clear foreign key references in leads, loans, and purl_workspaces
+        # Clear foreign key references in leads, loans
         db.execute(text("UPDATE leads SET owner_id = NULL WHERE owner_id = :user_id"), {'user_id': user_id})
         db.execute(text("UPDATE loans SET loan_officer_id = NULL WHERE loan_officer_id = :user_id"), {'user_id': user_id})
-        db.execute(text("UPDATE purl_workspaces SET owner_user_id = NULL WHERE owner_user_id = :user_id"), {'user_id': user_id})
+
+        # Clear purl-related tables
+        db.execute(text("DELETE FROM purl_access_tokens WHERE created_by = :user_id"), {'user_id': user_id})
         db.execute(text("DELETE FROM purl_workspaces WHERE owner_user_id = :user_id"), {'user_id': user_id})
 
         # Delete user roles
