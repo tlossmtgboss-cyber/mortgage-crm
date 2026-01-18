@@ -64,6 +64,14 @@ def run_migration():
         """), {'user_id': user_id})
         print("Deleted onboarding_user_profiles")
 
+        # Reset invitation status BEFORE deleting user (FK: accepted_by_user_id)
+        conn.execute(text("""
+            UPDATE subscriber_invitations
+            SET status = 'pending', accepted_at = NULL, accepted_by_user_id = NULL
+            WHERE email = :email AND status = 'accepted'
+        """), {'email': email})
+        print("Reset invitation status to pending")
+
         # Break circular FK reference between users and tenant_accounts
         # users.tenant_account_id -> tenant_accounts.id
         # tenant_accounts.owner_user_id -> users.id
@@ -89,14 +97,6 @@ def run_migration():
             DELETE FROM users WHERE id = :user_id
         """), {'user_id': user_id})
         print(f"Deleted user {user_id}")
-
-        # Reset invitation status
-        conn.execute(text("""
-            UPDATE subscriber_invitations
-            SET status = 'pending', accepted_at = NULL, accepted_by_user_id = NULL
-            WHERE email = :email AND status = 'accepted'
-        """), {'email': email})
-        print("Reset invitation status to pending")
 
         print("\n✅ Cleanup complete! Tim Loss can now sign up fresh.")
         return {'deleted': True, 'user_id': user_id, 'tenant_id': str(tenant_id) if tenant_id else None}
