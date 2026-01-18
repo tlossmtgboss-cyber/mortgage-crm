@@ -36,6 +36,17 @@ def run_migration():
 
         print(f"Found user: id={user_id}, tenant_id={tenant_id}")
 
+        # Clear foreign key references
+        conn.execute(text("""
+            UPDATE leads SET owner_id = NULL WHERE owner_id = :user_id
+        """), {'user_id': user_id})
+        print("Cleared leads.owner_id references")
+
+        conn.execute(text("""
+            UPDATE loans SET loan_officer_id = NULL WHERE loan_officer_id = :user_id
+        """), {'user_id': user_id})
+        print("Cleared loans.loan_officer_id references")
+
         # Delete user roles
         conn.execute(text("""
             DELETE FROM user_assigned_roles WHERE user_id = :user_id
@@ -46,6 +57,12 @@ def run_migration():
             DELETE FROM user_active_role WHERE user_id = :user_id
         """), {'user_id': user_id})
         print("Deleted user_active_role")
+
+        # Delete onboarding profiles
+        conn.execute(text("""
+            DELETE FROM onboarding_user_profiles WHERE user_id = :user_id
+        """), {'user_id': user_id})
+        print("Deleted onboarding_user_profiles")
 
         # Delete user
         conn.execute(text("""
