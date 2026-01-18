@@ -63222,6 +63222,31 @@ async def send_tim_loss_invite_migration(
         raise HTTPException(status_code=500, detail=f"Failed: {str(e)}")
 
 
+@app.post("/api/v1/public/migrations/cleanup-tim-loss-account", response_model=None)
+async def cleanup_tim_loss_account_migration(
+    migration_key: str = "",
+    db: Session = Depends(get_db)
+):
+    """
+    Clean up partially created Tim Loss account to allow fresh signup.
+    """
+    if migration_key != "cleanup-tim-loss":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    try:
+        from migrations.cleanup_tim_loss_account import run_migration
+        result = run_migration()
+        return {
+            "success": True,
+            "message": "Tim Loss account cleaned up",
+            "data": result
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Cleanup error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed: {str(e)}")
+
+
 @app.post("/api/v1/public/migrations/add-users-password-column", response_model=None)
 async def add_users_password_column_migration(
     migration_key: str = "",
