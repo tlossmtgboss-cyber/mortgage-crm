@@ -107,3 +107,4 @@ google-auth-oauthlib
 google-api-python-client
 google-cloud-texttospeech>=2.17.2
 pdf2image>=1.16.0
+# Deployment trigger Sun Jan 18 06:45:05 EST 2026
