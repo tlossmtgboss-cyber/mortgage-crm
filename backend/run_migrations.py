@@ -116,11 +116,84 @@ def check_migration_status():
         return {"error": str(e)}
 
 
+def run_sample_data_cleanup():
+    """One-time cleanup of sample data. Remove this function after it runs."""
+    database_url = os.getenv("DATABASE_URL")
+
+    if not database_url:
+        logger.error("DATABASE_URL not set - skipping cleanup")
+        return False
+
+    if database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql://", 1)
+
+    try:
+        from sqlalchemy import create_engine, text
+
+        engine = create_engine(database_url)
+        logger.info("=" * 50)
+        logger.info("RUNNING SAMPLE DATA CLEANUP...")
+        logger.info("=" * 50)
+
+        with engine.connect() as conn:
+            # Delete all tasks
+            r = conn.execute(text('DELETE FROM tasks'))
+            logger.info(f"Deleted {r.rowcount} tasks")
+
+            r = conn.execute(text('DELETE FROM task_instances'))
+            logger.info(f"Deleted {r.rowcount} task_instances")
+
+            r = conn.execute(text('DELETE FROM purl_tasks'))
+            logger.info(f"Deleted {r.rowcount} purl_tasks")
+
+            # Delete team members and profiles
+            r = conn.execute(text('DELETE FROM team_members'))
+            logger.info(f"Deleted {r.rowcount} team_members")
+
+            r = conn.execute(text('DELETE FROM team_member_profiles'))
+            logger.info(f"Deleted {r.rowcount} team_member_profiles")
+
+            # Delete extracted data
+            r = conn.execute(text('DELETE FROM extracted_data'))
+            logger.info(f"Deleted {r.rowcount} extracted_data records")
+
+            # Delete referral partners
+            r = conn.execute(text('DELETE FROM referral_partners'))
+            logger.info(f"Deleted {r.rowcount} referral_partners")
+
+            # Delete all users EXCEPT admin@perenniaai.com
+            r = conn.execute(text("DELETE FROM users WHERE email != 'admin@perenniaai.com'"))
+            logger.info(f"Deleted {r.rowcount} users (kept admin@perenniaai.com)")
+
+            # Delete suspended and cancelled accounts
+            r = conn.execute(text("DELETE FROM tenant_accounts WHERE status IN ('suspended', 'canceled')"))
+            logger.info(f"Deleted {r.rowcount} suspended/cancelled tenant_accounts")
+
+            conn.commit()
+
+        logger.info("=" * 50)
+        logger.info("SAMPLE DATA CLEANUP COMPLETE!")
+        logger.info("=" * 50)
+        return True
+
+    except Exception as e:
+        logger.error(f"Cleanup failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--status":
         status = check_migration_status()
         print(f"Migration Status: {status}")
         sys.exit(0 if not status.get("error") else 1)
+    elif len(sys.argv) > 1 and sys.argv[1] == "--cleanup":
+        success = run_sample_data_cleanup()
+        sys.exit(0 if success else 1)
     else:
         success = run_migrations()
+        # Run cleanup after migrations
+        if success:
+            run_sample_data_cleanup()
         sys.exit(0 if success else 1)
