@@ -64,18 +64,18 @@ def run_migration():
         """), {'user_id': user_id})
         print("Deleted onboarding_user_profiles")
 
-        # Delete user
-        conn.execute(text("""
-            DELETE FROM users WHERE id = :user_id
-        """), {'user_id': user_id})
-        print(f"Deleted user {user_id}")
-
-        # Delete tenant if exists
+        # Delete tenant BEFORE user (tenant.owner_user_id references user)
         if tenant_id:
             conn.execute(text("""
                 DELETE FROM tenant_accounts WHERE id = :tenant_id
             """), {'tenant_id': str(tenant_id)})
             print(f"Deleted tenant {tenant_id}")
+
+        # Delete user (after tenant is deleted)
+        conn.execute(text("""
+            DELETE FROM users WHERE id = :user_id
+        """), {'user_id': user_id})
+        print(f"Deleted user {user_id}")
 
         # Reset invitation status
         conn.execute(text("""
