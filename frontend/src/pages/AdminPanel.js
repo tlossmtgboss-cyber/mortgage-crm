@@ -17,7 +17,7 @@ import './AdminPanel.css';
 
 const AdminPanel = () => {
   const navigate = useNavigate();
-  const { userRole, hasPermission, hasAnyPermission, isPlatformAdmin, isSiteAdmin, isAdmin, loading: permissionsLoading } = usePermissions();
+  const { userRole, hasPermission: _hasPermission, hasAnyPermission, isPlatformAdmin, isSiteAdmin, isAdmin, loading: permissionsLoading } = usePermissions();
 
   // Get user info from localStorage as fallback (in case PermissionContext has stale data)
   const getLocalStorageRole = () => {
@@ -76,7 +76,7 @@ const AdminPanel = () => {
   // State
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
-  const [stats, setStats] = useState(null);
+  const [_stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
   const [loanOfficers, setLoanOfficers] = useState([]);
   const [realtors, setRealtors] = useState([]);
@@ -95,7 +95,7 @@ const AdminPanel = () => {
   const [employeeRoles, setEmployeeRoles] = useState([]);
 
   // Get current user ID
-  const getCurrentUserId = () => {
+  const _getCurrentUserId = () => {
     try {
       const userStr = localStorage.getItem('user');
       if (userStr) {
@@ -113,9 +113,9 @@ const AdminPanel = () => {
   // Account Management state
   const [accountKpis, setAccountKpis] = useState(null);
   const [accountKpisLoading, setAccountKpisLoading] = useState(false);
-  const [accounts, setAccounts] = useState([]);
-  const [accountsLoading, setAccountsLoading] = useState(false);
-  const [accountFilter, setAccountFilter] = useState('active');
+  const [_accounts, setAccounts] = useState([]);
+  const [_accountsLoading, setAccountsLoading] = useState(false);
+  const [accountFilter, _setAccountFilter] = useState('active');
 
   // Mission Control state
   const [missionControlData, setMissionControlData] = useState(null);
@@ -479,7 +479,7 @@ const AdminPanel = () => {
   };
 
   // Open test account modal with defaults
-  const openTestAccountModal = () => {
+  const _openTestAccountModal = () => {
     // Generate a unique email based on timestamp
     const timestamp = Date.now();
     setTestAccountForm({
@@ -496,7 +496,7 @@ const AdminPanel = () => {
   };
 
   // Format currency
-  const formatCurrency = (amount) => {
+  const _formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',

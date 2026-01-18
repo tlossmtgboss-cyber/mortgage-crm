@@ -58,7 +58,7 @@ const VoiceConversation = () => {
   // WebSocket hook
   const {
     status: wsStatus,
-    sttEnabled: wsSttEnabled,
+    sttEnabled: _wsSttEnabled,
     connect,
     disconnect,
     startListening,
@@ -94,8 +94,8 @@ const VoiceConversation = () => {
 
   // Audio recorder hook
   const {
-    isRecording,
-    hasPermission,
+    isRecording: _isRecording,
+    hasPermission: _hasPermission,
     error: audioError,
     startRecording,
     stopRecording,
