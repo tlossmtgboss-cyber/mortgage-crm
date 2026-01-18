@@ -350,7 +350,9 @@ async def start_onboarding(
             'seats': invite_data.get('seats', 5)
         })
 
-        # Create admin user
+        # Create site admin user (NOT platform admin)
+        # site_admin = organization-level admin, can manage their own users
+        # admin = platform admin with full access (reserved for developers)
         hashed_password = hash_password(request.password)
         contact_name = invite_data.get('contact_name', '')
         name_parts = contact_name.split(' ', 1) if contact_name else ['', '']
@@ -358,11 +360,11 @@ async def start_onboarding(
         user_result = db.execute(text("""
             INSERT INTO users (
                 email, hashed_password, full_name, first_name, last_name,
-                role, is_active, tenant_account_id,
+                role, permission_role, is_active, tenant_account_id,
                 created_at, updated_at
             ) VALUES (
                 :email, :hashed_password, :full_name, :first_name, :last_name,
-                'admin', true, :tenant_id,
+                'site_admin', 'site_admin', true, :tenant_id,
                 NOW(), NOW()
             )
             RETURNING id

@@ -63224,17 +63224,66 @@ async def cleanup_tim_loss_account_migration(
 ):
     """
     Clean up partially created Tim Loss account to allow fresh signup.
+    Uses existing db session instead of creating new connection.
     """
     if migration_key != "cleanup-tim-loss":
         raise HTTPException(status_code=403, detail="Invalid migration key")
 
     try:
-        from migrations.cleanup_tim_loss_account import run_migration
-        result = run_migration()
+        email = 'tloss@cmghomeloans.com'
+
+        # Get user info
+        user = db.execute(text("""
+            SELECT id, tenant_account_id FROM users WHERE email = :email
+        """), {'email': email}).fetchone()
+
+        if not user:
+            return {
+                "success": True,
+                "message": "No user found - already cleaned up",
+                "data": {"deleted": False, "reason": "no_user"}
+            }
+
+        user_id = user[0]
+        tenant_id = user[1]
+
+        logger.info(f"Cleaning up user: id={user_id}, tenant_id={tenant_id}")
+
+        # Clear foreign key references in leads and loans
+        db.execute(text("UPDATE leads SET owner_id = NULL WHERE owner_id = :user_id"), {'user_id': user_id})
+        db.execute(text("UPDATE loans SET loan_officer_id = NULL WHERE loan_officer_id = :user_id"), {'user_id': user_id})
+
+        # Delete user roles
+        db.execute(text("DELETE FROM user_assigned_roles WHERE user_id = :user_id"), {'user_id': user_id})
+        db.execute(text("DELETE FROM user_active_role WHERE user_id = :user_id"), {'user_id': user_id})
+
+        # Delete onboarding profiles
+        db.execute(text("DELETE FROM onboarding_user_profiles WHERE user_id = :user_id"), {'user_id': user_id})
+
+        # Reset invitation (FK: accepted_by_user_id) and clear revoked_by
+        db.execute(text("""
+            UPDATE subscriber_invitations
+            SET status = 'pending', accepted_at = NULL, accepted_by_user_id = NULL
+            WHERE email = :email AND status = 'accepted'
+        """), {'email': email})
+        db.execute(text("UPDATE subscriber_invitations SET revoked_by = NULL WHERE revoked_by = :user_id"), {'user_id': user_id})
+
+        # Break circular FK between users and tenant_accounts
+        db.execute(text("UPDATE users SET tenant_account_id = NULL WHERE id = :user_id"), {'user_id': user_id})
+
+        if tenant_id:
+            db.execute(text("UPDATE tenant_accounts SET owner_user_id = NULL WHERE id = :tenant_id"), {'tenant_id': str(tenant_id)})
+            db.execute(text("DELETE FROM tenant_accounts WHERE id = :tenant_id"), {'tenant_id': str(tenant_id)})
+
+        # Delete user
+        db.execute(text("DELETE FROM users WHERE id = :user_id"), {'user_id': user_id})
+
+        db.commit()
+
         return {
             "success": True,
             "message": "Tim Loss account cleaned up",
-            "data": result
+            "data": {"deleted": True, "user_id": user_id, "tenant_id": str(tenant_id) if tenant_id else None}
         }
     except Exception as e:
         db.rollback()
