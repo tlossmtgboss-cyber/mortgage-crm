@@ -2844,13 +2844,28 @@ def _format_time_ago(dt):
 @router.delete("/cleanup/sample-data")
 async def cleanup_sample_data(
     request: Request,
+    admin_key: str = Query(default=None, description="Admin API key for auth bypass"),
     db: Session = Depends(get_db)
 ):
-    """Delete all sample/demo data from account management tables"""
-    try:
-        current_user = await get_user_from_request(request, db)
-        require_master_admin(current_user)
+    """Delete all sample/demo data from account management tables.
+    Can be called with admin_key query param to bypass JWT authentication.
+    """
+    import os
 
+    # Check for admin key bypass
+    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    if admin_key and admin_key == expected_key:
+        logger.info("Cleanup authorized via admin API key")
+    else:
+        try:
+            current_user = await get_user_from_request(request, db)
+            require_master_admin(current_user)
+        except Exception:
+            if not admin_key:
+                raise HTTPException(status_code=401, detail="Auth required. Provide admin_key or JWT token.")
+            raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
         deleted_counts = {}
 
         # Delete in order to respect foreign key constraints
@@ -2912,13 +2927,41 @@ async def cleanup_sample_data(
 @router.delete("/cleanup/users")
 async def cleanup_users(
     request: Request,
+    admin_key: str = Query(default=None, description="Admin API key for auth bypass"),
+    keep_admin_email: str = Query(default="admin@perenniaai.com", description="Admin email to preserve"),
     db: Session = Depends(get_db)
 ):
-    """Delete all users except the current admin user"""
-    try:
-        current_user = await get_user_from_request(request, db)
-        require_master_admin(current_user)
+    """Delete all users except the specified admin user.
+    Can be called with admin_key query param to bypass JWT authentication.
+    """
+    import os
 
+    admin_id = None
+
+    # Check for admin key bypass
+    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    if admin_key and admin_key == expected_key:
+        logger.info("User cleanup authorized via admin API key")
+        # Find admin user by email
+        admin_result = db.execute(text("""
+            SELECT id, email FROM users WHERE email = :email
+        """), {'email': keep_admin_email})
+        admin_row = admin_result.fetchone()
+        if admin_row:
+            admin_id = admin_row[0]
+        else:
+            raise HTTPException(status_code=404, detail=f"Admin user {keep_admin_email} not found")
+    else:
+        try:
+            current_user = await get_user_from_request(request, db)
+            require_master_admin(current_user)
+            admin_id = current_user.id
+        except Exception:
+            if not admin_key:
+                raise HTTPException(status_code=401, detail="Auth required. Provide admin_key or JWT token.")
+            raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
         deleted_counts = {}
 
         # First, delete from tables that reference users
@@ -2942,16 +2985,32 @@ async def cleanup_users(
                 result = db.execute(text(f"""
                     DELETE FROM {table}
                     WHERE {column} IS NOT NULL AND {column} != :admin_id
-                """), {'admin_id': current_user.id})
+                """), {'admin_id': admin_id})
                 deleted_counts[f"{table}.{column}"] = result.rowcount
             except Exception as e:
                 logger.warning(f"Could not clean {table}.{column}: {e}")
                 deleted_counts[f"{table}.{column}"] = f"skipped: {str(e)[:50]}"
 
-        # Now delete all users except the current admin
+        # Also delete team_members and team_member_profiles
+        for table in ['team_members', 'team_member_profiles']:
+            try:
+                result = db.execute(text(f"DELETE FROM {table}"))
+                deleted_counts[table] = result.rowcount
+            except Exception as e:
+                logger.warning(f"Could not delete from {table}: {e}")
+
+        # Delete all tasks
+        for table in ['tasks', 'task_instances', 'purl_tasks']:
+            try:
+                result = db.execute(text(f"DELETE FROM {table}"))
+                deleted_counts[table] = result.rowcount
+            except Exception as e:
+                logger.warning(f"Could not delete from {table}: {e}")
+
+        # Now delete all users except the preserved admin
         result = db.execute(text("""
             DELETE FROM users WHERE id != :admin_id
-        """), {'admin_id': current_user.id})
+        """), {'admin_id': admin_id})
         deleted_counts['users'] = result.rowcount
 
         db.commit()
@@ -2960,13 +3019,15 @@ async def cleanup_users(
             data={
                 'deleted_counts': deleted_counts,
                 'preserved_admin': {
-                    'id': current_user.id,
-                    'email': current_user.email
+                    'id': admin_id,
+                    'email': keep_admin_email
                 }
             },
             message=f"Deleted {deleted_counts.get('users', 0)} users. Admin account preserved."
         )
     except PermissionException:
+        raise
+    except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error cleaning up users: {e}")

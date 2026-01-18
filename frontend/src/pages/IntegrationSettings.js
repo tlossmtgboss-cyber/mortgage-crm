@@ -282,8 +282,8 @@ const IntegrationSettings = () => {
 
   const filteredIntegrations = integrations.filter(int => {
     const matchesSearch = !searchQuery ||
-      int.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      int.description.toLowerCase().includes(searchQuery.toLowerCase());
+      (int.name && int.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (int.description && int.description.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesCategory = activeTab === 'all' || int.category === activeTab;
     return matchesSearch && matchesCategory;
   });
@@ -428,7 +428,7 @@ const IntegrationSettings = () => {
                     />
                   ) : null}
                   <div className="logo-fallback" style={{ display: getIntegrationLogo(integration.id) ? 'none' : 'flex' }}>
-                    {integration.name.charAt(0)}
+                    {integration.name?.charAt(0) || '?'}
                   </div>
                 </div>
                 <div className={`status-badge ${getStatusColor(integration.status)}`}>
@@ -461,7 +461,7 @@ const IntegrationSettings = () => {
                     />
                   ) : null}
                   <div className="logo-fallback-large" style={{ display: getIntegrationLogo(selectedIntegration.id) ? 'none' : 'flex' }}>
-                    {selectedIntegration.name.charAt(0)}
+                    {selectedIntegration.name?.charAt(0) || '?'}
                   </div>
                 </div>
                 <h2>{selectedIntegration.name}</h2>
