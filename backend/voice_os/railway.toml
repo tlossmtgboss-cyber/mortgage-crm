@@ -1,18 +1,9 @@
 [build]
-builder = "NIXPACKS"
-buildCommand = "npm install && npm run build"
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "npm start"
 healthcheckPath = "/health"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
-
-[[deploy.environmentVariables]]
-name = "PORT"
-value = "8080"
-
-[[deploy.environmentVariables]]
-name = "NODE_ENV"
-value = "production"
