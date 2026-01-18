@@ -64,14 +64,27 @@ def run_migration():
         """), {'user_id': user_id})
         print("Deleted onboarding_user_profiles")
 
-        # Delete tenant BEFORE user (tenant.owner_user_id references user)
+        # Break circular FK reference between users and tenant_accounts
+        # users.tenant_account_id -> tenant_accounts.id
+        # tenant_accounts.owner_user_id -> users.id
+        conn.execute(text("""
+            UPDATE users SET tenant_account_id = NULL WHERE id = :user_id
+        """), {'user_id': user_id})
+        print("Cleared users.tenant_account_id reference")
+
         if tenant_id:
+            conn.execute(text("""
+                UPDATE tenant_accounts SET owner_user_id = NULL WHERE id = :tenant_id
+            """), {'tenant_id': str(tenant_id)})
+            print("Cleared tenant_accounts.owner_user_id reference")
+
+            # Now we can safely delete the tenant
             conn.execute(text("""
                 DELETE FROM tenant_accounts WHERE id = :tenant_id
             """), {'tenant_id': str(tenant_id)})
             print(f"Deleted tenant {tenant_id}")
 
-        # Delete user (after tenant is deleted)
+        # Now we can safely delete the user
         conn.execute(text("""
             DELETE FROM users WHERE id = :user_id
         """), {'user_id': user_id})
