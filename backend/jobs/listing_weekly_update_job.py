@@ -8,20 +8,16 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import Session
+
+# Use shared database module for connection pooling
+from database import SessionLocal
 
 logger = logging.getLogger(__name__)
 
 
 def get_db_session() -> Session:
-    """Get a database session for the job"""
-    database_url = os.getenv("DATABASE_URL", "sqlite:///./mortgage_crm.db")
-    if database_url.startswith("postgres://"):
-        database_url = database_url.replace("postgres://", "postgresql://", 1)
-
-    engine = create_engine(database_url)
-    SessionLocal = sessionmaker(bind=engine)
+    """Get a database session from the shared pool"""
     return SessionLocal()
 
 
