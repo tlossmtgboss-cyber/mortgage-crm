@@ -866,6 +866,12 @@ export const MASTER_ADMIN_NAVIGATION = [
     path: '/support',
     isStandalone: true
   },
+  {
+    key: 'calendar',
+    label: 'Calendar',
+    path: '/calendar',
+    isStandalone: true
+  },
   // Dropdown categories
   {
     key: 'sales',
@@ -880,7 +886,6 @@ export const MASTER_ADMIN_NAVIGATION = [
       { path: '/referral-partners', label: 'Partners', icon: 'fa-handshake' },
       { path: '/partner-recruiting', label: 'Partner Recruiting', icon: 'fa-user-tie' },
       { path: '/marketing', label: 'Marketing', icon: 'fa-bullhorn' },
-      { path: '/calendar', label: 'Calendar', icon: 'fa-calendar-alt' },
     ]
   },
   {
