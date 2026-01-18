@@ -163,6 +163,7 @@ PUBLIC_PATHS = [
     "/api/v1/admin/account-management/cleanup/",  # Admin-key protected cleanup endpoints
     "/api/v1/admin/account-management/run-migration",  # Admin-key protected migration
     "/api/v1/admin/account-management/run-invitations-migration",  # Admin-key protected migration
+    "/api/v1/admin/account-management/run-cleanup-migration",  # Admin-key protected cleanup migration
 ]
 
 # ============================================================================

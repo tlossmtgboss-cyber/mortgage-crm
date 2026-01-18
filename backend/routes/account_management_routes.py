@@ -408,6 +408,166 @@ async def run_account_management_migration(
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 
+@router.post("/run-cleanup-migration")
+async def run_cleanup_migration(
+    admin_key: str = None,
+    keep_admin_email: str = Query(default="admin@perenniaai.com"),
+    db: Session = Depends(get_db)
+):
+    """Comprehensive cleanup: Delete ALL sample data including tasks, users, accounts.
+
+    This migration-style endpoint removes:
+    - All tasks (tasks, task_instances, purl_tasks)
+    - All users except the specified admin email
+    - All team members and profiles
+    - All suspended and cancelled accounts
+    - All account management sample data
+    """
+    import os
+
+    # Verify admin key
+    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    if admin_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        results = {
+            'deleted': {},
+            'errors': [],
+            'preserved_admin': keep_admin_email
+        }
+
+        # 1. Delete all tasks
+        task_tables = ['tasks', 'task_instances', 'purl_tasks']
+        for table in task_tables:
+            try:
+                result = db.execute(text(f"DELETE FROM {table}"))
+                results['deleted'][table] = result.rowcount
+                logger.info(f"Cleanup: Deleted {result.rowcount} rows from {table}")
+            except Exception as e:
+                results['errors'].append(f"{table}: {str(e)[:100]}")
+
+        # 2. Delete team members and profiles
+        team_tables = ['team_members', 'team_member_profiles']
+        for table in team_tables:
+            try:
+                result = db.execute(text(f"DELETE FROM {table}"))
+                results['deleted'][table] = result.rowcount
+            except Exception as e:
+                results['errors'].append(f"{table}: {str(e)[:100]}")
+
+        # 3. Delete extracted_data (reconciliation)
+        try:
+            result = db.execute(text("DELETE FROM extracted_data"))
+            results['deleted']['extracted_data'] = result.rowcount
+        except Exception as e:
+            results['errors'].append(f"extracted_data: {str(e)[:100]}")
+
+        # 4. Delete referral partners
+        try:
+            result = db.execute(text("DELETE FROM referral_partners"))
+            results['deleted']['referral_partners'] = result.rowcount
+        except Exception as e:
+            results['errors'].append(f"referral_partners: {str(e)[:100]}")
+
+        # 5. Get admin user ID to preserve
+        admin_result = db.execute(text("""
+            SELECT id, email, full_name FROM users WHERE email = :admin_email
+        """), {'admin_email': keep_admin_email})
+        admin_row = admin_result.fetchone()
+
+        if not admin_row:
+            raise HTTPException(status_code=404, detail=f"Admin user {keep_admin_email} not found")
+
+        admin_id = admin_row[0]
+
+        # 6. Delete related user data for non-admin users
+        user_related_tables = [
+            ('user_settings', 'user_id'),
+            ('user_notifications', 'user_id'),
+            ('loan_officer_profiles', 'user_id'),
+            ('conversations', 'user_id'),
+            ('ai_conversation_messages', 'user_id'),
+            ('onboarding_user_profiles', 'user_id'),
+            ('onboarding_user_categories', 'user_id'),
+            ('onboarding_user_responsibilities', 'user_id'),
+            ('onboarding_user_permissions', 'user_id'),
+        ]
+
+        for table, column in user_related_tables:
+            try:
+                result = db.execute(text(f"""
+                    DELETE FROM {table} WHERE {column} != :admin_id
+                """), {'admin_id': admin_id})
+                results['deleted'][table] = result.rowcount
+            except Exception:
+                pass  # Skip missing tables
+
+        # 7. List and delete all users except admin
+        users_result = db.execute(text("""
+            SELECT id, email, full_name, role FROM users WHERE id != :admin_id
+        """), {'admin_id': admin_id})
+        users_to_delete = users_result.fetchall()
+        results['users_deleted_list'] = [
+            {'email': u[1], 'name': u[2], 'role': u[3]} for u in users_to_delete
+        ]
+
+        result = db.execute(text("""
+            DELETE FROM users WHERE id != :admin_id
+        """), {'admin_id': admin_id})
+        results['deleted']['users'] = result.rowcount
+
+        # 8. Delete suspended and cancelled accounts
+        try:
+            result = db.execute(text("""
+                DELETE FROM tenant_accounts WHERE status IN ('suspended', 'canceled')
+            """))
+            results['deleted']['suspended_cancelled_accounts'] = result.rowcount
+        except Exception as e:
+            results['errors'].append(f"tenant_accounts: {str(e)[:100]}")
+
+        # 9. Clean up account management tables
+        account_tables = [
+            'subscription_events',
+            'account_subscriptions',
+            'account_invoices',
+            'cost_ledger_monthly',
+            'usage_events',
+            'login_events',
+            'admin_audit_log',
+            'impersonation_sessions',
+            'user_activity_stats',
+            'account_kpi_snapshots',
+            'account_user_roles',
+        ]
+
+        for table in account_tables:
+            try:
+                result = db.execute(text(f"DELETE FROM {table}"))
+                if result.rowcount > 0:
+                    results['deleted'][table] = result.rowcount
+            except Exception:
+                pass
+
+        db.commit()
+
+        total_deleted = sum(v for v in results['deleted'].values() if isinstance(v, int))
+        results['total_rows_deleted'] = total_deleted
+
+        return {
+            "status": "success",
+            "message": f"Cleanup completed. Deleted {total_deleted} total rows. Admin {keep_admin_email} preserved.",
+            "data": results
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Cleanup migration failed: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(e)}")
+
+
 @router.post("/run-invitations-migration")
 async def run_invitations_migration(
     admin_key: str = None,
