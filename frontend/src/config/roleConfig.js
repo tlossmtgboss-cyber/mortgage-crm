@@ -940,7 +940,7 @@ export const MASTER_ADMIN_NAVIGATION = [
     key: 'leadership',
     label: 'Leadership',
     path: '/admin',
-    matchPaths: ['/admin', '/market', '/profitability', '/production-predictor', '/deal-alerts', '/scorecard', '/team-members'],
+    matchPaths: ['/admin', '/market', '/profitability', '/production-predictor', '/deal-alerts', '/scorecard'],
     children: [
       { path: '/admin', label: 'Admin Panel', icon: 'fa-cog' },
       { path: '/market', label: 'Market', icon: 'fa-globe' },
@@ -948,7 +948,6 @@ export const MASTER_ADMIN_NAVIGATION = [
       { path: '/production-predictor', label: 'Production Predictor', icon: 'fa-crystal-ball' },
       { path: '/deal-alerts', label: 'Deal Alerts', icon: 'fa-bell' },
       { path: '/scorecard', label: 'Scorecard', icon: 'fa-clipboard-list' },
-      { path: '/team-members', label: 'Team Members', icon: 'fa-users-cog' },
     ]
   }
 ];

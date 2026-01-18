@@ -162,10 +162,6 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
     );
   };
 
-  // Check if user can see team-related actions
-  const canViewTeam = hasAnyPermission(['team.view_all', 'team.view_team', 'team.manage_permissions']) ||
-    userRole === 'management' || userRole === 'admin';
-
 
   // Render badge for dropdown items (for master admin navigation)
   const renderDropdownBadge = (item) => {
@@ -303,23 +299,6 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
             <NotificationBell />
             {/* Multi-Role Switcher - shows when user has multiple assigned roles */}
             <RoleSwitcher />
-            {/* Team Members - requires team permissions or management/admin role */}
-            {canViewTeam && (
-              <Link
-                to="/team-members"
-                className={`nav-link team-link ${isActive('/team-members') || startsWithPath('/team-members') ? 'active' : ''}`}
-                title="Team Members"
-              >
-                Team
-              </Link>
-            )}
-            <Link
-              to="/support"
-              className={`settings-link ${isActive('/support') ? 'active' : ''}`}
-              title="Support"
-            >
-              Support
-            </Link>
             <Link
               to="/settings"
               className={`settings-link ${isActive('/settings') ? 'active' : ''}`}
