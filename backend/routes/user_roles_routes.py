@@ -608,7 +608,7 @@ async def get_available_roles(
     result = db.execute(text("""
         SELECT id, name, description
         FROM onboarding_roles
-        WHERE is_active = 1 OR is_active IS NULL
+        WHERE is_active = true OR is_active IS NULL
         ORDER BY name
     """))
 
