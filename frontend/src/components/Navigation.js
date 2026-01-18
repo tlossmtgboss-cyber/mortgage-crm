@@ -2,7 +2,7 @@ import React, { useMemo, useCallback, useState, useRef, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom';
 import { usePermissions } from '../contexts/PermissionContext';
 import { useModules } from '../contexts/ModuleContext';
-import { getNavigationForRole, roleHasDashboard } from '../config/roleConfig';
+import { getNavigationForRole, roleHasDashboard, isMasterAdmin, getMasterAdminNavigation } from '../config/roleConfig';
 import { usePrefetch } from '../hooks/useQueries';
 import NotificationBell from './NotificationBell';
 import UpgradeModal from './UpgradeModal';
@@ -57,11 +57,36 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
     }
   }, [prefetchMap]);
 
+  // Get user email from localStorage to check for master admin
+  const userEmail = useMemo(() => {
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        return user.email || null;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  // Check if current user is the master admin (admin@perenniaai.com)
+  const isMasterAdminUser = useMemo(() => {
+    return isMasterAdmin(userEmail);
+  }, [userEmail]);
+
   // Get navigation items for the current role, with module lock status
   // Don't show locked state while modules are still loading to avoid flash of upgrade badges
   // Platform Admin users have full access - never lock any items for them
   // Site Admin users get their own limited navigation (not full admin)
+  // Master Admin (admin@perenniaai.com) gets consolidated dropdown navigation
   const navItems = useMemo(() => {
+    // Master admin gets special consolidated navigation
+    if (isMasterAdminUser) {
+      return getMasterAdminNavigation();
+    }
+
     // Check if user is PLATFORM admin (developer with god-mode)
     // site_admin is NOT a platform admin - they get their own limited navigation
     const platformAdminRoles = ['admin', 'super_admin'];
@@ -81,7 +106,7 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
       // Site admins still respect module restrictions
       isLocked: !isPlatformAdmin && !modulesLoading && item.module && !hasModule(item.module)
     }));
-  }, [effectiveRole, userRole, hasModule, modulesLoading]);
+  }, [effectiveRole, userRole, hasModule, modulesLoading, isMasterAdminUser]);
 
   // Handle click on locked nav item
   const handleLockedClick = useCallback((e, item) => {
@@ -124,6 +149,19 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
     userRole === 'management' || userRole === 'admin';
 
 
+  // Render badge for dropdown items (for master admin navigation)
+  const renderDropdownBadge = (item) => {
+    if (!item.badgeKey) return null;
+    const count = taskCounts[item.badgeKey];
+    if (!count || count === 0) return null;
+
+    return (
+      <span className={`nav-badge dropdown-badge ${item.badgeClass || ''}`}>
+        ({count})
+      </span>
+    );
+  };
+
   // Render a dropdown submenu item
   const renderDropdownItem = (child, parentKey, index) => {
     if (child.children) {
@@ -163,7 +201,7 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
       );
     }
 
-    // Regular dropdown item
+    // Regular dropdown item (with optional badge support for master admin nav)
     return (
       <Link
         key={index}
@@ -173,6 +211,7 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
       >
         {child.icon && <i className={`fas ${child.icon}`}></i>}
         <span>{child.label}</span>
+        {renderDropdownBadge(child)}
       </Link>
     );
   };

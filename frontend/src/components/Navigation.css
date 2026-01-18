@@ -138,6 +138,21 @@
   }
 }
 
+/* Dropdown badge styles for master admin navigation */
+.dropdown-badge {
+  margin-left: auto;
+  font-size: 11px;
+}
+
+.dropdown-badge.urgent {
+  padding: 1px 6px;
+  font-size: 10px;
+}
+
+.dropdown-item .dropdown-badge {
+  margin-left: 8px;
+}
+
 .nav-actions {
   display: flex;
   align-items: center;

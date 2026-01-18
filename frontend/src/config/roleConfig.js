@@ -811,6 +811,135 @@ export const getDefaultRouteForRole = (effectiveRole) => {
 };
 
 // =============================================================================
+// MASTER ADMIN NAVIGATION - Consolidated dropdown structure for admin@perenniaai.com
+// =============================================================================
+
+export const MASTER_ADMIN_EMAIL = 'admin@perenniaai.com';
+
+/**
+ * Check if user is the master admin (admin@perenniaai.com)
+ * @param {string} email - The user's email
+ * @returns {boolean} True if user is master admin
+ */
+export const isMasterAdmin = (email) => {
+  return email?.toLowerCase() === MASTER_ADMIN_EMAIL;
+};
+
+/**
+ * Master Admin Navigation Structure
+ * Consolidated into 4 main dropdown categories + standalone items (Tasks, Reconciliation)
+ * Tasks and Reconciliation remain as standalone nav items for quick access
+ */
+export const MASTER_ADMIN_NAVIGATION = [
+  // Standalone items for quick access (with badges)
+  {
+    key: 'tasks',
+    label: 'Tasks',
+    path: '/tasks',
+    badgeKey: 'urgentTasks',
+    badgeClass: 'urgent',
+    isStandalone: true
+  },
+  {
+    key: 'reconciliation',
+    label: 'Reconciliation',
+    path: '/reconciliation',
+    badgeKey: 'reconciliation',
+    badgeClass: 'urgent',
+    isStandalone: true
+  },
+  // Dropdown categories
+  {
+    key: 'sales',
+    label: 'Sales',
+    path: '/leads',
+    matchPaths: ['/leads', '/loans', '/portfolio', '/referral-partners', '/partner-recruiting', '/marketing', '/calendar', '/rate-monitor'],
+    children: [
+      { path: '/leads', label: 'Leads', icon: 'fa-user-plus', badgeKey: 'leads' },
+      { path: '/loans', label: 'Active Loans', icon: 'fa-file-contract', badgeKey: 'loans' },
+      { path: '/portfolio', label: 'MUM Clients', icon: 'fa-users' },
+      { path: '/rate-monitor', label: 'Rate Monitor', icon: 'fa-chart-line' },
+      { path: '/referral-partners', label: 'Partners', icon: 'fa-handshake' },
+      { path: '/partner-recruiting', label: 'Partner Recruiting', icon: 'fa-user-tie' },
+      { path: '/marketing', label: 'Marketing', icon: 'fa-bullhorn' },
+      { path: '/calendar', label: 'Calendar', icon: 'fa-calendar-alt' },
+    ]
+  },
+  {
+    key: 'operations',
+    label: 'Operations',
+    path: '/smart-docs',
+    matchPaths: ['/smart-docs', '/closed-loans', '/ai-underwriter'],
+    children: [
+      { path: '/smart-docs', label: 'Smart Docs', icon: 'fa-file-alt', badgeKey: 'smartDocs', badgeClass: 'urgent' },
+      { path: '/closed-loans', label: 'Closed Loans', icon: 'fa-check-circle' },
+      { path: '/ai-underwriter', label: 'AI Underwriter', icon: 'fa-robot' },
+    ]
+  },
+  {
+    key: 'management',
+    label: 'Management',
+    path: '/accounting',
+    matchPaths: ['/accounting', '/master-manager', '/usage-intelligence', '/integrations', '/voice', '/dialer', '/conversation-intelligence'],
+    children: [
+      {
+        label: 'Accounting',
+        icon: 'fa-calculator',
+        children: [
+          { path: '/accounting', label: 'Dashboard' },
+          { path: '/accounting/accounts', label: 'Chart of Accounts' },
+          { path: '/accounting/journal-entries', label: 'Journal Entries' },
+          { path: '/accounting/ar/invoices', label: 'AR Invoices' },
+          { path: '/accounting/ap/bills', label: 'AP Bills' },
+          { path: '/accounting/banking/accounts', label: 'Banking' },
+          { path: '/accounting/reports/profit-loss', label: 'Reports' },
+        ]
+      },
+      { path: '/master-manager', label: 'Capacity', icon: 'fa-chart-pie' },
+      { path: '/master-manager/recruiting', label: 'Recruiting', icon: 'fa-user-plus' },
+      { path: '/usage-intelligence', label: 'Usage Intelligence', icon: 'fa-chart-bar' },
+      { path: '/integrations', label: 'Integrations', icon: 'fa-plug' },
+      {
+        label: 'Voice & Calls',
+        icon: 'fa-phone-volume',
+        children: [
+          { path: '/voice/studio', label: 'Agent Studio' },
+          { path: '/voice/agents', label: 'Voice Agents' },
+          { path: '/dialer', label: 'Power Dialer' },
+          { path: '/voice/calls', label: 'Live Calls' },
+          { path: '/voice/analytics', label: 'Call Analytics' },
+          { path: '/conversation-intelligence', label: 'Call Intelligence' },
+        ]
+      },
+    ]
+  },
+  {
+    key: 'leadership',
+    label: 'Leadership',
+    path: '/dashboard',
+    matchPaths: ['/dashboard', '/admin', '/market', '/profitability', '/production-predictor', '/deal-alerts', '/scorecard', '/team-members'],
+    children: [
+      { path: '/admin', label: 'Admin Panel', icon: 'fa-cog' },
+      { path: '/dashboard', label: 'Dashboard', icon: 'fa-tachometer-alt' },
+      { path: '/market', label: 'Market', icon: 'fa-globe' },
+      { path: '/profitability', label: 'Profitability', icon: 'fa-dollar-sign' },
+      { path: '/production-predictor', label: 'Production Predictor', icon: 'fa-crystal-ball' },
+      { path: '/deal-alerts', label: 'Deal Alerts', icon: 'fa-bell' },
+      { path: '/scorecard', label: 'Scorecard', icon: 'fa-clipboard-list' },
+      { path: '/team-members', label: 'Team Members', icon: 'fa-users-cog' },
+    ]
+  }
+];
+
+/**
+ * Get master admin navigation items
+ * @returns {Array} Array of navigation item objects for master admin
+ */
+export const getMasterAdminNavigation = () => {
+  return MASTER_ADMIN_NAVIGATION;
+};
+
+// =============================================================================
 // PROFITABILITY VIEW TYPES - Different views based on role
 // =============================================================================
 
