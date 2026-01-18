@@ -42,8 +42,8 @@ else:
     engine = create_engine(
         DATABASE_URL,
         pool_pre_ping=True,           # Verify connections before use
-        pool_size=5,                  # Permanent connections
-        max_overflow=10,              # Additional connections under load
+        pool_size=3,                  # Permanent connections (reduced for Railway limits)
+        max_overflow=5,               # Additional connections under load
         pool_recycle=3600,            # Recycle connections after 1 hour
         pool_timeout=30,              # Wait max 30s for a connection
         echo=False,                   # Set True for SQL debugging
