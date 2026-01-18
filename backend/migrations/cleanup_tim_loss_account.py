@@ -64,13 +64,21 @@ def run_migration():
         """), {'user_id': user_id})
         print("Deleted onboarding_user_profiles")
 
-        # Reset invitation status BEFORE deleting user (FK: accepted_by_user_id)
+        # Clear ALL subscriber_invitations FK references to this user
         conn.execute(text("""
             UPDATE subscriber_invitations
             SET status = 'pending', accepted_at = NULL, accepted_by_user_id = NULL
             WHERE email = :email AND status = 'accepted'
         """), {'email': email})
         print("Reset invitation status to pending")
+
+        # Clear revoked_by and any other FK references to this user
+        conn.execute(text("""
+            UPDATE subscriber_invitations
+            SET revoked_by = NULL
+            WHERE revoked_by = :user_id
+        """), {'user_id': user_id})
+        print("Cleared subscriber_invitations.revoked_by references")
 
         # Break circular FK reference between users and tenant_accounts
         # users.tenant_account_id -> tenant_accounts.id
