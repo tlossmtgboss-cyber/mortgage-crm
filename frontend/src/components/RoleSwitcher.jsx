@@ -15,8 +15,9 @@
  */
 
 import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { usePermissions } from '../contexts/PermissionContext';
-import { isMasterAdmin } from '../config/roleConfig';
+import { isMasterAdmin, ROLE_DEFAULT_ROUTES } from '../config/roleConfig';
 import './RoleSwitcher.css';
 
 // All available roles that master admin can preview
@@ -34,6 +35,7 @@ const ALL_AVAILABLE_ROLES = [
 ];
 
 const RoleSwitcher = () => {
+  const navigate = useNavigate();
   const {
     assignedRoles,
     activeRole,
@@ -122,8 +124,12 @@ const RoleSwitcher = () => {
     setIsOpen(false);
     setIsSwitching(false);
 
-    // Reload to apply the new view
-    window.location.reload();
+    // Navigate to the default page for the selected role
+    const defaultRoute = ROLE_DEFAULT_ROUTES[roleId] || '/dashboard';
+
+    // Use window.location to force a full page refresh with the new route
+    // This ensures all components re-render with the new role context
+    window.location.href = defaultRoute;
   };
 
   const handleRoleSwitch = async (roleId) => {
@@ -145,8 +151,9 @@ const RoleSwitcher = () => {
 
     if (result.success) {
       setIsOpen(false);
-      // Reload the page to apply the new role's navigation and dashboard
-      window.location.reload();
+      // Navigate to the default page for the selected role
+      const defaultRoute = ROLE_DEFAULT_ROUTES[roleId] || '/dashboard';
+      window.location.href = defaultRoute;
     } else {
       setError(result.error || 'Failed to switch role');
     }
