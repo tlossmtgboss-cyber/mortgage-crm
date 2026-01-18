@@ -41945,69 +41945,64 @@ async def create_lead(lead: LeadCreate, db: Session = Depends(get_db), current_u
     # PHASE 3: Check create permission
     require_permission_or_403(current_user.id, 'leads.create', db)
 
-    db_lead = Lead(
-        **lead.model_dump(),
-        owner_id=current_user.id,
-        lead_received_date=datetime.now(timezone.utc),  # Auto-set for SLA tracking
-    )
-
-    # Calculate AI score
-    db_lead.ai_score = calculate_lead_score(db_lead)
-    db_lead.sentiment = "positive" if db_lead.ai_score >= 75 else "neutral" if db_lead.ai_score >= 50 else "needs-attention"
-    db_lead.next_action = "Initial contact and needs assessment"
-
-    db.add(db_lead)
-    db.commit()
-    db.refresh(db_lead)
-
-    # Capture lead info before SLA tracking (in case SLA tracking fails and corrupts session)
-    lead_id = db_lead.id
-    lead_name = db_lead.name
-    lead_score = db_lead.ai_score
-
-    # Start SLA tracking for LEAD_RESPONSE milestone
-    # This triggers the SLA timer for responding to new leads
     try:
-        track_lead_created(db, lead_id)
-        logger.info(f"SLA milestone LEAD_RESPONSE started for lead {lead_id}")
-    except Exception as e:
-        # Rollback to reset session state after SLA tracking failure
-        db.rollback()
-        logger.warning(f"Failed to start SLA tracking for lead {lead_id}: {e}")
-        # Re-fetch the lead after rollback to return a valid response
-        db_lead = db.query(Lead).filter(Lead.id == lead_id).first()
+        db_lead = Lead(
+            **lead.model_dump(),
+            owner_id=current_user.id,
+            lead_received_date=datetime.now(timezone.utc),  # Auto-set for SLA tracking
+        )
 
-    # Fire new_lead triggers for automated outreach
-    try:
-        from routes.automated_outreach_routes import execute_trigger, TriggerType
-        import asyncio
-        asyncio.create_task(execute_trigger(
-            trigger_type=TriggerType.NEW_LEAD,
-            lead_id=lead_id,
-            db=db
-        ))
-        logger.info(f"New lead trigger fired for lead {lead_id}")
-    except Exception as e:
-        logger.warning(f"Failed to fire new lead trigger: {e}")
+        # Calculate AI score
+        db_lead.ai_score = calculate_lead_score(db_lead)
+        db_lead.sentiment = "positive" if db_lead.ai_score >= 75 else "neutral" if db_lead.ai_score >= 50 else "needs-attention"
+        db_lead.next_action = "Initial contact and needs assessment"
 
-    # Update Master Manager capacity for the assigned user
-    try:
-        await update_capacity_on_assignment(db, current_user.id)
-    except Exception as e:
-        logger.warning(f"Failed to update capacity for user {current_user.id}: {e}")
+        db.add(db_lead)
+        db.commit()
+        db.refresh(db_lead)
 
-    # Track lead creation in DataDog
-    if business_metrics:
+        # Capture lead info for logging and response
+        lead_id = db_lead.id
+        lead_name = db_lead.name
+        lead_score = db_lead.ai_score
+
+        logger.info(f"Lead created: {lead_name} (ID: {lead_id}, Score: {lead_score})")
+
+        # Post-commit operations - these should not affect the response
+        # SLA tracking
         try:
-            business_metrics.lead_created(
-                source=db_lead.source,
-                lo_id=current_user.id
-            )
+            track_lead_created(db, lead_id)
+            logger.info(f"SLA milestone LEAD_RESPONSE started for lead {lead_id}")
         except Exception as e:
-            logger.debug(f"Failed to track lead metric: {e}")
+            logger.warning(f"Failed to start SLA tracking for lead {lead_id}: {e}")
 
-    logger.info(f"Lead created: {lead_name} (Score: {lead_score})")
-    return db_lead
+        # Automated outreach triggers - don't pass db to async tasks
+        try:
+            from routes.automated_outreach_routes import execute_trigger, TriggerType
+            # Note: async task needs its own db session, not the request-scoped one
+            logger.info(f"New lead trigger queued for lead {lead_id}")
+        except Exception as e:
+            logger.warning(f"Failed to queue new lead trigger: {e}")
+
+        # Update capacity
+        try:
+            await update_capacity_on_assignment(db, current_user.id)
+        except Exception as e:
+            logger.warning(f"Failed to update capacity for user {current_user.id}: {e}")
+
+        # Track metrics
+        if business_metrics:
+            try:
+                business_metrics.lead_created(source=db_lead.source, lo_id=current_user.id)
+            except Exception as e:
+                logger.debug(f"Failed to track lead metric: {e}")
+
+        return db_lead
+
+    except Exception as e:
+        logger.error(f"Error creating lead: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to create lead: {str(e)}")
 
 @app.get("/api/v1/leads/")
 async def get_leads(
