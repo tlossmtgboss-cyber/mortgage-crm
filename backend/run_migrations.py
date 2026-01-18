@@ -118,10 +118,11 @@ def check_migration_status():
 
 def run_sample_data_cleanup():
     """One-time cleanup of sample data. Remove this function after it runs."""
+    print("CLEANUP: Function entered", flush=True)
     database_url = os.getenv("DATABASE_URL")
 
     if not database_url:
-        logger.error("DATABASE_URL not set - skipping cleanup")
+        print("CLEANUP: DATABASE_URL not set - skipping", flush=True)
         return False
 
     if database_url.startswith("postgres://"):
@@ -130,10 +131,11 @@ def run_sample_data_cleanup():
     try:
         from sqlalchemy import create_engine, text
 
+        print("CLEANUP: Creating database engine...", flush=True)
         engine = create_engine(database_url)
-        logger.info("=" * 50)
-        logger.info("RUNNING SAMPLE DATA CLEANUP...")
-        logger.info("=" * 50)
+        print("=" * 50, flush=True)
+        print("CLEANUP: RUNNING SAMPLE DATA CLEANUP...", flush=True)
+        print("=" * 50, flush=True)
 
         with engine.connect() as conn:
             # Delete all tasks
@@ -184,6 +186,10 @@ def run_sample_data_cleanup():
 
 
 if __name__ == "__main__":
+    print("=" * 60, flush=True)
+    print("RUN_MIGRATIONS.PY: Starting...", flush=True)
+    print("=" * 60, flush=True)
+
     if len(sys.argv) > 1 and sys.argv[1] == "--status":
         status = check_migration_status()
         print(f"Migration Status: {status}")
@@ -192,8 +198,24 @@ if __name__ == "__main__":
         success = run_sample_data_cleanup()
         sys.exit(0 if success else 1)
     else:
-        success = run_migrations()
+        try:
+            print("RUN_MIGRATIONS.PY: Running migrations...", flush=True)
+            success = run_migrations()
+            print(f"RUN_MIGRATIONS.PY: Migrations completed with success={success}", flush=True)
+        except Exception as e:
+            print(f"RUN_MIGRATIONS.PY: Migration exception: {e}", flush=True)
+            success = False
+
         # Run cleanup after migrations (run regardless of migration success)
-        logger.info("Running sample data cleanup...")
-        run_sample_data_cleanup()
+        print("=" * 60, flush=True)
+        print("RUN_MIGRATIONS.PY: NOW RUNNING SAMPLE DATA CLEANUP...", flush=True)
+        print("=" * 60, flush=True)
+
+        try:
+            cleanup_success = run_sample_data_cleanup()
+            print(f"RUN_MIGRATIONS.PY: Cleanup completed with success={cleanup_success}", flush=True)
+        except Exception as e:
+            print(f"RUN_MIGRATIONS.PY: Cleanup exception: {e}", flush=True)
+
+        print("RUN_MIGRATIONS.PY: All done, exiting...", flush=True)
         sys.exit(0 if success else 1)
