@@ -63275,8 +63275,6 @@ async def cleanup_tim_loss_account_migration(
 
         if tenant_id:
             db.execute(text("UPDATE tenant_accounts SET owner_user_id = NULL WHERE id = :tenant_id"), {'tenant_id': str(tenant_id)})
-            # Delete any purl workspaces for this tenant
-            db.execute(text("DELETE FROM purl_workspaces WHERE tenant_id = :tenant_id"), {'tenant_id': str(tenant_id)})
             db.execute(text("DELETE FROM tenant_accounts WHERE id = :tenant_id"), {'tenant_id': str(tenant_id)})
 
         # Delete user
