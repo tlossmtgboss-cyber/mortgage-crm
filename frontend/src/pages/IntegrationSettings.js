@@ -3,9 +3,11 @@ import { useAsyncOperation, useFormSubmit, APIError } from '../utils/errorHandli
 import { toast } from '../utils/toast';
 import SalesforceFieldMapping from '../components/integrations/SalesforceFieldMapping';
 import SalesforceSetupWizard from '../components/integrations/SalesforceSetupWizard';
+import { API_BASE_URL } from '../services/api';
 import './IntegrationSettings.css';
 
-const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
+// Use centralized API URL from api.js (handles localhost vs production correctly)
+const API_URL = API_BASE_URL;
 
 const IntegrationSettings = () => {
   const [activeTab, setActiveTab] = useState('all');
