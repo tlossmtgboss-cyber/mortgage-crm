@@ -1,7 +1,7 @@
 FROM python:3.11-slim
 
 # Build cache buster - change this value to force full rebuild
-ARG CACHE_DATE=2026-01-18T18:20:00Z
+ARG CACHE_DATE=2026-01-18T23:20:00Z-cleanup
 
 WORKDIR /app
 
@@ -36,4 +36,4 @@ RUN ln -sf /usr/bin/python3 /usr/bin/python || true
 
 # Use start.py script for proper PORT handling and migrations
 CMD ["python3", "start.py"]
-# Force rebuild 2026-01-18T18:15:00Z sample-data-cleanup
+# Force rebuild 2026-01-18T23:20:00Z sample-data-cleanup-v2
