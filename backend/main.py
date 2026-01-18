@@ -63253,8 +63253,29 @@ async def cleanup_tim_loss_account_migration(
         db.execute(text("UPDATE leads SET owner_id = NULL WHERE owner_id = :user_id"), {'user_id': user_id})
         db.execute(text("UPDATE loans SET loan_officer_id = NULL WHERE loan_officer_id = :user_id"), {'user_id': user_id})
 
-        # Clear purl-related tables
-        db.execute(text("DELETE FROM purl_access_tokens WHERE created_by = :user_id"), {'user_id': user_id})
+        # Get workspace IDs owned by this user
+        workspace_ids = db.execute(text("SELECT id FROM purl_workspaces WHERE owner_user_id = :user_id"), {'user_id': user_id}).fetchall()
+        workspace_ids = [w[0] for w in workspace_ids]
+
+        # Clear purl-related tables (in order to respect FKs)
+        for ws_id in workspace_ids:
+            db.execute(text("DELETE FROM purl_events_outbox WHERE workspace_id = :ws_id"), {'ws_id': ws_id})
+            db.execute(text("DELETE FROM purl_audit_log WHERE workspace_id = :ws_id"), {'ws_id': ws_id})
+            db.execute(text("DELETE FROM purl_messages WHERE workspace_id = :ws_id"), {'ws_id': ws_id})
+            db.execute(text("DELETE FROM purl_tasks WHERE workspace_id = :ws_id"), {'ws_id': ws_id})
+            db.execute(text("DELETE FROM purl_document_requests WHERE workspace_id = :ws_id"), {'ws_id': ws_id})
+            db.execute(text("DELETE FROM purl_documents WHERE workspace_id = :ws_id"), {'ws_id': ws_id})
+            db.execute(text("DELETE FROM purl_portal_modules WHERE workspace_id = :ws_id"), {'ws_id': ws_id})
+            db.execute(text("DELETE FROM purl_loan_milestones WHERE loan_id IN (SELECT id FROM purl_loans WHERE workspace_id = :ws_id)"), {'ws_id': ws_id})
+            db.execute(text("DELETE FROM purl_loans WHERE workspace_id = :ws_id"), {'ws_id': ws_id})
+            db.execute(text("DELETE FROM purl_applications WHERE workspace_id = :ws_id"), {'ws_id': ws_id})
+            db.execute(text("DELETE FROM purl_access_tokens WHERE workspace_id = :ws_id"), {'ws_id': ws_id})
+            db.execute(text("DELETE FROM purl_workspace_members WHERE workspace_id = :ws_id"), {'ws_id': ws_id})
+            db.execute(text("DELETE FROM purl_contacts WHERE workspace_id = :ws_id"), {'ws_id': ws_id})
+
+        # Clear user FK references in purl tables
+        db.execute(text("UPDATE purl_access_tokens SET created_by = NULL WHERE created_by = :user_id"), {'user_id': user_id})
+        db.execute(text("UPDATE purl_access_tokens SET revoked_by = NULL WHERE revoked_by = :user_id"), {'user_id': user_id})
         db.execute(text("DELETE FROM purl_workspaces WHERE owner_user_id = :user_id"), {'user_id': user_id})
 
         # Delete user roles
