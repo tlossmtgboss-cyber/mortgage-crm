@@ -821,8 +821,25 @@ async def test_call_target(
 
     # Try to initiate call via VAPI
     try:
-        from vapi_service import VapiCRMIntegration
-        vapi = VapiCRMIntegration(db)
+        import os
+        from vapi_service import VapiCRMIntegration, VapiService
+
+        # Get assistant ID from environment
+        assistant_id = os.getenv('VAPI_REFINANCE_ASSISTANT_ID') or os.getenv('VAPI_ASSISTANT_ID')
+        if not assistant_id:
+            return {
+                'status': 'not_configured',
+                'target_id': target_id,
+                'phone': phone,
+                'client_name': client_name,
+                'message': 'VAPI_ASSISTANT_ID not configured. Set this environment variable to enable AI calls.',
+                'savings_info': {
+                    'client_rate': client_rate,
+                    'market_rate': market_rate,
+                    'monthly_savings': monthly_savings,
+                    'annual_savings': annual_savings,
+                },
+            }
 
         # Build call context
         first_name = client_name.split()[0] if client_name else "there"
@@ -835,18 +852,14 @@ async def test_call_target(
             'market_rate': market_rate,
         }
 
-        # Create the outbound call
-        call_response = await vapi.create_outbound_call(
-            phone_number=phone,
+        # Use VapiService directly for the call
+        vapi_service = VapiService()
+
+        # Create the outbound call using the vapi service's create_phone_call method
+        call_response = await vapi_service.create_phone_call(
+            assistant_id=assistant_id,
+            customer_number=phone,
             customer_name=client_name,
-            call_context={
-                'type': 'refinance_opportunity',
-                'monthly_savings': f"${monthly_savings:,.0f}",
-                'annual_savings': f"${annual_savings:,.0f}",
-                'current_rate': f"{client_rate:.3f}%",
-                'new_rate': f"{market_rate:.3f}%",
-                'first_name': first_name,
-            },
             metadata=call_metadata,
         )
 
