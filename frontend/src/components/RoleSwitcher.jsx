@@ -64,6 +64,20 @@ const RoleSwitcher = () => {
 
   const isMasterAdminUser = isMasterAdmin(userEmail);
 
+  // Group roles by category for master admin - must be before early return to satisfy hooks rules
+  const groupedRoles = useMemo(() => {
+    if (!isMasterAdminUser) return null;
+
+    const groups = {};
+    ALL_AVAILABLE_ROLES.forEach(role => {
+      if (!groups[role.category]) {
+        groups[role.category] = [];
+      }
+      groups[role.category].push(role);
+    });
+    return groups;
+  }, [isMasterAdminUser]);
+
   // Close dropdown when clicking outside - must be before early return to satisfy hooks rules
   React.useEffect(() => {
     const handleClickOutside = (e) => {
@@ -153,20 +167,6 @@ const RoleSwitcher = () => {
   const currentRoleName = isMasterAdminUser
     ? (ALL_AVAILABLE_ROLES.find(r => r.id === (viewAsRole || 'admin'))?.name || 'Platform Admin')
     : (activeRole?.name || 'Select Role');
-
-  // Group roles by category for master admin
-  const groupedRoles = useMemo(() => {
-    if (!isMasterAdminUser) return null;
-
-    const groups = {};
-    ALL_AVAILABLE_ROLES.forEach(role => {
-      if (!groups[role.category]) {
-        groups[role.category] = [];
-      }
-      groups[role.category].push(role);
-    });
-    return groups;
-  }, [isMasterAdminUser]);
 
   return (
     <div className="role-switcher">
