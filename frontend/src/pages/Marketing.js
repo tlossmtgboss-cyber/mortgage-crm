@@ -23,6 +23,7 @@ const IVRMenuDashboard = lazy(() => import('../components/voice/IVRMenuDashboard
 const HoldMusicDashboard = lazy(() => import('../components/voice/HoldMusicDashboard'));
 const TalkToAgentPage = lazy(() => import('../components/voice/TalkToAgentPage'));
 const CallAnalyticsDashboard = lazy(() => import('../components/voice/CallAnalyticsDashboard'));
+const VoiceConversation = lazy(() => import('../components/voice/VoiceConversation'));
 
 // Video OS component
 const VideoOS = lazy(() => import('./VideoOS'));
@@ -48,20 +49,28 @@ const MARKETING_CATEGORIES = {
       { id: 'deal-alerts', name: 'Deal Alerts', description: 'Proactive pipeline monitoring and alerts' },
     ]
   },
-  'voice-call-center': {
-    id: 'voice-call-center',
-    name: 'Voice & Call Center',
+  'voice': {
+    id: 'voice',
+    name: 'Voice',
+    icon: '🎙️',
+    tools: [
+      { id: 'voice-conversation', name: 'Voice Conversation', description: 'Talk to Aria with your preferred voice' },
+      { id: 'voice-agents', name: 'Voice Agents', description: 'Create and manage AI voice agents' },
+      { id: 'talk-to-agent', name: 'Talk to Agent', description: 'Direct call routing to agents' },
+      { id: 'hold-music', name: 'Hold Music', description: 'Customize hold music and messages' },
+      { id: 'ivr-menus', name: 'IVR Menus', description: 'Interactive voice response menus' },
+    ]
+  },
+  'call-center': {
+    id: 'call-center',
+    name: 'Call Center',
     icon: '📞',
     tools: [
       { id: 'ai-receptionist', name: 'AI Receptionist', description: 'AI-powered phone receptionist' },
-      { id: 'voice-agents', name: 'Voice Agents', description: 'Create and manage AI voice agents' },
       { id: 'live-calls', name: 'Live Calls', description: 'Monitor active calls in real-time' },
       { id: 'power-dialer', name: 'Power Dialer', description: 'High-volume outbound calling' },
       { id: 'call-queues', name: 'Call Queues', description: 'Manage inbound call queues' },
       { id: 'conference-rooms', name: 'Conference Rooms', description: 'Virtual conference room management' },
-      { id: 'ivr-menus', name: 'IVR Menus', description: 'Interactive voice response menus' },
-      { id: 'hold-music', name: 'Hold Music', description: 'Customize hold music and messages' },
-      { id: 'talk-to-agent', name: 'Talk to Agent', description: 'Direct call routing to agents' },
       { id: 'call-analytics', name: 'Call Analytics', description: 'Call performance metrics and insights' },
       { id: 'call-intelligence', name: 'Call Intelligence', description: 'AI-powered call analysis and insights' },
       { id: 'live-call-whisper', name: 'Live Call Whisper', description: 'Real-time AI coaching during calls' },
@@ -178,6 +187,8 @@ function Marketing() {
       // Voice & Call Center
       case 'ai-receptionist':
         return <AIReceptionistDashboard />;
+      case 'voice-conversation':
+        return <VoiceConversation />;
       case 'voice-agents':
         return <AgentStudio />;
       case 'live-calls':

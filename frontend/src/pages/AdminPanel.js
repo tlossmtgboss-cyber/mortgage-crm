@@ -87,9 +87,9 @@ const AdminPanel = () => {
   const [aiMetricsLoading, setAiMetricsLoading] = useState(false);
   const [aiMetricsLastUpdate, setAiMetricsLastUpdate] = useState(null);
 
-  // Impersonation state
-  const [selectedUserToImpersonate, setSelectedUserToImpersonate] = useState(null);
-  const [impersonating, setImpersonating] = useState(false);
+  // Role impersonation state (for previewing different role UX)
+  const [selectedRoleToPreview, setSelectedRoleToPreview] = useState(null);
+  const [switchingRole, setSwitchingRole] = useState(false);
 
   // Employee roles fetched from the system
   const [employeeRoles, setEmployeeRoles] = useState([]);
@@ -709,12 +709,6 @@ const AdminPanel = () => {
               )}
             </div>
           )}
-          <button className="btn-test-account" onClick={openTestAccountModal} title="Create a test account to test the software as a paid user">
-            Create Test Account
-          </button>
-          <button className="btn-primary" onClick={openNewUserModal}>
-            + Add User
-          </button>
         </div>
       </header>
 

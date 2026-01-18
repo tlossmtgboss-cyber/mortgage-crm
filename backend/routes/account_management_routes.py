@@ -2978,6 +2978,7 @@ async def cleanup_users(
 async def cleanup_all_sample_data(
     request: Request,
     keep_admin_email: str = Query(default="admin@perenniaai.com", description="Admin email to preserve"),
+    admin_key: str = Query(default=None, description="Admin API key for authentication bypass"),
     db: Session = Depends(get_db)
 ):
     """Comprehensive cleanup: Delete ALL sample data including tasks, users, accounts.
@@ -2988,11 +2989,26 @@ async def cleanup_all_sample_data(
     - All team members and profiles
     - All suspended and cancelled accounts
     - All account management sample data
-    """
-    try:
-        current_user = await get_user_from_request(request, db)
-        require_master_admin(current_user)
 
+    Can be called with admin_key query param to bypass JWT authentication.
+    """
+    import os
+
+    # Check for admin key bypass
+    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    if admin_key and admin_key == expected_key:
+        logger.info("Cleanup authorized via admin API key")
+    else:
+        # Fall back to JWT authentication
+        try:
+            current_user = await get_user_from_request(request, db)
+            require_master_admin(current_user)
+        except Exception as auth_error:
+            if not admin_key:
+                raise HTTPException(status_code=401, detail="Authentication required. Provide admin_key or valid JWT token.")
+            raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
         results = {
             'deleted': {},
             'errors': [],

@@ -13,8 +13,11 @@ import asyncio
 import base64
 import os
 import httpx
-from typing import Optional, Dict, Any, AsyncGenerator
+from typing import Optional, Dict, Any, AsyncGenerator, TYPE_CHECKING
 import uuid
+
+if TYPE_CHECKING:
+    from main import User
 
 # Database and auth imports
 from database import get_db
@@ -691,8 +694,12 @@ async def synthesize_text(request: dict):
     """
     HTTP endpoint for text-to-speech synthesis.
     Returns audio as base64-encoded mp3.
+    Supports voice_id and provider parameters for voice selection.
     """
     text = request.get("text", "")
+    voice_id = request.get("voice_id")  # e.g., "en-US-Neural2-C"
+    provider = request.get("provider")  # e.g., "google", "elevenlabs", "openai"
+
     if not text:
         raise HTTPException(400, "Text is required")
 
@@ -700,18 +707,30 @@ async def synthesize_text(request: dict):
         raise HTTPException(400, "Text too long (max 500 characters)")
 
     try:
-        # Use same priority as voice session: Google > ElevenLabs > OpenAI
-        if GOOGLE_TTS_ENABLED:
-            tts = GoogleTTSClient()
+        # If provider is specified, use that provider with the voice_id
+        if provider == "google" and GOOGLE_TTS_ENABLED:
+            tts = GoogleTTSClient(voice_name=voice_id or GOOGLE_TTS_VOICE)
+            audio = await tts.synthesize(text)
+        elif provider == "elevenlabs" and ELEVENLABS_API_KEY:
+            tts = ElevenLabsTTSClient(voice_id=voice_id)
+            audio = await tts.synthesize(text)
+        elif provider == "openai" and OPENAI_API_KEY:
+            tts = OpenAITTSClient(voice=voice_id)
+            audio = await tts.synthesize(text)
+        # Fallback to default priority if no provider specified
+        elif GOOGLE_TTS_ENABLED:
+            tts = GoogleTTSClient(voice_name=voice_id if voice_id and voice_id.startswith("en-US") else GOOGLE_TTS_VOICE)
             audio = await tts.synthesize(text)
         elif ELEVENLABS_API_KEY:
-            tts = ElevenLabsTTSClient()
+            tts = ElevenLabsTTSClient(voice_id=voice_id)
             audio = await tts.synthesize(text)
         elif OPENAI_API_KEY:
-            tts = OpenAITTSClient()
+            tts = OpenAITTSClient(voice=voice_id)
             audio = await tts.synthesize(text)
         else:
             raise HTTPException(500, "No TTS provider configured")
+
+        logger.info(f"[TTS] Synthesized with provider={provider}, voice_id={voice_id}")
 
         return {
             "audio": base64.b64encode(audio).decode("utf-8"),
@@ -768,13 +787,15 @@ async def list_available_voices():
 # User Voice Preference Endpoints
 # =============================================================================
 
-from auth import get_current_user_from_token
-from models import User
+def get_current_user_dep():
+    """Get current user dependency - avoids circular import"""
+    from main import get_current_user
+    return get_current_user
 
 
 @router.get("/user-voice-preference")
 async def get_user_voice_preference(
-    current_user: User = Depends(get_current_user_from_token),
+    current_user: "User" = Depends(get_current_user_dep()),
     db: Session = Depends(get_db)
 ):
     """Get user's saved voice preference for Aria conversations"""
@@ -808,7 +829,7 @@ async def get_user_voice_preference(
 @router.put("/user-voice-preference")
 async def save_user_voice_preference(
     request: dict,
-    current_user: User = Depends(get_current_user_from_token),
+    current_user: "User" = Depends(get_current_user_dep()),
     db: Session = Depends(get_db)
 ):
     """Save user's voice preference for Aria conversations"""

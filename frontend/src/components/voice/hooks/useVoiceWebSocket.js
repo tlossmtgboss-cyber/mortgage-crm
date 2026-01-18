@@ -1,9 +1,10 @@
 // WebSocket hook for voice conversation with Aria
 import { useState, useRef, useCallback, useEffect } from 'react';
 
-const useVoiceWebSocket = ({ onTranscript, onAudio, onStatusChange, onError }) => {
+const useVoiceWebSocket = ({ onTranscript, onAudio, onStatusChange, onError, onSessionInfo }) => {
   const [status, setStatus] = useState('idle'); // idle, connecting, connected, listening, processing, speaking, error
   const [sessionId, setSessionId] = useState(null);
+  const [sttEnabled, setSttEnabled] = useState(false);
 
   const wsRef = useRef(null);
   const reconnectAttempts = useRef(0);
@@ -56,7 +57,9 @@ const useVoiceWebSocket = ({ onTranscript, onAudio, onStatusChange, onError }) =
           switch (data.type) {
             case 'session_started':
               setSessionId(data.session_id);
+              setSttEnabled(data.stt_enabled || false);
               updateStatus('connected');
+              onSessionInfo?.({ sttEnabled: data.stt_enabled || false, ttsEnabled: data.tts_enabled || false });
               break;
 
             case 'listening':
@@ -215,6 +218,7 @@ const useVoiceWebSocket = ({ onTranscript, onAudio, onStatusChange, onError }) =
   return {
     status,
     sessionId,
+    sttEnabled,
     connect,
     disconnect,
     startListening,
