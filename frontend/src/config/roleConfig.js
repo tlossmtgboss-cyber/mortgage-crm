@@ -63,12 +63,15 @@ export const NAVIGATION_ITEMS = {
     path: '/reconciliation',
     label: 'Reconciliation',
     badgeKey: 'reconciliation',
+    badgeClass: 'urgent',
     module: 'base'
   },
   smartDocs: {
     path: '/smart-docs',
     label: 'Smart Docs',
     matchPaths: ['/smart-docs/', '/smart-docs'],
+    badgeKey: 'smartDocs',
+    badgeClass: 'urgent',
     module: 'base'
   },
   marketing: {

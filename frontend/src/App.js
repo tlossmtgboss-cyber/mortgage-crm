@@ -322,7 +322,9 @@ function App() {
     tasks: 0,
     urgentTasks: 0,
     partners: 0,
-    unifiedTasks: 0  // New unified task count
+    unifiedTasks: 0,  // New unified task count
+    reconciliation: 0,  // Pending reconciliation items
+    smartDocs: 0  // Documents pending review
   });
 
   const toggleAssistant = () => {
@@ -359,7 +361,9 @@ function App() {
           tasks: 0,
           urgentTasks: 0,
           partners: 0,
-          unifiedTasks: 0
+          unifiedTasks: 0,
+          reconciliation: 0,
+          smartDocs: 0
         });
       }
     };
@@ -373,25 +377,48 @@ function App() {
     const fetchTaskCounts = async () => {
       if (!isAuthenticated()) return;
 
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/v1/tasks`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        });
+      const headers = {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      };
 
-        if (response.ok) {
-          const tasks = await response.json();
-          // Count outstanding tasks (not completed)
+      try {
+        // Fetch all counts in parallel
+        const [tasksResponse, reconciliationResponse, smartDocsResponse] = await Promise.all([
+          fetch(`${API_BASE_URL}/api/v1/tasks`, { headers }),
+          fetch(`${API_BASE_URL}/api/v1/reconciliation/pending`, { headers }).catch(() => null),
+          fetch(`${API_BASE_URL}/api/v1/smart-docs/applicants/pending-review`, { headers }).catch(() => null)
+        ]);
+
+        let updates = {};
+
+        // Process tasks
+        if (tasksResponse.ok) {
+          const tasks = await tasksResponse.json();
           const outstandingTasks = tasks.filter(t => t.status !== 'completed' && t.status !== 'done').length;
-          // Count urgent tasks (high priority and not completed)
           const urgentTasks = tasks.filter(t => t.priority === 'high' && t.status !== 'completed' && t.status !== 'done').length;
-          setTaskCounts(prev => ({
-            ...prev,
-            tasks: outstandingTasks,
-            urgentTasks: urgentTasks
-          }));
+          updates.tasks = outstandingTasks;
+          updates.urgentTasks = urgentTasks;
         }
+
+        // Process reconciliation count
+        if (reconciliationResponse && reconciliationResponse.ok) {
+          const reconciliationData = await reconciliationResponse.json();
+          // Handle both array response and object with items array
+          const items = Array.isArray(reconciliationData) ? reconciliationData : (reconciliationData.items || []);
+          updates.reconciliation = items.length;
+        }
+
+        // Process smart docs count
+        if (smartDocsResponse && smartDocsResponse.ok) {
+          const smartDocsData = await smartDocsResponse.json();
+          // Sum up pending counts from all loans
+          const totalPending = Array.isArray(smartDocsData)
+            ? smartDocsData.reduce((sum, loan) => sum + (loan.pending_count || 0), 0)
+            : 0;
+          updates.smartDocs = totalPending;
+        }
+
+        setTaskCounts(prev => ({ ...prev, ...updates }));
       } catch (error) {
         console.error('Error fetching task counts:', error);
       }
