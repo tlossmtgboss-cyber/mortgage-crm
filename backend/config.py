@@ -176,6 +176,22 @@ class Settings(BaseSettings):
     )
 
     # =========================================================================
+    # GOOGLE CLOUD TEXT-TO-SPEECH
+    # =========================================================================
+    GOOGLE_TTS_ENABLED: bool = Field(
+        default=False,
+        description="Enable Google Cloud TTS (uses GOOGLE_APPLICATION_CREDENTIALS env var)"
+    )
+    GOOGLE_TTS_VOICE: str = Field(
+        default="en-US-Neural2-C",
+        description="Default Google TTS voice name"
+    )
+    GOOGLE_TTS_LANGUAGE: str = Field(
+        default="en-US",
+        description="Default Google TTS language code"
+    )
+
+    # =========================================================================
     # MONITORING
     # =========================================================================
     SENTRY_DSN: Optional[str] = Field(

@@ -30,6 +30,11 @@ ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
+# Google Cloud TTS settings
+GOOGLE_TTS_ENABLED = os.getenv("GOOGLE_TTS_ENABLED", "false").lower() == "true"
+GOOGLE_TTS_VOICE = os.getenv("GOOGLE_TTS_VOICE", "en-US-Neural2-C")
+GOOGLE_TTS_LANGUAGE = os.getenv("GOOGLE_TTS_LANGUAGE", "en-US")
+
 # Voice settings
 ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM")  # Rachel - warm female voice
 TTS_MODEL = os.getenv("TTS_MODEL", "eleven_turbo_v2_5")  # Fast model for low latency
@@ -221,6 +226,58 @@ class OpenAITTSClient:
             return response.content
 
 
+class GoogleTTSClient:
+    """Text-to-Speech using Google Cloud TTS"""
+
+    def __init__(self, voice_name: str = GOOGLE_TTS_VOICE, language_code: str = GOOGLE_TTS_LANGUAGE):
+        self.voice_name = voice_name
+        self.language_code = language_code
+        self._service = None
+
+    def _get_service(self):
+        """Lazy load the Google TTS service"""
+        if self._service is None:
+            try:
+                from integrations.google_tts_service import get_tts_service
+                self._service = get_tts_service()
+            except Exception as e:
+                logger.error(f"[GoogleTTS] Failed to initialize service: {e}")
+                raise
+        return self._service
+
+    async def synthesize(self, text: str) -> bytes:
+        """Synthesize audio using Google Cloud TTS"""
+        try:
+            service = self._get_service()
+            # Run sync call in thread pool to avoid blocking
+            import asyncio
+            loop = asyncio.get_event_loop()
+            audio_content = await loop.run_in_executor(
+                None,
+                lambda: service.synthesize_speech(
+                    text=text,
+                    language_code=self.language_code,
+                    voice_name=self.voice_name,
+                    audio_encoding="MP3",
+                    speaking_rate=1.0,
+                    pitch=0.0
+                )
+            )
+            if audio_content:
+                logger.info(f"[GoogleTTS] Synthesized {len(audio_content)} bytes")
+                return audio_content
+            return b""
+        except Exception as e:
+            logger.error(f"[GoogleTTS] Error: {e}")
+            return b""
+
+    async def synthesize_stream(self, text: str) -> AsyncGenerator[bytes, None]:
+        """Google TTS doesn't support streaming, so return full audio as single chunk"""
+        audio = await self.synthesize(text)
+        if audio:
+            yield audio
+
+
 class AriaVoiceAgent:
     """Voice agent that processes user speech and generates responses"""
 
@@ -325,8 +382,20 @@ class MobileVoiceSession:
         """Initialize the voice session"""
         logger.info(f"[MobileVoiceSession] Starting session {self.session_id} for user {self.user_id}")
 
-        # Initialize TTS client
-        if ELEVENLABS_API_KEY:
+        # Initialize TTS client - priority: Google (if enabled) > ElevenLabs > OpenAI
+        if GOOGLE_TTS_ENABLED:
+            try:
+                self.tts_client = GoogleTTSClient()
+                logger.info(f"[MobileVoiceSession] Using Google Cloud TTS (voice: {GOOGLE_TTS_VOICE})")
+            except Exception as e:
+                logger.warning(f"[MobileVoiceSession] Google TTS failed to init: {e}, falling back")
+                if ELEVENLABS_API_KEY:
+                    self.tts_client = ElevenLabsTTSClient()
+                    logger.info("[MobileVoiceSession] Fallback to ElevenLabs TTS")
+                else:
+                    self.tts_client = OpenAITTSClient()
+                    logger.info("[MobileVoiceSession] Fallback to OpenAI TTS")
+        elif ELEVENLABS_API_KEY:
             self.tts_client = ElevenLabsTTSClient()
             logger.info("[MobileVoiceSession] Using ElevenLabs TTS")
         else:
@@ -387,8 +456,8 @@ class MobileVoiceSession:
         await self._send_event("speaking", {"text": text})
 
         try:
-            if isinstance(self.tts_client, ElevenLabsTTSClient):
-                # Stream audio chunks
+            if isinstance(self.tts_client, (ElevenLabsTTSClient, GoogleTTSClient)):
+                # Stream audio chunks (Google TTS returns single chunk)
                 async for chunk in self.tts_client.synthesize_stream(text):
                     if not self.is_active:
                         break
@@ -398,7 +467,7 @@ class MobileVoiceSession:
                         "format": "mp3"
                     })
             else:
-                # Non-streaming fallback
+                # Non-streaming fallback (OpenAI)
                 audio = await self.tts_client.synthesize(text)
                 await self._send_event("audio", {
                     "data": base64.b64encode(audio).decode("utf-8"),
@@ -581,15 +650,34 @@ async def mobile_voice_websocket(
 @router.get("/status")
 async def get_voice_status():
     """Get voice service status"""
+    # Determine active TTS provider based on priority
+    if GOOGLE_TTS_ENABLED:
+        tts_provider = "google"
+        tts_voice = GOOGLE_TTS_VOICE
+    elif ELEVENLABS_API_KEY:
+        tts_provider = "elevenlabs"
+        tts_voice = ELEVENLABS_VOICE_ID
+    elif OPENAI_API_KEY:
+        tts_provider = "openai"
+        tts_voice = "nova"
+    else:
+        tts_provider = "none"
+        tts_voice = None
+
     return {
         "stt": {
             "provider": "deepgram" if DEEPGRAM_API_KEY else "none",
             "enabled": bool(DEEPGRAM_API_KEY)
         },
         "tts": {
-            "provider": "elevenlabs" if ELEVENLABS_API_KEY else ("openai" if OPENAI_API_KEY else "none"),
-            "enabled": bool(ELEVENLABS_API_KEY or OPENAI_API_KEY),
-            "voice_id": ELEVENLABS_VOICE_ID if ELEVENLABS_API_KEY else "nova"
+            "provider": tts_provider,
+            "enabled": tts_provider != "none",
+            "voice_id": tts_voice,
+            "available_providers": {
+                "google": GOOGLE_TTS_ENABLED,
+                "elevenlabs": bool(ELEVENLABS_API_KEY),
+                "openai": bool(OPENAI_API_KEY)
+            }
         },
         "llm": {
             "provider": "anthropic" if ANTHROPIC_API_KEY else ("openai" if OPENAI_API_KEY else "none"),
@@ -612,7 +700,11 @@ async def synthesize_text(request: dict):
         raise HTTPException(400, "Text too long (max 500 characters)")
 
     try:
-        if ELEVENLABS_API_KEY:
+        # Use same priority as voice session: Google > ElevenLabs > OpenAI
+        if GOOGLE_TTS_ENABLED:
+            tts = GoogleTTSClient()
+            audio = await tts.synthesize(text)
+        elif ELEVENLABS_API_KEY:
             tts = ElevenLabsTTSClient()
             audio = await tts.synthesize(text)
         elif OPENAI_API_KEY:
@@ -635,6 +727,21 @@ async def synthesize_text(request: dict):
 async def list_available_voices():
     """List available TTS voices"""
     voices = []
+
+    # Google Cloud TTS voices (Neural2 are highest quality)
+    if GOOGLE_TTS_ENABLED:
+        voices.extend([
+            {"id": "en-US-Neural2-C", "name": "Neural2-C", "provider": "google", "description": "Female, warm and professional", "language": "en-US"},
+            {"id": "en-US-Neural2-D", "name": "Neural2-D", "provider": "google", "description": "Male, deep and authoritative", "language": "en-US"},
+            {"id": "en-US-Neural2-E", "name": "Neural2-E", "provider": "google", "description": "Female, soft and friendly", "language": "en-US"},
+            {"id": "en-US-Neural2-F", "name": "Neural2-F", "provider": "google", "description": "Female, expressive", "language": "en-US"},
+            {"id": "en-US-Neural2-G", "name": "Neural2-G", "provider": "google", "description": "Female, casual", "language": "en-US"},
+            {"id": "en-US-Neural2-H", "name": "Neural2-H", "provider": "google", "description": "Female, warm", "language": "en-US"},
+            {"id": "en-US-Neural2-I", "name": "Neural2-I", "provider": "google", "description": "Male, casual", "language": "en-US"},
+            {"id": "en-US-Neural2-J", "name": "Neural2-J", "provider": "google", "description": "Male, conversational", "language": "en-US"},
+            {"id": "en-US-Studio-O", "name": "Studio-O", "provider": "google", "description": "Female, studio quality", "language": "en-US"},
+            {"id": "en-US-Studio-Q", "name": "Studio-Q", "provider": "google", "description": "Male, studio quality", "language": "en-US"},
+        ])
 
     if ELEVENLABS_API_KEY:
         # ElevenLabs voices
