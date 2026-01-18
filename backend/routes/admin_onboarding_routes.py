@@ -486,24 +486,22 @@ async def save_company_profile(
             raise HTTPException(status_code=404, detail="User not found")
 
         # Update tenant account
+        company_settings = json.dumps({
+            'phone': profile.company_phone,
+            'address': profile.company_address,
+            'industry': profile.industry,
+            'logo_url': profile.logo_url
+        })
+
         db.execute(text("""
             UPDATE tenant_accounts SET
                 name = :name,
-                settings = jsonb_set(
-                    COALESCE(settings, '{}'::jsonb),
-                    '{company}',
-                    :company_settings::jsonb
-                ),
+                settings = COALESCE(settings, '{}'::jsonb) || jsonb_build_object('company', :company_settings::jsonb),
                 updated_at = NOW()
-            WHERE id = :tenant_id
+            WHERE id = :tenant_id::uuid
         """), {
             'name': profile.company_name,
-            'company_settings': json.dumps({
-                'phone': profile.company_phone,
-                'address': profile.company_address,
-                'industry': profile.industry,
-                'logo_url': profile.logo_url
-            }),
+            'company_settings': company_settings,
             'tenant_id': str(user.tenant_account_id)
         })
 
