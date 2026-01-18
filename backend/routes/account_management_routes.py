@@ -38,6 +38,29 @@ def set_dependencies(user_model, current_user_func):
     get_current_user = current_user_func
 
 
+def table_exists(db: Session, table_name: str) -> bool:
+    """Check if a table exists in the database (works with both PostgreSQL and SQLite)"""
+    try:
+        # Try PostgreSQL syntax first
+        result = db.execute(text("""
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = :table_name
+            )
+        """), {"table_name": table_name}).scalar()
+        return bool(result)
+    except Exception:
+        try:
+            # Fall back to SQLite syntax
+            result = db.execute(text("""
+                SELECT COUNT(*) FROM sqlite_master
+                WHERE type='table' AND name = :table_name
+            """), {"table_name": table_name}).scalar()
+            return result > 0
+        except Exception:
+            return False
+
+
 # =============================================================================
 # Pydantic Models
 # =============================================================================
@@ -306,14 +329,7 @@ async def run_account_management_migration(
     # Default: migration action
     try:
         # Check if tables already exist
-        table_check = db.execute(text("""
-            SELECT EXISTS (
-                SELECT FROM information_schema.tables
-                WHERE table_schema = 'public' AND table_name = 'tenant_accounts'
-            )
-        """)).scalar()
-
-        if table_check:
+        if table_exists(db, 'tenant_accounts'):
             return {"status": "success", "message": "Tables already exist"}
 
         # Create all tables
@@ -641,14 +657,7 @@ async def run_invitations_migration(
 
     try:
         # Check if table already exists
-        table_check = db.execute(text("""
-            SELECT EXISTS (
-                SELECT FROM information_schema.tables
-                WHERE table_schema = 'public' AND table_name = 'subscriber_invitations'
-            )
-        """)).scalar()
-
-        if table_check:
+        if table_exists(db, 'subscriber_invitations'):
             return {"status": "success", "message": "subscriber_invitations table already exists"}
 
         # Create subscriber_invitations table
@@ -711,14 +720,7 @@ async def get_kpis(
         require_master_admin(current_user)
 
         # Check if tenant_accounts table exists
-        table_check = db.execute(text("""
-            SELECT EXISTS (
-                SELECT FROM information_schema.tables
-                WHERE table_schema = 'public' AND table_name = 'tenant_accounts'
-            )
-        """)).scalar()
-
-        if not table_check:
+        if not table_exists(db, 'tenant_accounts'):
             # Return mock data if tables don't exist yet
             return success_response(
                 data={
@@ -993,14 +995,7 @@ async def list_pending_invites(
         require_master_admin(current_user)
 
         # Check if table exists
-        table_check = db.execute(text("""
-            SELECT EXISTS (
-                SELECT FROM information_schema.tables
-                WHERE table_schema = 'public' AND table_name = 'subscriber_invitations'
-            )
-        """)).scalar()
-
-        if not table_check:
+        if not table_exists(db, 'subscriber_invitations'):
             return success_response(
                 data={
                     'invitations': [],
@@ -1426,14 +1421,7 @@ async def list_accounts(
         require_master_admin(current_user)
 
         # Check if table exists
-        table_check = db.execute(text("""
-            SELECT EXISTS (
-                SELECT FROM information_schema.tables
-                WHERE table_schema = 'public' AND table_name = 'tenant_accounts'
-            )
-        """)).scalar()
-
-        if not table_check:
+        if not table_exists(db, 'tenant_accounts'):
             return success_response(
                 data={
                     'accounts': [],
@@ -2243,14 +2231,7 @@ async def get_user_permissions(
             raise NotFoundException(f"User {user_id} not found")
 
         # Ensure user_permissions table exists
-        table_exists = db.execute(text("""
-            SELECT EXISTS (
-                SELECT FROM information_schema.tables
-                WHERE table_schema = 'public' AND table_name = 'user_permissions'
-            )
-        """)).scalar()
-
-        if not table_exists:
+        if not table_exists(db, 'user_permissions'):
             # Create the table
             db.execute(text("""
                 CREATE TABLE IF NOT EXISTS user_permissions (

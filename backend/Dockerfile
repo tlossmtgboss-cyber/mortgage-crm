@@ -33,4 +33,4 @@ RUN ln -sf /usr/bin/python3 /usr/bin/python || true
 
 # Use start.py script for proper PORT handling and migrations
 CMD ["python3", "start.py"]
-# Force rebuild 1768653977
+# Force rebuild 2026-01-18T18:15:00Z sample-data-cleanup
