@@ -474,8 +474,8 @@ class User(Base):
     title = Column(Text, nullable=True)  # e.g., "Senior Loan Officer"
     team_name = Column(Text, nullable=True)  # e.g., "Tim Loss Team"
     nmls_id = Column(String, nullable=True)
-    # Note: timezone column added via migration - use getattr() to safely access
-    # timezone = Column(String, default="America/Chicago")  # User's timezone for AI and display
+    # Timezone for AI scheduling and display
+    timezone = Column(String, default="America/New_York")
     branch = relationship("Branch", back_populates="users")
     organization = relationship("Organization", back_populates="users")
     leads = relationship("Lead", back_populates="owner")
@@ -52425,6 +52425,14 @@ def init_db():
                     conn.commit()
         except Exception as e:
             logger.warning(f"⚠️ Schema migration note: {e}")
+
+        # Run comprehensive column migration for all missing columns
+        try:
+            from migrations.add_all_missing_columns import run_migration
+            run_migration()
+            logger.info("✅ Comprehensive column migration completed")
+        except Exception as e:
+            logger.warning(f"⚠️ Comprehensive migration note: {e}")
 
         return True
     except Exception as e:
