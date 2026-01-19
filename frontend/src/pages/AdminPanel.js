@@ -126,6 +126,10 @@ const AdminPanel = () => {
   const [itTicketMetrics, setItTicketMetrics] = useState(null);
   const [itTicketMetricsLoading, setItTicketMetricsLoading] = useState(false);
 
+  // Sample data cleanup state
+  const [cleanupLoading, setCleanupLoading] = useState(false);
+  const [cleanupResult, setCleanupResult] = useState(null);
+
   // Modal state
   const [showUserModal, setShowUserModal] = useState(false);
   const [showTestAccountModal, setShowTestAccountModal] = useState(false);
@@ -284,6 +288,34 @@ const AdminPanel = () => {
       setMissionControlRefreshing(false);
     }
   }, [loadMissionControl]);
+
+  // Handle sample data cleanup
+  const handleCleanupSampleData = async () => {
+    if (!window.confirm('This will permanently delete all sample/demo users from the database. Continue?')) {
+      return;
+    }
+
+    try {
+      setCleanupLoading(true);
+      setCleanupResult(null);
+      const response = await api.post('/api/v1/admin/cleanup-sample-users');
+      const data = response.data;
+      setCleanupResult({
+        success: true,
+        message: `Cleaned up ${data.deleted_count || 0} sample users`
+      });
+      // Refresh the dashboard data to update users list
+      loadDashboard();
+    } catch (err) {
+      console.error('Cleanup error:', err);
+      setCleanupResult({
+        success: false,
+        message: err.response?.data?.detail || 'Failed to cleanup sample data'
+      });
+    } finally {
+      setCleanupLoading(false);
+    }
+  };
 
   // Load Mission Control when settings tab is active
   useEffect(() => {
@@ -2010,6 +2042,26 @@ const AdminPanel = () => {
                   <span>Stripe (Payments)</span>
                   <span className="status inactive">Not Connected</span>
                 </div>
+              </div>
+
+              <div className="settings-card">
+                <h3>Data Management</h3>
+                <p style={{fontSize: '0.85rem', color: '#6b7280', marginBottom: '12px'}}>
+                  Remove sample/demo data from your account
+                </p>
+                <button
+                  className={`btn-danger ${cleanupLoading ? 'loading' : ''}`}
+                  onClick={handleCleanupSampleData}
+                  disabled={cleanupLoading}
+                  style={{backgroundColor: '#dc2626'}}
+                >
+                  {cleanupLoading ? 'Cleaning...' : 'Cleanup Sample Data'}
+                </button>
+                {cleanupResult && (
+                  <div style={{marginTop: '12px', fontSize: '0.85rem', color: cleanupResult.success ? '#059669' : '#dc2626'}}>
+                    {cleanupResult.message}
+                  </div>
+                )}
               </div>
             </div>
 
