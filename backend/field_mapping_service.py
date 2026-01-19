@@ -129,19 +129,19 @@ FIELD_MAPPINGS: List[FieldMapping] = [
     ),
     FieldMapping(
         crm_field='borrower_mobile_phone',
-        excel_patterns=['bor 1 mobile', 'mobile phone', 'cell phone', 'bor mobile', 'mobile', 'cell'],
+        excel_patterns=['bor 1 mobile phone', 'bor 1 mobile', 'borrower mobile phone', 'mobile phone', 'cell phone', 'bor mobile', 'mobile', 'cell'],
         data_type='phone',
         transform=transform_phone,
     ),
     FieldMapping(
         crm_field='borrower_home_phone',
-        excel_patterns=['bor 1 home', 'home phone', 'bor home'],
+        excel_patterns=['bor 1 home phone', 'bor 1 home', 'borrower home phone', 'home phone', 'bor home'],
         data_type='phone',
         transform=transform_phone,
     ),
     FieldMapping(
         crm_field='borrower_work_phone',
-        excel_patterns=['bor 1 work', 'work phone', 'bor work'],
+        excel_patterns=['bor 1 work phone', 'bor 1 work', 'borrower work phone', 'work phone', 'bor work'],
         data_type='phone',
         transform=transform_phone,
     ),
@@ -202,7 +202,13 @@ FIELD_MAPPINGS: List[FieldMapping] = [
     ),
     FieldMapping(
         crm_field='purchase_price',
-        excel_patterns=['pur price', 'purchase price', 'buy price', 'sale price'],
+        excel_patterns=['pur price', 'purchase price', 'sale price'],
+        data_type='number',
+        transform=transform_number,
+    ),
+    FieldMapping(
+        crm_field='buy_price_net',
+        excel_patterns=['buy price net', 'buy price'],
         data_type='number',
         transform=transform_number,
     ),
@@ -347,7 +353,7 @@ FIELD_MAPPINGS: List[FieldMapping] = [
     ),
     FieldMapping(
         crm_field='listing_agent_phone',
-        excel_patterns=['list agent mobile', 'listing agent phone'],
+        excel_patterns=['list agent mobile phone', 'list agent mobile', 'listing agent phone'],
         data_type='phone',
         transform=transform_phone,
     ),
@@ -601,6 +607,29 @@ FIELD_MAPPINGS: List[FieldMapping] = [
         excel_patterns=['referral source', 'lead source', 'source'],
         data_type='string',
     ),
+
+    # ===== ADDITIONAL DATE FIELDS =====
+    FieldMapping(
+        crm_field='approved_not_accepted_date',
+        excel_patterns=['approved not accepted date', 'approved not accepted'],
+        data_type='date',
+        transform=transform_date,
+    ),
+    FieldMapping(
+        crm_field='canceled_for_incompleteness_date',
+        excel_patterns=['canceled for incompleteness date', 'canceled for incompleteness', 'cancelled for incompleteness'],
+        data_type='date',
+        transform=transform_date,
+    ),
+
+    # ===== ADDITIONAL BORROWER FIELDS =====
+    FieldMapping(
+        crm_field='borrower_email_3',
+        excel_patterns=['bor 3 email', 'borrower 3 email', 'third borrower email'],
+        data_type='email',
+        validation=validate_email,
+        transform=transform_email,
+    ),
 ]
 
 
@@ -638,9 +667,19 @@ def calculate_similarity(str1: str, str2: str) -> float:
     if s1 == s2:
         return 1.0
 
-    # One contains the other
+    # One contains the other - but penalize if lengths are very different
     if s1 in s2 or s2 in s1:
-        return 0.9
+        min_len = min(len(s1), len(s2))
+        max_len = max(len(s1), len(s2))
+        # Only give high score if the contained string is a significant portion
+        length_ratio = min_len / max_len if max_len > 0 else 0
+        if length_ratio >= 0.7:
+            return 0.95
+        elif length_ratio >= 0.5:
+            return 0.85
+        else:
+            # Short substring in long string - use length ratio as base
+            return 0.5 * length_ratio + 0.3
 
     # Levenshtein distance-based similarity
     max_len = max(len(s1), len(s2))

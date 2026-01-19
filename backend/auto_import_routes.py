@@ -26,16 +26,16 @@ router = APIRouter(prefix="/api/v1/auto-import", tags=["Auto Import"])
 
 # Import dependencies from main app
 try:
-    from main import get_current_user, get_db_connection
+    from main import get_current_user, get_db, SessionLocal
 except ImportError:
     # Fallback for standalone testing
     async def get_current_user():
         return {"email": "admin@perenniaai.com", "id": str(uuid.uuid4())}
 
-    def get_db_connection():
-        import psycopg2
-        import os
-        return psycopg2.connect(os.getenv("DATABASE_URL"))
+    def get_db():
+        pass
+
+    SessionLocal = None
 
 
 def parse_file_to_dataframe(content: bytes, filename: str) -> pd.DataFrame:
@@ -68,21 +68,16 @@ def parse_file_to_dataframe(content: bytes, filename: str) -> pd.DataFrame:
         raise ValueError(f"Error parsing file: {str(e)}")
 
 
-def get_table_columns(conn, table_name: str) -> set:
-    """Get valid column names for a database table"""
-    cursor = conn.cursor()
+def get_table_columns(db, table_name: str) -> set:
+    """Get valid column names for a database table using SQLAlchemy"""
     try:
-        cursor.execute("""
-            SELECT column_name
-            FROM information_schema.columns
-            WHERE table_name = %s
-        """, (table_name,))
-        return {row[0] for row in cursor.fetchall()}
+        from sqlalchemy import inspect
+        inspector = inspect(db.bind)
+        columns = inspector.get_columns(table_name)
+        return {col['name'] for col in columns}
     except Exception as e:
         logger.warning(f"Error getting columns for {table_name}: {e}")
         return set()
-    finally:
-        cursor.close()
 
 
 def map_to_existing_columns(row_data: dict, destination: str) -> dict:
@@ -135,32 +130,88 @@ def map_to_existing_columns(row_data: dict, destination: str) -> dict:
     elif destination == 'loans':
         # Map from auto-import fields to loans table columns
         field_map = {
+            # Loan identifiers
             'file_name': 'loan_number',
-            'borrower_first_name': 'borrower_first_name',
-            'borrower_last_name': 'borrower_last_name',
+            'organization_code': 'organization_code',
+
+            # Borrower info
             'borrower_email': 'borrower_email',
             'borrower_mobile_phone': 'borrower_phone',
+            'co_borrower_email': 'co_borrower_email',
+
+            # Property info
             'property_street': 'property_address',
             'property_city': 'property_city',
             'property_state': 'property_state',
             'property_zip': 'property_zip',
+            'property_type': 'property_type',
+            'occupancy_type': 'occupancy_type',
+            'appraised_value': 'appraisal_value',
+            'purchase_price': 'purchase_price',
+
+            # Loan details
             'loan_amount': 'amount',
             'interest_rate': 'rate',
             'loan_status': 'stage',
-            'loan_purpose': 'loan_type',
+            'loan_purpose': 'loan_purpose',
             'loan_program_name': 'program',
+            'loan_program_code': 'loan_program_code',
+            'loan_with': 'lender',
+
+            # Financial ratios
+            'ltv': 'ltv',
+            'cltv': 'cltv',
+            'first_ratio': 'first_ratio',
+            'second_ratio': 'second_ratio',
+            'credit_score': 'credit_score',
+            'cash_to_borrower': 'cash_to_borrower',
+            'lender_credit': 'lender_credit',
+
+            # Team members
             'loan_officer_name': 'loan_officer_name',
             'loan_processor_name': 'processor',
+            'loan_processor_email': 'processor_email',
             'underwriter_name': 'underwriter',
-            'credit_score': 'credit_score',
-            'ltv': 'ltv',
-            'scheduled_closing_date': 'closing_date',
-            'lock_expiration_date': 'lock_expiration_date',
-            'funded_date': 'funded_date',
-            'appraised_value': 'appraisal_value',
-            'purchase_price': 'purchase_price',
+            'closer_name': 'closer',
+
+            # Agents and title
             'listing_agent_name': 'realtor_agent',
             'settlement_company': 'title_company',
+
+            # Key dates
+            'date_created': 'created_at',
+            'status_date': 'stage_changed_at',
+            'scheduled_closing_date': 'scheduled_closing_date',
+            'lock_expiration_date': 'lock_expiration_date',
+            'funded_date': 'funded_date',
+
+            # SLA date fields
+            'le_pending_date': 'le_pending_date',
+            'le_initial_delivery_date': 'initial_disclosures_sent_date',
+            'le_received_date': 'initial_disclosures_signed_date',
+            'file_received_date': 'file_received_date',
+            'uw_received_date': 'uw_received_date',
+            'original_approved_date': 'loan_approved_date',
+            'approved_date': 'loan_approved_date',
+            'conditions_for_review_date': 'conditions_for_review_date',
+            'suspended_date': 'suspended_date',
+            'approved_not_accepted_date': 'approved_not_accepted_date',
+            'withdrawn_date': 'withdrawn_date',
+            'clear_to_close_date': 'clear_to_close_date',
+            'cd_requested_date': 'cd_requested_date',
+            'cd_initial_delivery_date': 'cd_sent_to_borrower_date',
+            'cd_received_date': 'cd_acknowledged_date',
+            'docs_ordered_date': 'docs_ordered_date',
+            'docs_out_date': 'docs_out_date',
+            'intent_to_proceed_date': 'contract_received_date',
+
+            # Appraisal dates
+            'appraisal_ordered_date': 'appraisal_ordered_date',
+            'appraisal_received_date': 'appraisal_received_date',
+
+            # Other
+            'origination_channel': 'origination_channel',
+            'referral_source': 'referral_source',
         }
 
         for auto_field, db_field in field_map.items():
@@ -210,14 +261,28 @@ def normalize_stage(stage_value: str, destination: str) -> str:
 
     elif destination == 'loans':
         loan_stage_map = {
+            # Pre-disclosure
+            'application': 'Application',
             'disclosed': 'Disclosed',
             'processing': 'Processing',
             'submitted': 'Submitted',
-            'underwriting': 'UW Received',
+            # Underwriting
+            'underwriting': 'Underwriting',
+            'uw received': 'UW Received',
+            'uw': 'UW Received',
+            'conditional approval': 'Conditional Approval',
+            'conditional': 'Conditional Approval',
             'approved': 'Approved',
-            'clear to close': 'CTC',
+            'suspended': 'Suspended',
+            # Clear to close
             'ctc': 'CTC',
+            'clear to close': 'Clear to Close',
+            'clearto close': 'Clear to Close',
+            'cleartoclose': 'Clear to Close',
+            # Closing & funding
+            'closing': 'Closing',
             'docs out': 'Docs Out',
+            'docs': 'Docs Out',
             'funded': 'Funded',
             'closed': 'Funded',
         }
@@ -239,6 +304,8 @@ async def auto_import(
     No manual field mapping required - fields are automatically detected and mapped
     using fuzzy matching with 70%+ confidence threshold.
     """
+    from sqlalchemy import text
+
     try:
         # Read and parse file
         content = await file.read()
@@ -294,11 +361,10 @@ async def auto_import(
         # Determine destination
         destination = 'loans' if table_name == 'loans' else 'leads'
 
-        # Get database connection
-        conn = get_db_connection()
-        valid_columns = get_table_columns(conn, destination)
+        # Get database session
+        db = SessionLocal()
+        valid_columns = get_table_columns(db, destination)
 
-        cursor = conn.cursor()
         imported = 0
         failed = 0
         import_errors = []
@@ -336,31 +402,31 @@ async def auto_import(
                         # Check for existing by email
                         email = row_data.get('email')
                         if email:
-                            cursor.execute(
-                                "SELECT id FROM leads WHERE LOWER(email) = LOWER(%s)",
-                                (email,)
+                            result = db.execute(
+                                text("SELECT id FROM leads WHERE LOWER(email) = LOWER(:email)"),
+                                {"email": email}
                             )
-                            existing = cursor.fetchone()
+                            existing = result.fetchone()
                             if existing:
                                 # Update existing
-                                update_cols = [f"{k} = %s" for k in row_data.keys() if k not in ['created_at']]
-                                update_vals = [v for k, v in row_data.items() if k not in ['created_at']]
-                                update_vals.append(existing[0])
-                                cursor.execute(
-                                    f"UPDATE leads SET {', '.join(update_cols)}, updated_at = NOW() WHERE id = %s",
-                                    update_vals
+                                update_data = {k: v for k, v in row_data.items() if k not in ['created_at']}
+                                update_data['updated_at'] = datetime.utcnow()
+                                set_clause = ', '.join([f"{k} = :{k}" for k in update_data.keys()])
+                                update_data['id'] = existing[0]
+                                db.execute(
+                                    text(f"UPDATE leads SET {set_clause} WHERE id = :id"),
+                                    update_data
                                 )
+                                db.commit()
                                 imported += 1
-                                conn.commit()
                                 continue
 
                         # Insert new
                         columns = list(row_data.keys())
-                        values = list(row_data.values())
-                        placeholders = ', '.join(['%s'] * len(columns))
-                        cursor.execute(
-                            f"INSERT INTO leads ({', '.join(columns)}) VALUES ({placeholders})",
-                            values
+                        placeholders = ', '.join([f":{k}" for k in columns])
+                        db.execute(
+                            text(f"INSERT INTO leads ({', '.join(columns)}) VALUES ({placeholders})"),
+                            row_data
                         )
 
                     elif destination == 'loans':
@@ -373,81 +439,89 @@ async def auto_import(
                             row_data['created_at'] = datetime.utcnow()
                         if 'stage' not in row_data:
                             row_data['stage'] = 'Processing'
+                        if 'amount' not in row_data:
+                            row_data['amount'] = 0  # Required field
 
                         # Check for existing by loan_number
                         loan_number = row_data.get('loan_number')
                         if loan_number:
-                            cursor.execute(
-                                "SELECT id FROM loans WHERE loan_number = %s",
-                                (loan_number,)
+                            result = db.execute(
+                                text("SELECT id FROM loans WHERE loan_number = :loan_number"),
+                                {"loan_number": loan_number}
                             )
-                            existing = cursor.fetchone()
+                            existing = result.fetchone()
                             if existing:
                                 # Update existing
-                                update_cols = [f"{k} = %s" for k in row_data.keys() if k not in ['loan_number', 'created_at']]
-                                update_vals = [v for k, v in row_data.items() if k not in ['loan_number', 'created_at']]
-                                update_vals.append(existing[0])
-                                cursor.execute(
-                                    f"UPDATE loans SET {', '.join(update_cols)}, updated_at = NOW() WHERE id = %s",
-                                    update_vals
+                                update_data = {k: v for k, v in row_data.items() if k not in ['loan_number', 'created_at']}
+                                update_data['updated_at'] = datetime.utcnow()
+                                set_clause = ', '.join([f"{k} = :{k}" for k in update_data.keys()])
+                                update_data['id'] = existing[0]
+                                db.execute(
+                                    text(f"UPDATE loans SET {set_clause} WHERE id = :id"),
+                                    update_data
                                 )
+                                db.commit()
                                 imported += 1
-                                conn.commit()
                                 continue
 
                         # Insert new
                         columns = list(row_data.keys())
-                        values = list(row_data.values())
-                        placeholders = ', '.join(['%s'] * len(columns))
-                        cursor.execute(
-                            f"INSERT INTO loans ({', '.join(columns)}) VALUES ({placeholders})",
-                            values
+                        placeholders = ', '.join([f":{k}" for k in columns])
+                        db.execute(
+                            text(f"INSERT INTO loans ({', '.join(columns)}) VALUES ({placeholders})"),
+                            row_data
                         )
 
                     imported += 1
-                    conn.commit()
+                    db.commit()
 
                 except Exception as row_error:
-                    conn.rollback()
+                    db.rollback()
                     failed += 1
                     import_errors.append(f"Row {idx + 2}: {str(row_error)}")
                     if len(import_errors) >= 50:
                         import_errors.append("... (additional errors truncated)")
                         break
 
-            # Log import to history
+            # Log import to history (skip if table doesn't exist)
             try:
-                user_id = current_user.get('id')
-                if user_id:
-                    cursor.execute("""
-                        INSERT INTO import_history (
-                            user_id, file_name, file_size, records_imported,
-                            records_total, records_failed, mapping_confidence,
-                            table_name, status, details, created_at
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
-                    """, (
-                        user_id,
-                        filename,
-                        len(content),
-                        imported,
-                        transform_result['stats']['total_rows'],
-                        failed,
-                        transform_result['stats']['confidence_average'],
-                        destination,
-                        'completed' if failed == 0 else 'partial',
-                        json.dumps({
-                            'mappings': transform_result['mappings'],
-                            'warnings': transform_result.get('warnings'),
-                            'errors': import_errors,
-                        })
-                    ))
-                    conn.commit()
+                if 'import_history' in get_table_columns(db, 'import_history'):
+                    user_id = current_user.get('id')
+                    if user_id:
+                        db.execute(
+                            text("""
+                                INSERT INTO import_history (
+                                    user_id, file_name, file_size, records_imported,
+                                    records_total, records_failed, mapping_confidence,
+                                    table_name, status, details, created_at
+                                ) VALUES (:user_id, :file_name, :file_size, :records_imported,
+                                    :records_total, :records_failed, :mapping_confidence,
+                                    :table_name, :status, :details, :created_at)
+                            """),
+                            {
+                                "user_id": user_id,
+                                "file_name": filename,
+                                "file_size": len(content),
+                                "records_imported": imported,
+                                "records_total": transform_result['stats']['total_rows'],
+                                "records_failed": failed,
+                                "mapping_confidence": transform_result['stats']['confidence_average'],
+                                "table_name": destination,
+                                "status": 'completed' if failed == 0 else 'partial',
+                                "details": json.dumps({
+                                    'mappings': transform_result['mappings'],
+                                    'warnings': transform_result.get('warnings'),
+                                    'errors': import_errors,
+                                }),
+                                "created_at": datetime.utcnow(),
+                            }
+                        )
+                        db.commit()
             except Exception as history_error:
                 logger.warning(f"Failed to log import history: {history_error}")
 
         finally:
-            cursor.close()
-            conn.close()
+            db.close()
 
         # Build response
         response = {

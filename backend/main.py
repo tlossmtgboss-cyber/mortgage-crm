@@ -39410,7 +39410,7 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
         "user_metadata": current_user.user_metadata,
         "phone": getattr(current_user, 'phone', None),
         "nmls_number": getattr(current_user, 'nmls_number', None),
-        "job_title": getattr(current_user, 'job_title', None),
+        "job_title": getattr(current_user, 'title', None),  # Map from 'title' column
         "slug": user_slug,
         "work_hours_start": business_hours.get('start', '09:00') if business_hours else '09:00',
         "work_hours_end": business_hours.get('end', '17:00') if business_hours else '17:00',
@@ -39447,12 +39447,13 @@ async def update_current_user_profile(
             if hasattr(current_user, 'nmls_number'):
                 current_user.nmls_number = profile_update.nmls_number
         if profile_update.job_title is not None:
-            if hasattr(current_user, 'job_title'):
-                current_user.job_title = profile_update.job_title
+            # Map job_title from frontend to 'title' column in database
+            current_user.title = profile_update.job_title
 
         # Update work hours (stored in business_hours JSON column)
         if profile_update.work_hours_start is not None or profile_update.work_hours_end is not None or profile_update.work_days is not None:
-            business_hours = getattr(current_user, 'business_hours', None) or {}
+            # Create a copy to ensure SQLAlchemy detects the change
+            business_hours = dict(getattr(current_user, 'business_hours', None) or {})
             if profile_update.work_hours_start is not None:
                 business_hours['start'] = profile_update.work_hours_start
             if profile_update.work_hours_end is not None:
@@ -39477,7 +39478,7 @@ async def update_current_user_profile(
                 "full_name": current_user.full_name,
                 "phone": getattr(current_user, 'phone', None),
                 "nmls_number": getattr(current_user, 'nmls_number', None),
-                "job_title": getattr(current_user, 'job_title', None),
+                "job_title": getattr(current_user, 'title', None),  # Map from 'title' column
                 "work_hours_start": business_hours.get('start', '09:00'),
                 "work_hours_end": business_hours.get('end', '17:00'),
                 "work_days": business_hours.get('days', ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'])

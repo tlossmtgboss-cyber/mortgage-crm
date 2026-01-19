@@ -403,61 +403,152 @@ function DataUpload() {
     ],
     loans: [
       // Loan Identifiers
-      { value: 'loan_number', label: 'Loan Number', group: 'Loan Identifiers' },
-      { value: 'stage', label: 'Loan Stage', group: 'Loan Identifiers' },
-      { value: 'date_created', label: 'Date Created', group: 'Loan Identifiers' },
+      { value: 'loan_number', label: 'Loan Number / File Name', group: 'Loan Identifiers' },
+      { value: 'stage', label: 'Loan Stage / Status', group: 'Loan Identifiers' },
+      { value: 'organization_code', label: 'Organization Code', group: 'Loan Identifiers' },
+      { value: 'loan_purpose', label: 'Loan Purpose', group: 'Loan Identifiers' },
+
       // Borrower Info
+      { value: 'borrower_name', label: 'Borrower Full Name', group: 'Borrower Info' },
       { value: 'borrower_first_name', label: 'Borrower First Name', group: 'Borrower Info' },
       { value: 'borrower_last_name', label: 'Borrower Last Name', group: 'Borrower Info' },
       { value: 'borrower_email', label: 'Borrower Email', group: 'Borrower Info' },
       { value: 'borrower_phone', label: 'Borrower Phone', group: 'Borrower Info' },
-      { value: 'coborrower_first_name', label: 'Co-Borrower First Name', group: 'Borrower Info' },
-      { value: 'coborrower_last_name', label: 'Co-Borrower Last Name', group: 'Borrower Info' },
+      { value: 'borrower_home_phone', label: 'Borrower Home Phone', group: 'Borrower Info' },
+      { value: 'borrower_work_phone', label: 'Borrower Work Phone', group: 'Borrower Info' },
+      { value: 'borrower_prequalified', label: 'Borrower PreQualified', group: 'Borrower Info' },
+      { value: 'coborrower_name', label: 'Co-Borrower Name', group: 'Borrower Info' },
       { value: 'co_borrower_email', label: 'Co-Borrower Email', group: 'Borrower Info' },
+      { value: 'borrower_email_3', label: 'Borrower 3 Email', group: 'Borrower Info' },
       { value: 'preferred_communication', label: 'Preferred Communication', group: 'Borrower Info' },
+
       // Loan Details
       { value: 'amount', label: 'Loan Amount', group: 'Loan Details' },
       { value: 'rate', label: 'Interest Rate', group: 'Loan Details' },
       { value: 'term', label: 'Loan Term (months)', group: 'Loan Details' },
-      { value: 'program', label: 'Loan Program', group: 'Loan Details' },
+      { value: 'program', label: 'Loan Program Name', group: 'Loan Details' },
+      { value: 'loan_program_code', label: 'Loan Program Code', group: 'Loan Details' },
       { value: 'loan_type', label: 'Loan Type', group: 'Loan Details' },
       { value: 'purchase_price', label: 'Purchase Price', group: 'Loan Details' },
       { value: 'down_payment', label: 'Down Payment', group: 'Loan Details' },
       { value: 'lender', label: 'Lender/Investor', group: 'Loan Details' },
+      { value: 'cash_to_borrower', label: 'Cash To Borrower', group: 'Loan Details' },
+      { value: 'lender_credit', label: 'Lender Credit', group: 'Loan Details' },
+      { value: 'buy_price_net', label: 'Buy Price Net', group: 'Loan Details' },
+      { value: 'origination_channel', label: 'Origination Channel', group: 'Loan Details' },
+      { value: 'referral_source', label: 'Referral Source', group: 'Loan Details' },
+
+      // Financial Info
+      { value: 'credit_score', label: 'Credit Score', group: 'Financial Info' },
+      { value: 'ltv', label: 'LTV', group: 'Financial Info' },
+      { value: 'cltv', label: 'CLTV', group: 'Financial Info' },
+      { value: 'first_ratio', label: 'First Ratio (Front DTI)', group: 'Financial Info' },
+      { value: 'second_ratio', label: 'Second Ratio (Back DTI)', group: 'Financial Info' },
+
       // Property Info
       { value: 'property_address', label: 'Property Address', group: 'Property Info' },
       { value: 'property_city', label: 'City', group: 'Property Info' },
       { value: 'property_state', label: 'State', group: 'Property Info' },
       { value: 'property_zip', label: 'Zip Code', group: 'Property Info' },
+      { value: 'property_type', label: 'Property Type', group: 'Property Info' },
+      { value: 'occupancy_type', label: 'Occupancy Type', group: 'Property Info' },
       { value: 'appraisal_value', label: 'Appraisal Value', group: 'Property Info' },
-      // Team Members
+
+      // Team Members - Internal
       { value: 'loan_officer_name', label: 'Loan Officer', group: 'Team Members' },
       { value: 'loan_officer_email', label: 'LO Email', group: 'Team Members' },
       { value: 'processor', label: 'Processor', group: 'Team Members' },
       { value: 'processor_email', label: 'Processor Email', group: 'Team Members' },
+      { value: 'processor_phone', label: 'Processor Phone', group: 'Team Members' },
       { value: 'underwriter', label: 'Underwriter', group: 'Team Members' },
       { value: 'underwriter_email', label: 'UW Email', group: 'Team Members' },
       { value: 'closer', label: 'Closer', group: 'Team Members' },
       { value: 'closer_email', label: 'Closer Email', group: 'Team Members' },
-      { value: 'realtor_agent', label: 'Realtor/Agent', group: 'Team Members' },
-      { value: 'title_company', label: 'Title Company', group: 'Team Members' },
-      // Important Dates
-      { value: 'closing_date', label: 'Closing Date', group: 'Important Dates' },
-      { value: 'lock_date', label: 'Lock Date', group: 'Important Dates' },
-      { value: 'lock_expiration_date', label: 'Lock Expiration', group: 'Important Dates' },
-      { value: 'funded_date', label: 'Funded Date', group: 'Important Dates' },
-      { value: 'contract_received_date', label: 'Contract Received', group: 'Important Dates' },
-      { value: 'loan_estimate_sent_date', label: 'LE Sent Date', group: 'Important Dates' },
-      { value: 'initial_disclosures_sent_date', label: 'Initial Disclosures Sent', group: 'Important Dates' },
-      { value: 'initial_disclosures_signed_date', label: 'Initial Disclosures Signed', group: 'Important Dates' },
-      { value: 'cd_received_signed_date', label: 'CD Signed', group: 'Important Dates' },
-      { value: 'conditional_approval_date', label: 'Conditional Approval', group: 'Important Dates' },
-      { value: 'final_closing_package_sent_date', label: 'Final Package Sent', group: 'Important Dates' },
-      // Appraisal
-      { value: 'appraisal_ordered_date', label: 'Appraisal Ordered', group: 'Appraisal' },
-      { value: 'appraisal_scheduled_date', label: 'Appraisal Scheduled', group: 'Appraisal' },
-      { value: 'appraisal_completed_date', label: 'Appraisal Completed', group: 'Appraisal' },
+      { value: 'doc_drawer_name', label: 'Doc Drawer', group: 'Team Members' },
+      { value: 'broker_name', label: 'Broker', group: 'Team Members' },
+      { value: 'disclosure', label: 'Disclosure Person', group: 'Team Members' },
+
+      // Agents & Third Parties
+      { value: 'listing_agent_name', label: 'Listing Agent', group: 'Agents' },
+      { value: 'listing_agent_company', label: 'Listing Agent Company', group: 'Agents' },
+      { value: 'listing_agent_phone', label: 'Listing Agent Phone', group: 'Agents' },
+      { value: 'listing_agent_email', label: 'Listing Agent Email', group: 'Agents' },
+      { value: 'selling_agent_name', label: 'Selling Agent', group: 'Agents' },
+      { value: 'selling_agent_company', label: 'Selling Agent Company', group: 'Agents' },
+      { value: 'selling_agent_phone', label: 'Selling Agent Phone', group: 'Agents' },
+      { value: 'selling_agent_email', label: 'Selling Agent Email', group: 'Agents' },
+      { value: 'realtor_agent', label: 'Realtor/Agent', group: 'Agents' },
+      { value: 'title_company', label: 'Title/Settlement Company', group: 'Agents' },
+      { value: 'settlement_company_phone', label: 'Settlement Company Phone', group: 'Agents' },
+
+      // SLA Dates - Application Phase
+      { value: 'created_at', label: 'Date Created', group: 'Application Dates' },
+      { value: 'status_date', label: 'Status Date', group: 'Application Dates' },
+      { value: 'prospect_date', label: 'Prospect Date', group: 'Application Dates' },
+      { value: 'application_date', label: 'Application Date', group: 'Application Dates' },
+      { value: 'le_pending_date', label: 'LE Pending Date', group: 'Application Dates' },
+      { value: 'le_requested_date', label: 'LE Requested Date', group: 'Application Dates' },
+      { value: 'credit_only_date', label: 'Credit Only Date', group: 'Application Dates' },
+      { value: 'credit_ordered_date', label: 'Credit Ordered Date', group: 'Application Dates' },
+      { value: 'file_received_date', label: 'File Received Date', group: 'Application Dates' },
+      { value: 'preapproval_date', label: 'Preapproval Date', group: 'Application Dates' },
+      { value: 'intent_to_proceed_date', label: 'Intent to Proceed Date', group: 'Application Dates' },
+
+      // SLA Dates - Disclosure Phase
+      { value: 'initial_disclosures_sent_date', label: 'LE Initial Delivery Date', group: 'Disclosure Dates' },
+      { value: 'initial_disclosures_signed_date', label: 'LE Initial Received Date', group: 'Disclosure Dates' },
+      { value: 'loan_estimate_sent_date', label: 'LE Sent Date', group: 'Disclosure Dates' },
+      { value: 'cd_requested_date', label: 'CD Requested Date', group: 'Disclosure Dates' },
+      { value: 'cd_sent_to_borrower_date', label: 'CD Delivery Date', group: 'Disclosure Dates' },
+      { value: 'cd_acknowledged_date', label: 'CD Received/Acknowledged Date', group: 'Disclosure Dates' },
+      { value: 'cd_received_signed_date', label: 'CD Signed Date', group: 'Disclosure Dates' },
+
+      // SLA Dates - Underwriting Phase
+      { value: 'uw_received_date', label: 'UW Received Date', group: 'Underwriting Dates' },
+      { value: 'conditions_for_review_date', label: 'Conditions for Review Date', group: 'Underwriting Dates' },
+      { value: 'suspended_date', label: 'Suspended Date', group: 'Underwriting Dates' },
+      { value: 'loan_approved_date', label: 'Approved Date', group: 'Underwriting Dates' },
+      { value: 'original_approved_date', label: 'Original Approved Date', group: 'Underwriting Dates' },
+      { value: 'conditional_approval_date', label: 'Conditional Approval Date', group: 'Underwriting Dates' },
+      { value: 'approved_not_accepted_date', label: 'Approved Not Accepted Date', group: 'Underwriting Dates' },
+      { value: 'approval_expires_date', label: 'Approval Expires Date', group: 'Underwriting Dates' },
+      { value: 'declined_date', label: 'Declined Date', group: 'Underwriting Dates' },
+      { value: 'withdrawn_date', label: 'Withdrawn Date', group: 'Underwriting Dates' },
+      { value: 'canceled_for_incompleteness_date', label: 'Canceled for Incompleteness Date', group: 'Underwriting Dates' },
+
+      // SLA Dates - Appraisal Phase
+      { value: 'appraisal_ordered_date', label: 'Appraisal Ordered', group: 'Appraisal Dates' },
+      { value: 'appraisal_scheduled_date', label: 'Appraisal Scheduled', group: 'Appraisal Dates' },
+      { value: 'appraisal_received_date', label: 'Appraisal Received', group: 'Appraisal Dates' },
+      { value: 'appraisal_completed_date', label: 'Appraisal Completed', group: 'Appraisal Dates' },
+      { value: 'appraisal_docs_expire_date', label: 'Appraisal Docs Expire', group: 'Appraisal Dates' },
+
+      // SLA Dates - Title Phase
+      { value: 'title_ordered_date', label: 'Title Ordered', group: 'Title Dates' },
+      { value: 'title_received_date', label: 'Title Received', group: 'Title Dates' },
+
+      // SLA Dates - Closing Phase
+      { value: 'clear_to_close_date', label: 'Clear to Close Date', group: 'Closing Dates' },
+      { value: 'docs_ordered_date', label: 'Docs Ordered Date', group: 'Closing Dates' },
+      { value: 'docs_out_date', label: 'Docs Out Date', group: 'Closing Dates' },
+      { value: 'docs_back_date', label: 'Docs Back Date', group: 'Closing Dates' },
+      { value: 'credit_docs_expire_date', label: 'Credit Docs Expire', group: 'Closing Dates' },
+      { value: 'scheduled_closing_date', label: 'Scheduled Closing Date', group: 'Closing Dates' },
+      { value: 'closing_date', label: 'Closing Date', group: 'Closing Dates' },
+      { value: 'contract_received_date', label: 'Contract Received', group: 'Closing Dates' },
+      { value: 'final_closing_package_sent_date', label: 'Final Package Sent', group: 'Closing Dates' },
+
+      // SLA Dates - Funding Phase
+      { value: 'scheduled_funding_date', label: 'Scheduled Funding Date', group: 'Funding Dates' },
+      { value: 'funds_ordered_date', label: 'Funds Ordered Date', group: 'Funding Dates' },
+      { value: 'funds_sent_date', label: 'Funds Sent Date', group: 'Funding Dates' },
+      { value: 'funded_date', label: 'Funded Date', group: 'Funding Dates' },
+      { value: 'first_payment_date', label: 'First Payment Date', group: 'Funding Dates' },
+      { value: 'investor_purchased_date', label: 'Investor Purchased Date', group: 'Funding Dates' },
+
       // Rate Lock
+      { value: 'lock_date', label: 'Lock Date', group: 'Rate Lock' },
+      { value: 'lock_expiration_date', label: 'Lock Expiration', group: 'Rate Lock' },
       { value: 'lock_term_days', label: 'Lock Term (days)', group: 'Rate Lock' },
       { value: 'float_down_available', label: 'Float Down Available', group: 'Rate Lock' }
     ],
