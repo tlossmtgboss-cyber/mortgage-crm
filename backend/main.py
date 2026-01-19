@@ -41091,6 +41091,115 @@ async def delete_user(
         raise HTTPException(status_code=500, detail=f"Delete failed: {error_msg[:200]}")
 
 
+@app.post("/api/v1/admin/cleanup-sample-users")
+async def cleanup_sample_users(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete sample/demo users (admin only)
+
+    This endpoint identifies and deletes demo/sample users that match known patterns:
+    - Users with @company.com email (from demo seed script)
+    - Users with names matching known demo users (Sarah Johnson, Michael Chen, etc.)
+
+    Protected users (will NOT be deleted):
+    - admin@perenniaai.com (platform admin)
+    - Current user
+    - Users with real activity (loans, leads, etc.)
+    """
+    # Admin check
+    if not current_user.is_admin and current_user.permission_role != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    # Known demo/sample user patterns
+    demo_email_patterns = ['@company.com']  # From seed_demo_people.py
+    demo_names = [
+        'Sarah Johnson', 'Michael Chen', 'Emily Davis', 'James Wilson',
+        'Sarah Mitchell', 'Jennifer Rodriguez', 'David Thompson', 'Lisa Wong',
+        'Robert Garcia', 'Amanda Foster', 'Kevin Park', 'Rachel Stevens',
+        'Marcus Johnson', 'Emily Patterson', 'Brandon Lee', 'Samantha Brooks',
+        'Tyler Martinez', 'Olivia Anderson', 'Admin User'
+    ]
+
+    protected_emails = ['admin@perenniaai.com', current_user.email]
+
+    try:
+        # Find sample users
+        sample_users = []
+
+        # Find users with demo email patterns
+        for pattern in demo_email_patterns:
+            users = db.query(User).filter(
+                User.email.like(f'%{pattern}'),
+                ~User.email.in_(protected_emails)
+            ).all()
+            sample_users.extend(users)
+
+        # Find users with demo names (but not protected emails)
+        for name in demo_names:
+            users = db.query(User).filter(
+                User.full_name == name,
+                ~User.email.in_(protected_emails)
+            ).all()
+            for user in users:
+                if user not in sample_users:
+                    sample_users.append(user)
+
+        if not sample_users:
+            return {
+                "message": "No sample users found to clean up",
+                "deleted_count": 0,
+                "deleted_users": []
+            }
+
+        deleted_users = []
+        errors = []
+
+        for user in sample_users:
+            try:
+                user_info = {"id": user.id, "email": user.email, "name": user.full_name}
+                params = {"user_id": user.id}
+
+                # Clean up related data first
+                cleanup_tables = [
+                    ('process_tasks', 'user_id'),
+                    ('process_milestones', 'user_id'),
+                    ('process_roles', 'user_id'),
+                    ('onboarding_progress', 'user_id'),
+                    ('sessions', 'user_id'),
+                    ('loan_activities', 'user_id'),
+                ]
+
+                for table_name, column_name in cleanup_tables:
+                    try:
+                        db.execute(text(f"DELETE FROM {table_name} WHERE {column_name} = :user_id"), params)
+                    except:
+                        pass
+
+                # Delete the user
+                db.execute(text("DELETE FROM users WHERE id = :user_id"), params)
+                deleted_users.append(user_info)
+
+            except Exception as e:
+                errors.append({"user": user.email, "error": str(e)[:100]})
+
+        db.commit()
+
+        logger.info(f"Sample user cleanup by {current_user.email}: {len(deleted_users)} deleted")
+
+        return {
+            "message": f"Cleaned up {len(deleted_users)} sample users",
+            "deleted_count": len(deleted_users),
+            "deleted_users": deleted_users,
+            "errors": errors if errors else None
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Sample user cleanup failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 async def _get_deletion_blockers(user_id: int, db: Session):
     """Helper function to check deletion blockers."""
     user = db.query(User).filter(User.id == user_id).first()
@@ -53788,49 +53897,9 @@ async def get_team_member_detail(
 ):
     """Get detailed information about a specific team member"""
     try:
-        # Get the user
+        # Get the user - no sample/demo data, only real users
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
-            # Return demo data for users that don't exist
-            demo_members = {
-                1: {"first_name": "Timothy", "last_name": "Loss", "email": "tloss@cmgfi.com", "role": "Loan Officer", "department": "Origination"},
-                2: {"first_name": "Sarah", "last_name": "Johnson", "email": "sjohnson@cmgfi.com", "role": "Processor", "department": "Processing"},
-                3: {"first_name": "Michael", "last_name": "Chen", "email": "mchen@cmgfi.com", "role": "Jr. Loan Officer", "department": "Origination"},
-                4: {"first_name": "Emily", "last_name": "Davis", "email": "edavis@cmgfi.com", "role": "Loan Officer Assistant", "department": "Origination"},
-                5: {"first_name": "James", "last_name": "Wilson", "email": "jwilson@cmgfi.com", "role": "Concierge", "department": "Operations"},
-            }
-
-            if user_id in demo_members:
-                demo = demo_members[user_id]
-                return {
-                    "id": user_id,
-                    "email": demo["email"],
-                    "first_name": demo["first_name"],
-                    "last_name": demo["last_name"],
-                    "full_name": f"{demo['first_name']} {demo['last_name']}",
-                    "role": demo["role"],
-                    "phone": "(555) 123-4567",
-                    "photo_url": None,
-                    "employee_id": f"EMP{user_id:04d}",
-                    "start_date": "2023-01-15",
-                    "department": demo["department"],
-                    "manager": "Timothy Loss",
-                    "title": demo["role"],
-                    "disc_d": 50,
-                    "disc_i": 50,
-                    "disc_s": 50,
-                    "disc_c": 50,
-                    "disc_summary": "",
-                    "birthday": "",
-                    "anniversary": "",
-                    "spouse_name": "",
-                    "children": "",
-                    "hobbies": "",
-                    "emergency_contact": "",
-                    "emergency_phone": "",
-                    "created_at": datetime.now().isoformat(),
-                    "onboarding_completed": True
-                }
             raise HTTPException(status_code=404, detail="User not found")
 
         # Parse user_metadata if it exists
