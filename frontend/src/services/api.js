@@ -886,7 +886,17 @@ export const teamAPI = {
     return response.data;
   },
   deleteMember: async (memberId) => {
-    await api.delete(`/api/v1/team/members/${memberId}`);
+    // Try team endpoint first, fallback to admin endpoint
+    try {
+      await api.delete(`/api/v1/team/members/${memberId}`);
+    } catch (error) {
+      if (error.response?.status === 404) {
+        // Fallback to admin delete endpoint
+        await api.delete(`/api/v1/admin/users/${memberId}`);
+      } else {
+        throw error;
+      }
+    }
   },
 };
 
