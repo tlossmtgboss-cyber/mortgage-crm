@@ -383,7 +383,10 @@ function ReconciliationCenter() {
 
       const microsoftStatus = await fetch(`${API_BASE_URL}/api/v1/microsoft/status/outlook_email`, {
         headers: { 'Authorization': `Bearer ${token}` }
-      }).then(r => r.ok ? r.json() : null).catch(() => null);
+      }).then(r => r.ok ? r.json() : null).catch((e) => { console.error('Microsoft status check error:', e); return null; });
+
+      // Debug logging for troubleshooting
+      console.log('Email service status check:', { gmailStatus, microsoftStatus });
 
       let response;
       let syncEndpoint;
