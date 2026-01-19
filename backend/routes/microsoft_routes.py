@@ -118,16 +118,22 @@ async def microsoft_callback(
     redirect_url = None
     integration_type = "calendar"  # default
 
+    logger.info(f"Microsoft callback received - state: {state}, code length: {len(code) if code else 0}")
+
     if state:
         parts = state.split("|")
+        logger.info(f"State parts: {parts}")
         try:
             user_id = int(parts[0])
         except ValueError:
+            logger.error(f"Failed to parse user_id from state: {parts[0] if parts else 'empty'}")
             pass
         if len(parts) > 1:
             redirect_url = parts[1]
         if len(parts) > 2:
             integration_type = parts[2]
+
+    logger.info(f"Parsed state - user_id: {user_id}, redirect_url: {redirect_url}, integration_type: {integration_type}")
 
     if not user_id:
         logger.error("Invalid state parameter in Microsoft callback")
@@ -151,6 +157,7 @@ async def microsoft_callback(
 
     # Determine provider name based on integration type
     provider = "outlook_calendar" if integration_type == "calendar" else "outlook_email"
+    logger.info(f"Integration type '{integration_type}' -> provider '{provider}'")
 
     # Store tokens in user_integrations table
     try:
