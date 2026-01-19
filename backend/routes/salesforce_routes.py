@@ -129,14 +129,48 @@ async def salesforce_callback(
     """
     Handle OAuth callback from Salesforce.
     Exchanges authorization code for access token.
+    Supports two state formats:
+    1. Secure hex token stored in oauth_states table (from integration_settings_routes)
+    2. Legacy format: user_id:redirect_url
     """
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
     if error:
         logger.error(f"Salesforce OAuth error: {error} - {error_description}")
-        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
         return RedirectResponse(
             url=f"{frontend_url}/settings/integrations?error=salesforce_auth_failed&message={error_description or error}"
         )
 
+    # First, try to handle state as a secure token from oauth_states table
+    if state:
+        try:
+            from services.salesforce.oauth_service import salesforce_oauth
+
+            # Check if this state exists in oauth_states table
+            oauth_state = db.execute(text("""
+                SELECT id, user_id, return_url, state_metadata, expires_at, used
+                FROM oauth_states
+                WHERE state_token = :state AND provider = 'salesforce'
+            """), {"state": state}).fetchone()
+
+            if oauth_state:
+                logger.info(f"Found OAuth state in database for state token")
+
+                # Use the oauth service to handle the callback
+                try:
+                    result = await salesforce_oauth.handle_callback(db, code, state)
+                    return_url = result.get('return_url') or f"{frontend_url}/settings/integrations"
+                    logger.info(f"Salesforce OAuth successful for user {result['user_id']}")
+                    return RedirectResponse(url=f"{return_url}?salesforce=connected")
+                except ValueError as e:
+                    logger.error(f"OAuth callback error: {e}")
+                    return RedirectResponse(
+                        url=f"{frontend_url}/settings/integrations?error=salesforce_auth_failed&message={str(e)}"
+                    )
+        except Exception as e:
+            logger.warning(f"OAuth state lookup failed, trying legacy format: {e}")
+
+    # Fall back to legacy format: user_id:redirect_url
     from integrations.salesforce_service import salesforce_client
 
     # Parse state
@@ -152,6 +186,7 @@ async def salesforce_callback(
             redirect_url = parts[1]
 
     if not user_id:
+        logger.error(f"Invalid state parameter: {state[:50] if state else 'None'}...")
         raise HTTPException(status_code=400, detail="Invalid state parameter")
 
     # Retrieve PKCE code_verifier using state
