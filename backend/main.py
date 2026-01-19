@@ -51534,6 +51534,61 @@ def init_db():
                         END $$;
                     """))
 
+                    # Add title column to users table if it doesn't exist (for job title/position)
+                    conn.execute(text("""
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (
+                                SELECT 1 FROM information_schema.columns
+                                WHERE table_name='users' AND column_name='title'
+                            ) THEN
+                                ALTER TABLE users ADD COLUMN title TEXT;
+                            END IF;
+                        END $$;
+                    """))
+
+                    # Add company_logo_url column to users table if it doesn't exist
+                    conn.execute(text("""
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (
+                                SELECT 1 FROM information_schema.columns
+                                WHERE table_name='users' AND column_name='company_logo_url'
+                            ) THEN
+                                ALTER TABLE users ADD COLUMN company_logo_url TEXT;
+                            END IF;
+                        END $$;
+                    """))
+
+                    # Add headshot_url column to users table if it doesn't exist
+                    conn.execute(text("""
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (
+                                SELECT 1 FROM information_schema.columns
+                                WHERE table_name='users' AND column_name='headshot_url'
+                            ) THEN
+                                ALTER TABLE users ADD COLUMN headshot_url TEXT;
+                            END IF;
+                        END $$;
+                    """))
+
+                    # Add team_name column to users table if it doesn't exist
+                    conn.execute(text("""
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (
+                                SELECT 1 FROM information_schema.columns
+                                WHERE table_name='users' AND column_name='team_name'
+                            ) THEN
+                                ALTER TABLE users ADD COLUMN team_name TEXT;
+                            END IF;
+                        END $$;
+                    """))
+
+                    conn.commit()
+                    logger.info("✅ User profile columns added/verified")
+
                     # Add new Lead columns if they don't exist
                     conn.execute(text("""
                         DO $$
