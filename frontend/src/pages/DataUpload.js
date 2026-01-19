@@ -230,10 +230,13 @@ function DataUpload() {
   const downloadLoansTemplate = () => {
     const headers = [
       'Loan Number',
+      'Date Created',
       'Borrower First Name',
       'Borrower Last Name',
       'Borrower Email',
       'Borrower Phone',
+      'Co-Borrower First Name',
+      'Co-Borrower Last Name',
       'Stage',
       'Property Address',
       'City',
@@ -252,10 +255,13 @@ function DataUpload() {
 
     const sampleData = [
       'LN-2024-001',
+      '2024-01-15',
       'Jane',
       'Doe',
       'jane.doe@email.com',
       '555-987-6543',
+      'John',
+      'Doe',
       'Processing',
       '456 Oak Avenue',
       'Dallas',
@@ -284,7 +290,8 @@ function DataUpload() {
   const downloadPortfolioTemplate = () => {
     const headers = [
       'Loan Number',
-      'Borrower Name',
+      'Borrower First Name',
+      'Borrower Last Name',
       'Borrower Email',
       'Borrower Phone',
       'Property Address',
@@ -308,7 +315,8 @@ function DataUpload() {
 
     const sampleData = [
       'PF-2023-001',
-      'Robert Johnson',
+      'Robert',
+      'Johnson',
       'robert.johnson@email.com',
       '555-456-7890',
       '789 Pine Street',
@@ -395,11 +403,14 @@ function DataUpload() {
       // Loan Identifiers
       { value: 'loan_number', label: 'Loan Number', group: 'Loan Identifiers' },
       { value: 'stage', label: 'Loan Stage', group: 'Loan Identifiers' },
+      { value: 'date_created', label: 'Date Created', group: 'Loan Identifiers' },
       // Borrower Info
-      { value: 'borrower_name', label: 'Borrower Name', group: 'Borrower Info' },
+      { value: 'borrower_first_name', label: 'Borrower First Name', group: 'Borrower Info' },
+      { value: 'borrower_last_name', label: 'Borrower Last Name', group: 'Borrower Info' },
       { value: 'borrower_email', label: 'Borrower Email', group: 'Borrower Info' },
       { value: 'borrower_phone', label: 'Borrower Phone', group: 'Borrower Info' },
-      { value: 'coborrower_name', label: 'Co-Borrower Name', group: 'Borrower Info' },
+      { value: 'coborrower_first_name', label: 'Co-Borrower First Name', group: 'Borrower Info' },
+      { value: 'coborrower_last_name', label: 'Co-Borrower Last Name', group: 'Borrower Info' },
       { value: 'co_borrower_email', label: 'Co-Borrower Email', group: 'Borrower Info' },
       { value: 'preferred_communication', label: 'Preferred Communication', group: 'Borrower Info' },
       // Loan Details
@@ -451,7 +462,8 @@ function DataUpload() {
     portfolio: [
       // Loan Info
       { value: 'loan_number', label: 'Loan Number', group: 'Loan Info' },
-      { value: 'borrower_name', label: 'Borrower Name', group: 'Loan Info' },
+      { value: 'borrower_first_name', label: 'Borrower First Name', group: 'Loan Info' },
+      { value: 'borrower_last_name', label: 'Borrower Last Name', group: 'Loan Info' },
       { value: 'borrower_email', label: 'Borrower Email', group: 'Loan Info' },
       { value: 'borrower_phone', label: 'Borrower Phone', group: 'Loan Info' },
       // Property

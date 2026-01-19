@@ -53640,10 +53640,24 @@ async def get_team_members(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get all team members with their assigned roles from onboarding"""
+    """Get all team members with their assigned roles from onboarding
+
+    Multi-tenancy: Only shows users from the current user's organization.
+    Excludes the platform admin (admin@perenniaai.com).
+    """
     try:
-        # Get all users in the system
-        all_users = db.query(User).filter(User.id != current_user.id).all()
+        # Get all users in the same organization as current user
+        # Exclude platform admin and current user (current user is added separately)
+        query = db.query(User).filter(
+            User.id != current_user.id,
+            User.email != 'admin@perenniaai.com'  # Never show platform admin
+        )
+
+        # Filter by organization if user has one
+        if current_user.organization_id:
+            query = query.filter(User.organization_id == current_user.organization_id)
+
+        all_users = query.all()
 
         # Get all process roles for the current user (the admin who completed onboarding)
         process_roles = db.query(ProcessRole).filter(
@@ -53653,10 +53667,8 @@ async def get_team_members(
 
         # Get tasks count for each role
         team_members = []
-        existing_ids = set()
 
         for user in all_users:
-            existing_ids.add(user.id)
             # Extract metadata
             metadata = user.user_metadata or {}
 
@@ -53678,29 +53690,7 @@ async def get_team_members(
             # Add to list
             team_members.append(member_data)
 
-        # Add demo members if they don't exist in DB
-        demo_members = [
-            {"id": 2, "first_name": "Sarah", "last_name": "Johnson", "email": "sjohnson@cmgfi.com", "role": "Processor", "title": "Senior Processor"},
-            {"id": 3, "first_name": "Michael", "last_name": "Chen", "email": "mchen@cmgfi.com", "role": "Jr. Loan Officer", "title": "Jr. Loan Officer"},
-            {"id": 4, "first_name": "Emily", "last_name": "Davis", "email": "edavis@cmgfi.com", "role": "Loan Officer Assistant", "title": "LOA"},
-            {"id": 5, "first_name": "James", "last_name": "Wilson", "email": "jwilson@cmgfi.com", "role": "Concierge", "title": "Concierge"},
-        ]
-
-        for demo in demo_members:
-            if demo["id"] not in existing_ids:
-                team_members.append({
-                    "id": demo["id"],
-                    "email": demo["email"],
-                    "full_name": f"{demo['first_name']} {demo['last_name']}",
-                    "first_name": demo["first_name"],
-                    "last_name": demo["last_name"],
-                    "phone": "(555) 123-4567",
-                    "role": demo["role"],
-                    "title": demo["title"],
-                    "created_at": datetime.now().isoformat(),
-                    "onboarding_completed": True,
-                    "tasks_count": 0
-                })
+        # No sample/demo data - only show real users from the database
 
         # Also include current user
         current_metadata = current_user.user_metadata or {}
