@@ -835,7 +835,8 @@ export const MASTER_ADMIN_NAVIGATION = [
   {
     key: 'dashboard',
     label: 'Dashboard',
-    path: '/dashboard',
+    path: '/admin',  // Admin Panel is the admin's dashboard
+    matchPaths: ['/admin'],
     isStandalone: true
   },
   {
@@ -939,10 +940,9 @@ export const MASTER_ADMIN_NAVIGATION = [
   {
     key: 'leadership',
     label: 'Leadership',
-    path: '/admin',
-    matchPaths: ['/admin', '/market', '/profitability', '/production-predictor', '/deal-alerts', '/scorecard'],
+    path: '/market',
+    matchPaths: ['/market', '/profitability', '/production-predictor', '/deal-alerts', '/scorecard'],
     children: [
-      { path: '/admin', label: 'Admin Panel', icon: 'fa-cog' },
       { path: '/market', label: 'Market', icon: 'fa-globe' },
       { path: '/profitability', label: 'Profitability', icon: 'fa-dollar-sign' },
       { path: '/production-predictor', label: 'Production Predictor', icon: 'fa-crystal-ball' },
