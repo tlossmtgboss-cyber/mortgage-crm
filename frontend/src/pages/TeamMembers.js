@@ -461,7 +461,8 @@ function TeamMembers() {
     );
   }
 
-  const assignedCount = Object.keys(roleAssignments).length;
+  // Count how many roles have a user assigned
+  const assignedCount = workflowRoles.filter(role => role.user_id).length;
 
   return (
     <div className="leads-page">
