@@ -1,7 +1,7 @@
 FROM python:3.11-slim
 
 # Build cache buster - change this value to force full rebuild
-ARG CACHE_DATE=2026-01-19T00:40:00Z-fix-migrations
+ARG CACHE_DATE=2026-01-19T17:15:00Z-salesforce-tables
 
 WORKDIR /app
 
