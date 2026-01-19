@@ -171,6 +171,17 @@ function TeamMembers() {
 
   // Handle workflow role assignment change
   const handleWorkflowRoleChange = async (memberId, roleId) => {
+    // Check if this role is already assigned to someone else
+    if (roleId) {
+      const existingRole = workflowRoles.find(r => r.role_id === parseInt(roleId));
+      if (existingRole && existingRole.user_id && existingRole.user_id !== memberId) {
+        const confirmMessage = `"${existingRole.role_name}" is currently assigned to ${existingRole.user_name}.\n\nDo you want to reassign this role?`;
+        if (!window.confirm(confirmMessage)) {
+          return; // User cancelled
+        }
+      }
+    }
+
     setSavingWorkflowRole(prev => ({ ...prev, [memberId]: true }));
 
     try {
@@ -186,7 +197,8 @@ function TeamMembers() {
         });
 
         if (response.ok) {
-          toast.success('Workflow role assigned');
+          const data = await response.json();
+          toast.success(data.message || 'Workflow role assigned');
 
           // Update local state
           setRoleAssignments(prev => {
@@ -572,16 +584,19 @@ function TeamMembers() {
                           }}
                         >
                           <option value="">-- None --</option>
-                          {workflowRoles.map(role => (
-                            <option
-                              key={role.role_id}
-                              value={role.role_id}
-                              disabled={role.user_id && role.user_id !== member.id}
-                            >
-                              {role.role_name}
-                              {role.user_id && role.user_id !== member.id ? ' (assigned)' : ''}
-                            </option>
-                          ))}
+                          {workflowRoles.map(role => {
+                            const isAssignedToOther = role.user_id && role.user_id !== member.id;
+                            const assignedToName = isAssignedToOther ? role.user_name : null;
+                            return (
+                              <option
+                                key={role.role_id}
+                                value={role.role_id}
+                              >
+                                {role.role_name}
+                                {assignedToName ? ` (${assignedToName})` : ''}
+                              </option>
+                            );
+                          })}
                         </select>
                         {isSavingRole && (
                           <span style={{
