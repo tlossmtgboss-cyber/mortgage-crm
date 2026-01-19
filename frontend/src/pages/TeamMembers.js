@@ -461,8 +461,8 @@ function TeamMembers() {
     );
   }
 
-  // Count how many roles have a user assigned
-  const assignedCount = workflowRoles.filter(role => role.user_id).length;
+  // Count how many team members have a workflow role assigned
+  const membersWithRoles = safeMembers.filter(member => roleAssignments[member.id]).length;
 
   return (
     <div className="leads-page">
@@ -669,7 +669,7 @@ function TeamMembers() {
           {workflowRoles.length === 0 ? (
             'No workflow roles configured. Click the button to set up workflow roles for your team.'
           ) : (
-            `${assignedCount} of ${workflowRoles.length} workflow roles assigned. Workflow roles determine default team member assignments for new loans and leads.`
+            `${membersWithRoles} of ${safeMembers.length} team members have a workflow role assigned.`
           )}
         </span>
         {workflowRoles.length === 0 && canEditTeam && (
