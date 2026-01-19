@@ -51227,6 +51227,9 @@ async def get_users_with_calendars(
 def init_db():
     """Create all database tables"""
     try:
+        # Import models to register them with Base before create_all
+        import salesforce_integration_models  # Salesforce integration tables
+
         Base.metadata.create_all(bind=engine)
         logger.info("✅ Database tables created successfully")
 

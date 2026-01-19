@@ -208,32 +208,12 @@ class ProductionPredictorService:
                     return history
 
             except Exception as e:
-                logger.warning(f"Could not fetch production history from database, using demo data: {e}")
+                logger.warning(f"Could not fetch production history from database: {e}")
 
-        # Fallback to sample historical data for demo
-        for i in range(months):
-            month_date = today.replace(day=1) - timedelta(days=30 * i)
-            # Simulate production with seasonality
-            base_units = 8  # Average monthly units
-            seasonal_factor = self.SEASONAL_FACTORS.get(month_date.month, 1.0)
-            # Add some random variation
-            import random
-            variation = random.uniform(0.8, 1.2)
-
-            units = int(base_units * seasonal_factor * variation)
-            volume = units * random.uniform(350000, 450000)
-            applications = int(units / 0.7)  # ~70% pull-through
-
-            history.append(ProductionDataPoint(
-                date=month_date,
-                units=units,
-                volume=volume,
-                applications=applications,
-                pull_through_rate=units / applications if applications > 0 else 0,
-            ))
-
-        # Reverse to chronological order
-        return list(reversed(history))
+        # No sample/demo data - return empty list when no real CRM data exists
+        # The frontend will show an appropriate "no data" state
+        logger.info(f"No production data found for {entity_type} {entity_id}")
+        return history
 
     def analyze_trend(
         self,

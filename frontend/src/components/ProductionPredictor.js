@@ -133,6 +133,33 @@ export function ProductionPredictorDashboard({ entityId, entityType = 'lo', embe
     const forecast90 = summary?.forecasts?.['90_day'] || {};
     const riskConfig = goalAttainment ? (RISK_CONFIG[goalAttainment.risk_level] || RISK_CONFIG.on_track) : null;
 
+    // Check if there's actual data (not just zeros)
+    const hasData = (
+      (summary?.current_month?.mtd_units > 0) ||
+      (summary?.current_month?.mtd_volume > 0) ||
+      (summary?.current_month?.projected_units > 0) ||
+      (forecast30.units > 0) ||
+      (forecast60.units > 0) ||
+      (forecast90.units > 0)
+    );
+
+    // Show empty state if no real data
+    if (!hasData) {
+      return (
+        <div className="production-predictor-embedded empty-state" style={{ textDecoration: 'none', color: 'inherit' }}>
+          <div className="embedded-header">
+            <div className="embedded-title">
+              <h3>Production Forecast</h3>
+            </div>
+          </div>
+          <div className="embedded-content" style={{ textAlign: 'center', padding: '2rem 1rem' }}>
+            <p style={{ color: '#6b7280', margin: '0 0 0.5rem 0' }}>No production data yet</p>
+            <p style={{ color: '#9ca3af', fontSize: '0.875rem', margin: 0 }}>Add loans to see forecasts</p>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <a href="/production-predictor" className="production-predictor-embedded" style={{ textDecoration: 'none', color: 'inherit' }}>
         <div className="embedded-header">

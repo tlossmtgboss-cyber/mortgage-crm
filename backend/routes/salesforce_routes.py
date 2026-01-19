@@ -176,10 +176,9 @@ async def salesforce_callback(
 
     # Store tokens in user_integrations table
     try:
-        # Drop and recreate table with correct schema (one-time fix for broken table)
-        db.execute(text("DROP TABLE IF EXISTS user_integrations CASCADE"))
+        # Ensure table exists (create if not exists - safe operation)
         db.execute(text("""
-            CREATE TABLE user_integrations (
+            CREATE TABLE IF NOT EXISTS user_integrations (
                 id SERIAL PRIMARY KEY,
                 user_id INTEGER NOT NULL,
                 provider VARCHAR(50) NOT NULL,
@@ -189,13 +188,13 @@ async def salesforce_callback(
                 scopes TEXT,
                 email VARCHAR(255),
                 provider_user_id VARCHAR(255),
+                instance_url TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(user_id, provider)
             )
         """))
         db.commit()
-        logger.info("Recreated user_integrations table with correct schema")
 
         # Check if integration already exists
         existing = db.execute(text("""
@@ -211,6 +210,7 @@ async def salesforce_callback(
                     refresh_token = :refresh_token,
                     expires_at = NULL,
                     scopes = :scopes,
+                    instance_url = :instance_url,
                     email = :email,
                     provider_user_id = :provider_user_id,
                     updated_at = CURRENT_TIMESTAMP
@@ -219,7 +219,8 @@ async def salesforce_callback(
                 "user_id": int(user_id),
                 "access_token": token_data.get("access_token"),
                 "refresh_token": token_data.get("refresh_token"),
-                "scopes": f"instance_url:{token_data.get('instance_url', '')}",
+                "scopes": token_data.get("scope", ""),
+                "instance_url": token_data.get("instance_url", ""),
                 "email": user_info.get("email") if user_info else None,
                 "provider_user_id": user_info.get("user_id") if user_info else None,
             })
@@ -227,13 +228,14 @@ async def salesforce_callback(
             # Create new
             db.execute(text("""
                 INSERT INTO user_integrations
-                (user_id, provider, access_token, refresh_token, scopes, email, provider_user_id)
-                VALUES (:user_id, 'salesforce', :access_token, :refresh_token, :scopes, :email, :provider_user_id)
+                (user_id, provider, access_token, refresh_token, scopes, instance_url, email, provider_user_id)
+                VALUES (:user_id, 'salesforce', :access_token, :refresh_token, :scopes, :instance_url, :email, :provider_user_id)
             """), {
                 "user_id": int(user_id),
                 "access_token": token_data.get("access_token"),
                 "refresh_token": token_data.get("refresh_token"),
-                "scopes": f"instance_url:{token_data.get('instance_url', '')}",
+                "scopes": token_data.get("scope", ""),
+                "instance_url": token_data.get("instance_url", ""),
                 "email": user_info.get("email") if user_info else None,
                 "provider_user_id": user_info.get("user_id") if user_info else None,
             })
@@ -267,7 +269,7 @@ async def salesforce_status(
         raise HTTPException(status_code=401, detail="Authentication required")
 
     integration = db.execute(text("""
-        SELECT access_token, scopes, email, created_at, updated_at
+        SELECT access_token, scopes, email, created_at, updated_at, instance_url
         FROM user_integrations
         WHERE user_id = :user_id AND provider = 'salesforce'
     """), {"user_id": user_id}).fetchone()
@@ -275,10 +277,10 @@ async def salesforce_status(
     if not integration or not integration[0]:
         return SalesforceConnectionStatus(connected=False)
 
-    # Parse instance_url from scopes
-    instance_url = None
-    if integration[1] and "instance_url:" in integration[1]:
-        instance_url = integration[1].split("instance_url:")[1].split(",")[0]
+    # Get instance_url from dedicated column, fall back to parsing from scopes for legacy data
+    instance_url = integration[5] if len(integration) > 5 and integration[5] else None
+    if not instance_url and integration[1] and "instance_url:" in str(integration[1]):
+        instance_url = str(integration[1]).split("instance_url:")[1].split(",")[0]
 
     # Get last sync time (table may not exist yet)
     last_sync_time = None
