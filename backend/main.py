@@ -51233,6 +51233,48 @@ def init_db():
         Base.metadata.create_all(bind=engine)
         logger.info("✅ Database tables created successfully")
 
+        # Explicitly create Salesforce integration tables if they don't exist
+        with engine.connect() as conn:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS integration_profiles (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    provider VARCHAR(50) NOT NULL DEFAULT 'salesforce',
+                    status VARCHAR(50) NOT NULL DEFAULT 'disconnected',
+                    access_token_encrypted TEXT,
+                    refresh_token_encrypted TEXT,
+                    instance_url TEXT,
+                    sf_org_id VARCHAR(100),
+                    sf_user_id VARCHAR(100),
+                    sf_username VARCHAR(255),
+                    connected_at TIMESTAMP,
+                    last_sync_at TIMESTAMP,
+                    last_error TEXT,
+                    field_map_version INTEGER DEFAULT 1,
+                    sync_enabled BOOLEAN DEFAULT TRUE,
+                    sync_interval_minutes INTEGER DEFAULT 15,
+                    sync_direction VARCHAR(20) DEFAULT 'bidirectional',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(user_id, provider)
+                )
+            """))
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS oauth_states (
+                    id SERIAL PRIMARY KEY,
+                    state_token VARCHAR(255) UNIQUE NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    provider VARCHAR(50) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TIMESTAMP NOT NULL,
+                    used BOOLEAN DEFAULT FALSE,
+                    return_url TEXT,
+                    state_metadata JSONB
+                )
+            """))
+            conn.commit()
+            logger.info("✅ Salesforce integration tables created/verified")
+
         # Run schema migrations for existing tables (PostgreSQL only)
         # Note: SQLite tables are already created with all columns via Base.metadata.create_all()
         try:
