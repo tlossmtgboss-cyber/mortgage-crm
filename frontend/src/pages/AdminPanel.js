@@ -338,7 +338,11 @@ const AdminPanel = () => {
 
   // Filter users
   const filteredUsers = users.filter(user => {
-    const matchesRole = roleFilter === 'all' || user.role === roleFilter;
+    // Match role filter - handle both user.role and user.permission_role
+    const matchesRole = roleFilter === 'all' ||
+      user.role?.toLowerCase().replace(' ', '_') === roleFilter.toLowerCase() ||
+      user.permission_role?.toLowerCase() === roleFilter.toLowerCase() ||
+      user.role?.toLowerCase() === roleFilter.toLowerCase().replace('_', ' ');
     const matchesSearch = searchTerm === '' ||
       `${user.first_name} ${user.last_name}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (user.email && user.email.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -687,6 +691,12 @@ const AdminPanel = () => {
           All Users
         </button>
         <button
+          className={`tab ${activeTab === 'roles' ? 'active' : ''}`}
+          onClick={() => setActiveTab('roles')}
+        >
+          Roles
+        </button>
+        <button
           className={`tab ${activeTab === 'loan_officers' ? 'active' : ''}`}
           onClick={() => setActiveTab('loan_officers')}
         >
@@ -1007,31 +1017,60 @@ const AdminPanel = () => {
         {activeTab === 'users' && (
           <section className="users-section">
             <div className="section-header">
-              <h2>All Users</h2>
-              <div className="section-actions">
-                <div className="search-box">
-                  <input
-                    type="text"
-                    placeholder="Search users..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
-                <select
-                  value={roleFilter}
-                  onChange={(e) => setRoleFilter(e.target.value)}
-                >
-                  <option value="all">All Roles</option>
-                  <option value="admin">Admin</option>
-                  <option value="loan_officer">Loan Officer</option>
-                  <option value="realtor">Realtor</option>
-                  <option value="processor">Processor</option>
-                  <option value="user">User</option>
-                </select>
-                <button className="btn-primary" onClick={openNewUserModal}>
-                  + Add User
-                </button>
+              <h2>User Management</h2>
+              <p className="section-subtitle">Manage all users in your organization</p>
+            </div>
+
+            {/* User Stats Summary */}
+            <div className="user-stats-summary">
+              <div className="stat-card">
+                <span className="stat-value">{users.length}</span>
+                <span className="stat-label">Total Users</span>
               </div>
+              <div className="stat-card">
+                <span className="stat-value">{users.filter(u => u.is_active).length}</span>
+                <span className="stat-label">Active</span>
+              </div>
+              <div className="stat-card">
+                <span className="stat-value">{users.filter(u => !u.is_active).length}</span>
+                <span className="stat-label">Inactive</span>
+              </div>
+              <div className="stat-card">
+                <span className="stat-value">{employeeRoles.length}</span>
+                <span className="stat-label">Roles</span>
+              </div>
+            </div>
+
+            <div className="users-filter-bar">
+              <div className="search-box">
+                <input
+                  type="text"
+                  placeholder="Search by name or email..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <select
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value)}
+                className="role-filter-select"
+              >
+                <option value="all">All Roles ({users.length})</option>
+                {employeeRoles.map(role => {
+                  const count = users.filter(u =>
+                    u.role?.toLowerCase() === role.name?.toLowerCase() ||
+                    u.permission_role?.toLowerCase() === role.name?.toLowerCase().replace(' ', '_')
+                  ).length;
+                  return (
+                    <option key={role.id} value={role.name?.toLowerCase().replace(' ', '_')}>
+                      {role.name} ({count})
+                    </option>
+                  );
+                })}
+              </select>
+              <button className="btn-primary" onClick={openNewUserModal}>
+                + Add User
+              </button>
             </div>
 
             <table className="users-table">
@@ -1086,6 +1125,78 @@ const AdminPanel = () => {
                 ))}
               </tbody>
             </table>
+          </section>
+        )}
+
+        {activeTab === 'roles' && (
+          <section className="roles-section">
+            <div className="section-header">
+              <h2>Role Positions</h2>
+              <p className="section-subtitle">View all available roles in your organization</p>
+            </div>
+
+            <div className="roles-grid">
+              {employeeRoles.length > 0 ? (
+                employeeRoles.map(role => (
+                  <div key={role.id} className="role-card">
+                    <div className="role-card-header">
+                      <h3 className="role-name">{role.name}</h3>
+                      <span className="role-id">ID: {role.id}</span>
+                    </div>
+                    <p className="role-description">{role.description || 'No description available'}</p>
+                    <div className="role-stats">
+                      <span className="role-user-count">
+                        {users.filter(u =>
+                          u.role?.toLowerCase() === role.name?.toLowerCase() ||
+                          u.permission_role?.toLowerCase() === role.name?.toLowerCase().replace(' ', '_')
+                        ).length} users
+                      </span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="no-roles-message">
+                  <p>No roles found. Roles are configured at the system level.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Users by Role Table */}
+            <div className="users-by-role-section">
+              <h3>Users by Role</h3>
+              <table className="users-by-role-table">
+                <thead>
+                  <tr>
+                    <th>Role</th>
+                    <th>Users</th>
+                    <th>Active</th>
+                    <th>Inactive</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {employeeRoles.map(role => {
+                    const roleUsers = users.filter(u =>
+                      u.role?.toLowerCase() === role.name?.toLowerCase() ||
+                      u.permission_role?.toLowerCase() === role.name?.toLowerCase().replace(' ', '_')
+                    );
+                    const activeCount = roleUsers.filter(u => u.is_active).length;
+                    const inactiveCount = roleUsers.filter(u => !u.is_active).length;
+                    return (
+                      <tr key={role.id}>
+                        <td>
+                          <span className={`role-badge role-${role.name?.toLowerCase().replace(/\s+/g, '-')}`}>
+                            {role.name}
+                          </span>
+                        </td>
+                        <td>{roleUsers.length}</td>
+                        <td><span className="status-badge active">{activeCount}</span></td>
+                        <td><span className="status-badge inactive">{inactiveCount}</span></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </section>
         )}
 
