@@ -218,7 +218,7 @@ async def google_calendar_status(
         row = result.fetchone()
 
         if not row:
-            return success_response({
+            return success_response("Not connected", {
                 "connected": False,
                 "enabled": google_calendar_client.enabled
             })
@@ -228,7 +228,7 @@ async def google_calendar_status(
         if row.expires_at:
             is_expired = datetime.utcnow() > row.expires_at
 
-        return success_response({
+        return success_response("Connected", {
             "connected": True,
             "enabled": google_calendar_client.enabled,
             "email": row.email,
@@ -239,7 +239,7 @@ async def google_calendar_status(
 
     except Exception as e:
         logger.error(f"Error checking Google Calendar status: {e}")
-        return success_response({
+        return success_response("Error checking status", {
             "connected": False,
             "enabled": google_calendar_client.enabled,
             "error": str(e)
@@ -292,7 +292,7 @@ async def refresh_google_calendar_token(
         })
         db.commit()
 
-        return success_response({
+        return success_response("Token refreshed", {
             "refreshed": True,
             "expires_at": token_data.get("expires_at")
         })
@@ -322,9 +322,9 @@ async def disconnect_google_calendar(
         """), {"user_id": user_id})
         db.commit()
 
-        return success_response({
+        return success_response("Google Calendar integration disconnected", {
             "disconnected": True
-        }, "Google Calendar integration disconnected")
+        })
 
     except Exception as e:
         logger.error(f"Error disconnecting Google Calendar: {e}")
@@ -384,7 +384,7 @@ async def list_calendars(
     if calendars is None:
         raise HTTPException(status_code=500, detail="Failed to fetch calendars from Google")
 
-    return success_response(calendars)
+    return success_response("Calendars retrieved", calendars)
 
 
 @router.get("/events")
@@ -422,4 +422,4 @@ async def list_events(
     if events is None:
         raise HTTPException(status_code=500, detail="Failed to fetch events from Google Calendar")
 
-    return success_response(events)
+    return success_response("Events retrieved", events)

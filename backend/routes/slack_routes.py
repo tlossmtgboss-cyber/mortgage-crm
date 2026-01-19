@@ -241,14 +241,14 @@ async def slack_status(
         row = result.fetchone()
 
         if not row:
-            return success_response({
+            return success_response("Not connected", {
                 "connected": False,
                 "enabled": slack_client.enabled
             })
 
         extra_data = row.extra_data or {}
 
-        return success_response({
+        return success_response("Connected", {
             "connected": True,
             "enabled": slack_client.enabled,
             "slack_user_id": row.provider_user_id,
@@ -259,7 +259,7 @@ async def slack_status(
 
     except Exception as e:
         logger.error(f"Error checking Slack status: {e}")
-        return success_response({
+        return success_response("Error checking status", {
             "connected": False,
             "enabled": slack_client.enabled,
             "error": str(e)
@@ -284,9 +284,9 @@ async def disconnect_slack(
         """), {"user_id": user_id})
         db.commit()
 
-        return success_response({
+        return success_response("Slack integration disconnected", {
             "disconnected": True
-        }, "Slack integration disconnected")
+        })
 
     except Exception as e:
         logger.error(f"Error disconnecting Slack: {e}")
@@ -320,7 +320,7 @@ async def get_team_info(
     if team_info is None:
         raise HTTPException(status_code=500, detail="Failed to fetch team info from Slack")
 
-    return success_response(team_info)
+    return success_response("Team info retrieved", team_info)
 
 
 @router.get("/channels")
@@ -348,7 +348,7 @@ async def list_channels(
     if channels is None:
         raise HTTPException(status_code=500, detail="Failed to fetch channels from Slack")
 
-    return success_response(channels)
+    return success_response("Channels retrieved", channels)
 
 
 @router.get("/users")
@@ -376,7 +376,7 @@ async def list_users(
     if users is None:
         raise HTTPException(status_code=500, detail="Failed to fetch users from Slack")
 
-    return success_response(users)
+    return success_response("Users retrieved", users)
 
 
 @router.post("/messages")
@@ -409,7 +409,7 @@ async def send_message(
     if response is None:
         raise HTTPException(status_code=500, detail="Failed to send message")
 
-    return success_response(response, "Message sent successfully")
+    return success_response("Message sent successfully", response)
 
 
 @router.post("/direct-messages")
@@ -441,7 +441,7 @@ async def send_direct_message(
     if response is None:
         raise HTTPException(status_code=500, detail="Failed to send direct message")
 
-    return success_response(response, "Direct message sent successfully")
+    return success_response("Direct message sent successfully", response)
 
 
 @router.post("/notifications")
@@ -476,4 +476,4 @@ async def send_notification(
     if response is None:
         raise HTTPException(status_code=500, detail="Failed to send notification")
 
-    return success_response(response, "Notification sent successfully")
+    return success_response("Notification sent successfully", response)

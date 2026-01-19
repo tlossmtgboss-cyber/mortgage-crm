@@ -219,7 +219,7 @@ async def hubspot_status(
         row = result.fetchone()
 
         if not row:
-            return success_response({
+            return success_response("Not connected", {
                 "connected": False,
                 "enabled": hubspot_client.enabled
             })
@@ -229,7 +229,7 @@ async def hubspot_status(
         if row.expires_at:
             is_expired = datetime.utcnow() > row.expires_at
 
-        return success_response({
+        return success_response("Connected", {
             "connected": True,
             "enabled": hubspot_client.enabled,
             "email": row.email,
@@ -240,7 +240,7 @@ async def hubspot_status(
 
     except Exception as e:
         logger.error(f"Error checking HubSpot status: {e}")
-        return success_response({
+        return success_response("Error checking status", {
             "connected": False,
             "enabled": hubspot_client.enabled,
             "error": str(e)
@@ -293,7 +293,7 @@ async def refresh_hubspot_token(
         })
         db.commit()
 
-        return success_response({
+        return success_response("Token refreshed", {
             "refreshed": True,
             "expires_at": token_data.get("expires_at")
         })
@@ -323,9 +323,9 @@ async def disconnect_hubspot(
         """), {"user_id": user_id})
         db.commit()
 
-        return success_response({
+        return success_response("HubSpot integration disconnected", {
             "disconnected": True
-        }, "HubSpot integration disconnected")
+        })
 
     except Exception as e:
         logger.error(f"Error disconnecting HubSpot: {e}")
@@ -388,7 +388,7 @@ async def get_hubspot_contacts(
     if contacts is None:
         raise HTTPException(status_code=500, detail="Failed to fetch contacts from HubSpot")
 
-    return success_response(contacts)
+    return success_response("Contacts retrieved", contacts)
 
 
 @router.get("/deals")
@@ -418,4 +418,4 @@ async def get_hubspot_deals(
     if deals is None:
         raise HTTPException(status_code=500, detail="Failed to fetch deals from HubSpot")
 
-    return success_response(deals)
+    return success_response("Deals retrieved", deals)

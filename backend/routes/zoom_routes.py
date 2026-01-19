@@ -231,7 +231,7 @@ async def zoom_status(
         row = result.fetchone()
 
         if not row:
-            return success_response({
+            return success_response("Not connected", {
                 "connected": False,
                 "enabled": zoom_client.enabled
             })
@@ -241,7 +241,7 @@ async def zoom_status(
         if row.expires_at:
             is_expired = datetime.utcnow() > row.expires_at
 
-        return success_response({
+        return success_response("Connected", {
             "connected": True,
             "enabled": zoom_client.enabled,
             "email": row.email,
@@ -253,7 +253,7 @@ async def zoom_status(
 
     except Exception as e:
         logger.error(f"Error checking Zoom status: {e}")
-        return success_response({
+        return success_response("Error checking status", {
             "connected": False,
             "enabled": zoom_client.enabled,
             "error": str(e)
@@ -306,7 +306,7 @@ async def refresh_zoom_token(
         })
         db.commit()
 
-        return success_response({
+        return success_response("Token refreshed", {
             "refreshed": True,
             "expires_at": token_data.get("expires_at")
         })
@@ -336,9 +336,9 @@ async def disconnect_zoom(
         """), {"user_id": user_id})
         db.commit()
 
-        return success_response({
+        return success_response("Zoom integration disconnected", {
             "disconnected": True
-        }, "Zoom integration disconnected")
+        })
 
     except Exception as e:
         logger.error(f"Error disconnecting Zoom: {e}")
@@ -399,7 +399,7 @@ async def list_meetings(
     if meetings is None:
         raise HTTPException(status_code=500, detail="Failed to fetch meetings from Zoom")
 
-    return success_response(meetings)
+    return success_response("Meetings retrieved", meetings)
 
 
 @router.post("/meetings")
@@ -435,7 +435,7 @@ async def create_meeting(
     if new_meeting is None:
         raise HTTPException(status_code=500, detail="Failed to create Zoom meeting")
 
-    return success_response(new_meeting, "Meeting created successfully")
+    return success_response("Meeting created successfully", new_meeting)
 
 
 @router.get("/meetings/{meeting_id}")
@@ -464,7 +464,7 @@ async def get_meeting(
     if meeting is None:
         raise HTTPException(status_code=404, detail="Meeting not found")
 
-    return success_response(meeting)
+    return success_response("Meeting retrieved", meeting)
 
 
 @router.delete("/meetings/{meeting_id}")
@@ -493,7 +493,7 @@ async def delete_meeting(
     if not success:
         raise HTTPException(status_code=500, detail="Failed to delete meeting")
 
-    return success_response({"deleted": True}, "Meeting deleted successfully")
+    return success_response("Meeting deleted successfully", {"deleted": True})
 
 
 @router.get("/recordings")
@@ -529,4 +529,4 @@ async def list_recordings(
     if recordings is None:
         raise HTTPException(status_code=500, detail="Failed to fetch recordings from Zoom")
 
-    return success_response(recordings)
+    return success_response("Recordings retrieved", recordings)

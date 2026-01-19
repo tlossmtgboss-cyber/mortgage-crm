@@ -257,7 +257,7 @@ async def docusign_status(
         row = result.fetchone()
 
         if not row:
-            return success_response({
+            return success_response("Not connected", {
                 "connected": False,
                 "enabled": docusign_client.enabled,
                 "environment": docusign_client.environment
@@ -270,7 +270,7 @@ async def docusign_status(
 
         extra_data = row.extra_data or {}
 
-        return success_response({
+        return success_response("Connected", {
             "connected": True,
             "enabled": docusign_client.enabled,
             "email": row.email,
@@ -284,7 +284,7 @@ async def docusign_status(
 
     except Exception as e:
         logger.error(f"Error checking DocuSign status: {e}")
-        return success_response({
+        return success_response("Error checking status", {
             "connected": False,
             "enabled": docusign_client.enabled,
             "error": str(e)
@@ -337,7 +337,7 @@ async def refresh_docusign_token(
         })
         db.commit()
 
-        return success_response({
+        return success_response("Token refreshed", {
             "refreshed": True,
             "expires_at": token_data.get("expires_at")
         })
@@ -367,9 +367,9 @@ async def disconnect_docusign(
         """), {"user_id": user_id})
         db.commit()
 
-        return success_response({
+        return success_response("DocuSign integration disconnected", {
             "disconnected": True
-        }, "DocuSign integration disconnected")
+        })
 
     except Exception as e:
         logger.error(f"Error disconnecting DocuSign: {e}")
@@ -423,7 +423,7 @@ async def list_envelopes(
     if envelopes is None:
         raise HTTPException(status_code=500, detail="Failed to fetch envelopes from DocuSign")
 
-    return success_response(envelopes)
+    return success_response("Envelopes retrieved", envelopes)
 
 
 @router.get("/envelopes/{envelope_id}")
@@ -443,7 +443,7 @@ async def get_envelope(
     if envelope is None:
         raise HTTPException(status_code=404, detail="Envelope not found")
 
-    return success_response(envelope)
+    return success_response("Envelope retrieved", envelope)
 
 
 @router.post("/envelopes/send")
@@ -472,7 +472,7 @@ async def send_for_signature(
     if envelope is None:
         raise HTTPException(status_code=500, detail="Failed to send document for signature")
 
-    return success_response(envelope, "Document sent for signature")
+    return success_response("Document sent for signature", envelope)
 
 
 @router.post("/envelopes/{envelope_id}/void")
@@ -498,7 +498,7 @@ async def void_envelope(
     if result is None:
         raise HTTPException(status_code=500, detail="Failed to void envelope")
 
-    return success_response(result, "Envelope voided")
+    return success_response("Envelope voided", result)
 
 
 @router.get("/envelopes/{envelope_id}/documents")
@@ -518,7 +518,7 @@ async def get_envelope_documents(
     if documents is None:
         raise HTTPException(status_code=500, detail="Failed to fetch documents")
 
-    return success_response(documents)
+    return success_response("Documents retrieved", documents)
 
 
 @router.get("/templates")
@@ -538,7 +538,7 @@ async def list_templates(
     if templates is None:
         raise HTTPException(status_code=500, detail="Failed to fetch templates from DocuSign")
 
-    return success_response(templates)
+    return success_response("Templates retrieved", templates)
 
 
 @router.post("/templates/{template_id}/send")
@@ -566,4 +566,4 @@ async def send_from_template(
     if envelope is None:
         raise HTTPException(status_code=500, detail="Failed to create envelope from template")
 
-    return success_response(envelope, "Envelope created from template")
+    return success_response("Envelope created from template", envelope)
