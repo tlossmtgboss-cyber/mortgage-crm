@@ -32,7 +32,8 @@ function TeamMembers() {
     email: '',
     phone: '',
     role: '',
-    title: ''
+    title: '',
+    workflow_role_id: ''
   });
   const [saveStatus, setSaveStatus] = useState('');
   const autoSaveTimerRef = useRef(null);
@@ -281,7 +282,8 @@ function TeamMembers() {
       email: '',
       phone: '',
       role: '',
-      title: ''
+      title: '',
+      workflow_role_id: ''
     });
     setEditingMember(null);
     setSaveStatus('');
@@ -310,9 +312,26 @@ function TeamMembers() {
 
     if (!editingMember) {
       try {
-        await teamAPI.createMember(formData);
+        // Create the member first
+        const newMember = await teamAPI.createMember(formData);
+
+        // If a workflow role was selected, assign it to the new member
+        if (formData.workflow_role_id && newMember && newMember.id) {
+          try {
+            await fetch(`${API_BASE_URL}/api/v1/settings/team-roles/${formData.workflow_role_id}`, {
+              method: 'POST',
+              headers: getAuthHeaders(),
+              body: JSON.stringify({ user_id: newMember.id }),
+            });
+          } catch (roleError) {
+            console.error('Failed to assign workflow role:', roleError);
+            // Don't fail the whole operation, just log it
+          }
+        }
+
         setShowAddModal(false);
         loadMembers();
+        loadWorkflowRoles();
         toast.success('Team member added!');
       } catch (error) {
         console.error('Failed to save team member:', error);
@@ -753,6 +772,28 @@ function TeamMembers() {
                       onChange={(e) => handleChange('title', e.target.value)}
                       placeholder="e.g., Senior Loan Officer"
                     />
+                  </div>
+                  <div className="form-group">
+                    <label>Workflow Role</label>
+                    <select
+                      value={formData.workflow_role_id || ''}
+                      onChange={(e) => handleChange('workflow_role_id', e.target.value)}
+                      style={{
+                        padding: '8px 12px',
+                        borderRadius: '6px',
+                        border: '1px solid #d1d5db',
+                        fontSize: '14px',
+                        width: '100%'
+                      }}
+                    >
+                      <option value="">-- Select Role --</option>
+                      {workflowRoles.map(role => (
+                        <option key={role.role_id} value={role.role_id}>
+                          {role.role_name}
+                          {role.user_id ? ` (${role.user_name})` : ''}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
               </div>
