@@ -2508,3 +2508,109 @@
     gap: 12px;
   }
 }
+
+/* IT Tickets KPI Section */
+.it-tickets-block {
+  grid-column: 1 / 13;
+}
+
+.it-tickets-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.it-ticket-metric {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.it-ticket-metric:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: #218D8D;
+}
+
+.it-ticket-metric .metric-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.it-ticket-metric .metric-content {
+  flex: 1;
+}
+
+.it-ticket-metric .metric-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1.2;
+}
+
+.it-ticket-metric .metric-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+}
+
+.btn-view-tickets {
+  width: 100%;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+}
+
+.btn-view-tickets:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(59, 130, 246, 0.4);
+}
+
+@media (max-width: 1024px) {
+  .it-tickets-metrics {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .it-tickets-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .it-ticket-metric {
+    padding: 14px 16px;
+  }
+
+  .it-ticket-metric .metric-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+  }
+
+  .it-ticket-metric .metric-value {
+    font-size: 20px;
+  }
+}

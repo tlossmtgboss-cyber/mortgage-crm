@@ -500,7 +500,8 @@ export const ROLE_DASHBOARD_CONTAINERS = {
     'ai-tasks',           // AI Prioritized Tasks
     'pipeline',           // Live Loan Pipeline
     'referrals',          // Referral Scoreboard
-    'team'                // Team Performance
+    'team',               // Team Performance
+    'it-tickets'          // IT Support Tickets KPIs
   ],
 
   // Site Admin Dashboard - Licensee/org owner, same dashboard access as admin
@@ -515,7 +516,8 @@ export const ROLE_DASHBOARD_CONTAINERS = {
     'ai-tasks',           // AI Prioritized Tasks
     'pipeline',           // Live Loan Pipeline
     'referrals',          // Referral Scoreboard
-    'team'                // Team Performance
+    'team',               // Team Performance
+    'it-tickets'          // IT Support Tickets KPIs
   ],
 
   // Loan Officer Dashboard - Full view with all sales-related containers

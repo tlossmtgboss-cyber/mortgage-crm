@@ -6,6 +6,7 @@ import { getDashboardContainersForRole } from '../config/roleConfig';
 import PendingPermissionRequests from '../components/PendingPermissionRequests';
 import ProductionPredictor from '../components/ProductionPredictor';
 import DealAlerts from '../components/DealAlerts';
+import api from '../services/api';
 import './Dashboard.css';
 
 function Dashboard() {
@@ -65,6 +66,25 @@ function Dashboard() {
 
   // Drag and drop state
   const [draggedIndex, setDraggedIndex] = useState(null);
+
+  // IT Tickets metrics state
+  const [itTicketMetrics, setItTicketMetrics] = useState(null);
+
+  // Fetch IT Ticket metrics for admin users
+  useEffect(() => {
+    const fetchItTicketMetrics = async () => {
+      if (!isDemoUser()) return;
+      try {
+        const response = await api.get('/api/v1/support/metrics');
+        if (response.data) {
+          setItTicketMetrics(response.data);
+        }
+      } catch (error) {
+        console.log('IT Ticket metrics not available:', error.message);
+      }
+    };
+    fetchItTicketMetrics();
+  }, []);
 
   // Get allowed containers for the current role
   const allowedContainers = useMemo(() => {
@@ -916,6 +936,76 @@ function Dashboard() {
               ))}
             </div>
           </div>
+        </div>
+      );
+    }
+
+    // IT Tickets KPIs - Admin only
+    if (containerId === 'it-tickets') {
+      if (!isDemoUser()) {
+        return null;
+      }
+
+      return (
+        <div
+          key={containerId}
+          className={`dashboard-block it-tickets-block draggable-container ${isDragging ? 'dragging' : ''}`}
+          onDragOver={(e) => handleDragOver(e, index)}
+          onDragEnd={handleDragEnd}
+        >
+          <div
+            className="drag-handle"
+            title="Drag to reorder"
+            draggable="true"
+            onDragStart={() => handleDragStart(index)}
+          >⋮⋮</div>
+          <div className="block-header clickable-block" onClick={() => navigate('/support')}>
+            <h2>IT Support Tickets</h2>
+          </div>
+          <div className="it-tickets-metrics">
+            <div className="it-ticket-metric" onClick={() => navigate('/support')}>
+              <div className="metric-icon" style={{ background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)' }}>
+                <span>📊</span>
+              </div>
+              <div className="metric-content">
+                <div className="metric-value">{itTicketMetrics?.avg_per_day?.toFixed(1) || '0.0'}</div>
+                <div className="metric-label">Avg Tickets/Day</div>
+              </div>
+            </div>
+            <div className="it-ticket-metric" onClick={() => navigate('/support')}>
+              <div className="metric-icon" style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>
+                <span>⏱️</span>
+              </div>
+              <div className="metric-content">
+                <div className="metric-value">{itTicketMetrics?.turn_time_display || '--'}</div>
+                <div className="metric-label">Avg Turn Time</div>
+              </div>
+            </div>
+            <div className="it-ticket-metric" onClick={() => navigate('/support')}>
+              <div className="metric-icon" style={{ background: 'linear-gradient(135deg, #8b5cf6, #6d28d9)' }}>
+                <span>📅</span>
+              </div>
+              <div className="metric-content">
+                <div className="metric-value">{itTicketMetrics?.tickets_this_month || 0}</div>
+                <div className="metric-label">This Month</div>
+              </div>
+            </div>
+            <div className="it-ticket-metric" onClick={() => navigate('/support?status=open')}>
+              <div className="metric-icon" style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
+                <span>🎫</span>
+              </div>
+              <div className="metric-content">
+                <div className="metric-value">{itTicketMetrics?.open_tickets || 0}</div>
+                <div className="metric-label">Open Tickets</div>
+              </div>
+            </div>
+          </div>
+          <button
+            className="btn-view-tickets"
+            onClick={() => navigate('/support')}
+          >
+            View All Tickets →
+          </button>
         </div>
       );
     }
