@@ -54502,7 +54502,7 @@ def has_permission(user_id: int, permission_key: str, db: Session) -> bool:
         True if user has the permission, False otherwise
     """
     try:
-        # Get user permissions from database
+        # First check explicit user_permissions table
         result = db.execute(text("""
             SELECT granted FROM user_permissions
             WHERE user_id = :user_id
@@ -54512,7 +54512,52 @@ def has_permission(user_id: int, permission_key: str, db: Session) -> bool:
         """), {'user_id': user_id, 'permission_key': permission_key})
 
         permission = result.fetchone()
-        return permission is not None
+        if permission is not None:
+            return True
+
+        # Fallback: Check role-based default permissions
+        # Get user's permission_role and check against role defaults
+        user_result = db.execute(text("""
+            SELECT permission_role FROM users WHERE id = :user_id
+        """), {'user_id': user_id})
+        user_row = user_result.fetchone()
+
+        if user_row and user_row[0]:
+            role = user_row[0].lower()
+
+            # Define role-based default permissions
+            role_defaults = {
+                'admin': True,  # Admin has all permissions
+                'site_admin': True,  # Site admin has all permissions
+                'leadership': {
+                    'leads.view_all': True, 'leads.create': True, 'leads.edit_all': True,
+                    'clients.view_all': True, 'loans.view_all': True, 'team.view_all': True,
+                },
+                'management': {
+                    'leads.view_team': True, 'leads.create': True, 'leads.edit_own': True,
+                    'clients.view_team': True, 'loans.view_team': True, 'team.view_team': True,
+                },
+                'sales': {
+                    'leads.view_assigned': True, 'leads.edit_own': True, 'leads.create': True,
+                    'clients.view_assigned': True, 'loans.view_assigned': True,
+                },
+                'processing': {
+                    'loans.view_all': True, 'loans.process': True, 'loans.edit_documents': True,
+                    'clients.view_all': True,
+                },
+                'operations': {
+                    'leads.view_all': True, 'clients.view_all': True, 'loans.view_all': True,
+                    'loans.process': True,
+                },
+            }
+
+            if role in ['admin', 'site_admin']:
+                return True  # Full access
+
+            if role in role_defaults and isinstance(role_defaults[role], dict):
+                return role_defaults[role].get(permission_key, False)
+
+        return False
 
     except Exception as e:
         logger.error(f"Permission check error for user {user_id}, key {permission_key}: {e}")
