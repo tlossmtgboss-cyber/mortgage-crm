@@ -285,10 +285,11 @@ async def run_account_management_migration(
             database_url = database_url.replace("postgres://", "postgresql://", 1)
 
         try:
-            engine = create_engine(database_url, pool_pre_ping=True)
+            engine = create_engine(database_url)
             results = {'deleted': {}, 'errors': [], 'preserved_admin': keep_admin_email}
 
-            with engine.connect() as conn:
+            # Use autocommit to avoid transaction issues
+            with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
                 # Delete all tasks
                 for table in ['tasks', 'task_instances', 'purl_tasks']:
                     try:
@@ -324,8 +325,6 @@ async def run_account_management_migration(
                     results['deleted']['suspended_cancelled_accounts'] = result.rowcount
                 except Exception:
                     pass
-
-                conn.commit()
 
             total = sum(v for v in results['deleted'].values() if isinstance(v, int))
             return {"status": "success", "message": f"Cleanup done. Deleted {total} rows.", "data": results}
