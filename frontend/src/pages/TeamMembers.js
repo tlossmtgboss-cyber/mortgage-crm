@@ -133,7 +133,7 @@ function TeamMembers() {
       return;
     }
 
-    if (!formData.first_name || !formData.last_name || !formData.role) {
+    if (!formData.first_name || !formData.last_name) {
       return;
     }
 
@@ -519,7 +519,6 @@ function TeamMembers() {
                 <th>NAME</th>
                 <th>EMAIL</th>
                 <th>PHONE</th>
-                <th>ROLE</th>
                 <th>TITLE</th>
                 <th style={{ minWidth: '180px' }}>WORKFLOW ROLE</th>
                 <th>ACTIONS</th>
@@ -558,9 +557,6 @@ function TeamMembers() {
                     </td>
                     <td>{String(member.email || 'N/A')}</td>
                     <td>{String(member.phone || 'N/A')}</td>
-                    <td>
-                      <span className="status-badge status-prospect">{String(member.role || 'Team Member')}</span>
-                    </td>
                     <td>{String(member.title || 'N/A')}</td>
                     <td onClick={(e) => e.stopPropagation()}>
                       <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -749,26 +745,6 @@ function TeamMembers() {
                 </div>
 
                 <div className="form-row">
-                  <div className="form-group">
-                    <label>Role *</label>
-                    <select
-                      value={formData.role}
-                      onChange={(e) => handleChange('role', e.target.value)}
-                      required
-                    >
-                      <option value="">Select Role...</option>
-                      <option value="Application Analysis">Application Analysis</option>
-                      <option value="Concierge">Concierge</option>
-                      <option value="Jr. Loan Officer">Jr. Loan Officer</option>
-                      <option value="Jr. Processor">Jr. Processor</option>
-                      <option value="Loan Officer">Loan Officer</option>
-                      <option value="Loan Officer Assistant">Loan Officer Assistant</option>
-                      <option value="Processing Assistant">Processing Assistant</option>
-                      <option value="Processor">Processor</option>
-                      <option value="Production Assistant 1">Production Assistant 1</option>
-                      <option value="Production Assistant 2">Production Assistant 2</option>
-                    </select>
-                  </div>
                   <div className="form-group">
                     <label>Title</label>
                     <input

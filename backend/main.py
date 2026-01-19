@@ -48845,6 +48845,10 @@ async def set_default_role_assignment(
                 "assigned_by_id": current_user.id
             })
 
+        # Also update the user's role field to match the workflow role
+        user.role = role[1]
+        db.add(user)
+
         db.commit()
 
         return {
