@@ -9,4 +9,4 @@ restartPolicyMaxRetries = 10
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
-# Force rebuild 2026-01-18
+# Force rebuild 2026-01-19-cleanup
