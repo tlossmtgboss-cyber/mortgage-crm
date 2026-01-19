@@ -138,6 +138,20 @@ def get_integration_profile(db: Session, user_id: int) -> Optional[IntegrationPr
     ).first()
 
 
+def is_profile_connected(profile: Optional[IntegrationProfile]) -> bool:
+    """Check if profile is connected (can sync emails/calendar without field mappings)."""
+    if not profile:
+        return False
+    return profile.status in ('connected', 'active')
+
+
+def is_profile_active(profile: Optional[IntegrationProfile]) -> bool:
+    """Check if profile is fully active (has field mappings configured)."""
+    if not profile:
+        return False
+    return profile.status == 'active'
+
+
 # ============ OAuth Endpoints ============
 
 @router.get("/connect")
@@ -732,11 +746,8 @@ async def sync_salesforce_emails(
     user_id = require_user(request, db)
     profile = get_integration_profile(db, user_id)
 
-    if not profile:
-        raise HTTPException(status_code=400, detail="Salesforce not connected")
-
-    if profile.status != 'active':
-        raise HTTPException(status_code=400, detail="Salesforce integration is not active")
+    if not is_profile_connected(profile):
+        raise HTTPException(status_code=400, detail="Salesforce not connected. Please connect your Salesforce account first.")
 
     try:
         from services.salesforce.email_sync_service import salesforce_email_sync
@@ -794,7 +805,7 @@ async def get_email_sync_status(
     """), {"user_id": user_id}).scalar()
 
     return {
-        "connected": profile.status == 'active',
+        "connected": is_profile_connected(profile),
         "email_sync_available": True,
         "total_synced_emails": email_count or 0,
         "last_sync": {
@@ -824,11 +835,8 @@ async def sync_salesforce_calendar(
     user_id = require_user(request, db)
     profile = get_integration_profile(db, user_id)
 
-    if not profile:
-        raise HTTPException(status_code=400, detail="Salesforce not connected")
-
-    if profile.status != 'active':
-        raise HTTPException(status_code=400, detail="Salesforce integration is not active")
+    if not is_profile_connected(profile):
+        raise HTTPException(status_code=400, detail="Salesforce not connected. Please connect your Salesforce account first.")
 
     try:
         from services.salesforce.calendar_sync_service import salesforce_calendar_sync
@@ -896,7 +904,7 @@ async def get_calendar_sync_status(
     """), {"user_id": user_id}).scalar()
 
     return {
-        "connected": profile.status == 'active',
+        "connected": is_profile_connected(profile),
         "calendar_sync_available": True,
         "total_synced_events": event_count or 0,
         "total_synced_tasks": task_count or 0,
@@ -906,3 +914,284 @@ async def get_calendar_sync_status(
             "timestamp": last_sync[2].isoformat() if last_sync else None
         } if last_sync else None
     }
+
+
+# ============ Full Sync Endpoint (Bidirectional) ============
+
+@router.post("/sync-full")
+async def trigger_full_salesforce_sync(
+    request: Request,
+    sync_emails: bool = Query(True, description="Sync emails from Salesforce"),
+    sync_calendar: bool = Query(True, description="Sync calendar from Salesforce"),
+    push_emails: bool = Query(True, description="Push CRM emails to Salesforce"),
+    db: Session = Depends(get_db)
+):
+    """
+    Trigger a full bidirectional sync with Salesforce.
+
+    - Pulls emails from Salesforce → CRM
+    - Pulls calendar events from Salesforce → CRM
+    - Pushes CRM email activities → Salesforce
+    """
+    user_id = require_user(request, db)
+    profile = get_integration_profile(db, user_id)
+
+    if not is_profile_connected(profile):
+        raise HTTPException(status_code=400, detail="Salesforce not connected. Please connect your Salesforce account first.")
+
+    try:
+        from tasks.salesforce_sync_tasks import trigger_user_sync
+
+        result = await trigger_user_sync(
+            user_id=user_id,
+            sync_emails=sync_emails,
+            sync_calendar=sync_calendar,
+            push_emails=push_emails
+        )
+
+        return {
+            "status": "success",
+            "sync_results": result,
+            "message": "Full Salesforce sync completed"
+        }
+    except Exception as e:
+        logger.error(f"Full sync failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
+
+
+@router.post("/push-emails")
+async def push_emails_to_salesforce_endpoint(
+    request: Request,
+    since_hours: int = Query(24, description="Hours back to look for unsent emails"),
+    db: Session = Depends(get_db)
+):
+    """
+    Push CRM email activities to Salesforce.
+
+    Creates Task records in Salesforce for outbound emails sent from the CRM.
+    """
+    user_id = require_user(request, db)
+    profile = get_integration_profile(db, user_id)
+
+    if not is_profile_connected(profile):
+        raise HTTPException(status_code=400, detail="Salesforce not connected. Please connect your Salesforce account first.")
+
+    try:
+        from tasks.salesforce_sync_tasks import push_emails_to_salesforce
+
+        result = await push_emails_to_salesforce(
+            user_id=user_id,
+            since_hours=since_hours
+        )
+
+        return {
+            "status": "success" if result['success'] else "partial",
+            "emails_pushed": result['emails_pushed'],
+            "emails_failed": result['emails_failed'],
+            "errors": result['errors'][:5] if result['errors'] else None,
+            "message": f"Pushed {result['emails_pushed']} emails to Salesforce"
+        }
+    except Exception as e:
+        logger.error(f"Email push failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Email push failed: {str(e)}")
+
+
+@router.get("/sync-health")
+async def get_salesforce_sync_health(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Get Salesforce sync health status.
+
+    Returns overall health metrics for Salesforce integration.
+    """
+    user_id = require_user(request, db)
+
+    try:
+        from tasks.salesforce_sync_tasks import check_salesforce_sync_health
+
+        health = await check_salesforce_sync_health()
+
+        return health
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Health check failed: {str(e)}")
+
+
+# ============ Outbound Sync Endpoints (Push TO Salesforce) ============
+
+@router.post("/push-to-salesforce")
+async def push_all_to_salesforce(
+    request: Request,
+    sync_loans: bool = Query(True, description="Push loan changes to Salesforce"),
+    sync_leads: bool = Query(True, description="Push lead changes to Salesforce"),
+    sync_emails: bool = Query(True, description="Push email activities to Salesforce"),
+    sync_calendar: bool = Query(True, description="Push calendar events to Salesforce"),
+    since_hours: int = Query(24, description="Only sync records modified in last N hours"),
+    db: Session = Depends(get_db)
+):
+    """
+    Push CRM data TO Salesforce (outbound sync).
+
+    This pushes:
+    - Loans → Salesforce Opportunities
+    - Leads → Salesforce Leads
+    - Email activities → Salesforce Tasks
+    - Calendar events → Salesforce Events
+    """
+    user_id = require_user(request, db)
+    profile = get_integration_profile(db, user_id)
+
+    if not is_profile_connected(profile):
+        raise HTTPException(status_code=400, detail="Salesforce not connected. Please connect your Salesforce account first.")
+
+    try:
+        from services.salesforce.sync_service import salesforce_sync
+
+        result = await salesforce_sync.sync_outbound(
+            db=db,
+            integration_profile_id=profile.id,
+            sync_loans=sync_loans,
+            sync_leads=sync_leads,
+            sync_emails=sync_emails,
+            sync_calendar=sync_calendar,
+            since_hours=since_hours
+        )
+
+        total_pushed = (
+            result['loans']['pushed'] +
+            result['leads']['pushed'] +
+            result['emails']['pushed'] +
+            result['calendar']['pushed']
+        )
+
+        return {
+            "status": "success" if result['success'] else "partial",
+            "total_pushed": total_pushed,
+            "details": result,
+            "message": f"Pushed {total_pushed} records to Salesforce"
+        }
+    except Exception as e:
+        logger.error(f"Outbound sync failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Outbound sync failed: {str(e)}")
+
+
+@router.post("/push-loan/{loan_id}")
+async def push_single_loan_to_salesforce(
+    loan_id: int,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Push a single loan to Salesforce as an Opportunity.
+    """
+    user_id = require_user(request, db)
+    profile = get_integration_profile(db, user_id)
+
+    if not is_profile_connected(profile):
+        raise HTTPException(status_code=400, detail="Salesforce not connected")
+
+    try:
+        from services.salesforce.sync_service import salesforce_sync
+
+        result = await salesforce_sync.push_loan_to_salesforce(
+            db=db,
+            integration_profile_id=profile.id,
+            loan_id=loan_id
+        )
+
+        if result['success']:
+            return {
+                "status": "success",
+                "salesforce_id": result['salesforce_id'],
+                "action": result['action'],
+                "message": f"Loan {loan_id} {result['action']} in Salesforce"
+            }
+        else:
+            raise HTTPException(status_code=500, detail=result.get('error', 'Push failed'))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to push loan {loan_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/push-lead/{lead_id}")
+async def push_single_lead_to_salesforce(
+    lead_id: int,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Push a single lead to Salesforce as a Lead.
+    """
+    user_id = require_user(request, db)
+    profile = get_integration_profile(db, user_id)
+
+    if not is_profile_connected(profile):
+        raise HTTPException(status_code=400, detail="Salesforce not connected")
+
+    try:
+        from services.salesforce.sync_service import salesforce_sync
+
+        result = await salesforce_sync.push_lead_to_salesforce(
+            db=db,
+            integration_profile_id=profile.id,
+            lead_id=lead_id
+        )
+
+        if result['success']:
+            return {
+                "status": "success",
+                "salesforce_id": result['salesforce_id'],
+                "action": result['action'],
+                "message": f"Lead {lead_id} {result['action']} in Salesforce"
+            }
+        else:
+            raise HTTPException(status_code=500, detail=result.get('error', 'Push failed'))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to push lead {lead_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/push-calendar-event/{event_id}")
+async def push_calendar_event_to_salesforce(
+    event_id: int,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Push a single calendar event to Salesforce as an Event.
+    """
+    user_id = require_user(request, db)
+    profile = get_integration_profile(db, user_id)
+
+    if not is_profile_connected(profile):
+        raise HTTPException(status_code=400, detail="Salesforce not connected")
+
+    try:
+        from services.salesforce.sync_service import salesforce_sync
+
+        result = await salesforce_sync.push_calendar_event_to_salesforce(
+            db=db,
+            integration_profile_id=profile.id,
+            event_id=event_id
+        )
+
+        if result['success']:
+            return {
+                "status": "success",
+                "salesforce_id": result['salesforce_id'],
+                "action": result['action'],
+                "message": f"Calendar event {event_id} {result['action']} in Salesforce"
+            }
+        else:
+            raise HTTPException(status_code=500, detail=result.get('error', 'Push failed'))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to push calendar event {event_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

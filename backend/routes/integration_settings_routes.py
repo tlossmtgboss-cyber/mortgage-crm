@@ -79,8 +79,29 @@ class PermissionException(Exception):
 # Response Helpers
 # =============================================================================
 
-def success_response(data: Any, message: str = "Success") -> Dict:
-    """Create standardized success response."""
+def success_response(data_or_message: Any, message_or_data: Any = None) -> Dict:
+    """
+    Create standardized success response.
+
+    Supports both signatures for backwards compatibility:
+    - success_response(data, message) - old signature (deprecated)
+    - success_response(message, data) - standard signature
+
+    DEPRECATION: The (data, message) signature is deprecated.
+    Use success_response(message, data) to match utils/responses.py
+    """
+    # Detect which signature is being used
+    # If first arg is a string and second is dict/list/None, it's the new signature
+    # If first arg is dict/list and second is string, it's the old signature
+    if isinstance(data_or_message, str) and (message_or_data is None or isinstance(message_or_data, (dict, list))):
+        # New signature: success_response(message, data)
+        message = data_or_message
+        data = message_or_data
+    else:
+        # Old signature: success_response(data, message) - deprecated
+        data = data_or_message
+        message = message_or_data if isinstance(message_or_data, str) else "Success"
+
     return {
         "success": True,
         "message": message,

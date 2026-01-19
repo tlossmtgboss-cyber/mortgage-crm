@@ -1,6 +1,16 @@
 """
-Salesforce Integration Routes
+Salesforce Integration Routes (Legacy)
 OAuth authentication, webhook handling, and sync endpoints
+
+DEPRECATION NOTICE:
+This module is being phased out in favor of salesforce_integration_routes.py which provides:
+- Per-user OAuth with PKCE
+- Schema discovery and field mapping
+- Email and calendar sync
+- Bidirectional sync support
+
+New endpoints are available at /api/integrations/salesforce/*
+These legacy endpoints at /api/v1/salesforce/* will be maintained for backwards compatibility.
 """
 import os
 import logging
@@ -95,7 +105,13 @@ async def salesforce_connect(
     """
     Initiate Salesforce OAuth flow.
     Redirects user to Salesforce login page.
+
+    DEPRECATED: Use /api/integrations/salesforce/connect instead for:
+    - PKCE-secured OAuth flow
+    - Better token management
+    - Calendar sync settings initialization
     """
+    logger.warning("DEPRECATED: /api/v1/salesforce/connect - Use /api/integrations/salesforce/connect instead")
     from integrations.salesforce_service import salesforce_client
 
     if not salesforce_client.enabled:

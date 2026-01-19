@@ -5,7 +5,7 @@ Handles bidirectional data synchronization using user-specific field mappings
 import hashlib
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 from urllib.parse import quote
 import httpx
@@ -706,6 +706,705 @@ class SalesforceSyncService:
                 item.error_message = str(e)
 
             db.commit()
+
+
+    # =========================================================================
+    # OUTBOUND SYNC - Push CRM data TO Salesforce
+    # =========================================================================
+
+    async def push_loan_to_salesforce(
+        self,
+        db: Session,
+        integration_profile_id: int,
+        loan_id: int
+    ) -> Dict[str, Any]:
+        """
+        Push a CRM loan to Salesforce as an Opportunity.
+
+        Args:
+            db: Database session
+            integration_profile_id: User's Salesforce integration profile
+            loan_id: CRM loan ID to push
+
+        Returns:
+            Result dict with salesforce_id and success status
+        """
+        from sqlalchemy import text
+
+        # Get access token
+        access_token, instance_url = await salesforce_oauth.get_access_token(
+            db, integration_profile_id
+        )
+
+        # Get loan data
+        loan = db.execute(text("""
+            SELECT l.*, u.email as lo_email, u.name as lo_name
+            FROM loans l
+            LEFT JOIN users u ON u.id = l.loan_officer_id
+            WHERE l.id = :loan_id
+        """), {"loan_id": loan_id}).fetchone()
+
+        if not loan:
+            raise ValueError(f"Loan {loan_id} not found")
+
+        # Map CRM loan fields to Salesforce Opportunity fields
+        opportunity_data = {
+            "Name": loan.borrower_name or f"Loan {loan.loan_number}",
+            "Amount": float(loan.amount or 0),
+            "StageName": self._map_crm_stage_to_salesforce(loan.stage),
+            "CloseDate": str(loan.closing_date or loan.expected_close_date or datetime.utcnow().date()),
+            "Description": f"Loan #{loan.loan_number}\nProperty: {loan.property_address or 'N/A'}",
+        }
+
+        # Add custom fields if they exist in Salesforce
+        custom_fields = {
+            "Loan_Number__c": loan.loan_number,
+            "Property_Address__c": loan.property_address,
+            "Loan_Type__c": loan.loan_type,
+            "Loan_Program__c": loan.program,
+            "Borrower_Email__c": loan.borrower_email,
+            "Borrower_Phone__c": loan.borrower_phone,
+            "Interest_Rate__c": float(loan.interest_rate) if loan.interest_rate else None,
+            "LTV__c": float(loan.ltv) if hasattr(loan, 'ltv') and loan.ltv else None,
+        }
+
+        # Only include custom fields that have values
+        for field, value in custom_fields.items():
+            if value is not None:
+                opportunity_data[field] = value
+
+        # Check if loan already has a Salesforce ID (update) or needs to be created
+        salesforce_id = loan.salesforce_id
+
+        async with httpx.AsyncClient() as client:
+            if salesforce_id:
+                # UPDATE existing Opportunity
+                response = await client.patch(
+                    f"{instance_url}/services/data/v59.0/sobjects/Opportunity/{salesforce_id}",
+                    headers={
+                        "Authorization": f"Bearer {access_token}",
+                        "Content-Type": "application/json"
+                    },
+                    json=opportunity_data,
+                    timeout=30.0
+                )
+
+                if response.status_code == 204:
+                    logger.info(f"Updated Salesforce Opportunity {salesforce_id} for loan {loan_id}")
+
+                    # Update loan's sync status
+                    db.execute(text("""
+                        UPDATE loans SET
+                            salesforce_last_synced_at = CURRENT_TIMESTAMP,
+                            salesforce_sync_status = 'synced',
+                            salesforce_sync_direction = 'outbound'
+                        WHERE id = :loan_id
+                    """), {"loan_id": loan_id})
+                    db.commit()
+
+                    return {
+                        "success": True,
+                        "salesforce_id": salesforce_id,
+                        "action": "updated",
+                        "loan_id": loan_id
+                    }
+                else:
+                    error = response.text
+                    logger.error(f"Failed to update Salesforce Opportunity: {error}")
+                    return {
+                        "success": False,
+                        "error": error,
+                        "loan_id": loan_id
+                    }
+            else:
+                # CREATE new Opportunity
+                response = await client.post(
+                    f"{instance_url}/services/data/v59.0/sobjects/Opportunity",
+                    headers={
+                        "Authorization": f"Bearer {access_token}",
+                        "Content-Type": "application/json"
+                    },
+                    json=opportunity_data,
+                    timeout=30.0
+                )
+
+                if response.status_code == 201:
+                    result = response.json()
+                    salesforce_id = result.get('id')
+
+                    logger.info(f"Created Salesforce Opportunity {salesforce_id} for loan {loan_id}")
+
+                    # Update loan with Salesforce ID
+                    db.execute(text("""
+                        UPDATE loans SET
+                            salesforce_id = :sf_id,
+                            salesforce_last_synced_at = CURRENT_TIMESTAMP,
+                            salesforce_sync_status = 'synced',
+                            salesforce_sync_direction = 'outbound'
+                        WHERE id = :loan_id
+                    """), {"sf_id": salesforce_id, "loan_id": loan_id})
+                    db.commit()
+
+                    return {
+                        "success": True,
+                        "salesforce_id": salesforce_id,
+                        "action": "created",
+                        "loan_id": loan_id
+                    }
+                else:
+                    error = response.text
+                    logger.error(f"Failed to create Salesforce Opportunity: {error}")
+                    return {
+                        "success": False,
+                        "error": error,
+                        "loan_id": loan_id
+                    }
+
+    async def push_lead_to_salesforce(
+        self,
+        db: Session,
+        integration_profile_id: int,
+        lead_id: int
+    ) -> Dict[str, Any]:
+        """
+        Push a CRM lead to Salesforce as a Lead.
+
+        Args:
+            db: Database session
+            integration_profile_id: User's Salesforce integration profile
+            lead_id: CRM lead ID to push
+
+        Returns:
+            Result dict with salesforce_id and success status
+        """
+        from sqlalchemy import text
+
+        # Get access token
+        access_token, instance_url = await salesforce_oauth.get_access_token(
+            db, integration_profile_id
+        )
+
+        # Get lead data
+        lead = db.execute(text("""
+            SELECT * FROM leads WHERE id = :lead_id
+        """), {"lead_id": lead_id}).fetchone()
+
+        if not lead:
+            raise ValueError(f"Lead {lead_id} not found")
+
+        # Map CRM lead fields to Salesforce Lead fields
+        lead_data = {
+            "FirstName": lead.first_name or "",
+            "LastName": lead.last_name or "Unknown",
+            "Email": lead.email,
+            "Phone": lead.phone,
+            "Company": lead.company or "Individual",
+            "LeadSource": lead.source or "CRM",
+            "Status": self._map_crm_lead_stage_to_salesforce(lead.stage),
+            "Description": f"CRM Lead ID: {lead.id}",
+        }
+
+        # Add custom fields if they exist
+        custom_fields = {
+            "CRM_Lead_ID__c": str(lead.id),
+            "Loan_Amount__c": float(lead.estimated_loan_amount) if hasattr(lead, 'estimated_loan_amount') and lead.estimated_loan_amount else None,
+            "Property_Type__c": lead.property_type if hasattr(lead, 'property_type') else None,
+        }
+
+        for field, value in custom_fields.items():
+            if value is not None:
+                lead_data[field] = value
+
+        # Check if lead already has a Salesforce ID
+        salesforce_id = lead.salesforce_id if hasattr(lead, 'salesforce_id') else None
+
+        async with httpx.AsyncClient() as client:
+            if salesforce_id:
+                # UPDATE existing Lead
+                response = await client.patch(
+                    f"{instance_url}/services/data/v59.0/sobjects/Lead/{salesforce_id}",
+                    headers={
+                        "Authorization": f"Bearer {access_token}",
+                        "Content-Type": "application/json"
+                    },
+                    json=lead_data,
+                    timeout=30.0
+                )
+
+                if response.status_code == 204:
+                    logger.info(f"Updated Salesforce Lead {salesforce_id} for CRM lead {lead_id}")
+
+                    db.execute(text("""
+                        UPDATE leads SET
+                            updated_at = CURRENT_TIMESTAMP,
+                            meta_data = COALESCE(meta_data, '{}'::jsonb) ||
+                                jsonb_build_object('salesforce_synced_at', :synced_at)
+                        WHERE id = :lead_id
+                    """), {"lead_id": lead_id, "synced_at": datetime.utcnow().isoformat()})
+                    db.commit()
+
+                    return {
+                        "success": True,
+                        "salesforce_id": salesforce_id,
+                        "action": "updated",
+                        "lead_id": lead_id
+                    }
+                else:
+                    error = response.text
+                    logger.error(f"Failed to update Salesforce Lead: {error}")
+                    return {"success": False, "error": error, "lead_id": lead_id}
+            else:
+                # CREATE new Lead
+                response = await client.post(
+                    f"{instance_url}/services/data/v59.0/sobjects/Lead",
+                    headers={
+                        "Authorization": f"Bearer {access_token}",
+                        "Content-Type": "application/json"
+                    },
+                    json=lead_data,
+                    timeout=30.0
+                )
+
+                if response.status_code == 201:
+                    result = response.json()
+                    salesforce_id = result.get('id')
+
+                    logger.info(f"Created Salesforce Lead {salesforce_id} for CRM lead {lead_id}")
+
+                    db.execute(text("""
+                        UPDATE leads SET
+                            salesforce_id = :sf_id,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = :lead_id
+                    """), {"sf_id": salesforce_id, "lead_id": lead_id})
+                    db.commit()
+
+                    return {
+                        "success": True,
+                        "salesforce_id": salesforce_id,
+                        "action": "created",
+                        "lead_id": lead_id
+                    }
+                else:
+                    error = response.text
+                    logger.error(f"Failed to create Salesforce Lead: {error}")
+                    return {"success": False, "error": error, "lead_id": lead_id}
+
+    async def push_email_to_salesforce(
+        self,
+        db: Session,
+        integration_profile_id: int,
+        email_id: int
+    ) -> Dict[str, Any]:
+        """
+        Push a CRM email to Salesforce as a Task (Email type).
+
+        Args:
+            db: Database session
+            integration_profile_id: User's Salesforce integration profile
+            email_id: CRM email ID to push
+
+        Returns:
+            Result dict with salesforce_id and success status
+        """
+        from sqlalchemy import text
+
+        access_token, instance_url = await salesforce_oauth.get_access_token(
+            db, integration_profile_id
+        )
+
+        # Get email data with related lead/loan Salesforce IDs
+        email = db.execute(text("""
+            SELECT em.*,
+                   l.salesforce_id as lead_sf_id,
+                   lo.salesforce_id as loan_sf_id
+            FROM email_messages em
+            LEFT JOIN leads l ON l.id = em.lead_id
+            LEFT JOIN loans lo ON lo.id = em.loan_id
+            WHERE em.id = :email_id
+        """), {"email_id": email_id}).fetchone()
+
+        if not email:
+            raise ValueError(f"Email {email_id} not found")
+
+        # Build Task data
+        task_data = {
+            "Subject": email.subject or "Email Activity",
+            "Description": (email.body or "")[:32000],
+            "TaskSubtype": "Email",
+            "Status": "Completed",
+            "Priority": "Normal",
+            "ActivityDate": email.created_at.strftime("%Y-%m-%d") if email.created_at else datetime.utcnow().strftime("%Y-%m-%d"),
+        }
+
+        # Link to Lead or Opportunity
+        if email.lead_sf_id:
+            task_data["WhoId"] = email.lead_sf_id
+        if email.loan_sf_id:
+            task_data["WhatId"] = email.loan_sf_id
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{instance_url}/services/data/v59.0/sobjects/Task",
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "Content-Type": "application/json"
+                },
+                json=task_data,
+                timeout=30.0
+            )
+
+            if response.status_code == 201:
+                result = response.json()
+                salesforce_id = result.get('id')
+
+                logger.info(f"Created Salesforce Task {salesforce_id} for email {email_id}")
+
+                # Update email with Salesforce Task ID
+                db.execute(text("""
+                    UPDATE email_messages SET
+                        meta_data = COALESCE(meta_data, '{}'::jsonb) ||
+                            jsonb_build_object(
+                                'salesforce_task_id', :sf_id,
+                                'salesforce_pushed_at', :pushed_at
+                            )
+                    WHERE id = :email_id
+                """), {
+                    "sf_id": salesforce_id,
+                    "pushed_at": datetime.utcnow().isoformat(),
+                    "email_id": email_id
+                })
+                db.commit()
+
+                return {
+                    "success": True,
+                    "salesforce_id": salesforce_id,
+                    "action": "created",
+                    "email_id": email_id
+                }
+            else:
+                error = response.text
+                logger.error(f"Failed to create Salesforce Task: {error}")
+                return {"success": False, "error": error, "email_id": email_id}
+
+    async def push_calendar_event_to_salesforce(
+        self,
+        db: Session,
+        integration_profile_id: int,
+        event_id: int
+    ) -> Dict[str, Any]:
+        """
+        Push a CRM calendar event to Salesforce as an Event.
+
+        Args:
+            db: Database session
+            integration_profile_id: User's Salesforce integration profile
+            event_id: CRM calendar event ID to push
+
+        Returns:
+            Result dict with salesforce_id and success status
+        """
+        from sqlalchemy import text
+
+        access_token, instance_url = await salesforce_oauth.get_access_token(
+            db, integration_profile_id
+        )
+
+        # Get event data
+        event = db.execute(text("""
+            SELECT ce.*,
+                   l.salesforce_id as lead_sf_id,
+                   lo.salesforce_id as loan_sf_id
+            FROM calendar_events ce
+            LEFT JOIN leads l ON l.id = ce.lead_id
+            LEFT JOIN loans lo ON lo.id = ce.loan_id
+            WHERE ce.id = :event_id
+        """), {"event_id": event_id}).fetchone()
+
+        if not event:
+            raise ValueError(f"Calendar event {event_id} not found")
+
+        # Build Salesforce Event data
+        event_data = {
+            "Subject": event.title or "CRM Event",
+            "Description": event.description or "",
+            "StartDateTime": event.start_time.isoformat() if event.start_time else datetime.utcnow().isoformat(),
+            "EndDateTime": event.end_time.isoformat() if event.end_time else (event.start_time + timedelta(hours=1)).isoformat() if event.start_time else datetime.utcnow().isoformat(),
+            "Location": event.location if hasattr(event, 'location') and event.location else None,
+            "IsAllDayEvent": event.all_day if hasattr(event, 'all_day') else False,
+        }
+
+        # Remove None values
+        event_data = {k: v for k, v in event_data.items() if v is not None}
+
+        # Link to Lead or Opportunity
+        if hasattr(event, 'lead_sf_id') and event.lead_sf_id:
+            event_data["WhoId"] = event.lead_sf_id
+        if hasattr(event, 'loan_sf_id') and event.loan_sf_id:
+            event_data["WhatId"] = event.loan_sf_id
+
+        # Check for existing Salesforce ID
+        salesforce_id = None
+        if hasattr(event, 'meta_data') and event.meta_data:
+            salesforce_id = event.meta_data.get('salesforce_event_id')
+
+        async with httpx.AsyncClient() as client:
+            if salesforce_id:
+                # UPDATE existing Event
+                response = await client.patch(
+                    f"{instance_url}/services/data/v59.0/sobjects/Event/{salesforce_id}",
+                    headers={
+                        "Authorization": f"Bearer {access_token}",
+                        "Content-Type": "application/json"
+                    },
+                    json=event_data,
+                    timeout=30.0
+                )
+
+                if response.status_code == 204:
+                    logger.info(f"Updated Salesforce Event {salesforce_id}")
+                    return {
+                        "success": True,
+                        "salesforce_id": salesforce_id,
+                        "action": "updated",
+                        "event_id": event_id
+                    }
+                else:
+                    error = response.text
+                    return {"success": False, "error": error, "event_id": event_id}
+            else:
+                # CREATE new Event
+                response = await client.post(
+                    f"{instance_url}/services/data/v59.0/sobjects/Event",
+                    headers={
+                        "Authorization": f"Bearer {access_token}",
+                        "Content-Type": "application/json"
+                    },
+                    json=event_data,
+                    timeout=30.0
+                )
+
+                if response.status_code == 201:
+                    result = response.json()
+                    salesforce_id = result.get('id')
+
+                    logger.info(f"Created Salesforce Event {salesforce_id}")
+
+                    # Update CRM event with Salesforce ID
+                    db.execute(text("""
+                        UPDATE calendar_events SET
+                            meta_data = COALESCE(meta_data, '{}'::jsonb) ||
+                                jsonb_build_object(
+                                    'salesforce_event_id', :sf_id,
+                                    'salesforce_pushed_at', :pushed_at
+                                )
+                        WHERE id = :event_id
+                    """), {
+                        "sf_id": salesforce_id,
+                        "pushed_at": datetime.utcnow().isoformat(),
+                        "event_id": event_id
+                    })
+                    db.commit()
+
+                    return {
+                        "success": True,
+                        "salesforce_id": salesforce_id,
+                        "action": "created",
+                        "event_id": event_id
+                    }
+                else:
+                    error = response.text
+                    return {"success": False, "error": error, "event_id": event_id}
+
+    async def sync_outbound(
+        self,
+        db: Session,
+        integration_profile_id: int,
+        sync_loans: bool = True,
+        sync_leads: bool = True,
+        sync_emails: bool = True,
+        sync_calendar: bool = True,
+        since_hours: int = 24
+    ) -> Dict[str, Any]:
+        """
+        Push all recent CRM changes to Salesforce.
+
+        Args:
+            db: Database session
+            integration_profile_id: User's Salesforce integration profile
+            sync_loans: Push loan changes
+            sync_leads: Push lead changes
+            sync_emails: Push email activities
+            sync_calendar: Push calendar events
+            since_hours: Only sync records modified in the last N hours
+
+        Returns:
+            Summary of sync results
+        """
+        from sqlalchemy import text
+
+        profile = db.query(IntegrationProfile).filter(
+            IntegrationProfile.id == integration_profile_id
+        ).first()
+
+        if not profile:
+            raise ValueError("Integration profile not found")
+
+        user_id = profile.user_id
+        since = datetime.utcnow() - timedelta(hours=since_hours)
+
+        results = {
+            "success": True,
+            "loans": {"pushed": 0, "failed": 0, "errors": []},
+            "leads": {"pushed": 0, "failed": 0, "errors": []},
+            "emails": {"pushed": 0, "failed": 0, "errors": []},
+            "calendar": {"pushed": 0, "failed": 0, "errors": []},
+        }
+
+        # Sync Loans
+        if sync_loans:
+            loans = db.execute(text("""
+                SELECT id FROM loans
+                WHERE loan_officer_id = :user_id
+                  AND updated_at >= :since
+                  AND (salesforce_sync_status IS NULL
+                       OR salesforce_sync_status != 'synced'
+                       OR salesforce_last_synced_at < updated_at)
+                ORDER BY updated_at DESC
+                LIMIT 100
+            """), {"user_id": user_id, "since": since}).fetchall()
+
+            for loan in loans:
+                try:
+                    result = await self.push_loan_to_salesforce(db, integration_profile_id, loan.id)
+                    if result['success']:
+                        results['loans']['pushed'] += 1
+                    else:
+                        results['loans']['failed'] += 1
+                        results['loans']['errors'].append(result.get('error', 'Unknown error')[:100])
+                except Exception as e:
+                    results['loans']['failed'] += 1
+                    results['loans']['errors'].append(str(e)[:100])
+
+        # Sync Leads
+        if sync_leads:
+            leads = db.execute(text("""
+                SELECT id FROM leads
+                WHERE owner_id = :user_id
+                  AND updated_at >= :since
+                  AND (salesforce_id IS NULL
+                       OR (meta_data->>'salesforce_synced_at')::timestamp < updated_at)
+                ORDER BY updated_at DESC
+                LIMIT 100
+            """), {"user_id": user_id, "since": since}).fetchall()
+
+            for lead in leads:
+                try:
+                    result = await self.push_lead_to_salesforce(db, integration_profile_id, lead.id)
+                    if result['success']:
+                        results['leads']['pushed'] += 1
+                    else:
+                        results['leads']['failed'] += 1
+                        results['leads']['errors'].append(result.get('error', 'Unknown error')[:100])
+                except Exception as e:
+                    results['leads']['failed'] += 1
+                    results['leads']['errors'].append(str(e)[:100])
+
+        # Sync Emails
+        if sync_emails:
+            emails = db.execute(text("""
+                SELECT id FROM email_messages
+                WHERE user_id = :user_id
+                  AND created_at >= :since
+                  AND direction = 'outbound'
+                  AND (meta_data IS NULL OR meta_data->>'salesforce_task_id' IS NULL)
+                ORDER BY created_at DESC
+                LIMIT 100
+            """), {"user_id": user_id, "since": since}).fetchall()
+
+            for email in emails:
+                try:
+                    result = await self.push_email_to_salesforce(db, integration_profile_id, email.id)
+                    if result['success']:
+                        results['emails']['pushed'] += 1
+                    else:
+                        results['emails']['failed'] += 1
+                        results['emails']['errors'].append(result.get('error', 'Unknown error')[:100])
+                except Exception as e:
+                    results['emails']['failed'] += 1
+                    results['emails']['errors'].append(str(e)[:100])
+
+        # Sync Calendar Events
+        if sync_calendar:
+            events = db.execute(text("""
+                SELECT id FROM calendar_events
+                WHERE user_id = :user_id
+                  AND updated_at >= :since
+                  AND (meta_data IS NULL OR meta_data->>'salesforce_event_id' IS NULL)
+                ORDER BY updated_at DESC
+                LIMIT 100
+            """), {"user_id": user_id, "since": since}).fetchall()
+
+            for event in events:
+                try:
+                    result = await self.push_calendar_event_to_salesforce(db, integration_profile_id, event.id)
+                    if result['success']:
+                        results['calendar']['pushed'] += 1
+                    else:
+                        results['calendar']['failed'] += 1
+                        results['calendar']['errors'].append(result.get('error', 'Unknown error')[:100])
+                except Exception as e:
+                    results['calendar']['failed'] += 1
+                    results['calendar']['errors'].append(str(e)[:100])
+
+        # Check overall success
+        total_failed = sum([
+            results['loans']['failed'],
+            results['leads']['failed'],
+            results['emails']['failed'],
+            results['calendar']['failed']
+        ])
+        results['success'] = total_failed == 0
+
+        logger.info(
+            f"Outbound sync complete: "
+            f"loans={results['loans']['pushed']}, "
+            f"leads={results['leads']['pushed']}, "
+            f"emails={results['emails']['pushed']}, "
+            f"calendar={results['calendar']['pushed']}"
+        )
+
+        return results
+
+    def _map_crm_stage_to_salesforce(self, crm_stage: str) -> str:
+        """Map CRM loan stage to Salesforce Opportunity stage"""
+        stage_mapping = {
+            'Application': 'Qualification',
+            'Processing': 'Needs Analysis',
+            'Submitted': 'Proposal/Price Quote',
+            'Underwriting': 'Negotiation/Review',
+            'Conditional Approval': 'Negotiation/Review',
+            'Approved': 'Negotiation/Review',
+            'CTC': 'Negotiation/Review',
+            'Clear to Close': 'Negotiation/Review',
+            'Docs Out': 'Negotiation/Review',
+            'Closing': 'Negotiation/Review',
+            'Funded': 'Closed Won',
+            'Cancelled': 'Closed Lost',
+            'Denied': 'Closed Lost',
+        }
+        return stage_mapping.get(crm_stage, 'Qualification')
+
+    def _map_crm_lead_stage_to_salesforce(self, crm_stage: str) -> str:
+        """Map CRM lead stage to Salesforce Lead status"""
+        stage_mapping = {
+            'new': 'Open - Not Contacted',
+            'contacted': 'Working - Contacted',
+            'qualified': 'Closed - Converted',
+            'unqualified': 'Closed - Not Converted',
+            'converted': 'Closed - Converted',
+        }
+        return stage_mapping.get(crm_stage, 'Open - Not Contacted')
 
 
 # Export singleton instance

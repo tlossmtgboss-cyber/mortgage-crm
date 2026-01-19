@@ -60920,6 +60920,38 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"⚠️ Capacity recalculation job not added: {e}")
 
+    # Add Salesforce sync jobs
+    try:
+        from tasks.salesforce_sync_tasks import (
+            sync_all_users_salesforce_sync,
+            check_salesforce_sync_health_sync
+        )
+        scheduler.add_job(
+            sync_all_users_salesforce_sync,
+            trigger=IntervalTrigger(minutes=15),
+            id='salesforce_sync_all_users',
+            name='Bidirectional Salesforce sync (push & pull) for all users',
+            replace_existing=True,
+            kwargs={
+                'sync_emails': True,
+                'sync_calendar': True,
+                'push_to_salesforce': True,
+                'email_days_back': 1,
+                'calendar_days_back': 1,
+                'calendar_days_forward': 14
+            }
+        )
+        scheduler.add_job(
+            check_salesforce_sync_health_sync,
+            trigger=IntervalTrigger(minutes=10),
+            id='salesforce_sync_health',
+            name='Salesforce sync health check',
+            replace_existing=True
+        )
+        logger.info("✅ Salesforce sync scheduler started (sync every 15 minutes, health check every 10 minutes)")
+    except Exception as e:
+        logger.warning(f"⚠️ Salesforce sync scheduler not started: {e}")
+
     logger.info("✅ CRM is ready!")
     logger.info("📚 API Documentation: http://localhost:8000/docs")
     logger.info("🔐 Admin Login: admin@perenniaai.com")
