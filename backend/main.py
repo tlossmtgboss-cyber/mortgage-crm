@@ -21114,6 +21114,15 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ DocuSign routes not loaded: {e}")
 
+# Microsoft Outlook Integration routes (OAuth, Calendar, Email)
+try:
+    from routes.microsoft_routes import router as microsoft_router, set_dependencies as set_microsoft_deps
+    set_microsoft_deps(get_db, get_current_user)
+    app.include_router(microsoft_router, tags=["Microsoft Outlook Integration"])
+    logger.info("✅ Microsoft Outlook routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Microsoft Outlook routes not loaded: {e}")
+
 # Listing Agent Portal routes (Transaction updates for listing agents)
 try:
     from routes.listing_portal_routes import router as listing_portal_router, set_dependencies as set_listing_portal_deps
@@ -22361,6 +22370,14 @@ try:
     logger.info("✅ Document Visibility routes loaded")
 except Exception as e:
     logger.warning(f"⚠️ Document Visibility routes not loaded: {e}")
+
+# Support Tickets routes (IT ticket management for platform admin)
+try:
+    from routes.support_tickets_routes import router as support_tickets_router
+    app.include_router(support_tickets_router, tags=["Support Tickets"])
+    logger.info("✅ Support Tickets routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Support Tickets routes not loaded: {e}")
 
 @app.get("/api/v1/debug/portal-services-status")
 async def debug_portal_services_status():

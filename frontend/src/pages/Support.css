@@ -916,6 +916,39 @@
   max-width: 700px;
 }
 
+/* Ticket Submitter Info (for admins) */
+.ticket-submitter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background: #f8f9fa;
+  border-radius: 6px;
+}
+
+.ticket-submitter i {
+  color: #2196f3;
+}
+
+.ticket-submitter .ticket-org {
+  margin-left: 12px;
+  padding-left: 12px;
+  border-left: 1px solid #ddd;
+}
+
+.ticket-submitter .ticket-org i {
+  color: #9c27b0;
+  margin-right: 4px;
+}
+
+/* Ticket Priority */
+.ticket-priority {
+  text-transform: capitalize;
+}
+
 /* Complete Ticket Button */
 .btn-complete-ticket {
   display: inline-flex;

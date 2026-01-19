@@ -22,6 +22,7 @@ const Support = () => {
   const [loadingTickets, setLoadingTickets] = useState(false);
   const [showNewTicketForm, setShowNewTicketForm] = useState(false);
   const [completingTicketId, setCompletingTicketId] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const tabs = [
     { id: 'active', label: 'Active Tickets', icon: 'fa-ticket-alt' },
@@ -52,6 +53,7 @@ const Support = () => {
       if (response.ok) {
         const data = await response.json();
         setTickets(data.tickets || []);
+        setIsAdmin(data.is_admin || false);
       }
     } catch (err) {
       console.error('Error loading tickets:', err);
@@ -137,10 +139,25 @@ const Support = () => {
         </span>
       </div>
       <h3 className="ticket-subject">{ticket.subject}</h3>
+      {/* Show submitter info for admins */}
+      {isAdmin && (ticket.user_name || ticket.user_email) && (
+        <div className="ticket-submitter">
+          <i className="fas fa-user"></i>
+          <span>{ticket.user_name || ticket.user_email}</span>
+          {ticket.organization_name && (
+            <span className="ticket-org">
+              <i className="fas fa-building"></i> {ticket.organization_name}
+            </span>
+          )}
+        </div>
+      )}
       <p className="ticket-preview">{ticket.description?.substring(0, 150)}...</p>
       <div className="ticket-meta">
         <span className="ticket-category">
           <i className="fas fa-tag"></i> {ticket.category}
+        </span>
+        <span className="ticket-priority">
+          <i className="fas fa-flag"></i> {ticket.priority}
         </span>
         <span className="ticket-date">
           <i className="fas fa-clock"></i> {new Date(ticket.created_at).toLocaleDateString()}
