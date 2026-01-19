@@ -40597,11 +40597,32 @@ async def get_all_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get all registered users (admin only)"""
+    """Get all registered users (admin only)
+
+    Multi-tenancy:
+    - Platform admins (permission_role='admin') see all users
+    - Site administrators see only users from their organization
+    """
     from utils.auth import require_admin
     require_admin(current_user)
 
-    users = db.query(User).order_by(User.created_at.desc()).all()
+    # Check if platform admin (can see all users across all organizations)
+    is_platform_admin = (
+        current_user.permission_role == 'admin' or
+        current_user.email == 'admin@perenniaai.com'
+    )
+
+    if is_platform_admin:
+        # Platform admin sees all users
+        users = db.query(User).order_by(User.created_at.desc()).all()
+    else:
+        # Site admin sees only users from their organization
+        # Exclude platform admin from organization user lists
+        query = db.query(User).filter(
+            User.organization_id == current_user.organization_id,
+            User.email != 'admin@perenniaai.com'  # Never show platform admin to org users
+        )
+        users = query.order_by(User.created_at.desc()).all()
 
     return [{
         "id": user.id,
