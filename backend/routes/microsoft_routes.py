@@ -83,7 +83,7 @@ async def microsoft_auth(
 
     user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
     frontend_url = os.getenv("FRONTEND_URL", "https://www.perenniaai.com")
-    state = f"{user_id}:{frontend_url}/settings/integrations:{integration_type}"
+    state = f"{user_id}|{frontend_url}/settings/integrations|{integration_type}"
 
     auth_url = microsoft_outlook_client.get_authorization_url(state=state, integration_type=integration_type)
 
@@ -112,13 +112,14 @@ async def microsoft_callback(
 
     from integrations.microsoft_outlook_service import microsoft_outlook_client
 
-    # Parse state (format: user_id:redirect_url:integration_type)
+    # Parse state (format: user_id|redirect_url|integration_type)
+    # Using | as delimiter because : conflicts with https://
     user_id = None
     redirect_url = None
     integration_type = "calendar"  # default
 
     if state:
-        parts = state.split(":", 2)
+        parts = state.split("|")
         try:
             user_id = int(parts[0])
         except ValueError:
@@ -153,78 +154,100 @@ async def microsoft_callback(
 
     # Store tokens in user_integrations table
     try:
-        # Check if user_integrations table exists
-        try:
-            result = db.execute(text("""
-                SELECT EXISTS (
-                    SELECT FROM information_schema.tables
-                    WHERE table_name = 'user_integrations'
-                )
-            """))
-            table_exists = result.scalar()
-        except Exception:
-            # SQLite fallback
+        import json as json_module
+
+        # Parse expires_at - could be ISO string or datetime
+        expires_at_value = token_data.get("expires_at")
+        if isinstance(expires_at_value, str):
             try:
-                result = db.execute(text("""
-                    SELECT COUNT(*) FROM sqlite_master
-                    WHERE type='table' AND name='user_integrations'
-                """))
-                table_exists = result.scalar() > 0
-            except Exception:
-                table_exists = False
+                expires_at_value = datetime.fromisoformat(expires_at_value.replace('Z', '+00:00'))
+            except ValueError:
+                expires_at_value = datetime.utcnow() + timedelta(hours=1)
 
-        if not table_exists:
-            # Create table if it doesn't exist
-            db.execute(text("""
-                CREATE TABLE user_integrations (
-                    id SERIAL PRIMARY KEY,
-                    user_id INTEGER NOT NULL,
-                    provider VARCHAR(50) NOT NULL,
-                    access_token TEXT,
-                    refresh_token TEXT,
-                    expires_at TIMESTAMP,
-                    scopes TEXT,
-                    email VARCHAR(255),
-                    provider_user_id VARCHAR(255),
-                    instance_url TEXT,
-                    extra_data JSONB,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(user_id, provider)
-                )
-            """))
-            db.commit()
-
-        # Upsert the integration record
-        db.execute(text("""
-            INSERT INTO user_integrations
-                (user_id, provider, access_token, refresh_token, expires_at, email, provider_user_id, scopes, extra_data, updated_at)
-            VALUES
-                (:user_id, :provider, :access_token, :refresh_token, :expires_at, :email, :ms_user_id, :scopes,
-                 jsonb_build_object('token_type', :token_type, 'integration_type', :integration_type), CURRENT_TIMESTAMP)
-            ON CONFLICT (user_id, provider)
-            DO UPDATE SET
-                access_token = EXCLUDED.access_token,
-                refresh_token = EXCLUDED.refresh_token,
-                expires_at = EXCLUDED.expires_at,
-                email = EXCLUDED.email,
-                provider_user_id = EXCLUDED.provider_user_id,
-                scopes = EXCLUDED.scopes,
-                extra_data = EXCLUDED.extra_data,
-                updated_at = CURRENT_TIMESTAMP
-        """), {
-            "user_id": user_id,
-            "provider": provider,
-            "access_token": token_data.get("access_token"),
-            "refresh_token": token_data.get("refresh_token"),
-            "expires_at": token_data.get("expires_at"),
-            "email": user_email,
-            "ms_user_id": ms_user_id,
-            "scopes": token_data.get("scope"),
+        # Prepare extra_data as JSON string
+        extra_data_json = json_module.dumps({
             "token_type": token_data.get("token_type", "Bearer"),
             "integration_type": integration_type
         })
-        db.commit()
+
+        # Try upsert first (table should exist)
+        try:
+            db.execute(text("""
+                INSERT INTO user_integrations
+                    (user_id, provider, access_token, refresh_token, expires_at, email, provider_user_id, scopes, extra_data, updated_at)
+                VALUES
+                    (:user_id, :provider, :access_token, :refresh_token, :expires_at, :email, :ms_user_id, :scopes,
+                     :extra_data::jsonb, CURRENT_TIMESTAMP)
+                ON CONFLICT (user_id, provider)
+                DO UPDATE SET
+                    access_token = EXCLUDED.access_token,
+                    refresh_token = EXCLUDED.refresh_token,
+                    expires_at = EXCLUDED.expires_at,
+                    email = EXCLUDED.email,
+                    provider_user_id = EXCLUDED.provider_user_id,
+                    scopes = EXCLUDED.scopes,
+                    extra_data = EXCLUDED.extra_data,
+                    updated_at = CURRENT_TIMESTAMP
+            """), {
+                "user_id": user_id,
+                "provider": provider,
+                "access_token": token_data.get("access_token"),
+                "refresh_token": token_data.get("refresh_token"),
+                "expires_at": expires_at_value,
+                "email": user_email,
+                "ms_user_id": ms_user_id,
+                "scopes": token_data.get("scope"),
+                "extra_data": extra_data_json
+            })
+            db.commit()
+        except Exception as insert_err:
+            db.rollback()
+            logger.warning(f"Upsert failed, trying simple insert/update: {insert_err}")
+
+            # Try simple approach - check if exists then insert or update
+            result = db.execute(text("""
+                SELECT id FROM user_integrations WHERE user_id = :user_id AND provider = :provider
+            """), {"user_id": user_id, "provider": provider})
+            existing = result.fetchone()
+
+            if existing:
+                db.execute(text("""
+                    UPDATE user_integrations SET
+                        access_token = :access_token,
+                        refresh_token = :refresh_token,
+                        expires_at = :expires_at,
+                        email = :email,
+                        provider_user_id = :ms_user_id,
+                        scopes = :scopes,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE user_id = :user_id AND provider = :provider
+                """), {
+                    "user_id": user_id,
+                    "provider": provider,
+                    "access_token": token_data.get("access_token"),
+                    "refresh_token": token_data.get("refresh_token"),
+                    "expires_at": expires_at_value,
+                    "email": user_email,
+                    "ms_user_id": ms_user_id,
+                    "scopes": token_data.get("scope")
+                })
+            else:
+                db.execute(text("""
+                    INSERT INTO user_integrations
+                        (user_id, provider, access_token, refresh_token, expires_at, email, provider_user_id, scopes)
+                    VALUES
+                        (:user_id, :provider, :access_token, :refresh_token, :expires_at, :email, :ms_user_id, :scopes)
+                """), {
+                    "user_id": user_id,
+                    "provider": provider,
+                    "access_token": token_data.get("access_token"),
+                    "refresh_token": token_data.get("refresh_token"),
+                    "expires_at": expires_at_value,
+                    "email": user_email,
+                    "ms_user_id": ms_user_id,
+                    "scopes": token_data.get("scope")
+                })
+            db.commit()
 
         logger.info(f"Successfully stored Microsoft {provider} tokens for user {user_id}")
 
@@ -581,3 +604,63 @@ async def send_email(
         raise HTTPException(status_code=500, detail="Failed to send email")
 
     return success_response({"sent": True}, "Email sent successfully")
+
+
+@router.post("/email/sync")
+async def sync_outlook_emails(
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Sync emails from Outlook for the Reconciliation Center"""
+    from integrations.microsoft_outlook_service import microsoft_outlook_client
+
+    user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
+
+    # Get access token
+    result = db.execute(text("""
+        SELECT access_token, refresh_token, expires_at
+        FROM user_integrations
+        WHERE user_id = :user_id AND provider = 'outlook_email'
+    """), {"user_id": user_id})
+    row = result.fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Outlook Email not connected")
+
+    access_token = row.access_token
+
+    # Check if token is expired and refresh if needed
+    if row.expires_at and datetime.utcnow() > row.expires_at:
+        token_data = microsoft_outlook_client.refresh_access_token(row.refresh_token)
+        if token_data:
+            access_token = token_data["access_token"]
+            db.execute(text("""
+                UPDATE user_integrations
+                SET access_token = :access_token,
+                    refresh_token = :refresh_token,
+                    expires_at = :expires_at,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE user_id = :user_id AND provider = 'outlook_email'
+            """), {
+                "user_id": user_id,
+                "access_token": token_data.get("access_token"),
+                "refresh_token": token_data.get("refresh_token"),
+                "expires_at": token_data.get("expires_at")
+            })
+            db.commit()
+        else:
+            raise HTTPException(status_code=401, detail="Token expired and refresh failed")
+
+    # Fetch recent emails (last 50 unread + recent)
+    messages = microsoft_outlook_client.list_messages(access_token, folder="inbox", top=50)
+
+    if messages is None:
+        raise HTTPException(status_code=500, detail="Failed to fetch emails from Outlook")
+
+    processed_count = len(messages.get("value", []))
+
+    return success_response({
+        "synced": True,
+        "processed_count": processed_count,
+        "messages": messages.get("value", [])
+    }, f"Synced {processed_count} emails from Outlook")

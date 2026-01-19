@@ -910,6 +910,26 @@
   color: white;
 }
 
+.tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 9px;
+  background: #10b981;
+  color: white;
+}
+
+.tab.active .tab-badge {
+  background: white;
+  color: #3b82f6;
+}
+
 /* Credentials Form */
 .credentials-form {
   margin-top: 12px;

@@ -381,7 +381,7 @@ function ReconciliationCenter() {
         headers: { 'Authorization': `Bearer ${token}` }
       }).then(r => r.ok ? r.json() : null).catch(() => null);
 
-      const microsoftStatus = await fetch(`${API_BASE_URL}/api/v1/microsoft/status`, {
+      const microsoftStatus = await fetch(`${API_BASE_URL}/api/v1/microsoft/status/outlook_email`, {
         headers: { 'Authorization': `Bearer ${token}` }
       }).then(r => r.ok ? r.json() : null).catch(() => null);
 
@@ -395,9 +395,9 @@ function ReconciliationCenter() {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}` }
         });
-      } else if (microsoftStatus?.connected) {
-        // Use Microsoft sync
-        syncEndpoint = `${API_BASE_URL}/api/v1/microsoft/sync-now`;
+      } else if (microsoftStatus?.data?.connected) {
+        // Use Microsoft Outlook sync
+        syncEndpoint = `${API_BASE_URL}/api/v1/microsoft/email/sync`;
         response = await fetch(syncEndpoint, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}` }

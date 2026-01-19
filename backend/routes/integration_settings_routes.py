@@ -280,9 +280,24 @@ INTEGRATIONS = {
         "icon": "google",
         "features": ["events", "availability", "reminders"]
     },
-    # NOTE: Outlook Calendar and Email integrations removed temporarily
-    # Re-add when Azure AD app is properly configured with correct redirect URIs
-    # See microsoft_outlook_service.py for implementation
+    "outlook_calendar": {
+        "id": "outlook_calendar",
+        "name": "Outlook Calendar",
+        "category": "calendar",
+        "auth_type": "oauth2",
+        "description": "Sync with Microsoft Outlook calendar",
+        "icon": "microsoft",
+        "features": ["events", "availability", "teams_meetings"]
+    },
+    "outlook_email": {
+        "id": "outlook_email",
+        "name": "Outlook Email",
+        "category": "communication",
+        "auth_type": "oauth2",
+        "description": "Send and receive emails via Microsoft Outlook",
+        "icon": "microsoft",
+        "features": ["send_email", "receive_email", "attachments", "folders"]
+    },
     "calendly": {
         "id": "calendly",
         "name": "Calendly",
@@ -777,8 +792,43 @@ async def connect_integration(
                     "redirect_uri": os.getenv("DOCUSIGN_REDIRECT_URI", "https://api.perenniaai.com/api/v1/docusign/callback")
                 }, "OAuth flow initiated - redirect to DocuSign")
 
-            # NOTE: Outlook Calendar and Email handlers removed temporarily
-            # Re-add when Azure AD app is properly configured
+            # Handle Outlook Calendar OAuth (Microsoft Graph API)
+            if integration_id == "outlook_calendar":
+                from integrations.microsoft_outlook_service import microsoft_outlook_client
+                if not microsoft_outlook_client.enabled:
+                    raise HTTPException(
+                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                        detail=error_response("Microsoft Outlook integration not configured. Please set MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET environment variables.", code="NOT_CONFIGURED")
+                    )
+                user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
+                frontend_url = os.getenv("FRONTEND_URL", "https://www.perenniaai.com")
+                state = f"{user_id}|{frontend_url}/settings/integrations|calendar"
+                oauth_url = microsoft_outlook_client.get_authorization_url(state=state, integration_type="calendar")
+                return success_response({
+                    "integration_id": integration_id,
+                    "auth_type": "oauth2",
+                    "oauth_url": oauth_url,
+                    "redirect_uri": microsoft_outlook_client.redirect_uri
+                }, "OAuth flow initiated - redirect to Microsoft")
+
+            # Handle Outlook Email OAuth (Microsoft Graph API)
+            if integration_id == "outlook_email":
+                from integrations.microsoft_outlook_service import microsoft_outlook_client
+                if not microsoft_outlook_client.enabled:
+                    raise HTTPException(
+                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                        detail=error_response("Microsoft Outlook integration not configured. Please set MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET environment variables.", code="NOT_CONFIGURED")
+                    )
+                user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
+                frontend_url = os.getenv("FRONTEND_URL", "https://www.perenniaai.com")
+                state = f"{user_id}|{frontend_url}/settings/integrations|email"
+                oauth_url = microsoft_outlook_client.get_authorization_url(state=state, integration_type="email")
+                return success_response({
+                    "integration_id": integration_id,
+                    "auth_type": "oauth2",
+                    "oauth_url": oauth_url,
+                    "redirect_uri": microsoft_outlook_client.redirect_uri
+                }, "OAuth flow initiated - redirect to Microsoft")
 
             # Generic OAuth URL for other integrations
             oauth_url = int_info.get("oauth_url", f"https://{integration_id}.com/oauth/authorize")

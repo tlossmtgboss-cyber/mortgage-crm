@@ -286,9 +286,18 @@ const IntegrationSettings = () => {
     const matchesSearch = !searchQuery ||
       (int.name && int.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (int.description && int.description.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    // Handle special "connected" tab
+    if (activeTab === 'connected') {
+      return matchesSearch && int.status === 'connected';
+    }
+
     const matchesCategory = activeTab === 'all' || int.category === activeTab;
     return matchesSearch && matchesCategory;
   });
+
+  // Count of connected integrations for the tab badge
+  const connectedCount = integrations.filter(i => i.status === 'connected').length;
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -309,6 +318,8 @@ const IntegrationSettings = () => {
       ringcentral: 'ringcentral.com',
       slack: 'slack.com',
       google_calendar: 'calendar.google.com',
+      outlook_calendar: 'outlook.com',
+      outlook_email: 'outlook.com',
       calendly: 'calendly.com',
       google_drive: 'drive.google.com',
       dropbox: 'dropbox.com',
@@ -397,6 +408,12 @@ const IntegrationSettings = () => {
             onClick={() => setActiveTab('all')}
           >
             All
+          </button>
+          <button
+            className={`tab ${activeTab === 'connected' ? 'active' : ''}`}
+            onClick={() => setActiveTab('connected')}
+          >
+            Connected {connectedCount > 0 && <span className="tab-badge">{connectedCount}</span>}
           </button>
           {categories.map(cat => (
             <button
