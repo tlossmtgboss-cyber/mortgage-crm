@@ -1772,7 +1772,7 @@ async def add_missing_database_columns(
     - permission_key column for permissions
     """
     try:
-        db = get_raw_db_session()
+        db = SessionLocal()
         results = {"columns_added": [], "errors": [], "skipped": []}
 
         try:
