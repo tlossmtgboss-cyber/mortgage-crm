@@ -279,6 +279,12 @@ async def run_account_management_migration(
     # Handle cleanup action
     if action == "cleanup":
         try:
+            # Clear any failed transaction state first
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
             results = {'deleted': {}, 'errors': [], 'preserved_admin': keep_admin_email}
 
             # Delete all tasks
