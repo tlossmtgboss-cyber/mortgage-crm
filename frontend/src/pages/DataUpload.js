@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './DataUpload.css';
+import AutoDataImport from '../components/data-management/AutoDataImport';
 
 function DataUpload() {
   const navigate = useNavigate();
+  const [importMode, setImportMode] = useState('auto'); // 'auto' or 'manual'
   const [uploadState, setUploadState] = useState('select'); // select, analyzing, questions, mapping, importing, complete
   const [file, setFile] = useState(null);
   const [parsedData, setParsedData] = useState(null);
@@ -512,6 +514,32 @@ function DataUpload() {
         </div>
       </div>
 
+      {/* Import Mode Toggle */}
+      <div className="import-mode-toggle">
+        <div className="mode-tabs">
+          <button
+            className={`mode-tab ${importMode === 'auto' ? 'active' : ''}`}
+            onClick={() => { setImportMode('auto'); reset(); }}
+          >
+            <span className="mode-icon">✨</span>
+            <div className="mode-info">
+              <span className="mode-title">Auto Import</span>
+              <span className="mode-desc">Intelligent field mapping</span>
+            </div>
+          </button>
+          <button
+            className={`mode-tab ${importMode === 'manual' ? 'active' : ''}`}
+            onClick={() => { setImportMode('manual'); reset(); }}
+          >
+            <span className="mode-icon">🔧</span>
+            <div className="mode-info">
+              <span className="mode-title">Manual Import</span>
+              <span className="mode-desc">Step-by-step mapping</span>
+            </div>
+          </button>
+        </div>
+      </div>
+
       {error && (
         <div className="error-banner">
           <span className="error-icon">⚠️</span>
@@ -520,6 +548,13 @@ function DataUpload() {
         </div>
       )}
 
+      {/* Auto Import Mode */}
+      {importMode === 'auto' && (
+        <AutoDataImport />
+      )}
+
+      {/* Manual Import Mode */}
+      {importMode === 'manual' && (
       <div className="upload-content">
         {/* Step 1: File Selection */}
         {uploadState === 'select' && (
@@ -827,6 +862,7 @@ function DataUpload() {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

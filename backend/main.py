@@ -20796,6 +20796,10 @@ app.include_router(email_monitor_router, tags=["Email Monitor"])
 from data_import_routes import router as data_import_router
 app.include_router(data_import_router, tags=["Data Import"])
 
+# Include Auto Import routes (intelligent field mapping)
+from auto_import_routes import router as auto_import_router
+app.include_router(auto_import_router, tags=["Auto Import"])
+
 # Include Disposition routes (voice notes + AI summarization)
 from telephony.disposition_router import router as disposition_router, set_dependencies as set_disposition_deps
 set_disposition_deps(get_db, get_current_user)
