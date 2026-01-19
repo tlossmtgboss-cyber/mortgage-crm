@@ -7,6 +7,9 @@ from typing import Any, Optional
 import logging
 import os
 
+from database import SessionLocal
+from sqlalchemy import text
+
 router = APIRouter(prefix="/api/v1/migrations", tags=["migrations"])
 
 logger = logging.getLogger(__name__)
