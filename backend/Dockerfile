@@ -1,7 +1,8 @@
 FROM python:3.11-slim
 
 # Build cache buster - change this value to force full rebuild
-ARG CACHE_DATE=2026-01-19T17:15:00Z-salesforce-tables
+ARG CACHE_DATE=2026-01-19T19:30:00Z-salesforce-oauth-callback-fix
+RUN echo "Build timestamp: ${CACHE_DATE}"
 
 WORKDIR /app
 
