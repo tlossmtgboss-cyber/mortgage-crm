@@ -205,20 +205,40 @@ async def switch_active_role(
     This changes which navigation and dashboard the user sees,
     but does not affect their actual permissions (they retain
     the highest permissions from all assigned roles).
+
+    Admins (is_admin=True or permission_role='admin'/'site_admin') can
+    switch to any role for impersonation/preview purposes.
     """
     user_id = current_user.id
     role_id = request.role_id
 
-    # Verify user has this role assigned
-    check_result = db.execute(text("""
-        SELECT 1 FROM user_assigned_roles
-        WHERE user_id = :user_id AND role_id = :role_id
-    """), {"user_id": user_id, "role_id": role_id})
+    # Check if user is an admin (can impersonate any role)
+    is_admin = getattr(current_user, 'is_admin', False)
+    permission_role = getattr(current_user, 'permission_role', '')
+    is_admin_role = permission_role in ['admin', 'site_admin', 'platform_admin']
 
-    if not check_result.fetchone():
+    if not is_admin and not is_admin_role:
+        # Non-admins can only switch to roles they have assigned
+        check_result = db.execute(text("""
+            SELECT 1 FROM user_assigned_roles
+            WHERE user_id = :user_id AND role_id = :role_id
+        """), {"user_id": user_id, "role_id": role_id})
+
+        if not check_result.fetchone():
+            raise HTTPException(
+                status_code=403,
+                detail="You do not have this role assigned"
+            )
+
+    # Verify the role exists
+    role_exists = db.execute(text("""
+        SELECT 1 FROM onboarding_roles WHERE id = :role_id
+    """), {"role_id": role_id})
+
+    if not role_exists.fetchone():
         raise HTTPException(
-            status_code=403,
-            detail="You do not have this role assigned"
+            status_code=404,
+            detail="Role not found"
         )
 
     # Get role name for response
