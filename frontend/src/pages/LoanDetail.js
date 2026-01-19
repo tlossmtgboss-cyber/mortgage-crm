@@ -23,6 +23,7 @@ import PortalSelectorModal from '../components/PortalSelectorModal';
 import SendVideoModal from '../components/video/SendVideoModal';
 import CreditTab from '../components/CreditTab';
 import WorkflowRoleAssignment from '../components/WorkflowRoleAssignment';
+import SalesforceConnectionBadge from '../components/SalesforceConnectionBadge';
 import { formatPhoneNumber } from '../utils/phoneUtils';
 import CurrencyInput from '../components/common/CurrencyInput';
 import './LeadDetail.css';
@@ -1065,7 +1066,10 @@ function LoanDetail() {
       <div className="client-name-banner" style={{
         padding: '12px 24px',
         backgroundColor: '#f8fafc',
-        borderBottom: '1px solid #e2e8f0'
+        borderBottom: '1px solid #e2e8f0',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between'
       }}>
         <h2 style={{
           margin: 0,
@@ -1077,6 +1081,13 @@ function LoanDetail() {
             ? `${formData.borrower_first_name || ''} ${formData.borrower_last_name || ''}`.trim()
             : loan?.borrower_name || loan?.borrower || 'Unknown Borrower'}
         </h2>
+        {/* Salesforce Connection Indicator */}
+        <SalesforceConnectionBadge
+          entityType="loan"
+          entityId={id}
+          salesforceId={loan?.salesforce_id}
+          lastSyncedAt={loan?.salesforce_last_synced_at}
+        />
       </div>
 
       {/* Tab Navigation */}

@@ -25,6 +25,7 @@ import EmailComposerModal from '../components/EmailComposerModal';
 import CalendarSidebar from '../components/CalendarSidebar';
 import NeedsListView from '../components/smart-docs/NeedsListView';
 import SendVideoModal from '../components/video/SendVideoModal';
+import SalesforceConnectionBadge from '../components/SalesforceConnectionBadge';
 import { formatPhoneNumber } from '../utils/phoneUtils';
 import CurrencyInput from '../components/common/CurrencyInput';
 import './LeadDetail.css';
@@ -1933,7 +1934,10 @@ function LeadDetail() {
       <div className="client-name-banner" style={{
         padding: '12px 24px',
         backgroundColor: '#f8fafc',
-        borderBottom: '1px solid #e2e8f0'
+        borderBottom: '1px solid #e2e8f0',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between'
       }}>
         <h2 style={{
           margin: 0,
@@ -1947,6 +1951,13 @@ function LeadDetail() {
               ? `${lead?.first_name || ''} ${lead?.last_name || ''}`.trim()
               : 'Unknown Client'}
         </h2>
+        {/* Salesforce Connection Indicator */}
+        <SalesforceConnectionBadge
+          entityType="lead"
+          entityId={id}
+          salesforceId={lead?.salesforce_id}
+          lastSyncedAt={lead?.salesforce_last_synced_at}
+        />
       </div>
 
       {/* Tab Navigation */}

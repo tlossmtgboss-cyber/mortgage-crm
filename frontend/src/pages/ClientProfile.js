@@ -15,6 +15,7 @@ import IncomeTab from '../components/income/IncomeTab';
 import ScheduleAppointmentModal from '../components/ScheduleAppointmentModal';
 import NeedsListView from '../components/smart-docs/NeedsListView';
 import CreditTab from '../components/CreditTab';
+import SalesforceConnectionBadge from '../components/SalesforceConnectionBadge';
 import './LeadDetail.css';
 
 // Mock lead data generator (same as Leads.js)
@@ -661,6 +662,13 @@ function ClientProfile() {
       <div className="loan-toolbar">
         <div className="toolbar-header">
           <h3>Loan Details</h3>
+          {/* Salesforce Connection Indicator */}
+          <SalesforceConnectionBadge
+            entityType="loan"
+            entityId={id}
+            salesforceId={client?.salesforce_id}
+            lastSyncedAt={client?.salesforce_last_synced_at}
+          />
         </div>
         <div className="loan-fields-grid">
           <div className="loan-field">

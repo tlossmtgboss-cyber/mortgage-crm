@@ -1,0 +1,272 @@
+/**
+ * SalesforceConnectionBadge Styles
+ */
+
+/* Main Badge Container */
+.salesforce-connection-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+/* Badge Main Content */
+.sf-badge-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+}
+
+/* Connected State */
+.salesforce-connection-badge.connected .sf-badge-main {
+  background: linear-gradient(135deg, #e8f5fc 0%, #d4edfc 100%);
+  color: #0070d2;
+  border-color: #b0d4f1;
+}
+
+.salesforce-connection-badge.connected:hover .sf-badge-main {
+  background: linear-gradient(135deg, #d4edfc 0%, #b0d4f1 100%);
+  box-shadow: 0 2px 8px rgba(0, 112, 210, 0.2);
+}
+
+/* Disconnected State */
+.salesforce-connection-badge.disconnected .sf-badge-main {
+  background: #f5f5f5;
+  color: #666;
+  border-color: #ddd;
+}
+
+.salesforce-connection-badge.disconnected:hover .sf-badge-main {
+  background: #eee;
+}
+
+/* Badge Icon */
+.sf-badge-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.salesforce-connection-badge.connected .sf-badge-icon {
+  color: #0070d2;
+}
+
+.salesforce-connection-badge.disconnected .sf-badge-icon {
+  color: #999;
+}
+
+/* Status Dot */
+.sf-badge-status {
+  display: flex;
+  align-items: center;
+}
+
+.sf-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #4caf50;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+/* Tooltip */
+.sf-badge-tooltip {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  padding: 0;
+  min-width: 220px;
+  z-index: 1000;
+  overflow: hidden;
+  animation: tooltipFadeIn 0.2s ease;
+}
+
+@keyframes tooltipFadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* Tooltip Arrow */
+.sf-badge-tooltip::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 6px solid #0070d2;
+}
+
+/* Tooltip Header */
+.sf-tooltip-header {
+  background: linear-gradient(135deg, #0070d2 0%, #005fb2 100%);
+  color: white;
+  padding: 10px 14px;
+  font-size: 13px;
+}
+
+/* Tooltip Content */
+.sf-tooltip-content {
+  padding: 12px 14px;
+}
+
+.sf-tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.sf-tooltip-row:last-of-type {
+  margin-bottom: 12px;
+}
+
+.sf-tooltip-label {
+  color: #666;
+}
+
+.sf-tooltip-value {
+  color: #333;
+  font-weight: 500;
+  font-family: monospace;
+  font-size: 11px;
+}
+
+.sf-tooltip-value.connected {
+  color: #4caf50;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.sf-tooltip-message {
+  color: #666;
+  font-size: 12px;
+  margin: 0 0 12px 0;
+  line-height: 1.4;
+}
+
+/* Sync Button */
+.sf-sync-button {
+  width: 100%;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, #0070d2 0%, #005fb2 100%);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sf-sync-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #005fb2 0%, #004990 100%);
+  box-shadow: 0 2px 8px rgba(0, 112, 210, 0.3);
+}
+
+.sf-sync-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* Compact Badge */
+.sf-badge-compact {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: help;
+}
+
+.sf-badge-compact.connected {
+  background: #e8f5fc;
+  color: #0070d2;
+}
+
+.sf-badge-compact.disconnected {
+  background: #f5f5f5;
+  color: #999;
+}
+
+.sf-badge-compact .sf-badge-check {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 12px;
+  height: 12px;
+  background: #4caf50;
+  color: white;
+  border-radius: 50%;
+  font-size: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid white;
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+  .salesforce-connection-badge.connected .sf-badge-main {
+    background: linear-gradient(135deg, #1a3a4d 0%, #0d2a3a 100%);
+    border-color: #2a5a7a;
+  }
+
+  .salesforce-connection-badge.disconnected .sf-badge-main {
+    background: #2a2a2a;
+    color: #999;
+    border-color: #444;
+  }
+
+  .sf-badge-tooltip {
+    background: #1e1e1e;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  }
+
+  .sf-tooltip-content {
+    background: #1e1e1e;
+  }
+
+  .sf-tooltip-label {
+    color: #999;
+  }
+
+  .sf-tooltip-value {
+    color: #ddd;
+  }
+
+  .sf-tooltip-message {
+    color: #aaa;
+  }
+}
