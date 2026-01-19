@@ -6,7 +6,7 @@ Master admin can view all tickets, regular users see only their own.
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, text
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, text, JSON
 from pydantic import BaseModel
 from typing import Optional, List, Callable
 from datetime import datetime, timezone
@@ -76,6 +76,9 @@ class SupportTicket(Base):
     user_name = Column(String(255), nullable=True)
     organization_name = Column(String(255), nullable=True)
 
+    # Attachments (screenshots)
+    attachments = Column(JSON, nullable=True)  # List of {name, type, data}
+
 
 # Create table if not exists
 try:
@@ -89,11 +92,18 @@ except Exception as e:
 # PYDANTIC SCHEMAS
 # ============================================================================
 
+class AttachmentData(BaseModel):
+    name: str
+    type: str
+    data: str  # base64 encoded
+
+
 class TicketCreate(BaseModel):
     subject: str
     description: str
     category: str
     priority: str = "normal"
+    attachments: Optional[List[AttachmentData]] = None
 
 
 class TicketUpdate(BaseModel):
@@ -184,6 +194,8 @@ async def get_tickets(
                     "created_at": t.created_at.isoformat() if t.created_at else None,
                     "updated_at": t.updated_at.isoformat() if t.updated_at else None,
                     "resolved_at": t.resolved_at.isoformat() if t.resolved_at else None,
+                    "attachment_count": len(t.attachments) if t.attachments else 0,
+                    "attachments": t.attachments if t.attachments else [],
                 }
                 for t in tickets
             ],
@@ -218,6 +230,14 @@ async def create_ticket(
             if result:
                 organization_name = result[0]
 
+        # Process attachments - store metadata only, not full base64 data in DB
+        attachments_data = None
+        if ticket.attachments:
+            attachments_data = [
+                {"name": att.name, "type": att.type, "data": att.data}
+                for att in ticket.attachments[:5]  # Limit to 5
+            ]
+
         new_ticket = SupportTicket(
             user_id=current_user.id,
             organization_id=organization_id,
@@ -229,6 +249,7 @@ async def create_ticket(
             user_email=user_email,
             user_name=user_name,
             organization_name=organization_name,
+            attachments=attachments_data,
         )
 
         db.add(new_ticket)

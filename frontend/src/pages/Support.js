@@ -23,6 +23,8 @@ const Support = () => {
   const [showNewTicketForm, setShowNewTicketForm] = useState(false);
   const [completingTicketId, setCompletingTicketId] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [screenshots, setScreenshots] = useState([]);
+  const [uploadingScreenshot, setUploadingScreenshot] = useState(false);
 
   const tabs = [
     { id: 'active', label: 'Active Tickets', icon: 'fa-ticket-alt' },
@@ -62,6 +64,58 @@ const Support = () => {
     }
   };
 
+  const handleScreenshotUpload = async (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+
+    // Limit to 5 screenshots
+    if (screenshots.length + files.length > 5) {
+      toast.error('Maximum 5 screenshots allowed');
+      return;
+    }
+
+    setUploadingScreenshot(true);
+    try {
+      const newScreenshots = await Promise.all(
+        files.map(async (file) => {
+          // Validate file type
+          if (!file.type.startsWith('image/')) {
+            throw new Error(`${file.name} is not an image`);
+          }
+          // Validate file size (max 5MB)
+          if (file.size > 5 * 1024 * 1024) {
+            throw new Error(`${file.name} is too large (max 5MB)`);
+          }
+
+          return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              resolve({
+                name: file.name,
+                type: file.type,
+                size: file.size,
+                data: reader.result,
+              });
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+        })
+      );
+
+      setScreenshots([...screenshots, ...newScreenshots]);
+    } catch (err) {
+      toast.error(err.message || 'Failed to upload screenshot');
+    } finally {
+      setUploadingScreenshot(false);
+      e.target.value = ''; // Reset input
+    }
+  };
+
+  const removeScreenshot = (index) => {
+    setScreenshots(screenshots.filter((_, i) => i !== index));
+  };
+
   const handleSubmitTicket = async (e) => {
     e.preventDefault();
 
@@ -75,12 +129,20 @@ const Support = () => {
       const response = await fetch(`${API_BASE_URL}/api/v1/support/tickets`, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify(ticketForm)
+        body: JSON.stringify({
+          ...ticketForm,
+          attachments: screenshots.map(s => ({
+            name: s.name,
+            type: s.type,
+            data: s.data,
+          }))
+        })
       });
 
       if (response.ok) {
         toast.success('Support ticket submitted successfully. We\'ll get back to you soon!');
         setTicketForm({ subject: '', category: '', priority: 'normal', description: '' });
+        setScreenshots([]);
         setShowNewTicketForm(false);
         loadTickets();
       } else {
@@ -152,6 +214,12 @@ const Support = () => {
         </div>
       )}
       <p className="ticket-preview">{ticket.description?.substring(0, 150)}...</p>
+      {ticket.attachment_count > 0 && (
+        <div className="ticket-attachments">
+          <i className="fas fa-paperclip"></i>
+          <span>{ticket.attachment_count} attachment{ticket.attachment_count > 1 ? 's' : ''}</span>
+        </div>
+      )}
       <div className="ticket-meta">
         <span className="ticket-category">
           <i className="fas fa-tag"></i> {ticket.category}
@@ -269,6 +337,46 @@ const Support = () => {
                   placeholder="Please describe your issue in detail. Include any error messages, steps to reproduce, and what you've already tried."
                   rows={6}
                 />
+              </div>
+
+              <div className="form-group">
+                <label>Screenshots (optional)</label>
+                <div className="screenshot-upload-area">
+                  <input
+                    type="file"
+                    id="screenshot-upload"
+                    accept="image/*"
+                    multiple
+                    onChange={handleScreenshotUpload}
+                    disabled={uploadingScreenshot || screenshots.length >= 5}
+                    style={{ display: 'none' }}
+                  />
+                  <label htmlFor="screenshot-upload" className={`screenshot-upload-btn ${screenshots.length >= 5 ? 'disabled' : ''}`}>
+                    {uploadingScreenshot ? (
+                      <><i className="fas fa-spinner fa-spin"></i> Uploading...</>
+                    ) : (
+                      <><i className="fas fa-camera"></i> Add Screenshots</>
+                    )}
+                  </label>
+                  <span className="screenshot-hint">Max 5 images, 5MB each</span>
+                </div>
+                {screenshots.length > 0 && (
+                  <div className="screenshot-previews">
+                    {screenshots.map((screenshot, index) => (
+                      <div key={index} className="screenshot-preview">
+                        <img src={screenshot.data} alt={screenshot.name} />
+                        <button
+                          type="button"
+                          className="remove-screenshot"
+                          onClick={() => removeScreenshot(index)}
+                        >
+                          <i className="fas fa-times"></i>
+                        </button>
+                        <span className="screenshot-name">{screenshot.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <button type="submit" className="btn-primary" disabled={submitting}>

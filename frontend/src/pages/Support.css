@@ -983,6 +983,115 @@
   gap: 16px;
 }
 
+/* Screenshot Upload Styles */
+.screenshot-upload-area {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.screenshot-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #f5f5f5;
+  border: 2px dashed #ccc;
+  border-radius: 8px;
+  color: #666;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.screenshot-upload-btn:hover:not(.disabled) {
+  background: #e3f2fd;
+  border-color: #2196f3;
+  color: #2196f3;
+}
+
+.screenshot-upload-btn.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.screenshot-upload-btn i {
+  font-size: 16px;
+}
+
+.screenshot-hint {
+  font-size: 12px;
+  color: #999;
+}
+
+.screenshot-previews {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.screenshot-preview {
+  position: relative;
+  width: 120px;
+}
+
+.screenshot-preview img {
+  width: 120px;
+  height: 90px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 2px solid #e0e0e0;
+}
+
+.screenshot-preview .remove-screenshot {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 24px;
+  height: 24px;
+  background: #f44336;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.screenshot-preview .remove-screenshot:hover {
+  background: #d32f2f;
+}
+
+.screenshot-preview .screenshot-name {
+  display: block;
+  font-size: 11px;
+  color: #666;
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Ticket attachment indicator */
+.ticket-attachments {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #2196f3;
+  margin-top: 8px;
+}
+
+.ticket-attachments i {
+  font-size: 14px;
+}
+
 /* Responsive adjustments for new elements */
 @media (max-width: 768px) {
   .new-ticket-btn span {
@@ -999,5 +1108,19 @@
   .ticket-meta {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .screenshot-upload-area {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .screenshot-preview {
+    width: 100px;
+  }
+
+  .screenshot-preview img {
+    width: 100px;
+    height: 75px;
   }
 }
