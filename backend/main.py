@@ -36665,9 +36665,61 @@ async def health_check(db: Session = Depends(get_db)):
 
 
 @app.get("/ping")
-async def ping():
-    """Simple ping endpoint - no dependencies, instant response"""
-    return {"ping": "pong", "status": "ok"}
+async def ping(db: Session = Depends(get_db)):
+    """Simple ping endpoint - also creates Salesforce tables if needed"""
+    tables_created = []
+    try:
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS oauth_states (
+                id SERIAL PRIMARY KEY,
+                state_token VARCHAR(255) UNIQUE NOT NULL,
+                user_id INTEGER NOT NULL,
+                provider VARCHAR(50) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP NOT NULL,
+                used BOOLEAN DEFAULT FALSE,
+                return_url TEXT,
+                state_metadata JSONB
+            )
+        """))
+        db.commit()
+        tables_created.append("oauth_states")
+    except Exception as e:
+        db.rollback()
+        tables_created.append(f"oauth_states error: {str(e)[:50]}")
+
+    try:
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS integration_profiles (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                provider VARCHAR(50) NOT NULL DEFAULT 'salesforce',
+                status VARCHAR(50) NOT NULL DEFAULT 'disconnected',
+                access_token_encrypted TEXT,
+                refresh_token_encrypted TEXT,
+                instance_url TEXT,
+                sf_org_id VARCHAR(100),
+                sf_user_id VARCHAR(100),
+                sf_username VARCHAR(255),
+                connected_at TIMESTAMP,
+                last_sync_at TIMESTAMP,
+                last_error TEXT,
+                field_map_version INTEGER DEFAULT 1,
+                sync_enabled BOOLEAN DEFAULT TRUE,
+                sync_interval_minutes INTEGER DEFAULT 15,
+                sync_direction VARCHAR(20) DEFAULT 'bidirectional',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, provider)
+            )
+        """))
+        db.commit()
+        tables_created.append("integration_profiles")
+    except Exception as e:
+        db.rollback()
+        tables_created.append(f"integration_profiles error: {str(e)[:50]}")
+
+    return {"ping": "pong", "status": "ok", "tables": tables_created}
 
 
 @app.get("/admin/create-salesforce-tables")
