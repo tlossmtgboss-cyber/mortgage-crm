@@ -1,9 +1,9 @@
 /**
  * SalesforceConnectionBadge Component
  *
- * Displays a visual indicator showing whether a CRM record is connected/synced
- * with Salesforce. Shows connection status, last sync time, and provides
- * quick actions for manual sync.
+ * Displays a visual indicator showing whether a CRM record is linked to
+ * a Salesforce record. Data flows ONE-WAY: Salesforce → CRM.
+ * When Salesforce is updated, those changes sync to the CRM.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -13,17 +13,16 @@ import './SalesforceConnectionBadge.css';
 const SalesforceConnectionBadge = ({
   entityType = 'loan',  // 'loan', 'lead', 'contact'
   entityId,
-  salesforceId,         // If passed directly, skip API check
-  lastSyncedAt,         // Optional: last sync timestamp
+  salesforceId,         // Salesforce record ID if linked
+  lastSyncedAt,         // When CRM was last updated from Salesforce
   showDetails = true,   // Show expanded details on hover
-  onSyncClick,          // Optional: callback when sync is clicked
+  onRefreshClick,       // Optional: callback when refresh is clicked
   compact = false       // Compact mode for smaller displays
 }) => {
   const [isConnected, setIsConnected] = useState(!!salesforceId);
   const [syncStatus, setSyncStatus] = useState(null);
-  const [loading, setLoading] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
-  const [syncing, setSyncing] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     // If salesforceId is passed, use it directly
@@ -34,6 +33,9 @@ const SalesforceConnectionBadge = ({
         last_synced_at: lastSyncedAt,
         status: 'connected'
       });
+    } else {
+      setIsConnected(false);
+      setSyncStatus(null);
     }
   }, [salesforceId, lastSyncedAt]);
 
@@ -55,35 +57,34 @@ const SalesforceConnectionBadge = ({
     return date.toLocaleDateString();
   };
 
-  const handleSyncClick = async (e) => {
+  const handleRefreshClick = async (e) => {
     e.stopPropagation();
 
-    if (onSyncClick) {
-      onSyncClick();
+    if (onRefreshClick) {
+      onRefreshClick();
       return;
     }
 
-    // Default sync behavior
+    // Refresh from Salesforce (pull latest data)
     try {
-      setSyncing(true);
+      setRefreshing(true);
 
-      // Call the appropriate push endpoint based on entity type
-      if (entityType === 'loan') {
-        await salesforceAPI.pushLoan(entityId);
-      } else if (entityType === 'lead') {
-        // For leads, we can use the same endpoint or add a specific one later
-        await salesforceAPI.pushLoan(entityId);
+      if (entityType === 'loan' && entityId) {
+        await salesforceAPI.pullLoan(entityId);
       }
 
-      // Update status after sync
+      // Update status after refresh
       setSyncStatus(prev => ({
         ...prev,
         last_synced_at: new Date().toISOString()
       }));
+
+      // Reload the page to show updated data
+      window.location.reload();
     } catch (error) {
-      console.error('Sync failed:', error);
+      console.error('Refresh from Salesforce failed:', error);
     } finally {
-      setSyncing(false);
+      setRefreshing(false);
     }
   };
 
@@ -92,7 +93,7 @@ const SalesforceConnectionBadge = ({
     return (
       <span
         className={`sf-badge-compact ${isConnected ? 'connected' : 'disconnected'}`}
-        title={isConnected ? `Connected to Salesforce (${salesforceId})` : 'Not connected to Salesforce'}
+        title={isConnected ? `Linked to Salesforce (${salesforceId})` : 'Not linked to Salesforce'}
       >
         <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
           <path d="M12.5 2C9.5 2 7 4.5 7 7.5c0 .3 0 .6.1.9C4.3 9 2 11.6 2 14.8 2 18.7 5.1 22 9 22h10c3.3 0 6-2.7 6-6 0-2.6-1.7-4.9-4-5.7v-.8C21 6.5 18.5 4 15.5 4c-1.1 0-2.1.3-3 .9z"/>
@@ -115,7 +116,7 @@ const SalesforceConnectionBadge = ({
           </svg>
         </span>
         <span className="sf-badge-text">
-          {isConnected ? 'Salesforce Connected' : 'Not Synced'}
+          {isConnected ? 'Salesforce Linked' : 'Not in Salesforce'}
         </span>
         {isConnected && (
           <span className="sf-badge-status">
@@ -128,43 +129,42 @@ const SalesforceConnectionBadge = ({
       {showDetails && showTooltip && (
         <div className="sf-badge-tooltip">
           <div className="sf-tooltip-header">
-            <strong>Salesforce Integration</strong>
+            <strong>Salesforce Link</strong>
           </div>
           <div className="sf-tooltip-content">
             {isConnected ? (
               <>
                 <div className="sf-tooltip-row">
                   <span className="sf-tooltip-label">Status:</span>
-                  <span className="sf-tooltip-value connected">Connected</span>
+                  <span className="sf-tooltip-value connected">Linked</span>
                 </div>
                 <div className="sf-tooltip-row">
                   <span className="sf-tooltip-label">SF ID:</span>
                   <span className="sf-tooltip-value">{salesforceId || 'N/A'}</span>
                 </div>
                 <div className="sf-tooltip-row">
-                  <span className="sf-tooltip-label">Last Sync:</span>
+                  <span className="sf-tooltip-label">Last Updated:</span>
                   <span className="sf-tooltip-value">{formatLastSync(syncStatus?.last_synced_at || lastSyncedAt)}</span>
                 </div>
+                <p className="sf-tooltip-info">
+                  Updates from Salesforce automatically sync to CRM.
+                </p>
                 <button
                   className="sf-sync-button"
-                  onClick={handleSyncClick}
-                  disabled={syncing}
+                  onClick={handleRefreshClick}
+                  disabled={refreshing}
                 >
-                  {syncing ? 'Syncing...' : '↻ Sync Now'}
+                  {refreshing ? 'Refreshing...' : '↻ Refresh from SF'}
                 </button>
               </>
             ) : (
               <>
                 <p className="sf-tooltip-message">
-                  This record is not linked to Salesforce.
+                  This record is not linked to a Salesforce record.
                 </p>
-                <button
-                  className="sf-sync-button"
-                  onClick={handleSyncClick}
-                  disabled={syncing}
-                >
-                  {syncing ? 'Pushing...' : 'Push to Salesforce'}
-                </button>
+                <p className="sf-tooltip-info">
+                  Create this record in Salesforce to enable sync.
+                </p>
               </>
             )}
           </div>

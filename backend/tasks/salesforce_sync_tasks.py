@@ -1,11 +1,14 @@
 """
 Salesforce Integration Background Sync Tasks
-Handles scheduled sync operations between CRM and Salesforce
+
+Data flows ONE-WAY: Salesforce → CRM
+When data is updated in Salesforce, those changes are pulled into the CRM.
+The CRM does NOT push data back to Salesforce.
 
 Tasks:
 - sync_emails_from_salesforce: Pull email history from Salesforce
 - sync_calendar_from_salesforce: Pull calendar events from Salesforce
-- sync_all_users: Run sync for all connected users
+- sync_all_users_salesforce: Run inbound sync for all connected users
 - check_salesforce_sync_health: Health monitoring
 
 Scheduler Integration:
@@ -35,6 +38,8 @@ async def sync_emails_from_salesforce(
     """
     Sync email history from Salesforce to CRM for a single user.
 
+    Data flows ONE-WAY: Salesforce → CRM
+
     Args:
         integration_profile_id: Integration profile ID
         days_back: Number of days to sync back
@@ -56,7 +61,7 @@ async def sync_emails_from_salesforce(
         )
 
         logger.info(
-            f"Email sync for profile {integration_profile_id}: "
+            f"Email sync from Salesforce for profile {integration_profile_id}: "
             f"synced={result['emails_synced']}, skipped={result['emails_skipped']}"
         )
 
@@ -92,6 +97,8 @@ async def sync_calendar_from_salesforce(
     """
     Sync calendar events from Salesforce to CRM for a single user.
 
+    Data flows ONE-WAY: Salesforce → CRM
+
     Args:
         integration_profile_id: Integration profile ID
         days_back: Number of days to sync back
@@ -115,7 +122,7 @@ async def sync_calendar_from_salesforce(
         )
 
         logger.info(
-            f"Calendar sync for profile {integration_profile_id}: "
+            f"Calendar sync from Salesforce for profile {integration_profile_id}: "
             f"events={result['events_synced']}, tasks={result['tasks_synced']}"
         )
 
@@ -141,24 +148,25 @@ def sync_calendar_from_salesforce_sync(integration_profile_id: int, **kwargs) ->
 
 
 # ============================================================================
-# Task: Sync All Connected Users
+# Task: Sync All Connected Users (Inbound Only)
 # ============================================================================
 
 async def sync_all_users_salesforce(
     sync_emails: bool = True,
     sync_calendar: bool = True,
-    push_to_salesforce: bool = True,
     email_days_back: int = 7,
     calendar_days_back: int = 7,
     calendar_days_forward: int = 30
 ) -> Dict[str, Any]:
     """
-    Run bidirectional Salesforce sync for all connected users.
+    Run Salesforce sync for all connected users.
+
+    Data flows ONE-WAY: Salesforce → CRM
+    Pulls emails and calendar events from Salesforce into the CRM.
 
     Args:
         sync_emails: Whether to pull emails from Salesforce
         sync_calendar: Whether to pull calendar from Salesforce
-        push_to_salesforce: Whether to push CRM changes to Salesforce
         email_days_back: Days back to sync for emails
         calendar_days_back: Days back to sync for calendar
         calendar_days_forward: Days forward to sync for calendar
@@ -173,20 +181,12 @@ async def sync_all_users_salesforce(
 
         results = {
             'users_processed': 0,
-            'inbound': {
-                'emails_synced': 0,
-                'emails_skipped': 0,
-                'events_synced': 0,
-                'tasks_synced': 0,
-                'errors': []
-            },
-            'outbound': {
-                'loans_pushed': 0,
-                'leads_pushed': 0,
-                'emails_pushed': 0,
-                'calendar_pushed': 0,
-                'errors': []
-            },
+            'sync_direction': 'inbound_only',
+            'emails_synced': 0,
+            'emails_skipped': 0,
+            'events_synced': 0,
+            'tasks_synced': 0,
+            'errors': [],
             'started_at': datetime.utcnow().isoformat(),
             'completed_at': None
         }
@@ -198,25 +198,25 @@ async def sync_all_users_salesforce(
             IntegrationProfile.sync_enabled == True
         ).all()
 
-        logger.info(f"Starting Salesforce sync for {len(profiles)} users")
+        logger.info(f"Starting Salesforce inbound sync for {len(profiles)} users")
 
         for profile in profiles:
             try:
                 results['users_processed'] += 1
 
-                # INBOUND: Pull emails from Salesforce
+                # Pull emails from Salesforce → CRM
                 if sync_emails:
                     email_result = await sync_emails_from_salesforce(
                         integration_profile_id=profile.id,
                         days_back=email_days_back,
                         limit=200
                     )
-                    results['inbound']['emails_synced'] += email_result.get('emails_synced', 0)
-                    results['inbound']['emails_skipped'] += email_result.get('emails_skipped', 0)
+                    results['emails_synced'] += email_result.get('emails_synced', 0)
+                    results['emails_skipped'] += email_result.get('emails_skipped', 0)
                     if email_result.get('errors'):
-                        results['inbound']['errors'].extend(email_result['errors'][:3])
+                        results['errors'].extend(email_result['errors'][:3])
 
-                # INBOUND: Pull calendar from Salesforce
+                # Pull calendar from Salesforce → CRM
                 if sync_calendar:
                     calendar_result = await sync_calendar_from_salesforce(
                         integration_profile_id=profile.id,
@@ -224,33 +224,10 @@ async def sync_all_users_salesforce(
                         days_forward=calendar_days_forward,
                         limit=200
                     )
-                    results['inbound']['events_synced'] += calendar_result.get('events_synced', 0)
-                    results['inbound']['tasks_synced'] += calendar_result.get('tasks_synced', 0)
+                    results['events_synced'] += calendar_result.get('events_synced', 0)
+                    results['tasks_synced'] += calendar_result.get('tasks_synced', 0)
                     if calendar_result.get('errors'):
-                        results['inbound']['errors'].extend(calendar_result['errors'][:3])
-
-                # OUTBOUND: Push CRM data TO Salesforce
-                if push_to_salesforce:
-                    from services.salesforce.sync_service import salesforce_sync
-
-                    outbound_result = await salesforce_sync.sync_outbound(
-                        db=db,
-                        integration_profile_id=profile.id,
-                        sync_loans=True,
-                        sync_leads=True,
-                        sync_emails=True,
-                        sync_calendar=True,
-                        since_hours=24
-                    )
-                    results['outbound']['loans_pushed'] += outbound_result['loans']['pushed']
-                    results['outbound']['leads_pushed'] += outbound_result['leads']['pushed']
-                    results['outbound']['emails_pushed'] += outbound_result['emails']['pushed']
-                    results['outbound']['calendar_pushed'] += outbound_result['calendar']['pushed']
-
-                    # Collect errors
-                    for key in ['loans', 'leads', 'emails', 'calendar']:
-                        if outbound_result[key].get('errors'):
-                            results['outbound']['errors'].extend(outbound_result[key]['errors'][:2])
+                        results['errors'].extend(calendar_result['errors'][:3])
 
                 # Update last sync time
                 profile.last_sync_at = datetime.utcnow()
@@ -258,14 +235,14 @@ async def sync_all_users_salesforce(
 
             except Exception as e:
                 logger.error(f"Sync failed for user {profile.user_id}: {e}")
+                results['errors'].append(f"User {profile.user_id}: {str(e)}")
 
         results['completed_at'] = datetime.utcnow().isoformat()
 
         logger.info(
-            f"Salesforce bidirectional sync complete: {results['users_processed']} users | "
-            f"INBOUND: emails={results['inbound']['emails_synced']}, events={results['inbound']['events_synced']} | "
-            f"OUTBOUND: loans={results['outbound']['loans_pushed']}, leads={results['outbound']['leads_pushed']}, "
-            f"emails={results['outbound']['emails_pushed']}, calendar={results['outbound']['calendar_pushed']}"
+            f"Salesforce inbound sync complete: {results['users_processed']} users | "
+            f"emails={results['emails_synced']}, events={results['events_synced']}, "
+            f"tasks={results['tasks_synced']}"
         )
 
         return results
@@ -277,154 +254,6 @@ async def sync_all_users_salesforce(
 def sync_all_users_salesforce_sync(**kwargs) -> Dict[str, Any]:
     """Synchronous wrapper for sync_all_users_salesforce"""
     return asyncio.run(sync_all_users_salesforce(**kwargs))
-
-
-# ============================================================================
-# Task: Push Emails to Salesforce (Bidirectional)
-# ============================================================================
-
-async def push_emails_to_salesforce(
-    user_id: int,
-    since_hours: int = 24
-) -> Dict[str, Any]:
-    """
-    Push CRM email activities to Salesforce.
-    Creates Task records in Salesforce for outbound emails.
-
-    Args:
-        user_id: CRM user ID
-        since_hours: Hours back to look for unsent emails
-
-    Returns:
-        Push result dictionary
-    """
-    db = SessionLocal()
-
-    try:
-        from salesforce_integration_models import IntegrationProfile
-        from services.salesforce.oauth_service import salesforce_oauth
-        import httpx
-
-        results = {
-            'success': True,
-            'emails_pushed': 0,
-            'emails_failed': 0,
-            'errors': []
-        }
-
-        # Get user's Salesforce profile
-        profile = db.query(IntegrationProfile).filter(
-            IntegrationProfile.user_id == user_id,
-            IntegrationProfile.provider == 'salesforce',
-            IntegrationProfile.status.in_(['connected', 'active'])
-        ).first()
-
-        if not profile:
-            return {
-                'success': False,
-                'emails_pushed': 0,
-                'emails_failed': 0,
-                'errors': ['User not connected to Salesforce']
-            }
-
-        # Get access token
-        access_token, instance_url = await salesforce_oauth.get_access_token(db, profile.id)
-
-        # Get unsent emails from CRM
-        since = datetime.utcnow() - timedelta(hours=since_hours)
-        emails = db.execute(text("""
-            SELECT em.id, em.to_email, em.from_email, em.subject, em.body,
-                   em.direction, em.created_at, em.lead_id, em.loan_id,
-                   l.salesforce_id as lead_sf_id,
-                   lo.salesforce_id as loan_sf_id
-            FROM email_messages em
-            LEFT JOIN leads l ON l.id = em.lead_id
-            LEFT JOIN loans lo ON lo.id = em.loan_id
-            WHERE em.user_id = :user_id
-              AND em.created_at >= :since
-              AND em.direction = 'outbound'
-              AND (em.meta_data IS NULL OR em.meta_data->>'salesforce_task_id' IS NULL)
-            ORDER BY em.created_at DESC
-            LIMIT 100
-        """), {"user_id": user_id, "since": since}).fetchall()
-
-        async with httpx.AsyncClient() as client:
-            for email in emails:
-                try:
-                    # Determine WhoId and WhatId
-                    who_id = email.lead_sf_id if email.lead_sf_id else None
-                    what_id = email.loan_sf_id if email.loan_sf_id else None
-
-                    # Create Task in Salesforce
-                    task_data = {
-                        "Subject": email.subject or "Email Activity",
-                        "Description": email.body[:32000] if email.body else "",
-                        "TaskSubtype": "Email",
-                        "Status": "Completed",
-                        "ActivityDate": email.created_at.strftime("%Y-%m-%d")
-                    }
-
-                    if who_id:
-                        task_data["WhoId"] = who_id
-                    if what_id:
-                        task_data["WhatId"] = what_id
-
-                    response = await client.post(
-                        f"{instance_url}/services/data/v59.0/sobjects/Task",
-                        headers={
-                            "Authorization": f"Bearer {access_token}",
-                            "Content-Type": "application/json"
-                        },
-                        json=task_data,
-                        timeout=30.0
-                    )
-
-                    if response.status_code == 201:
-                        sf_task_id = response.json().get('id')
-
-                        # Update email with Salesforce task ID
-                        db.execute(text("""
-                            UPDATE email_messages
-                            SET meta_data = COALESCE(meta_data, '{}'::jsonb) ||
-                                jsonb_build_object('salesforce_task_id', :sf_id, 'pushed_at', :pushed_at)
-                            WHERE id = :email_id
-                        """), {
-                            "sf_id": sf_task_id,
-                            "pushed_at": datetime.utcnow().isoformat(),
-                            "email_id": email.id
-                        })
-                        db.commit()
-
-                        results['emails_pushed'] += 1
-                    else:
-                        results['emails_failed'] += 1
-                        results['errors'].append(f"Email {email.id}: {response.text[:100]}")
-
-                except Exception as e:
-                    results['emails_failed'] += 1
-                    results['errors'].append(f"Email {email.id}: {str(e)[:100]}")
-
-        logger.info(
-            f"Pushed {results['emails_pushed']} emails to Salesforce for user {user_id}"
-        )
-
-        return results
-
-    except Exception as e:
-        logger.error(f"Email push failed for user {user_id}: {e}")
-        return {
-            'success': False,
-            'emails_pushed': 0,
-            'emails_failed': 0,
-            'errors': [str(e)]
-        }
-    finally:
-        db.close()
-
-
-def push_emails_to_salesforce_sync(user_id: int, **kwargs) -> Dict[str, Any]:
-    """Synchronous wrapper for push_emails_to_salesforce"""
-    return asyncio.run(push_emails_to_salesforce(user_id, **kwargs))
 
 
 # ============================================================================
@@ -488,6 +317,7 @@ async def check_salesforce_sync_health() -> Dict[str, Any]:
 
         return {
             'healthy': healthy,
+            'sync_direction': 'inbound_only',
             'metrics': {
                 'connected_profiles': connected or 0,
                 'error_profiles': error_profiles or 0,
@@ -523,16 +353,19 @@ def register_salesforce_sync_jobs(scheduler):
     """
     Register Salesforce sync jobs with APScheduler.
 
+    Note: Sync is ONE-WAY only (Salesforce → CRM).
+    No data is pushed from CRM to Salesforce.
+
     Args:
         scheduler: APScheduler instance
     """
-    # Sync all users every 15 minutes
+    # Sync all users every 15 minutes (inbound only)
     scheduler.add_job(
         sync_all_users_salesforce_sync,
         'interval',
         minutes=15,
         id='salesforce_sync_all_users',
-        name='Sync emails and calendar from Salesforce for all users',
+        name='Sync emails and calendar from Salesforce for all users (inbound only)',
         replace_existing=True,
         kwargs={
             'sync_emails': True,
@@ -553,7 +386,7 @@ def register_salesforce_sync_jobs(scheduler):
         replace_existing=True
     )
 
-    logger.info("Salesforce sync jobs registered: sync every 15 minutes, health check every 10 minutes")
+    logger.info("Salesforce sync jobs registered (inbound only): sync every 15 minutes, health check every 10 minutes")
 
 
 # ============================================================================
@@ -563,17 +396,18 @@ def register_salesforce_sync_jobs(scheduler):
 async def trigger_user_sync(
     user_id: int,
     sync_emails: bool = True,
-    sync_calendar: bool = True,
-    push_emails: bool = True
+    sync_calendar: bool = True
 ) -> Dict[str, Any]:
     """
-    Manually trigger full sync for a specific user.
+    Manually trigger sync for a specific user.
+
+    Data flows ONE-WAY: Salesforce → CRM
+    Pulls latest data from Salesforce into the CRM.
 
     Args:
         user_id: CRM user ID
         sync_emails: Pull emails from Salesforce
         sync_calendar: Pull calendar from Salesforce
-        push_emails: Push emails to Salesforce
 
     Returns:
         Combined sync results
@@ -598,24 +432,19 @@ async def trigger_user_sync(
         results = {
             'success': True,
             'user_id': user_id,
-            'email_pull': None,
-            'calendar_pull': None,
-            'email_push': None
+            'sync_direction': 'inbound_only',
+            'email_sync': None,
+            'calendar_sync': None
         }
 
         if sync_emails:
-            results['email_pull'] = await sync_emails_from_salesforce(
+            results['email_sync'] = await sync_emails_from_salesforce(
                 profile.id, days_back=30, limit=500
             )
 
         if sync_calendar:
-            results['calendar_pull'] = await sync_calendar_from_salesforce(
+            results['calendar_sync'] = await sync_calendar_from_salesforce(
                 profile.id, days_back=30, days_forward=90, limit=500
-            )
-
-        if push_emails:
-            results['email_push'] = await push_emails_to_salesforce(
-                user_id, since_hours=168  # 7 days
             )
 
         return results

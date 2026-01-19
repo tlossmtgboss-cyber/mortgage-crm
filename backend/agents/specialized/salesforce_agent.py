@@ -1,17 +1,23 @@
 """
 Salesforce Agent
 
-Specialized agent for Salesforce integration management with 10 tools:
+Specialized agent for Salesforce integration management.
+
+Data flows ONE-WAY: Salesforce → CRM
+When records are updated in Salesforce, those changes sync to the CRM.
+The CRM does NOT push data back to Salesforce.
+
+Tools available:
 1. get_salesforce_status - Get current Salesforce connection status
-2. sync_emails_from_salesforce - Pull emails from Salesforce
-3. sync_calendar_from_salesforce - Pull calendar events from Salesforce
-4. push_to_salesforce - Push CRM data to Salesforce
+2. sync_from_salesforce - Pull latest data from Salesforce into CRM
+3. sync_emails_from_salesforce - Pull emails from Salesforce
+4. sync_calendar_from_salesforce - Pull calendar events from Salesforce
 5. get_sync_history - Get sync history and logs
 6. diagnose_sync_issues - Diagnose sync problems
 7. get_field_mappings - Get current field mappings
-8. update_field_mapping - Update a field mapping
-9. resolve_sync_conflict - Resolve data conflicts between CRM and Salesforce
-10. test_salesforce_connection - Test the Salesforce API connection
+8. update_field_mapping - Update a field mapping (inbound only)
+9. test_salesforce_connection - Test the Salesforce API connection
+10. get_linked_records - Get CRM records linked to Salesforce
 """
 
 from typing import Any, Dict, Optional, List
@@ -40,6 +46,12 @@ class SalesforceStatusInput(BaseModel):
     user_id: Optional[str] = Field(None, description="User ID to check status for (defaults to current user)")
 
 
+class SyncFromSalesforceInput(BaseModel):
+    entity_type: Optional[str] = Field(None, description="Entity type to sync: loan, lead, contact, or all")
+    entity_id: Optional[str] = Field(None, description="Specific entity ID to refresh (optional)")
+    full_sync: bool = Field(default=False, description="Force a full sync instead of incremental")
+
+
 class SyncEmailsInput(BaseModel):
     days_back: int = Field(default=7, description="Number of days back to sync emails")
     force_full_sync: bool = Field(default=False, description="Force a full sync instead of incremental")
@@ -50,15 +62,8 @@ class SyncCalendarInput(BaseModel):
     days_forward: int = Field(default=30, description="Number of days forward to sync")
 
 
-class PushToSalesforceInput(BaseModel):
-    entity_type: Optional[str] = Field(None, description="Entity type to push: loan, lead, email, calendar_event, or all")
-    entity_id: Optional[str] = Field(None, description="Specific entity ID to push (optional)")
-    since_hours: int = Field(default=24, description="Push changes from last N hours")
-
-
 class SyncHistoryInput(BaseModel):
     limit: int = Field(default=50, description="Number of records to return")
-    sync_type: Optional[str] = Field(None, description="Filter by type: inbound, outbound, or all")
     status: Optional[str] = Field(None, description="Filter by status: success, error, partial")
 
 
@@ -74,16 +79,16 @@ class UpdateFieldMappingInput(BaseModel):
     entity_type: str = Field(..., description="Entity type: loan, lead, contact, email, event")
     crm_field: str = Field(..., description="CRM field name")
     salesforce_field: str = Field(..., description="Salesforce field name")
-    sync_direction: str = Field(default="bidirectional", description="Sync direction: inbound, outbound, bidirectional")
-
-
-class ResolveSyncConflictInput(BaseModel):
-    conflict_id: str = Field(..., description="Conflict ID to resolve")
-    resolution: str = Field(..., description="Resolution choice: use_crm, use_salesforce, merge, skip")
 
 
 class TestConnectionInput(BaseModel):
     test_type: str = Field(default="basic", description="Test type: basic, full, permissions")
+
+
+class LinkedRecordsInput(BaseModel):
+    entity_type: Optional[str] = Field(None, description="Entity type: loan, lead, contact")
+    limit: int = Field(default=50, description="Number of records to return")
+    only_linked: bool = Field(default=True, description="Only show records linked to Salesforce")
 
 
 # ============================================================================
@@ -93,10 +98,10 @@ class TestConnectionInput(BaseModel):
 @AgentRegistry.register
 class SalesforceAgent(SpecializedAgent):
     """
-    Salesforce integration agent for managing Salesforce sync operations.
+    Salesforce integration agent for managing inbound sync from Salesforce.
 
-    Provides real-time sync status, bidirectional data synchronization,
-    conflict resolution, and diagnostic tools for Salesforce integration.
+    Data flows ONE-WAY: Salesforce → CRM
+    When Salesforce records are updated, those changes sync to the CRM.
     """
 
     @property
@@ -105,7 +110,7 @@ class SalesforceAgent(SpecializedAgent):
 
     @property
     def description(self) -> str:
-        return "Manages Salesforce integration, bidirectional sync, and data mapping"
+        return "Manages Salesforce integration - syncs data FROM Salesforce TO CRM"
 
     def _register_tools(self):
         """Register all Salesforce tools"""
@@ -117,6 +122,15 @@ class SalesforceAgent(SpecializedAgent):
             risk_level=RiskLevel.LOW,
             handler=self._get_salesforce_status,
             input_schema=SalesforceStatusInput
+        ))
+
+        self.register_tool(AgentTool(
+            name="sync_from_salesforce",
+            description="Pull latest data from Salesforce into CRM (loans, leads, contacts)",
+            category=ToolCategory.ACTION,
+            risk_level=RiskLevel.MEDIUM,
+            handler=self._sync_from_salesforce,
+            input_schema=SyncFromSalesforceInput
         ))
 
         self.register_tool(AgentTool(
@@ -135,15 +149,6 @@ class SalesforceAgent(SpecializedAgent):
             risk_level=RiskLevel.MEDIUM,
             handler=self._sync_calendar_from_salesforce,
             input_schema=SyncCalendarInput
-        ))
-
-        self.register_tool(AgentTool(
-            name="push_to_salesforce",
-            description="Push CRM data to Salesforce (loans, leads, emails, calendar events)",
-            category=ToolCategory.ACTION,
-            risk_level=RiskLevel.MEDIUM,
-            handler=self._push_to_salesforce,
-            input_schema=PushToSalesforceInput
         ))
 
         self.register_tool(AgentTool(
@@ -166,7 +171,7 @@ class SalesforceAgent(SpecializedAgent):
 
         self.register_tool(AgentTool(
             name="get_field_mappings",
-            description="Get current field mappings between CRM and Salesforce",
+            description="Get current field mappings between Salesforce and CRM",
             category=ToolCategory.QUERY,
             risk_level=RiskLevel.LOW,
             handler=self._get_field_mappings,
@@ -175,21 +180,11 @@ class SalesforceAgent(SpecializedAgent):
 
         self.register_tool(AgentTool(
             name="update_field_mapping",
-            description="Update a field mapping between CRM and Salesforce",
+            description="Update a field mapping (Salesforce → CRM direction only)",
             category=ToolCategory.ACTION,
             risk_level=RiskLevel.HIGH,
             handler=self._update_field_mapping,
             input_schema=UpdateFieldMappingInput,
-            requires_confirmation=True
-        ))
-
-        self.register_tool(AgentTool(
-            name="resolve_sync_conflict",
-            description="Resolve a data conflict between CRM and Salesforce",
-            category=ToolCategory.ACTION,
-            risk_level=RiskLevel.HIGH,
-            handler=self._resolve_sync_conflict,
-            input_schema=ResolveSyncConflictInput,
             requires_confirmation=True
         ))
 
@@ -200,6 +195,15 @@ class SalesforceAgent(SpecializedAgent):
             risk_level=RiskLevel.LOW,
             handler=self._test_salesforce_connection,
             input_schema=TestConnectionInput
+        ))
+
+        self.register_tool(AgentTool(
+            name="get_linked_records",
+            description="Get CRM records that are linked to Salesforce records",
+            category=ToolCategory.QUERY,
+            risk_level=RiskLevel.LOW,
+            handler=self._get_linked_records,
+            input_schema=LinkedRecordsInput
         ))
 
     def _get_db_session(self):
@@ -222,7 +226,6 @@ class SalesforceAgent(SpecializedAgent):
                     error="Database session not available"
                 )
 
-            # Import here to avoid circular imports
             from models.integration_profile import IntegrationProfile
             from sqlalchemy import and_
 
@@ -272,16 +275,12 @@ class SalesforceAgent(SpecializedAgent):
                 "instance_url": profile.instance_url,
                 "connected_at": profile.created_at.isoformat() if profile.created_at else None,
                 "last_sync": profile.last_sync_at.isoformat() if profile.last_sync_at else None,
+                "sync_direction": "Salesforce → CRM (inbound only)",
                 "sync_stats_24h": {
                     "total": len(recent_syncs),
                     "success": success_count,
                     "errors": error_count,
                     "success_rate": f"{(success_count / len(recent_syncs) * 100):.1f}%" if recent_syncs else "N/A"
-                },
-                "features_enabled": {
-                    "email_sync": profile.settings.get("email_sync_enabled", True) if profile.settings else True,
-                    "calendar_sync": profile.settings.get("calendar_sync_enabled", True) if profile.settings else True,
-                    "push_to_salesforce": profile.settings.get("push_enabled", True) if profile.settings else True
                 }
             }
 
@@ -308,6 +307,72 @@ class SalesforceAgent(SpecializedAgent):
                 error=str(e),
                 message="Failed to get Salesforce status"
             )
+
+    async def _sync_from_salesforce(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
+        """Sync data from Salesforce to CRM"""
+        try:
+            db = self._get_db_session()
+            user_id = self._get_user_id()
+
+            if not db:
+                return ToolResult(success=False, error="Database session not available")
+
+            from models.integration_profile import IntegrationProfile
+            from services.salesforce.sync_service import SalesforceSyncService
+            from sqlalchemy import and_
+
+            profile = db.query(IntegrationProfile).filter(
+                and_(
+                    IntegrationProfile.user_id == user_id,
+                    IntegrationProfile.provider == "salesforce",
+                    IntegrationProfile.status.in_(["connected", "active"])
+                )
+            ).first()
+
+            if not profile:
+                return ToolResult(
+                    success=False,
+                    error="Salesforce not connected",
+                    message="Please connect Salesforce before syncing"
+                )
+
+            sync_service = SalesforceSyncService()
+            entity_type = input_data.get("entity_type")
+            entity_id = input_data.get("entity_id")
+            full_sync = input_data.get("full_sync", False)
+
+            # If specific entity requested, pull just that one
+            if entity_id and entity_type == "loan":
+                result = await sync_service.pull_single_record(
+                    db=db,
+                    integration_profile_id=profile.id,
+                    record_type="loan",
+                    record_id=entity_id
+                )
+            else:
+                # Full or incremental sync from Salesforce
+                result = await sync_service.sync(
+                    db=db,
+                    integration_profile_id=profile.id,
+                    direction='inbound',
+                    full_sync=full_sync
+                )
+
+            return ToolResult(
+                success=True,
+                data={
+                    "records_synced": result.records_succeeded if hasattr(result, 'records_succeeded') else result.get('records_synced', 0),
+                    "records_updated": result.get('records_updated', 0) if isinstance(result, dict) else 0,
+                    "errors": result.errors if hasattr(result, 'errors') else [],
+                    "sync_direction": "Salesforce → CRM",
+                    "synced_at": datetime.utcnow().isoformat()
+                },
+                message=f"Synced data from Salesforce to CRM"
+            )
+
+        except Exception as e:
+            logger.error(f"Error syncing from Salesforce: {e}", exc_info=True)
+            return ToolResult(success=False, error=str(e))
 
     async def _sync_emails_from_salesforce(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
         """Sync emails from Salesforce"""
@@ -350,7 +415,7 @@ class SalesforceAgent(SpecializedAgent):
                     "emails_synced": result.get("emails_synced", 0),
                     "emails_updated": result.get("emails_updated", 0),
                     "errors": result.get("errors", []),
-                    "sync_type": "full" if input_data.get("force_full_sync") else "incremental",
+                    "sync_direction": "Salesforce → CRM",
                     "synced_at": datetime.utcnow().isoformat()
                 },
                 message=f"Synced {result.get('emails_synced', 0)} emails from Salesforce"
@@ -402,6 +467,7 @@ class SalesforceAgent(SpecializedAgent):
                     "events_synced": result.get("events_synced", 0),
                     "events_updated": result.get("events_updated", 0),
                     "errors": result.get("errors", []),
+                    "sync_direction": "Salesforce → CRM",
                     "date_range": {
                         "from": (datetime.utcnow() - timedelta(days=input_data.get("days_back", 7))).date().isoformat(),
                         "to": (datetime.utcnow() + timedelta(days=input_data.get("days_forward", 30))).date().isoformat()
@@ -413,88 +479,6 @@ class SalesforceAgent(SpecializedAgent):
 
         except Exception as e:
             logger.error(f"Error syncing calendar from Salesforce: {e}", exc_info=True)
-            return ToolResult(success=False, error=str(e))
-
-    async def _push_to_salesforce(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
-        """Push CRM data to Salesforce"""
-        try:
-            db = self._get_db_session()
-            user_id = self._get_user_id()
-
-            if not db:
-                return ToolResult(success=False, error="Database session not available")
-
-            from models.integration_profile import IntegrationProfile
-            from services.salesforce.sync_service import SalesforceSyncService
-            from sqlalchemy import and_
-
-            profile = db.query(IntegrationProfile).filter(
-                and_(
-                    IntegrationProfile.user_id == user_id,
-                    IntegrationProfile.provider == "salesforce",
-                    IntegrationProfile.status.in_(["connected", "active"])
-                )
-            ).first()
-
-            if not profile:
-                return ToolResult(
-                    success=False,
-                    error="Salesforce not connected",
-                    message="Please connect Salesforce before pushing data"
-                )
-
-            sync_service = SalesforceSyncService()
-            entity_type = input_data.get("entity_type")
-            entity_id = input_data.get("entity_id")
-            since_hours = input_data.get("since_hours", 24)
-
-            results = {}
-
-            # Push specific entity if ID provided
-            if entity_id and entity_type:
-                if entity_type == "loan":
-                    result = await sync_service.push_loan_to_salesforce(db, profile.id, entity_id)
-                    results["loan"] = result
-                elif entity_type == "lead":
-                    result = await sync_service.push_lead_to_salesforce(db, profile.id, entity_id)
-                    results["lead"] = result
-                elif entity_type == "email":
-                    result = await sync_service.push_email_to_salesforce(db, profile.id, entity_id)
-                    results["email"] = result
-                elif entity_type == "calendar_event":
-                    result = await sync_service.push_calendar_event_to_salesforce(db, profile.id, entity_id)
-                    results["calendar_event"] = result
-            else:
-                # Full outbound sync
-                result = await sync_service.sync_outbound(
-                    db=db,
-                    integration_profile_id=profile.id,
-                    sync_loans=(entity_type in [None, "all", "loan"]),
-                    sync_leads=(entity_type in [None, "all", "lead"]),
-                    sync_emails=(entity_type in [None, "all", "email"]),
-                    sync_calendar=(entity_type in [None, "all", "calendar_event"]),
-                    since_hours=since_hours
-                )
-                results = result
-
-            total_pushed = sum([
-                results.get("loans_pushed", 0),
-                results.get("leads_pushed", 0),
-                results.get("emails_pushed", 0),
-                results.get("events_pushed", 0)
-            ]) if isinstance(results, dict) else 1
-
-            return ToolResult(
-                success=True,
-                data={
-                    **results,
-                    "pushed_at": datetime.utcnow().isoformat()
-                },
-                message=f"Pushed {total_pushed} records to Salesforce"
-            )
-
-        except Exception as e:
-            logger.error(f"Error pushing to Salesforce: {e}", exc_info=True)
             return ToolResult(success=False, error=str(e))
 
     async def _get_sync_history(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
@@ -528,10 +512,6 @@ class SalesforceAgent(SpecializedAgent):
                 SalesforceSyncLog.integration_profile_id == profile.id
             )
 
-            sync_type = input_data.get("sync_type")
-            if sync_type and sync_type != "all":
-                query = query.filter(SalesforceSyncLog.sync_direction == sync_type)
-
             status = input_data.get("status")
             if status:
                 query = query.filter(SalesforceSyncLog.status == status)
@@ -544,7 +524,7 @@ class SalesforceAgent(SpecializedAgent):
                 {
                     "id": log.id,
                     "sync_type": log.sync_type,
-                    "direction": log.sync_direction,
+                    "direction": "Salesforce → CRM",
                     "status": log.status,
                     "records_processed": log.records_processed,
                     "records_success": log.records_success,
@@ -561,7 +541,8 @@ class SalesforceAgent(SpecializedAgent):
                 success=True,
                 data={
                     "logs": log_data,
-                    "total": len(log_data)
+                    "total": len(log_data),
+                    "sync_direction": "Salesforce → CRM (inbound only)"
                 },
                 message=f"Retrieved {len(log_data)} sync logs"
             )
@@ -581,7 +562,7 @@ class SalesforceAgent(SpecializedAgent):
 
             from models.integration_profile import IntegrationProfile
             from models.salesforce_sync_log import SalesforceSyncLog
-            from sqlalchemy import and_, desc, func
+            from sqlalchemy import and_, desc
 
             issues = []
             recommendations = []
@@ -674,7 +655,7 @@ class SalesforceAgent(SpecializedAgent):
                     issues.append({
                         "type": "stale",
                         "severity": "warning",
-                        "message": f"No sync in {int(hours_since_sync)} hours"
+                        "message": f"No sync from Salesforce in {int(hours_since_sync)} hours"
                     })
                     recommendations.append("Check if the scheduled sync job is running")
             else:
@@ -683,7 +664,7 @@ class SalesforceAgent(SpecializedAgent):
                     "severity": "warning",
                     "message": "No sync has been performed yet"
                 })
-                recommendations.append("Run an initial sync to populate data")
+                recommendations.append("Run an initial sync to pull data from Salesforce")
 
             if not issues:
                 issues.append({
@@ -698,6 +679,7 @@ class SalesforceAgent(SpecializedAgent):
                     "issues": issues,
                     "recommendations": recommendations,
                     "recent_error_count": len(recent_errors) if 'recent_errors' in dir() else 0,
+                    "sync_direction": "Salesforce → CRM (inbound only)",
                     "diagnosed_at": datetime.utcnow().isoformat()
                 },
                 message=f"Found {len([i for i in issues if i['severity'] != 'info'])} issues"
@@ -708,55 +690,55 @@ class SalesforceAgent(SpecializedAgent):
             return ToolResult(success=False, error=str(e))
 
     async def _get_field_mappings(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
-        """Get field mappings between CRM and Salesforce"""
+        """Get field mappings between Salesforce and CRM"""
 
-        # Default field mappings (these would be stored in DB in production)
+        # Default field mappings (Salesforce → CRM direction)
         default_mappings = {
             "loan": {
                 "mappings": [
-                    {"crm_field": "id", "sf_field": "External_Loan_ID__c", "direction": "outbound"},
-                    {"crm_field": "loan_number", "sf_field": "Name", "direction": "bidirectional"},
-                    {"crm_field": "loan_amount", "sf_field": "Amount", "direction": "bidirectional"},
-                    {"crm_field": "status", "sf_field": "StageName", "direction": "bidirectional"},
-                    {"crm_field": "loan_type", "sf_field": "Loan_Type__c", "direction": "bidirectional"},
-                    {"crm_field": "interest_rate", "sf_field": "Interest_Rate__c", "direction": "bidirectional"},
-                    {"crm_field": "expected_close_date", "sf_field": "CloseDate", "direction": "bidirectional"},
-                    {"crm_field": "property_address", "sf_field": "Property_Address__c", "direction": "bidirectional"},
+                    {"sf_field": "Id", "crm_field": "salesforce_id", "direction": "SF → CRM"},
+                    {"sf_field": "Name", "crm_field": "loan_number", "direction": "SF → CRM"},
+                    {"sf_field": "Amount", "crm_field": "loan_amount", "direction": "SF → CRM"},
+                    {"sf_field": "StageName", "crm_field": "status", "direction": "SF → CRM"},
+                    {"sf_field": "Loan_Type__c", "crm_field": "loan_type", "direction": "SF → CRM"},
+                    {"sf_field": "Interest_Rate__c", "crm_field": "interest_rate", "direction": "SF → CRM"},
+                    {"sf_field": "CloseDate", "crm_field": "expected_close_date", "direction": "SF → CRM"},
+                    {"sf_field": "Property_Address__c", "crm_field": "property_address", "direction": "SF → CRM"},
                 ],
                 "sf_object": "Opportunity"
             },
             "lead": {
                 "mappings": [
-                    {"crm_field": "id", "sf_field": "External_Lead_ID__c", "direction": "outbound"},
-                    {"crm_field": "first_name", "sf_field": "FirstName", "direction": "bidirectional"},
-                    {"crm_field": "last_name", "sf_field": "LastName", "direction": "bidirectional"},
-                    {"crm_field": "email", "sf_field": "Email", "direction": "bidirectional"},
-                    {"crm_field": "phone", "sf_field": "Phone", "direction": "bidirectional"},
-                    {"crm_field": "company", "sf_field": "Company", "direction": "bidirectional"},
-                    {"crm_field": "status", "sf_field": "Status", "direction": "bidirectional"},
-                    {"crm_field": "source", "sf_field": "LeadSource", "direction": "bidirectional"},
+                    {"sf_field": "Id", "crm_field": "salesforce_id", "direction": "SF → CRM"},
+                    {"sf_field": "FirstName", "crm_field": "first_name", "direction": "SF → CRM"},
+                    {"sf_field": "LastName", "crm_field": "last_name", "direction": "SF → CRM"},
+                    {"sf_field": "Email", "crm_field": "email", "direction": "SF → CRM"},
+                    {"sf_field": "Phone", "crm_field": "phone", "direction": "SF → CRM"},
+                    {"sf_field": "Company", "crm_field": "company", "direction": "SF → CRM"},
+                    {"sf_field": "Status", "crm_field": "status", "direction": "SF → CRM"},
+                    {"sf_field": "LeadSource", "crm_field": "source", "direction": "SF → CRM"},
                 ],
                 "sf_object": "Lead"
             },
             "email": {
                 "mappings": [
-                    {"crm_field": "id", "sf_field": "External_Email_ID__c", "direction": "outbound"},
-                    {"crm_field": "subject", "sf_field": "Subject", "direction": "bidirectional"},
-                    {"crm_field": "body", "sf_field": "Description", "direction": "bidirectional"},
-                    {"crm_field": "sent_at", "sf_field": "ActivityDate", "direction": "bidirectional"},
-                    {"crm_field": "from_address", "sf_field": "FromAddress", "direction": "inbound"},
-                    {"crm_field": "to_address", "sf_field": "ToAddress", "direction": "inbound"},
+                    {"sf_field": "Id", "crm_field": "salesforce_id", "direction": "SF → CRM"},
+                    {"sf_field": "Subject", "crm_field": "subject", "direction": "SF → CRM"},
+                    {"sf_field": "Description", "crm_field": "body", "direction": "SF → CRM"},
+                    {"sf_field": "ActivityDate", "crm_field": "sent_at", "direction": "SF → CRM"},
+                    {"sf_field": "FromAddress", "crm_field": "from_address", "direction": "SF → CRM"},
+                    {"sf_field": "ToAddress", "crm_field": "to_address", "direction": "SF → CRM"},
                 ],
                 "sf_object": "Task"
             },
             "event": {
                 "mappings": [
-                    {"crm_field": "id", "sf_field": "External_Event_ID__c", "direction": "outbound"},
-                    {"crm_field": "title", "sf_field": "Subject", "direction": "bidirectional"},
-                    {"crm_field": "description", "sf_field": "Description", "direction": "bidirectional"},
-                    {"crm_field": "start_time", "sf_field": "StartDateTime", "direction": "bidirectional"},
-                    {"crm_field": "end_time", "sf_field": "EndDateTime", "direction": "bidirectional"},
-                    {"crm_field": "location", "sf_field": "Location", "direction": "bidirectional"},
+                    {"sf_field": "Id", "crm_field": "salesforce_id", "direction": "SF → CRM"},
+                    {"sf_field": "Subject", "crm_field": "title", "direction": "SF → CRM"},
+                    {"sf_field": "Description", "crm_field": "description", "direction": "SF → CRM"},
+                    {"sf_field": "StartDateTime", "crm_field": "start_time", "direction": "SF → CRM"},
+                    {"sf_field": "EndDateTime", "crm_field": "end_time", "direction": "SF → CRM"},
+                    {"sf_field": "Location", "crm_field": "location", "direction": "SF → CRM"},
                 ],
                 "sf_object": "Event"
             }
@@ -769,6 +751,7 @@ class SalesforceAgent(SpecializedAgent):
                 success=True,
                 data={
                     "entity_type": entity_type,
+                    "sync_direction": "Salesforce → CRM (inbound only)",
                     **default_mappings[entity_type]
                 },
                 message=f"Retrieved {len(default_mappings[entity_type]['mappings'])} field mappings for {entity_type}"
@@ -779,47 +762,24 @@ class SalesforceAgent(SpecializedAgent):
             data={
                 "entity_types": list(default_mappings.keys()),
                 "mappings": default_mappings,
+                "sync_direction": "Salesforce → CRM (inbound only)",
                 "total_mappings": sum(len(m["mappings"]) for m in default_mappings.values())
             },
             message=f"Retrieved field mappings for {len(default_mappings)} entity types"
         )
 
     async def _update_field_mapping(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
-        """Update a field mapping"""
-        # In production, this would update the database
+        """Update a field mapping (inbound direction only)"""
         return ToolResult(
             success=True,
             data={
                 "entity_type": input_data["entity_type"],
                 "crm_field": input_data["crm_field"],
                 "salesforce_field": input_data["salesforce_field"],
-                "sync_direction": input_data.get("sync_direction", "bidirectional"),
+                "sync_direction": "Salesforce → CRM",
                 "updated_at": datetime.utcnow().isoformat()
             },
-            message=f"Updated mapping: {input_data['crm_field']} -> {input_data['salesforce_field']}"
-        )
-
-    async def _resolve_sync_conflict(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
-        """Resolve a sync conflict"""
-        resolution = input_data["resolution"]
-        conflict_id = input_data["conflict_id"]
-
-        resolution_actions = {
-            "use_crm": "CRM data will overwrite Salesforce",
-            "use_salesforce": "Salesforce data will overwrite CRM",
-            "merge": "Data will be merged (newest wins per field)",
-            "skip": "Conflict will be skipped and logged"
-        }
-
-        return ToolResult(
-            success=True,
-            data={
-                "conflict_id": conflict_id,
-                "resolution": resolution,
-                "action_taken": resolution_actions.get(resolution, "Unknown resolution"),
-                "resolved_at": datetime.utcnow().isoformat()
-            },
-            message=f"Conflict {conflict_id} resolved using '{resolution}' strategy"
+            message=f"Updated mapping: SF:{input_data['salesforce_field']} → CRM:{input_data['crm_field']}"
         )
 
     async def _test_salesforce_connection(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
@@ -832,7 +792,6 @@ class SalesforceAgent(SpecializedAgent):
                 return ToolResult(success=False, error="Database session not available")
 
             from models.integration_profile import IntegrationProfile
-            from services.salesforce.sync_service import SalesforceSyncService
             from sqlalchemy import and_
 
             profile = db.query(IntegrationProfile).filter(
@@ -877,23 +836,6 @@ class SalesforceAgent(SpecializedAgent):
                 "message": f"Instance: {profile.instance_url}" if profile.instance_url else "No instance URL"
             })
 
-            if test_type == "full":
-                # Would actually call Salesforce API in production
-                sync_service = SalesforceSyncService()
-                try:
-                    # Test API call
-                    checks.append({
-                        "check": "api_access",
-                        "status": "passed",
-                        "message": "Successfully connected to Salesforce API"
-                    })
-                except Exception as api_error:
-                    checks.append({
-                        "check": "api_access",
-                        "status": "failed",
-                        "message": str(api_error)
-                    })
-
             all_passed = all(c["status"] == "passed" for c in checks)
 
             return ToolResult(
@@ -904,6 +846,7 @@ class SalesforceAgent(SpecializedAgent):
                     "checks": checks,
                     "passed_count": len([c for c in checks if c["status"] == "passed"]),
                     "failed_count": len([c for c in checks if c["status"] == "failed"]),
+                    "sync_direction": "Salesforce → CRM (inbound only)",
                     "tested_at": datetime.utcnow().isoformat()
                 },
                 message=f"Connection test {'passed' if all_passed else 'failed'}"
@@ -911,4 +854,79 @@ class SalesforceAgent(SpecializedAgent):
 
         except Exception as e:
             logger.error(f"Error testing Salesforce connection: {e}", exc_info=True)
+            return ToolResult(success=False, error=str(e))
+
+    async def _get_linked_records(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
+        """Get CRM records linked to Salesforce"""
+        try:
+            db = self._get_db_session()
+
+            if not db:
+                return ToolResult(success=False, error="Database session not available")
+
+            entity_type = input_data.get("entity_type")
+            limit = input_data.get("limit", 50)
+            only_linked = input_data.get("only_linked", True)
+
+            results = {}
+
+            # Get linked loans
+            if not entity_type or entity_type == "loan":
+                from models.loan import Loan
+
+                query = db.query(Loan)
+                if only_linked:
+                    query = query.filter(Loan.salesforce_id.isnot(None))
+
+                loans = query.limit(limit).all()
+                results["loans"] = [
+                    {
+                        "id": loan.id,
+                        "loan_number": loan.loan_number,
+                        "borrower_name": loan.borrower_name,
+                        "salesforce_id": loan.salesforce_id,
+                        "last_synced_at": loan.salesforce_last_synced_at.isoformat() if loan.salesforce_last_synced_at else None,
+                        "linked": loan.salesforce_id is not None
+                    }
+                    for loan in loans
+                ]
+
+            # Get linked leads
+            if not entity_type or entity_type == "lead":
+                from models.lead import Lead
+
+                query = db.query(Lead)
+                if only_linked:
+                    query = query.filter(Lead.salesforce_id.isnot(None))
+
+                leads = query.limit(limit).all()
+                results["leads"] = [
+                    {
+                        "id": lead.id,
+                        "name": f"{lead.first_name} {lead.last_name}",
+                        "email": lead.email,
+                        "salesforce_id": lead.salesforce_id,
+                        "last_synced_at": lead.salesforce_last_synced_at.isoformat() if hasattr(lead, 'salesforce_last_synced_at') and lead.salesforce_last_synced_at else None,
+                        "linked": lead.salesforce_id is not None
+                    }
+                    for lead in leads
+                ]
+
+            total_linked = sum(
+                len([r for r in records if r.get("linked")])
+                for records in results.values()
+            )
+
+            return ToolResult(
+                success=True,
+                data={
+                    **results,
+                    "total_linked": total_linked,
+                    "sync_direction": "Salesforce → CRM (inbound only)"
+                },
+                message=f"Found {total_linked} records linked to Salesforce"
+            )
+
+        except Exception as e:
+            logger.error(f"Error getting linked records: {e}", exc_info=True)
             return ToolResult(success=False, error=str(e))

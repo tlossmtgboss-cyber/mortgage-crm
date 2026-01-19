@@ -1,6 +1,11 @@
 """
 Salesforce Sync Engine
-Handles bidirectional data synchronization using user-specific field mappings
+Handles ONE-WAY data synchronization: Salesforce → CRM
+
+When data is updated in Salesforce, those changes are pulled into the CRM.
+The CRM does NOT push data back to Salesforce.
+
+Note: Outbound push methods are kept for backwards compatibility but are deprecated.
 """
 import hashlib
 import json
