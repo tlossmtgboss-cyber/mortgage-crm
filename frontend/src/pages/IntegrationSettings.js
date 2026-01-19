@@ -310,6 +310,7 @@ const IntegrationSettings = () => {
       slack: 'slack.com',
       google_calendar: 'calendar.google.com',
       outlook_calendar: 'outlook.com',
+      outlook_email: 'outlook.com',
       calendly: 'calendly.com',
       google_drive: 'drive.google.com',
       dropbox: 'dropbox.com',

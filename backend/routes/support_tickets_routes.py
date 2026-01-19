@@ -4,23 +4,45 @@ Handles IT support ticket submission and management for the platform.
 Master admin can view all tickets, regular users see only their own.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, text
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Callable
 from datetime import datetime, timezone
+import logging
 
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from database import Base, get_db as db_get_db, engine
 
-from main import get_db, get_current_user, Base, engine
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/support", tags=["support"])
 
 # Master admin email
 MASTER_ADMIN_EMAIL = "admin@perenniaai.com"
+
+# Dependency injection placeholders
+_get_current_user: Optional[Callable] = None
+
+
+def set_dependencies(get_current_user_func: Callable):
+    """Set dependencies at runtime from main.py."""
+    global _get_current_user
+    _get_current_user = get_current_user_func
+
+
+def get_db():
+    """Get database session wrapper."""
+    yield from db_get_db()
+
+
+async def get_current_user(request: Request, db: Session = Depends(get_db)):
+    """Get current user - wrapper that works at request time."""
+    if _get_current_user is None:
+        raise HTTPException(status_code=500, detail="Auth dependency not configured")
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    return await _get_current_user(token=token, request=request, db=db)
 
 
 # ============================================================================
@@ -58,8 +80,9 @@ class SupportTicket(Base):
 # Create table if not exists
 try:
     SupportTicket.__table__.create(engine, checkfirst=True)
+    logger.info("✅ Support tickets table created/verified")
 except Exception as e:
-    print(f"Note: support_tickets table creation: {e}")
+    logger.info(f"Note: support_tickets table creation: {e}")
 
 
 # ============================================================================
@@ -190,10 +213,10 @@ async def create_ticket(
         organization_name = None
 
         if organization_id:
-            from main import Organization
-            org = db.query(Organization).filter(Organization.id == organization_id).first()
-            if org:
-                organization_name = org.name
+            # Use raw SQL to avoid circular import with main.py
+            result = db.execute(text("SELECT name FROM organizations WHERE id = :org_id"), {"org_id": organization_id}).fetchone()
+            if result:
+                organization_name = result[0]
 
         new_ticket = SupportTicket(
             user_id=current_user.id,

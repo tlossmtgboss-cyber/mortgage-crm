@@ -21119,6 +21119,15 @@ try:
     from routes.microsoft_routes import router as microsoft_router, set_dependencies as set_microsoft_deps
     set_microsoft_deps(get_db, get_current_user)
     app.include_router(microsoft_router, tags=["Microsoft Outlook Integration"])
+
+    # Legacy OAuth callback path - redirect to new path
+    from fastapi.responses import RedirectResponse
+    @app.get("/oauth/microsoft/callback", tags=["Microsoft OAuth Legacy"])
+    async def legacy_microsoft_callback(request: Request):
+        """Legacy OAuth callback - redirects to new path with query params"""
+        query_string = str(request.url.query)
+        return RedirectResponse(url=f"/api/v1/microsoft/callback?{query_string}", status_code=307)
+
     logger.info("✅ Microsoft Outlook routes loaded")
 except Exception as e:
     logger.warning(f"⚠️ Microsoft Outlook routes not loaded: {e}")
@@ -22373,7 +22382,8 @@ except Exception as e:
 
 # Support Tickets routes (IT ticket management for platform admin)
 try:
-    from routes.support_tickets_routes import router as support_tickets_router
+    from routes.support_tickets_routes import router as support_tickets_router, set_dependencies as set_support_deps
+    set_support_deps(get_current_user)
     app.include_router(support_tickets_router, tags=["Support Tickets"])
     logger.info("✅ Support Tickets routes loaded")
 except Exception as e:
