@@ -122,6 +122,10 @@ const AdminPanel = () => {
   const [missionControlLoading, setMissionControlLoading] = useState(false);
   const [missionControlRefreshing, setMissionControlRefreshing] = useState(false);
 
+  // IT Tickets state
+  const [itTicketMetrics, setItTicketMetrics] = useState(null);
+  const [itTicketMetricsLoading, setItTicketMetricsLoading] = useState(false);
+
   // Modal state
   const [showUserModal, setShowUserModal] = useState(false);
   const [showTestAccountModal, setShowTestAccountModal] = useState(false);
@@ -324,6 +328,24 @@ const AdminPanel = () => {
   useEffect(() => {
     loadAccounts(accountFilter);
   }, [accountFilter, loadAccounts]);
+
+  // Load IT Ticket Metrics
+  const loadItTicketMetrics = useCallback(async () => {
+    try {
+      setItTicketMetricsLoading(true);
+      const response = await api.get('/api/v1/support/metrics');
+      setItTicketMetrics(response.data);
+    } catch (err) {
+      console.error('Error loading IT ticket metrics:', err);
+      setItTicketMetrics(null);
+    } finally {
+      setItTicketMetricsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadItTicketMetrics();
+  }, [loadItTicketMetrics]);
 
   // Unblock IP
   const handleUnblockIP = async (ip) => {
@@ -938,6 +960,51 @@ const AdminPanel = () => {
                     <span className="metric-sublabel">Annual recurring</span>
                   </div>
                 </div>
+              </section>
+            )}
+
+            {/* IT Tickets - Platform Admin Only */}
+            {isCurrentUserPlatformAdmin && (
+              <section
+                className="it-tickets-section clickable-card"
+                onClick={() => navigate('/support')}
+                style={{ cursor: 'pointer' }}
+              >
+                <div className="section-header">
+                  <h2>IT Support Tickets</h2>
+                  <span className="card-arrow">→</span>
+                </div>
+                <p className="section-subtitle">Support ticket metrics and performance tracking.</p>
+
+                {itTicketMetricsLoading ? (
+                  <div className="loading-placeholder">Loading ticket data...</div>
+                ) : (
+                  <div className="account-metrics-grid">
+                    <div className="account-metric-card">
+                      <span className="metric-label">AVG TICKETS/DAY</span>
+                      <span className="metric-value">{itTicketMetrics?.avgTicketsPerDay?.toFixed(1) || '0'}</span>
+                      <span className="metric-sublabel">Daily average</span>
+                    </div>
+
+                    <div className="account-metric-card highlight-green">
+                      <span className="metric-label">AVG TURN TIME</span>
+                      <span className="metric-value">{itTicketMetrics?.avgTurnTimeHours?.toFixed(1) || '0'}h</span>
+                      <span className="metric-sublabel">Hours to resolve</span>
+                    </div>
+
+                    <div className="account-metric-card highlight-blue">
+                      <span className="metric-label">THIS MONTH</span>
+                      <span className="metric-value">{itTicketMetrics?.totalThisMonth || 0}</span>
+                      <span className="metric-sublabel">Total tickets</span>
+                    </div>
+
+                    <div className="account-metric-card highlight-yellow">
+                      <span className="metric-label">OPEN TICKETS</span>
+                      <span className="metric-value">{itTicketMetrics?.openTickets || 0}</span>
+                      <span className="metric-sublabel">Awaiting resolution</span>
+                    </div>
+                  </div>
+                )}
               </section>
             )}
 
