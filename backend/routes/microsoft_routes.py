@@ -298,7 +298,7 @@ async def microsoft_status(
         row = result.fetchone()
 
         if not row:
-            return success_response({
+            return success_response("Not connected", {
                 "connected": False,
                 "enabled": microsoft_outlook_client.enabled
             })
@@ -308,7 +308,7 @@ async def microsoft_status(
         if row.expires_at:
             is_expired = datetime.utcnow() > row.expires_at
 
-        return success_response({
+        return success_response("Connected", {
             "connected": True,
             "enabled": microsoft_outlook_client.enabled,
             "email": row.email,
@@ -320,7 +320,7 @@ async def microsoft_status(
 
     except Exception as e:
         logger.error(f"Error checking Microsoft {provider} status: {e}")
-        return success_response({
+        return success_response("Error checking status", {
             "connected": False,
             "enabled": microsoft_outlook_client.enabled,
             "error": str(e)
@@ -378,7 +378,7 @@ async def refresh_microsoft_token(
         })
         db.commit()
 
-        return success_response({
+        return success_response("Token refreshed", {
             "refreshed": True,
             "expires_at": token_data.get("expires_at")
         })
@@ -412,9 +412,9 @@ async def disconnect_microsoft(
         """), {"user_id": user_id, "provider": provider})
         db.commit()
 
-        return success_response({
+        return success_response(f"{provider} integration disconnected", {
             "disconnected": True
-        }, f"{provider} integration disconnected")
+        })
 
     except Exception as e:
         logger.error(f"Error disconnecting Microsoft {provider}: {e}")
@@ -478,7 +478,7 @@ async def list_calendar_events(
     if events is None:
         raise HTTPException(status_code=500, detail="Failed to fetch events from Outlook")
 
-    return success_response(events)
+    return success_response("Events retrieved", events)
 
 
 @router.post("/calendar/events")
@@ -516,7 +516,7 @@ async def create_calendar_event(
     if new_event is None:
         raise HTTPException(status_code=500, detail="Failed to create calendar event")
 
-    return success_response(new_event, "Event created successfully")
+    return success_response("Event created successfully", new_event)
 
 
 # Email API Endpoints
@@ -574,7 +574,7 @@ async def list_email_messages(
     if messages is None:
         raise HTTPException(status_code=500, detail="Failed to fetch messages from Outlook")
 
-    return success_response(messages)
+    return success_response("Messages retrieved", messages)
 
 
 @router.post("/email/send")
@@ -610,7 +610,7 @@ async def send_email(
     if not success:
         raise HTTPException(status_code=500, detail="Failed to send email")
 
-    return success_response({"sent": True}, "Email sent successfully")
+    return success_response("Email sent successfully", {"sent": True})
 
 
 @router.post("/email/sync")
@@ -666,8 +666,8 @@ async def sync_outlook_emails(
 
     processed_count = len(messages.get("value", []))
 
-    return success_response({
+    return success_response(f"Synced {processed_count} emails from Outlook", {
         "synced": True,
         "processed_count": processed_count,
         "messages": messages.get("value", [])
-    }, f"Synced {processed_count} emails from Outlook")
+    })
