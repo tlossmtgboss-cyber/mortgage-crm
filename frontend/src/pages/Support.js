@@ -7,6 +7,10 @@ import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from '../services/api';
 import { getAuthHeaders } from '../utils/auth';
 import { toast } from '../utils/toast';
+import {
+  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, Legend, ResponsiveContainer
+} from 'recharts';
 import './Support.css';
 
 const Support = () => {
@@ -25,10 +29,15 @@ const Support = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [screenshots, setScreenshots] = useState([]);
   const [uploadingScreenshot, setUploadingScreenshot] = useState(false);
+  const [metrics, setMetrics] = useState(null);
+  const [analytics, setAnalytics] = useState(null);
+  const [loadingMetrics, setLoadingMetrics] = useState(false);
+  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
 
   const tabs = [
     { id: 'active', label: 'Active Tickets', icon: 'fa-ticket-alt' },
     { id: 'completed', label: 'Completed Tickets', icon: 'fa-check-circle' },
+    { id: 'analytics', label: 'Analytics', icon: 'fa-chart-bar' },
   ];
 
   const ticketCategories = [
@@ -45,6 +54,48 @@ const Support = () => {
   useEffect(() => {
     loadTickets();
   }, []);
+
+  // Load metrics and analytics when admin
+  useEffect(() => {
+    if (isAdmin) {
+      loadMetrics();
+      loadAnalytics();
+    }
+  }, [isAdmin]);
+
+  const loadMetrics = async () => {
+    setLoadingMetrics(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/support/metrics`, {
+        headers: getAuthHeaders()
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setMetrics(data);
+      }
+    } catch (err) {
+      console.error('Error loading metrics:', err);
+    } finally {
+      setLoadingMetrics(false);
+    }
+  };
+
+  const loadAnalytics = async () => {
+    setLoadingAnalytics(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/support/analytics?months=6`, {
+        headers: getAuthHeaders()
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setAnalytics(data);
+      }
+    } catch (err) {
+      console.error('Error loading analytics:', err);
+    } finally {
+      setLoadingAnalytics(false);
+    }
+  };
 
   const loadTickets = async () => {
     setLoadingTickets(true);
@@ -254,6 +305,48 @@ const Support = () => {
         <p>Manage and track support tickets</p>
       </div>
 
+      {/* Metrics Section - Admin Only */}
+      {isAdmin && metrics && (
+        <div className="metrics-container">
+          <div className="metric-card">
+            <div className="metric-icon">
+              <i className="fas fa-chart-line"></i>
+            </div>
+            <div className="metric-content">
+              <div className="metric-value">{metrics.avg_per_day}</div>
+              <div className="metric-label">Avg Tickets/Day</div>
+            </div>
+          </div>
+          <div className="metric-card">
+            <div className="metric-icon turn-time">
+              <i className="fas fa-clock"></i>
+            </div>
+            <div className="metric-content">
+              <div className="metric-value">{metrics.turn_time_display}</div>
+              <div className="metric-label">Avg Turn Time</div>
+            </div>
+          </div>
+          <div className="metric-card">
+            <div className="metric-icon this-month">
+              <i className="fas fa-calendar-alt"></i>
+            </div>
+            <div className="metric-content">
+              <div className="metric-value">{metrics.tickets_this_month}</div>
+              <div className="metric-label">This Month</div>
+            </div>
+          </div>
+          <div className="metric-card">
+            <div className="metric-icon open">
+              <i className="fas fa-folder-open"></i>
+            </div>
+            <div className="metric-content">
+              <div className="metric-value">{metrics.open_tickets}</div>
+              <div className="metric-label">Open Tickets</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tab Navigation */}
       <div className="support-tabs">
         {tabs.map(tab => (
@@ -441,6 +534,89 @@ const Support = () => {
                 {completedTickets.map(ticket => renderTicketCard(ticket, false))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Analytics Tab */}
+        {activeTab === 'analytics' && isAdmin && (
+          <div className="analytics-section">
+            {loadingAnalytics ? (
+              <div className="loading-state">
+                <i className="fas fa-spinner fa-spin"></i>
+                <p>Loading analytics...</p>
+              </div>
+            ) : !analytics ? (
+              <div className="empty-state">
+                <i className="fas fa-chart-bar"></i>
+                <h3>No analytics data</h3>
+                <p>Analytics will appear once tickets are submitted.</p>
+              </div>
+            ) : (
+              <div className="analytics-charts">
+                {/* Monthly Submissions Chart */}
+                <div className="chart-card">
+                  <h3><i className="fas fa-ticket-alt"></i> Monthly Ticket Submissions</h3>
+                  <div className="chart-container">
+                    {analytics.monthly_submissions?.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={analytics.monthly_submissions}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="month" />
+                          <YAxis />
+                          <Tooltip />
+                          <Legend />
+                          <Bar dataKey="submissions" name="Submitted" fill="#2196f3" />
+                          <Bar dataKey="resolved" name="Resolved" fill="#4caf50" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="no-chart-data">
+                        <p>No submission data available</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Turn Time Chart */}
+                <div className="chart-card">
+                  <h3><i className="fas fa-clock"></i> Average Resolution Time (Hours)</h3>
+                  <div className="chart-container">
+                    {analytics.monthly_turn_time?.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={300}>
+                        <LineChart data={analytics.monthly_turn_time}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="month" />
+                          <YAxis />
+                          <Tooltip formatter={(value) => [`${value} hours`, 'Avg Resolution Time']} />
+                          <Legend />
+                          <Line
+                            type="monotone"
+                            dataKey="hours"
+                            name="Hours to Resolve"
+                            stroke="#ff9800"
+                            strokeWidth={2}
+                            dot={{ fill: '#ff9800' }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="no-chart-data">
+                        <p>No resolution time data available</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Non-admin analytics message */}
+        {activeTab === 'analytics' && !isAdmin && (
+          <div className="empty-state">
+            <i className="fas fa-lock"></i>
+            <h3>Admin Access Required</h3>
+            <p>Analytics are only available to administrators.</p>
           </div>
         )}
       </div>

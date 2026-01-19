@@ -983,6 +983,149 @@
   gap: 16px;
 }
 
+/* Metrics Container */
+.metrics-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.metric-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e0e0e0;
+}
+
+.metric-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #2196f3, #1976d2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 20px;
+}
+
+.metric-icon.turn-time {
+  background: linear-gradient(135deg, #ff9800, #f57c00);
+}
+
+.metric-icon.this-month {
+  background: linear-gradient(135deg, #9c27b0, #7b1fa2);
+}
+
+.metric-icon.open {
+  background: linear-gradient(135deg, #4caf50, #388e3c);
+}
+
+.metric-content {
+  flex: 1;
+}
+
+.metric-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1a1a2e;
+  line-height: 1.2;
+}
+
+.metric-label {
+  font-size: 13px;
+  color: #666;
+  margin-top: 4px;
+}
+
+/* Analytics Section */
+.analytics-section {
+  margin-top: 24px;
+}
+
+.analytics-charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 24px;
+}
+
+.chart-card {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e0e0e0;
+}
+
+.chart-card h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a2e;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.chart-card h3 i {
+  color: #2196f3;
+}
+
+.chart-container {
+  width: 100%;
+  min-height: 300px;
+}
+
+.no-chart-data {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  color: #999;
+  font-size: 14px;
+}
+
+/* Responsive adjustments for metrics */
+@media (max-width: 768px) {
+  .metrics-container {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .metric-card {
+    padding: 16px;
+    gap: 12px;
+  }
+
+  .metric-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 16px;
+  }
+
+  .metric-value {
+    font-size: 22px;
+  }
+
+  .analytics-charts {
+    grid-template-columns: 1fr;
+  }
+
+  .chart-card {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .metrics-container {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Screenshot Upload Styles */
 .screenshot-upload-area {
   display: flex;

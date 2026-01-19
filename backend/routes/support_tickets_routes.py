@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, text, JSON
 from pydantic import BaseModel
 from typing import Optional, List, Callable
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import logging
 
 from database import Base, get_db as db_get_db, engine
@@ -435,4 +435,147 @@ async def delete_ticket(
     except Exception as e:
         db.rollback()
         print(f"Error deleting ticket: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/metrics")
+async def get_ticket_metrics(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Get ticket metrics summary (admin only)"""
+    try:
+        # Only admin can view metrics
+        if not is_platform_admin(current_user):
+            raise HTTPException(status_code=403, detail="Only administrators can view metrics")
+
+        # Get current month start
+        now = datetime.now(timezone.utc)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+        # Get 30 days ago for average calculation
+        thirty_days_ago = now - timedelta(days=30)
+
+        # Total tickets this month
+        tickets_this_month = db.query(SupportTicket).filter(
+            SupportTicket.created_at >= month_start
+        ).count()
+
+        # Tickets in last 30 days for average
+        tickets_last_30_days = db.query(SupportTicket).filter(
+            SupportTicket.created_at >= thirty_days_ago
+        ).count()
+        avg_per_day = round(tickets_last_30_days / 30, 1)
+
+        # Average turn time (time to complete) for resolved tickets in last 90 days
+        ninety_days_ago = now - timedelta(days=90)
+        resolved_tickets = db.execute(text("""
+            SELECT AVG(EXTRACT(EPOCH FROM (resolved_at - created_at)) / 3600) as avg_hours
+            FROM support_tickets
+            WHERE status IN ('resolved', 'closed')
+            AND resolved_at IS NOT NULL
+            AND created_at >= :start_date
+        """), {"start_date": ninety_days_ago}).fetchone()
+
+        avg_turn_time_hours = resolved_tickets[0] if resolved_tickets and resolved_tickets[0] else 0
+
+        # Convert to days and hours
+        if avg_turn_time_hours:
+            avg_turn_days = int(avg_turn_time_hours // 24)
+            avg_turn_hours = int(avg_turn_time_hours % 24)
+            turn_time_display = f"{avg_turn_days}d {avg_turn_hours}h" if avg_turn_days > 0 else f"{avg_turn_hours}h"
+        else:
+            turn_time_display = "N/A"
+
+        # Open vs resolved counts
+        open_count = db.query(SupportTicket).filter(
+            SupportTicket.status.in_(['open', 'in_progress'])
+        ).count()
+
+        resolved_count = db.query(SupportTicket).filter(
+            SupportTicket.status.in_(['resolved', 'closed'])
+        ).count()
+
+        return {
+            "avg_per_day": avg_per_day,
+            "turn_time_display": turn_time_display,
+            "turn_time_hours": round(avg_turn_time_hours, 1) if avg_turn_time_hours else 0,
+            "tickets_this_month": tickets_this_month,
+            "open_tickets": open_count,
+            "resolved_tickets": resolved_count,
+            "total_tickets": open_count + resolved_count,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error fetching metrics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/analytics")
+async def get_ticket_analytics(
+    months: int = 6,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Get monthly ticket analytics for charts (admin only)"""
+    try:
+        # Only admin can view analytics
+        if not is_platform_admin(current_user):
+            raise HTTPException(status_code=403, detail="Only administrators can view analytics")
+
+        # Get monthly submission data
+        monthly_submissions = db.execute(text("""
+            SELECT
+                DATE_TRUNC('month', created_at) as month,
+                COUNT(*) as submissions,
+                COUNT(CASE WHEN status IN ('resolved', 'closed') THEN 1 END) as resolved
+            FROM support_tickets
+            WHERE created_at >= NOW() - INTERVAL ':months months'
+            GROUP BY DATE_TRUNC('month', created_at)
+            ORDER BY month ASC
+        """.replace(':months', str(months)))).fetchall()
+
+        # Get monthly average turn time
+        monthly_turn_time = db.execute(text("""
+            SELECT
+                DATE_TRUNC('month', created_at) as month,
+                AVG(EXTRACT(EPOCH FROM (resolved_at - created_at)) / 3600) as avg_hours
+            FROM support_tickets
+            WHERE status IN ('resolved', 'closed')
+            AND resolved_at IS NOT NULL
+            AND created_at >= NOW() - INTERVAL ':months months'
+            GROUP BY DATE_TRUNC('month', created_at)
+            ORDER BY month ASC
+        """.replace(':months', str(months)))).fetchall()
+
+        # Format monthly data
+        submissions_data = []
+        for row in monthly_submissions:
+            month_str = row[0].strftime("%b %Y") if row[0] else "Unknown"
+            submissions_data.append({
+                "month": month_str,
+                "submissions": row[1] or 0,
+                "resolved": row[2] or 0,
+            })
+
+        turn_time_data = []
+        for row in monthly_turn_time:
+            month_str = row[0].strftime("%b %Y") if row[0] else "Unknown"
+            hours = row[1] or 0
+            turn_time_data.append({
+                "month": month_str,
+                "hours": round(hours, 1),
+                "days": round(hours / 24, 1) if hours else 0,
+            })
+
+        return {
+            "monthly_submissions": submissions_data,
+            "monthly_turn_time": turn_time_data,
+            "period_months": months,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error fetching analytics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
