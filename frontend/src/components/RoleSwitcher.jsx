@@ -113,23 +113,17 @@ const RoleSwitcher = () => {
       return;
     }
 
-    setIsSwitching(true);
-
-    // Store viewAsRole in localStorage and context
+    // Store viewAsRole in localStorage FIRST (synchronous)
     localStorage.setItem('viewAsRole', roleId);
-    if (setViewAsRole) {
-      setViewAsRole(roleId);
-    }
 
-    setIsOpen(false);
-    setIsSwitching(false);
-
-    // Navigate to the default page for the selected role
+    // Get the default route for the selected role
     const defaultRoute = ROLE_DEFAULT_ROUTES[roleId] || '/dashboard';
 
-    // Use window.location to force a full page refresh with the new route
-    // This ensures all components re-render with the new role context
-    window.location.href = defaultRoute;
+    // Immediately redirect to the appropriate page for this role
+    // Use a small timeout to ensure localStorage is written before redirect
+    setTimeout(() => {
+      window.location.href = defaultRoute;
+    }, 50);
   };
 
   const handleRoleSwitch = async (roleId) => {

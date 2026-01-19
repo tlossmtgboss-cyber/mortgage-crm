@@ -365,13 +365,13 @@ class IPAccessControlMiddleware(BaseHTTPMiddleware):
 # Rate limit tiers based on user roles
 RATE_LIMIT_TIERS = {
     # Admin users get highest limits
-    "admin": {"requests_per_minute": 500, "requests_per_hour": 20000},
+    "admin": {"requests_per_minute": 1000, "requests_per_hour": 50000},
     # Power users (managers, senior LOs) get elevated limits
-    "power_user": {"requests_per_minute": 300, "requests_per_hour": 15000},
+    "power_user": {"requests_per_minute": 600, "requests_per_hour": 30000},
     # Standard authenticated users
-    "standard": {"requests_per_minute": 120, "requests_per_hour": 5000},
+    "standard": {"requests_per_minute": 300, "requests_per_hour": 15000},
     # Unauthenticated/IP-based (most restrictive)
-    "anonymous": {"requests_per_minute": 60, "requests_per_hour": 1000},
+    "anonymous": {"requests_per_minute": 100, "requests_per_hour": 2000},
 }
 
 # Endpoint categories with specific rate limits (multipliers applied to base limits)
