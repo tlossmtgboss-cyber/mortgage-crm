@@ -70,10 +70,15 @@ function Dashboard() {
   // IT Tickets metrics state
   const [itTicketMetrics, setItTicketMetrics] = useState(null);
 
+  // Check if user is admin (any admin role, not just demo email)
+  const isAdminUser = () => {
+    return userRole === 'admin' || userRole === 'site_admin' || effectiveRole === 'admin' || effectiveRole === 'site_admin';
+  };
+
   // Fetch IT Ticket metrics for admin users
   useEffect(() => {
     const fetchItTicketMetrics = async () => {
-      if (!isDemoUser()) return;
+      if (!isAdminUser()) return;
       try {
         const response = await api.get('/api/v1/support/metrics');
         if (response.data) {
@@ -84,7 +89,7 @@ function Dashboard() {
       }
     };
     fetchItTicketMetrics();
-  }, []);
+  }, [userRole, effectiveRole]);
 
   // Get allowed containers for the current role
   const allowedContainers = useMemo(() => {
@@ -942,7 +947,7 @@ function Dashboard() {
 
     // IT Tickets KPIs - Admin only
     if (containerId === 'it-tickets') {
-      if (!isDemoUser()) {
+      if (!isAdminUser()) {
         return null;
       }
 
