@@ -398,8 +398,17 @@ class AgentRegistry:
             "zoom": "VideoAgent",
             "integration": "IntegrationsAgent",
             "connect": "IntegrationsAgent",
-            "sync": "IntegrationsAgent",
             "api": "IntegrationsAgent",
+
+            # Salesforce-specific
+            "salesforce": "SalesforceAgent",
+            "sf": "SalesforceAgent",
+            "sfdc": "SalesforceAgent",
+            "salesforce sync": "SalesforceAgent",
+            "sync salesforce": "SalesforceAgent",
+            "push to salesforce": "SalesforceAgent",
+            "pull from salesforce": "SalesforceAgent",
+            "sync": "SalesforceAgent",  # Default sync to Salesforce agent
             "rate": "RateAdvisorAgent",
             "lock": "RateAdvisorAgent",
             "pricing": "RateAdvisorAgent",

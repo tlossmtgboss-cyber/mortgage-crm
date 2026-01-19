@@ -14,7 +14,7 @@ CORE CRM AGENTS (8):
 7. Portfolio Agent - Post-close client management
 8. Compliance Agent - Regulatory compliance monitoring
 
-EXTENDED AGENTS (12):
+EXTENDED AGENTS (13):
 9. Receptionist Agent - AI voice/chat receptionist
 10. Profitability Agent - Loan and branch profitability analysis
 11. Subscription Agent - SaaS subscription and billing management
@@ -27,6 +27,7 @@ EXTENDED AGENTS (12):
 18. Video Agent - Video meeting intelligence (UVIP)
 19. Integrations Agent - Third-party integration management
 20. Rate Advisor Agent - Rate lock and pricing advice
+21. Salesforce Agent - Salesforce integration and bidirectional sync
 """
 
 from .base import SpecializedAgent, AgentTool, AgentRegistry, ToolCategory, RiskLevel, ToolResult
@@ -54,6 +55,7 @@ from .scheduler_agent import SchedulerAgent
 from .video_agent import VideoAgent
 from .integrations_agent import IntegrationsAgent
 from .rate_advisor_agent import RateAdvisorAgent
+from .salesforce_agent import SalesforceAgent
 
 __all__ = [
     # Base classes
@@ -87,8 +89,9 @@ __all__ = [
     "VideoAgent",
     "IntegrationsAgent",
     "RateAdvisorAgent",
+    "SalesforceAgent",
 ]
 
 # Agent count for verification
-AGENT_COUNT = 20
-TOOL_COUNT = 160  # 20 agents × 8 tools average
+AGENT_COUNT = 21
+TOOL_COUNT = 170  # 21 agents × ~8 tools average
