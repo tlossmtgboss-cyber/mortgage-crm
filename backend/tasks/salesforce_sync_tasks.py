@@ -34,7 +34,8 @@ logger = logging.getLogger(__name__)
 async def sync_emails_from_salesforce(
     integration_profile_id: int,
     days_back: int = 7,
-    limit: int = 200
+    limit: int = 200,
+    db: Session = None
 ) -> Dict[str, Any]:
     """
     Sync email history from Salesforce to CRM for a single user.
@@ -45,11 +46,15 @@ async def sync_emails_from_salesforce(
         integration_profile_id: Integration profile ID
         days_back: Number of days to sync back
         limit: Maximum emails to sync
+        db: Optional database session (reuse parent session to avoid connection exhaustion)
 
     Returns:
         Sync result dictionary
     """
-    db = SessionLocal()
+    # Reuse provided session or create new one (to avoid connection pool exhaustion)
+    own_session = db is None
+    if own_session:
+        db = SessionLocal()
 
     try:
         from services.salesforce.email_sync_service import salesforce_email_sync
@@ -77,7 +82,9 @@ async def sync_emails_from_salesforce(
             'errors': [str(e)]
         }
     finally:
-        db.close()
+        # Only close if we created the session
+        if own_session:
+            db.close()
 
 
 def sync_emails_from_salesforce_sync(integration_profile_id: int, **kwargs) -> Dict[str, Any]:
@@ -93,7 +100,8 @@ async def sync_calendar_from_salesforce(
     integration_profile_id: int,
     days_back: int = 7,
     days_forward: int = 30,
-    limit: int = 200
+    limit: int = 200,
+    db: Session = None
 ) -> Dict[str, Any]:
     """
     Sync calendar events from Salesforce to CRM for a single user.
@@ -105,11 +113,15 @@ async def sync_calendar_from_salesforce(
         days_back: Number of days to sync back
         days_forward: Number of days to sync forward
         limit: Maximum events to sync
+        db: Optional database session (reuse parent session to avoid connection exhaustion)
 
     Returns:
         Sync result dictionary
     """
-    db = SessionLocal()
+    # Reuse provided session or create new one (to avoid connection pool exhaustion)
+    own_session = db is None
+    if own_session:
+        db = SessionLocal()
 
     try:
         from services.salesforce.calendar_sync_service import salesforce_calendar_sync
@@ -140,7 +152,9 @@ async def sync_calendar_from_salesforce(
             'errors': [str(e)]
         }
     finally:
-        db.close()
+        # Only close if we created the session
+        if own_session:
+            db.close()
 
 
 def sync_calendar_from_salesforce_sync(integration_profile_id: int, **kwargs) -> Dict[str, Any]:
@@ -220,11 +234,13 @@ async def sync_all_users_salesforce(
                 results['users_processed'] += 1
 
                 # ===== INBOUND: Pull from Salesforce → CRM =====
+                # Pass db session to avoid creating nested connections (connection pool exhaustion fix)
                 if sync_emails:
                     email_result = await sync_emails_from_salesforce(
                         integration_profile_id=profile.id,
                         days_back=email_days_back,
-                        limit=200
+                        limit=200,
+                        db=db  # Reuse parent session
                     )
                     results['inbound']['emails_synced'] += email_result.get('emails_synced', 0)
                     results['inbound']['emails_skipped'] += email_result.get('emails_skipped', 0)
@@ -236,7 +252,8 @@ async def sync_all_users_salesforce(
                         integration_profile_id=profile.id,
                         days_back=calendar_days_back,
                         days_forward=calendar_days_forward,
-                        limit=200
+                        limit=200,
+                        db=db  # Reuse parent session
                     )
                     results['inbound']['events_synced'] += calendar_result.get('events_synced', 0)
                     results['inbound']['tasks_synced'] += calendar_result.get('tasks_synced', 0)
@@ -531,14 +548,15 @@ async def trigger_user_sync(
         }
 
         # ===== INBOUND: Pull from Salesforce =====
+        # Pass db session to avoid creating nested connections (connection pool exhaustion fix)
         if sync_emails:
             results['inbound']['email_sync'] = await sync_emails_from_salesforce(
-                profile.id, days_back=30, limit=500
+                profile.id, days_back=30, limit=500, db=db
             )
 
         if sync_calendar:
             results['inbound']['calendar_sync'] = await sync_calendar_from_salesforce(
-                profile.id, days_back=30, days_forward=90, limit=500
+                profile.id, days_back=30, days_forward=90, limit=500, db=db
             )
 
         # ===== OUTBOUND: Push to Salesforce =====

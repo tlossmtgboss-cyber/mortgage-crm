@@ -72609,19 +72609,116 @@ async def add_followupboss_tables_migration(
     migration_key: str = "",
     db: Session = Depends(get_db)
 ):
-    """Run the Follow Up Boss tables migration."""
+    """Run the Follow Up Boss tables migration using existing db connection."""
     if migration_key != "fub-migration-2026":
         raise HTTPException(status_code=403, detail="Invalid migration key")
 
     try:
-        from migrations.add_followupboss_tables import run_migration
-        success = run_migration()
-        if success:
-            return {"status": "success", "message": "Follow Up Boss tables created successfully"}
-        else:
-            raise HTTPException(status_code=500, detail="Migration failed - check logs")
-    except ImportError as e:
-        raise HTTPException(status_code=500, detail=f"Migration module not found: {str(e)}")
+        # Run migrations using the existing database session
+        migrations = [
+            ("fub_user_connections", """
+                CREATE TABLE IF NOT EXISTS fub_user_connections (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    api_key_encrypted TEXT NOT NULL,
+                    fub_user_id INTEGER,
+                    fub_user_email VARCHAR(255),
+                    fub_user_name VARCHAR(255),
+                    webhook_secret VARCHAR(64),
+                    webhook_url VARCHAR(500),
+                    sync_enabled BOOLEAN DEFAULT TRUE,
+                    sync_notes BOOLEAN DEFAULT TRUE,
+                    sync_stages BOOLEAN DEFAULT TRUE,
+                    sync_lead_updates BOOLEAN DEFAULT TRUE,
+                    last_sync_at TIMESTAMP WITH TIME ZONE,
+                    last_sync_status VARCHAR(50),
+                    last_error TEXT,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    UNIQUE(user_id)
+                )
+            """),
+            ("fub_lead_mappings", """
+                CREATE TABLE IF NOT EXISTS fub_lead_mappings (
+                    id SERIAL PRIMARY KEY,
+                    connection_id INTEGER NOT NULL REFERENCES fub_user_connections(id) ON DELETE CASCADE,
+                    fub_person_id INTEGER NOT NULL,
+                    lead_id INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+                    sync_hash VARCHAR(64),
+                    last_synced_at TIMESTAMP WITH TIME ZONE,
+                    sync_direction VARCHAR(20) DEFAULT 'bidirectional',
+                    fub_stage VARCHAR(100),
+                    fub_assigned_to VARCHAR(255),
+                    fub_updated_at TIMESTAMP WITH TIME ZONE,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """),
+            ("fub_sync_events", """
+                CREATE TABLE IF NOT EXISTS fub_sync_events (
+                    id SERIAL PRIMARY KEY,
+                    connection_id INTEGER NOT NULL REFERENCES fub_user_connections(id) ON DELETE CASCADE,
+                    event_type VARCHAR(50) NOT NULL,
+                    direction VARCHAR(20) NOT NULL,
+                    fub_entity_type VARCHAR(50),
+                    fub_entity_id INTEGER,
+                    crm_entity_type VARCHAR(50),
+                    crm_entity_id INTEGER,
+                    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                    error_message TEXT,
+                    request_payload JSONB,
+                    response_payload JSONB,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    completed_at TIMESTAMP WITH TIME ZONE
+                )
+            """),
+            ("fub_stage_mappings", """
+                CREATE TABLE IF NOT EXISTS fub_stage_mappings (
+                    id SERIAL PRIMARY KEY,
+                    connection_id INTEGER NOT NULL REFERENCES fub_user_connections(id) ON DELETE CASCADE,
+                    fub_stage_name VARCHAR(100) NOT NULL,
+                    fub_stage_id INTEGER,
+                    crm_stage VARCHAR(50) NOT NULL,
+                    is_auto_mapped BOOLEAN DEFAULT TRUE,
+                    confidence_score INTEGER DEFAULT 100,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """),
+        ]
+
+        results = []
+        for name, sql in migrations:
+            try:
+                db.execute(text(sql))
+                db.commit()
+                results.append(f"✅ {name}")
+                logger.info(f"FUB migration: Created {name}")
+            except Exception as e:
+                if "already exists" in str(e).lower():
+                    results.append(f"⏭️ {name} (exists)")
+                else:
+                    results.append(f"❌ {name}: {str(e)}")
+                    logger.error(f"FUB migration error for {name}: {e}")
+
+        # Create indexes
+        indexes = [
+            "CREATE INDEX IF NOT EXISTS ix_fub_connections_user_id ON fub_user_connections(user_id)",
+            "CREATE INDEX IF NOT EXISTS ix_fub_mappings_connection_person ON fub_lead_mappings(connection_id, fub_person_id)",
+            "CREATE INDEX IF NOT EXISTS ix_fub_mappings_lead ON fub_lead_mappings(lead_id)",
+            "CREATE INDEX IF NOT EXISTS ix_fub_events_connection_created ON fub_sync_events(connection_id, created_at DESC)",
+            "CREATE INDEX IF NOT EXISTS ix_fub_events_status ON fub_sync_events(status)",
+            "CREATE INDEX IF NOT EXISTS ix_fub_stages_connection_fub ON fub_stage_mappings(connection_id, fub_stage_name)",
+        ]
+        for idx_sql in indexes:
+            try:
+                db.execute(text(idx_sql))
+                db.commit()
+            except Exception:
+                pass  # Index might already exist
+
+        return {"status": "success", "message": "Follow Up Boss tables created successfully", "details": results}
+
     except Exception as e:
         logger.error(f"FUB migration error: {e}")
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")

@@ -193,13 +193,26 @@ async def connect_salesforce(
             secret_key = os.getenv("SECRET_KEY", "dev-secret-key")
             payload = jwt.decode(token, secret_key, algorithms=["HS256"])
             email = payload.get("sub")
+            logger.info(f"Salesforce connect: decoded token for email {email}")
             if email:
+                # Ensure clean transaction state before query
+                try:
+                    db.rollback()
+                except:
+                    pass
                 result = db.execute(
                     text("SELECT id FROM users WHERE email = :email"),
                     {"email": email}
                 ).fetchone()
                 if result:
                     user_id = result[0]
+                    logger.info(f"Salesforce connect: found user_id {user_id} for email {email}")
+                else:
+                    logger.warning(f"Salesforce connect: no user found for email {email}")
+        except jwt.ExpiredSignatureError:
+            logger.warning("Salesforce connect: token expired")
+        except jwt.InvalidTokenError as e:
+            logger.warning(f"Salesforce connect: invalid token: {e}")
         except Exception as e:
             logger.warning(f"Failed to decode token from query param: {e}")
 

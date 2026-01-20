@@ -39,14 +39,15 @@ if DATABASE_URL.startswith("sqlite"):
     )
 else:
     # PostgreSQL production settings
-    # Railway free tier has ~20 connections max; reduce pool to avoid exhaustion
+    # Railway has ~20 connections max; use moderate pool to handle scheduler jobs
+    # Connection exhaustion fix: scheduler jobs now reuse parent sessions where possible
     engine = create_engine(
         DATABASE_URL,
         pool_pre_ping=True,           # Verify connections before use
-        pool_size=2,                  # Minimal permanent connections
-        max_overflow=3,               # Additional connections under load (total max: 5)
+        pool_size=4,                  # Permanent connections (increased from 2)
+        max_overflow=6,               # Additional connections under load (total max: 10)
         pool_recycle=1800,            # Recycle connections every 30 min
-        pool_timeout=20,              # Wait max 20s for a connection
+        pool_timeout=30,              # Wait max 30s for a connection (increased from 20)
         echo=False,                   # Set True for SQL debugging
         connect_args={
             "options": f"-c statement_timeout={STATEMENT_TIMEOUT_MS}"
