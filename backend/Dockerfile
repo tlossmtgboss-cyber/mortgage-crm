@@ -1,7 +1,7 @@
 FROM python:3.11-slim
 
 # Build cache buster - change this value to force full rebuild
-ARG CACHE_DATE=2026-01-19T19:30:00Z-salesforce-oauth-callback-fix
+ARG CACHE_DATE=2026-01-20-import-closed-loans-endpoint
 RUN echo "Build timestamp: ${CACHE_DATE}"
 
 WORKDIR /app
@@ -38,4 +38,4 @@ RUN ln -sf /usr/bin/python3 /usr/bin/python || true
 # Use start.py script for proper PORT handling and migrations
 CMD ["python3", "start.py"]
 # Force rebuild 2026-01-19T00:40:00Z fix-migrations-api
-# Force rebuild: 1768855826
+# Force rebuild: salesforce-import-closed-loans-2026-01-20
