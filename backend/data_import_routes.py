@@ -462,23 +462,51 @@ def normalize_stage_value(stage_value: str, destination: str) -> str:
         return lead_stage_map.get(stage_lower, 'NEW')
 
     elif destination == 'loans':
-        # LoanStage enum mappings
+        # LoanStage enum mappings - comprehensive list of variants
         loan_stage_map = {
+            # Application/Pre-disclosure
+            'application': 'Application',
+            'app': 'Application',
+            'new application': 'Application',
             'disclosed': 'Disclosed',
+            'le sent': 'Disclosed',
             'processing': 'Processing',
             'in processing': 'Processing',
+            'proc': 'Processing',
+            # Submission
             'submitted': 'Submitted',
             'uw submitted': 'Submitted',
+            'submit': 'Submitted',
+            # Underwriting
             'uw received': 'UW Received',
             'underwriting': 'UW Received',
+            'uw': 'UW Received',
+            'in uw': 'UW Received',
+            'in underwriting': 'UW Received',
+            'conditional approval': 'Conditional Approval',
+            'conditional': 'Conditional Approval',
+            'cond approval': 'Conditional Approval',
             'approved': 'Approved',
+            'approved with conditions': 'Conditional Approval',
+            'suspended': 'Suspended',
+            'susp': 'Suspended',
+            # Clear to Close - normalize all variants to 'CTC' (the established DB enum value)
             'clear to close': 'CTC',
             'ctc': 'CTC',
-            'suspended': 'Suspended',
+            'clearto close': 'CTC',
+            'cleartoclose': 'CTC',
+            'clear-to-close': 'CTC',
+            'c.t.c.': 'CTC',
+            'c.t.c': 'CTC',
+            # Closing & funding
+            'closing': 'Closing',
             'docs out': 'Docs Out',
             'docs': 'Docs Out',
+            'documents out': 'Docs Out',
             'funded': 'Funded',
             'closed': 'Funded',
+            'complete': 'Funded',
+            'settled': 'Funded',
         }
         # Return mapped value, or default to 'Processing' if not found
         return loan_stage_map.get(stage_lower, 'Processing')

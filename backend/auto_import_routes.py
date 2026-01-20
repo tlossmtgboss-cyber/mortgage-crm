@@ -267,31 +267,51 @@ def normalize_stage(stage_value: str, destination: str) -> str:
         return lead_stage_map.get(stage_lower, 'NEW')
 
     elif destination == 'loans':
+        # LoanStage enum mappings - comprehensive list of variants
         loan_stage_map = {
-            # Pre-disclosure
+            # Application/Pre-disclosure
             'application': 'Application',
+            'app': 'Application',
+            'new application': 'Application',
             'disclosed': 'Disclosed',
+            'le sent': 'Disclosed',
             'processing': 'Processing',
+            'in processing': 'Processing',
+            'proc': 'Processing',
+            # Submission
             'submitted': 'Submitted',
+            'uw submitted': 'Submitted',
+            'submit': 'Submitted',
             # Underwriting
             'underwriting': 'Underwriting',
             'uw received': 'UW Received',
             'uw': 'UW Received',
+            'in uw': 'UW Received',
+            'in underwriting': 'UW Received',
             'conditional approval': 'Conditional Approval',
             'conditional': 'Conditional Approval',
+            'cond approval': 'Conditional Approval',
             'approved': 'Approved',
+            'approved with conditions': 'Conditional Approval',
             'suspended': 'Suspended',
-            # Clear to close
+            'susp': 'Suspended',
+            # Clear to Close - normalize all variants to 'CTC' (the established DB enum value)
             'ctc': 'CTC',
-            'clear to close': 'Clear to Close',
-            'clearto close': 'Clear to Close',
-            'cleartoclose': 'Clear to Close',
+            'clear to close': 'CTC',
+            'clearto close': 'CTC',
+            'cleartoclose': 'CTC',
+            'clear-to-close': 'CTC',
+            'c.t.c.': 'CTC',
+            'c.t.c': 'CTC',
             # Closing & funding
             'closing': 'Closing',
             'docs out': 'Docs Out',
             'docs': 'Docs Out',
+            'documents out': 'Docs Out',
             'funded': 'Funded',
             'closed': 'Funded',
+            'complete': 'Funded',
+            'settled': 'Funded',
         }
         return loan_stage_map.get(stage_lower, 'Processing')
 
