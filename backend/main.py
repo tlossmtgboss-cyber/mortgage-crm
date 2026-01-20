@@ -197,12 +197,15 @@ if DATABASE_URL.startswith("sqlite"):
         connect_args={"check_same_thread": False}
     )
 else:
+    # Railway has ~20 connections max - keep pool small to avoid exhaustion
+    # database.py also creates a pool, so total = main.py pool + database.py pool
     engine = create_engine(
         DATABASE_URL,
         pool_pre_ping=True,
-        pool_size=3,
-        max_overflow=5,
-        pool_recycle=3600
+        pool_size=2,
+        max_overflow=3,
+        pool_recycle=1800,  # Recycle connections every 30 min
+        pool_timeout=20,    # Wait max 20s for a connection
     )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

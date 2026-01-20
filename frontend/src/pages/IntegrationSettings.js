@@ -3,6 +3,7 @@ import { useAsyncOperation, useFormSubmit, APIError } from '../utils/errorHandli
 import { toast } from '../utils/toast';
 import SalesforceFieldMapping from '../components/integrations/SalesforceFieldMapping';
 import SalesforceSetupWizard from '../components/integrations/SalesforceSetupWizard';
+import FollowUpBossSettings from '../components/integrations/FollowUpBossSettings';
 import { API_BASE_URL } from '../services/api';
 import './IntegrationSettings.css';
 
@@ -632,6 +633,13 @@ const IntegrationSettings = () => {
                     />
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Follow Up Boss Integration - Full settings panel */}
+            {selectedIntegration.id === 'followupboss' && (
+              <div className="detail-section followupboss-integration">
+                <FollowUpBossSettings />
               </div>
             )}
 

@@ -13,14 +13,10 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 import secrets
 import re
-from sqlalchemy import text, create_engine
-from sqlalchemy.orm import sessionmaker
-import os
+from sqlalchemy import text
 
-# Create engine for service-level database access
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://localhost:5432/perennia")
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(bind=engine)
+# Use shared engine from database.py to avoid connection pool exhaustion
+from database import SessionLocal
 
 from models.recruit_portal_models import (
     PortalData,

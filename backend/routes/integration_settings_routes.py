@@ -263,6 +263,15 @@ INTEGRATIONS = {
         "icon": "hubspot",
         "features": ["contacts", "deals", "companies", "activities"]
     },
+    "followupboss": {
+        "id": "followupboss",
+        "name": "Follow Up Boss",
+        "category": "crm",
+        "auth_type": "api_key",
+        "description": "Sync leads bidirectionally with Follow Up Boss CRM",
+        "icon": "followupboss",
+        "features": ["leads", "stages", "notes", "webhooks"]
+    },
     # Communication
     "twilio": {
         "id": "twilio",

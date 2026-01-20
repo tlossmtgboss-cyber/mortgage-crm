@@ -36,6 +36,8 @@ function SalesforceSetupWizard({ onComplete }) {
   const [calendarSyncStatus, setCalendarSyncStatus] = useState(null);
   const [syncingEmails, setSyncingEmails] = useState(false);
   const [syncingCalendar, setSyncingCalendar] = useState(false);
+  const [importingClosedLoans, setImportingClosedLoans] = useState(false);
+  const [importResults, setImportResults] = useState(null);
 
   const token = localStorage.getItem('token');
 
@@ -294,6 +296,28 @@ function SalesforceSetupWizard({ onComplete }) {
       toast.error('Calendar sync failed');
     }
     setSyncingCalendar(false);
+  };
+
+  const importClosedLoans = async () => {
+    setImportingClosedLoans(true);
+    setImportResults(null);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/salesforce/import-closed-loans`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setImportResults(data);
+        toast.success(data.message || `Imported ${data.imported} closed loans`);
+      } else {
+        const error = await res.json();
+        toast.error(error.detail || 'Import failed');
+      }
+    } catch (err) {
+      toast.error('Import closed loans failed');
+    }
+    setImportingClosedLoans(false);
   };
 
   const activateIntegration = async () => {
@@ -656,6 +680,47 @@ function SalesforceSetupWizard({ onComplete }) {
               <p className="last-sync-info">
                 Last sync: {new Date(calendarSyncStatus.last_sync.timestamp).toLocaleString()}
               </p>
+            )}
+          </div>
+
+          <div className="sync-type import-closed-loans">
+            <h4>Import Closed Loans</h4>
+            <p className="sync-description">
+              Import all closed/funded loans from Salesforce Opportunities into the CRM with all available fields.
+              This is a one-time bulk import.
+            </p>
+            <div className="button-group">
+              <button
+                className="btn btn-success btn-lg"
+                onClick={importClosedLoans}
+                disabled={importingClosedLoans}
+              >
+                {importingClosedLoans ? 'Importing...' : 'Import All Closed Loans'}
+              </button>
+            </div>
+            {importResults && (
+              <div className="import-results">
+                <p className="import-summary">
+                  <strong>Import Complete:</strong> Found {importResults.total_found} loans in Salesforce
+                </p>
+                <div className="import-stats">
+                  <span className="stat imported">New: {importResults.imported}</span>
+                  <span className="stat updated">Updated: {importResults.updated}</span>
+                  {importResults.failed > 0 && (
+                    <span className="stat failed">Failed: {importResults.failed}</span>
+                  )}
+                </div>
+                {importResults.errors?.length > 0 && (
+                  <details className="import-errors">
+                    <summary>View Errors ({importResults.errors.length})</summary>
+                    <ul>
+                      {importResults.errors.slice(0, 10).map((err, i) => (
+                        <li key={i}>{err.salesforce_id}: {err.error}</li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </div>
             )}
           </div>
         </div>

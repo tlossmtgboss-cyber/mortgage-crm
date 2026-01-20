@@ -685,3 +685,106 @@
     flex: 1;
   }
 }
+
+/* Import Closed Loans Section */
+.sync-type.import-closed-loans {
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+  border: 2px solid #4caf50;
+  border-radius: 12px;
+  padding: 20px;
+  margin-top: 16px;
+}
+
+.sync-type.import-closed-loans h4 {
+  color: #2e7d32;
+  font-size: 18px;
+}
+
+.sync-type.import-closed-loans .btn-success {
+  background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
+  border: none;
+  padding: 14px 28px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 8px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sync-type.import-closed-loans .btn-success:hover:not(:disabled) {
+  background: linear-gradient(135deg, #388e3c 0%, #2e7d32 100%);
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+  transform: translateY(-1px);
+}
+
+.sync-type.import-closed-loans .btn-success:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.import-results {
+  margin-top: 16px;
+  padding: 16px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #c8e6c9;
+}
+
+.import-summary {
+  margin: 0 0 12px 0;
+  font-size: 15px;
+  color: #1a1a2e;
+}
+
+.import-stats {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.import-stats .stat {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.import-stats .stat.imported {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.import-stats .stat.updated {
+  background: #fff3e0;
+  color: #f57c00;
+}
+
+.import-stats .stat.failed {
+  background: #ffebee;
+  color: #d32f2f;
+}
+
+.import-errors {
+  margin-top: 12px;
+  padding: 12px;
+  background: #fff8e1;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.import-errors summary {
+  cursor: pointer;
+  font-weight: 500;
+  color: #f57c00;
+}
+
+.import-errors ul {
+  margin: 8px 0 0 0;
+  padding-left: 20px;
+}
+
+.import-errors li {
+  color: #666;
+  margin-bottom: 4px;
+}

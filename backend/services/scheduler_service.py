@@ -11,13 +11,9 @@ from typing import Optional, List, Dict, Any
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
-
-# Database configuration
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://localhost:5432/mortgage_crm")
 
 # Reminder configuration
 REMINDER_INTERVALS = {
@@ -41,10 +37,9 @@ def get_notification_service():
 
 
 def get_db_session():
-    """Get database session."""
-    engine = create_engine(DATABASE_URL)
-    Session = sessionmaker(bind=engine)
-    return Session()
+    """Get database session using shared engine from database.py to avoid connection pool exhaustion."""
+    from database import SessionLocal
+    return SessionLocal()
 
 
 class SchedulerService:
