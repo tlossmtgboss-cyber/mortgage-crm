@@ -36662,7 +36662,7 @@ async def health_check(db: Session = Depends(get_db)):
     """Basic health check - database connectivity"""
     try:
         db.execute(text("SELECT 1"))
-        return {"status": "healthy", "database": "connected", "timestamp": datetime.now(timezone.utc), "version": "2026.01.19.1"}
+        return {"status": "healthy", "database": "connected", "timestamp": datetime.now(timezone.utc), "version": "2026.01.20.1"}
     except Exception as e:
         logger.error(f"Health check failed: {e}")
         return JSONResponse(
@@ -36793,7 +36793,7 @@ async def api_health_check(db: Session = Depends(get_db)):
     """API health check endpoint at /api/v1/health - database connectivity"""
     try:
         db.execute(text("SELECT 1"))
-        return {"status": "healthy", "database": "connected", "timestamp": datetime.now(timezone.utc), "version": "2026.01.19.1"}
+        return {"status": "healthy", "database": "connected", "timestamp": datetime.now(timezone.utc), "version": "2026.01.20.1"}
     except Exception as e:
         logger.error(f"API health check failed: {e}")
         return JSONResponse(
@@ -72654,6 +72654,60 @@ async def debug_data(
             "loans_by_owner": loans_by_owner,
             "tasks_by_user": tasks_by_user,
             "users": users
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/api/v1/admin/task-check")
+async def task_check(
+    migration_key: str = "",
+    db: Session = Depends(get_db)
+):
+    """Debug endpoint to check task assignments and multi-tenancy."""
+    if migration_key != "fix-loans-2026":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    try:
+        # Check all tasks with their assignments
+        tasks_result = db.execute(text("""
+            SELECT
+                t.id, t.title, t.assigned_to_id,
+                u.email as assigned_to_email,
+                l.loan_number,
+                t.created_at
+            FROM ai_tasks t
+            LEFT JOIN users u ON u.id = t.assigned_to_id
+            LEFT JOIN loans l ON l.id = t.loan_id
+            ORDER BY t.created_at DESC
+            LIMIT 50
+        """)).fetchall()
+
+        tasks = [
+            {
+                "id": r[0],
+                "title": r[1][:50] if r[1] else None,
+                "assigned_to_id": r[2],
+                "assigned_to_email": r[3],
+                "loan_number": r[4],
+                "created_at": r[5].isoformat() if r[5] else None
+            }
+            for r in tasks_result
+        ]
+
+        # Summary by user
+        summary_result = db.execute(text("""
+            SELECT u.email, COUNT(*) as count
+            FROM ai_tasks t
+            LEFT JOIN users u ON u.id = t.assigned_to_id
+            GROUP BY u.email, t.assigned_to_id
+        """)).fetchall()
+        summary = [{"email": r[0], "count": r[1]} for r in summary_result]
+
+        return {
+            "total_tasks": len(tasks),
+            "summary_by_user": summary,
+            "recent_tasks": tasks[:20]
         }
     except Exception as e:
         return {"error": str(e)}
