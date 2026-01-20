@@ -72628,11 +72628,22 @@ async def admin_import_loans(
         source_columns = list(df.columns)
         mapping_results = auto_map_fields(source_columns, min_confidence=0.7)
 
-        # Map column names for insertion
+        # Get actual columns in loans table
+        columns_result = db.execute(text("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'loans'
+        """)).fetchall()
+        existing_columns = {row[0] for row in columns_result}
+
+        # Map column names for insertion - only include existing columns
         column_map = {}
+        skipped_columns = []
         for result in mapping_results:
             if result.crm_field and result.crm_field != 'skip':
-                column_map[result.excel_column] = result.crm_field
+                if result.crm_field in existing_columns:
+                    column_map[result.excel_column] = result.crm_field
+                else:
+                    skipped_columns.append(result.crm_field)
 
         successful = 0
         failed = 0
@@ -72693,6 +72704,7 @@ async def admin_import_loans(
             "failed": failed,
             "errors": errors if errors else None,
             "fields_mapped": len(column_map),
+            "skipped_columns": skipped_columns[:10] if skipped_columns else None,
             "organization_id": org_id
         }
     except Exception as e:
