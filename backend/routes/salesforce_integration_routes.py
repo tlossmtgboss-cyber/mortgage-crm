@@ -216,6 +216,12 @@ async def get_connection_status(
     db: Session = Depends(get_db)
 ):
     """Get Salesforce connection status for current user."""
+    # Rollback any failed transaction from previous requests
+    try:
+        db.rollback()
+    except:
+        pass
+
     user_id = require_user(request, db)
     profile = get_integration_profile(db, user_id)
 

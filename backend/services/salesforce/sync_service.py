@@ -1,11 +1,12 @@
 """
 Salesforce Sync Engine
-Handles ONE-WAY data synchronization: Salesforce → CRM
+Handles BIDIRECTIONAL data synchronization: Salesforce ↔ CRM
 
-When data is updated in Salesforce, those changes are pulled into the CRM.
-The CRM does NOT push data back to Salesforce.
+Data flows BOTH WAYS:
+- Inbound: Salesforce → CRM (pull emails, calendar, loans, leads)
+- Outbound: CRM → Salesforce (push updated loans, leads, activities)
 
-Note: Outbound push methods are kept for backwards compatibility but are deprecated.
+Sync runs automatically every 5 minutes via APScheduler.
 """
 import hashlib
 import json
