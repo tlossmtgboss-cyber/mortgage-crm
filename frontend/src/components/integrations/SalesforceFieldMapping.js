@@ -2,7 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from '../../utils/toast';
 import './SalesforceFieldMapping.css';
 
-const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
+// Always use api.perenniaai.com for production API calls
+const API_URL = window.location.hostname.includes('perenniaai.com')
+  ? 'https://api.perenniaai.com'
+  : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
 // Available CRM fields that can be mapped to
 const CRM_LOAN_FIELDS = [
