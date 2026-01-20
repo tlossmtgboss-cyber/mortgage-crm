@@ -260,6 +260,12 @@ async def discover_schema(
     db: Session = Depends(get_db)
 ):
     """Discover/refresh Salesforce schema."""
+    # Rollback any failed transaction from previous requests
+    try:
+        db.rollback()
+    except:
+        pass
+
     user_id = require_user(request, db)
     profile = get_integration_profile(db, user_id)
 
@@ -274,6 +280,8 @@ async def discover_schema(
             "message": f"Discovered {len(schemas)} Salesforce objects"
         }
     except Exception as e:
+        db.rollback()
+        logger.error(f"Schema discovery failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -283,6 +291,12 @@ async def get_schema_objects(
     db: Session = Depends(get_db)
 ):
     """Get all discovered Salesforce objects."""
+    # Rollback any failed transaction from previous requests
+    try:
+        db.rollback()
+    except:
+        pass
+
     user_id = require_user(request, db)
     profile = get_integration_profile(db, user_id)
 
