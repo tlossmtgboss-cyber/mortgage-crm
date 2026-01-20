@@ -72692,13 +72692,26 @@ async def admin_import_loans(
                 # Add organization_id
                 mapped_values['organization_id'] = org_id
 
-                # Handle loan_number - get from original mapping if available
+                # Handle loan_number - get from original mapping or "File Name" column
                 if 'loan_number' not in mapped_values:
+                    # Check for explicit loan_number mapping
                     if 'loan_number' in all_field_map:
                         ln_col = all_field_map['loan_number']
                         ln_val = row.get(ln_col)
                         if pd.notna(ln_val):
                             mapped_values['loan_number'] = str(ln_val)
+                    # Fall back to file_name mapping (often contains loan number)
+                    if 'loan_number' not in mapped_values and 'file_name' in all_field_map:
+                        fn_col = all_field_map['file_name']
+                        fn_val = row.get(fn_col)
+                        if pd.notna(fn_val):
+                            mapped_values['loan_number'] = str(fn_val)
+                    # Also try "File Name" column directly
+                    if 'loan_number' not in mapped_values and 'File Name' in row.index:
+                        fn_val = row.get('File Name')
+                        if pd.notna(fn_val):
+                            mapped_values['loan_number'] = str(fn_val)
+                    # Generate if still missing
                     if 'loan_number' not in mapped_values:
                         import uuid
                         mapped_values['loan_number'] = f"IMP-{uuid.uuid4().hex[:8].upper()}"
