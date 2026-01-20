@@ -612,6 +612,9 @@ async def execute_import(
     """
     Execute the data import based on user answers and column mappings
     """
+    # Initialize connection variables for proper cleanup in finally block
+    conn = None
+    cursor = None
     try:
         # Parse JSON strings
         answers_dict = json.loads(answers)
@@ -908,6 +911,19 @@ async def execute_import(
     except Exception as e:
         logger.error(f"Error executing import: {e}")
         raise HTTPException(status_code=500, detail=f"Error importing data: {str(e)}")
+    finally:
+        # CRITICAL: Always close connections to prevent leaks
+        # This handles cases where exception occurs after conn is created but before inner try
+        if cursor:
+            try:
+                cursor.close()
+            except Exception:
+                pass
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 @router.get("/stage-values")
@@ -918,15 +934,14 @@ async def get_all_stage_values(
     Get all unique stage values currently in the leads table.
     This helps identify invalid stage values that need to be fixed.
     """
+    conn = None
+    cursor = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
 
         cursor.execute("SELECT stage, COUNT(*) as count FROM leads GROUP BY stage ORDER BY count DESC")
         results = cursor.fetchall()
-
-        cursor.close()
-        conn.close()
 
         return {
             "stage_values": [{"stage": row[0], "count": row[1]} for row in results],
@@ -935,6 +950,17 @@ async def get_all_stage_values(
     except Exception as e:
         logger.error(f"Error getting stage values: {e}")
         return {"error": str(e)}
+    finally:
+        if cursor:
+            try:
+                cursor.close()
+            except Exception:
+                pass
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 @router.post("/fix-stages")
@@ -949,6 +975,8 @@ async def fix_lead_stage_values(
     if key != "fix-stages-now":
         raise HTTPException(status_code=403, detail="Invalid key. Use ?key=fix-stages-now")
 
+    conn = None
+    cursor = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -1008,9 +1036,6 @@ async def fix_lead_stage_values(
             logger.warning(f"Could not fix NULL stages: {e}")
             conn.rollback()
 
-        cursor.close()
-        conn.close()
-
         return {
             "success": True,
             "message": f"Fixed {fixed_count} lead stage values",
@@ -1023,6 +1048,17 @@ async def fix_lead_stage_values(
             "message": f"Fix failed: {str(e)}",
             "error": str(e)
         }
+    finally:
+        if cursor:
+            try:
+                cursor.close()
+            except Exception:
+                pass
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 @router.post("/fix-owner-assignment")
