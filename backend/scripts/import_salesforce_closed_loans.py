@@ -1,0 +1,486 @@
+"""
+Import Closed Loans from Salesforce
+
+This script imports all closed/funded loans (Opportunities with Stage = 'Closed Won')
+from Salesforce into the CRM with all available fields.
+
+Data flows ONE-WAY: Salesforce → CRM
+
+Usage:
+    python scripts/import_salesforce_closed_loans.py
+
+Or via API:
+    POST /api/v1/salesforce/import-closed-loans
+"""
+import asyncio
+import logging
+import os
+import sys
+import uuid
+from datetime import datetime
+from typing import Dict, Any, List, Optional
+
+import httpx
+
+# Add backend to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from sqlalchemy import text
+from database import SessionLocal
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+
+
+# Salesforce field to CRM field mapping for Opportunities (Closed Loans)
+OPPORTUNITY_FIELD_MAPPING = {
+    # Standard Salesforce Opportunity fields
+    'Id': 'salesforce_id',
+    'Name': 'borrower_name',
+    'Amount': 'amount',
+    'StageName': 'stage',
+    'CloseDate': 'closing_date',
+    'Description': 'notes',
+    'AccountId': 'salesforce_account_id',
+
+    # Contact/Borrower fields (if available)
+    'Contact_Email__c': 'borrower_email',
+    'Borrower_Email__c': 'borrower_email',
+    'Email__c': 'borrower_email',
+    'Contact_Phone__c': 'borrower_phone',
+    'Borrower_Phone__c': 'borrower_phone',
+    'Phone__c': 'borrower_phone',
+    'Co_Borrower_Name__c': 'coborrower_name',
+    'Co_Borrower_Email__c': 'co_borrower_email',
+
+    # Loan details
+    'Loan_Number__c': 'loan_number',
+    'File_Name__c': 'loan_number',
+    'Loan_Amount__c': 'amount',
+    'Interest_Rate__c': 'rate',
+    'Loan_Term__c': 'term',
+    'Loan_Type__c': 'loan_type',
+    'Loan_Program__c': 'program',
+    'Loan_Purpose__c': 'loan_purpose',
+    'Rate_Type__c': 'rate_type',
+
+    # Property fields
+    'Property_Address__c': 'property_address',
+    'Property_Street__c': 'property_address',
+    'Property_City__c': 'property_city',
+    'Property_State__c': 'property_state',
+    'Property_Zip__c': 'property_zip',
+    'Property_County__c': 'property_county',
+    'Property_Type__c': 'property_type',
+    'Property_Value__c': 'purchase_price',
+    'Appraised_Value__c': 'appraisal_value',
+    'Occupancy_Type__c': 'occupancy_type',
+    'Property_Units__c': 'property_units',
+
+    # Financial details
+    'Purchase_Price__c': 'purchase_price',
+    'Down_Payment__c': 'down_payment',
+    'LTV__c': 'ltv',
+    'CLTV__c': 'cltv',
+    'Monthly_Payment__c': 'monthly_payment',
+    'Property_Tax__c': 'property_tax',
+    'Hazard_Insurance__c': 'hazard_insurance',
+    'Mortgage_Insurance__c': 'mortgage_insurance',
+    'HOA_Amount__c': 'hoa_amount',
+    'Origination_Fee__c': 'origination_fee',
+
+    # Team members
+    'Loan_Officer__c': 'loan_officer_name',
+    'Loan_Officer_Email__c': 'loan_officer_email',
+    'Processor__c': 'processor',
+    'Processor_Email__c': 'processor_email',
+    'Underwriter__c': 'underwriter',
+    'Underwriter_Email__c': 'underwriter_email',
+    'Closer__c': 'closer',
+    'Closer_Email__c': 'closer_email',
+
+    # Dates
+    'Lock_Date__c': 'lock_date',
+    'Lock_Expiration_Date__c': 'lock_expiration_date',
+    'Application_Date__c': 'application_date',
+    'Approval_Date__c': 'loan_approved_date',
+    'Clear_to_Close_Date__c': 'clear_to_close_date',
+    'Docs_Out_Date__c': 'docs_out_date',
+    'Funding_Date__c': 'funded_date',
+    'Funded_Date__c': 'funded_date',
+
+    # Additional fields
+    'Lender__c': 'lender',
+    'Title_Company__c': 'title_company',
+    'Realtor__c': 'realtor_agent',
+    'Referral_Source__c': 'referral_source',
+    'Credit_Score__c': 'credit_score',
+
+    # 2nd Loan
+    'Second_Loan_Amount__c': 'second_loan_amount',
+    'Second_Loan_Rate__c': 'second_loan_rate',
+    'Second_Loan_Payment__c': 'second_loan_payment',
+}
+
+
+class SalesforceClosedLoansImporter:
+    """Import closed loans from Salesforce to CRM"""
+
+    def __init__(self, integration_profile_id: int = None, user_id: int = None):
+        self.integration_profile_id = integration_profile_id
+        self.user_id = user_id
+        self.access_token = None
+        self.instance_url = None
+        self.results = {
+            'success': True,
+            'total_found': 0,
+            'imported': 0,
+            'updated': 0,
+            'skipped': 0,
+            'failed': 0,
+            'errors': [],
+            'imported_loans': []
+        }
+
+    async def get_access_token(self, db) -> tuple:
+        """Get Salesforce access token from integration profile"""
+        from salesforce_integration_models import IntegrationProfile
+        from services.salesforce.oauth_service import salesforce_oauth
+
+        if self.integration_profile_id:
+            return await salesforce_oauth.get_access_token(db, self.integration_profile_id)
+
+        # Find first active Salesforce profile
+        profile = db.query(IntegrationProfile).filter(
+            IntegrationProfile.provider == 'salesforce',
+            IntegrationProfile.status.in_(['connected', 'active'])
+        ).first()
+
+        if not profile:
+            raise ValueError("No active Salesforce connection found")
+
+        self.integration_profile_id = profile.id
+        self.user_id = profile.user_id
+
+        return await salesforce_oauth.get_access_token(db, profile.id)
+
+    async def discover_opportunity_fields(self) -> List[str]:
+        """Discover available fields on Opportunity object"""
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{self.instance_url}/services/data/v60.0/sobjects/Opportunity/describe",
+                headers={
+                    'Authorization': f'Bearer {self.access_token}',
+                    'Content-Type': 'application/json'
+                },
+                timeout=30.0
+            )
+
+            if response.status_code != 200:
+                logger.warning(f"Failed to describe Opportunity: {response.text}")
+                return list(OPPORTUNITY_FIELD_MAPPING.keys())
+
+            data = response.json()
+            available_fields = [f['name'] for f in data.get('fields', [])]
+
+            logger.info(f"Discovered {len(available_fields)} fields on Opportunity object")
+            return available_fields
+
+    def build_soql_query(self, available_fields: List[str]) -> str:
+        """Build SOQL query for closed opportunities"""
+        # Get fields that exist in Salesforce
+        fields_to_query = ['Id', 'Name', 'Amount', 'StageName', 'CloseDate', 'Description',
+                          'AccountId', 'CreatedDate', 'LastModifiedDate']
+
+        # Add custom fields that exist
+        for sf_field in OPPORTUNITY_FIELD_MAPPING.keys():
+            if sf_field in available_fields and sf_field not in fields_to_query:
+                fields_to_query.append(sf_field)
+
+        fields_str = ', '.join(fields_to_query)
+
+        # Query for Closed Won opportunities
+        soql = f"""
+            SELECT {fields_str}
+            FROM Opportunity
+            WHERE StageName = 'Closed Won'
+               OR StageName LIKE '%Funded%'
+               OR StageName LIKE '%Closed%'
+            ORDER BY CloseDate DESC
+            LIMIT 2000
+        """
+
+        return soql.strip()
+
+    async def query_closed_opportunities(self, soql: str) -> List[Dict[str, Any]]:
+        """Query Salesforce for closed opportunities"""
+        all_records = []
+        next_url = None
+
+        async with httpx.AsyncClient() as client:
+            # Initial query
+            response = await client.get(
+                f"{self.instance_url}/services/data/v60.0/query",
+                params={'q': soql},
+                headers={
+                    'Authorization': f'Bearer {self.access_token}',
+                    'Content-Type': 'application/json'
+                },
+                timeout=60.0
+            )
+
+            if response.status_code != 200:
+                raise ValueError(f"Salesforce query failed: {response.text}")
+
+            data = response.json()
+            all_records.extend(data.get('records', []))
+            next_url = data.get('nextRecordsUrl')
+
+            # Handle pagination
+            while next_url:
+                response = await client.get(
+                    f"{self.instance_url}{next_url}",
+                    headers={
+                        'Authorization': f'Bearer {self.access_token}',
+                        'Content-Type': 'application/json'
+                    },
+                    timeout=60.0
+                )
+
+                if response.status_code != 200:
+                    logger.warning(f"Pagination failed: {response.text}")
+                    break
+
+                data = response.json()
+                all_records.extend(data.get('records', []))
+                next_url = data.get('nextRecordsUrl')
+
+        logger.info(f"Found {len(all_records)} closed opportunities in Salesforce")
+        return all_records
+
+    def transform_opportunity_to_loan(self, opportunity: Dict[str, Any]) -> Dict[str, Any]:
+        """Transform Salesforce Opportunity to CRM Loan data"""
+        loan_data = {}
+
+        for sf_field, crm_field in OPPORTUNITY_FIELD_MAPPING.items():
+            value = opportunity.get(sf_field)
+            if value is not None:
+                # Handle type conversions
+                if crm_field in ['amount', 'purchase_price', 'down_payment', 'rate',
+                                 'ltv', 'cltv', 'monthly_payment', 'appraisal_value',
+                                 'property_tax', 'hazard_insurance', 'mortgage_insurance',
+                                 'hoa_amount', 'origination_fee', 'second_loan_amount',
+                                 'second_loan_rate', 'second_loan_payment']:
+                    try:
+                        loan_data[crm_field] = float(value)
+                    except (ValueError, TypeError):
+                        pass
+                elif crm_field in ['term', 'property_units', 'credit_score']:
+                    try:
+                        loan_data[crm_field] = int(value)
+                    except (ValueError, TypeError):
+                        pass
+                elif crm_field in ['closing_date', 'lock_date', 'lock_expiration_date',
+                                  'funded_date', 'application_date', 'loan_approved_date',
+                                  'clear_to_close_date', 'docs_out_date']:
+                    # Keep as string for now, database will parse
+                    loan_data[crm_field] = str(value)[:10] if value else None
+                else:
+                    loan_data[crm_field] = str(value) if value else None
+
+        # Map Salesforce stage to CRM stage
+        sf_stage = opportunity.get('StageName', '')
+        loan_data['stage'] = self._map_stage(sf_stage)
+
+        # Ensure required fields
+        if not loan_data.get('borrower_name'):
+            loan_data['borrower_name'] = opportunity.get('Name', 'Unknown Borrower')
+
+        if not loan_data.get('amount'):
+            loan_data['amount'] = float(opportunity.get('Amount', 0) or 0)
+
+        # Generate loan number if not present
+        if not loan_data.get('loan_number'):
+            loan_data['loan_number'] = f"SF-{opportunity.get('Id', '')[:15]}"
+
+        return loan_data
+
+    def _map_stage(self, sf_stage: str) -> str:
+        """Map Salesforce stage to CRM stage"""
+        stage_lower = sf_stage.lower() if sf_stage else ''
+
+        if 'funded' in stage_lower or 'closed won' in stage_lower:
+            return 'Funded'
+        elif 'closing' in stage_lower:
+            return 'Closing'
+        elif 'clear to close' in stage_lower or 'ctc' in stage_lower:
+            return 'CTC'
+        elif 'docs' in stage_lower:
+            return 'Docs Out'
+        elif 'approved' in stage_lower:
+            return 'Approved'
+        elif 'underwriting' in stage_lower:
+            return 'Underwriting'
+        elif 'submitted' in stage_lower:
+            return 'Submitted'
+        elif 'processing' in stage_lower:
+            return 'Processing'
+        else:
+            return 'Funded'  # Default for closed loans
+
+    async def import_loan(self, db, loan_data: Dict[str, Any]) -> Optional[int]:
+        """Import a single loan to the CRM"""
+        salesforce_id = loan_data.get('salesforce_id')
+        loan_number = loan_data.get('loan_number')
+
+        # Check if loan already exists
+        existing = None
+        if salesforce_id:
+            existing = db.execute(text("""
+                SELECT id FROM loans WHERE salesforce_id = :sf_id
+            """), {"sf_id": salesforce_id}).fetchone()
+
+        if not existing and loan_number:
+            existing = db.execute(text("""
+                SELECT id FROM loans WHERE loan_number = :loan_num
+            """), {"loan_num": loan_number}).fetchone()
+
+        # Remove fields that don't exist in DB or are read-only
+        fields_to_remove = ['salesforce_account_id', 'notes', 'referral_source', 'credit_score',
+                           'property_type']
+        for field in fields_to_remove:
+            loan_data.pop(field, None)
+
+        if existing:
+            # Update existing loan
+            loan_id = existing[0]
+
+            # Build SET clause
+            set_parts = []
+            for key in loan_data.keys():
+                if key != 'loan_number':  # Don't update loan_number
+                    set_parts.append(f"{key} = :{key}")
+
+            if set_parts:
+                set_parts.append("salesforce_last_synced_at = CURRENT_TIMESTAMP")
+                set_parts.append("salesforce_sync_status = 'synced'")
+                set_clause = ", ".join(set_parts)
+
+                loan_data['loan_id'] = loan_id
+
+                db.execute(text(f"""
+                    UPDATE loans SET {set_clause}, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = :loan_id
+                """), loan_data)
+
+            self.results['updated'] += 1
+            return loan_id
+        else:
+            # Create new loan
+            if not loan_data.get('loan_officer_id'):
+                loan_data['loan_officer_id'] = self.user_id
+
+            loan_data['salesforce_sync_status'] = 'synced'
+
+            columns = ", ".join(loan_data.keys())
+            placeholders = ", ".join([f":{k}" for k in loan_data.keys()])
+
+            result = db.execute(text(f"""
+                INSERT INTO loans ({columns}, salesforce_last_synced_at, created_at, updated_at)
+                VALUES ({placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                RETURNING id, loan_number
+            """), loan_data)
+
+            row = result.fetchone()
+            self.results['imported'] += 1
+            self.results['imported_loans'].append({
+                'id': row[0],
+                'loan_number': row[1],
+                'borrower_name': loan_data.get('borrower_name'),
+                'amount': loan_data.get('amount'),
+                'salesforce_id': loan_data.get('salesforce_id')
+            })
+
+            return row[0]
+
+    async def run(self) -> Dict[str, Any]:
+        """Run the import process"""
+        db = SessionLocal()
+
+        try:
+            logger.info("Starting Salesforce closed loans import...")
+
+            # Get access token
+            self.access_token, self.instance_url = await self.get_access_token(db)
+            logger.info(f"Connected to Salesforce: {self.instance_url}")
+
+            # Discover available fields
+            available_fields = await self.discover_opportunity_fields()
+
+            # Build and execute query
+            soql = self.build_soql_query(available_fields)
+            logger.info(f"Executing SOQL query...")
+
+            opportunities = await self.query_closed_opportunities(soql)
+            self.results['total_found'] = len(opportunities)
+
+            # Import each opportunity
+            for i, opp in enumerate(opportunities):
+                try:
+                    loan_data = self.transform_opportunity_to_loan(opp)
+                    await self.import_loan(db, loan_data)
+
+                    if (i + 1) % 50 == 0:
+                        logger.info(f"Processed {i + 1}/{len(opportunities)} opportunities...")
+                        db.commit()
+
+                except Exception as e:
+                    self.results['failed'] += 1
+                    self.results['errors'].append({
+                        'salesforce_id': opp.get('Id'),
+                        'name': opp.get('Name'),
+                        'error': str(e)
+                    })
+                    logger.error(f"Failed to import {opp.get('Id')}: {e}")
+
+            db.commit()
+
+            logger.info(f"Import complete: {self.results['imported']} imported, "
+                       f"{self.results['updated']} updated, {self.results['failed']} failed")
+
+            return self.results
+
+        except Exception as e:
+            db.rollback()
+            self.results['success'] = False
+            self.results['errors'].append({'error': str(e)})
+            logger.error(f"Import failed: {e}")
+            raise
+        finally:
+            db.close()
+
+
+async def main():
+    """Main entry point for CLI execution"""
+    importer = SalesforceClosedLoansImporter()
+    results = await importer.run()
+
+    print("\n" + "="*60)
+    print("SALESFORCE CLOSED LOANS IMPORT COMPLETE")
+    print("="*60)
+    print(f"Total found in Salesforce: {results['total_found']}")
+    print(f"Imported (new):            {results['imported']}")
+    print(f"Updated (existing):        {results['updated']}")
+    print(f"Failed:                    {results['failed']}")
+    print("="*60)
+
+    if results['errors']:
+        print("\nErrors:")
+        for err in results['errors'][:10]:
+            print(f"  - {err}")
+
+    return results
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

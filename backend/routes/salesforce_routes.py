@@ -1794,3 +1794,46 @@ async def admin_pull_recent_loans(
             "status": "error",
             "message": str(e)
         }
+
+
+# ============ Import Closed Loans from Salesforce ============
+
+@router.post("/import-closed-loans")
+async def import_closed_loans_from_salesforce(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Import all closed/funded loans from Salesforce into the CRM.
+
+    This endpoint queries Salesforce for all Opportunities with Stage = 'Closed Won'
+    (or similar funded stages) and imports them into the CRM loans table with all
+    available fields.
+
+    Data flows ONE-WAY: Salesforce → CRM
+    """
+    user_id = get_current_user_id(request, db)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    try:
+        from scripts.import_salesforce_closed_loans import SalesforceClosedLoansImporter
+
+        # Create importer with user context
+        importer = SalesforceClosedLoansImporter(user_id=user_id)
+        results = await importer.run()
+
+        return {
+            "status": "success" if results['success'] else "partial",
+            "message": f"Import complete: {results['imported']} new, {results['updated']} updated, {results['failed']} failed",
+            "total_found": results['total_found'],
+            "imported": results['imported'],
+            "updated": results['updated'],
+            "failed": results['failed'],
+            "errors": results['errors'][:20],  # Limit errors in response
+            "imported_loans": results['imported_loans'][:50]  # Limit response size
+        }
+
+    except Exception as e:
+        logger.error(f"Import closed loans failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
