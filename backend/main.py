@@ -72457,6 +72457,90 @@ async def add_followupboss_tables_migration(
 
 
 # ============================================================================
+# ADMIN - FIX LOAN ASSOCIATIONS
+# ============================================================================
+
+@app.post("/api/v1/admin/fix-loan-associations")
+async def fix_loan_associations(
+    user_email: str = "tloss@cmgfi.com",
+    migration_key: str = "",
+    db: Session = Depends(get_db)
+):
+    """Associate orphaned loans with a user's organization."""
+    if migration_key != "fix-loans-2026":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    try:
+        # Find the user
+        user = db.query(User).filter(User.email == user_email).first()
+        if not user:
+            # List available users
+            users = db.query(User).all()
+            user_list = [{"id": u.id, "email": u.email, "org_id": u.organization_id} for u in users]
+            return {"status": "error", "message": f"User {user_email} not found", "available_users": user_list}
+
+        org_id = user.organization_id
+        user_id = user.id
+
+        # Update loans without organization_id
+        result = db.execute(
+            text("UPDATE loans SET organization_id = :org_id WHERE organization_id IS NULL"),
+            {"org_id": org_id}
+        )
+        updated_count = result.rowcount
+
+        db.commit()
+
+        # Get total loans for this org
+        total = db.query(Loan).filter(Loan.organization_id == org_id).count()
+
+        return {
+            "status": "success",
+            "user_email": user_email,
+            "user_id": user_id,
+            "organization_id": org_id,
+            "loans_updated": updated_count,
+            "total_loans_for_org": total
+        }
+    except Exception as e:
+        logger.error(f"Fix loan associations failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/admin/loan-check")
+async def check_loan_status(
+    migration_key: str = "",
+    db: Session = Depends(get_db)
+):
+    """Check loan and user status for debugging."""
+    if migration_key != "fix-loans-2026":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    try:
+        # Get all users
+        users = db.query(User).all()
+        user_info = [{"id": u.id, "email": u.email, "org_id": u.organization_id} for u in users]
+
+        # Get loan stats
+        total_loans = db.query(Loan).count()
+        orphan_loans = db.query(Loan).filter(Loan.organization_id == None).count()
+
+        # Get sample loans
+        sample_loans = db.query(Loan).limit(5).all()
+        loan_info = [{"id": l.id, "loan_number": l.loan_number, "borrower": l.borrower_name, "org_id": l.organization_id} for l in sample_loans]
+
+        return {
+            "users": user_info,
+            "total_loans": total_loans,
+            "orphan_loans": orphan_loans,
+            "sample_loans": loan_info
+        }
+    except Exception as e:
+        logger.error(f"Loan check failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
 # MAIN
 # ============================================================================
 
@@ -72472,4 +72556,4 @@ if __name__ == "__main__":
 # Forced rebuild v3
 # force redeploy Sun Dec 21 10:53:37 EST 2025
 
-# Force redeploy Sun Jan 11 04:22:56 EST 2026
+# Force redeploy Sun Jan 19 19:10:00 EST 2026
