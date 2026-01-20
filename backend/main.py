@@ -44364,7 +44364,7 @@ async def get_loans(
         sql = f"""
             SELECT id, loan_number, borrower_name, borrower_email, borrower_phone,
                    coborrower_name, co_borrower_email,
-                   stage, program, COALESCE(amount, loan_amount) as amount, rate,
+                   stage, program, amount, rate,
                    closing_date, days_in_stage, sla_status, created_at,
                    loan_officer_name, loan_officer_email, processor, processor_email,
                    underwriter, underwriter_email, closer, closer_email,
