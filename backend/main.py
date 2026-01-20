@@ -39535,7 +39535,12 @@ async def update_current_user_profile(
         if profile_update.work_hours_start is not None or profile_update.work_hours_end is not None or profile_update.work_days is not None:
             # Get current business hours
             result = db.execute(text("SELECT business_hours FROM users WHERE id = :user_id"), {"user_id": current_user.id}).fetchone()
-            business_hours = dict(result[0] or {}) if result and result[0] else {}
+            current_bh = result[0] if result and result[0] else {}
+            # Handle case where business_hours might be a JSON string
+            if isinstance(current_bh, str):
+                import json as json_lib
+                current_bh = json_lib.loads(current_bh) if current_bh else {}
+            business_hours = dict(current_bh) if current_bh else {}
 
             if profile_update.work_hours_start is not None:
                 business_hours['start'] = profile_update.work_hours_start
@@ -39553,26 +39558,38 @@ async def update_current_user_profile(
             db.execute(text(sql), params)
             db.commit()
 
-        # Refresh to get updated values
-        db.refresh(current_user)
+        # Query for updated values directly instead of using refresh() which can fail on schema mismatch
+        updated_user = db.execute(
+            text("""
+                SELECT id, email, full_name, phone, nmls_number, title, business_hours
+                FROM users WHERE id = :user_id
+            """),
+            {"user_id": current_user.id}
+        ).fetchone()
+
+        if not updated_user:
+            raise HTTPException(status_code=404, detail="User not found after update")
 
         # Get updated business hours for response
-        business_hours = getattr(current_user, 'business_hours', None) or {}
+        business_hours = updated_user[6] if updated_user[6] else {}
+        if isinstance(business_hours, str):
+            import json as json_lib
+            business_hours = json_lib.loads(business_hours)
 
-        logger.info(f"Profile updated for user {current_user.email}")
+        logger.info(f"Profile updated for user {updated_user[1]}")
         return {
             "success": True,
             "message": "Profile updated successfully",
             "user": {
-                "id": current_user.id,
-                "email": current_user.email,
-                "full_name": current_user.full_name,
-                "phone": getattr(current_user, 'phone', None),
-                "nmls_number": getattr(current_user, 'nmls_number', None),
-                "job_title": getattr(current_user, 'title', None),  # Map from 'title' column
-                "work_hours_start": business_hours.get('start', '09:00'),
-                "work_hours_end": business_hours.get('end', '17:00'),
-                "work_days": business_hours.get('days', ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'])
+                "id": updated_user[0],
+                "email": updated_user[1],
+                "full_name": updated_user[2],
+                "phone": updated_user[3],
+                "nmls_number": updated_user[4],
+                "job_title": updated_user[5],  # 'title' column
+                "work_hours_start": business_hours.get('start', '09:00') if business_hours else '09:00',
+                "work_hours_end": business_hours.get('end', '17:00') if business_hours else '17:00',
+                "work_days": business_hours.get('days', ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']) if business_hours else ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
             }
         }
     except Exception as e:
