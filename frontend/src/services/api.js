@@ -2869,6 +2869,20 @@ export const callMonitoringAPI = {
     const response = await api.get(`/api/v1/call-monitoring/loan/${loanId}/calls`, { params });
     return response.data;
   },
+
+  // CI Voice Integration
+  listCIRecordings: async (params = {}) => {
+    const response = await api.get('/api/v1/call-monitoring/ci-recordings', { params });
+    return response.data;
+  },
+
+  processCIRecording: async (recordingId, runAgents = true) => {
+    const response = await api.post('/api/v1/call-monitoring/process-ci-recording', {
+      recording_id: recordingId,
+      run_agents: runAgents
+    });
+    return response.data;
+  },
 };
 
 export default api;

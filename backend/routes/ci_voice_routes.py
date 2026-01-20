@@ -626,6 +626,19 @@ async def process_transcription(
                     WHERE id = :id
                 """), {"id": recording_id})
 
+                db.commit()
+
+                # Trigger Call Monitoring AI agents
+                try:
+                    from services.call_monitoring.ci_integration_service import trigger_call_monitoring_agents
+                    logger.info(f"Triggering Call Monitoring agents for recording {recording_id}")
+                    asyncio.create_task(
+                        trigger_call_monitoring_agents(db, recording_id, transcription_id)
+                    )
+                except Exception as agent_error:
+                    logger.warning(f"Could not trigger Call Monitoring agents: {agent_error}")
+                    # Non-blocking - transcription still succeeded
+
             else:
                 # Mark as failed
                 db.execute(text("""

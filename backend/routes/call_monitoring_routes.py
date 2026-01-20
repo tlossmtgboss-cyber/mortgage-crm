@@ -934,6 +934,168 @@ async def get_client_calls(
 
 
 # =============================================================================
+# CI VOICE INTEGRATION
+# =============================================================================
+
+class ProcessCIRecordingRequest(BaseModel):
+    """Request to process a CI Voice recording with AI agents."""
+    recording_id: str = Field(..., description="UUID of the ci_call_recordings entry")
+    run_agents: bool = Field(default=True, description="Whether to run AI agents")
+
+
+@router.post("/process-ci-recording")
+async def process_ci_recording(
+    request: ProcessCIRecordingRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Process an existing CI Voice recording with Call Monitoring AI agents.
+
+    Use this to:
+    - Process historical recordings that weren't automatically processed
+    - Reprocess a recording with the latest agent prompts
+    - Test the agent pipeline with a specific recording
+    """
+    try:
+        # Check if recording exists and has transcription
+        recording = db.execute(text("""
+            SELECT r.id, r.status, r.loan_id, r.lead_id,
+                   t.id as transcription_id, t.status as transcription_status
+            FROM ci_call_recordings r
+            LEFT JOIN ci_call_transcriptions t ON t.recording_id = r.id
+            WHERE r.id = :recording_id
+            ORDER BY t.created_at DESC
+            LIMIT 1
+        """), {"recording_id": request.recording_id}).fetchone()
+
+        if not recording:
+            raise HTTPException(status_code=404, detail="Recording not found")
+
+        if not recording.transcription_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Recording has no transcription. Please transcribe first using /api/v1/ci-voice/recordings/{id}/transcribe"
+            )
+
+        if recording.transcription_status != 'completed':
+            raise HTTPException(
+                status_code=400,
+                detail=f"Transcription not complete. Status: {recording.transcription_status}"
+            )
+
+        # Trigger the integration service
+        from services.call_monitoring.ci_integration_service import CIIntegrationService
+
+        service = CIIntegrationService(db)
+        result = await service.process_completed_transcription(
+            recording_id=request.recording_id,
+            transcription_id=str(recording.transcription_id),
+            run_agents=request.run_agents
+        )
+
+        return {
+            "status": "success",
+            "message": "Recording queued for AI agent processing",
+            **result
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error processing CI recording: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/ci-recordings")
+async def list_ci_recordings(
+    status: Optional[str] = Query(None, description="Filter by status: recorded, transcribed, analyzed"),
+    loan_id: Optional[str] = Query(None),
+    lead_id: Optional[str] = Query(None),
+    limit: int = Query(50, le=200),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    List CI Voice recordings available for processing.
+
+    Shows recordings that can be processed by Call Monitoring agents.
+    """
+    try:
+        query = """
+            SELECT
+                r.id,
+                r.external_call_id,
+                r.direction,
+                r.status,
+                r.duration_seconds,
+                r.started_at,
+                r.loan_id,
+                r.lead_id,
+                t.id as transcription_id,
+                t.status as transcription_status,
+                t.word_count,
+                cs.id as call_session_id,
+                cs.status as session_status
+            FROM ci_call_recordings r
+            LEFT JOIN ci_call_transcriptions t ON t.recording_id = r.id
+            LEFT JOIN call_sessions cs ON cs.recording_id = r.id
+            WHERE 1=1
+        """
+        params = {"limit": limit}
+
+        if status:
+            query += " AND r.status = :status"
+            params["status"] = status
+
+        if loan_id:
+            query += " AND r.loan_id = :loan_id"
+            params["loan_id"] = loan_id
+
+        if lead_id:
+            query += " AND r.lead_id = :lead_id"
+            params["lead_id"] = lead_id
+
+        query += " ORDER BY r.started_at DESC LIMIT :limit"
+
+        result = db.execute(text(query), params)
+        recordings = []
+
+        for row in result:
+            rec = dict(row._mapping)
+            # Convert UUIDs to strings
+            for key in rec:
+                if isinstance(rec[key], UUID):
+                    rec[key] = str(rec[key])
+                elif isinstance(rec[key], datetime):
+                    rec[key] = rec[key].isoformat()
+
+            # Add processing status
+            rec["can_process"] = (
+                rec.get("transcription_status") == "completed" and
+                rec.get("call_session_id") is None
+            )
+            rec["already_processed"] = rec.get("call_session_id") is not None
+
+            recordings.append(rec)
+
+        return {
+            "recordings": recordings,
+            "total": len(recordings),
+            "filters": {
+                "status": status,
+                "loan_id": loan_id,
+                "lead_id": lead_id,
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Error listing CI recordings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
 # BACKGROUND TASK HELPERS
 # =============================================================================
 
