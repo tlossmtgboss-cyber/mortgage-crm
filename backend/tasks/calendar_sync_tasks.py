@@ -598,11 +598,11 @@ def register_calendar_sync_jobs(scheduler):
         replace_existing=True
     )
 
-    # Health check every 5 minutes
+    # Health check every 15 minutes (reduced from 5 to prevent connection exhaustion)
     scheduler.add_job(
         check_sync_health_sync,
         'interval',
-        minutes=5,
+        minutes=15,
         id='calendar_sync_health',
         name='Calendar sync health check',
         replace_existing=True

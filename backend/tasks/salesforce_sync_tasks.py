@@ -405,7 +405,7 @@ async def check_salesforce_sync_health() -> Dict[str, Any]:
         return {
             'healthy': healthy,
             'sync_direction': 'bidirectional',
-            'sync_interval_minutes': 5,
+            'sync_interval_minutes': 15,
             'metrics': {
                 'connected_profiles': connected or 0,
                 'error_profiles': error_profiles or 0,
@@ -450,20 +450,20 @@ def register_salesforce_sync_jobs(scheduler):
     """
     Register Salesforce sync jobs with APScheduler.
 
-    Sync is BIDIRECTIONAL every 5 minutes:
+    Sync is BIDIRECTIONAL every 15 minutes (reduced from 5 to prevent connection exhaustion):
     - Inbound: Salesforce → CRM (pull emails, calendar, loans, leads)
     - Outbound: CRM → Salesforce (push updated loans, leads, activities)
 
     Args:
         scheduler: APScheduler instance
     """
-    # BIDIRECTIONAL sync every 5 minutes
+    # BIDIRECTIONAL sync every 15 minutes (reduced from 5 to prevent connection exhaustion)
     scheduler.add_job(
         sync_all_users_salesforce_sync,
         'interval',
-        minutes=5,
+        minutes=15,
         id='salesforce_sync_all_users',
-        name='Bidirectional Salesforce sync: pull from SF and push CRM changes every 5 minutes',
+        name='Bidirectional Salesforce sync: pull from SF and push CRM changes every 15 minutes',
         replace_existing=True,
         kwargs={
             'sync_emails': True,
@@ -476,17 +476,17 @@ def register_salesforce_sync_jobs(scheduler):
         }
     )
 
-    # Health check every 5 minutes (aligned with sync interval)
+    # Health check every 15 minutes (aligned with sync interval)
     scheduler.add_job(
         check_salesforce_sync_health_sync,
         'interval',
-        minutes=5,
+        minutes=15,
         id='salesforce_sync_health',
         name='Salesforce sync health check',
         replace_existing=True
     )
 
-    logger.info("Salesforce sync jobs registered (BIDIRECTIONAL): sync every 5 minutes, health check every 5 minutes")
+    logger.info("Salesforce sync jobs registered (BIDIRECTIONAL): sync every 15 minutes, health check every 15 minutes")
 
 
 # ============================================================================
