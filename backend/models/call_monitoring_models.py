@@ -178,8 +178,8 @@ class CallSession(Base):
     # Participants summary (for quick display)
     participants = Column(JSONB, default=[])
 
-    # Call metadata
-    metadata = Column(JSONB, default={})
+    # Call metadata (use 'call_metadata' as attribute name since 'metadata' is reserved by SQLAlchemy)
+    call_metadata = Column('metadata', JSONB, default={})
     tags = Column(ARRAY(Text), default=[])
 
     # Confidence (for ambient mic mode)
@@ -386,8 +386,8 @@ class CallArtifact(Base):
     source_evidence = Column(Text)  # Transcript excerpt that led to this artifact
     source_timestamp_ms = Column(Integer)  # Position in transcript
 
-    # Metadata
-    metadata = Column(JSONB, default={})
+    # Metadata (use 'artifact_metadata' as attribute name since 'metadata' is reserved by SQLAlchemy)
+    artifact_metadata = Column('metadata', JSONB, default={})
     priority = Column(String(20))  # low, medium, high, critical
 
     # Timestamps
