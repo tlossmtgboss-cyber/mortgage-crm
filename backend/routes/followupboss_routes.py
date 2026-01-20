@@ -13,15 +13,11 @@ API endpoints for managing Follow Up Boss integration:
 import os
 import logging
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Callable
 
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-
-from database import get_db
-from auth import get_current_user
-from models.user import User
 from models.followupboss_models import (
     FUBUserConnection, FUBLeadMapping, FUBSyncEvent, FUBStageMapping,
     FUBConnectRequest, FUBConnectionStatus, FUBStageMappingItem,
@@ -36,6 +32,45 @@ from services.followupboss_sync_service import FollowUpBossSyncService
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/integrations/followupboss", tags=["Follow Up Boss Integration"])
+
+
+# =============================================================================
+# DEPENDENCY INJECTION
+# =============================================================================
+
+# Dependency injection placeholders
+_get_db: Optional[Callable] = None
+_get_current_user: Optional[Callable] = None
+
+
+def set_dependencies(get_db_func: Callable, get_current_user_func: Callable):
+    """Set dependencies at runtime from main.py."""
+    global _get_db, _get_current_user
+    _get_db = get_db_func
+    _get_current_user = get_current_user_func
+
+
+def get_db():
+    """Get database session - wrapper that works at request time."""
+    if _get_db is None:
+        raise HTTPException(status_code=500, detail="Database dependency not configured")
+    yield from _get_db()
+
+
+async def get_current_user(request: Request, db: Session = Depends(get_db)):
+    """Get current user - wrapper that works at request time."""
+    if _get_current_user is None:
+        raise HTTPException(status_code=500, detail="Auth dependency not configured")
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    return await _get_current_user(token=token, request=request, db=db)
+
+
+def get_user_id(current_user) -> int:
+    """Extract user ID from current_user (handles both dict and object forms)."""
+    if isinstance(current_user, dict):
+        return current_user.get("user_id") or current_user.get("id")
+    return getattr(current_user, "id", None)
 
 
 # =============================================================================
@@ -66,7 +101,7 @@ class ManualSyncResponse(BaseModel):
 @router.post("/connect")
 async def connect_fub_account(
     request: FUBConnectRequest,
-    current_user: User = Depends(get_current_user),
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -76,7 +111,7 @@ async def connect_fub_account(
     """
     # Check if already connected
     existing = db.query(FUBUserConnection).filter(
-        FUBUserConnection.user_id == current_user.id
+        FUBUserConnection.user_id == get_user_id(current_user)
     ).first()
 
     if existing:
@@ -98,11 +133,11 @@ async def connect_fub_account(
     # Generate webhook secret and URL
     webhook_secret = generate_webhook_secret()
     base_url = os.getenv("API_BASE_URL", "https://api.perenniaai.com")
-    webhook_url = f"{base_url}/api/webhooks/followupboss/{current_user.id}"
+    webhook_url = f"{base_url}/api/webhooks/followupboss/{get_user_id(current_user)}"
 
     # Create connection
     connection = FUBUserConnection(
-        user_id=current_user.id,
+        user_id=get_user_id(current_user),
         api_key_encrypted=encrypt_api_key(request.api_key),
         fub_user_id=user_info.get("id") if user_info else None,
         fub_user_email=user_info.get("email") if user_info else None,
@@ -128,7 +163,7 @@ async def connect_fub_account(
     except Exception as e:
         logger.warning(f"Failed to auto-map FUB stages: {e}")
 
-    logger.info(f"FUB account connected for user {current_user.id}")
+    logger.info(f"FUB account connected for user {get_user_id(current_user)}")
 
     return {
         "status": "connected",
@@ -141,7 +176,7 @@ async def connect_fub_account(
 
 @router.delete("/disconnect")
 async def disconnect_fub_account(
-    current_user: User = Depends(get_current_user),
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -150,7 +185,7 @@ async def disconnect_fub_account(
     Removes connection, mappings, and sync history.
     """
     connection = db.query(FUBUserConnection).filter(
-        FUBUserConnection.user_id == current_user.id
+        FUBUserConnection.user_id == get_user_id(current_user)
     ).first()
 
     if not connection:
@@ -160,7 +195,7 @@ async def disconnect_fub_account(
     db.delete(connection)
     db.commit()
 
-    logger.info(f"FUB account disconnected for user {current_user.id}")
+    logger.info(f"FUB account disconnected for user {get_user_id(current_user)}")
 
     return {
         "status": "disconnected",
@@ -170,14 +205,14 @@ async def disconnect_fub_account(
 
 @router.get("/status", response_model=FUBConnectionStatus)
 async def get_connection_status(
-    current_user: User = Depends(get_current_user),
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
     Get Follow Up Boss connection status.
     """
     connection = db.query(FUBUserConnection).filter(
-        FUBUserConnection.user_id == current_user.id
+        FUBUserConnection.user_id == get_user_id(current_user)
     ).first()
 
     if not connection:
@@ -207,14 +242,14 @@ async def get_connection_status(
 @router.put("/settings")
 async def update_sync_settings(
     settings: SyncSettingsUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
     Update sync settings.
     """
     connection = db.query(FUBUserConnection).filter(
-        FUBUserConnection.user_id == current_user.id
+        FUBUserConnection.user_id == get_user_id(current_user)
     ).first()
 
     if not connection:
@@ -244,14 +279,14 @@ async def update_sync_settings(
 
 @router.get("/webhook-url")
 async def get_webhook_url(
-    current_user: User = Depends(get_current_user),
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
     Get webhook URL to configure in Follow Up Boss.
     """
     connection = db.query(FUBUserConnection).filter(
-        FUBUserConnection.user_id == current_user.id
+        FUBUserConnection.user_id == get_user_id(current_user)
     ).first()
 
     if not connection:
@@ -276,14 +311,14 @@ async def get_webhook_url(
 
 @router.get("/stage-mappings", response_model=FUBStageMappingResponse)
 async def get_stage_mappings(
-    current_user: User = Depends(get_current_user),
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
     Get stage mappings between FUB and CRM.
     """
     connection = db.query(FUBUserConnection).filter(
-        FUBUserConnection.user_id == current_user.id
+        FUBUserConnection.user_id == get_user_id(current_user)
     ).first()
 
     if not connection:
@@ -309,7 +344,7 @@ async def get_stage_mappings(
 @router.put("/stage-mappings")
 async def update_stage_mappings(
     update: FUBStageMappingUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -318,7 +353,7 @@ async def update_stage_mappings(
     Replaces all mappings with provided list.
     """
     connection = db.query(FUBUserConnection).filter(
-        FUBUserConnection.user_id == current_user.id
+        FUBUserConnection.user_id == get_user_id(current_user)
     ).first()
 
     if not connection:
@@ -352,7 +387,7 @@ async def update_stage_mappings(
 
 @router.post("/stage-mappings/refresh")
 async def refresh_stage_mappings(
-    current_user: User = Depends(get_current_user),
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -361,7 +396,7 @@ async def refresh_stage_mappings(
     Only adds new stages, preserves existing user mappings.
     """
     connection = db.query(FUBUserConnection).filter(
-        FUBUserConnection.user_id == current_user.id
+        FUBUserConnection.user_id == get_user_id(current_user)
     ).first()
 
     if not connection:
@@ -410,7 +445,7 @@ async def refresh_stage_mappings(
 @router.post("/sync", response_model=ManualSyncResponse)
 async def trigger_manual_sync(
     limit: int = Query(default=100, le=500),
-    current_user: User = Depends(get_current_user),
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -419,7 +454,7 @@ async def trigger_manual_sync(
     Fetches leads assigned to user and syncs to CRM.
     """
     connection = db.query(FUBUserConnection).filter(
-        FUBUserConnection.user_id == current_user.id
+        FUBUserConnection.user_id == get_user_id(current_user)
     ).first()
 
     if not connection:
@@ -460,14 +495,14 @@ async def get_sync_history(
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0),
     status: Optional[str] = Query(default=None),
-    current_user: User = Depends(get_current_user),
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
     Get sync event history.
     """
     connection = db.query(FUBUserConnection).filter(
-        FUBUserConnection.user_id == current_user.id
+        FUBUserConnection.user_id == get_user_id(current_user)
     ).first()
 
     if not connection:
@@ -515,14 +550,14 @@ async def get_sync_history(
 async def get_lead_mappings(
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0),
-    current_user: User = Depends(get_current_user),
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
     Get lead mappings between FUB and CRM.
     """
     connection = db.query(FUBUserConnection).filter(
-        FUBUserConnection.user_id == current_user.id
+        FUBUserConnection.user_id == get_user_id(current_user)
     ).first()
 
     if not connection:
@@ -566,7 +601,7 @@ async def get_lead_mappings(
 @router.delete("/lead-mappings/{mapping_id}")
 async def delete_lead_mapping(
     mapping_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -575,7 +610,7 @@ async def delete_lead_mapping(
     Does not delete the lead, just removes the FUB sync link.
     """
     connection = db.query(FUBUserConnection).filter(
-        FUBUserConnection.user_id == current_user.id
+        FUBUserConnection.user_id == get_user_id(current_user)
     ).first()
 
     if not connection:
@@ -601,14 +636,14 @@ async def delete_lead_mapping(
 
 @router.get("/verify")
 async def verify_connection(
-    current_user: User = Depends(get_current_user),
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
     Verify FUB API connection is still valid.
     """
     connection = db.query(FUBUserConnection).filter(
-        FUBUserConnection.user_id == current_user.id
+        FUBUserConnection.user_id == get_user_id(current_user)
     ).first()
 
     if not connection:
