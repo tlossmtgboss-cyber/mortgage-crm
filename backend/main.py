@@ -72645,6 +72645,49 @@ async def fix_loan_associations(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/v1/admin/fix-task-assignments")
+async def fix_task_assignments(
+    migration_key: str = "",
+    db: Session = Depends(get_db)
+):
+    """Fix task assignments to match loan_officer_id for multi-tenancy."""
+    if migration_key != "fix-loans-2026":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    try:
+        # Fix tasks that are associated with loans to use the loan's loan_officer_id
+        result = db.execute(text("""
+            UPDATE ai_tasks
+            SET assigned_to_id = loans.loan_officer_id
+            FROM loans
+            WHERE ai_tasks.loan_id = loans.id
+            AND loans.loan_officer_id IS NOT NULL
+            AND (ai_tasks.assigned_to_id IS NULL OR ai_tasks.assigned_to_id != loans.loan_officer_id)
+        """))
+        tasks_fixed = result.rowcount
+
+        db.commit()
+
+        # Get summary of task assignments after fix
+        summary_result = db.execute(text("""
+            SELECT u.email, COUNT(*) as count
+            FROM ai_tasks t
+            LEFT JOIN users u ON u.id = t.assigned_to_id
+            GROUP BY u.email, t.assigned_to_id
+        """)).fetchall()
+        summary = [{"email": r[0], "count": r[1]} for r in summary_result]
+
+        return {
+            "status": "success",
+            "tasks_fixed": tasks_fixed,
+            "task_summary_by_user": summary,
+            "message": "Fixed task assignments based on loan_officer_id"
+        }
+    except Exception as e:
+        logger.error(f"Fix task assignments failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/v1/admin/loan-check")
 async def check_loan_status(
     migration_key: str = "",
