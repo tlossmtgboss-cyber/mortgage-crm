@@ -158,13 +158,37 @@ def is_profile_active(profile: Optional[IntegrationProfile]) -> bool:
 async def connect_salesforce(
     request: Request,
     return_url: Optional[str] = Query(None, description="URL to redirect after auth"),
+    token: Optional[str] = Query(None, description="JWT token for auth when redirecting"),
     db: Session = Depends(get_db)
 ):
     """
     Initiate Salesforce OAuth flow.
     Redirects user to Salesforce login page.
+
+    Accepts token via:
+    1. Authorization header (for API calls)
+    2. Query parameter (for browser redirects)
     """
+    # Try getting user from header first, then from query param token
     user_id = get_current_user_id(request, db)
+
+    # If no user from header, try the token query parameter
+    if not user_id and token:
+        try:
+            import jwt
+            secret_key = os.getenv("SECRET_KEY", "dev-secret-key")
+            payload = jwt.decode(token, secret_key, algorithms=["HS256"])
+            email = payload.get("sub")
+            if email:
+                result = db.execute(
+                    text("SELECT id FROM users WHERE email = :email"),
+                    {"email": email}
+                ).fetchone()
+                if result:
+                    user_id = result[0]
+        except Exception as e:
+            logger.warning(f"Failed to decode token from query param: {e}")
+
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
 

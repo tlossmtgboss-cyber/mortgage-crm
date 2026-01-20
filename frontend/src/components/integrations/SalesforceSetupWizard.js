@@ -81,8 +81,13 @@ function SalesforceSetupWizard({ onComplete }) {
   };
 
   const handleConnect = () => {
-    // Redirect to OAuth
-    window.location.href = `${API_URL}/api/integrations/salesforce/connect?return_url=${encodeURIComponent(window.location.href)}`;
+    // Redirect to OAuth - include token for authentication during redirect
+    const connectUrl = new URL(`${API_URL}/api/integrations/salesforce/connect`);
+    connectUrl.searchParams.set('return_url', window.location.href);
+    if (token) {
+      connectUrl.searchParams.set('token', token);
+    }
+    window.location.href = connectUrl.toString();
   };
 
   const handleDisconnect = async () => {
