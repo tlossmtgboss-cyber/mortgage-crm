@@ -72608,12 +72608,32 @@ async def check_loan_status(
         ).fetchall()
         loan_info = [{"id": l[0], "loan_number": l[1], "borrower": l[2], "org_id": l[3], "lo_id": l[4]} for l in sample_result]
 
+        # Get task assignments to understand multi-tenancy
+        task_summary = db.execute(text("""
+            SELECT u.email, COUNT(*) as count
+            FROM ai_tasks t
+            LEFT JOIN users u ON u.id = t.assigned_to_id
+            GROUP BY u.email, t.assigned_to_id
+        """)).fetchall()
+        task_info = [{"email": t[0], "count": t[1]} for t in task_summary]
+
+        # Get sample tasks
+        sample_tasks = db.execute(text("""
+            SELECT t.id, t.assigned_to_id, u.email, t.title
+            FROM ai_tasks t
+            LEFT JOIN users u ON u.id = t.assigned_to_id
+            LIMIT 10
+        """)).fetchall()
+        task_samples = [{"id": t[0], "assigned_to_id": t[1], "email": t[2], "title": t[3][:50] if t[3] else None} for t in sample_tasks]
+
         return {
             "users": user_info,
             "total_loans": total_loans,
             "orphan_loans": orphan_loans,
             "no_loan_officer": no_lo_loans,
-            "sample_loans": loan_info
+            "sample_loans": loan_info,
+            "tasks_by_user": task_info,
+            "sample_tasks": task_samples
         }
     except Exception as e:
         logger.error(f"Loan check failed: {e}")
