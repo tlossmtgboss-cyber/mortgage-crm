@@ -96,7 +96,7 @@ not properly stored in the database.
 
 **Command**:
 ```javascript
-fetch('https://mortgage-crm-production-7a9a.up.railway.app/api/v1/microsoft/sync-diagnostics', {
+fetch('https://api.perenniaai.com/api/v1/microsoft/sync-diagnostics', {
   headers: {'Authorization': 'Bearer ' + localStorage.getItem('token')}
 })
 .then(r => r.json())
@@ -116,7 +116,7 @@ fetch('https://mortgage-crm-production-7a9a.up.railway.app/api/v1/microsoft/sync
 
 **Command**:
 ```javascript
-fetch('https://mortgage-crm-production-7a9a.up.railway.app/api/v1/microsoft/force-sync', {
+fetch('https://api.perenniaai.com/api/v1/microsoft/force-sync', {
   method: 'POST',
   headers: {
     'Authorization': 'Bearer ' + localStorage.getItem('token'),

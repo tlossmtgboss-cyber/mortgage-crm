@@ -9,7 +9,7 @@ import sys
 from datetime import datetime
 
 # Configuration
-API_BASE_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+API_BASE_URL = "https://api.perenniaai.com"
 
 # ANSI color codes for terminal output
 GREEN = '\033[92m'

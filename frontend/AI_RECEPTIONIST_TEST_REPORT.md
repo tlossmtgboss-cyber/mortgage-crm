@@ -2,7 +2,7 @@
 **Date**: November 15, 2025
 **Environment**: Production
 **Frontend**: Vercel
-**Backend**: Railway (https://mortgage-crm-production-7a9a.up.railway.app)
+**Backend**: Railway (https://api.perenniaai.com)
 
 ---
 
@@ -125,7 +125,7 @@ Bundle sizes after gzip:
 
 ### API Service Layer
 ✅ **PASSED** - All 13 endpoints properly defined in `aiReceptionistDashboardAPI`
-- Base URL correctly configured: `https://mortgage-crm-production-7a9a.up.railway.app`
+- Base URL correctly configured: `https://api.perenniaai.com`
 - Environment variable: `REACT_APP_API_URL` set correctly
 - Axios interceptor configured for authentication
 

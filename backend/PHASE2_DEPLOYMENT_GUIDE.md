@@ -64,22 +64,22 @@ vercel --prod --yes
 
 ```bash
 # Get auth token
-TOKEN=$(curl -s -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/auth/login" \
+TOKEN=$(curl -s -X POST "https://api.perenniaai.com/api/v1/auth/login" \
   -H "Content-Type: application/json" \
   -d '{"username": "admin@perenniaai.com", "password": "password"}' | jq -r '.access_token')
 
 # Test AI query
-curl -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/profitability/ai/query" \
+curl -X POST "https://api.perenniaai.com/api/v1/profitability/ai/query" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"question": "What is our cost per loan?"}'
 
 # Test recommendations
-curl "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/profitability/ai/recommendations" \
+curl "https://api.perenniaai.com/api/v1/profitability/ai/recommendations" \
   -H "Authorization: Bearer $TOKEN"
 
 # Test suggested questions
-curl "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/profitability/ai/suggested-questions" \
+curl "https://api.perenniaai.com/api/v1/profitability/ai/suggested-questions" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -123,7 +123,7 @@ curl "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/profitability/a
 1. Check browser console for errors
 2. Verify API is responding:
    ```bash
-   curl https://mortgage-crm-production-7a9a.up.railway.app/health
+   curl https://api.perenniaai.com/health
    ```
 
 3. Clear browser cache and retry

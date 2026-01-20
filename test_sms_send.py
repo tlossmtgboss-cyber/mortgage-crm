@@ -6,7 +6,7 @@ Sends a test SMS message via Twilio
 import requests
 import sys
 
-BACKEND_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+BACKEND_URL = "https://api.perenniaai.com"
 
 def login():
     """Login to get auth token"""

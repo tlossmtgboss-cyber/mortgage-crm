@@ -25,14 +25,14 @@
 ### Twilio Webhook ✅
 **OLD (Broken):**
 ```
-Voice URL: https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voice/incoming
+Voice URL: https://api.perenniaai.com/api/v1/voice/incoming
 Problem: Railway WebSocket connection failing → calls drop
 ```
 
 **NEW (Working):**
 ```
 Voice URL: https://api.vapi.ai/call/twilio?assistantId=120e239e-4d19-4e43-ad92-1f8b07d08c8c
-Status Callback: https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/webhook
+Status Callback: https://api.perenniaai.com/api/vapi/webhook
 Result: Calls go to Vapi → Sam answers → Logs to your dashboard
 ```
 

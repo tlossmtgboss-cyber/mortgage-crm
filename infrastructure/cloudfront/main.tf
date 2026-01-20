@@ -67,7 +67,7 @@ variable "custom_domain_cert_arn" {
 variable "backend_origin" {
   description = "Backend API origin URL"
   type        = string
-  default     = "mortgage-crm-production-7a9a.up.railway.app"
+  default     = "api.perenniaai.com"
 }
 
 variable "price_class" {

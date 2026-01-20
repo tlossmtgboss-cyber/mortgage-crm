@@ -7,7 +7,7 @@ import requests
 import sys
 
 # API configuration
-API_BASE_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+API_BASE_URL = "https://api.perenniaai.com"
 
 def test_lead_detail_access():
     """Test that we can access lead details"""

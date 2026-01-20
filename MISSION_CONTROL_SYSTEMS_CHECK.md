@@ -44,7 +44,7 @@ Mission Control for AI Colleague Performance Tracking has been successfully depl
 
 ### 2. API Endpoints ✅
 
-**Base URL:** `https://mortgage-crm-production-7a9a.up.railway.app`
+**Base URL:** `https://api.perenniaai.com`
 
 **Mission Control v1 API**
 All endpoints verified as accessible (require authentication):
@@ -247,10 +247,10 @@ All endpoints verified as accessible (require authentication):
 ## Access Information
 
 ### Production
-**Frontend:** https://mortgage-crm-production-7a9a.up.railway.app
+**Frontend:** https://api.perenniaai.com
 → Login → Settings → Mission Control tab
 
-**API:** https://mortgage-crm-production-7a9a.up.railway.app/api/v1/mission-control/*
+**API:** https://api.perenniaai.com/api/v1/mission-control/*
 Requires: JWT Bearer token
 
 ### Local Development
@@ -264,7 +264,7 @@ Requires: JWT Bearer token
 
 **Issues:** GitHub Issues
 **Documentation:** `/backend/migrations/add_ai_colleague_tracking.py`
-**API Docs:** https://mortgage-crm-production-7a9a.up.railway.app/docs
+**API Docs:** https://api.perenniaai.com/docs
 
 ---
 

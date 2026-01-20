@@ -8,7 +8,7 @@ import sys
 
 # Your live CRM URL
 CRM_URL = "https://mortgage-crm-git-main-tim-loss-projects.vercel.app"
-BACKEND_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+BACKEND_URL = "https://api.perenniaai.com"
 
 def test_frontend_deployment():
     """Test if frontend is deployed and accessible"""

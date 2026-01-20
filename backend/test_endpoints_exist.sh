@@ -5,7 +5,7 @@ echo "  MISSION CONTROL - ENDPOINT VERIFICATION (No Auth Required)"
 echo "======================================================================"
 echo ""
 
-BASE_URL="https://mortgage-crm-production-7a9a.up.railway.app"
+BASE_URL="https://api.perenniaai.com"
 
 endpoints=(
   "/api/v1/ai/mission-control/health"

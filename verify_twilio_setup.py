@@ -7,7 +7,7 @@ import requests
 import sys
 import time
 
-BACKEND_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+BACKEND_URL = "https://api.perenniaai.com"
 
 print("="*60)
 print("🔍 VERIFYING TWILIO SETUP")

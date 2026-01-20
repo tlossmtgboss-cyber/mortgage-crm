@@ -7,8 +7,8 @@ import requests
 import json
 from datetime import datetime
 
-CRM_WEBHOOK_URL = "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/webhook"
-DASHBOARD_API_URL = "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard"
+CRM_WEBHOOK_URL = "https://api.perenniaai.com/api/vapi/webhook"
+DASHBOARD_API_URL = "https://api.perenniaai.com/api/v1/ai-receptionist/dashboard"
 
 print("=" * 80)
 print("🧪 TESTING VAPI → CRM WEBHOOK INTEGRATION")
@@ -129,7 +129,7 @@ auth_payload = {
 print(f"   Authenticating as admin@perenniaai.com...")
 try:
     auth_response = requests.post(
-        "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/auth/login",
+        "https://api.perenniaai.com/api/v1/auth/login",
         data=auth_payload,
         timeout=10
     )

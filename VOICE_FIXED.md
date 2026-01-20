@@ -25,7 +25,7 @@ This is a **dead link** from an old development setup. When Twilio tried to send
 ✅ **Automatically updated Twilio webhook to production URL:**
 
 ```
-Correct URL: https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voice/incoming
+Correct URL: https://api.perenniaai.com/api/v1/voice/incoming
 Method: POST
 ```
 
@@ -37,7 +37,7 @@ Method: POST
 
 **Step 1: Twilio Receives Call**
 - Your call comes in to Twilio
-- Twilio sends webhook to: `https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voice/incoming`
+- Twilio sends webhook to: `https://api.perenniaai.com/api/v1/voice/incoming`
 
 **Step 2: Backend Processes Call**
 - Backend receives webhook with caller info
@@ -111,7 +111,7 @@ WHERE client_phone IN ('+15555551234', '+15551234TEST', '+15546104794');
 Or use the admin endpoint:
 ```bash
 curl -X DELETE \
-  "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard/admin/clear-sample-data" \
+  "https://api.perenniaai.com/api/v1/ai-receptionist/dashboard/admin/clear-sample-data" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
@@ -124,7 +124,7 @@ curl -X DELETE \
 | Component | Status | Value |
 |-----------|--------|-------|
 | Phone Number | ✅ Active | +1 (832) 648-2297 |
-| Webhook URL | ✅ Fixed | `https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voice/incoming` |
+| Webhook URL | ✅ Fixed | `https://api.perenniaai.com/api/v1/voice/incoming` |
 | OpenAI API | ✅ Connected | GPT-4o Realtime |
 | WebSocket | ✅ Ready | `/api/v1/voice/ws/voice-stream` |
 | Database Logging | ✅ Working | All calls logged to production DB |
@@ -150,7 +150,7 @@ Voice URL: https://extensive-unretrieved-gertha.ngrok-free.dev/twilio/voice
 
 ### After:
 ```python
-Voice URL: https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voice/incoming
+Voice URL: https://api.perenniaai.com/api/v1/voice/incoming
 # Live production URL on Railway
 # Result: Call connects to AI
 ```
@@ -197,13 +197,13 @@ If you still experience issues:
 
    Should show:
    ```
-   Voice URL: https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voice/incoming
+   Voice URL: https://api.perenniaai.com/api/v1/voice/incoming
    Method: POST
    ```
 
 3. **Test webhook directly:**
    ```bash
-   curl -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voice/incoming" \
+   curl -X POST "https://api.perenniaai.com/api/v1/voice/incoming" \
      -d "From=+15555551234" \
      -d "To=+18326482297" \
      -d "CallSid=TEST123"

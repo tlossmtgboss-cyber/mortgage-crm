@@ -40,7 +40,7 @@ X-API-Key: 185b7101-9435-44da-87ab-b7582c4e4607
 
 **Configuration:**
 ```
-URL: https://mortgage-crm-production-7a9a.up.railway.app/api/v1/leads/
+URL: https://api.perenniaai.com/api/v1/leads/
 
 Method: POST
 
@@ -117,7 +117,7 @@ Data (JSON):
 
 **Configuration:**
 ```
-URL: https://mortgage-crm-production-7a9a.up.railway.app/api/v1/leads/{{Lead ID}}
+URL: https://api.perenniaai.com/api/v1/leads/{{Lead ID}}
 
 Method: PATCH
 
@@ -163,7 +163,7 @@ Data (JSON):
 
 #### Trigger
 - **Method:** Zapier Polling (every 5-15 minutes)
-- **Endpoint:** `GET https://mortgage-crm-production-7a9a.up.railway.app/api/v1/leads?limit=100`
+- **Endpoint:** `GET https://api.perenniaai.com/api/v1/leads?limit=100`
 - **Authentication:** X-API-Key header
 
 #### Action
@@ -279,7 +279,7 @@ Data: (Pass through lead data from trigger)
 
 ### Test Create Lead
 ```bash
-curl -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/leads/" \
+curl -X POST "https://api.perenniaai.com/api/v1/leads/" \
 -H "X-API-Key: 185b7101-9435-44da-87ab-b7582c4e4607" \
 -H "Content-Type: application/json" \
 -d '{
@@ -292,7 +292,7 @@ curl -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/leads/"
 
 ### Test Update Lead
 ```bash
-curl -X PATCH "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/leads/44" \
+curl -X PATCH "https://api.perenniaai.com/api/v1/leads/44" \
 -H "X-API-Key: 185b7101-9435-44da-87ab-b7582c4e4607" \
 -H "Content-Type: application/json" \
 -d '{
@@ -303,7 +303,7 @@ curl -X PATCH "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/leads/
 
 ### Test Get Leads
 ```bash
-curl "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/leads?limit=10" \
+curl "https://api.perenniaai.com/api/v1/leads?limit=10" \
 -H "X-API-Key: 185b7101-9435-44da-87ab-b7582c4e4607"
 ```
 
@@ -333,6 +333,6 @@ For questions or issues:
 3. Test with curl commands provided
 4. Check Zapier task history for detailed error messages
 
-**API Base URL:** `https://mortgage-crm-production-7a9a.up.railway.app`
+**API Base URL:** `https://api.perenniaai.com`
 **API Key:** `185b7101-9435-44da-87ab-b7582c4e4607`
 **Webhook URL:** `https://hooks.zapier.com/hooks/catch/2446725/usnpkzc/`

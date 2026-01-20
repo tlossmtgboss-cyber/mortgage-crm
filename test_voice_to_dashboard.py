@@ -6,7 +6,7 @@ This simulates what happens when someone calls +1 (832) 648-2297
 import requests
 import time
 
-API_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+API_URL = "https://api.perenniaai.com"
 
 print("=" * 70)
 print("TEST: Voice Call → AI Receptionist Dashboard")

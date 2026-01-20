@@ -270,7 +270,7 @@ python3 test_teams_integration.py
 **Testing:**
 - Run: `python3 test_teams_integration.py`
 - Check Railway logs: https://railway.app/dashboard
-- Check backend health: https://mortgage-crm-production-7a9a.up.railway.app/health
+- Check backend health: https://api.perenniaai.com/health
 
 ---
 

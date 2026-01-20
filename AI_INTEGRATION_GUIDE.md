@@ -183,7 +183,7 @@ You can manually trigger AI agents via API calls:
 ### Trigger Lead Qualification
 
 ```bash
-curl -X POST 'https://mortgage-crm-production-7a9a.up.railway.app/api/ai/events?event_type=LeadCreated' \
+curl -X POST 'https://api.perenniaai.com/api/ai/events?event_type=LeadCreated' \
   -H 'Content-Type: application/json' \
   -H 'Authorization: Bearer YOUR_TOKEN' \
   -d '{
@@ -199,7 +199,7 @@ curl -X POST 'https://mortgage-crm-production-7a9a.up.railway.app/api/ai/events?
 ### Run Daily Pipeline Sweep
 
 ```bash
-curl -X POST 'https://mortgage-crm-production-7a9a.up.railway.app/api/ai/events?event_type=DailyPipelineSweep' \
+curl -X POST 'https://api.perenniaai.com/api/ai/events?event_type=DailyPipelineSweep' \
   -H 'Content-Type: application/json' \
   -d '{
     "entity_type": "system",
@@ -210,7 +210,7 @@ curl -X POST 'https://mortgage-crm-production-7a9a.up.railway.app/api/ai/events?
 ### Scan Portfolio for Refi Opportunities
 
 ```bash
-curl -X POST 'https://mortgage-crm-production-7a9a.up.railway.app/api/ai/events?event_type=MonthlyPortfolioReview' \
+curl -X POST 'https://api.perenniaai.com/api/ai/events?event_type=MonthlyPortfolioReview' \
   -H 'Content-Type: application/json' \
   -d '{
     "entity_type": "portfolio",
@@ -225,7 +225,7 @@ curl -X POST 'https://mortgage-crm-production-7a9a.up.railway.app/api/ai/events?
 ### 1. List All Agent Executions
 
 ```bash
-curl 'https://mortgage-crm-production-7a9a.up.railway.app/api/ai/executions'
+curl 'https://api.perenniaai.com/api/ai/executions'
 ```
 
 Response shows what agents have done:
@@ -253,16 +253,16 @@ Response shows what agents have done:
 
 ```bash
 # See what Lead Manager agent has done
-curl 'https://mortgage-crm-production-7a9a.up.railway.app/api/ai/executions?agent_id=lead_manager'
+curl 'https://api.perenniaai.com/api/ai/executions?agent_id=lead_manager'
 
 # See Pipeline Manager's recent activity
-curl 'https://mortgage-crm-production-7a9a.up.railway.app/api/ai/executions?agent_id=pipeline_manager&limit=10'
+curl 'https://api.perenniaai.com/api/ai/executions?agent_id=pipeline_manager&limit=10'
 ```
 
 ### 3. Check Agent Status
 
 ```bash
-curl 'https://mortgage-crm-production-7a9a.up.railway.app/api/ai/agents'
+curl 'https://api.perenniaai.com/api/ai/agents'
 ```
 
 ---
@@ -369,7 +369,7 @@ function AIActivityWidget() {
 
 ```bash
 # Get agent performance stats
-curl 'https://mortgage-crm-production-7a9a.up.railway.app/api/ai/agents/lead_manager/metrics?days=30'
+curl 'https://api.perenniaai.com/api/ai/agents/lead_manager/metrics?days=30'
 ```
 
 **Metrics you can track:**
@@ -396,7 +396,7 @@ curl 'https://mortgage-crm-production-7a9a.up.railway.app/api/ai/agents/lead_man
 ### AI agents not responding?
 Check event was received:
 ```bash
-curl 'https://mortgage-crm-production-7a9a.up.railway.app/api/ai/executions?hours=1'
+curl 'https://api.perenniaai.com/api/ai/executions?hours=1'
 ```
 
 ### Want to disable an agent temporarily?

@@ -7,7 +7,7 @@ import requests
 import json
 import time
 
-BACKEND_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+BACKEND_URL = "https://api.perenniaai.com"
 
 def print_section(title):
     print("\n" + "="*70)

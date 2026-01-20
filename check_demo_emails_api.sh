@@ -1,7 +1,7 @@
 #!/bin/bash
 # Check demo account emails via production API
 
-BASE_URL="https://mortgage-crm-production-7a9a.up.railway.app"
+BASE_URL="https://api.perenniaai.com"
 EMAIL="admin@perenniaai.com"
 PASSWORD="demo123"
 

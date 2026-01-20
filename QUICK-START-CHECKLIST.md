@@ -48,10 +48,10 @@ Go to **"Variables"** tab and add these:
 ### Test Backend
 - [ ] Open terminal and run:
   ```bash
-  curl https://mortgage-crm-production-7a9a.up.railway.app/health
+  curl https://api.perenniaai.com/health
   ```
 - [ ] Should return `{"status":"healthy"}` or similar
-- [ ] Open in browser: https://mortgage-crm-production-7a9a.up.railway.app/docs
+- [ ] Open in browser: https://api.perenniaai.com/docs
 - [ ] Should see FastAPI documentation page
 
 ---
@@ -65,13 +65,13 @@ Go to **"Variables"** tab and add these:
 
 ### Verify Environment Variable
 - [ ] Check if `REACT_APP_API_URL` exists
-- [ ] Value should be: `https://mortgage-crm-production-7a9a.up.railway.app`
+- [ ] Value should be: `https://api.perenniaai.com`
 - [ ] Scope should be: **All Environments** (Production, Preview, Development)
 
 ### If Variable is Missing or Wrong
 - [ ] Click **"Add New"**
 - [ ] Name: `REACT_APP_API_URL`
-- [ ] Value: `https://mortgage-crm-production-7a9a.up.railway.app`
+- [ ] Value: `https://api.perenniaai.com`
 - [ ] Select all environments (Production, Preview, Development)
 - [ ] Click **"Save"**
 
@@ -108,7 +108,7 @@ Go to **"Variables"** tab and add these:
 - [ ] Supported account types: **Single tenant**
 - [ ] Redirect URI:
   - Platform: **Web**
-  - URL: `https://mortgage-crm-production-7a9a.up.railway.app/auth/microsoft/callback`
+  - URL: `https://api.perenniaai.com/auth/microsoft/callback`
 - [ ] Click **"Register"**
 
 ### Copy Important Values
@@ -154,7 +154,7 @@ Go to **"Variables"** tab and add these:
   - Value: (from Azure AD)
 
 - [ ] **MICROSOFT_REDIRECT_URI**
-  - Value: `https://mortgage-crm-production-7a9a.up.railway.app/auth/microsoft/callback`
+  - Value: `https://api.perenniaai.com/auth/microsoft/callback`
 
 - [ ] **MICROSOFT_FROM_EMAIL**
   - Value: Your Microsoft 365 email (e.g., `yourname@company.com`)
@@ -165,7 +165,7 @@ Go to **"Variables"** tab and add these:
 - [ ] Check logs for: `"Microsoft Graph API initialized successfully"`
 
 ### Test Microsoft Integration
-- [ ] Go to https://mortgage-crm-production-7a9a.up.railway.app/docs
+- [ ] Go to https://api.perenniaai.com/docs
 - [ ] Find Microsoft integration endpoints
 - [ ] Try **POST /api/v1/integrations/microsoft/send-email**
 - [ ] Should send a test email via Outlook
@@ -242,7 +242,7 @@ cd backend && python3 verify_env.py
 ### Common Commands
 ```bash
 # Test backend health
-curl https://mortgage-crm-production-7a9a.up.railway.app/health
+curl https://api.perenniaai.com/health
 
 # View Railway logs (if CLI installed)
 railway logs

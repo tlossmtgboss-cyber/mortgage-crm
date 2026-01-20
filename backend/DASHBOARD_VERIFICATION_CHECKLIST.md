@@ -112,7 +112,7 @@ python verify_ai_receptionist_dashboard.py
 python verify_ai_receptionist_dashboard.py
 
 # Or manually via API
-curl -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/migrations/add-ai-receptionist-dashboard-tables" \
+curl -X POST "https://api.perenniaai.com/api/v1/migrations/add-ai-receptionist-dashboard-tables" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
@@ -166,7 +166,7 @@ Then test each endpoint:
 
 #### Activity Feed
 ```bash
-curl "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard/activity/feed?limit=5" \
+curl "https://api.perenniaai.com/api/v1/ai-receptionist/dashboard/activity/feed?limit=5" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
@@ -174,7 +174,7 @@ curl "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist
 
 #### Realtime Metrics
 ```bash
-curl "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard/metrics/realtime" \
+curl "https://api.perenniaai.com/api/v1/ai-receptionist/dashboard/metrics/realtime" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
@@ -193,7 +193,7 @@ curl "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist
 
 #### Daily Metrics
 ```bash
-curl "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard/metrics/daily?start_date=2024-11-01&end_date=2024-11-15" \
+curl "https://api.perenniaai.com/api/v1/ai-receptionist/dashboard/metrics/daily?start_date=2024-11-01&end_date=2024-11-15" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
@@ -201,7 +201,7 @@ curl "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist
 
 #### Skills
 ```bash
-curl "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard/skills" \
+curl "https://api.perenniaai.com/api/v1/ai-receptionist/dashboard/skills" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
@@ -209,7 +209,7 @@ curl "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist
 
 #### ROI
 ```bash
-curl "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard/roi" \
+curl "https://api.perenniaai.com/api/v1/ai-receptionist/dashboard/roi" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
@@ -228,7 +228,7 @@ curl "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist
 
 #### Errors
 ```bash
-curl "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard/errors?status=unresolved" \
+curl "https://api.perenniaai.com/api/v1/ai-receptionist/dashboard/errors?status=unresolved" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
@@ -236,7 +236,7 @@ curl "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist
 
 #### System Health
 ```bash
-curl "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard/system-health" \
+curl "https://api.perenniaai.com/api/v1/ai-receptionist/dashboard/system-health" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
@@ -275,13 +275,13 @@ SELECT COUNT(*) FROM ai_receptionist_conversations;   -- Expected: 3
 
 **Get an error ID first:**
 ```bash
-curl "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard/errors?limit=1" \
+curl "https://api.perenniaai.com/api/v1/ai-receptionist/dashboard/errors?limit=1" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
 **Approve the fix:**
 ```bash
-curl -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard/errors/{ERROR_ID}/approve-fix" \
+curl -X POST "https://api.perenniaai.com/api/v1/ai-receptionist/dashboard/errors/{ERROR_ID}/approve-fix" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
@@ -336,7 +336,7 @@ sudo apt install apache2-utils  # Linux
 # Run load test
 ab -n 100 -c 10 \
   -H "Authorization: Bearer YOUR_TOKEN" \
-  "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard/activity/feed?limit=10"
+  "https://api.perenniaai.com/api/v1/ai-receptionist/dashboard/activity/feed?limit=10"
 ```
 
 ---
@@ -406,14 +406,14 @@ def aggregate_yesterday():
 
 1. **Invalid date range:**
 ```bash
-curl "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard/metrics/daily?start_date=2025-12-31&end_date=2025-01-01" \
+curl "https://api.perenniaai.com/api/v1/ai-receptionist/dashboard/metrics/daily?start_date=2025-12-31&end_date=2025-01-01" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 **Expected:** 200 OK with empty array (or 400/422 Bad Request)
 
 2. **Non-existent error_id:**
 ```bash
-curl -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard/errors/nonexistent-id/approve-fix" \
+curl -X POST "https://api.perenniaai.com/api/v1/ai-receptionist/dashboard/errors/nonexistent-id/approve-fix" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 **Expected:** 404 Not Found
@@ -425,7 +425,7 @@ curl -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-rece
 
 3. **Non-existent skill_name:**
 ```bash
-curl "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard/skills/NonExistentSkill" \
+curl "https://api.perenniaai.com/api/v1/ai-receptionist/dashboard/skills/NonExistentSkill" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 **Expected:** 404 Not Found
@@ -437,7 +437,7 @@ curl "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist
 
 4. **Missing authentication:**
 ```bash
-curl "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard/activity/feed"
+curl "https://api.perenniaai.com/api/v1/ai-receptionist/dashboard/activity/feed"
 ```
 **Expected:** 401 Unauthorized
 
@@ -550,7 +550,7 @@ Once you've verified Phase 1 works:
 ---
 
 **Questions or issues?**
-- Check API docs: https://mortgage-crm-production-7a9a.up.railway.app/docs#/AI%20Receptionist%20Dashboard
+- Check API docs: https://api.perenniaai.com/docs#/AI%20Receptionist%20Dashboard
 - Review implementation guide: `AI_RECEPTIONIST_DASHBOARD_IMPLEMENTATION_GUIDE.md`
 - Run verification script: `python verify_ai_receptionist_dashboard.py`
 

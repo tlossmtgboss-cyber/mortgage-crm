@@ -9,7 +9,7 @@ import json
 import time
 from datetime import datetime
 
-BASE_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+BASE_URL = "https://api.perenniaai.com"
 
 class TestRunner:
     def __init__(self):

@@ -19,7 +19,7 @@ SLYBROADCAST_CALLER_ID=8438345251  # Your business phone number (10 digits, no +
 OPENAI_API_KEY=your_openai_api_key_here
 
 # API URL (for hosting audio files)
-API_URL=https://mortgage-crm-production-7a9a.up.railway.app
+API_URL=https://api.perenniaai.com
 ```
 
 ## How to Get Your Slybroadcast Credentials

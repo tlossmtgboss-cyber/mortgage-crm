@@ -10,7 +10,7 @@
 
 ### Backend (Railway) - FULLY DEPLOYED ✅
 - **Status**: Live and operational
-- **URL**: https://mortgage-crm-production-7a9a.up.railway.app
+- **URL**: https://api.perenniaai.com
 - **Database**: Tables created and seeded with 10 sample guidelines
 - **API Endpoints**: All 6 endpoints working perfectly
   - `/api/v1/guideline-updates/sidebar` ✅
@@ -140,7 +140,7 @@
 - **Dependencies**: React, fetch API, localStorage
 
 ### API Integration
-- **Base URL**: https://mortgage-crm-production-7a9a.up.railway.app
+- **Base URL**: https://api.perenniaai.com
 - **Auth**: JWT token from localStorage
 - **Endpoints**: `/api/v1/guideline-updates/*`
 - **Polling**: Every 5 minutes (sidebar), Every 2 minutes (badge)

@@ -6,7 +6,7 @@ import requests
 import json
 
 # Configuration
-BACKEND_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+BACKEND_URL = "https://api.perenniaai.com"
 # Use the demo token from earlier tests
 AUTH_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZW1vQGV4YW1wbGUuY29tIiwiZXhwIjoxNzYyNzM4NDI0fQ.tVE9h1OpPxWF0ELj2-nwFkS1UiT5ILrctE7SRZ6wd5I"
 API_KEY = "2710d1a040a03295045e0ad6bb2535997da8acd0"

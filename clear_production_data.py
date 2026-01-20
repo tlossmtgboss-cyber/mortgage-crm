@@ -6,7 +6,7 @@ Run this script to remove all the fake team members and sample data.
 import requests
 
 # Your production backend URL
-BACKEND_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+BACKEND_URL = "https://api.perenniaai.com"
 
 print("🧹 Clear Production Sample Data")
 print("=" * 50)

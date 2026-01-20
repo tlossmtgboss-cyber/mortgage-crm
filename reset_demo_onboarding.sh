@@ -6,7 +6,7 @@ echo ""
 
 # Get authentication token for demo user
 echo "📝 Logging in as demo user..."
-TOKEN_RESPONSE=$(curl -s -X POST "https://mortgage-crm-production-7a9a.up.railway.app/token" \
+TOKEN_RESPONSE=$(curl -s -X POST "https://api.perenniaai.com/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "username=admin@perenniaai.com&password=demo123")
 
@@ -23,7 +23,7 @@ echo ""
 
 # Reset onboarding
 echo "🔄 Resetting onboarding..."
-RESET_RESPONSE=$(curl -s -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/onboarding/reset" \
+RESET_RESPONSE=$(curl -s -X POST "https://api.perenniaai.com/api/v1/onboarding/reset" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json")
 

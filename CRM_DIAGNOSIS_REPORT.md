@@ -333,7 +333,7 @@ Your Mortgage CRM is **production-ready** and **fully functional**. The comprehe
 - Voice Chat Feature: `VOICE_CHAT_FEATURE.md`
 - AI Integration: `AI_INTEGRATION_GUIDE.md`
 - Security: `SECURITY.md`
-- API Docs: https://mortgage-crm-production-7a9a.up.railway.app/docs
+- API Docs: https://api.perenniaai.com/docs
 
 ### Test Scripts
 - Comprehensive Test: `comprehensive_crm_test.sh`

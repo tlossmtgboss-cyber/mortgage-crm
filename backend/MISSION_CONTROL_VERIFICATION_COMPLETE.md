@@ -126,7 +126,7 @@ SELECT * FROM calculate_ai_health_score(
 
 **To verify real logging works:**
 
-1. Login to: https://mortgage-crm-production-7a9a.up.railway.app
+1. Login to: https://api.perenniaai.com
 2. Go to **any Lead detail page**
 3. Use **Smart AI Chat** 5-10 times
 4. Ask questions like:

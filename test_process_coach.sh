@@ -7,7 +7,7 @@ echo ""
 
 # Login and get token
 echo "Step 1: Logging in as demo user..."
-LOGIN_RESPONSE=$(curl -s -X POST https://mortgage-crm-production-7a9a.up.railway.app/token \
+LOGIN_RESPONSE=$(curl -s -X POST https://api.perenniaai.com/token \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "username=admin@perenniaai.com&password=demo123")
 
@@ -27,7 +27,7 @@ echo "=========================================="
 echo "TEST 1: Daily Briefing (Should include CRM data)"
 echo "=========================================="
 
-DAILY_BRIEFING_RESPONSE=$(curl -s -X POST https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai/smart-chat \
+DAILY_BRIEFING_RESPONSE=$(curl -s -X POST https://api.perenniaai.com/api/v1/ai/smart-chat \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -62,7 +62,7 @@ echo "=========================================="
 echo "TEST 2: Pipeline Audit (Should identify stuck deals)"
 echo "=========================================="
 
-PIPELINE_AUDIT_RESPONSE=$(curl -s -X POST https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai/smart-chat \
+PIPELINE_AUDIT_RESPONSE=$(curl -s -X POST https://api.perenniaai.com/api/v1/ai/smart-chat \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -90,7 +90,7 @@ echo "=========================================="
 echo "TEST 3: Priority Guidance (Should use task data)"
 echo "=========================================="
 
-PRIORITY_RESPONSE=$(curl -s -X POST https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai/smart-chat \
+PRIORITY_RESPONSE=$(curl -s -X POST https://api.perenniaai.com/api/v1/ai/smart-chat \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -118,7 +118,7 @@ echo "=========================================="
 echo "TEST 4: Memory Stats"
 echo "=========================================="
 
-MEMORY_STATS=$(curl -s -X GET https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai/memory-stats \
+MEMORY_STATS=$(curl -s -X GET https://api.perenniaai.com/api/v1/ai/memory-stats \
   -H "Authorization: Bearer $TOKEN")
 
 echo "Memory Stats:"

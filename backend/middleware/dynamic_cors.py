@@ -71,7 +71,7 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
             "https://app.perenniaai.com",
             "https://api.perenniaai.com",
             # Railway production domains
-            "https://mortgage-crm-production-7a9a.up.railway.app",
+            "https://api.perenniaai.com",
             "https://mortgage-crm-production-79a9.up.railway.app",
         }
 

@@ -77,7 +77,7 @@ Successfully implemented and deployed the AI Intelligence Layer for the Profitab
 ## Access URLs
 
 - **Dashboard**: https://perenniaai.com/profitability
-- **API**: https://mortgage-crm-production-7a9a.up.railway.app
+- **API**: https://api.perenniaai.com
 
 ## Files Created
 

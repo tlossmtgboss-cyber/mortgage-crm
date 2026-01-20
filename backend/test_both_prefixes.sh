@@ -3,7 +3,7 @@
 echo "Testing BOTH Mission Control route prefixes..."
 echo ""
 
-BASE_URL="https://mortgage-crm-production-7a9a.up.railway.app"
+BASE_URL="https://api.perenniaai.com"
 
 echo "=== Testing /api/mission-control/* (mission_control_routes.py) ==="
 for endpoint in "/summary" "/integrations" "/ai-metrics" "/alerts"; do

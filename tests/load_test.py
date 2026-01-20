@@ -11,7 +11,7 @@ Environment Variables:
     TEST_API_KEY - API key to bypass IP restrictions (set in server .env)
 
 Examples:
-    python tests/load_test.py https://mortgage-crm-production-7a9a.up.railway.app
+    python tests/load_test.py https://api.perenniaai.com
     python tests/load_test.py --users 50 --requests 10
     TEST_API_KEY=your-key python tests/load_test.py https://api.example.com
     python tests/load_test.py --api-key your-key https://api.example.com
@@ -291,7 +291,7 @@ async def main():
     parser.add_argument(
         "api_url",
         nargs="?",
-        default="https://mortgage-crm-production-7a9a.up.railway.app",
+        default="https://api.perenniaai.com",
         help="API URL to test"
     )
     parser.add_argument(

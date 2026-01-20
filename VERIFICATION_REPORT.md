@@ -67,7 +67,7 @@ All deployment endpoints accessible:
 | Endpoint | Status | URL |
 |----------|--------|-----|
 | Test Page | ✅ | https://mortgage-crm-git-main-tim-loss-projects.vercel.app/verizon-test |
-| Backend API | ✅ | https://mortgage-crm-production-7a9a.up.railway.app |
+| Backend API | ✅ | https://api.perenniaai.com |
 | Frontend | ✅ | https://mortgage-crm-git-main-tim-loss-projects.vercel.app |
 
 ### 5. Frontend Build Check ✅
@@ -321,7 +321,7 @@ TWILIO_PHONE_NUMBER=+15551234567
 ### Live URLs:
 - **CRM:** https://mortgage-crm-git-main-tim-loss-projects.vercel.app
 - **Test Page:** https://mortgage-crm-git-main-tim-loss-projects.vercel.app/verizon-test
-- **Backend:** https://mortgage-crm-production-7a9a.up.railway.app
+- **Backend:** https://api.perenniaai.com
 - **Railway:** https://railway.app/dashboard
 - **Twilio:** https://console.twilio.com
 

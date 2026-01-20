@@ -3,7 +3,7 @@
 # Script to run MUM client fields migration on Railway
 
 echo "🔑 Getting authentication token..."
-TOKEN=$(curl -X POST "https://mortgage-crm-production-7a9a.up.railway.app/token" \
+TOKEN=$(curl -X POST "https://api.perenniaai.com/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "username=tloss@cmgfi.com&password=Up2024!" \
   -s | jq -r '.access_token')
@@ -19,7 +19,7 @@ echo "🔧 Running MUM client fields migration..."
 echo ""
 
 # Run the migration
-RESULT=$(curl -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/migrations/add-mum-client-fields" \
+RESULT=$(curl -X POST "https://api.perenniaai.com/api/v1/migrations/add-mum-client-fields" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -s)

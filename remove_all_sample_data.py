@@ -17,7 +17,7 @@ import os
 from datetime import datetime
 
 # Configuration
-API_URL = os.getenv("API_URL", "https://mortgage-crm-production-7a9a.up.railway.app")
+API_URL = os.getenv("API_URL", "https://api.perenniaai.com")
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "admin@perenniaai.com")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")  # Set via environment variable
 

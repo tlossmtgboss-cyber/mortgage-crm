@@ -6,7 +6,7 @@ echo ""
 
 # Get authentication token
 echo "📝 Logging in..."
-TOKEN_RESPONSE=$(curl -s -X POST "https://mortgage-crm-production-7a9a.up.railway.app/token" \
+TOKEN_RESPONSE=$(curl -s -X POST "https://api.perenniaai.com/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "username=admin@perenniaai.com&password=demo123")
 
@@ -23,7 +23,7 @@ echo ""
 # Test 1: Get templates
 echo "🔍 Test 1: Get Voicemail Templates"
 echo "-----------------------------------"
-TEMPLATES_RESPONSE=$(curl -s "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voicemail/templates" \
+TEMPLATES_RESPONSE=$(curl -s "https://api.perenniaai.com/api/v1/voicemail/templates" \
   -H "Authorization: Bearer $TOKEN")
 
 echo "$TEMPLATES_RESPONSE" | jq '.'
@@ -36,7 +36,7 @@ echo ""
 # Test 2: Get voicemail history
 echo "🔍 Test 2: Get Voicemail History"
 echo "-----------------------------------"
-HISTORY_RESPONSE=$(curl -s "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voicemail/history?limit=5" \
+HISTORY_RESPONSE=$(curl -s "https://api.perenniaai.com/api/v1/voicemail/history?limit=5" \
   -H "Authorization: Bearer $TOKEN")
 
 echo "$HISTORY_RESPONSE" | jq '.'
@@ -45,7 +45,7 @@ echo ""
 # Test 3: Get analytics
 echo "🔍 Test 3: Get Voicemail Analytics"
 echo "-----------------------------------"
-ANALYTICS_RESPONSE=$(curl -s "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voicemail/analytics" \
+ANALYTICS_RESPONSE=$(curl -s "https://api.perenniaai.com/api/v1/voicemail/analytics" \
   -H "Authorization: Bearer $TOKEN")
 
 echo "$ANALYTICS_RESPONSE" | jq '.'

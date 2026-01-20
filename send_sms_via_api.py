@@ -6,7 +6,7 @@ Uses the deployed backend to send SMS through Twilio
 import requests
 import sys
 
-BACKEND_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+BACKEND_URL = "https://api.perenniaai.com"
 
 def main():
     print("="*70)

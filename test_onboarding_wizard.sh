@@ -11,7 +11,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Configuration
-API_URL="https://mortgage-crm-production-7a9a.up.railway.app"
+API_URL="https://api.perenniaai.com"
 TOKEN_FILE="/tmp/token_onboarding_test.json"
 
 echo -e "${BLUE}=== Onboarding Wizard API Test ===${NC}\n"

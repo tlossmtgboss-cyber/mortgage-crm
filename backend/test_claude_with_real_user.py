@@ -6,7 +6,7 @@ import json
 
 def main():
     # Railway production URL
-    BASE_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+    BASE_URL = "https://api.perenniaai.com"
 
     # Your credentials
     EMAIL = "tloss@cmgfi.com"

@@ -9,7 +9,7 @@ Complete guide to setting up Zaps for your Mortgage CRM.
 Before you begin:
 - ✅ Zapier account (free or paid)
 - ✅ API Key: `185b7101-9435-44da-87ab-b7582c4e4607`
-- ✅ API URL: `https://mortgage-crm-production-7a9a.up.railway.app`
+- ✅ API URL: `https://api.perenniaai.com`
 
 ---
 
@@ -83,7 +83,7 @@ Before you begin:
 
 1. **URL:** Paste this exactly:
    ```
-   https://mortgage-crm-production-7a9a.up.railway.app/api/v1/leads/
+   https://api.perenniaai.com/api/v1/leads/
    ```
 
 ### Set Up Action - Payload Type
@@ -266,7 +266,7 @@ Key: notes         | Value: {{Additional Comments}}
 
 2. **URL:**
    ```
-   https://mortgage-crm-production-7a9a.up.railway.app/api/v1/leads/{{LEAD_ID}}
+   https://api.perenniaai.com/api/v1/leads/{{LEAD_ID}}
    ```
    *(You'll need to know the lead ID - see "Finding Lead ID" section below)*
 
@@ -409,7 +409,7 @@ Map the webhook data to spreadsheet columns:
 
 1. **URL:**
    ```
-   https://mortgage-crm-production-7a9a.up.railway.app/api/v1/leads?limit=100
+   https://api.perenniaai.com/api/v1/leads?limit=100
    ```
 
 2. **Method:** GET
@@ -469,7 +469,7 @@ Create a Zap step that:
 
 ## Option 3: Manual Lookup
 ```bash
-curl "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/leads" \
+curl "https://api.perenniaai.com/api/v1/leads" \
 -H "X-API-Key: 185b7101-9435-44da-87ab-b7582c4e4607" | grep "sarah@email.com"
 ```
 
@@ -493,7 +493,7 @@ curl "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/leads" \
 
 ## Test 3: Verify in CRM
 ```bash
-curl "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/leads?limit=10" \
+curl "https://api.perenniaai.com/api/v1/leads?limit=10" \
 -H "X-API-Key: 185b7101-9435-44da-87ab-b7582c4e4607"
 ```
 
@@ -536,7 +536,7 @@ curl "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/leads?limit=10"
 **Solutions:**
 1. Check Zapier Task History for the execution
 2. Look at the response from the webhook action
-3. Verify the URL is exactly: `https://mortgage-crm-production-7a9a.up.railway.app/api/v1/leads/`
+3. Verify the URL is exactly: `https://api.perenniaai.com/api/v1/leads/`
 4. Check that the method is POST (not GET or PATCH)
 
 ---
@@ -570,7 +570,7 @@ Organize Zaps in folders: "Lead Generation", "Lead Nurture", etc.
 
 **API Key:** `185b7101-9435-44da-87ab-b7582c4e4607`
 
-**Base URL:** `https://mortgage-crm-production-7a9a.up.railway.app`
+**Base URL:** `https://api.perenniaai.com`
 
 **Endpoints:**
 - Create Lead: `POST /api/v1/leads/`
@@ -617,7 +617,7 @@ Here's a complete example with exact values:
 
 **Action: Webhooks by Zapier**
 - Event: POST
-- URL: `https://mortgage-crm-production-7a9a.up.railway.app/api/v1/leads/`
+- URL: `https://api.perenniaai.com/api/v1/leads/`
 
 **Headers:**
 ```

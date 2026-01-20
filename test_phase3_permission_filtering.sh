@@ -3,7 +3,7 @@
 # Phase 3 Permission Filtering Test Script
 # Tests that impersonation + permission filtering work together
 
-API_URL="https://mortgage-crm-production-7a9a.up.railway.app"
+API_URL="https://api.perenniaai.com"
 
 echo "🧪 Phase 3 Permission Filtering Test"
 echo "===================================="

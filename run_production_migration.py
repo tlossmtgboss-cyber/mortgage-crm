@@ -6,7 +6,7 @@ Run MUM client fields migration on production via API
 import requests
 import sys
 
-API_BASE = "https://mortgage-crm-production-7a9a.up.railway.app"
+API_BASE = "https://api.perenniaai.com"
 
 # Try multiple credentials
 credentials = [
@@ -39,7 +39,7 @@ if not token:
     print("❌ Failed to authenticate with any credentials")
     print("\nPlease provide valid credentials:")
     print("You can run this manually in your browser console instead:")
-    print("\nfetch('https://mortgage-crm-production-7a9a.up.railway.app/api/v1/migrations/add-mum-client-fields', {")
+    print("\nfetch('https://api.perenniaai.com/api/v1/migrations/add-mum-client-fields', {")
     print("  method: 'POST',")
     print("  headers: {")
     print("    'Authorization': 'Bearer ' + localStorage.getItem('token'),")

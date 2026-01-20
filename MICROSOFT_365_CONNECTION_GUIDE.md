@@ -4,7 +4,7 @@
 
 ### Step 1: Navigate to Settings
 ```
-https://mortgage-crm-production-7a9a.up.railway.app/settings
+https://api.perenniaai.com/settings
 ```
 
 ### Step 2: Connect Microsoft 365
@@ -141,7 +141,7 @@ Run this to check your Microsoft 365 connection:
 
 ```bash
 # Test with your auth token
-curl https://mortgage-crm-production-7a9a.up.railway.app/api/v1/microsoft/status \
+curl https://api.perenniaai.com/api/v1/microsoft/status \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
@@ -175,7 +175,7 @@ Your CRM is configured with:
 |---------|-------|
 | **Client ID** | `185b7101-9435-44da-87ab-b7582c4e4607` |
 | **Tenant** | `common` (multi-tenant) |
-| **Redirect URI** | `https://mortgage-crm-production-7a9a.up.railway.app/api/v1/email/oauth/callback` |
+| **Redirect URI** | `https://api.perenniaai.com/api/v1/email/oauth/callback` |
 | **Scopes** | Mail.Read, Mail.ReadWrite, Mail.Send, User.Read, Contacts.Read |
 
 ---

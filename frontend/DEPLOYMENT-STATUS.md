@@ -3,7 +3,7 @@
 ## ✅ COMPLETED - All Systems Updated
 
 ### Backend (Railway) - LIVE ✅
-- **URL**: https://mortgage-crm-production-7a9a.up.railway.app
+- **URL**: https://api.perenniaai.com
 - **Status**: Healthy & Connected
 - **Latest Deploy**: commit `daed74a` - Lead model fields added
 - **Database**: All migrations applied automatically
@@ -59,12 +59,12 @@ Created test lead successfully with all fields:
 ### Option 2: Test API Directly
 ```bash
 # Get token
-curl -X POST https://mortgage-crm-production-7a9a.up.railway.app/token \
+curl -X POST https://api.perenniaai.com/token \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "username=admin@perenniaai.com&password=demo123"
 
 # Create lead (use token from above)
-curl -X POST https://mortgage-crm-production-7a9a.up.railway.app/api/v1/leads/ \
+curl -X POST https://api.perenniaai.com/api/v1/leads/ \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -126,9 +126,9 @@ curl -X POST https://mortgage-crm-production-7a9a.up.railway.app/api/v1/leads/ \
 ## 🔗 Quick Links
 
 - **Frontend**: https://mortgage-crm-nine.vercel.app
-- **Backend API**: https://mortgage-crm-production-7a9a.up.railway.app
-- **API Docs**: https://mortgage-crm-production-7a9a.up.railway.app/docs
-- **Health Check**: https://mortgage-crm-production-7a9a.up.railway.app/health
+- **Backend API**: https://api.perenniaai.com
+- **API Docs**: https://api.perenniaai.com/docs
+- **Health Check**: https://api.perenniaai.com/health
 
 ---
 

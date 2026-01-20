@@ -17,7 +17,7 @@ echo ""
 echo "Running migration..."
 
 curl -X POST \
-  https://mortgage-crm-production-7a9a.up.railway.app/api/v1/migrations/add-external-message-id \
+  https://api.perenniaai.com/api/v1/migrations/add-external-message-id \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   | python3 -m json.tool

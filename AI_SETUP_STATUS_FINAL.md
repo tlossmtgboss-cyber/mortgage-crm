@@ -15,7 +15,7 @@
 ### 2. Railway Integration Complete
 - ✅ All code committed and pushed to GitHub
 - ✅ Railway auto-deploys from `main` branch
-- ✅ Health endpoint responding: https://mortgage-crm-production-7a9a.up.railway.app/health
+- ✅ Health endpoint responding: https://api.perenniaai.com/health
 - ✅ AI router integrated into main.py (no circular imports)
 - ✅ Admin endpoints for remote migration at `/admin/run-ai-migration` and `/admin/initialize-ai-system`
 
@@ -58,7 +58,7 @@ When this error occurs, PostgreSQL rolls back the ENTIRE transaction, so **no ta
 
 3. **Then run migration:**
    ```bash
-   curl -X POST 'https://mortgage-crm-production-7a9a.up.railway.app/admin/run-ai-migration' \
+   curl -X POST 'https://api.perenniaai.com/admin/run-ai-migration' \
      -H 'Content-Type: application/json' \
      -d '{"secret": "migrate-ai-2024"}'
    ```
@@ -82,7 +82,7 @@ I created `ai_phase1_2_schema.sql` that contains only Phase 1 (AMAS) and Phase 2
 
 3. **Then initialize:**
    ```bash
-   curl -X POST 'https://mortgage-crm-production-7a9a.up.railway.app/admin/initialize-ai-system' \
+   curl -X POST 'https://api.perenniaai.com/admin/initialize-ai-system' \
      -H 'Content-Type: application/json' \
      -d '{"secret": "migrate-ai-2024"}'
    ```
@@ -128,10 +128,10 @@ Once migration and initialization complete:
 
 ```bash
 # List all agents
-curl https://mortgage-crm-production-7a9a.up.railway.app/api/ai/agents
+curl https://api.perenniaai.com/api/ai/agents
 
 # Dispatch test event
-curl -X POST https://mortgage-crm-production-7a9a.up.railway.app/api/ai/events \
+curl -X POST https://api.perenniaai.com/api/ai/events \
   -H "Content-Type: application/json" \
   -d '{
     "event_type": "LeadCreated",
@@ -144,7 +144,7 @@ curl -X POST https://mortgage-crm-production-7a9a.up.railway.app/api/ai/events \
   }'
 
 # Check executions
-curl https://mortgage-crm-production-7a9a.up.railway.app/api/ai/executions
+curl https://api.perenniaai.com/api/ai/executions
 ```
 
 ---
@@ -176,7 +176,7 @@ curl https://mortgage-crm-production-7a9a.up.railway.app/api/ai/executions
 2. **Run the migration** using chosen method
 3. **Run initialization:**
    ```bash
-   curl -X POST 'https://mortgage-crm-production-7a9a.up.railway.app/admin/initialize-ai-system' \
+   curl -X POST 'https://api.perenniaai.com/admin/initialize-ai-system' \
      -H 'Content-Type: application/json' \
      -d '{"secret": "migrate-ai-2024"}'
    ```

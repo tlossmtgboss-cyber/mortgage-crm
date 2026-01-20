@@ -207,7 +207,7 @@ This will send a test email to tloss@cmgfi.com
 
 3. Test production:
    ```bash
-   curl -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai/send-daily-priorities-email" \
+   curl -X POST "https://api.perenniaai.com/api/v1/ai/send-daily-priorities-email" \
      -H "Authorization: Bearer YOUR_TOKEN" \
      -H "Content-Type: application/json" \
      -d '{"email_address": "tloss@cmgfi.com"}'

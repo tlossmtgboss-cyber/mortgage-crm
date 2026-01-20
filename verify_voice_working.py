@@ -2,7 +2,7 @@
 """Verify voice AI receptionist is working and check recent calls"""
 import requests
 
-API_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+API_URL = "https://api.perenniaai.com"
 
 # Get auth token
 print("Getting auth token...")

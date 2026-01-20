@@ -6,7 +6,7 @@ import requests
 import json
 from datetime import datetime
 
-API_BASE_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+API_BASE_URL = "https://api.perenniaai.com"
 
 # Read token from file
 with open('/tmp/current_token.txt', 'r') as f:

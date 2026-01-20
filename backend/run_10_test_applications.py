@@ -14,7 +14,7 @@ import random
 import time
 import json
 
-BASE_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+BASE_URL = "https://api.perenniaai.com"
 ADMIN_LO_ID = "57"  # Tim Loss's user ID
 
 # Test data arrays for variety

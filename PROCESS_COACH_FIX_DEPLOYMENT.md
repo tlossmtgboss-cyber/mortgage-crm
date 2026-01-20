@@ -3,7 +3,7 @@
 **Status:** ✅ DEPLOYED TO PRODUCTION
 **Production URLs:**
 - Frontend: https://mortgage-crm-nine.vercel.app
-- Backend: https://mortgage-crm-production-7a9a.up.railway.app
+- Backend: https://api.perenniaai.com
 
 ---
 
@@ -141,7 +141,7 @@ dfccd64 - Fix Process Coach to use actual CRM data instead of asking for it
 
 ### Backend Deployment (Railway)
 - **Status:** ✅ Deployed and Healthy
-- **Health Check:** https://mortgage-crm-production-7a9a.up.railway.app/health
+- **Health Check:** https://api.perenniaai.com/health
 - **Response:** `{"status":"healthy","database":"connected"}`
 - **Deployment Method:** Auto-deployment from GitHub main branch
 - **Started:** Successfully with all services running

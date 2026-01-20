@@ -175,7 +175,7 @@ cd /Users/timothyloss/my-project/mortgage-crm/backend
 
 Or manually:
 ```bash
-curl -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voice/drop-voicemail" \
+curl -X POST "https://api.perenniaai.com/api/v1/voice/drop-voicemail" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{

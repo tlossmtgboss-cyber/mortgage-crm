@@ -7,7 +7,7 @@ echo ""
 
 # Get a token first
 echo "Step 1: Getting auth token..."
-LOGIN_RESPONSE=$(curl -s -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/login" \
+LOGIN_RESPONSE=$(curl -s -X POST "https://api.perenniaai.com/api/v1/login" \
   -H "Content-Type: application/json" \
   -d '{"email": "admin@perenniaai.com", "password": "demo123"}')
 
@@ -16,7 +16,7 @@ TOKEN=$(echo "$LOGIN_RESPONSE" | jq -r '.access_token' 2>/dev/null)
 if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
     echo "❌ Could not get auth token. Trying tloss@cmgfi.com..."
 
-    LOGIN_RESPONSE=$(curl -s -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/login" \
+    LOGIN_RESPONSE=$(curl -s -X POST "https://api.perenniaai.com/api/v1/login" \
       -H "Content-Type: application/json" \
       -d '{"email": "tloss@cmgfi.com", "password": "your_password_here"}')
 
@@ -34,7 +34,7 @@ echo ""
 
 # Check if there's a users endpoint
 echo "Step 2: Checking for users endpoint..."
-USERS_RESPONSE=$(curl -s -X GET "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/users" \
+USERS_RESPONSE=$(curl -s -X GET "https://api.perenniaai.com/api/v1/users" \
   -H "Authorization: Bearer $TOKEN" \
   -w "\n%{http_code}")
 

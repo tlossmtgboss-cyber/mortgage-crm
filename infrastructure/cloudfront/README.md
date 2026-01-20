@@ -94,7 +94,7 @@ project_name = "perennia-crm"
 s3_bucket_name = "perennia-docs"
 
 # Backend API origin
-backend_origin = "mortgage-crm-production-7a9a.up.railway.app"
+backend_origin = "api.perenniaai.com"
 
 # Optional: Custom domain
 # custom_domain = "cdn.yourcompany.com"

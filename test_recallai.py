@@ -77,7 +77,7 @@ if __name__ == "__main__":
         print("2. Click 'Connect Recall.ai'")
         print(f"3. Paste the API key: {API_KEY}")
         print("4. Configure webhook URL in Recall.ai dashboard:")
-        print("   https://mortgage-crm-production-7a9a.up.railway.app/api/v1/recallai/webhook")
+        print("   https://api.perenniaai.com/api/v1/recallai/webhook")
         print(f"5. Use webhook secret: {WEBHOOK_SECRET}")
         print("\nTo test:")
         print("1. Open any lead profile")

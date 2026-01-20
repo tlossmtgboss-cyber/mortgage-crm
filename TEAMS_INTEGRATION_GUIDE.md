@@ -64,7 +64,7 @@ To enable full functionality, you need to configure Microsoft Graph API access. 
 ```
 Name: Mortgage CRM - Teams Integration
 Supported account types: Single tenant (your organization only)
-Redirect URI: https://mortgage-crm-production-7a9a.up.railway.app/auth/microsoft/callback
+Redirect URI: https://api.perenniaai.com/auth/microsoft/callback
 ```
 
 5. Click **"Register"**

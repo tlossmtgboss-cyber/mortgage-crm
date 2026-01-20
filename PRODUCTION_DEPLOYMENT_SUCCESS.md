@@ -4,7 +4,7 @@
 
 The Guideline Updates Sidebar has been successfully deployed to your live production environment!
 
-**Production URL**: https://mortgage-crm-production-7a9a.up.railway.app
+**Production URL**: https://api.perenniaai.com
 
 ---
 
@@ -50,7 +50,7 @@ All endpoints are live and responding correctly:
 ### As a User
 
 1. **Go to Production Site**
-   - URL: https://mortgage-crm-production-7a9a.up.railway.app
+   - URL: https://api.perenniaai.com
 
 2. **Log in to your account**
    - Use your existing credentials
@@ -139,7 +139,7 @@ Or use the API endpoint:
 ### Adding More Sample Data
 
 ```bash
-curl -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/migrations/seed-guideline-updates" \
+curl -X POST "https://api.perenniaai.com/api/v1/migrations/seed-guideline-updates" \
   -H "Content-Type: application/json"
 ```
 
@@ -161,7 +161,7 @@ command = "python3 backend/guideline_updates_scraper.py"
 ### Test Checklist
 
 1. ✅ **Login to Production**
-   - Go to https://mortgage-crm-production-7a9a.up.railway.app
+   - Go to https://api.perenniaai.com
    - Log in with demo credentials or your account
 
 2. ✅ **Navigate to AI Underwriter**
@@ -253,7 +253,7 @@ If you encounter any issues:
 
 The Guideline Updates Sidebar is now **LIVE ON PRODUCTION** and ready to help your team stay current with the latest mortgage lending guidelines!
 
-**Go check it out**: https://mortgage-crm-production-7a9a.up.railway.app/ai-underwriter
+**Go check it out**: https://api.perenniaai.com/ai-underwriter
 
 ---
 

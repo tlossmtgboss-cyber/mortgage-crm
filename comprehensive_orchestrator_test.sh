@@ -3,7 +3,7 @@
 # Comprehensive AI Orchestrator Test Suite
 # Tests: Functional, Workflow, Error Handling, Security, Performance, Audit, Edge Cases
 
-BASE_URL="https://mortgage-crm-production-7a9a.up.railway.app"
+BASE_URL="https://api.perenniaai.com"
 RESULTS_FILE="/tmp/orchestrator_test_results.json"
 
 echo "=============================================="

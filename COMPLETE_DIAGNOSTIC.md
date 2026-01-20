@@ -16,7 +16,7 @@
 
 1. **Twilio Phone Number Configuration**
    - ✅ Webhook URL configured correctly
-   - ✅ Points to: `https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voice/incoming`
+   - ✅ Points to: `https://api.perenniaai.com/api/v1/voice/incoming`
 
 2. **Railway Backend Webhook**
    - ✅ Receives incoming call webhooks
@@ -30,7 +30,7 @@
      <Response>
        <Connect>
          <Stream track="both_tracks"
-                 url="wss://mortgage-crm-production-7a9a.up.railway.app/api/v1/voice/ws/voice-stream" />
+                 url="wss://api.perenniaai.com/api/v1/voice/ws/voice-stream" />
        </Connect>
      </Response>
      ```

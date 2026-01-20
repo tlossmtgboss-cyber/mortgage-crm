@@ -72,7 +72,7 @@ If you prefer, you can trigger the migration via curl:
 
 ```bash
 # Replace YOUR_TOKEN with your actual auth token
-curl -X POST https://mortgage-crm-production-7a9a.up.railway.app/api/v1/migrations/add-conversation-memory \
+curl -X POST https://api.perenniaai.com/api/v1/migrations/add-conversation-memory \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json"
 ```

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Run Estimate Parser Cache Migration
 
-API_URL="https://mortgage-crm-production-7a9a.up.railway.app"
+API_URL="https://api.perenniaai.com"
 
 echo "🚀 Running estimate parser cache migration..."
 echo ""

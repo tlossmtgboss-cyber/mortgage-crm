@@ -296,7 +296,7 @@ To verify the feature is working:
 ## 🚀 Deployment Status
 
 **Backend**: ✅ Deployed on Railway
-- URL: https://mortgage-crm-production-7a9a.up.railway.app
+- URL: https://api.perenniaai.com
 - Endpoints: Responding with 401 (requires auth) ✅
 - Database: Connected ✅
 

@@ -5,7 +5,7 @@ Check SMS sending with detailed response
 import requests
 import json
 
-BACKEND_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+BACKEND_URL = "https://api.perenniaai.com"
 
 # Login
 login_response = requests.post(

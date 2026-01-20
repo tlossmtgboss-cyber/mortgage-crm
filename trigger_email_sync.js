@@ -11,7 +11,7 @@
     try {
         console.log('🔄 Triggering email sync...');
 
-        const response = await fetch('https://mortgage-crm-production-7a9a.up.railway.app/api/v1/email/sync-now', {
+        const response = await fetch('https://api.perenniaai.com/api/v1/email/sync-now', {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${localStorage.getItem('token').replace(/"/g, '')}`,

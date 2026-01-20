@@ -41,14 +41,14 @@ Status: active
 - Twilio Auth Token: Updated
 
 ### 4. Added Server URLs ✅
-- Assistant Server URL: `https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/webhook`
-- Phone Number Server URL: `https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/webhook`
+- Assistant Server URL: `https://api.perenniaai.com/api/vapi/webhook`
+- Phone Number Server URL: `https://api.perenniaai.com/api/vapi/webhook`
 
 ### 5. Configured Twilio Webhook ✅
 ```
 Voice URL: https://api.vapi.ai/call/twilio?assistantId=120e239e-4d19-4e43-ad92-1f8b07d08c8c
 Voice Method: POST
-Status Callback: https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/webhook
+Status Callback: https://api.perenniaai.com/api/vapi/webhook
 ```
 
 ---

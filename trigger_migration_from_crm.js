@@ -11,7 +11,7 @@
     try {
         console.log('🔧 Running migration to add external_message_id column...');
 
-        const response = await fetch('https://mortgage-crm-production-7a9a.up.railway.app/api/v1/migrations/add-external-message-id', {
+        const response = await fetch('https://api.perenniaai.com/api/v1/migrations/add-external-message-id', {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${localStorage.getItem('token').replace(/"/g, '')}`,

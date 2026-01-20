@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 CRM_URL = "https://mortgage-crm-git-main-tim-loss-projects.vercel.app"
-BACKEND_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+BACKEND_URL = "https://api.perenniaai.com"
 
 def print_header(text):
     print("\n" + "="*70)

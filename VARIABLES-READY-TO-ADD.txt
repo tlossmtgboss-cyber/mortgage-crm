@@ -71,7 +71,7 @@ Railway will automatically redeploy (you'll see it in Deployments tab)
 
 Wait 3-5 minutes, then test:
 
-curl https://mortgage-crm-production-7a9a.up.railway.app/health
+curl https://api.perenniaai.com/health
 
 Expected: {"status":"healthy"} or similar
 

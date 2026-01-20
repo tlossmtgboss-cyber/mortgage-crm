@@ -320,7 +320,7 @@ const [autoRefresh, setAutoRefresh] = useState(true);
 
 **Live URLs:**
 - Frontend: https://mortgage-crm-frontend.vercel.app/ai-receptionist-dashboard
-- Backend API: https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard
+- Backend API: https://api.perenniaai.com/api/v1/ai-receptionist/dashboard
 
 **Deployment Status:**
 - ✅ Code pushed to GitHub main branch
@@ -605,4 +605,4 @@ All deliverables successfully implemented:
 **Phase:** 2 of 2
 **Status:** ✅ COMPLETE
 **Frontend URL:** https://mortgage-crm-frontend.vercel.app/ai-receptionist-dashboard
-**Backend API:** https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard
+**Backend API:** https://api.perenniaai.com/api/v1/ai-receptionist/dashboard

@@ -4,7 +4,7 @@
 
 ```bash
 # Get your auth token
-curl -X POST "https://mortgage-crm-production-7a9a.up.railway.app/token" \
+curl -X POST "https://api.perenniaai.com/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "username=YOUR_EMAIL&password=YOUR_PASSWORD"
 ```
@@ -23,7 +23,7 @@ Copy the `access_token` value.
 
 ```bash
 # Replace YOUR_TOKEN with the token from Step 1
-curl -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/migrations/add-ai-receptionist-dashboard-tables" \
+curl -X POST "https://api.perenniaai.com/api/v1/migrations/add-ai-receptionist-dashboard-tables" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json"
 ```
@@ -116,27 +116,27 @@ Total Records: 784
 # Use your auth token from Step 1
 
 # Test 1: Activity Feed (should return 200 with data)
-curl -X GET "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard/activity/feed?limit=5" \
+curl -X GET "https://api.perenniaai.com/api/v1/ai-receptionist/dashboard/activity/feed?limit=5" \
   -H "Authorization: Bearer YOUR_TOKEN"
 
 # Test 2: Realtime Metrics (should return 200 with metrics)
-curl -X GET "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard/metrics/realtime" \
+curl -X GET "https://api.perenniaai.com/api/v1/ai-receptionist/dashboard/metrics/realtime" \
   -H "Authorization: Bearer YOUR_TOKEN"
 
 # Test 3: Skills (should return 200 with skills array)
-curl -X GET "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard/skills" \
+curl -X GET "https://api.perenniaai.com/api/v1/ai-receptionist/dashboard/skills" \
   -H "Authorization: Bearer YOUR_TOKEN"
 
 # Test 4: ROI (should return 200 with ROI calculations)
-curl -X GET "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard/roi" \
+curl -X GET "https://api.perenniaai.com/api/v1/ai-receptionist/dashboard/roi" \
   -H "Authorization: Bearer YOUR_TOKEN"
 
 # Test 5: Errors (should return 200 with errors array)
-curl -X GET "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard/errors" \
+curl -X GET "https://api.perenniaai.com/api/v1/ai-receptionist/dashboard/errors" \
   -H "Authorization: Bearer YOUR_TOKEN"
 
 # Test 6: System Health (should return 200 with health data)
-curl -X GET "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard/system-health" \
+curl -X GET "https://api.perenniaai.com/api/v1/ai-receptionist/dashboard/system-health" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 

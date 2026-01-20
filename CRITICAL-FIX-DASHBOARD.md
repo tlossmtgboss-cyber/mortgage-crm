@@ -164,7 +164,7 @@ All showing realistic demo data until the backend is fully implemented.
 
 ✅ **Backend Deployed:**
 - Railway auto-deploying from main branch
-- Endpoint: https://mortgage-crm-production-7a9a.up.railway.app/api/v1/dashboard
+- Endpoint: https://api.perenniaai.com/api/v1/dashboard
 - Returns correct empty structure
 
 ## Testing Checklist

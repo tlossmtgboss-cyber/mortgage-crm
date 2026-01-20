@@ -154,7 +154,7 @@ Every AI action is logged:
 
 ```bash
 # See what the Email Processor agent has done
-curl 'https://mortgage-crm-production-7a9a.up.railway.app/api/ai/executions?agent_id=email_processor'
+curl 'https://api.perenniaai.com/api/ai/executions?agent_id=email_processor'
 ```
 
 **Response:**
@@ -309,7 +309,7 @@ The Email Processor Agent collaborates with other agents:
 4. **Monitor Performance**
    ```bash
    # Check email processor metrics
-   curl 'https://mortgage-crm-production-7a9a.up.railway.app/api/ai/analytics/agent/email_processor?days=7'
+   curl 'https://api.perenniaai.com/api/ai/analytics/agent/email_processor?days=7'
    ```
 
 5. **Review Reconciliation Queue**

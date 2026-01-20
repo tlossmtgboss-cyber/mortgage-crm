@@ -3,7 +3,7 @@
 
 import requests
 
-API_BASE = "https://mortgage-crm-production-7a9a.up.railway.app"
+API_BASE = "https://api.perenniaai.com"
 
 # Login
 response = requests.post(

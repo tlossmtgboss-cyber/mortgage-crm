@@ -2,7 +2,7 @@
 import requests
 
 FRONTEND_URL = "https://mortgage-crm-nine.vercel.app"
-BACKEND_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+BACKEND_URL = "https://api.perenniaai.com"
 
 print("🎯 Testing Buyer Intake Application Deployment\n")
 

@@ -3,7 +3,7 @@
 import requests
 import time
 
-API_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+API_URL = "https://api.perenniaai.com"
 
 print("=" * 70)
 print("TEST: Incoming Call Webhook")
@@ -81,7 +81,7 @@ To fix Twilio configuration:
 1. Go to: https://console.twilio.com/us1/develop/phone-numbers/manage/incoming
 2. Click on +1 (832) 648-2297
 3. Set 'A CALL COMES IN' webhook to:
-   https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voice/incoming
+   https://api.perenniaai.com/api/v1/voice/incoming
 4. Method: HTTP POST
 5. Save
 """)

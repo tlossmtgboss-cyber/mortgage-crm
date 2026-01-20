@@ -6,7 +6,7 @@ echo ""
 
 # Get authentication token
 echo "📝 Authenticating..."
-TOKEN_RESPONSE=$(curl -s -X POST "https://mortgage-crm-production-7a9a.up.railway.app/token" \
+TOKEN_RESPONSE=$(curl -s -X POST "https://api.perenniaai.com/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "username=admin@perenniaai.com&password=demo123")
 
@@ -22,7 +22,7 @@ echo ""
 
 # Run column fix migration
 echo "🔄 Running column fix migration..."
-MIGRATION_RESPONSE=$(curl -s -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/migrations/fix-voicemail-drops-columns" \
+MIGRATION_RESPONSE=$(curl -s -X POST "https://api.perenniaai.com/api/v1/migrations/fix-voicemail-drops-columns" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json")
 
@@ -39,7 +39,7 @@ elif [ "$SUCCESS" = "null" ]; then
   sleep 30
   # Retry
   echo "🔄 Retrying migration..."
-  MIGRATION_RESPONSE=$(curl -s -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/migrations/fix-voicemail-drops-columns" \
+  MIGRATION_RESPONSE=$(curl -s -X POST "https://api.perenniaai.com/api/v1/migrations/fix-voicemail-drops-columns" \
     -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json")
   echo "$MIGRATION_RESPONSE" | jq '.'

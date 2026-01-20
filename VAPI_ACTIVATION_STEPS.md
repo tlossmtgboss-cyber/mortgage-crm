@@ -62,7 +62,7 @@ Or via Railway Dashboard:
    - URL: `https://api.vapi.ai/call/twilio?assistantId=YOUR_ASSISTANT_ID`
    - HTTP Method: **POST**
 4. **Status Callback URL** (IMPORTANT for logging to your dashboard):
-   - URL: `https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/webhook`
+   - URL: `https://api.perenniaai.com/api/vapi/webhook`
    - HTTP Method: **POST**
 5. Click **"Save"**
 
@@ -75,7 +75,7 @@ Or via Railway Dashboard:
 1. In Vapi dashboard, go to **"Settings"** → **"Webhooks"**
 2. Add webhook URL:
    ```
-   https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/webhook
+   https://api.perenniaai.com/api/vapi/webhook
    ```
 3. Select events:
    - ✅ `call.started`
@@ -142,7 +142,7 @@ railway redeploy --yes
 
 ### Test Vapi webhook:
 ```bash
-curl -X POST https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/webhook \
+curl -X POST https://api.perenniaai.com/api/vapi/webhook \
   -H "Content-Type: application/json" \
   -d '{
     "message": {
@@ -172,7 +172,7 @@ curl -X POST https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/webhoo
 
 ### Issue: "Calls not appearing in dashboard"
 - Verify Vapi webhook is configured (Step 4)
-- Check webhook URL: `https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/webhook`
+- Check webhook URL: `https://api.perenniaai.com/api/vapi/webhook`
 - Check Railway logs for webhook events
 
 ---
@@ -209,7 +209,7 @@ https://api.vapi.ai/call/twilio?assistantId=YOUR_ASSISTANT_ID
 
 **Vapi → CRM Webhook:**
 ```
-https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/webhook
+https://api.perenniaai.com/api/vapi/webhook
 ```
 
 **CRM Function Endpoints:**

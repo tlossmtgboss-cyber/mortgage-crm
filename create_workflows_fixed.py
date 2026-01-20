@@ -7,7 +7,7 @@ import requests
 import json
 from datetime import datetime, timedelta
 
-API_BASE = "https://mortgage-crm-production-7a9a.up.railway.app"
+API_BASE = "https://api.perenniaai.com"
 
 # Get the 10 team members we just created
 TEAM_WORKFLOWS = {

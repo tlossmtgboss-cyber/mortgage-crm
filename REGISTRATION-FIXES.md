@@ -158,7 +158,7 @@ Dashboard loads → App.js checks onboarding_completed
 ## Production Deployment Status
 
 ### Backend (Railway)
-- URL: https://mortgage-crm-production-7a9a.up.railway.app
+- URL: https://api.perenniaai.com
 - Status: Auto-deploying latest changes
 - Logs: Available in Railway dashboard
 

@@ -5,7 +5,7 @@ Test individual sections of dashboard to isolate the 500 error
 import requests
 from datetime import date, timedelta
 
-API_BASE_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+API_BASE_URL = "https://api.perenniaai.com"
 
 # Get token
 response = requests.post(

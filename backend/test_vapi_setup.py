@@ -9,7 +9,7 @@ import os
 # Vapi credentials from environment
 VAPI_API_KEY = os.getenv("VAPI_API_KEY", "")
 VAPI_ASSISTANT_ID = os.getenv("VAPI_ASSISTANT_ID", "")
-CRM_WEBHOOK_URL = "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/webhook"
+CRM_WEBHOOK_URL = "https://api.perenniaai.com/api/vapi/webhook"
 
 print("=" * 80)
 print("🧪 TESTING VAPI SETUP")

@@ -14,7 +14,7 @@ print("="*70)
 print("\n1️⃣ BACKEND API CHECK")
 print("-" * 70)
 
-backend_url = "https://mortgage-crm-production-7a9a.up.railway.app"
+backend_url = "https://api.perenniaai.com"
 
 try:
     # Login first

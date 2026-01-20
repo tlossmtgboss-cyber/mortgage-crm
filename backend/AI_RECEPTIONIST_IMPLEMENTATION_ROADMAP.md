@@ -469,7 +469,7 @@
 **Testing:**
 - Run migration: `python run_ab_testing_migration.py`
 - Test voice: Call Twilio number (once routes enabled)
-- API docs: `https://mortgage-crm-production-7a9a.up.railway.app/docs`
+- API docs: `https://api.perenniaai.com/docs`
 
 ---
 

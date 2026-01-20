@@ -66,7 +66,7 @@ python3 test_email_priorities.py
 Or use the API directly:
 
 ```bash
-curl -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai/send-daily-priorities-email" \
+curl -X POST "https://api.perenniaai.com/api/v1/ai/send-daily-priorities-email" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"email_address": "tloss@cmgfi.com"}'

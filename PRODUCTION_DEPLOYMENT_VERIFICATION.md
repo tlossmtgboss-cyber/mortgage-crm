@@ -28,10 +28,10 @@ All created features have been successfully deployed to production and verified 
 - **Last Build**: Recent (contains all latest features)
 
 ### Backend (Railway)
-- **URL**: https://mortgage-crm-production-7a9a.up.railway.app
+- **URL**: https://api.perenniaai.com
 - **Status**: ✅ **HEALTHY**
 - **Health Check**: `{"status":"healthy","database":"connected"}`
-- **API Docs**: https://mortgage-crm-production-7a9a.up.railway.app/docs (HTTP 200)
+- **API Docs**: https://api.perenniaai.com/docs (HTTP 200)
 - **Database**: ✅ Connected
 - **Auto-sync Scheduler**: ✅ Running (every 5 minutes)
 
@@ -499,8 +499,8 @@ All 20 most recent commits have been deployed to production:
 
 ### Production URLs
 - **Frontend**: https://mortgage-crm-nine.vercel.app
-- **Backend**: https://mortgage-crm-production-7a9a.up.railway.app
-- **API Docs**: https://mortgage-crm-production-7a9a.up.railway.app/docs
+- **Backend**: https://api.perenniaai.com
+- **API Docs**: https://api.perenniaai.com/docs
 
 ### What's Live Right Now
 1. ✅ **Voice Chat** - Speak to AI in Process Coach

@@ -18,7 +18,7 @@ JWT_SECRET_KEY=your-jwt-secret-key-here-min-32-chars
 
 ### CORS (Frontend URL)
 ```bash
-FRONTEND_URL=https://mortgage-crm-production-7a9a.up.railway.app
+FRONTEND_URL=https://api.perenniaai.com
 ```
 
 ## Microsoft 365 Integration
@@ -27,7 +27,7 @@ FRONTEND_URL=https://mortgage-crm-production-7a9a.up.railway.app
 MICROSOFT_CLIENT_ID=185b7101-9435-44da-87ab-b7582c4e4607
 MICROSOFT_CLIENT_SECRET=your-microsoft-client-secret
 MICROSOFT_TENANT_ID=common
-MICROSOFT_REDIRECT_URI=https://mortgage-crm-production-7a9a.up.railway.app/api/v1/email/oauth/callback
+MICROSOFT_REDIRECT_URI=https://api.perenniaai.com/api/v1/email/oauth/callback
 ```
 
 ## Twilio SMS (Optional - but needed if configured)
@@ -69,13 +69,13 @@ ANTHROPIC_API_KEY=your-anthropic-api-key
 # Set critical variables first
 railway variables set SECRET_KEY="$(openssl rand -base64 32)"
 railway variables set JWT_SECRET_KEY="$(openssl rand -base64 32)"
-railway variables set FRONTEND_URL="https://mortgage-crm-production-7a9a.up.railway.app"
+railway variables set FRONTEND_URL="https://api.perenniaai.com"
 
 # Microsoft 365
 railway variables set MICROSOFT_CLIENT_ID="185b7101-9435-44da-87ab-b7582c4e4607"
 railway variables set MICROSOFT_CLIENT_SECRET="YOUR_SECRET_HERE"
 railway variables set MICROSOFT_TENANT_ID="common"
-railway variables set MICROSOFT_REDIRECT_URI="https://mortgage-crm-production-7a9a.up.railway.app/api/v1/email/oauth/callback"
+railway variables set MICROSOFT_REDIRECT_URI="https://api.perenniaai.com/api/v1/email/oauth/callback"
 
 # Database (if not auto-linked)
 railway variables set DATABASE_URL="postgresql://..."
@@ -144,7 +144,7 @@ Copy the output and use as the variable values.
 
 1. Railway will automatically redeploy
 2. Wait 1-2 minutes for deployment
-3. Check health: https://mortgage-crm-production-7a9a.up.railway.app/health
+3. Check health: https://api.perenniaai.com/health
 4. Should return: `{"status": "healthy"}`
 
 ---

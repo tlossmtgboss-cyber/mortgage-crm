@@ -4,7 +4,7 @@ echo "🚀 Running AI Receptionist Dashboard Tables Migration..."
 echo ""
 
 # Production URL
-API_URL="https://mortgage-crm-production-7a9a.up.railway.app"
+API_URL="https://api.perenniaai.com"
 
 # Try to get auth token
 echo "Step 1: Getting authentication token..."

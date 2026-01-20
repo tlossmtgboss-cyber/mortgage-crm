@@ -21,7 +21,7 @@ echo "==========================================================================
 echo -e "${NC}"
 
 # Get Railway URL
-RAILWAY_URL="https://mortgage-crm-production-7a9a.up.railway.app"
+RAILWAY_URL="https://api.perenniaai.com"
 
 echo -e "${BOLD}Your Railway Backend URL:${NC} $RAILWAY_URL"
 echo ""

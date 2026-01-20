@@ -44,7 +44,7 @@
 ## 🔧 Technical Implementation
 
 ### Backend (Railway)
-- **URL**: https://mortgage-crm-production-7a9a.up.railway.app
+- **URL**: https://api.perenniaai.com
 - **Database Tables**:
   - `guideline_updates` (10 sample updates loaded)
   - `user_update_views` (tracks viewed updates)
@@ -284,7 +284,7 @@ The production database has 10 sample guideline updates:
 4. **Verify You're on AI Underwriter Page**: Sidebar only appears on AI Underwriter page
 
 ### If Issues Persist
-- **Backend Status**: Check https://mortgage-crm-production-7a9a.up.railway.app/health
+- **Backend Status**: Check https://api.perenniaai.com/health
 - **Frontend Status**: Check https://mortgage-crm-nine.vercel.app
 - **Database**: Verify guideline_updates table has 10 rows
 
@@ -344,7 +344,7 @@ Use this checklist to verify the deployment:
 
 **Production URLs:**
 - **Frontend**: https://mortgage-crm-nine.vercel.app
-- **Backend**: https://mortgage-crm-production-7a9a.up.railway.app
+- **Backend**: https://api.perenniaai.com
 
 **Deployment Completed**: November 18, 2025 - 8:14 PM EST
 **Status**: ✅ LIVE AND OPERATIONAL
