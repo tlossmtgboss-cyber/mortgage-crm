@@ -186,28 +186,9 @@ def clear_cache(prefix: str = None) -> None:
     else:
         _cache = {}
 
-# Database - Create Base first
-Base = declarative_base()
-
-# Then create engine
-# SQLite-specific settings
-if DATABASE_URL.startswith("sqlite"):
-    engine = create_engine(
-        DATABASE_URL,
-        connect_args={"check_same_thread": False}
-    )
-else:
-    # Railway has ~20 connections max - keep pool small to avoid exhaustion
-    # database.py also creates a pool, so total = main.py pool + database.py pool
-    engine = create_engine(
-        DATABASE_URL,
-        pool_pre_ping=True,
-        pool_size=2,
-        max_overflow=3,
-        pool_recycle=1800,  # Recycle connections every 30 min
-        pool_timeout=20,    # Wait max 20s for a connection
-    )
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# Database - Import shared engine and session from database.py to avoid duplicate pools
+# This consolidates all DB connections to a single pool (Railway has ~20 connection limit)
+from database import engine, SessionLocal, Base, get_db as _get_db_from_database
 
 # Initialize background scheduler for auto-sync with job defaults
 # misfire_grace_time: If a job is missed by up to 30 seconds, still run it
@@ -220,7 +201,9 @@ scheduler = AsyncIOScheduler(
     }
 )
 
+# Use shared get_db from database.py to ensure consistent session management
 def get_db():
+    """Database session dependency - uses shared pool from database.py"""
     db = SessionLocal()
     try:
         yield db
@@ -20282,6 +20265,15 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Could not load Live Call Whisper routes: {e}")
 
+# Include Call Monitoring routes (AI-powered call analysis with 3 agents)
+try:
+    from routes.call_monitoring_routes import router as call_monitoring_router, set_dependencies as set_call_monitoring_deps
+    set_call_monitoring_deps(get_current_user)
+    app.include_router(call_monitoring_router, tags=["Call Monitoring"])
+    logger.info("✅ Call Monitoring routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load Call Monitoring routes: {e}")
+
 # Include Production Predictor routes (AI-powered production forecasting)
 try:
     from routes.production_predictor_routes import router as production_predictor_router
@@ -21077,8 +21069,9 @@ except Exception as e:
 
 # Follow Up Boss Integration routes (CRM Sync, Webhooks)
 try:
-    from routes.followupboss_routes import router as followupboss_router
+    from routes.followupboss_routes import router as followupboss_router, set_dependencies as set_fub_deps
     from routes.followupboss_webhook_routes import router as followupboss_webhook_router
+    set_fub_deps(get_db, get_current_user)
     app.include_router(followupboss_router, prefix="/api/v1", tags=["Follow Up Boss Integration"])
     app.include_router(followupboss_webhook_router, prefix="/api", tags=["Follow Up Boss Webhooks"])
     logger.info("✅ Follow Up Boss routes loaded")
@@ -60649,6 +60642,14 @@ async def startup_event():
                 logger.info("✅ Conversation Intelligence Platform migration completed")
             except Exception as e:
                 logger.warning(f"⚠️ Conversation Intelligence Platform migration skipped: {e}")
+
+            # Run Call Monitoring System migration (AI agents for call analysis)
+            try:
+                from migrations.add_call_monitoring_system import run_migration as run_call_monitoring_migration
+                run_call_monitoring_migration()
+                logger.info("✅ Call Monitoring System migration completed")
+            except Exception as e:
+                logger.warning(f"⚠️ Call Monitoring System migration skipped: {e}")
 
             # Run Document Extraction migration (AI extraction, owner detection)
             try:

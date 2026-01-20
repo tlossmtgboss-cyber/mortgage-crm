@@ -16,6 +16,7 @@ import ScheduleAppointmentModal from '../components/ScheduleAppointmentModal';
 import NeedsListView from '../components/smart-docs/NeedsListView';
 import CreditTab from '../components/CreditTab';
 import SalesforceConnectionBadge from '../components/SalesforceConnectionBadge';
+import CallIntelligenceTab from '../components/call-intelligence/CallIntelligenceTab';
 import './LeadDetail.css';
 
 // Mock lead data generator (same as Leads.js)
@@ -927,6 +928,12 @@ function ClientProfile() {
         >
           Team Members
         </button>
+        <button
+          className={`tab-btn ${activeTab === 'call-intelligence' ? 'active' : ''}`}
+          onClick={() => setActiveTab('call-intelligence')}
+        >
+          Call Intelligence
+        </button>
       </div>
 
       <div className="detail-content">
@@ -1277,6 +1284,17 @@ function ClientProfile() {
           <div className="info-section">
             <h2>Team Members</h2>
             <TeamAssignment leadId={id} />
+          </div>
+          )}
+
+          {/* Call Intelligence Tab */}
+          {activeTab === 'call-intelligence' && (
+          <div className="info-section call-intelligence-section">
+            <CallIntelligenceTab
+              clientId={id}
+              loanId={client?.loan_id}
+              leadId={id}
+            />
           </div>
           )}
 

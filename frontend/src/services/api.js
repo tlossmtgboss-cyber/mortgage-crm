@@ -2760,6 +2760,117 @@ export const rateMonitorAPI = {
   },
 };
 
+// Call Monitoring API (AI Call Intelligence)
+export const callMonitoringAPI = {
+  // Session Management
+  createSession: async (data) => {
+    const response = await api.post('/api/v1/call-monitoring/sessions', data);
+    return response.data;
+  },
+
+  getSession: async (sessionId) => {
+    const response = await api.get(`/api/v1/call-monitoring/sessions/${sessionId}`);
+    return response.data;
+  },
+
+  updateSession: async (sessionId, data) => {
+    const response = await api.patch(`/api/v1/call-monitoring/sessions/${sessionId}`, data);
+    return response.data;
+  },
+
+  endSession: async (sessionId, runAgents = true) => {
+    const response = await api.post(`/api/v1/call-monitoring/sessions/${sessionId}/end`, null, {
+      params: { run_agents: runAgents }
+    });
+    return response.data;
+  },
+
+  listSessions: async (params = {}) => {
+    const response = await api.get('/api/v1/call-monitoring/sessions', { params });
+    return response.data;
+  },
+
+  // Transcript
+  appendTranscriptChunk: async (sessionId, data) => {
+    const response = await api.post(`/api/v1/call-monitoring/sessions/${sessionId}/transcript/chunk`, data);
+    return response.data;
+  },
+
+  getTranscript: async (sessionId) => {
+    const response = await api.get(`/api/v1/call-monitoring/sessions/${sessionId}/transcript`);
+    return response.data;
+  },
+
+  // Agent Execution
+  runAgents: async (sessionId, agentTypes = null) => {
+    const response = await api.post(`/api/v1/call-monitoring/sessions/${sessionId}/run-agents`, {
+      agent_types: agentTypes
+    });
+    return response.data;
+  },
+
+  // Artifacts
+  getArtifacts: async (sessionId, params = {}) => {
+    const response = await api.get(`/api/v1/call-monitoring/sessions/${sessionId}/artifacts`, { params });
+    return response.data;
+  },
+
+  approveArtifacts: async (sessionId, artifactIds) => {
+    const response = await api.post(`/api/v1/call-monitoring/sessions/${sessionId}/artifacts/approve`, {
+      artifact_ids: artifactIds
+    });
+    return response.data;
+  },
+
+  rejectArtifacts: async (sessionId, artifactIds, reason = null) => {
+    const response = await api.post(`/api/v1/call-monitoring/sessions/${sessionId}/artifacts/reject`, {
+      artifact_ids: artifactIds,
+      rejection_reason: reason
+    });
+    return response.data;
+  },
+
+  executeArtifacts: async (sessionId, artifactIds = null) => {
+    const response = await api.post(`/api/v1/call-monitoring/sessions/${sessionId}/artifacts/execute`, {
+      artifact_ids: artifactIds
+    });
+    return response.data;
+  },
+
+  // Review Flow
+  getReviewData: async (sessionId) => {
+    const response = await api.get(`/api/v1/call-monitoring/sessions/${sessionId}/review`);
+    return response.data;
+  },
+
+  submitReview: async (sessionId, data) => {
+    const response = await api.post(`/api/v1/call-monitoring/sessions/${sessionId}/review/submit`, data);
+    return response.data;
+  },
+
+  // Participants
+  addParticipant: async (sessionId, data) => {
+    const response = await api.post(`/api/v1/call-monitoring/sessions/${sessionId}/participants`, data);
+    return response.data;
+  },
+
+  getParticipants: async (sessionId) => {
+    const response = await api.get(`/api/v1/call-monitoring/sessions/${sessionId}/participants`);
+    return response.data;
+  },
+
+  // Client Call History
+  getClientCalls: async (clientId, params = {}) => {
+    const response = await api.get(`/api/v1/call-monitoring/client/${clientId}/calls`, { params });
+    return response.data;
+  },
+
+  getLoanCalls: async (loanId, params = {}) => {
+    const response = await api.get(`/api/v1/call-monitoring/loan/${loanId}/calls`, { params });
+    return response.data;
+  },
+};
+
 export default api;
 
 // Debug function for console - helps diagnose API issues
