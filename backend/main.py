@@ -39437,32 +39437,52 @@ async def update_current_user_profile(
     current_user: User = Depends(get_current_user)
 ):
     """Update current user's profile information"""
-    try:
-        if profile_update.full_name is not None:
-            current_user.full_name = profile_update.full_name
-        if profile_update.phone is not None:
-            if hasattr(current_user, 'phone'):
-                current_user.phone = profile_update.phone
-        if profile_update.nmls_number is not None:
-            if hasattr(current_user, 'nmls_number'):
-                current_user.nmls_number = profile_update.nmls_number
-        if profile_update.job_title is not None:
-            # Map job_title from frontend to 'title' column in database
-            current_user.title = profile_update.job_title
+    from sqlalchemy import text
 
-        # Update work hours (stored in business_hours JSON column)
+    try:
+        # Use raw SQL to update to avoid SQLAlchemy model issues with missing columns
+        update_fields = []
+        params = {"user_id": current_user.id}
+
+        if profile_update.full_name is not None:
+            update_fields.append("full_name = :full_name")
+            params["full_name"] = profile_update.full_name
+
+        if profile_update.phone is not None:
+            update_fields.append("phone = :phone")
+            params["phone"] = profile_update.phone
+
+        if profile_update.nmls_number is not None:
+            update_fields.append("nmls_number = :nmls_number")
+            params["nmls_number"] = profile_update.nmls_number
+
+        if profile_update.job_title is not None:
+            update_fields.append("title = :title")
+            params["title"] = profile_update.job_title
+
+        # Handle business hours
         if profile_update.work_hours_start is not None or profile_update.work_hours_end is not None or profile_update.work_days is not None:
-            # Create a copy to ensure SQLAlchemy detects the change
-            business_hours = dict(getattr(current_user, 'business_hours', None) or {})
+            # Get current business hours
+            result = db.execute(text("SELECT business_hours FROM users WHERE id = :user_id"), {"user_id": current_user.id}).fetchone()
+            business_hours = dict(result[0] or {}) if result and result[0] else {}
+
             if profile_update.work_hours_start is not None:
                 business_hours['start'] = profile_update.work_hours_start
             if profile_update.work_hours_end is not None:
                 business_hours['end'] = profile_update.work_hours_end
             if profile_update.work_days is not None:
                 business_hours['days'] = profile_update.work_days
-            current_user.business_hours = business_hours
 
-        db.commit()
+            import json
+            update_fields.append("business_hours = :business_hours::json")
+            params["business_hours"] = json.dumps(business_hours)
+
+        if update_fields:
+            sql = f"UPDATE users SET {', '.join(update_fields)} WHERE id = :user_id"
+            db.execute(text(sql), params)
+            db.commit()
+
+        # Refresh to get updated values
         db.refresh(current_user)
 
         # Get updated business hours for response
