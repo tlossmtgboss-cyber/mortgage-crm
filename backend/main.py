@@ -44347,12 +44347,12 @@ async def get_loans(
     try:
         # Build WHERE clause based on permissions
         where_clauses = []
-        params = {"skip": skip, "limit": limit, "user_id": current_user.id, "user_email": current_user.email}
+        params = {"skip": skip, "limit": limit, "user_id": current_user.id}
 
         # Check if user has view_all permission
         if not has_permission(current_user.id, 'loans.view_all', db):
-            # Match by loan_officer_id OR loan_officer_email (for imported loans)
-            where_clauses.append("(loan_officer_id = :user_id OR LOWER(loan_officer_email) = LOWER(:user_email))")
+            # Match by loan_officer_id only (safe fallback)
+            where_clauses.append("loan_officer_id = :user_id")
 
         # Filter by stage if provided
         if stage:
@@ -44366,12 +44366,10 @@ async def get_loans(
                    coborrower_name, co_borrower_email,
                    stage, program, amount, rate,
                    closing_date, days_in_stage, sla_status, created_at,
-                   loan_officer_name, loan_officer_email, processor, processor_email,
-                   underwriter, underwriter_email, closer, closer_email,
-                   property_address, loan_officer_id
+                   property_address, loan_officer_id, processor, underwriter
             FROM loans
             WHERE {where_sql}
-            ORDER BY COALESCE(updated_at, created_at) DESC
+            ORDER BY created_at DESC
             LIMIT :limit OFFSET :skip
         """
 
