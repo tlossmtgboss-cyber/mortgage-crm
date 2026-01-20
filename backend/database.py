@@ -2,12 +2,18 @@
 Database configuration and session management
 Shared by main.py and other modules to avoid circular imports
 
-Production settings:
-- Connection pooling: 5 permanent + 10 overflow connections
-- Pool recycling: Refresh connections every hour
+Production settings (Railway PostgreSQL):
+- Connection pooling: 3 permanent + 5 overflow (max 8 total)
+- Pool recycling: Refresh connections every 15 min
 - Pool pre-ping: Verify connections before use
+- TCP keepalives: Detect dead connections quickly
 - Statement timeout: 30 seconds (PostgreSQL only)
 - Slow query logging: Configurable threshold
+
+Connection exhaustion prevention:
+- Conservative pool size stays under Railway's ~20 connection limit
+- TCP keepalives detect network issues before they cause pool exhaustion
+- Pool events logged for debugging connection issues
 """
 import os
 import time
@@ -39,20 +45,56 @@ if DATABASE_URL.startswith("sqlite"):
     )
 else:
     # PostgreSQL production settings
-    # Railway has ~20 connections max; use moderate pool to handle scheduler jobs
-    # Connection exhaustion fix: scheduler jobs now reuse parent sessions where possible
+    # Railway has ~20 connections max; conservative pool to prevent exhaustion
+    # Key: pool_size + max_overflow should not exceed ~50% of Railway's limit
+    # This leaves room for migrations, admin tools, and connection spikes
     engine = create_engine(
         DATABASE_URL,
-        pool_pre_ping=True,           # Verify connections before use
-        pool_size=4,                  # Permanent connections (increased from 2)
-        max_overflow=6,               # Additional connections under load (total max: 10)
-        pool_recycle=1800,            # Recycle connections every 30 min
-        pool_timeout=30,              # Wait max 30s for a connection (increased from 20)
+        pool_pre_ping=True,           # CRITICAL: Verify connections before use (catches stale/dead connections)
+        pool_size=3,                  # Permanent connections (reduced to stay under Railway limits)
+        max_overflow=5,               # Additional connections under load (total max: 8)
+        pool_recycle=900,             # Recycle connections every 15 min (was 30 - faster recycling prevents stale connections)
+        pool_timeout=20,              # Wait max 20s for a connection (fail fast if pool exhausted)
         echo=False,                   # Set True for SQL debugging
         connect_args={
-            "options": f"-c statement_timeout={STATEMENT_TIMEOUT_MS}"
+            "options": f"-c statement_timeout={STATEMENT_TIMEOUT_MS}",
+            "keepalives": 1,          # Enable TCP keepalives
+            "keepalives_idle": 30,    # Start keepalives after 30s idle
+            "keepalives_interval": 10, # Send keepalive every 10s
+            "keepalives_count": 5     # Close connection after 5 failed keepalives
         }
     )
+
+# Connection pool event logging (for debugging connection exhaustion)
+@event.listens_for(engine, "checkout")
+def on_checkout(dbapi_conn, connection_record, connection_proxy):
+    """Log when a connection is checked out from the pool."""
+    pool = engine.pool
+    logger.debug(
+        f"DB connection checkout - Pool status: "
+        f"size={pool.size()}, checkedin={pool.checkedin()}, "
+        f"checkedout={pool.checkedout()}, overflow={pool.overflow()}"
+    )
+
+@event.listens_for(engine, "checkin")
+def on_checkin(dbapi_conn, connection_record):
+    """Log when a connection is returned to the pool."""
+    pool = engine.pool
+    logger.debug(
+        f"DB connection checkin - Pool status: "
+        f"size={pool.size()}, checkedin={pool.checkedin()}, "
+        f"checkedout={pool.checkedout()}, overflow={pool.overflow()}"
+    )
+
+@event.listens_for(engine, "connect")
+def on_connect(dbapi_conn, connection_record):
+    """Log when a new connection is created."""
+    logger.info("New database connection established")
+
+@event.listens_for(engine, "invalidate")
+def on_invalidate(dbapi_conn, connection_record, exception):
+    """Log when a connection is invalidated (detected as stale)."""
+    logger.warning(f"Database connection invalidated: {exception}")
 
 # Slow query logging
 @event.listens_for(engine, "before_cursor_execute")
@@ -92,3 +134,25 @@ def get_db_url():
     if url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql://", 1)
     return url
+
+
+def get_pool_status():
+    """
+    Get current connection pool status for debugging and health checks.
+
+    Returns:
+        dict: Pool status with size, checked in/out, and overflow counts
+    """
+    try:
+        pool = engine.pool
+        return {
+            "pool_size": pool.size(),
+            "checked_in": pool.checkedin(),
+            "checked_out": pool.checkedout(),
+            "overflow": pool.overflow(),
+            "total_connections": pool.checkedout() + pool.checkedin(),
+            "max_connections": pool.size() + pool._max_overflow,
+            "status": "healthy" if pool.checkedout() < (pool.size() + pool._max_overflow) else "saturated"
+        }
+    except Exception as e:
+        return {"error": str(e), "status": "unknown"}
