@@ -115,10 +115,10 @@ class SchedulerService:
         # WORKFLOW SLA SYSTEM JOBS
         # =================================================================
 
-        # Workflow task generation - runs every 5 minutes
+        # Workflow task generation - runs every 15 minutes (reduced from 5 to prevent connection exhaustion)
         self.scheduler.add_job(
             func=self.run_workflow_task_generation,
-            trigger=IntervalTrigger(minutes=5),
+            trigger=IntervalTrigger(minutes=15),
             id="workflow_task_generation",
             name="Generate Workflow Tasks",
             replace_existing=True,

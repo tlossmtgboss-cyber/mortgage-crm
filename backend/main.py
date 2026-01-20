@@ -61034,14 +61034,14 @@ async def startup_event():
                     finally:
                         db.close()
 
-                # Run every 5 minutes to ensure timely task generation
+                # Run every 15 minutes (reduced from 5 to prevent connection exhaustion)
                 scheduler.add_job(
                     run_workflow_sla_tasks,
-                    IntervalTrigger(minutes=5),
+                    IntervalTrigger(minutes=15),
                     id="workflow_sla_tasks",
                     replace_existing=True
                 )
-                logger.info("✅ Workflow SLA task scheduler started (runs every 5 minutes)")
+                logger.info("✅ Workflow SLA task scheduler started (runs every 15 minutes)")
             except Exception as e:
                 logger.warning(f"⚠️ Workflow SLA scheduler not started: {e}")
 
@@ -61049,24 +61049,24 @@ async def startup_event():
         logger.warning(f"⚠️ Startup initialization skipped: {e}")
         logger.info("Application will still start, database will be initialized on first request")
 
-    # Start auto-sync scheduler
+    # Start auto-sync scheduler (reduced frequency to prevent connection exhaustion)
     try:
         scheduler.add_job(
             auto_sync_emails,
-            trigger=IntervalTrigger(minutes=5),
+            trigger=IntervalTrigger(minutes=15),
             id='auto_sync_emails',
             name='Auto-sync Microsoft 365 emails',
             replace_existing=True
         )
         scheduler.add_job(
             auto_sync_gmail,
-            trigger=IntervalTrigger(minutes=5),
+            trigger=IntervalTrigger(minutes=15),
             id='auto_sync_gmail',
             name='Auto-sync Gmail emails',
             replace_existing=True
         )
         scheduler.start()
-        logger.info("✅ Auto-sync scheduler started (Microsoft 365 + Gmail, runs every 5 minutes)")
+        logger.info("✅ Auto-sync scheduler started (Microsoft 365 + Gmail, runs every 15 minutes)")
     except Exception as e:
         logger.error(f"Failed to start auto-sync scheduler: {e}")
 
@@ -61085,12 +61085,12 @@ async def startup_event():
 
         scheduler.add_job(
             cleanup_dialer_locks,
-            trigger=IntervalTrigger(minutes=5),
+            trigger=IntervalTrigger(minutes=30),
             id='cleanup_dialer_locks',
             name='Clean up expired dialer locks',
             replace_existing=True
         )
-        logger.info("✅ Dialer lock cleanup job added (runs every 5 minutes)")
+        logger.info("✅ Dialer lock cleanup job added (runs every 30 minutes)")
     except Exception as e:
         logger.warning(f"⚠️ Dialer lock cleanup job not added: {e}")
 
@@ -61137,10 +61137,10 @@ async def startup_event():
             create_daily_performance_snapshot
         )
 
-        # Health checks every 5 minutes - monitors all agent health status
+        # Health checks every 15 minutes - monitors all agent health status (reduced from 5 to prevent connection exhaustion)
         scheduler.add_job(
             run_agent_health_checks,
-            trigger=IntervalTrigger(minutes=5),
+            trigger=IntervalTrigger(minutes=15),
             id='agent_health_checks',
             replace_existing=True
         )

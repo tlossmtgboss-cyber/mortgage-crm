@@ -446,18 +446,18 @@ class IntakeFieldUpdate(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
-class RiskFlag(Base):
+class CallRiskFlag(Base):
     """
     Underwriter risk identification from calls.
     Tracks potential issues and suggested conditions.
+    (Renamed from RiskFlag to avoid conflict with portal_models.RiskFlag)
     """
-    __tablename__ = "risk_flags"
+    __tablename__ = "call_risk_flags"
     __table_args__ = (
-        Index('ix_risk_flags_session', 'session_id'),
-        Index('ix_risk_flags_category', 'risk_category'),
-        Index('ix_risk_flags_severity', 'severity'),
-        Index('ix_risk_flags_loan', 'loan_id'),
-        {'extend_existing': True}
+        Index('ix_call_risk_flags_session', 'session_id'),
+        Index('ix_call_risk_flags_category', 'risk_category'),
+        Index('ix_call_risk_flags_severity', 'severity'),
+        Index('ix_call_risk_flags_loan', 'loan_id'),
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
