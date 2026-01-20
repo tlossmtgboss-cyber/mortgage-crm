@@ -35101,7 +35101,8 @@ async def debug_all_loans(
 
         # Get ALL loans regardless of loan_officer_id
         all_loans = db.execute(text("""
-            SELECT id, loan_number, borrower_name, borrower_email, stage, loan_officer_id, created_at
+            SELECT id, loan_number, borrower_name, borrower_email, stage,
+                   loan_officer_id, loan_officer_email, loan_officer_name, created_at
             FROM loans
             ORDER BY created_at DESC
             LIMIT 50
@@ -35109,6 +35110,8 @@ async def debug_all_loans(
 
         return {
             "total_loans": len(all_loans),
+            "current_user_id": current_user.id,
+            "current_user_email": current_user.email,
             "loans": [
                 {
                     "id": row[0],
@@ -35117,13 +35120,73 @@ async def debug_all_loans(
                     "borrower_email": row[3],
                     "stage": row[4],
                     "loan_officer_id": row[5],
-                    "created_at": str(row[6]) if row[6] else None
+                    "loan_officer_email": row[6],
+                    "loan_officer_name": row[7],
+                    "created_at": str(row[8]) if row[8] else None
                 }
                 for row in all_loans
             ]
         }
     except Exception as e:
         logger.error(f"Debug all loans error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/fix-loans-assignment")
+async def fix_loans_assignment(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Fix loan assignments by setting loan_officer_id based on matching loan_officer_email.
+    This fixes loans that were imported with email but without proper loan_officer_id assignment.
+    """
+    try:
+        from sqlalchemy import text
+
+        # Find loans where loan_officer_email matches a user but loan_officer_id is NULL or mismatched
+        unassigned = db.execute(text("""
+            SELECT l.id, l.loan_number, l.borrower_name, l.loan_officer_email, l.loan_officer_id,
+                   u.id as matched_user_id, u.email as matched_user_email
+            FROM loans l
+            JOIN users u ON LOWER(l.loan_officer_email) = LOWER(u.email)
+            WHERE l.loan_officer_id IS NULL OR l.loan_officer_id != u.id
+        """)).fetchall()
+
+        fixed_loans = []
+        for row in unassigned:
+            loan_id = row[0]
+            loan_number = row[1]
+            borrower_name = row[2]
+            lo_email = row[3]
+            old_lo_id = row[4]
+            matched_user_id = row[5]
+
+            # Update the loan_officer_id to match the user with that email
+            db.execute(text("""
+                UPDATE loans SET loan_officer_id = :user_id, updated_at = NOW()
+                WHERE id = :loan_id
+            """), {"user_id": matched_user_id, "loan_id": loan_id})
+
+            fixed_loans.append({
+                "loan_id": loan_id,
+                "loan_number": loan_number,
+                "borrower_name": borrower_name,
+                "loan_officer_email": lo_email,
+                "old_loan_officer_id": old_lo_id,
+                "new_loan_officer_id": matched_user_id
+            })
+
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": f"Fixed {len(fixed_loans)} loan assignments",
+            "fixed_loans": fixed_loans
+        }
+    except Exception as e:
+        logger.error(f"Fix loans assignment error: {e}")
+        db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -44284,11 +44347,12 @@ async def get_loans(
     try:
         # Build WHERE clause based on permissions
         where_clauses = []
-        params = {"skip": skip, "limit": limit, "user_id": current_user.id}
+        params = {"skip": skip, "limit": limit, "user_id": current_user.id, "user_email": current_user.email}
 
         # Check if user has view_all permission
         if not has_permission(current_user.id, 'loans.view_all', db):
-            where_clauses.append("loan_officer_id = :user_id")
+            # Match by loan_officer_id OR loan_officer_email (for imported loans)
+            where_clauses.append("(loan_officer_id = :user_id OR LOWER(loan_officer_email) = LOWER(:user_email))")
 
         # Filter by stage if provided
         if stage:
@@ -44300,13 +44364,14 @@ async def get_loans(
         sql = f"""
             SELECT id, loan_number, borrower_name, borrower_email, borrower_phone,
                    coborrower_name, co_borrower_email,
-                   stage, program, amount, rate,
+                   stage, program, COALESCE(amount, loan_amount) as amount, rate,
                    closing_date, days_in_stage, sla_status, created_at,
                    loan_officer_name, loan_officer_email, processor, processor_email,
-                   underwriter, underwriter_email, closer, closer_email
+                   underwriter, underwriter_email, closer, closer_email,
+                   property_address, loan_officer_id
             FROM loans
             WHERE {where_sql}
-            ORDER BY updated_at DESC
+            ORDER BY COALESCE(updated_at, created_at) DESC
             LIMIT :limit OFFSET :skip
         """
 
