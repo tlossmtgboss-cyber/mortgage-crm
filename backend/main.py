@@ -36785,6 +36785,74 @@ async def create_salesforce_tables(db: Session = Depends(get_db)):
         results.append(f"integration_profiles: {str(e)}")
         db.rollback()
 
+    # Create sf_user_schemas table for Salesforce schema discovery
+    try:
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS sf_user_schemas (
+                id SERIAL PRIMARY KEY,
+                integration_profile_id INTEGER NOT NULL REFERENCES integration_profiles(id) ON DELETE CASCADE,
+                object_name VARCHAR(100) NOT NULL,
+                fields JSONB NOT NULL,
+                record_types JSONB,
+                picklist_values JSONB,
+                discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_validated_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(integration_profile_id, object_name)
+            )
+        """))
+        db.commit()
+        results.append("sf_user_schemas: created/verified")
+    except Exception as e:
+        results.append(f"sf_user_schemas: {str(e)}")
+        db.rollback()
+
+    # Create field_mappings table
+    try:
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS field_mappings (
+                id SERIAL PRIMARY KEY,
+                integration_profile_id INTEGER NOT NULL REFERENCES integration_profiles(id) ON DELETE CASCADE,
+                sf_object VARCHAR(100) NOT NULL,
+                sf_field VARCHAR(255) NOT NULL,
+                crm_entity VARCHAR(100) NOT NULL,
+                crm_field VARCHAR(255) NOT NULL,
+                transform_type VARCHAR(50) DEFAULT 'direct',
+                transform_config JSONB,
+                is_active BOOLEAN DEFAULT TRUE,
+                is_required BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(integration_profile_id, sf_object, sf_field)
+            )
+        """))
+        db.commit()
+        results.append("field_mappings: created/verified")
+    except Exception as e:
+        results.append(f"field_mappings: {str(e)}")
+        db.rollback()
+
+    # Create integration_events table for logging
+    try:
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS integration_events (
+                id SERIAL PRIMARY KEY,
+                integration_profile_id INTEGER NOT NULL REFERENCES integration_profiles(id) ON DELETE CASCADE,
+                event_type VARCHAR(100) NOT NULL,
+                status VARCHAR(50) NOT NULL,
+                error_message TEXT,
+                duration_ms INTEGER,
+                event_data JSONB,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        db.commit()
+        results.append("integration_events: created/verified")
+    except Exception as e:
+        results.append(f"integration_events: {str(e)}")
+        db.rollback()
+
     return {"results": results}
 
 
