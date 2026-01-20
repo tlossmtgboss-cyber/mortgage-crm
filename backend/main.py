@@ -72540,10 +72540,14 @@ async def fix_loan_associations(
         user_id = user_result[0]
         org_id = user_result[2]
 
-        # Update loans without organization_id
+        # Update loans - set both organization_id AND loan_officer_id
         result = db.execute(
-            text("UPDATE loans SET organization_id = :org_id WHERE organization_id IS NULL"),
-            {"org_id": org_id}
+            text("""
+                UPDATE loans
+                SET organization_id = :org_id, loan_officer_id = :user_id
+                WHERE organization_id IS NULL OR loan_officer_id IS NULL
+            """),
+            {"org_id": org_id, "user_id": user_id}
         )
         updated_count = result.rowcount
 
@@ -72562,7 +72566,8 @@ async def fix_loan_associations(
             "user_id": user_id,
             "organization_id": org_id,
             "loans_updated": updated_count,
-            "total_loans_for_org": total
+            "total_loans_for_org": total,
+            "message": "Updated organization_id and loan_officer_id on loans"
         }
     except Exception as e:
         logger.error(f"Fix loan associations failed: {e}")
