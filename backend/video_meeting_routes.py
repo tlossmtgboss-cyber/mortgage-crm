@@ -1186,7 +1186,7 @@ async def upload_screen_recording(
 
         # Generate shareable URL
         # In production, this would be a cloud storage URL
-        base_url = os.getenv('BACKEND_URL', 'https://mortgage-crm-production-7a9a.up.railway.app')
+        base_url = os.getenv('BACKEND_URL', 'https://api.perenniaai.com')
         share_url = f"{base_url}/api/v1/meetings/screen-recordings/{recording_id}"
 
         # Log recording metadata

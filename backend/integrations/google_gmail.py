@@ -39,7 +39,7 @@ class GmailService:
         self.client_id = os.getenv('GOOGLE_CLIENT_ID')
         self.client_secret = os.getenv('GOOGLE_CLIENT_SECRET')
         self.redirect_uri = os.getenv('GOOGLE_REDIRECT_URI',
-            'https://mortgage-crm-production-7a9a.up.railway.app/api/v1/gmail/callback')
+            'https://api.perenniaai.com/api/v1/gmail/callback')
 
         # Client config for OAuth flow
         self.client_config = {

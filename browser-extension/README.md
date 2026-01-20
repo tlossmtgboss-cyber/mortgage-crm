@@ -64,7 +64,7 @@ Your Browser (logged in)
     ↓
 Extension extracts data from mortgageguidelines.com
     ↓
-Sends to CRM API: https://mortgage-crm-production-7a9a.up.railway.app
+Sends to CRM API: https://api.perenniaai.com
     ↓
 Saved to database
     ↓
@@ -77,7 +77,7 @@ The extension is pre-configured to work with your production CRM. No additional 
 
 ### API Endpoint
 ```
-https://mortgage-crm-production-7a9a.up.railway.app/api/v1/migrations/import-browser-guidelines
+https://api.perenniaai.com/api/v1/migrations/import-browser-guidelines
 ```
 
 ### Source URLs

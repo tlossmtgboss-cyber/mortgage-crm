@@ -9,7 +9,7 @@
   ],
   "host_permissions": [
     "https://my.mortgageguidelines.com/*",
-    "https://mortgage-crm-production-7a9a.up.railway.app/*"
+    "https://api.perenniaai.com/*"
   ],
   "action": {
     "default_popup": "popup.html",

@@ -21681,7 +21681,7 @@ async def debug_create_test_workspace(
             "token_id": token[0],
             "expires_at": expires_at.isoformat(),
             "portal_url": f"https://perenniaai.com/portal/{workspace_slug}",
-            "test_curl": f'curl -H "Authorization: Bearer {full_token}" "https://mortgage-crm-production-7a9a.up.railway.app/api/purl/workspace/{workspace_slug}"'
+            "test_curl": f'curl -H "Authorization: Bearer {full_token}" "https://api.perenniaai.com/api/purl/workspace/{workspace_slug}"'
         }
     except Exception as e:
         db.rollback()
@@ -25719,7 +25719,7 @@ async def make_outbound_call(
             raise HTTPException(status_code=503, detail="Twilio phone number not configured")
 
         # Create TwiML for the call - use OpenAI Realtime API webhook
-        api_url = os.getenv("API_URL", "https://mortgage-crm-production-7a9a.up.railway.app")
+        api_url = os.getenv("API_URL", "https://api.perenniaai.com")
         twiml_url = f"{api_url}/api/v1/voice/incoming?script_type={script_type}"
 
         # Make the call
@@ -25932,7 +25932,7 @@ async def drop_voicemail(
                 shutil.copy(audio_path, static_audio_path)
 
                 # Get public URL for audio
-                api_url = os.getenv("API_URL", "https://mortgage-crm-production-7a9a.up.railway.app")
+                api_url = os.getenv("API_URL", "https://api.perenniaai.com")
                 audio_url = f"{api_url}/static/{audio_filename}"
 
                 logger.info(f"Audio URL: {audio_url}")

@@ -285,7 +285,7 @@ async def calendly_oauth_callback(
     Handle Calendly OAuth callback.
     Exchange code for tokens and store integration.
     """
-    frontend_url = os.getenv("FRONTEND_URL", "https://mortgage-crm-production-7a9a.up.railway.app")
+    frontend_url = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
 
     # Handle OAuth errors from Calendly
     if error:

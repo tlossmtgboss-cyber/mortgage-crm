@@ -692,7 +692,7 @@ async def api_click_to_dial(
 ):
     """Initiate a single click-to-dial call"""
     import os
-    base_url = os.getenv("BASE_URL", "https://mortgage-crm-production-7a9a.up.railway.app")
+    base_url = os.getenv("BASE_URL", "https://api.perenniaai.com")
 
     result = click_to_dial(
         db_session=db,
@@ -726,7 +726,7 @@ async def create_dialer_session(
 ):
     """Create a new power dialer session"""
     import os
-    base_url = os.getenv("BASE_URL", "https://mortgage-crm-production-7a9a.up.railway.app")
+    base_url = os.getenv("BASE_URL", "https://api.perenniaai.com")
 
     engine = DialerEngine(db, current_user.id)
     result = engine.create_session(request.task_ids, base_url)
@@ -801,7 +801,7 @@ async def initiate_session_call(
 ):
     """Initiate a call for a specific task in the session"""
     import os
-    base_url = os.getenv("BASE_URL", "https://mortgage-crm-production-7a9a.up.railway.app")
+    base_url = os.getenv("BASE_URL", "https://api.perenniaai.com")
 
     engine = DialerEngine(db, current_user.id)
     result = engine.initiate_call(session_id, task_id, base_url)

@@ -48,7 +48,7 @@ BORROWER_TOKEN_EXPIRY_DAYS = 90
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 # Callback goes to backend, which then redirects to frontend with token
-BACKEND_URL = os.getenv("BACKEND_URL", "https://mortgage-crm-production-7a9a.up.railway.app")
+BACKEND_URL = os.getenv("BACKEND_URL", "https://api.perenniaai.com")
 GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_BORROWER_REDIRECT_URI", f"{BACKEND_URL}/api/v1/borrower-auth/google/callback")
 
 # Facebook OAuth

@@ -381,7 +381,7 @@ async def configure_phone_routing(
     Configure the Vapi phone number to use intelligent routing.
     This sets the serverUrl on the phone number to point to our routing webhook.
     """
-    webhook_url = f"{os.getenv('RAILWAY_PUBLIC_DOMAIN', 'https://mortgage-crm-production-7a9a.up.railway.app')}/api/v1/call-routing/webhook/route-call"
+    webhook_url = f"{os.getenv('RAILWAY_PUBLIC_DOMAIN', 'https://api.perenniaai.com')}/api/v1/call-routing/webhook/route-call"
 
     try:
         async with httpx.AsyncClient() as client:
