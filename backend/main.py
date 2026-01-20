@@ -72460,6 +72460,40 @@ async def add_followupboss_tables_migration(
 # ADMIN - FIX LOAN ASSOCIATIONS
 # ============================================================================
 
+@app.post("/api/v1/admin/add-loans-organization-column")
+async def add_loans_organization_column(
+    migration_key: str = "",
+    db: Session = Depends(get_db)
+):
+    """Add organization_id column to loans table if it doesn't exist."""
+    if migration_key != "fix-loans-2026":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    try:
+        # Check if column exists
+        check_result = db.execute(text("""
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'loans' AND column_name = 'organization_id'
+            )
+        """)).fetchone()
+
+        column_exists = check_result[0] if check_result else False
+
+        if column_exists:
+            return {"status": "success", "message": "Column already exists", "action": "none"}
+
+        # Add the column
+        db.execute(text("ALTER TABLE loans ADD COLUMN organization_id INTEGER"))
+        db.execute(text("CREATE INDEX IF NOT EXISTS ix_loans_organization_id ON loans(organization_id)"))
+        db.commit()
+
+        return {"status": "success", "message": "Column added successfully", "action": "created"}
+    except Exception as e:
+        logger.error(f"Add organization_id column failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/v1/admin/fix-loan-associations")
 async def fix_loan_associations(
     user_email: str = "tloss@cmgfi.com",
