@@ -35190,6 +35190,49 @@ async def fix_loans_assignment(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/v1/fix-assign-all-loans-to-user")
+async def fix_assign_all_loans_to_user(
+    user_id: int = 1,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Assign all loans to a specific user ID (default: 1 for tloss@cmgfi.com).
+    This is a fix for loans that were imported without proper loan_officer_id assignment.
+    """
+    try:
+        from sqlalchemy import text
+
+        # Count loans before update
+        before_count = db.execute(text(
+            "SELECT COUNT(*) FROM loans WHERE loan_officer_id IS NULL OR loan_officer_id != :user_id"
+        ), {"user_id": user_id}).scalar()
+
+        # Update all loans to assign to the specified user
+        db.execute(text("""
+            UPDATE loans
+            SET loan_officer_id = :user_id, updated_at = NOW()
+            WHERE loan_officer_id IS NULL OR loan_officer_id != :user_id
+        """), {"user_id": user_id})
+
+        db.commit()
+
+        # Count total loans after
+        total_loans = db.execute(text("SELECT COUNT(*) FROM loans")).scalar()
+
+        return {
+            "status": "success",
+            "message": f"Assigned {before_count} loans to user ID {user_id}",
+            "loans_updated": before_count,
+            "total_loans": total_loans,
+            "assigned_to_user_id": user_id
+        }
+    except Exception as e:
+        logger.error(f"Fix assign all loans error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/v1/debug/dashboard-diagnosis")
 async def debug_dashboard_diagnosis(
     current_user: User = Depends(get_current_user),
