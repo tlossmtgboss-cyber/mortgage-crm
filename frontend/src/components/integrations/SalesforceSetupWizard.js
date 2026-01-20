@@ -2,7 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from '../../utils/toast';
 import './SalesforceSetupWizard.css';
 
-const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
+// Always use api.perenniaai.com for production API calls
+const API_URL = window.location.hostname.includes('perenniaai.com')
+  ? 'https://api.perenniaai.com'
+  : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
 // Target entities in CRM
 const TARGET_ENTITIES = [
