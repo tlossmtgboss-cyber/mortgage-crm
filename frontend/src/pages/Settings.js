@@ -777,7 +777,7 @@ function Settings() {
     setLoadingProfile(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'https://api.perenniaai.com'}/api/v1/users/me`, {
+      const response = await fetch(`${API_BASE}/api/v1/users/me`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -815,7 +815,7 @@ function Settings() {
       const token = localStorage.getItem('token');
       // Combine first_name and last_name into full_name for the API
       const fullName = `${userProfile.first_name} ${userProfile.last_name}`.trim();
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'https://api.perenniaai.com'}/api/v1/users/me`, {
+      const response = await fetch(`${API_BASE}/api/v1/users/me`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -862,7 +862,7 @@ function Settings() {
     setProfileMessage({ type: '', text: '' });
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'https://api.perenniaai.com'}/api/v1/users/me/password`, {
+      const response = await fetch(`${API_BASE}/api/v1/users/me/password`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
