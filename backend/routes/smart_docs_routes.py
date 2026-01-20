@@ -1764,8 +1764,8 @@ async def get_smart_docs_loans(
 
     try:
         # Build WHERE clause for active loans (exclude funded)
-        # LoanStage enum values: DISCLOSED, PROCESSING, SUBMITTED, UW_RECEIVED, APPROVED, SUSPENDED, CTC, DOCS, FUNDED
-        where_clauses = ["stage != 'FUNDED'"]
+        # LoanStage enum VALUES (stored in DB): Disclosed, Processing, Submitted, UW Received, Approved, Suspended, CTC, Docs Out, Funded
+        where_clauses = ["stage != 'Funded'"]
         params = {"skip": skip, "limit": limit}
 
         # Filter by specific stage if provided

@@ -295,7 +295,7 @@ async def backfill_sla_tasks_batch(
             FROM loans l
             LEFT JOIN tasks t ON t.loan_id = l.id AND t.sla_milestone_type IS NOT NULL
             WHERE l.application_date IS NOT NULL
-            AND l.stage NOT IN ('FUNDED', 'CANCELLED', 'DENIED', 'WITHDRAWN')
+            AND l.stage NOT IN ('Funded')
             AND t.id IS NULL
             LIMIT :limit
         """), {"limit": limit}).fetchall()

@@ -27,7 +27,7 @@ def _query_processor_workload_today(db: Session, params: Dict, user_id: int) -> 
                     ELSE 60 END as priority_score
         FROM loans l
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         ORDER BY priority_score DESC, l.closing_date ASC
         LIMIT 50
     """), {"user_id": user_id})
@@ -68,17 +68,17 @@ def _query_processor_priority_queue(db: Session, params: Dict, user_id: int) -> 
     result = db.execute(text("""
         SELECT l.id, l.loan_number, l.borrower_name, l.stage, l.closing_date,
                CASE WHEN l.closing_date < NOW() + INTERVAL '2 days' THEN 'Critical - Closing Imminent'
-                    WHEN l.stage = 'CLEAR_TO_CLOSE' THEN 'High - Clear to Close'
+                    WHEN l.stage = 'CTC' THEN 'High - Clear to Close'
                     WHEN l.days_in_stage > 21 THEN 'High - Stalled'
                     WHEN l.closing_date < NOW() + INTERVAL '7 days' THEN 'Medium - Closing Soon'
                     ELSE 'Normal' END as urgency,
                l.days_in_stage
         FROM loans l
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         ORDER BY
             CASE WHEN l.closing_date < NOW() + INTERVAL '2 days' THEN 1
-                 WHEN l.stage = 'CLEAR_TO_CLOSE' THEN 2
+                 WHEN l.stage = 'CTC' THEN 2
                  WHEN l.days_in_stage > 21 THEN 3
                  WHEN l.closing_date < NOW() + INTERVAL '7 days' THEN 4
                  ELSE 5 END,
@@ -102,7 +102,7 @@ def _query_processor_current_capacity(db: Session, params: Dict, user_id: int) -
                 COUNT(*) FILTER (WHERE closing_date < NOW() + INTERVAL '7 days') as closing_soon
             FROM loans
             WHERE processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-            AND stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+            AND stage NOT IN ('Funded')
         )
         SELECT active_files, optimal_capacity, files_in_process, closing_soon,
                ROUND(100.0 * active_files / optimal_capacity, 1) as utilization_pct,
@@ -135,13 +135,13 @@ def _query_processor_files_by_loan_officer(db: Session, params: Dict, user_id: i
             l.loan_officer_id,
             u.first_name || ' ' || u.last_name as loan_officer_name,
             COUNT(*) as file_count,
-            COUNT(*) FILTER (WHERE l.stage = 'PROCESSING') as in_processing,
-            COUNT(*) FILTER (WHERE l.stage = 'UNDERWRITING') as in_underwriting,
+            COUNT(*) FILTER (WHERE l.stage = 'Processing') as in_processing,
+            COUNT(*) FILTER (WHERE l.stage IN ('Underwriting', 'UW Received')) as in_underwriting,
             COUNT(*) FILTER (WHERE l.closing_date < NOW() + INTERVAL '7 days') as closing_soon
         FROM loans l
         LEFT JOIN users u ON l.loan_officer_id = u.id
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         GROUP BY l.loan_officer_id, u.first_name, u.last_name
         ORDER BY file_count DESC
     """), {"user_id": user_id})
@@ -204,7 +204,7 @@ def _query_processor_file_list(db: Session, params: Dict, user_id: int) -> List[
         FROM loans l
         LEFT JOIN users u ON l.loan_officer_id = u.id
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         ORDER BY l.closing_date ASC NULLS LAST, l.created_at DESC
         LIMIT 100
     """), {"user_id": user_id})
@@ -228,7 +228,7 @@ def _query_processor_missing_documents(db: Session, params: Dict, user_id: int) 
         FROM loans l
         LEFT JOIN documents d ON d.loan_id = l.id
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         GROUP BY l.id, l.loan_number, l.borrower_name, l.stage
         HAVING COUNT(d.id) FILTER (WHERE d.status = 'missing') > 0
         ORDER BY missing_count DESC
@@ -251,7 +251,7 @@ def _query_processor_unresponsive_borrowers_docs(db: Session, params: Dict, user
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
         AND d.status = 'requested'
         AND d.requested_date < NOW() - INTERVAL '3 days'
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         GROUP BY l.id, l.loan_number, l.borrower_name, l.email, l.phone
         ORDER BY days_waiting DESC
         LIMIT 30
@@ -292,7 +292,7 @@ def _query_processor_complete_documentation(db: Session, params: Dict, user_id: 
         FROM loans l
         LEFT JOIN documents d ON d.loan_id = l.id
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         GROUP BY l.id, l.loan_number, l.borrower_name, l.stage
         HAVING COUNT(d.id) > 0
         AND COUNT(d.id) FILTER (WHERE d.status != 'received') = 0
@@ -398,7 +398,7 @@ def _query_processor_credit_supplement_needed(db: Session, params: Dict, user_id
                ROUND(EXTRACT(EPOCH FROM (NOW() - l.credit_report_date))/86400) as credit_age_days
         FROM loans l
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         AND l.credit_report_date < NOW() - INTERVAL '90 days'
         ORDER BY credit_age_days DESC
     """), {"user_id": user_id})
@@ -436,7 +436,7 @@ def _query_processor_incomplete_income_docs(db: Session, params: Dict, user_id: 
         FROM loans l
         LEFT JOIN documents d ON d.loan_id = l.id
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         GROUP BY l.id, l.loan_number, l.borrower_name, l.income
         HAVING COUNT(d.id) FILTER (WHERE d.document_type ILIKE '%paystub%' AND d.status = 'received') < 2
         ORDER BY l.closing_date ASC NULLS LAST
@@ -457,7 +457,7 @@ def _query_processor_expired_documents(db: Session, params: Dict, user_id: int) 
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
         AND d.status = 'received'
         AND d.received_date < NOW() - INTERVAL '60 days'
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         ORDER BY age_days DESC
     """), {"user_id": user_id})
 
@@ -542,7 +542,7 @@ def _query_processor_appraisal_issues(db: Session, params: Dict, user_id: int) -
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
         AND l.appraisal_received_date IS NOT NULL
         AND (l.property_value < l.amount OR l.appraisal_conditions IS NOT NULL)
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         ORDER BY value_gap ASC
     """), {"user_id": user_id})
 
@@ -579,7 +579,7 @@ def _query_processor_title_commitments_review(db: Session, params: Dict, user_id
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
         AND l.title_received_date IS NOT NULL
         AND l.title_cleared_date IS NULL
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         ORDER BY l.title_received_date ASC
     """), {"user_id": user_id})
 
@@ -692,7 +692,7 @@ def _query_processor_ready_for_underwriting(db: Session, params: Dict, user_id: 
         FROM loans l
         LEFT JOIN documents d ON d.loan_id = l.id
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND l.stage = 'PROCESSING'
+        AND l.stage = 'Processing'
         AND l.appraisal_received_date IS NOT NULL
         GROUP BY l.id, l.loan_number, l.borrower_name, l.loan_type, l.amount
         HAVING COUNT(d.id) > 0 AND COUNT(d.id) FILTER (WHERE d.status != 'received') = 0
@@ -711,7 +711,7 @@ def _query_processor_files_with_underwriter(db: Session, params: Dict, user_id: 
                ROUND(EXTRACT(EPOCH FROM (NOW() - l.submitted_to_uw_date))/86400) as days_in_uw
         FROM loans l
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND l.stage = 'UNDERWRITING'
+        AND l.stage IN ('Underwriting', 'UW Received')
         ORDER BY days_in_uw DESC
     """), {"user_id": user_id})
 
@@ -782,7 +782,7 @@ def _query_processor_suspended_files(db: Session, params: Dict, user_id: int) ->
                ROUND(EXTRACT(EPOCH FROM (NOW() - l.suspended_date))/86400) as days_suspended
         FROM loans l
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND l.stage = 'SUSPENDED'
+        AND l.stage = 'Suspended'
         ORDER BY days_suspended DESC
     """), {"user_id": user_id})
 
@@ -817,7 +817,7 @@ def _query_processor_clear_to_close_files(db: Session, params: Dict, user_id: in
                l.clear_to_close_date
         FROM loans l
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND l.stage = 'CLEAR_TO_CLOSE'
+        AND l.stage = 'CTC'
         ORDER BY l.closing_date ASC
     """), {"user_id": user_id})
 
@@ -878,7 +878,7 @@ def _query_processor_closing_schedule(db: Session, params: Dict, user_id: int) -
         FROM loans l
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
         AND l.closing_date BETWEEN NOW() AND NOW() + INTERVAL '30 days'
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         ORDER BY l.closing_date ASC
     """), {"user_id": user_id})
 
@@ -921,7 +921,7 @@ def _query_processor_expiring_rate_locks(db: Session, params: Dict, user_id: int
         FROM loans l
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
         AND l.lock_expiration < NOW() + INTERVAL '7 days'
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         ORDER BY l.lock_expiration ASC
     """), {"user_id": user_id})
 
@@ -959,7 +959,7 @@ def _query_processor_disclosures_due(db: Session, params: Dict, user_id: int) ->
                     THEN 'Closing Disclosure' END as disclosure_type
         FROM loans l
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         AND (NOT l.initial_disclosure_sent
              OR (NOT l.closing_disclosure_sent AND l.closing_date < NOW() + INTERVAL '4 days'))
         ORDER BY l.closing_date ASC NULLS LAST
@@ -981,7 +981,7 @@ def _query_processor_delayed_files(db: Session, params: Dict, user_id: int) -> L
                     ELSE 'Slightly Delayed' END as delay_level
         FROM loans l
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         AND l.days_in_stage > 10
         ORDER BY l.days_in_stage DESC
     """), {"user_id": user_id})
@@ -1074,7 +1074,7 @@ def _query_processor_compliance_red_flags(db: Session, params: Dict, user_id: in
         FROM loans l
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
         AND l.compliance_flags > 0
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         ORDER BY l.compliance_flags DESC, l.closing_date ASC NULLS LAST
     """), {"user_id": user_id})
 
@@ -1096,7 +1096,7 @@ def _query_processor_trid_violations(db: Session, params: Dict, user_id: int) ->
                END as violation_type
         FROM loans l
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         AND ((NOT l.initial_disclosure_sent AND l.application_date < NOW() - INTERVAL '3 days')
              OR (NOT l.closing_disclosure_sent AND l.closing_date < NOW() + INTERVAL '3 days'))
         ORDER BY l.closing_date ASC NULLS LAST
@@ -1118,7 +1118,7 @@ def _query_processor_missing_disclosures(db: Session, params: Dict, user_id: int
                l.stage, l.closing_date
         FROM loans l
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         AND (NOT l.initial_disclosure_sent OR NOT l.le_sent OR NOT l.ecoa_sent)
         ORDER BY l.closing_date ASC NULLS LAST
     """), {"user_id": user_id})
@@ -1137,7 +1137,7 @@ def _query_processor_data_errors(db: Session, params: Dict, user_id: int) -> Lis
         FROM loans l
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
         AND l.data_quality_score < 80
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         ORDER BY l.data_quality_score ASC, l.closing_date ASC NULLS LAST
     """), {"user_id": user_id})
 
@@ -1152,7 +1152,7 @@ def _query_processor_aus_rerun_needed(db: Session, params: Dict, user_id: int) -
                ROUND(EXTRACT(EPOCH FROM (NOW() - l.aus_run_date))/86400) as days_since_aus
         FROM loans l
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         AND l.aus_run_date < NOW() - INTERVAL '30 days'
         ORDER BY days_since_aus DESC
     """), {"user_id": user_id})
@@ -1171,7 +1171,7 @@ def _query_processor_appraisal_issues_qc(db: Session, params: Dict, user_id: int
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
         AND l.appraisal_received_date IS NOT NULL
         AND (l.property_value < l.amount * 1.0 OR l.appraisal_conditions IS NOT NULL)
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         ORDER BY (l.property_value / NULLIF(l.amount, 0)) ASC
     """), {"user_id": user_id})
 
@@ -1188,7 +1188,7 @@ def _query_processor_credit_issues_qc(db: Session, params: Dict, user_id: int) -
         FROM loans l
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
         AND (l.credit_score < 640 OR l.credit_issues IS NOT NULL)
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         ORDER BY l.credit_score ASC NULLS LAST
     """), {"user_id": user_id})
 
@@ -1227,7 +1227,7 @@ def _query_processor_unresponsive_borrowers(db: Session, params: Dict, user_id: 
                ROUND(EXTRACT(EPOCH FROM (NOW() - COALESCE(l.last_contact, l.updated_at)))/86400) as days_silent
         FROM loans l
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         AND COALESCE(l.last_contact, l.updated_at) < NOW() - INTERVAL '5 days'
         ORDER BY days_silent DESC
         LIMIT 30
@@ -1267,7 +1267,7 @@ def _query_processor_frustrated_borrowers(db: Session, params: Dict, user_id: in
         FROM loans l
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
         AND l.sentiment < 3
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         ORDER BY l.sentiment ASC, l.days_in_stage DESC
     """), {"user_id": user_id})
 
@@ -1304,7 +1304,7 @@ def _query_processor_borrowers_need_updates(db: Session, params: Dict, user_id: 
                ROUND(EXTRACT(EPOCH FROM (NOW() - l.last_status_update))/86400) as days_since_update
         FROM loans l
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         AND l.last_status_update < NOW() - INTERVAL '7 days'
         ORDER BY days_since_update DESC
         LIMIT 30
@@ -1343,7 +1343,7 @@ def _query_processor_borrower_satisfaction(db: Session, params: Dict, user_id: i
                     ELSE 'Dissatisfied' END as satisfaction_level
         FROM loans l
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         AND l.sentiment IS NOT NULL
         ORDER BY l.sentiment ASC, l.closing_date ASC NULLS LAST
         LIMIT 50
@@ -1366,7 +1366,7 @@ def _query_processor_lo_action_items(db: Session, params: Dict, user_id: int) ->
         FROM loans l
         LEFT JOIN users u ON l.loan_officer_id = u.id
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         GROUP BY l.loan_officer_id, u.first_name, u.last_name
         HAVING COUNT(*) FILTER (WHERE l.ball_in_court = 'loan_officer') > 0
         ORDER BY waiting_on_lo DESC
@@ -1386,7 +1386,7 @@ def _query_processor_los_blocking_files(db: Session, params: Dict, user_id: int)
         LEFT JOIN users u ON l.loan_officer_id = u.id
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
         AND l.ball_in_court = 'loan_officer'
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         ORDER BY l.closing_date ASC NULLS LAST
         LIMIT 50
     """), {"user_id": user_id})
@@ -1422,13 +1422,13 @@ def _query_processor_my_loan_officers(db: Session, params: Dict, user_id: int) -
     result = db.execute(text("""
         SELECT l.loan_officer_id, u.first_name || ' ' || u.last_name as lo_name,
                COUNT(*) as active_files,
-               COUNT(*) FILTER (WHERE l.stage = 'PROCESSING') as in_processing,
-               COUNT(*) FILTER (WHERE l.stage = 'UNDERWRITING') as in_underwriting,
+               COUNT(*) FILTER (WHERE l.stage = 'Processing') as in_processing,
+               COUNT(*) FILTER (WHERE l.stage IN ('Underwriting', 'UW Received')) as in_underwriting,
                COUNT(*) FILTER (WHERE l.closing_date < NOW() + INTERVAL '14 days') as closing_soon
         FROM loans l
         LEFT JOIN users u ON l.loan_officer_id = u.id
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         GROUP BY l.loan_officer_id, u.first_name, u.last_name
         ORDER BY active_files DESC
     """), {"user_id": user_id})
@@ -1447,7 +1447,7 @@ def _query_processor_files_need_lo_approval(db: Session, params: Dict, user_id: 
         LEFT JOIN users u ON l.loan_officer_id = u.id
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
         AND l.pending_lo_approval = true
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         ORDER BY l.closing_date ASC NULLS LAST
     """), {"user_id": user_id})
 
@@ -1465,7 +1465,7 @@ def _query_processor_problem_files_by_lo(db: Session, params: Dict, user_id: int
         FROM loans l
         LEFT JOIN users u ON l.loan_officer_id = u.id
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         GROUP BY u.id, u.first_name, u.last_name
         HAVING COUNT(l.id) FILTER (WHERE l.risk_score > 70) > 0
             OR COUNT(l.id) FILTER (WHERE l.days_in_stage > 21) > 0
@@ -1509,7 +1509,7 @@ def _query_processor_files_by_stage(db: Session, params: Dict, user_id: int) -> 
                ROUND(AVG(l.days_in_stage), 1) as avg_days_in_stage
         FROM loans l
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         GROUP BY l.stage
         ORDER BY file_count DESC
     """), {"user_id": user_id})
@@ -1543,7 +1543,7 @@ def _query_processor_stalled_files(db: Session, params: Dict, user_id: int) -> L
                ROUND(EXTRACT(EPOCH FROM (NOW() - l.updated_at))/86400) as days_no_activity
         FROM loans l
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         AND l.updated_at < NOW() - INTERVAL '7 days'
         ORDER BY days_no_activity DESC
         LIMIT 30
@@ -1565,7 +1565,7 @@ def _query_processor_file_aging_report(db: Session, params: Dict, user_id: int) 
                     ELSE 'Green' END as aging_status
         FROM loans l
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         ORDER BY l.days_in_stage DESC
         LIMIT 50
     """), {"user_id": user_id})
@@ -1610,7 +1610,7 @@ def _query_processor_files_at_risk_fallout(db: Session, params: Dict, user_id: i
                l.days_in_stage, l.sentiment
         FROM loans l
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         AND (l.risk_score > 75 OR l.sentiment < 3 OR l.days_in_stage > 28)
         ORDER BY l.risk_score DESC, l.sentiment ASC
         LIMIT 30
@@ -1631,7 +1631,7 @@ def _query_processor_funnel_health(db: Session, params: Dict, user_id: int) -> D
             COUNT(*) as total_active
         FROM loans
         WHERE processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND stage NOT IN ('Funded')
     """), {"user_id": user_id})
 
     row = result.fetchone()
@@ -1685,7 +1685,7 @@ def _query_processor_all_file_issues(db: Session, params: Dict, user_id: int) ->
         FROM loans l
         LEFT JOIN conditions c ON c.loan_id = l.id
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         GROUP BY l.id, l.loan_number, l.borrower_name, l.stage, l.risk_score, l.blocking_issue
         HAVING COUNT(c.id) FILTER (WHERE c.status = 'open') > 3 OR l.risk_score > 60 OR l.blocking_issue IS NOT NULL
         ORDER BY open_conditions DESC, l.risk_score DESC
@@ -1704,7 +1704,7 @@ def _query_processor_income_calc_problems(db: Session, params: Dict, user_id: in
         FROM loans l
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
         AND (l.dti > 43 OR l.income_issues IS NOT NULL)
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         ORDER BY l.dti DESC NULLS LAST
     """), {"user_id": user_id})
 
@@ -1722,7 +1722,7 @@ def _query_processor_credit_disputes(db: Session, params: Dict, user_id: int) ->
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
         AND l.credit_disputes IS NOT NULL
         AND l.credit_disputes != ''
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         ORDER BY l.credit_score ASC NULLS LAST
     """), {"user_id": user_id})
 
@@ -1740,7 +1740,7 @@ def _query_processor_appraisal_gaps(db: Session, params: Dict, user_id: int) -> 
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
         AND l.appraisal_received_date IS NOT NULL
         AND l.property_value < l.amount
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         ORDER BY shortage DESC
     """), {"user_id": user_id})
 
@@ -1759,7 +1759,7 @@ def _query_processor_title_issues(db: Session, params: Dict, user_id: int) -> Li
         AND l.title_received_date IS NOT NULL
         AND l.title_exceptions IS NOT NULL
         AND l.title_cleared_date IS NULL
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         ORDER BY l.closing_date ASC NULLS LAST
     """), {"user_id": user_id})
 
@@ -1775,7 +1775,7 @@ def _query_processor_manual_underwriting_files(db: Session, params: Dict, user_i
         FROM loans l
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
         AND l.aus_result IN ('Refer', 'Caution', 'Manual')
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         ORDER BY l.closing_date ASC NULLS LAST
     """), {"user_id": user_id})
 
@@ -1792,7 +1792,7 @@ def _query_processor_eligibility_issues(db: Session, params: Dict, user_id: int)
         FROM loans l
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
         AND l.eligibility_issues IS NOT NULL
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         ORDER BY l.closing_date ASC NULLS LAST
     """), {"user_id": user_id})
 
@@ -1808,7 +1808,7 @@ def _query_processor_whats_blocking_files(db: Session, params: Dict, user_id: in
         FROM loans l
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
         AND l.blocking_issue IS NOT NULL
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         ORDER BY l.days_in_stage DESC
         LIMIT 50
     """), {"user_id": user_id})
@@ -2023,7 +2023,7 @@ def _query_processor_at_capacity_check(db: Session, params: Dict, user_id: int) 
                  ELSE 'Available' END as capacity_status
         FROM loans
         WHERE processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND stage NOT IN ('Funded')
     """), {"user_id": user_id})
 
     row = result.fetchone()
@@ -2068,7 +2068,7 @@ def _query_processor_can_take_another(db: Session, params: Dict, user_id: int) -
             25 as max_capacity
         FROM loans
         WHERE processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND stage NOT IN ('Funded')
     """), {"user_id": user_id})
 
     row = result.fetchone()
@@ -2118,10 +2118,10 @@ def _query_processor_file_distribution(db: Session, params: Dict, user_id: int) 
             ROUND(100.0 * COUNT(*) / (SELECT COUNT(*) FROM loans
                                       WHERE processor = (SELECT CONCAT(first_name, ' ', last_name)
                                                         FROM users WHERE id = :user_id)
-                                      AND stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')), 1) as pct_of_pipeline
+                                      AND stage NOT IN ('Funded')), 1) as pct_of_pipeline
         FROM loans l
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         GROUP BY l.loan_type
         ORDER BY file_count DESC
     """), {"user_id": user_id})
@@ -2199,7 +2199,7 @@ def _query_processor_time_allocation(db: Session, params: Dict, user_id: int) ->
         FROM loans l
         LEFT JOIN documents d ON d.loan_id = l.id
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         GROUP BY activity
 
         UNION ALL
@@ -2211,7 +2211,7 @@ def _query_processor_time_allocation(db: Session, params: Dict, user_id: int) ->
         FROM loans l
         LEFT JOIN conditions c ON c.loan_id = l.id
         WHERE l.processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-        AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+        AND l.stage NOT IN ('Funded')
         GROUP BY activity
 
         ORDER BY open_items DESC
@@ -2230,7 +2230,7 @@ def _query_processor_biggest_bottleneck(db: Session, params: Dict, user_id: int)
                 ROUND(AVG(days_in_stage), 1) as avg_days
             FROM loans
             WHERE processor = (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :user_id)
-            AND stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
+            AND stage NOT IN ('Funded')
             GROUP BY stage
         )
         SELECT stage, files, avg_days
@@ -2279,7 +2279,7 @@ def _query_processor_lo_quality_ranking(db: Session, params: Dict, user_id: int)
             u.first_name || ' ' || u.last_name as lo_name,
             COUNT(l.id) as files,
             ROUND(AVG(l.data_quality_score), 1) as avg_quality_score,
-            ROUND(AVG(l.days_in_stage) FILTER (WHERE l.stage = 'PROCESSING'), 1) as avg_processing_time,
+            ROUND(AVG(l.days_in_stage) FILTER (WHERE l.stage = 'Processing'), 1) as avg_processing_time,
             COUNT(c.id)::numeric / NULLIF(COUNT(DISTINCT l.id), 0) as conditions_per_file
         FROM loans l
         LEFT JOIN users u ON l.loan_officer_id = u.id
