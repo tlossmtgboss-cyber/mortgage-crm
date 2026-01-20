@@ -1,8 +1,11 @@
 {
   "name": "mortgage-crm-frontend",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Agentic AI Mortgage CRM - React Frontend",
   "private": true,
+  "engines": {
+    "node": ">=18.0.0 <25.0.0"
+  },
   "dependencies": {
     "@capacitor/app": "^8.0.0",
     "@capacitor/camera": "^8.0.0",
