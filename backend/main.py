@@ -72598,16 +72598,21 @@ async def check_loan_status(
         orphan_result = db.execute(text("SELECT COUNT(*) FROM loans WHERE organization_id IS NULL")).fetchone()
         orphan_loans = orphan_result[0] if orphan_result else 0
 
-        # Get sample loans using raw SQL
+        # Count loans without loan_officer_id
+        no_lo_result = db.execute(text("SELECT COUNT(*) FROM loans WHERE loan_officer_id IS NULL")).fetchone()
+        no_lo_loans = no_lo_result[0] if no_lo_result else 0
+
+        # Get sample loans using raw SQL - include loan_officer_id
         sample_result = db.execute(
-            text("SELECT id, loan_number, borrower_name, organization_id FROM loans LIMIT 5")
+            text("SELECT id, loan_number, borrower_name, organization_id, loan_officer_id FROM loans LIMIT 5")
         ).fetchall()
-        loan_info = [{"id": l[0], "loan_number": l[1], "borrower": l[2], "org_id": l[3]} for l in sample_result]
+        loan_info = [{"id": l[0], "loan_number": l[1], "borrower": l[2], "org_id": l[3], "lo_id": l[4]} for l in sample_result]
 
         return {
             "users": user_info,
             "total_loans": total_loans,
             "orphan_loans": orphan_loans,
+            "no_loan_officer": no_lo_loans,
             "sample_loans": loan_info
         }
     except Exception as e:
