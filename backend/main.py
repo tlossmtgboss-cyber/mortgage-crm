@@ -72587,6 +72587,28 @@ async def check_loan_status(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.delete("/api/v1/admin/clear-imported-loans")
+async def clear_imported_loans(
+    migration_key: str = "",
+    db: Session = Depends(get_db)
+):
+    """Clear loans that were imported (have IMP- prefix or Unknown borrower)."""
+    if migration_key != "fix-loans-2026":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    try:
+        result = db.execute(text("""
+            DELETE FROM loans
+            WHERE loan_number LIKE 'IMP-%' OR borrower_name = 'Unknown'
+        """))
+        deleted = result.rowcount
+        db.commit()
+        return {"status": "success", "deleted": deleted}
+    except Exception as e:
+        logger.error(f"Clear imported loans failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/v1/admin/import-loans")
 async def admin_import_loans(
     file: UploadFile = File(...),
@@ -72649,6 +72671,12 @@ async def admin_import_loans(
         failed = 0
         errors = []
 
+        # Create a mapping from target field to source column for name/number handling
+        all_field_map = {}
+        for result in mapping_results:
+            if result.crm_field:
+                all_field_map[result.crm_field] = result.excel_column
+
         for idx, row in df.iterrows():
             try:
                 # Build INSERT statement dynamically
@@ -72664,15 +72692,31 @@ async def admin_import_loans(
                 # Add organization_id
                 mapped_values['organization_id'] = org_id
 
-                # Handle loan_number - generate if missing
+                # Handle loan_number - get from original mapping if available
                 if 'loan_number' not in mapped_values:
-                    import uuid
-                    mapped_values['loan_number'] = f"IMP-{uuid.uuid4().hex[:8].upper()}"
+                    if 'loan_number' in all_field_map:
+                        ln_col = all_field_map['loan_number']
+                        ln_val = row.get(ln_col)
+                        if pd.notna(ln_val):
+                            mapped_values['loan_number'] = str(ln_val)
+                    if 'loan_number' not in mapped_values:
+                        import uuid
+                        mapped_values['loan_number'] = f"IMP-{uuid.uuid4().hex[:8].upper()}"
 
-                # Handle borrower_name
+                # Handle borrower_name - combine first/last from original data
                 if 'borrower_name' not in mapped_values:
-                    first = mapped_values.pop('borrower_first_name', '')
-                    last = mapped_values.pop('borrower_last_name', '')
+                    first = ''
+                    last = ''
+                    if 'borrower_first_name' in all_field_map:
+                        fn_col = all_field_map['borrower_first_name']
+                        fn_val = row.get(fn_col)
+                        if pd.notna(fn_val):
+                            first = str(fn_val)
+                    if 'borrower_last_name' in all_field_map:
+                        ln_col = all_field_map['borrower_last_name']
+                        ln_val = row.get(ln_col)
+                        if pd.notna(ln_val):
+                            last = str(ln_val)
                     if first or last:
                         mapped_values['borrower_name'] = f"{first} {last}".strip()
                     else:
