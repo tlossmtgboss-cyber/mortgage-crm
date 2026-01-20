@@ -72471,16 +72471,20 @@ async def fix_loan_associations(
         raise HTTPException(status_code=403, detail="Invalid migration key")
 
     try:
-        # Find the user
-        user = db.query(User).filter(User.email == user_email).first()
-        if not user:
+        # Find the user using raw SQL
+        user_result = db.execute(
+            text("SELECT id, email, organization_id FROM users WHERE email = :email"),
+            {"email": user_email}
+        ).fetchone()
+
+        if not user_result:
             # List available users
-            users = db.query(User).all()
-            user_list = [{"id": u.id, "email": u.email, "org_id": u.organization_id} for u in users]
+            users_result = db.execute(text("SELECT id, email, organization_id FROM users")).fetchall()
+            user_list = [{"id": u[0], "email": u[1], "org_id": u[2]} for u in users_result]
             return {"status": "error", "message": f"User {user_email} not found", "available_users": user_list}
 
-        org_id = user.organization_id
-        user_id = user.id
+        user_id = user_result[0]
+        org_id = user_result[2]
 
         # Update loans without organization_id
         result = db.execute(
@@ -72492,7 +72496,11 @@ async def fix_loan_associations(
         db.commit()
 
         # Get total loans for this org
-        total = db.query(Loan).filter(Loan.organization_id == org_id).count()
+        total_result = db.execute(
+            text("SELECT COUNT(*) FROM loans WHERE organization_id = :org_id"),
+            {"org_id": org_id}
+        ).fetchone()
+        total = total_result[0] if total_result else 0
 
         return {
             "status": "success",
@@ -72517,17 +72525,22 @@ async def check_loan_status(
         raise HTTPException(status_code=403, detail="Invalid migration key")
 
     try:
-        # Get all users
-        users = db.query(User).all()
-        user_info = [{"id": u.id, "email": u.email, "org_id": u.organization_id} for u in users]
+        # Get all users using raw SQL
+        users_result = db.execute(text("SELECT id, email, organization_id FROM users")).fetchall()
+        user_info = [{"id": u[0], "email": u[1], "org_id": u[2]} for u in users_result]
 
-        # Get loan stats
-        total_loans = db.query(Loan).count()
-        orphan_loans = db.query(Loan).filter(Loan.organization_id == None).count()
+        # Get loan stats using raw SQL
+        total_result = db.execute(text("SELECT COUNT(*) FROM loans")).fetchone()
+        total_loans = total_result[0] if total_result else 0
 
-        # Get sample loans
-        sample_loans = db.query(Loan).limit(5).all()
-        loan_info = [{"id": l.id, "loan_number": l.loan_number, "borrower": l.borrower_name, "org_id": l.organization_id} for l in sample_loans]
+        orphan_result = db.execute(text("SELECT COUNT(*) FROM loans WHERE organization_id IS NULL")).fetchone()
+        orphan_loans = orphan_result[0] if orphan_result else 0
+
+        # Get sample loans using raw SQL
+        sample_result = db.execute(
+            text("SELECT id, loan_number, borrower_name, organization_id FROM loans LIMIT 5")
+        ).fetchall()
+        loan_info = [{"id": l[0], "loan_number": l[1], "borrower": l[2], "org_id": l[3]} for l in sample_result]
 
         return {
             "users": user_info,
