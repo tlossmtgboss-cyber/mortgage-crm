@@ -72655,8 +72655,10 @@ async def fix_task_assignments(
         raise HTTPException(status_code=403, detail="Invalid migration key")
 
     try:
-        # Fix tasks that are associated with loans to use the loan's loan_officer_id
-        result = db.execute(text("""
+        results = {}
+
+        # Fix ai_tasks that are associated with loans
+        ai_result = db.execute(text("""
             UPDATE ai_tasks
             SET assigned_to_id = loans.loan_officer_id
             FROM loans
@@ -72664,24 +72666,54 @@ async def fix_task_assignments(
             AND loans.loan_officer_id IS NOT NULL
             AND (ai_tasks.assigned_to_id IS NULL OR ai_tasks.assigned_to_id != loans.loan_officer_id)
         """))
-        tasks_fixed = result.rowcount
+        results["ai_tasks_fixed"] = ai_result.rowcount
+
+        # Fix regular tasks that are associated with loans
+        task_result = db.execute(text("""
+            UPDATE tasks
+            SET owner_id = loans.loan_officer_id
+            FROM loans
+            WHERE tasks.loan_id = loans.id
+            AND loans.loan_officer_id IS NOT NULL
+            AND (tasks.owner_id IS NULL OR tasks.owner_id != loans.loan_officer_id)
+        """))
+        results["regular_tasks_fixed"] = task_result.rowcount
+
+        # Fix regular tasks that are associated with leads (use lead's owner_id)
+        lead_task_result = db.execute(text("""
+            UPDATE tasks
+            SET owner_id = leads.owner_id
+            FROM leads
+            WHERE tasks.lead_id = leads.id
+            AND leads.owner_id IS NOT NULL
+            AND (tasks.owner_id IS NULL OR tasks.owner_id != leads.owner_id)
+        """))
+        results["lead_tasks_fixed"] = lead_task_result.rowcount
 
         db.commit()
 
-        # Get summary of task assignments after fix
-        summary_result = db.execute(text("""
+        # Get summary of AI task assignments after fix
+        ai_summary_result = db.execute(text("""
             SELECT u.email, COUNT(*) as count
             FROM ai_tasks t
             LEFT JOIN users u ON u.id = t.assigned_to_id
             GROUP BY u.email, t.assigned_to_id
         """)).fetchall()
-        summary = [{"email": r[0], "count": r[1]} for r in summary_result]
+        results["ai_tasks_by_user"] = [{"email": r[0], "count": r[1]} for r in ai_summary_result]
+
+        # Get summary of regular task assignments after fix
+        task_summary_result = db.execute(text("""
+            SELECT u.email, COUNT(*) as count
+            FROM tasks t
+            LEFT JOIN users u ON u.id = t.owner_id
+            GROUP BY u.email, t.owner_id
+        """)).fetchall()
+        results["regular_tasks_by_user"] = [{"email": r[0], "count": r[1]} for r in task_summary_result]
 
         return {
             "status": "success",
-            "tasks_fixed": tasks_fixed,
-            "task_summary_by_user": summary,
-            "message": "Fixed task assignments based on loan_officer_id"
+            **results,
+            "message": "Fixed task assignments based on loan_officer_id and lead.owner_id"
         }
     except Exception as e:
         logger.error(f"Fix task assignments failed: {e}")
@@ -72728,14 +72760,38 @@ async def check_loan_status(
         """)).fetchall()
         task_info = [{"email": t[0], "count": t[1]} for t in task_summary]
 
-        # Get sample tasks
-        sample_tasks = db.execute(text("""
+        # Get sample AI tasks
+        sample_ai_tasks = db.execute(text("""
             SELECT t.id, t.assigned_to_id, u.email, t.title
             FROM ai_tasks t
             LEFT JOIN users u ON u.id = t.assigned_to_id
             LIMIT 10
         """)).fetchall()
-        task_samples = [{"id": t[0], "assigned_to_id": t[1], "email": t[2], "title": t[3][:50] if t[3] else None} for t in sample_tasks]
+        ai_task_samples = [{"id": t[0], "assigned_to_id": t[1], "email": t[2], "title": t[3][:50] if t[3] else None} for t in sample_ai_tasks]
+
+        # Get regular tasks summary
+        regular_task_summary = db.execute(text("""
+            SELECT u.email, COUNT(*) as count
+            FROM tasks t
+            LEFT JOIN users u ON u.id = t.owner_id
+            GROUP BY u.email, t.owner_id
+        """)).fetchall()
+        regular_task_info = [{"email": t[0], "count": t[1]} for t in regular_task_summary]
+
+        # Get sample regular tasks
+        sample_tasks = db.execute(text("""
+            SELECT t.id, t.owner_id, u.email, t.title, t.status
+            FROM tasks t
+            LEFT JOIN users u ON u.id = t.owner_id
+            LIMIT 20
+        """)).fetchall()
+        task_samples = [{"id": t[0], "owner_id": t[1], "email": t[2], "title": t[3][:50] if t[3] else None, "status": t[4]} for t in sample_tasks]
+
+        # Count workflow task instances
+        workflow_tasks = db.execute(text("""
+            SELECT COUNT(*) FROM workflow_task_instances
+        """)).fetchone()
+        workflow_count = workflow_tasks[0] if workflow_tasks else 0
 
         return {
             "users": user_info,
@@ -72743,8 +72799,11 @@ async def check_loan_status(
             "orphan_loans": orphan_loans,
             "no_loan_officer": no_lo_loans,
             "sample_loans": loan_info,
-            "tasks_by_user": task_info,
-            "sample_tasks": task_samples
+            "ai_tasks_by_user": task_info,
+            "ai_task_samples": ai_task_samples,
+            "regular_tasks_by_user": regular_task_info,
+            "regular_task_samples": task_samples,
+            "workflow_task_instances_count": workflow_count
         }
     except Exception as e:
         logger.error(f"Loan check failed: {e}")
