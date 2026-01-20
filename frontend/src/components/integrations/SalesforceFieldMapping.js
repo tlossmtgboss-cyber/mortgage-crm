@@ -116,7 +116,7 @@ function SalesforceFieldMapping({ isConnected, onMappingSaved }) {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const res = await fetch(`${API_URL}/api/v1/salesforce/mappings`, {
+      const res = await fetch(`${API_URL}/api/integrations/salesforce/mappings`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -138,7 +138,7 @@ function SalesforceFieldMapping({ isConnected, onMappingSaved }) {
 
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${API_URL}/api/v1/salesforce/explore/objects`, {
+      const res = await fetch(`${API_URL}/api/integrations/salesforce/schema/objects`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -172,7 +172,7 @@ function SalesforceFieldMapping({ isConnected, onMappingSaved }) {
     try {
       setLoadingFields(true);
       const token = localStorage.getItem('token');
-      const res = await fetch(`${API_URL}/api/v1/salesforce/explore/objects/${objectName}`, {
+      const res = await fetch(`${API_URL}/api/integrations/salesforce/schema/objects/${objectName}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -207,7 +207,7 @@ function SalesforceFieldMapping({ isConnected, onMappingSaved }) {
     try {
       setSaving(true);
       const token = localStorage.getItem('token');
-      const res = await fetch(`${API_URL}/api/v1/salesforce/mappings`, {
+      const res = await fetch(`${API_URL}/api/integrations/salesforce/mappings`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
