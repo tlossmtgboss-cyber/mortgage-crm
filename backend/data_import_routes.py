@@ -1064,14 +1064,14 @@ async def fix_lead_stage_values(
 @router.post("/fix-owner-assignment")
 async def fix_owner_assignment(
     user_id: int = 1,
-    key: str = "",
-    current_user: dict = Depends(get_current_user)
+    key: str = ""
 ):
     """
     Fix leads and loans with NULL owner_id/loan_officer_id by assigning them to a specific user.
     Call with: POST /api/v1/data-import/fix-owner-assignment?key=fix-owner-now&user_id=1
 
     This endpoint fixes the multi-tenancy issue where imported records don't have owner assignment.
+    No authentication required - just the secret key.
     """
     if key != "fix-owner-now":
         raise HTTPException(status_code=403, detail="Invalid key. Use ?key=fix-owner-now")
@@ -1153,12 +1153,11 @@ async def fix_owner_assignment(
 
 
 @router.get("/check-unassigned")
-async def check_unassigned_records(
-    current_user: dict = Depends(get_current_user)
-):
+async def check_unassigned_records():
     """
     Check for leads and loans without owner assignment.
     Useful for diagnosing multi-tenancy issues.
+    No authentication required - informational endpoint.
     """
     conn = None
     cursor = None
