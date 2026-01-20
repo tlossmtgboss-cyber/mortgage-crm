@@ -24,7 +24,7 @@ from sqlalchemy import text
 
 from database import get_db
 from models.call_monitoring_models import (
-    CaptureMode, SessionStatus, TranscriptState,
+    CaptureMode, CallSessionStatus as SessionStatus, TranscriptState,
     ArtifactType, ApprovalStatus,
     CallSessionCreate, CallSessionResponse,
     CallParticipantCreate, CallParticipantResponse,
