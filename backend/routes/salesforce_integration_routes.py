@@ -110,6 +110,11 @@ def get_current_user_id(request: Request, db: Session) -> Optional[int]:
             payload = jwt.decode(token, secret_key, algorithms=["HS256"])
             email = payload.get("sub")
             if email:
+                try:
+                    # Ensure clean transaction state before query
+                    db.rollback()
+                except:
+                    pass
                 result = db.execute(
                     text("SELECT id FROM users WHERE email = :email"),
                     {"email": email}
@@ -119,6 +124,10 @@ def get_current_user_id(request: Request, db: Session) -> Optional[int]:
             return payload.get("user_id")
     except Exception as e:
         logger.warning(f"Failed to extract user ID: {e}")
+        try:
+            db.rollback()
+        except:
+            pass
     return None
 
 
@@ -132,6 +141,11 @@ def require_user(request: Request, db: Session = Depends(get_db)) -> int:
 
 def get_integration_profile(db: Session, user_id: int) -> Optional[IntegrationProfile]:
     """Get user's Salesforce integration profile."""
+    try:
+        # Ensure clean transaction state
+        db.rollback()
+    except:
+        pass
     return db.query(IntegrationProfile).filter(
         IntegrationProfile.user_id == user_id,
         IntegrationProfile.provider == 'salesforce'
