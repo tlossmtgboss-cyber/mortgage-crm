@@ -29,7 +29,8 @@ COPY . .
 EXPOSE 8080
 
 # Health check for Railway - using /health/live which doesn't require DB
-HEALTHCHECK --interval=30s --timeout=30s --start-period=120s --retries=10 \
+# Increased timeouts to handle slow startup on Railway
+HEALTHCHECK --interval=30s --timeout=60s --start-period=300s --retries=15 \
     CMD curl -f http://localhost:8080/health/live || exit 1
 
 # Create python alias if needed and run start script
