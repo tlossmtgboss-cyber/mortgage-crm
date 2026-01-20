@@ -72620,6 +72620,45 @@ async def check_loan_status(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/v1/admin/debug-data")
+async def debug_data(
+    migration_key: str = "",
+    db: Session = Depends(get_db)
+):
+    """Debug endpoint to check data isolation."""
+    if migration_key != "fix-loans-2026":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    try:
+        # Check loans
+        loans_result = db.execute(text("""
+            SELECT loan_officer_id, organization_id, COUNT(*) as count
+            FROM loans
+            GROUP BY loan_officer_id, organization_id
+        """)).fetchall()
+        loans_by_owner = [{"lo_id": r[0], "org_id": r[1], "count": r[2]} for r in loans_result]
+
+        # Check tasks
+        tasks_result = db.execute(text("""
+            SELECT assigned_to_id, COUNT(*) as count
+            FROM ai_tasks
+            GROUP BY assigned_to_id
+        """)).fetchall()
+        tasks_by_user = [{"user_id": r[0], "count": r[1]} for r in tasks_result]
+
+        # Check users
+        users_result = db.execute(text("SELECT id, email, organization_id FROM users")).fetchall()
+        users = [{"id": r[0], "email": r[1], "org_id": r[2]} for r in users_result]
+
+        return {
+            "loans_by_owner": loans_by_owner,
+            "tasks_by_user": tasks_by_user,
+            "users": users
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @app.delete("/api/v1/admin/clear-imported-loans")
 async def clear_imported_loans(
     migration_key: str = "",
