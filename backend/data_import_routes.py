@@ -746,6 +746,13 @@ async def execute_import(
                             columns.append('source')
                             values.append('Data Import')
 
+                        # CRITICAL: Set owner_id for multi-tenancy
+                        # Get user_id from current_user (User object from get_current_user)
+                        user_id = getattr(current_user, 'id', None)
+                        if user_id and 'owner_id' not in columns:
+                            columns.append('owner_id')
+                            values.append(user_id)
+
                         # Create placeholders
                         placeholders = ', '.join(['%s'] * len(columns))
                         columns_str = ', '.join(columns)
@@ -827,6 +834,12 @@ async def execute_import(
                         if 'stage' not in columns:
                             columns.append('stage')
                             values.append('processing')
+
+                        # CRITICAL: Set loan_officer_id for multi-tenancy if not already mapped
+                        user_id = getattr(current_user, 'id', None)
+                        if user_id and 'loan_officer_id' not in columns:
+                            columns.append('loan_officer_id')
+                            values.append(user_id)
 
                         placeholders = ', '.join(['%s'] * len(columns))
                         columns_str = ', '.join(columns)
@@ -1008,5 +1021,150 @@ async def fix_lead_stage_values(
         return {
             "success": False,
             "message": f"Fix failed: {str(e)}",
+            "error": str(e)
+        }
+
+
+@router.post("/fix-owner-assignment")
+async def fix_owner_assignment(
+    user_id: int = 1,
+    key: str = "",
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Fix leads and loans with NULL owner_id/loan_officer_id by assigning them to a specific user.
+    Call with: POST /api/v1/data-import/fix-owner-assignment?key=fix-owner-now&user_id=1
+
+    This endpoint fixes the multi-tenancy issue where imported records don't have owner assignment.
+    """
+    if key != "fix-owner-now":
+        raise HTTPException(status_code=403, detail="Invalid key. Use ?key=fix-owner-now")
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        results = {
+            "leads_fixed": 0,
+            "loans_fixed": 0,
+            "errors": []
+        }
+
+        # Verify user exists
+        cursor.execute("SELECT id, email FROM users WHERE id = %s", (user_id,))
+        user = cursor.fetchone()
+        if not user:
+            raise HTTPException(status_code=404, detail=f"User with id {user_id} not found")
+
+        target_email = user[1]
+
+        # Fix leads with NULL owner_id
+        try:
+            cursor.execute(
+                "UPDATE leads SET owner_id = %s WHERE owner_id IS NULL",
+                (user_id,)
+            )
+            results["leads_fixed"] = cursor.rowcount
+            logger.info(f"Fixed {cursor.rowcount} leads - assigned to user {user_id} ({target_email})")
+            conn.commit()
+        except Exception as e:
+            results["errors"].append(f"Failed to fix leads: {str(e)}")
+            conn.rollback()
+
+        # Fix loans with NULL loan_officer_id
+        try:
+            cursor.execute(
+                "UPDATE loans SET loan_officer_id = %s WHERE loan_officer_id IS NULL",
+                (user_id,)
+            )
+            results["loans_fixed"] = cursor.rowcount
+            logger.info(f"Fixed {cursor.rowcount} loans - assigned to user {user_id} ({target_email})")
+            conn.commit()
+        except Exception as e:
+            results["errors"].append(f"Failed to fix loans: {str(e)}")
+            conn.rollback()
+
+        cursor.close()
+        conn.close()
+
+        return {
+            "success": True,
+            "message": f"Fixed {results['leads_fixed']} leads and {results['loans_fixed']} loans - assigned to {target_email}",
+            "target_user_id": user_id,
+            "target_email": target_email,
+            **results
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Owner assignment fix failed: {e}")
+        return {
+            "success": False,
+            "message": f"Fix failed: {str(e)}",
+            "error": str(e)
+        }
+
+
+@router.get("/check-unassigned")
+async def check_unassigned_records(
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Check for leads and loans without owner assignment.
+    Useful for diagnosing multi-tenancy issues.
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Count unassigned leads
+        cursor.execute("SELECT COUNT(*) FROM leads WHERE owner_id IS NULL")
+        unassigned_leads = cursor.fetchone()[0]
+
+        # Count unassigned loans
+        cursor.execute("SELECT COUNT(*) FROM loans WHERE loan_officer_id IS NULL")
+        unassigned_loans = cursor.fetchone()[0]
+
+        # Get sample of unassigned leads
+        cursor.execute("""
+            SELECT id, name, email, source, created_at
+            FROM leads
+            WHERE owner_id IS NULL
+            ORDER BY created_at DESC
+            LIMIT 10
+        """)
+        sample_leads = cursor.fetchall()
+
+        # Get sample of unassigned loans
+        cursor.execute("""
+            SELECT id, loan_number, borrower_name, created_at
+            FROM loans
+            WHERE loan_officer_id IS NULL
+            ORDER BY created_at DESC
+            LIMIT 10
+        """)
+        sample_loans = cursor.fetchall()
+
+        cursor.close()
+        conn.close()
+
+        return {
+            "success": True,
+            "unassigned_leads_count": unassigned_leads,
+            "unassigned_loans_count": unassigned_loans,
+            "sample_unassigned_leads": [
+                {"id": l[0], "name": l[1], "email": l[2], "source": l[3], "created_at": str(l[4]) if l[4] else None}
+                for l in sample_leads
+            ],
+            "sample_unassigned_loans": [
+                {"id": l[0], "loan_number": l[1], "borrower_name": l[2], "created_at": str(l[3]) if l[3] else None}
+                for l in sample_loans
+            ],
+            "recommendation": "Run POST /api/v1/data-import/fix-owner-assignment?key=fix-owner-now&user_id=1 to fix" if (unassigned_leads > 0 or unassigned_loans > 0) else "All records have owner assignment"
+        }
+    except Exception as e:
+        logger.error(f"Check unassigned failed: {e}")
+        return {
+            "success": False,
             "error": str(e)
         }

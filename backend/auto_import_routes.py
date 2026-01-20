@@ -399,6 +399,11 @@ async def auto_import(
                         if 'source' not in row_data:
                             row_data['source'] = 'Auto Import'
 
+                        # CRITICAL: Set owner_id for multi-tenancy
+                        user_id = getattr(current_user, 'id', None)
+                        if user_id and 'owner_id' not in row_data:
+                            row_data['owner_id'] = user_id
+
                         # Check for existing by email
                         email = row_data.get('email')
                         if email:
@@ -441,6 +446,11 @@ async def auto_import(
                             row_data['stage'] = 'Processing'
                         if 'amount' not in row_data:
                             row_data['amount'] = 0  # Required field
+
+                        # CRITICAL: Set loan_officer_id for multi-tenancy if not already mapped
+                        user_id = getattr(current_user, 'id', None)
+                        if user_id and 'loan_officer_id' not in row_data:
+                            row_data['loan_officer_id'] = user_id
 
                         # Check for existing by loan_number
                         loan_number = row_data.get('loan_number')
