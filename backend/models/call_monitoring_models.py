@@ -686,3 +686,256 @@ class CallTimelineEntry(BaseModel):
     summary_preview: Optional[str]
     participant_count: int
     artifact_count: int
+
+
+# =============================================================================
+# UNDERWRITING GUIDELINES MODELS
+# =============================================================================
+
+class GuidelineType(str, Enum):
+    """Types of underwriting guidelines."""
+    AGENCY = "agency"  # Fannie Mae, Freddie Mac, FHA, VA, USDA
+    INVESTOR = "investor"  # Specific investor overlays
+    COMPANY = "company"  # Internal company policies
+    STATE = "state"  # State-specific requirements
+    PRODUCT = "product"  # Product-specific guidelines
+
+
+class GuidelineCategory(str, Enum):
+    """Categories of guidelines."""
+    CREDIT = "credit"
+    INCOME = "income"
+    ASSETS = "assets"
+    PROPERTY = "property"
+    COMPLIANCE = "compliance"
+    DTI = "dti"
+    LTV = "ltv"
+    RESERVES = "reserves"
+    DOCUMENTATION = "documentation"
+    GENERAL = "general"
+
+
+class UnderwritingGuideline(Base):
+    """
+    Uploaded underwriting guidelines that the AI can reference.
+    Supports PDF, text, and structured guideline documents.
+    """
+    __tablename__ = "underwriting_guidelines"
+    __table_args__ = (
+        Index('ix_uw_guidelines_type', 'guideline_type'),
+        Index('ix_uw_guidelines_category', 'category'),
+        Index('ix_uw_guidelines_loan_program', 'loan_program'),
+        Index('ix_uw_guidelines_active', 'is_active'),
+        {'extend_existing': True}
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    # Guideline identification
+    name = Column(String(500), nullable=False)
+    description = Column(Text)
+    version = Column(String(50))
+
+    # Classification
+    guideline_type = Column(String(50), nullable=False)  # agency, investor, company, state
+    category = Column(String(50))  # credit, income, assets, property, etc.
+    loan_program = Column(String(50))  # conventional, fha, va, usda, all
+    investor_name = Column(String(200))  # For investor overlays
+
+    # Source document
+    source_file_name = Column(String(500))
+    source_file_path = Column(String(1000))  # Path in storage (S3, local)
+    source_file_type = Column(String(50))  # pdf, txt, docx, html
+    source_file_size = Column(Integer)
+
+    # Extracted/processed content
+    full_text = Column(Text)  # Full extracted text from document
+    summary = Column(Text)  # AI-generated summary of the guideline
+    key_points = Column(JSONB, default=[])  # List of key requirements
+
+    # Structured guidelines (for quick lookups)
+    structured_rules = Column(JSONB, default={})
+    # Example structure:
+    # {
+    #   "min_credit_score": {"standard": 620, "high_balance": 680},
+    #   "max_dti": {"standard": 45, "with_compensating": 50},
+    #   "max_ltv": {"purchase": 97, "cash_out": 80},
+    #   "waiting_periods": {"bankruptcy": "4 years", "foreclosure": "7 years"}
+    # }
+
+    # Tags for searching
+    tags = Column(ARRAY(Text), default=[])
+    keywords = Column(ARRAY(Text), default=[])  # Auto-extracted keywords
+
+    # Effective dates
+    effective_date = Column(Date)
+    expiration_date = Column(Date)
+
+    # Status
+    is_active = Column(Boolean, default=True)
+    is_processed = Column(Boolean, default=False)  # Has text been extracted?
+
+    # Ownership
+    uploaded_by = Column(UUID(as_uuid=True), ForeignKey('users.id'))
+    organization_id = Column(UUID(as_uuid=True))  # For multi-tenant
+
+    # Processing metadata
+    processing_notes = Column(Text)
+    last_processed_at = Column(DateTime(timezone=True))
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class GuidelineSection(Base):
+    """
+    Sections within a guideline document for granular searching.
+    Enables finding specific sections relevant to a question.
+    """
+    __tablename__ = "guideline_sections"
+    __table_args__ = (
+        Index('ix_guideline_sections_guideline', 'guideline_id'),
+        Index('ix_guideline_sections_category', 'category'),
+        {'extend_existing': True}
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    guideline_id = Column(UUID(as_uuid=True), ForeignKey('underwriting_guidelines.id', ondelete='CASCADE'), nullable=False)
+
+    # Section identification
+    section_number = Column(String(100))  # e.g., "B3-3.1-07"
+    section_title = Column(String(500))
+    parent_section = Column(String(100))  # e.g., "B3-3.1"
+
+    # Content
+    content = Column(Text, nullable=False)
+    summary = Column(Text)
+
+    # Classification
+    category = Column(String(50))  # credit, income, assets, etc.
+    topics = Column(ARRAY(Text), default=[])  # Specific topics covered
+
+    # For vector search (future enhancement)
+    content_embedding = Column(ARRAY(Float))  # Vector embedding for semantic search
+
+    # Position in document
+    page_number = Column(Integer)
+    position_start = Column(Integer)  # Character position in full text
+    position_end = Column(Integer)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+# --- Underwriting Guidelines Pydantic Schemas ---
+
+class GuidelineUploadRequest(BaseModel):
+    """Request schema for uploading a guideline."""
+    name: str
+    description: Optional[str] = None
+    version: Optional[str] = None
+    guideline_type: GuidelineType
+    category: Optional[GuidelineCategory] = None
+    loan_program: Optional[str] = "all"  # conventional, fha, va, usda, all
+    investor_name: Optional[str] = None
+    effective_date: Optional[str] = None
+    expiration_date: Optional[str] = None
+    tags: Optional[List[str]] = None
+
+
+class GuidelineUpdateRequest(BaseModel):
+    """Request schema for updating a guideline."""
+    name: Optional[str] = None
+    description: Optional[str] = None
+    version: Optional[str] = None
+    guideline_type: Optional[GuidelineType] = None
+    category: Optional[GuidelineCategory] = None
+    loan_program: Optional[str] = None
+    investor_name: Optional[str] = None
+    effective_date: Optional[str] = None
+    expiration_date: Optional[str] = None
+    tags: Optional[List[str]] = None
+    is_active: Optional[bool] = None
+    structured_rules: Optional[Dict[str, Any]] = None
+
+
+class GuidelineTextInput(BaseModel):
+    """Request schema for adding guideline text directly."""
+    name: str
+    description: Optional[str] = None
+    guideline_type: GuidelineType
+    category: Optional[GuidelineCategory] = None
+    loan_program: Optional[str] = "all"
+    content: str  # The guideline text content
+    structured_rules: Optional[Dict[str, Any]] = None
+    tags: Optional[List[str]] = None
+
+
+class GuidelineResponse(BaseModel):
+    """Response schema for a guideline."""
+    id: str
+    name: str
+    description: Optional[str]
+    version: Optional[str]
+    guideline_type: str
+    category: Optional[str]
+    loan_program: Optional[str]
+    investor_name: Optional[str]
+    source_file_name: Optional[str]
+    is_active: bool
+    is_processed: bool
+    effective_date: Optional[str]
+    expiration_date: Optional[str]
+    tags: Optional[List[str]]
+    key_points: Optional[List[str]]
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class GuidelineDetailResponse(GuidelineResponse):
+    """Detailed response including full text and structured rules."""
+    full_text: Optional[str]
+    summary: Optional[str]
+    structured_rules: Optional[Dict[str, Any]]
+    keywords: Optional[List[str]]
+
+
+class GuidelineSectionResponse(BaseModel):
+    """Response schema for a guideline section."""
+    id: str
+    guideline_id: str
+    section_number: Optional[str]
+    section_title: Optional[str]
+    content: str
+    summary: Optional[str]
+    category: Optional[str]
+    topics: Optional[List[str]]
+    page_number: Optional[int]
+
+    class Config:
+        from_attributes = True
+
+
+class GuidelineSearchRequest(BaseModel):
+    """Request schema for searching guidelines."""
+    query: str
+    loan_program: Optional[str] = None
+    category: Optional[str] = None
+    guideline_type: Optional[str] = None
+    limit: int = 10
+
+
+class GuidelineSearchResult(BaseModel):
+    """Search result for guideline query."""
+    guideline_id: str
+    guideline_name: str
+    section_id: Optional[str]
+    section_title: Optional[str]
+    content_snippet: str
+    relevance_score: float
+    category: Optional[str]
+    loan_program: Optional[str]

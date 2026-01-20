@@ -39549,8 +39549,12 @@ async def update_current_user_profile(
 ):
     """Update current user's profile information"""
     from sqlalchemy import text
+    import json as json_module
+    import traceback
 
     try:
+        logger.info(f"Profile update request for user {current_user.id}: {profile_update.dict(exclude_none=True)}")
+
         # Use raw SQL to update to avoid SQLAlchemy model issues with missing columns
         update_fields = []
         params = {"user_id": current_user.id}
@@ -39573,52 +39577,80 @@ async def update_current_user_profile(
 
         # Handle business hours
         if profile_update.work_hours_start is not None or profile_update.work_hours_end is not None or profile_update.work_days is not None:
-            # Get current business hours
-            result = db.execute(text("SELECT business_hours FROM users WHERE id = :user_id"), {"user_id": current_user.id}).fetchone()
-            business_hours = dict(result[0] or {}) if result and result[0] else {}
+            try:
+                # Get current business hours
+                result = db.execute(text("SELECT business_hours FROM users WHERE id = :user_id"), {"user_id": current_user.id}).fetchone()
+                business_hours = {}
+                if result and result[0]:
+                    if isinstance(result[0], dict):
+                        business_hours = dict(result[0])
+                    elif isinstance(result[0], str):
+                        business_hours = json_module.loads(result[0])
 
-            if profile_update.work_hours_start is not None:
-                business_hours['start'] = profile_update.work_hours_start
-            if profile_update.work_hours_end is not None:
-                business_hours['end'] = profile_update.work_hours_end
-            if profile_update.work_days is not None:
-                business_hours['days'] = profile_update.work_days
+                if profile_update.work_hours_start is not None:
+                    business_hours['start'] = profile_update.work_hours_start
+                if profile_update.work_hours_end is not None:
+                    business_hours['end'] = profile_update.work_hours_end
+                if profile_update.work_days is not None:
+                    business_hours['days'] = profile_update.work_days
 
-            import json
-            update_fields.append("business_hours = :business_hours::json")
-            params["business_hours"] = json.dumps(business_hours)
+                # Use CAST for PostgreSQL compatibility
+                update_fields.append("business_hours = CAST(:business_hours AS json)")
+                params["business_hours"] = json_module.dumps(business_hours)
+            except Exception as bh_error:
+                logger.warning(f"Could not update business_hours: {bh_error}")
+                # Continue without business hours update
 
         if update_fields:
             sql = f"UPDATE users SET {', '.join(update_fields)} WHERE id = :user_id"
+            logger.info(f"Executing SQL: {sql} with params: {params}")
             db.execute(text(sql), params)
             db.commit()
+            logger.info(f"Profile SQL update successful for user {current_user.id}")
 
-        # Refresh to get updated values
-        db.refresh(current_user)
+        # Fetch updated user data directly with SQL to avoid ORM issues
+        user_result = db.execute(text("""
+            SELECT id, email, full_name, phone, nmls_number, title, business_hours
+            FROM users WHERE id = :user_id
+        """), {"user_id": current_user.id}).fetchone()
 
-        # Get updated business hours for response
-        business_hours = getattr(current_user, 'business_hours', None) or {}
+        if not user_result:
+            raise HTTPException(status_code=404, detail="User not found after update")
 
-        logger.info(f"Profile updated for user {current_user.email}")
+        # Parse business hours from result
+        business_hours = {}
+        if user_result[6]:  # business_hours column
+            if isinstance(user_result[6], dict):
+                business_hours = user_result[6]
+            elif isinstance(user_result[6], str):
+                try:
+                    business_hours = json_module.loads(user_result[6])
+                except:
+                    business_hours = {}
+
+        logger.info(f"Profile updated successfully for user {current_user.email}")
         return {
             "success": True,
             "message": "Profile updated successfully",
             "user": {
-                "id": current_user.id,
-                "email": current_user.email,
-                "full_name": current_user.full_name,
-                "phone": getattr(current_user, 'phone', None),
-                "nmls_number": getattr(current_user, 'nmls_number', None),
-                "job_title": getattr(current_user, 'title', None),  # Map from 'title' column
+                "id": user_result[0],
+                "email": user_result[1],
+                "full_name": user_result[2],
+                "phone": user_result[3],
+                "nmls_number": user_result[4],
+                "job_title": user_result[5],  # title column
                 "work_hours_start": business_hours.get('start', '09:00'),
                 "work_hours_end": business_hours.get('end', '17:00'),
                 "work_days": business_hours.get('days', ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'])
             }
         }
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
-        logger.error(f"Error updating profile: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error updating profile for user {current_user.id}: {e}")
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Profile update failed: {str(e)}")
 
 
 @app.post("/api/v1/users/{user_id}/photo")
