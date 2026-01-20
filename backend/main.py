@@ -72543,12 +72543,12 @@ async def fix_loan_associations(
         user_id = user_result[0]
         org_id = user_result[2]
 
-        # Update loans - set both organization_id AND loan_officer_id
+        # Update ALL loans in this org - set loan_officer_id to this user
         result = db.execute(
             text("""
                 UPDATE loans
                 SET organization_id = :org_id, loan_officer_id = :user_id
-                WHERE organization_id IS NULL OR loan_officer_id IS NULL
+                WHERE organization_id = :org_id
             """),
             {"org_id": org_id, "user_id": user_id}
         )
