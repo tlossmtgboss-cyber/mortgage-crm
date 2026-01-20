@@ -30,7 +30,7 @@
           }
         },
         "server": {
-          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/identify-caller"
+          "url": "https://api.perenniaai.com/api/vapi/functions/identify-caller"
         }
       },
       {
@@ -73,7 +73,7 @@
           }
         },
         "server": {
-          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/transfer-to-production-assistant"
+          "url": "https://api.perenniaai.com/api/vapi/functions/transfer-to-production-assistant"
         }
       },
       {
@@ -111,7 +111,7 @@
           }
         },
         "server": {
-          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/transfer-to-loan-officer"
+          "url": "https://api.perenniaai.com/api/vapi/functions/transfer-to-loan-officer"
         }
       },
       {
@@ -153,7 +153,7 @@
           }
         },
         "server": {
-          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/transfer-to-processor"
+          "url": "https://api.perenniaai.com/api/vapi/functions/transfer-to-processor"
         }
       },
       {
@@ -175,7 +175,7 @@
           }
         },
         "server": {
-          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/create-task"
+          "url": "https://api.perenniaai.com/api/vapi/functions/create-task"
         }
       },
       {
@@ -197,7 +197,7 @@
           }
         },
         "server": {
-          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/schedule-appointment"
+          "url": "https://api.perenniaai.com/api/vapi/functions/schedule-appointment"
         }
       },
       {
@@ -215,7 +215,7 @@
           }
         },
         "server": {
-          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/available-time-slots"
+          "url": "https://api.perenniaai.com/api/vapi/functions/available-time-slots"
         }
       },
       {
@@ -251,7 +251,7 @@
           }
         },
         "server": {
-          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/submit-preapproval-application"
+          "url": "https://api.perenniaai.com/api/vapi/functions/submit-preapproval-application"
         }
       },
       {
@@ -272,7 +272,7 @@
           }
         },
         "server": {
-          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/schedule-calendly-appointment"
+          "url": "https://api.perenniaai.com/api/vapi/functions/schedule-calendly-appointment"
         }
       }
     ]
@@ -287,6 +287,6 @@
   "silenceTimeoutSeconds": 30,
   "maxDurationSeconds": 1800,
   "backgroundSound": "office",
-  "serverUrl": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/webhook",
+  "serverUrl": "https://api.perenniaai.com/api/vapi/webhook",
   "serverUrlSecret": ""
 }
