@@ -908,7 +908,26 @@ async def disconnect_integration(
         if user_id:
             from sqlalchemy import text
             try:
-                # Delete the integration record from database
+                # Special handling for Salesforce - disconnect OAuth profile
+                if integration_id == 'salesforce':
+                    try:
+                        from services.salesforce import salesforce_oauth
+                        from salesforce_integration_models import IntegrationProfile
+
+                        # Find and disconnect the Salesforce integration profile
+                        profile = db.query(IntegrationProfile).filter(
+                            IntegrationProfile.user_id == int(user_id),
+                            IntegrationProfile.provider == 'salesforce'
+                        ).first()
+
+                        if profile:
+                            salesforce_oauth.disconnect(db, profile.id)
+                            logger.info(f"Disconnected Salesforce OAuth for user {user_id}")
+                    except Exception as sf_error:
+                        logger.error(f"Error disconnecting Salesforce OAuth: {sf_error}")
+                        # Continue to try the generic disconnect too
+
+                # Delete the integration record from database (generic)
                 db.execute(text("""
                     DELETE FROM user_integrations
                     WHERE user_id = :user_id AND provider = :provider

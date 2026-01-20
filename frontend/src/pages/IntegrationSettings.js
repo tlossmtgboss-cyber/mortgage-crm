@@ -460,7 +460,18 @@ const IntegrationSettings = () => {
               </div>
               <div className="card-footer">
                 <span className="category-tag">{getCategoryLabel(integration.category)}</span>
-                <span className="auth-type">{integration.auth_type}</span>
+                {integration.status === 'connected' && (
+                  <button
+                    className="btn-disconnect-small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDisconnect(integration.id);
+                    }}
+                    title="Disconnect integration"
+                  >
+                    Disconnect
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -617,6 +628,20 @@ const IntegrationSettings = () => {
             {/* Salesforce Integration - Setup Wizard and Field Mapping */}
             {selectedIntegration.id === 'salesforce' && (
               <div className="detail-section salesforce-integration">
+                {/* Always show disconnect button for Salesforce when status is connected */}
+                {selectedIntegration.status === 'connected' && (
+                  <div className="salesforce-disconnect-section">
+                    <p className="disconnect-info">
+                      If you're experiencing connection issues, try disconnecting and reconnecting.
+                    </p>
+                    <button
+                      className="btn-danger btn-disconnect-prominent"
+                      onClick={() => handleDisconnect('salesforce')}
+                    >
+                      Disconnect Salesforce
+                    </button>
+                  </div>
+                )}
                 <SalesforceSetupWizard
                   onConnectionComplete={() => {
                     toast.success('Salesforce connected successfully!');

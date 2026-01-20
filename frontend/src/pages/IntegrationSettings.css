@@ -1186,3 +1186,67 @@
   padding-top: 24px;
   border-top: 1px solid #e5e7eb;
 }
+
+/* Disconnect Button Styles */
+.btn-disconnect-small {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #dc2626;
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-disconnect-small:hover {
+  background: #fecaca;
+  border-color: #f87171;
+}
+
+.salesforce-disconnect-section {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.salesforce-disconnect-section .disconnect-info {
+  color: #991b1b;
+  font-size: 13px;
+  margin: 0 0 12px 0;
+}
+
+.btn-disconnect-prominent {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+  background: #dc2626;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.btn-disconnect-prominent:hover {
+  background: #b91c1c;
+}
+
+/* Card footer adjustments for disconnect button */
+.integration-card .card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.integration-card .card-footer .category-tag {
+  flex-shrink: 0;
+}
+
+.integration-card .card-footer .auth-type {
+  display: none; /* Hide auth-type when disconnect button is present */
+}
