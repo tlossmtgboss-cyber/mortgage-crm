@@ -1040,6 +1040,8 @@ async def fix_owner_assignment(
     if key != "fix-owner-now":
         raise HTTPException(status_code=403, detail="Invalid key. Use ?key=fix-owner-now")
 
+    conn = None
+    cursor = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -1084,9 +1086,6 @@ async def fix_owner_assignment(
             results["errors"].append(f"Failed to fix loans: {str(e)}")
             conn.rollback()
 
-        cursor.close()
-        conn.close()
-
         return {
             "success": True,
             "message": f"Fixed {results['leads_fixed']} leads and {results['loans_fixed']} loans - assigned to {target_email}",
@@ -1103,6 +1102,18 @@ async def fix_owner_assignment(
             "message": f"Fix failed: {str(e)}",
             "error": str(e)
         }
+    finally:
+        # CRITICAL: Always close connections to prevent leaks
+        if cursor:
+            try:
+                cursor.close()
+            except Exception:
+                pass
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 @router.get("/check-unassigned")
@@ -1113,6 +1124,8 @@ async def check_unassigned_records(
     Check for leads and loans without owner assignment.
     Useful for diagnosing multi-tenancy issues.
     """
+    conn = None
+    cursor = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -1145,9 +1158,6 @@ async def check_unassigned_records(
         """)
         sample_loans = cursor.fetchall()
 
-        cursor.close()
-        conn.close()
-
         return {
             "success": True,
             "unassigned_leads_count": unassigned_leads,
@@ -1168,3 +1178,15 @@ async def check_unassigned_records(
             "success": False,
             "error": str(e)
         }
+    finally:
+        # CRITICAL: Always close connections to prevent leaks
+        if cursor:
+            try:
+                cursor.close()
+            except Exception:
+                pass
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass

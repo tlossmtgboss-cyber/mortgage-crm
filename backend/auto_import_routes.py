@@ -38,6 +38,13 @@ except ImportError:
     SessionLocal = None
 
 
+def get_db_connection():
+    """Get a raw psycopg2 database connection for history queries."""
+    import psycopg2
+    import os
+    return psycopg2.connect(os.getenv("DATABASE_URL"))
+
+
 def parse_file_to_dataframe(content: bytes, filename: str) -> pd.DataFrame:
     """Parse uploaded file (CSV or Excel) into a DataFrame"""
     try:
@@ -567,13 +574,16 @@ async def get_import_history(
     current_user: dict = Depends(get_current_user)
 ):
     """Get import history for the current user"""
+    # Check user_id before creating connection to avoid leak on early return
+    user_id = current_user.get('id')
+    if not user_id:
+        return {"success": True, "imports": []}
+
+    conn = None
+    cursor = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-
-        user_id = current_user.get('id')
-        if not user_id:
-            return {"success": True, "imports": []}
 
         cursor.execute("""
             SELECT id, file_name, file_size, records_imported, records_total,
@@ -597,9 +607,6 @@ async def get_import_history(
                 import_dict['created_at'] = import_dict['created_at'].isoformat()
             imports.append(import_dict)
 
-        cursor.close()
-        conn.close()
-
         return {"success": True, "imports": imports}
 
     except Exception as e:
@@ -608,6 +615,18 @@ async def get_import_history(
             status_code=500,
             detail=f"Failed to fetch import history: {str(e)}"
         )
+    finally:
+        # CRITICAL: Always close connections to prevent leaks
+        if cursor:
+            try:
+                cursor.close()
+            except Exception:
+                pass
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 @router.get("/field-mappings")
