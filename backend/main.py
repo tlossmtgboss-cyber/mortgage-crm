@@ -72622,17 +72622,17 @@ async def admin_import_loans(
         org_id = user_result[1]
 
         # Import the field mapping service
-        from field_mapping_service import get_best_field_matches
+        from field_mapping_service import auto_map_fields
 
         # Get column mappings
         source_columns = list(df.columns)
-        mappings = get_best_field_matches(source_columns)
+        mapping_results = auto_map_fields(source_columns, min_confidence=0.7)
 
         # Map column names for insertion
         column_map = {}
-        for source_col, mapping in mappings.items():
-            if mapping['confidence'] >= 0.7 and mapping['target'] != 'skip':
-                column_map[source_col] = mapping['target']
+        for result in mapping_results:
+            if result.crm_field and result.crm_field != 'skip':
+                column_map[result.excel_column] = result.crm_field
 
         successful = 0
         failed = 0
