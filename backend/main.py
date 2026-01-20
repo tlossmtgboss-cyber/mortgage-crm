@@ -72587,6 +72587,119 @@ async def check_loan_status(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/v1/admin/import-loans")
+async def admin_import_loans(
+    file: UploadFile = File(...),
+    migration_key: str = Form(...),
+    user_email: str = Form("tloss@cmgfi.com"),
+    db: Session = Depends(get_db)
+):
+    """Import loans from Excel file (admin only, protected by migration key)."""
+    if migration_key != "fix-loans-2026":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    import pandas as pd
+    import io
+
+    try:
+        # Read the file
+        contents = await file.read()
+        if file.filename.endswith('.xlsx'):
+            df = pd.read_excel(io.BytesIO(contents))
+        else:
+            df = pd.read_csv(io.BytesIO(contents))
+
+        # Get user's organization
+        user_result = db.execute(
+            text("SELECT id, organization_id FROM users WHERE email = :email"),
+            {"email": user_email}
+        ).fetchone()
+
+        if not user_result:
+            raise HTTPException(status_code=404, detail=f"User {user_email} not found")
+
+        user_id = user_result[0]
+        org_id = user_result[1]
+
+        # Import the field mapping service
+        from field_mapping_service import get_best_field_matches
+
+        # Get column mappings
+        source_columns = list(df.columns)
+        mappings = get_best_field_matches(source_columns)
+
+        # Map column names for insertion
+        column_map = {}
+        for source_col, mapping in mappings.items():
+            if mapping['confidence'] >= 0.7 and mapping['target'] != 'skip':
+                column_map[source_col] = mapping['target']
+
+        successful = 0
+        failed = 0
+        errors = []
+
+        for idx, row in df.iterrows():
+            try:
+                # Build INSERT statement dynamically
+                mapped_values = {}
+                for source_col, target_col in column_map.items():
+                    value = row.get(source_col)
+                    if pd.notna(value):
+                        mapped_values[target_col] = value
+
+                if not mapped_values:
+                    continue
+
+                # Add organization_id
+                mapped_values['organization_id'] = org_id
+
+                # Handle loan_number - generate if missing
+                if 'loan_number' not in mapped_values:
+                    import uuid
+                    mapped_values['loan_number'] = f"IMP-{uuid.uuid4().hex[:8].upper()}"
+
+                # Handle borrower_name
+                if 'borrower_name' not in mapped_values:
+                    first = mapped_values.pop('borrower_first_name', '')
+                    last = mapped_values.pop('borrower_last_name', '')
+                    if first or last:
+                        mapped_values['borrower_name'] = f"{first} {last}".strip()
+                    else:
+                        mapped_values['borrower_name'] = 'Unknown'
+
+                # Ensure amount is set
+                if 'amount' not in mapped_values:
+                    mapped_values['amount'] = 0
+
+                columns = ', '.join(mapped_values.keys())
+                placeholders = ', '.join([f':{k}' for k in mapped_values.keys()])
+
+                db.execute(
+                    text(f"INSERT INTO loans ({columns}) VALUES ({placeholders})"),
+                    mapped_values
+                )
+                successful += 1
+            except Exception as e:
+                failed += 1
+                if len(errors) < 5:
+                    errors.append(f"Row {idx}: {str(e)[:100]}")
+
+        db.commit()
+
+        return {
+            "status": "success",
+            "total_rows": len(df),
+            "successful": successful,
+            "failed": failed,
+            "errors": errors if errors else None,
+            "fields_mapped": len(column_map),
+            "organization_id": org_id
+        }
+    except Exception as e:
+        logger.error(f"Admin import loans failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ============================================================================
 # MAIN
 # ============================================================================
