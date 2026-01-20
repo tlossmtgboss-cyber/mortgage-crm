@@ -732,7 +732,7 @@ class CallMonitoringOrchestrator:
         loan_id = session.get('loan_id') if session else None
 
         self.db.execute(text("""
-            INSERT INTO risk_flags (
+            INSERT INTO call_risk_flags (
                 id, session_id, artifact_id, risk_category, severity,
                 title, description, evidence, recommended_action,
                 condition_type, loan_id
@@ -1151,7 +1151,7 @@ class CallMonitoringOrchestrator:
         # Get risk flag details
         risk_flag = self.db.execute(text("""
             SELECT id, title, description, risk_category, severity, condition_type
-            FROM risk_flags
+            FROM call_risk_flags
             WHERE artifact_id = :artifact_id
         """), {"artifact_id": artifact_id}).fetchone()
 
@@ -1180,7 +1180,7 @@ class CallMonitoringOrchestrator:
 
         # Update risk flag with condition link
         self.db.execute(text("""
-            UPDATE risk_flags SET condition_id = :condition_id WHERE id = :id
+            UPDATE call_risk_flags SET condition_id = :condition_id WHERE id = :id
         """), {"id": str(risk_flag[0]), "condition_id": condition_id})
 
         return condition_id

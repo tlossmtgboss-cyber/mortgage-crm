@@ -277,8 +277,9 @@ def run_migration():
     CREATE INDEX IF NOT EXISTS ix_intake_field_entity ON intake_field_updates(entity_type, entity_id);
     CREATE INDEX IF NOT EXISTS ix_intake_field_status ON intake_field_updates(status);
 
-    -- 7. Risk Flags - Underwriter risk identification
-    CREATE TABLE IF NOT EXISTS risk_flags (
+    -- 7. Call Risk Flags - Underwriter risk identification from calls
+    -- (Named call_risk_flags to avoid conflict with portal risk_flags table)
+    CREATE TABLE IF NOT EXISTS call_risk_flags (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         session_id UUID NOT NULL REFERENCES call_sessions(id) ON DELETE CASCADE,
         artifact_id UUID REFERENCES call_artifacts(id) ON DELETE SET NULL,
@@ -311,11 +312,11 @@ def run_migration():
         updated_at TIMESTAMPTZ DEFAULT NOW()
     );
 
-    CREATE INDEX IF NOT EXISTS ix_risk_flags_session ON risk_flags(session_id);
-    CREATE INDEX IF NOT EXISTS ix_risk_flags_category ON risk_flags(risk_category);
-    CREATE INDEX IF NOT EXISTS ix_risk_flags_severity ON risk_flags(severity);
-    CREATE INDEX IF NOT EXISTS ix_risk_flags_loan ON risk_flags(loan_id);
-    CREATE INDEX IF NOT EXISTS ix_risk_flags_status ON risk_flags(status);
+    CREATE INDEX IF NOT EXISTS ix_call_risk_flags_session ON call_risk_flags(session_id);
+    CREATE INDEX IF NOT EXISTS ix_call_risk_flags_category ON call_risk_flags(risk_category);
+    CREATE INDEX IF NOT EXISTS ix_call_risk_flags_severity ON call_risk_flags(severity);
+    CREATE INDEX IF NOT EXISTS ix_call_risk_flags_loan ON call_risk_flags(loan_id);
+    CREATE INDEX IF NOT EXISTS ix_call_risk_flags_status ON call_risk_flags(status);
 
     -- =============================================================================
     -- TRIGGER FOR UPDATED_AT

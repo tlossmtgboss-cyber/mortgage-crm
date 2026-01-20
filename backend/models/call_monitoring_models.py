@@ -645,8 +645,8 @@ class IntakeFieldUpdateResponse(BaseModel):
 
 # --- Risk Flag Schemas ---
 
-class RiskFlagResponse(BaseModel):
-    """Schema for risk flag response."""
+class CallRiskFlagResponse(BaseModel):
+    """Schema for call risk flag response."""
     id: str
     session_id: str
     risk_category: str
