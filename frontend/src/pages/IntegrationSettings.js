@@ -493,25 +493,28 @@ const IntegrationSettings = () => {
 
             <p className="detail-description">{selectedIntegration.description}</p>
 
-            <div className="detail-actions">
-              {selectedIntegration.status === 'connected' ? (
-                <>
-                  <button className="btn-primary" onClick={handleTriggerSync}>
-                    Sync Now
+            {/* Hide generic actions for Salesforce - SalesforceSetupWizard handles connection */}
+            {selectedIntegration.id !== 'salesforce' && (
+              <div className="detail-actions">
+                {selectedIntegration.status === 'connected' ? (
+                  <>
+                    <button className="btn-primary" onClick={handleTriggerSync}>
+                      Sync Now
+                    </button>
+                    <button className="btn-secondary" onClick={handleTestConnection}>
+                      Test Connection
+                    </button>
+                    <button className="btn-danger" onClick={() => handleDisconnect(selectedIntegration.id)}>
+                      Disconnect
+                    </button>
+                  </>
+                ) : (
+                  <button className="btn-primary" onClick={() => handleConnect(selectedIntegration.id)}>
+                    Connect
                   </button>
-                  <button className="btn-secondary" onClick={handleTestConnection}>
-                    Test Connection
-                  </button>
-                  <button className="btn-danger" onClick={() => handleDisconnect(selectedIntegration.id)}>
-                    Disconnect
-                  </button>
-                </>
-              ) : (
-                <button className="btn-primary" onClick={() => handleConnect(selectedIntegration.id)}>
-                  Connect
-                </button>
-              )}
-            </div>
+                )}
+              </div>
+            )}
 
             {/* Credentials Section */}
             {selectedIntegration.auth_type === 'api_key' && (
@@ -545,69 +548,71 @@ const IntegrationSettings = () => {
               </div>
             )}
 
-            {/* Configuration Section */}
-            <div className="detail-section">
-              <div className="section-header">
-                <h3>Configuration</h3>
-                {!configMode ? (
-                  <button className="btn-sm" onClick={() => setConfigMode(true)}>Edit</button>
-                ) : (
-                  <div className="config-actions">
-                    <button className="btn-sm" onClick={() => setConfigMode(false)}>Cancel</button>
-                    <button className="btn-sm btn-primary" onClick={handleSaveConfig} disabled={saving}>
-                      {saving ? 'Saving...' : 'Save'}
-                    </button>
+            {/* Configuration Section - Hide for Salesforce (uses its own setup wizard) */}
+            {selectedIntegration.id !== 'salesforce' && (
+              <div className="detail-section">
+                <div className="section-header">
+                  <h3>Configuration</h3>
+                  {!configMode ? (
+                    <button className="btn-sm" onClick={() => setConfigMode(true)}>Edit</button>
+                  ) : (
+                    <div className="config-actions">
+                      <button className="btn-sm" onClick={() => setConfigMode(false)}>Cancel</button>
+                      <button className="btn-sm btn-primary" onClick={handleSaveConfig} disabled={saving}>
+                        {saving ? 'Saving...' : 'Save'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="config-form">
+                  <label className="toggle-item">
+                    <input
+                      type="checkbox"
+                      checked={config.enabled || false}
+                      onChange={(e) => updateConfig('enabled', e.target.checked)}
+                      disabled={!configMode}
+                    />
+                    <span>Enabled</span>
+                  </label>
+
+                  <label className="toggle-item">
+                    <input
+                      type="checkbox"
+                      checked={config.sync_enabled || false}
+                      onChange={(e) => updateConfig('sync_enabled', e.target.checked)}
+                      disabled={!configMode}
+                    />
+                    <span>Auto Sync</span>
+                  </label>
+
+                  <div className="form-group">
+                    <label>Sync Interval (minutes)</label>
+                    <input
+                      type="number"
+                      value={config.sync_interval_minutes || 60}
+                      onChange={(e) => updateConfig('sync_interval_minutes', parseInt(e.target.value) || 60)}
+                      min={5}
+                      max={1440}
+                      disabled={!configMode}
+                    />
                   </div>
-                )}
-              </div>
 
-              <div className="config-form">
-                <label className="toggle-item">
-                  <input
-                    type="checkbox"
-                    checked={config.enabled || false}
-                    onChange={(e) => updateConfig('enabled', e.target.checked)}
-                    disabled={!configMode}
-                  />
-                  <span>Enabled</span>
-                </label>
-
-                <label className="toggle-item">
-                  <input
-                    type="checkbox"
-                    checked={config.sync_enabled || false}
-                    onChange={(e) => updateConfig('sync_enabled', e.target.checked)}
-                    disabled={!configMode}
-                  />
-                  <span>Auto Sync</span>
-                </label>
-
-                <div className="form-group">
-                  <label>Sync Interval (minutes)</label>
-                  <input
-                    type="number"
-                    value={config.sync_interval_minutes || 60}
-                    onChange={(e) => updateConfig('sync_interval_minutes', parseInt(e.target.value) || 60)}
-                    min={5}
-                    max={1440}
-                    disabled={!configMode}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Sync Direction</label>
-                  <select
-                    value={config.sync_direction || 'bidirectional'}
-                    onChange={(e) => updateConfig('sync_direction', e.target.value)}
-                    disabled={!configMode}
-                  >
-                    <option value="incoming">Incoming Only</option>
-                    <option value="outgoing">Outgoing Only</option>
-                    <option value="bidirectional">Bidirectional</option>
-                  </select>
+                  <div className="form-group">
+                    <label>Sync Direction</label>
+                    <select
+                      value={config.sync_direction || 'bidirectional'}
+                      onChange={(e) => updateConfig('sync_direction', e.target.value)}
+                      disabled={!configMode}
+                    >
+                      <option value="incoming">Incoming Only</option>
+                      <option value="outgoing">Outgoing Only</option>
+                      <option value="bidirectional">Bidirectional</option>
+                    </select>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Salesforce Integration - Setup Wizard and Field Mapping */}
             {selectedIntegration.id === 'salesforce' && (
