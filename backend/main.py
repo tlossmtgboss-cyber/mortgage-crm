@@ -20274,6 +20274,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Could not load Call Monitoring routes: {e}")
 
+# Include Underwriting Guidelines routes (upload and manage AI underwriter guidelines)
+try:
+    from routes.underwriting_guidelines_routes import router as underwriting_guidelines_router
+    app.include_router(underwriting_guidelines_router, tags=["Underwriting Guidelines"])
+    logger.info("✅ Underwriting Guidelines routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load Underwriting Guidelines routes: {e}")
+
 # Include Production Predictor routes (AI-powered production forecasting)
 try:
     from routes.production_predictor_routes import router as production_predictor_router
@@ -38924,6 +38932,45 @@ async def reset_password(request: ResetPasswordRequest, db: Session = Depends(ge
             status_code=500,
             detail="An error occurred while resetting your password. Please try again."
         )
+
+
+class AdminPasswordResetRequest(BaseModel):
+    email: str
+    new_password: str
+    admin_key: str
+
+
+@app.post("/api/v1/admin/force-password-reset")
+async def admin_force_password_reset(request: AdminPasswordResetRequest, db: Session = Depends(get_db)):
+    """
+    Admin endpoint to force reset a user's password.
+    Requires ADMIN_RESET_KEY environment variable to be set.
+    """
+    # Verify admin key
+    expected_key = os.getenv("ADMIN_RESET_KEY", "")
+    if not expected_key or request.admin_key != expected_key:
+        logger.warning(f"Invalid admin reset attempt for {request.email}")
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    # Find user
+    user = db.query(User).filter(func.lower(User.email) == request.email.lower()).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Validate password
+    if len(request.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+
+    # Update password
+    user.hashed_password = get_password_hash(request.new_password)
+    db.commit()
+
+    logger.info(f"Admin forced password reset for {request.email}")
+
+    return {
+        "success": True,
+        "message": f"Password reset successful for {request.email}"
+    }
 
 
 # ============================================================================
