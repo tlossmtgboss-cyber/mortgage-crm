@@ -56,17 +56,30 @@ def fix_salesforce_schema(db: Session) -> dict:
     except Exception as e:
         logger.warning(f"Could not run OAuth tables migration: {e}")
 
-    # Check and add integration_profile_id to sf_user_schemas if missing
-    try:
-        db.execute(text("""
-            ALTER TABLE sf_user_schemas
-            ADD COLUMN IF NOT EXISTS integration_profile_id INTEGER REFERENCES integration_profiles(id) ON DELETE CASCADE
-        """))
-        db.commit()
-        fixes.append("Added integration_profile_id to sf_user_schemas")
-    except Exception as e:
-        db.rollback()
-        logger.debug(f"sf_user_schemas fix: {e}")
+    # Fix sf_user_schemas table - add all required columns
+    sf_user_schemas_columns = [
+        ("integration_profile_id", "INTEGER REFERENCES integration_profiles(id) ON DELETE CASCADE"),
+        ("object_name", "VARCHAR(100)"),
+        ("fields", "JSONB"),
+        ("record_types", "JSONB"),
+        ("picklist_values", "JSONB"),
+        ("discovered_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
+        ("last_validated_at", "TIMESTAMP"),
+        ("created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
+        ("updated_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
+    ]
+
+    for col_name, col_type in sf_user_schemas_columns:
+        try:
+            db.execute(text(f"""
+                ALTER TABLE sf_user_schemas
+                ADD COLUMN IF NOT EXISTS {col_name} {col_type}
+            """))
+            db.commit()
+            fixes.append(f"Added {col_name} to sf_user_schemas")
+        except Exception as e:
+            db.rollback()
+            logger.debug(f"sf_user_schemas.{col_name} fix: {e}")
 
     # Check and add integration_profile_id to field_mappings if missing
     try:
