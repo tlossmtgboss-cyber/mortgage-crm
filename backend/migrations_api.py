@@ -2005,3 +2005,50 @@ async def debug_loans(key: str = ""):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
+
+
+@router.delete("/delete-unknown-borrowers")
+async def delete_unknown_borrowers(key: str = ""):
+    """
+    Delete loans with 'Unknown Borrower' as borrower_name.
+    Call with: DELETE /api/v1/migrations/delete-unknown-borrowers?key=delete-unknown
+    """
+    if key != "delete-unknown":
+        raise HTTPException(status_code=403, detail="Invalid key")
+
+    db = SessionLocal()
+    try:
+        # First get the IDs that will be deleted
+        result = db.execute(text("""
+            SELECT id, loan_number, borrower_name
+            FROM loans
+            WHERE borrower_name = 'Unknown Borrower'
+        """))
+        to_delete = [dict(row._mapping) for row in result.fetchall()]
+
+        if not to_delete:
+            return {
+                "status": "success",
+                "message": "No 'Unknown Borrower' loans found",
+                "deleted_count": 0
+            }
+
+        # Delete the loans
+        db.execute(text("""
+            DELETE FROM loans
+            WHERE borrower_name = 'Unknown Borrower'
+        """))
+        db.commit()
+
+        return {
+            "status": "success",
+            "deleted_count": len(to_delete),
+            "deleted_loans": to_delete,
+            "message": f"Deleted {len(to_delete)} 'Unknown Borrower' loans"
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Delete unknown borrowers error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
