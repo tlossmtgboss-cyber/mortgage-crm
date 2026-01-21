@@ -12,7 +12,7 @@ const API_BASE = API_BASE_URL;
  * Make an authenticated API request
  */
 async function apiRequest(endpoint, options = {}) {
-  const token = localStorage.getItem('authToken');
+  const token = localStorage.getItem('token');
 
   const config = {
     headers: {
