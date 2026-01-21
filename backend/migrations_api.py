@@ -2057,7 +2057,7 @@ async def delete_unknown_borrowers(key: str = ""):
 @router.get("/debug-mum-clients")
 async def debug_mum_clients(key: str = ""):
     """
-    Debug endpoint to check mum_clients data.
+    Debug endpoint to check mum_clients data and table structure.
     Call with: GET /api/v1/migrations/debug-mum-clients?key=debug
     """
     if key != "debug":
@@ -2065,6 +2065,15 @@ async def debug_mum_clients(key: str = ""):
 
     db = SessionLocal()
     try:
+        # Check if table exists and get column info
+        table_info = db.execute(text("""
+            SELECT column_name, data_type, is_nullable
+            FROM information_schema.columns
+            WHERE table_name = 'mum_clients'
+            ORDER BY ordinal_position
+        """))
+        columns = [dict(row._mapping) for row in table_info.fetchall()]
+
         # Get sample mum_clients data
         result = db.execute(text("""
             SELECT id, name, loan_number, user_id, created_at
@@ -2086,6 +2095,7 @@ async def debug_mum_clients(key: str = ""):
         total = db.execute(text("SELECT COUNT(*) FROM mum_clients")).scalar()
 
         return {
+            "table_columns": columns,
             "sample_clients": clients,
             "by_user_id": by_user,
             "total_clients": total
