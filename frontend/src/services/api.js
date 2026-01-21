@@ -2760,6 +2760,103 @@ export const rateMonitorAPI = {
   },
 };
 
+// Rate Sheet API (Rate Sheet Upload & Refinance Opportunities)
+export const rateSheetAPI = {
+  // Rate Sheets
+  uploadSheet: async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post('/api/v1/rate-monitor/sheets/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  getSheets: async (params = {}) => {
+    const response = await api.get('/api/v1/rate-monitor/sheets', { params });
+    return response.data;
+  },
+
+  getSheet: async (sheetId) => {
+    const response = await api.get(`/api/v1/rate-monitor/sheets/${sheetId}`);
+    return response.data;
+  },
+
+  getSheetRates: async (sheetId, params = {}) => {
+    const response = await api.get(`/api/v1/rate-monitor/sheets/${sheetId}/rates`, { params });
+    return response.data;
+  },
+
+  deleteSheet: async (sheetId) => {
+    const response = await api.delete(`/api/v1/rate-monitor/sheets/${sheetId}`);
+    return response.data;
+  },
+
+  scanForOpportunities: async (sheetId, data = {}) => {
+    const response = await api.post(`/api/v1/rate-monitor/sheets/${sheetId}/scan`, data);
+    return response.data;
+  },
+
+  // Opportunities
+  getOpportunities: async (params = {}) => {
+    const response = await api.get('/api/v1/rate-monitor/opportunities', { params });
+    return response.data;
+  },
+
+  getOpportunitiesDashboard: async () => {
+    const response = await api.get('/api/v1/rate-monitor/opportunities/dashboard');
+    return response.data;
+  },
+
+  getOpportunity: async (opportunityId) => {
+    const response = await api.get(`/api/v1/rate-monitor/opportunities/${opportunityId}`);
+    return response.data;
+  },
+
+  updateOpportunity: async (opportunityId, data) => {
+    const response = await api.patch(`/api/v1/rate-monitor/opportunities/${opportunityId}`, data);
+    return response.data;
+  },
+
+  // Outreach
+  triggerOutreach: async (opportunityId, data = {}) => {
+    const response = await api.post(`/api/v1/rate-monitor/opportunities/${opportunityId}/outreach`, data);
+    return response.data;
+  },
+
+  sendSMS: async (opportunityId) => {
+    const response = await api.post(`/api/v1/rate-monitor/opportunities/${opportunityId}/sms`);
+    return response.data;
+  },
+
+  initiateCall: async (opportunityId, customMessage = null) => {
+    const response = await api.post(`/api/v1/rate-monitor/opportunities/${opportunityId}/call`, null, {
+      params: customMessage ? { custom_message: customMessage } : {},
+    });
+    return response.data;
+  },
+
+  bulkOutreach: async (opportunityIds, skipSms = false) => {
+    const response = await api.post('/api/v1/rate-monitor/opportunities/bulk-outreach', {
+      opportunity_ids: opportunityIds,
+      skip_sms: skipSms,
+    });
+    return response.data;
+  },
+
+  markOptedOut: async (opportunityId) => {
+    const response = await api.post(`/api/v1/rate-monitor/opportunities/${opportunityId}/opt-out`);
+    return response.data;
+  },
+
+  markConverted: async (opportunityId, notes = null) => {
+    const response = await api.post(`/api/v1/rate-monitor/opportunities/${opportunityId}/convert`, null, {
+      params: notes ? { notes } : {},
+    });
+    return response.data;
+  },
+};
+
 // Call Monitoring API (AI Call Intelligence)
 export const callMonitoringAPI = {
   // Session Management
@@ -2881,6 +2978,22 @@ export const callMonitoringAPI = {
       recording_id: recordingId,
       run_agents: runAgents
     });
+    return response.data;
+  },
+
+  // Call Intelligence Page
+  getLiveTranscript: async (sessionId) => {
+    const response = await api.get(`/api/v1/call-monitoring/sessions/${sessionId}/live-transcript`);
+    return response.data;
+  },
+
+  convertToApplication: async (sessionId, data) => {
+    const response = await api.post(`/api/v1/call-monitoring/sessions/${sessionId}/convert-to-application`, data);
+    return response.data;
+  },
+
+  getCallMetrics: async (days = 30) => {
+    const response = await api.get('/api/v1/call-monitoring/metrics', { params: { days } });
     return response.data;
   },
 };

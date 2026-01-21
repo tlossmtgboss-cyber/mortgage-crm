@@ -94,6 +94,7 @@ const VoiceIVRMenuDashboard = lazy(() => import('./components/voice/IVRMenuDashb
 const VoiceHoldMusicDashboard = lazy(() => import('./components/voice/HoldMusicDashboard'));
 const VoiceTalkToAgentPage = lazy(() => import('./components/voice/TalkToAgentPage'));
 const VoiceCallAnalyticsDashboard = lazy(() => import('./components/voice/CallAnalyticsDashboard'));
+const CallIntelligencePage = lazy(() => import('./pages/CallIntelligencePage'));
 const AILandingPage = lazy(() => import('./pages/AILandingPage'));
 const WorkflowDashboard = lazy(() => import('./pages/WorkflowDashboard'));
 const WorkflowStagePage = lazy(() => import('./pages/WorkflowStagePage'));
@@ -3117,6 +3118,28 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><ConversationIntelligence /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/call-intelligence"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><CallIntelligencePage /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>

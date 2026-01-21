@@ -1096,6 +1096,264 @@ async def list_ci_recordings(
 
 
 # =============================================================================
+# CALL INTELLIGENCE PAGE ENDPOINTS
+# =============================================================================
+
+class ConvertToApplicationRequest(BaseModel):
+    """Request to convert call data to a lead or loan application."""
+    create_type: str = Field(..., description="'lead' or 'loan'")
+    extracted_data: Dict[str, Any] = Field(..., description="Extracted borrower/loan data")
+    notes: Optional[str] = None
+
+
+@router.get("/sessions/{session_id}/live-transcript", response_model=Dict[str, Any])
+async def get_live_transcript(
+    session_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get live transcript for polling during active calls.
+
+    Returns the current transcript state and any new chunks since last poll.
+    Optimized for frequent polling during live calls.
+    """
+    try:
+        orchestrator = CallMonitoringOrchestrator(db)
+        session = orchestrator.get_session(session_id)
+
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        transcript_data = orchestrator.get_transcript(session_id)
+
+        # Get any AI suggestions generated for this call
+        suggestions_result = db.execute(text("""
+            SELECT content, structured_data, created_at
+            FROM call_artifacts
+            WHERE session_id = :session_id
+            AND artifact_type IN ('suggestion', 'prompt', 'compliance_reminder')
+            ORDER BY created_at DESC
+            LIMIT 10
+        """), {"session_id": session_id})
+
+        suggestions = []
+        for row in suggestions_result:
+            row_dict = dict(row._mapping)
+            suggestions.append({
+                "type": row_dict.get("structured_data", {}).get("type", "suggestion"),
+                "text": row_dict.get("content"),
+                "priority": row_dict.get("structured_data", {}).get("priority", "medium"),
+                "created_at": row_dict["created_at"].isoformat() if row_dict.get("created_at") else None,
+            })
+
+        return {
+            "session_id": session_id,
+            "status": session.get("status"),
+            "transcript": transcript_data.get("transcript", ""),
+            "word_count": transcript_data.get("word_count", 0),
+            "is_active": session.get("status") in ["active", "capturing"],
+            "duration_seconds": session.get("duration_seconds"),
+            "started_at": session.get("started_at"),
+            "suggestions": suggestions,
+            "participants": session.get("participants", []),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting live transcript: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/sessions/{session_id}/convert-to-application", response_model=Dict[str, Any])
+async def convert_to_application(
+    session_id: str,
+    request: ConvertToApplicationRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Convert call session data into a lead or loan application.
+
+    Extracts borrower information from call artifacts and creates
+    a new lead or loan record pre-filled with the extracted data.
+    """
+    try:
+        orchestrator = CallMonitoringOrchestrator(db)
+        session = orchestrator.get_session(session_id)
+
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        data = request.extracted_data
+        user_id = current_user.get("id", 1)
+
+        if request.create_type == "lead":
+            # Create a lead
+            result = db.execute(text("""
+                INSERT INTO leads (
+                    first_name, last_name, email, phone,
+                    source, status, loan_purpose, loan_amount,
+                    property_type, notes, assigned_to, created_at, updated_at
+                ) VALUES (
+                    :first_name, :last_name, :email, :phone,
+                    'call_conversion', 'new', :loan_purpose, :loan_amount,
+                    :property_type, :notes, :assigned_to, NOW(), NOW()
+                )
+                RETURNING id
+            """), {
+                "first_name": data.get("first_name", ""),
+                "last_name": data.get("last_name", ""),
+                "email": data.get("email"),
+                "phone": data.get("phone"),
+                "loan_purpose": data.get("loan_purpose"),
+                "loan_amount": float(str(data.get("loan_amount", "0")).replace(",", "").replace("$", "")) if data.get("loan_amount") else None,
+                "property_type": data.get("property_type"),
+                "notes": f"Converted from call session {session_id}. {request.notes or ''}",
+                "assigned_to": user_id,
+            })
+
+            lead_id = result.fetchone()[0]
+            db.commit()
+
+            # Update session with conversion info
+            db.execute(text("""
+                UPDATE call_sessions
+                SET lead_id = :lead_id,
+                    metadata = jsonb_set(
+                        COALESCE(metadata, '{}'::jsonb),
+                        '{converted_to}',
+                        '"lead"'
+                    )
+                WHERE id = :session_id
+            """), {"lead_id": lead_id, "session_id": session_id})
+            db.commit()
+
+            return {
+                "status": "success",
+                "created_type": "lead",
+                "created_id": lead_id,
+                "message": f"Lead created successfully from call",
+            }
+
+        elif request.create_type == "loan":
+            # Create a loan
+            result = db.execute(text("""
+                INSERT INTO loans (
+                    borrower_first_name, borrower_last_name,
+                    borrower_email, borrower_phone,
+                    loan_purpose, loan_amount, property_type,
+                    property_address, status, source,
+                    loan_officer_id, created_at, updated_at
+                ) VALUES (
+                    :first_name, :last_name, :email, :phone,
+                    :loan_purpose, :loan_amount, :property_type,
+                    :property_address, 'lead', 'call_conversion',
+                    :lo_id, NOW(), NOW()
+                )
+                RETURNING id
+            """), {
+                "first_name": data.get("first_name", ""),
+                "last_name": data.get("last_name", ""),
+                "email": data.get("email"),
+                "phone": data.get("phone"),
+                "loan_purpose": data.get("loan_purpose"),
+                "loan_amount": float(str(data.get("loan_amount", "0")).replace(",", "").replace("$", "")) if data.get("loan_amount") else None,
+                "property_type": data.get("property_type"),
+                "property_address": data.get("property_address"),
+                "lo_id": user_id,
+            })
+
+            loan_id = result.fetchone()[0]
+            db.commit()
+
+            # Update session with conversion info
+            db.execute(text("""
+                UPDATE call_sessions
+                SET loan_id = :loan_id,
+                    metadata = jsonb_set(
+                        COALESCE(metadata, '{}'::jsonb),
+                        '{converted_to}',
+                        '"loan"'
+                    )
+                WHERE id = :session_id
+            """), {"loan_id": loan_id, "session_id": session_id})
+            db.commit()
+
+            return {
+                "status": "success",
+                "created_type": "loan",
+                "created_id": loan_id,
+                "message": f"Loan application created successfully from call",
+            }
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="create_type must be 'lead' or 'loan'"
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error converting call to application: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/metrics", response_model=Dict[str, Any])
+async def get_call_metrics(
+    days: int = Query(default=30, description="Number of days for metrics"),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get call intelligence metrics for the dashboard.
+
+    Returns:
+    - Pending reviews count
+    - Active calls count
+    - Completed today
+    - Conversion rate
+    - Average call duration
+    """
+    try:
+        # Get counts
+        result = db.execute(text("""
+            SELECT
+                COUNT(*) FILTER (WHERE status IN ('active', 'capturing')) as active_calls,
+                COUNT(*) FILTER (WHERE status = 'completed' AND approval_status = 'pending') as pending_reviews,
+                COUNT(*) FILTER (WHERE DATE(ended_at) = CURRENT_DATE) as completed_today,
+                COUNT(*) FILTER (WHERE metadata->>'converted_to' IS NOT NULL AND ended_at >= NOW() - INTERVAL ':days days') as conversions,
+                COUNT(*) FILTER (WHERE ended_at >= NOW() - INTERVAL ':days days') as total_completed,
+                AVG(duration_seconds) FILTER (WHERE duration_seconds > 0) as avg_duration
+            FROM call_sessions
+            WHERE created_at >= NOW() - INTERVAL ':days days'
+        """.replace(':days', str(days))))
+
+        row = result.fetchone()
+        metrics = dict(row._mapping) if row else {}
+
+        # Calculate conversion rate
+        total = metrics.get("total_completed", 0) or 1
+        conversions = metrics.get("conversions", 0) or 0
+        conversion_rate = round((conversions / total) * 100, 1)
+
+        return {
+            "active_calls": metrics.get("active_calls", 0) or 0,
+            "pending_reviews": metrics.get("pending_reviews", 0) or 0,
+            "completed_today": metrics.get("completed_today", 0) or 0,
+            "conversion_rate": conversion_rate,
+            "avg_duration_seconds": round(metrics.get("avg_duration", 0) or 0),
+            "period_days": days,
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting call metrics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
 # BACKGROUND TASK HELPERS
 # =============================================================================
 
