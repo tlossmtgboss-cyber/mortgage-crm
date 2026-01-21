@@ -989,13 +989,62 @@ async def execute_import(
                                 imported += 1
                                 continue
 
-                        # Add required fields
-                        if 'created_at' not in columns:
-                            columns.append('created_at')
-                            values.append(datetime.utcnow())
-                        if 'status' not in columns:
-                            columns.append('status')
-                            values.append('active')
+                        # Map 'name' to 'client_name' (required column)
+                        if 'name' in columns and 'client_name' not in columns:
+                            idx = columns.index('name')
+                            columns[idx] = 'client_name'
+                        elif 'client_name' not in columns:
+                            columns.append('client_name')
+                            values.append(client_name or 'Unknown Client')
+
+                        # Add required NOT NULL fields with defaults
+                        required_fields = {
+                            'created_at': datetime.utcnow(),
+                            'status': 'active',
+                            'original_loan_amount': 0,
+                            'current_loan_amount': 0,
+                            'interest_rate': 0,
+                            'appraisal_value_at_closing': 0,
+                            'current_property_value': 0,
+                            'closing_date': datetime.utcnow().date(),
+                            'first_payment_date': datetime.utcnow().date(),
+                        }
+
+                        # Map imported values to required fields
+                        if 'loan_balance' in columns:
+                            idx = columns.index('loan_balance')
+                            lb_val = values[idx] or 0
+                            if 'original_loan_amount' not in columns:
+                                columns.append('original_loan_amount')
+                                values.append(lb_val)
+                            if 'current_loan_amount' not in columns:
+                                columns.append('current_loan_amount')
+                                values.append(lb_val)
+                            if 'appraisal_value_at_closing' not in columns:
+                                columns.append('appraisal_value_at_closing')
+                                values.append(lb_val * 1.25 if lb_val else 0)
+                            if 'current_property_value' not in columns:
+                                columns.append('current_property_value')
+                                values.append(lb_val * 1.25 if lb_val else 0)
+
+                        if 'current_rate' in columns and 'interest_rate' not in columns:
+                            idx = columns.index('current_rate')
+                            columns.append('interest_rate')
+                            values.append(values[idx] or 0)
+
+                        if 'original_close_date' in columns and 'closing_date' not in columns:
+                            idx = columns.index('original_close_date')
+                            columns.append('closing_date')
+                            values.append(values[idx] or datetime.utcnow().date())
+                            if 'first_payment_date' not in columns:
+                                columns.append('first_payment_date')
+                                values.append(values[idx] or datetime.utcnow().date())
+
+                        # Add any remaining required fields with defaults
+                        for field, default in required_fields.items():
+                            if field not in columns:
+                                columns.append(field)
+                                values.append(default)
 
                         # Set user_id for multi-tenancy
                         user_id = getattr(current_user, 'id', None)
