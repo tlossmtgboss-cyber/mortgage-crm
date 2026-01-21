@@ -118,6 +118,7 @@ function Portfolio() {
         second_home: '0%',
         investment_property: '0%',
         new_construction: '0%',
+        first_time_buyer: '0%',
         conventional_mi: '0%',
         fha: '0%',
         va: '0%',
@@ -133,6 +134,7 @@ function Portfolio() {
       second_home: 0,
       investment_property: 0,
       new_construction: 0,
+      first_time_buyer: 0,
       conventional_mi: 0,
       fha: 0,
       va: 0,
@@ -160,6 +162,14 @@ function Portfolio() {
         counts.new_construction++;
       }
 
+      // First time home buyer check
+      const isFirstTimeBuyer = client.is_first_time_buyer || client.first_time_buyer ||
+        client.first_time_homebuyer || client.is_first_time_homebuyer ||
+        (client.buyer_type || '').toLowerCase().includes('first');
+      if (isFirstTimeBuyer) {
+        counts.first_time_buyer++;
+      }
+
       // Loan type segmentation
       const loanType = (client.loan_type || '').toLowerCase();
       const hasMI = client.has_mi || client.has_pmi || client.mi_amount > 0 || client.pmi_amount > 0;
@@ -185,6 +195,7 @@ function Portfolio() {
       second_home: toPercent(counts.second_home),
       investment_property: toPercent(counts.investment_property),
       new_construction: toPercent(counts.new_construction),
+      first_time_buyer: toPercent(counts.first_time_buyer),
       conventional_mi: toPercent(counts.conventional_mi),
       fha: toPercent(counts.fha),
       va: toPercent(counts.va),
@@ -528,6 +539,14 @@ function Portfolio() {
             >
               <div className="mum-stat-value">{clientSegments?.new_construction || '0%'}</div>
               <div className="mum-stat-label">NEW CONSTRUCTION</div>
+            </div>
+            <div
+              className="mum-stat-card segment-card clickable"
+              onClick={() => navigate('/portfolio/detail?metric=first_time_buyer')}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="mum-stat-value">{clientSegments?.first_time_buyer || '0%'}</div>
+              <div className="mum-stat-label">FIRST TIME BUYERS</div>
             </div>
           </div>
 
