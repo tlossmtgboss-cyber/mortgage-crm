@@ -44980,6 +44980,11 @@ async def update_loan(loan_id: int, loan_update: LoanUpdate, db: Session = Depen
             db
         )
 
+        # Auto-assign loan_officer_id if unassigned
+        if loan.loan_officer_id is None:
+            loan.loan_officer_id = current_user.id
+            logger.info(f"Auto-assigned loan {loan.loan_number} to user {current_user.id}")
+
         # Track if stage is changing
         old_stage = loan.stage
         old_stage_str = old_stage.value if hasattr(old_stage, 'value') else str(old_stage) if old_stage else None
@@ -54981,7 +54986,7 @@ def filter_loans_by_permissions(query, user: User, db: Session):
     - loans.view_team: See team's loans
     - loans.view_assigned: See only assigned loans (where user is loan_officer)
 
-    Default behavior (no permissions set): Show assigned loans
+    Default behavior (no permissions set): Show assigned loans + unassigned loans
     """
     try:
         if has_permission(user.id, 'loans.view_all', db):
@@ -54989,7 +54994,7 @@ def filter_loans_by_permissions(query, user: User, db: Session):
             return query
 
         if has_permission(user.id, 'loans.view_team', db):
-            # Team Lead: See team's loans
+            # Team Lead: See team's loans + unassigned loans
             team_id = getattr(user, 'team_id', None)
             if team_id:
                 team_member_ids = db.execute(text("""
@@ -54997,14 +55002,26 @@ def filter_loans_by_permissions(query, user: User, db: Session):
                 """), {"team_id": team_id}).fetchall()
                 team_ids = [m[0] for m in team_member_ids]
                 if team_ids:
-                    return query.filter(Loan.loan_officer_id.in_(team_ids))
-            return query.filter(Loan.loan_officer_id == user.id)
+                    return query.filter(or_(
+                        Loan.loan_officer_id.in_(team_ids),
+                        Loan.loan_officer_id.is_(None)  # Include unassigned loans
+                    ))
+            return query.filter(or_(
+                Loan.loan_officer_id == user.id,
+                Loan.loan_officer_id.is_(None)  # Include unassigned loans
+            ))
 
-        # Default: Show loans where user is the loan officer
-        return query.filter(Loan.loan_officer_id == user.id)
+        # Default: Show loans where user is the loan officer OR unassigned
+        return query.filter(or_(
+            Loan.loan_officer_id == user.id,
+            Loan.loan_officer_id.is_(None)  # Include unassigned loans
+        ))
     except Exception as e:
         logger.error(f"Loan permission filter error: {e}")
-        return query.filter(Loan.loan_officer_id == user.id)
+        return query.filter(or_(
+            Loan.loan_officer_id == user.id,
+            Loan.loan_officer_id.is_(None)
+        ))
 
 
 def filter_mum_clients_by_permissions(query, user: User, db: Session):
