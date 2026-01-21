@@ -57,7 +57,7 @@ echo -e "${YELLOW}1. BACKEND API HEALTH TESTS${NC}"
 echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
 
 # Test API Health
-API_URL="https://mortgage-crm-production-7a9a.up.railway.app"
+API_URL="https://app.perenniaai.com"
 
 # Health endpoint
 health_response=$(curl -s "$API_URL/health" 2>&1)

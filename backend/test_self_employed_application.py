@@ -17,7 +17,7 @@ import json
 import os
 
 # Use production URL
-BASE_URL = os.getenv("API_URL", "https://mortgage-crm-production-7a9a.up.railway.app")
+BASE_URL = os.getenv("API_URL", "https://app.perenniaai.com")
 ADMIN_LO_ID = "57"  # Tim Loss's user ID
 
 def find_or_create_timothy_loss_partner():

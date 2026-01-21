@@ -10,7 +10,7 @@ from datetime import date, timedelta
 from tabulate import tabulate
 
 # Configuration
-BACKEND_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+BACKEND_URL = "https://app.perenniaai.com"
 API_BASE = f"{BACKEND_URL}/api/v1"
 
 # Test results storage

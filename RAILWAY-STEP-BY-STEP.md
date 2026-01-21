@@ -259,7 +259,7 @@ ModuleNotFoundError
 ### Get Your Railway URL
 
 1. In the backend service, look for your **public domain**
-2. It should be something like: `mortgage-crm-production-7a9a.up.railway.app`
+2. It should be something like: `app.perenniaai.com`
 3. Copy this URL
 
 ### Test in Terminal
@@ -267,7 +267,7 @@ ModuleNotFoundError
 Open your terminal and run:
 
 ```bash
-curl https://mortgage-crm-production-7a9a.up.railway.app/health
+curl https://app.perenniaai.com/health
 ```
 
 **Expected response:**
@@ -289,7 +289,7 @@ or similar
 
 Open your browser and go to:
 ```
-https://mortgage-crm-production-7a9a.up.railway.app/docs
+https://app.perenniaai.com/docs
 ```
 
 **Expected:** You should see the FastAPI Swagger UI documentation page

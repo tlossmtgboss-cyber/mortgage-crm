@@ -47,7 +47,7 @@ Hi [Name],
 Great talking to you today! As promised, here's your access:
 
 LOGIN DETAILS:
-URL: https://mortgage-crm-production-7a9a.up.railway.app
+URL: https://app.perenniaai.com
 Email: [their-email]
 Temporary Password: [temp-password]
 (You'll be prompted to change this on first login)
@@ -246,7 +246,7 @@ Beta benefits:
 - Direct influence on product development
 
 Limited to 10 teams. Apply today:
-https://mortgage-crm-production-7a9a.up.railway.app/beta
+https://app.perenniaai.com/beta
 
 #mortgage #proptech #AI #sales
 ```
@@ -276,7 +276,7 @@ Beta perks:
 - Lifetime discount at launch
 - Your feedback shapes the product
 
-Apply here: https://mortgage-crm-production-7a9a.up.railway.app/beta
+Apply here: https://app.perenniaai.com/beta
 
 Or just reply and I'll get you set up directly.
 

@@ -947,8 +947,8 @@ Provide mortgage professionals with an AI-powered platform that automates 80% of
 
 **Production Environment:**
 - Frontend: https://mortgage-crm-nine.vercel.app
-- Backend API: https://mortgage-crm-production-7a9a.up.railway.app
-- API Docs: https://mortgage-crm-production-7a9a.up.railway.app/docs
+- Backend API: https://app.perenniaai.com
+- API Docs: https://app.perenniaai.com/docs
 - AI Receptionist: (832) 648-2297
 
 **Key Pages:**

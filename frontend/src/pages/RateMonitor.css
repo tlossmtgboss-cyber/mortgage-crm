@@ -682,6 +682,418 @@
   color: #666;
 }
 
+/* =============================================================================
+   RATE SHEETS SECTION
+   ============================================================================= */
+
+/* Upload Section */
+.upload-section {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e2e8f0;
+  margin-bottom: 24px;
+}
+
+.upload-section h3 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  color: #1a1a2e;
+}
+
+.upload-form {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.upload-form input[type="file"] {
+  flex: 1;
+  padding: 10px;
+  border: 2px dashed #e2e8f0;
+  border-radius: 8px;
+  background: #f7fafc;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.upload-form input[type="file"]:hover {
+  border-color: #2c5282;
+  background: #ebf8ff;
+}
+
+.upload-form input[type="file"]:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Sheets List */
+.sheets-list-section {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e2e8f0;
+  margin-bottom: 24px;
+}
+
+.sheets-list-section h3 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  color: #1a1a2e;
+}
+
+.sheets-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sheet-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background: #f7fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sheet-item:hover {
+  background: #ebf8ff;
+  border-color: #90cdf4;
+}
+
+.sheet-item.selected {
+  background: #ebf8ff;
+  border-color: #2c5282;
+  box-shadow: 0 0 0 2px rgba(44, 82, 130, 0.2);
+}
+
+.sheet-info h4 {
+  margin: 0 0 4px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a2e;
+}
+
+.sheet-info .sheet-meta {
+  font-size: 12px;
+  color: #666;
+  display: flex;
+  gap: 12px;
+}
+
+.sheet-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Sheet Status Badges */
+.status-badge.status-pending {
+  background: #feebc8;
+  color: #c05621;
+}
+
+.status-badge.status-processing {
+  background: #bee3f8;
+  color: #2c5282;
+}
+
+.status-badge.status-parsed {
+  background: #c6f6d5;
+  color: #276749;
+}
+
+.status-badge.status-failed {
+  background: #fed7d7;
+  color: #c53030;
+}
+
+/* Rates Section within Rate Sheets */
+.rates-section {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e2e8f0;
+}
+
+.rates-section h3 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  color: #1a1a2e;
+}
+
+.rates-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.rates-header h3 {
+  margin: 0;
+}
+
+.rates-table-container {
+  overflow-x: auto;
+}
+
+/* =============================================================================
+   OPPORTUNITIES SECTION
+   ============================================================================= */
+
+/* Opportunities Metrics Bar */
+.opportunities-metrics {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.opp-metric-card {
+  flex: 1;
+  min-width: 150px;
+  background: white;
+  border-radius: 12px;
+  padding: 16px 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e2e8f0;
+  text-align: center;
+}
+
+.opp-metric-card.urgent {
+  background: linear-gradient(135deg, #fff5f5 0%, #fed7d7 100%);
+  border-color: #feb2b2;
+}
+
+.opp-metric-card.success {
+  background: linear-gradient(135deg, #f0fff4 0%, #c6f6d5 100%);
+  border-color: #9ae6b4;
+}
+
+.opp-metric-card.info {
+  background: linear-gradient(135deg, #ebf8ff 0%, #bee3f8 100%);
+  border-color: #90cdf4;
+}
+
+.opp-metric-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1a1a2e;
+  margin-bottom: 4px;
+}
+
+.opp-metric-label {
+  font-size: 12px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Opportunities Actions Bar */
+.opportunities-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 16px;
+}
+
+.bulk-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.bulk-actions span {
+  font-size: 14px;
+  color: #4a5568;
+}
+
+/* Opportunities Table */
+.opportunities-table-container {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e2e8f0;
+}
+
+/* Priority Row Highlighting */
+.data-table tbody tr.priority-urgent {
+  background: linear-gradient(to right, #fff5f5, white);
+}
+
+.data-table tbody tr.priority-high {
+  background: linear-gradient(to right, #fffaf0, white);
+}
+
+.data-table tbody tr.priority-medium {
+  background: linear-gradient(to right, #fffff0, white);
+}
+
+.data-table tbody tr.priority-low {
+  background: white;
+}
+
+.data-table tbody tr.priority-urgent:hover {
+  background: linear-gradient(to right, #fed7d7, #f7fafc);
+}
+
+.data-table tbody tr.priority-high:hover {
+  background: linear-gradient(to right, #feebc8, #f7fafc);
+}
+
+/* Client Info Cell */
+.client-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.client-info .name {
+  font-weight: 600;
+  color: #1a1a2e;
+}
+
+.client-info .phone {
+  font-size: 12px;
+  color: #666;
+}
+
+/* Rate Comparison Cell */
+.rate-cell {
+  display: flex;
+  flex-direction: column;
+}
+
+.rate-cell .current {
+  font-size: 14px;
+  color: #666;
+}
+
+.rate-cell .new {
+  font-size: 14px;
+  font-weight: 600;
+  color: #276749;
+}
+
+.rate-cell .drop {
+  font-size: 11px;
+  color: #48bb78;
+  margin-top: 2px;
+}
+
+/* Savings Cell */
+.savings-cell {
+  display: flex;
+  flex-direction: column;
+}
+
+.savings-cell .monthly {
+  font-size: 16px;
+  font-weight: 700;
+  color: #2c5282;
+}
+
+.savings-cell .annual {
+  font-size: 12px;
+  color: #666;
+}
+
+/* Opportunity Status Badges */
+.status-badge.status-identified {
+  background: #e2e8f0;
+  color: #4a5568;
+}
+
+.status-badge.status-sms_sent {
+  background: #bee3f8;
+  color: #2c5282;
+}
+
+.status-badge.status-scheduled {
+  background: #c6f6d5;
+  color: #276749;
+}
+
+.status-badge.status-opted_out {
+  background: #e2e8f0;
+  color: #718096;
+}
+
+.status-badge.status-declined {
+  background: #fed7d7;
+  color: #c53030;
+}
+
+/* Danger Button */
+.btn-danger {
+  padding: 10px 20px;
+  background: #e53e3e;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-danger:hover {
+  background: #c53030;
+}
+
+.btn-danger.btn-sm {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+/* Warning Button */
+.btn-warning {
+  padding: 10px 20px;
+  background: #ed8936;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-warning:hover {
+  background: #dd6b20;
+}
+
+/* Button Disabled State */
+.btn-primary:disabled,
+.btn-secondary:disabled,
+.btn-success:disabled,
+.btn-danger:disabled,
+.btn-warning:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Checkbox in Table */
+.data-table input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+/* No Sheets Message */
+.no-sheets {
+  text-align: center;
+  padding: 32px;
+  color: #666;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .rate-monitor-page {
@@ -728,6 +1140,44 @@
   }
 
   .alert-actions {
+    flex-wrap: wrap;
+  }
+
+  /* Responsive: Rate Sheets */
+  .upload-form {
+    flex-direction: column;
+  }
+
+  .upload-form input[type="file"] {
+    width: 100%;
+  }
+
+  .sheet-item {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .sheet-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  /* Responsive: Opportunities */
+  .opportunities-metrics {
+    flex-direction: column;
+  }
+
+  .opp-metric-card {
+    min-width: auto;
+  }
+
+  .opportunities-actions {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .bulk-actions {
     flex-wrap: wrap;
   }
 }

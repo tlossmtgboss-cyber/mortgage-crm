@@ -7,7 +7,7 @@ import requests
 import json
 import io
 
-API_BASE_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+API_BASE_URL = "https://app.perenniaai.com"
 
 def get_auth_token():
     """Login and get authentication token"""

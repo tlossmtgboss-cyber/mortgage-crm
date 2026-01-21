@@ -8,7 +8,7 @@ This guide will get you up and running in under 10 minutes.
 
 ## Step 1: Log In
 
-1. Go to: **https://mortgage-crm-production-7a9a.up.railway.app**
+1. Go to: **https://app.perenniaai.com**
 2. Enter your email and temporary password
 3. You'll be prompted to set a new password
 4. Complete the onboarding wizard (takes ~2 minutes)

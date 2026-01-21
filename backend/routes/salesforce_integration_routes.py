@@ -33,6 +33,85 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/integrations/salesforce", tags=["Salesforce Integration"])
 
 
+# ============ Database Schema Fix ============
+
+def fix_salesforce_schema(db: Session) -> dict:
+    """Fix missing columns in Salesforce integration tables"""
+    fixes = []
+
+    # Check and add integration_profile_id to sf_user_schemas if missing
+    try:
+        db.execute(text("""
+            ALTER TABLE sf_user_schemas
+            ADD COLUMN IF NOT EXISTS integration_profile_id INTEGER REFERENCES integration_profiles(id) ON DELETE CASCADE
+        """))
+        db.commit()
+        fixes.append("Added integration_profile_id to sf_user_schemas")
+    except Exception as e:
+        db.rollback()
+        logger.debug(f"sf_user_schemas fix: {e}")
+
+    # Check and add integration_profile_id to field_mappings if missing
+    try:
+        db.execute(text("""
+            ALTER TABLE field_mappings
+            ADD COLUMN IF NOT EXISTS integration_profile_id INTEGER REFERENCES integration_profiles(id) ON DELETE CASCADE
+        """))
+        db.commit()
+        fixes.append("Added integration_profile_id to field_mappings")
+    except Exception as e:
+        db.rollback()
+        logger.debug(f"field_mappings fix: {e}")
+
+    # Check and add integration_profile_id to integration_events if missing
+    try:
+        db.execute(text("""
+            ALTER TABLE integration_events
+            ADD COLUMN IF NOT EXISTS integration_profile_id INTEGER REFERENCES integration_profiles(id) ON DELETE CASCADE
+        """))
+        db.commit()
+        fixes.append("Added integration_profile_id to integration_events")
+    except Exception as e:
+        db.rollback()
+        logger.debug(f"integration_events fix: {e}")
+
+    # Check and add integration_profile_id to sync_queue if missing
+    try:
+        db.execute(text("""
+            ALTER TABLE sync_queue
+            ADD COLUMN IF NOT EXISTS integration_profile_id INTEGER REFERENCES integration_profiles(id) ON DELETE CASCADE
+        """))
+        db.commit()
+        fixes.append("Added integration_profile_id to sync_queue")
+    except Exception as e:
+        db.rollback()
+        logger.debug(f"sync_queue fix: {e}")
+
+    # Check and add integration_profile_id to integration_record_tracking if missing
+    try:
+        db.execute(text("""
+            ALTER TABLE integration_record_tracking
+            ADD COLUMN IF NOT EXISTS integration_profile_id INTEGER REFERENCES integration_profiles(id) ON DELETE CASCADE
+        """))
+        db.commit()
+        fixes.append("Added integration_profile_id to integration_record_tracking")
+    except Exception as e:
+        db.rollback()
+        logger.debug(f"integration_record_tracking fix: {e}")
+
+    return {"fixes_applied": fixes}
+
+
+@router.post("/fix-schema")
+async def fix_schema_endpoint(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Fix missing columns in Salesforce integration tables (admin only)"""
+    result = fix_salesforce_schema(db)
+    return {"status": "success", **result}
+
+
 # ============ Pydantic Models ============
 
 class ConnectionStatus(BaseModel):

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-API_URL="https://mortgage-crm-production-7a9a.up.railway.app"
+API_URL="https://app.perenniaai.com"
 
 TOKEN_RESPONSE=$(curl -s "$API_URL/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \

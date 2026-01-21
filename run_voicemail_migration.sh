@@ -6,7 +6,7 @@ echo ""
 
 # Get authentication token
 echo "📝 Logging in..."
-TOKEN_RESPONSE=$(curl -s -X POST "https://mortgage-crm-production-7a9a.up.railway.app/token" \
+TOKEN_RESPONSE=$(curl -s -X POST "https://app.perenniaai.com/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "username=admin@perenniaai.com&password=demo123")
 
@@ -23,7 +23,7 @@ echo ""
 
 # Run migration
 echo "🔄 Running voicemail system migration..."
-MIGRATION_RESPONSE=$(curl -s -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/migrations/add-voicemail-system" \
+MIGRATION_RESPONSE=$(curl -s -X POST "https://app.perenniaai.com/api/v1/migrations/add-voicemail-system" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json")
 

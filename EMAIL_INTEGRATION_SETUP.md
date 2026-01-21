@@ -45,7 +45,7 @@ Your Claude API key was shared in plain text. Let's store it securely:
    Name: Mortgage CRM Email Integration
    Supported account types: Accounts in this organizational directory only
    Redirect URI: Web
-   https://mortgage-crm-production-7a9a.up.railway.app/api/v1/email/oauth/callback
+   https://app.perenniaai.com/api/v1/email/oauth/callback
    ```
 
 5. **Click Register**
@@ -96,7 +96,7 @@ Go back to Railway and add these variables:
 MICROSOFT_CLIENT_ID=<your-client-id-from-step-2.1>
 MICROSOFT_TENANT_ID=<your-tenant-id-from-step-2.2>
 MICROSOFT_CLIENT_SECRET=<your-client-secret-from-step-2.3>
-MICROSOFT_REDIRECT_URI=https://mortgage-crm-production-7a9a.up.railway.app/api/v1/email/oauth/callback
+MICROSOFT_REDIRECT_URI=https://app.perenniaai.com/api/v1/email/oauth/callback
 ```
 
 Click **Deploy** to restart with new variables.
@@ -117,7 +117,7 @@ ANTHROPIC_API_KEY=sk-ant-api03-...
 MICROSOFT_CLIENT_ID=<from Azure AD>
 MICROSOFT_TENANT_ID=<from Azure AD>
 MICROSOFT_CLIENT_SECRET=<from Azure AD>
-MICROSOFT_REDIRECT_URI=https://mortgage-crm-production-7a9a.up.railway.app/api/v1/email/oauth/callback
+MICROSOFT_REDIRECT_URI=https://app.perenniaai.com/api/v1/email/oauth/callback
 
 # Email Processing Settings (optional - defaults shown)
 EMAIL_POLLING_INTERVAL=300  # Check every 5 minutes

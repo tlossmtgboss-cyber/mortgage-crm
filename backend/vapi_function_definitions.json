@@ -13,7 +13,7 @@
         },
         "required": ["phone_number"]
       },
-      "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/get-lead-info",
+      "url": "https://app.perenniaai.com/api/vapi/functions/get-lead-info",
       "method": "POST"
     },
     {
@@ -38,7 +38,7 @@
         },
         "required": ["phone_number"]
       },
-      "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/update-lead-status",
+      "url": "https://app.perenniaai.com/api/vapi/functions/update-lead-status",
       "method": "POST"
     },
     {
@@ -71,7 +71,7 @@
         },
         "required": ["phone_number", "title"]
       },
-      "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/create-task",
+      "url": "https://app.perenniaai.com/api/vapi/functions/create-task",
       "method": "POST"
     },
     {
@@ -100,7 +100,7 @@
         },
         "required": ["phone_number"]
       },
-      "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/schedule-appointment",
+      "url": "https://app.perenniaai.com/api/vapi/functions/schedule-appointment",
       "method": "POST"
     },
     {
@@ -115,7 +115,7 @@
           }
         }
       },
-      "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/available-time-slots",
+      "url": "https://app.perenniaai.com/api/vapi/functions/available-time-slots",
       "method": "GET"
     },
     {
@@ -200,7 +200,7 @@
         },
         "required": ["phone_number", "first_name", "last_name"]
       },
-      "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/submit-preapproval-application",
+      "url": "https://app.perenniaai.com/api/vapi/functions/submit-preapproval-application",
       "method": "POST"
     },
     {
@@ -224,10 +224,10 @@
         },
         "required": ["phone_number"]
       },
-      "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/schedule-calendly-appointment",
+      "url": "https://app.perenniaai.com/api/vapi/functions/schedule-calendly-appointment",
       "method": "POST"
     }
   ],
-  "server_url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions",
+  "server_url": "https://app.perenniaai.com/api/vapi/functions",
   "assistant_id": "120e239e-4d19-4e43-ad92-1f8b07d08c8c"
 }

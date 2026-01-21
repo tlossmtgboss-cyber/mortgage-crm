@@ -44,7 +44,7 @@ try:
         print(f"   Voice Method: {number.voice_method}")
         print(f"   Status Callback: {number.status_callback}")
 
-        expected_url = "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voice/incoming"
+        expected_url = "https://app.perenniaai.com/api/v1/voice/incoming"
 
         if number.voice_url == expected_url:
             print(f"\n   ✅ Webhook URL is CORRECT")
@@ -95,7 +95,7 @@ Next steps:
    https://console.twilio.com/us1/develop/phone-numbers/manage/incoming
 
    Set Voice URL to:
-   https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voice/incoming
+   https://app.perenniaai.com/api/v1/voice/incoming
    Method: POST
 
 3. After updating, call the number

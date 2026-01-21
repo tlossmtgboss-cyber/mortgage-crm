@@ -34,7 +34,7 @@ In the Vapi assistant configuration:
 1. Scroll to the **Server** section
 2. Set **Server URL** to:
    ```
-   https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions
+   https://app.perenniaai.com/api/vapi/functions
    ```
 3. Set **Server URL Request Method** to `POST`
 
@@ -57,7 +57,7 @@ In the **Functions** section of your assistant, add these 5 functions:
     },
     "required": ["phone_number"]
   },
-  "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/get-lead-info",
+  "url": "https://app.perenniaai.com/api/vapi/functions/get-lead-info",
   "method": "POST"
 }
 ```
@@ -86,7 +86,7 @@ In the **Functions** section of your assistant, add these 5 functions:
     },
     "required": ["phone_number"]
   },
-  "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/update-lead-status",
+  "url": "https://app.perenniaai.com/api/vapi/functions/update-lead-status",
   "method": "POST"
 }
 ```
@@ -123,7 +123,7 @@ In the **Functions** section of your assistant, add these 5 functions:
     },
     "required": ["phone_number", "title"]
   },
-  "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/create-task",
+  "url": "https://app.perenniaai.com/api/vapi/functions/create-task",
   "method": "POST"
 }
 ```
@@ -156,7 +156,7 @@ In the **Functions** section of your assistant, add these 5 functions:
     },
     "required": ["phone_number"]
   },
-  "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/schedule-appointment",
+  "url": "https://app.perenniaai.com/api/vapi/functions/schedule-appointment",
   "method": "POST"
 }
 ```
@@ -175,7 +175,7 @@ In the **Functions** section of your assistant, add these 5 functions:
       }
     }
   },
-  "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/available-time-slots",
+  "url": "https://app.perenniaai.com/api/vapi/functions/available-time-slots",
   "method": "GET"
 }
 ```
@@ -233,7 +233,7 @@ To see function calling in action:
 - Verify the endpoints are accessible
 - Test endpoints directly with curl:
   ```bash
-  curl -X POST https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/get-lead-info \
+  curl -X POST https://app.perenniaai.com/api/vapi/functions/get-lead-info \
     -H "Content-Type: application/json" \
     -d '{"phone_number": "+18434169589"}'
   ```

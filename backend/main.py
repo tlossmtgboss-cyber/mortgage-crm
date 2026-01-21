@@ -104,6 +104,9 @@ from models.financial_intelligence import (
     LostDeal, CapitalRequirement, ComplianceRisk
 )
 
+# Import rate sheet models for table creation
+from models.rate_sheet import RateSheet, RateSheetRate, RefinanceOpportunity
+
 # Setup logging - reduce verbosity in production to avoid Railway rate limits
 _is_production = os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("ENVIRONMENT") == "production"
 _log_level = logging.WARNING if _is_production else logging.INFO
@@ -20545,6 +20548,13 @@ try:
 except Exception as e:
     logger.warning(f"Could not load rate monitor routes: {e}")
 
+# Include Rate Sheet Upload routes (rate sheet parsing and refinance opportunities)
+try:
+    from rate_sheet_routes import router as rate_sheet_router
+    app.include_router(rate_sheet_router, tags=["Rate Sheets"])
+except Exception as e:
+    logger.warning(f"Could not load rate sheet routes: {e}")
+
 # Include Gmail Integration routes
 from gmail_routes import router as gmail_router
 app.include_router(gmail_router, tags=["Gmail Integration"])
@@ -21682,7 +21692,7 @@ async def debug_create_test_workspace(
             "token_id": token[0],
             "expires_at": expires_at.isoformat(),
             "portal_url": f"https://perenniaai.com/portal/{workspace_slug}",
-            "test_curl": f'curl -H "Authorization: Bearer {full_token}" "https://mortgage-crm-production-7a9a.up.railway.app/api/purl/workspace/{workspace_slug}"'
+            "test_curl": f'curl -H "Authorization: Bearer {full_token}" "https://app.perenniaai.com/api/purl/workspace/{workspace_slug}"'
         }
     except Exception as e:
         db.rollback()
@@ -25720,7 +25730,7 @@ async def make_outbound_call(
             raise HTTPException(status_code=503, detail="Twilio phone number not configured")
 
         # Create TwiML for the call - use OpenAI Realtime API webhook
-        api_url = os.getenv("API_URL", "https://mortgage-crm-production-7a9a.up.railway.app")
+        api_url = os.getenv("API_URL", "https://app.perenniaai.com")
         twiml_url = f"{api_url}/api/v1/voice/incoming?script_type={script_type}"
 
         # Make the call
@@ -25933,7 +25943,7 @@ async def drop_voicemail(
                 shutil.copy(audio_path, static_audio_path)
 
                 # Get public URL for audio
-                api_url = os.getenv("API_URL", "https://mortgage-crm-production-7a9a.up.railway.app")
+                api_url = os.getenv("API_URL", "https://app.perenniaai.com")
                 audio_url = f"{api_url}/static/{audio_filename}"
 
                 logger.info(f"Audio URL: {audio_url}")

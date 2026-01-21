@@ -1,7 +1,7 @@
 #!/bin/bash
 # Test Claude integration via Railway production API
 
-BASE_URL="https://mortgage-crm-production-7a9a.up.railway.app"
+BASE_URL="https://app.perenniaai.com"
 EMAIL="tloss@cmgfi.com"
 
 echo "================================================================================"

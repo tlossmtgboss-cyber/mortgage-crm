@@ -183,7 +183,7 @@ ModuleNotFoundError → Missing dependency
 
 ### Test 1: Health Endpoint
 ```bash
-curl https://mortgage-crm-production-7a9a.up.railway.app/health
+curl https://app.perenniaai.com/health
 ```
 
 **Expected response:**
@@ -197,7 +197,7 @@ or similar success message
 ### Test 2: API Documentation
 Open in browser:
 ```
-https://mortgage-crm-production-7a9a.up.railway.app/docs
+https://app.perenniaai.com/docs
 ```
 
 **Expected:** FastAPI Swagger UI documentation page
@@ -270,10 +270,10 @@ In Railway dashboard:
 ### Test Backend
 ```bash
 # Health check
-curl https://mortgage-crm-production-7a9a.up.railway.app/health
+curl https://app.perenniaai.com/health
 
 # API docs (open in browser)
-open https://mortgage-crm-production-7a9a.up.railway.app/docs
+open https://app.perenniaai.com/docs
 ```
 
 ### Redeploy from Local
@@ -304,10 +304,10 @@ Once you see ✅ **"Application startup complete"** in logs:
 2. **Verify Vercel Environment**
    - Go to: https://vercel.com/dashboard
    - Click project → Settings → Environment Variables
-   - Ensure: `REACT_APP_API_URL = https://mortgage-crm-production-7a9a.up.railway.app`
+   - Ensure: `REACT_APP_API_URL = https://app.perenniaai.com`
 
 3. **Test API Endpoints**
-   - Go to: https://mortgage-crm-production-7a9a.up.railway.app/docs
+   - Go to: https://app.perenniaai.com/docs
    - Try the `/token` endpoint with demo credentials
    - Try the `/api/v1/dashboard` endpoint
 

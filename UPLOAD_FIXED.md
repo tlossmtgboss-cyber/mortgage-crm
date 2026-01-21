@@ -307,7 +307,7 @@ Now that upload is working, you can:
 **Need Help?**
 - Test script: `python3 test_all_uploads.py`
 - Check backend logs: Railway dashboard → Backend → Logs
-- API documentation: https://mortgage-crm-production-7a9a.up.railway.app/docs
+- API documentation: https://app.perenniaai.com/docs
 
 ---
 

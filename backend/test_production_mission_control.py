@@ -11,7 +11,7 @@ from datetime import datetime
 import subprocess
 
 # Configuration
-API_BASE = "https://mortgage-crm-production-7a9a.up.railway.app"
+API_BASE = "https://app.perenniaai.com"
 
 # Colors for output
 class Colors:

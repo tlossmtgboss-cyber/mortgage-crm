@@ -59,7 +59,7 @@ You need to configure at least one staff member for each role. Use the API endpo
 
 ```bash
 # Example: Set up Production Assistant
-curl -X POST https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/receptionist/staff-availability \
+curl -X POST https://app.perenniaai.com/api/vapi/receptionist/staff-availability \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -d '{
@@ -120,7 +120,7 @@ Test that the new endpoints are accessible:
 
 ```bash
 # Test identify-caller endpoint
-curl -X POST https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/identify-caller \
+curl -X POST https://app.perenniaai.com/api/vapi/functions/identify-caller \
   -H "Content-Type: application/json" \
   -d '{"phone_number": "+15551234567"}'
 
@@ -140,7 +140,7 @@ curl -X POST https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functi
 1. Create a test lead in your CRM with phone number `+15551234567`
 2. Call the identify-caller endpoint:
 ```bash
-curl -X POST https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/identify-caller \
+curl -X POST https://app.perenniaai.com/api/vapi/functions/identify-caller \
   -H "Content-Type: application/json" \
   -d '{"phone_number": "+15551234567"}'
 ```
@@ -163,7 +163,7 @@ curl -X POST https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functi
 
 **Steps:**
 ```bash
-curl -X GET "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/receptionist/available-staff" \
+curl -X GET "https://app.perenniaai.com/api/vapi/receptionist/available-staff" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
@@ -215,7 +215,7 @@ You → Vapi AI (Sam) → identify_caller → transfer_to_production_assistant �
 
 **Steps:**
 ```bash
-curl -X GET "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/receptionist/routing-log?limit=10" \
+curl -X GET "https://app.perenniaai.com/api/vapi/receptionist/routing-log?limit=10" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
@@ -254,7 +254,7 @@ VAPI_ASSISTANT_ID=your_updated_assistant_id
 DATABASE_URL=postgresql://...
 
 # Production Domain
-PRODUCTION_DOMAIN=https://mortgage-crm-production-7a9a.up.railway.app
+PRODUCTION_DOMAIN=https://app.perenniaai.com
 ```
 
 ### **Twilio Configuration (if using)**
@@ -274,7 +274,7 @@ TWILIO_FROM_NUMBER=your_twilio_number
 
 ```bash
 # Via API
-curl -X GET "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/receptionist/routing-log" \
+curl -X GET "https://app.perenniaai.com/api/vapi/receptionist/routing-log" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
@@ -282,7 +282,7 @@ curl -X GET "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/recept
 
 ```bash
 # Set PA as unavailable
-curl -X POST https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/receptionist/staff-availability \
+curl -X POST https://app.perenniaai.com/api/vapi/receptionist/staff-availability \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -d '{
@@ -295,7 +295,7 @@ curl -X POST https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/recept
 ### **View Available Staff**
 
 ```bash
-curl -X GET "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/receptionist/available-staff?role=production_assistant" \
+curl -X GET "https://app.perenniaai.com/api/vapi/receptionist/available-staff?role=production_assistant" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
@@ -309,7 +309,7 @@ curl -X GET "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/recept
 
 **Fix:**
 ```bash
-curl -X POST https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/receptionist/staff-availability \
+curl -X POST https://app.perenniaai.com/api/vapi/receptionist/staff-availability \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -d '{
@@ -331,13 +331,13 @@ curl -X POST https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/recept
 **Debug Steps:**
 1. Check staff availability:
    ```bash
-   curl -X GET "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/receptionist/available-staff" \
+   curl -X GET "https://app.perenniaai.com/api/vapi/receptionist/available-staff" \
      -H "Authorization: Bearer YOUR_JWT_TOKEN"
    ```
 
 2. Check routing logs for error details:
    ```bash
-   curl -X GET "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/receptionist/routing-log?limit=1" \
+   curl -X GET "https://app.perenniaai.com/api/vapi/receptionist/routing-log?limit=1" \
      -H "Authorization: Bearer YOUR_JWT_TOKEN"
    ```
 

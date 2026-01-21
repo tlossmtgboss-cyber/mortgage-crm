@@ -163,10 +163,10 @@ SELECT * FROM calculate_ai_health_score(
 **What to verify:**
 ```bash
 curl -H "Authorization: Bearer TOKEN" \
-  https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai/mission-control/health
+  https://app.perenniaai.com/api/v1/ai/mission-control/health
 
 curl -H "Authorization: Bearer TOKEN" \
-  https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai/mission-control/actions
+  https://app.perenniaai.com/api/v1/ai/mission-control/actions
 ```
 
 **Current Status:** ⏳ UNKNOWN - Need auth token to test

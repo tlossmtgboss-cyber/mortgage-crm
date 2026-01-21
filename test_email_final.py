@@ -4,7 +4,7 @@
 import requests
 import json
 
-API_URL = "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai/send-daily-priorities-email"
+API_URL = "https://app.perenniaai.com/api/v1/ai/send-daily-priorities-email"
 TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZW1vQGV4YW1wbGUuY29tIiwiZXhwIjoxNzY0MDE2OTcxfQ.DvKjpG2FOrpR_g8XHZ1ETk7bEFKRaABHW0D25csrdxA"
 TARGET_EMAIL = "tloss@cmgfi.com"
 

@@ -14,7 +14,7 @@
 ```bash
 # Migration endpoint check
 $ curl -s -o /dev/null -w "HTTP %{http_code}" -X POST \
-  "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/migrations/add-ai-receptionist-dashboard-tables"
+  "https://app.perenniaai.com/api/v1/migrations/add-ai-receptionist-dashboard-tables"
 
 HTTP 401  # ✅ Endpoint exists, requires authentication
 ```
@@ -46,7 +46,7 @@ HTTP 401  # ✅ Endpoint exists, requires authentication
 **Required Action:**
 ```bash
 # You need to authenticate and run this command:
-curl -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/migrations/add-ai-receptionist-dashboard-tables" \
+curl -X POST "https://app.perenniaai.com/api/v1/migrations/add-ai-receptionist-dashboard-tables" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
@@ -328,7 +328,7 @@ Enter your credentials when prompted, and the script will:
 
 **Questions or Issues?**
 - All curl commands: `DASHBOARD_VERIFICATION_CHECKLIST.md`
-- API documentation: https://mortgage-crm-production-7a9a.up.railway.app/docs#/AI%20Receptionist%20Dashboard
+- API documentation: https://app.perenniaai.com/docs#/AI%20Receptionist%20Dashboard
 - Implementation guide: `AI_RECEPTIONIST_DASHBOARD_IMPLEMENTATION_GUIDE.md`
 
 ---

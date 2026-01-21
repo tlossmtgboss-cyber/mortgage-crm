@@ -6,7 +6,7 @@ echo "==========================================================================
 echo ""
 
 # Configuration
-API_URL="https://mortgage-crm-production-7a9a.up.railway.app"
+API_URL="https://app.perenniaai.com"
 # You'll need to replace this with a valid token
 TOKEN="${1:-YOUR_TOKEN_HERE}"
 

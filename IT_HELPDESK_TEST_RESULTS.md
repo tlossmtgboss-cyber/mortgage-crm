@@ -124,7 +124,7 @@ This will:
 4. Paste and run:
 
 ```javascript
-fetch('https://mortgage-crm-production-7a9a.up.railway.app/api/v1/microsoft/sync-diagnostics', {
+fetch('https://app.perenniaai.com/api/v1/microsoft/sync-diagnostics', {
   headers: {'Authorization': 'Bearer ' + localStorage.getItem('token')}
 })
 .then(r => r.json())
@@ -293,7 +293,7 @@ Urgency: high
 ## 📞 How to Get Help
 
 ### If IT Helpdesk isn't working:
-1. Check backend health: https://mortgage-crm-production-7a9a.up.railway.app/health
+1. Check backend health: https://app.perenniaai.com/health
 2. Check Railway logs: `railway logs | grep -i "helpdesk"`
 3. Verify frontend deployment at Vercel
 4. Check browser console for errors (F12)

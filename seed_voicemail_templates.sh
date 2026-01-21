@@ -6,7 +6,7 @@ echo ""
 
 # Get authentication token
 echo "📝 Authenticating..."
-TOKEN_RESPONSE=$(curl -s -X POST "https://mortgage-crm-production-7a9a.up.railway.app/token" \
+TOKEN_RESPONSE=$(curl -s -X POST "https://app.perenniaai.com/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "username=admin@perenniaai.com&password=demo123")
 
@@ -26,7 +26,7 @@ echo ""
 
 # Template 1: Closing Disclosure Ready
 echo "1. Closing Disclosure Ready..."
-curl -s -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voicemail/templates" \
+curl -s -X POST "https://app.perenniaai.com/api/v1/voicemail/templates" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -39,7 +39,7 @@ echo "   ✅ Closing Disclosure Ready"
 
 # Template 2: Document Request
 echo "2. Document Request..."
-curl -s -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voicemail/templates" \
+curl -s -X POST "https://app.perenniaai.com/api/v1/voicemail/templates" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -52,7 +52,7 @@ echo "   ✅ Document Request"
 
 # Template 3: Rate Lock Expiration
 echo "3. Rate Lock Expiration..."
-curl -s -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voicemail/templates" \
+curl -s -X POST "https://app.perenniaai.com/api/v1/voicemail/templates" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -65,7 +65,7 @@ echo "   ✅ Rate Lock Expiration"
 
 # Template 4: Application Status Update
 echo "4. Application Status Update..."
-curl -s -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voicemail/templates" \
+curl -s -X POST "https://app.perenniaai.com/api/v1/voicemail/templates" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -78,7 +78,7 @@ echo "   ✅ Application Status Update"
 
 # Template 5: Appointment Reminder
 echo "5. Appointment Reminder..."
-curl -s -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voicemail/templates" \
+curl -s -X POST "https://app.perenniaai.com/api/v1/voicemail/templates" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -96,7 +96,7 @@ echo ""
 
 # Verify
 echo "📋 Verifying templates..."
-TEMPLATES_RESPONSE=$(curl -s "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voicemail/templates" \
+TEMPLATES_RESPONSE=$(curl -s "https://app.perenniaai.com/api/v1/voicemail/templates" \
   -H "Authorization: Bearer $TOKEN")
 
 TEMPLATE_COUNT=$(echo "$TEMPLATES_RESPONSE" | jq -r '.templates | length')

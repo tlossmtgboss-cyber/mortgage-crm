@@ -343,19 +343,19 @@ return actual_user  # No impersonation
 
 1. **Login as manager**
    ```bash
-   curl -X POST "https://mortgage-crm-production-7a9a.up.railway.app/token" \
+   curl -X POST "https://app.perenniaai.com/token" \
      -d "username=admin@perenniaai.com&password=demo123"
    ```
 
 2. **Get leads as manager**
    ```bash
-   curl "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/leads/" \
+   curl "https://app.perenniaai.com/api/v1/leads/" \
      -H "Authorization: Bearer YOUR_TOKEN"
    ```
 
 3. **Start impersonation**
    ```bash
-   curl -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/impersonation/start" \
+   curl -X POST "https://app.perenniaai.com/api/v1/impersonation/start" \
      -H "Authorization: Bearer YOUR_TOKEN" \
      -H "Content-Type: application/json" \
      -d '{
@@ -368,7 +368,7 @@ return actual_user  # No impersonation
 
 4. **Get leads while impersonating**
    ```bash
-   curl "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/leads/" \
+   curl "https://app.perenniaai.com/api/v1/leads/" \
      -H "Authorization: Bearer YOUR_TOKEN" \
      -H "X-Impersonation-Token: SESSION_TOKEN_FROM_STEP_3"
    ```

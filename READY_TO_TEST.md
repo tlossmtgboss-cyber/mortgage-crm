@@ -16,10 +16,10 @@ VAPI_PHONE_NUMBER_ID: 633423b3-dd7d-416f-abe4-2c195e3e641c ✅
 
 ### ✅ Twilio Webhook
 ```
-FROM: https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voice/incoming
+FROM: https://app.perenniaai.com/api/v1/voice/incoming
 TO:   https://api.vapi.ai/call/twilio?assistantId=120e239e-4d19-4e43-ad92-1f8b07d08c8c
 
-Status Callback: https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/webhook
+Status Callback: https://app.perenniaai.com/api/vapi/webhook
 
 ✅ UPDATED SUCCESSFULLY
 ```
@@ -47,7 +47,7 @@ Status:    ACTIVE ✅
 
 ### ✅ Webhook Endpoint
 ```
-URL: https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/webhook
+URL: https://app.perenniaai.com/api/vapi/webhook
 Status: ACCESSIBLE ✅
 Test Results:
   - call.started event: 200 OK ✅
@@ -266,7 +266,7 @@ This re-applies the Twilio webhook configuration.
 railway logs | grep "Vapi webhook"
 ```
 If no logs, verify webhook URL in Vapi dashboard:
-- Should be: `https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/webhook`
+- Should be: `https://app.perenniaai.com/api/vapi/webhook`
 
 ### Issue: Functions don't work
 **Check:**

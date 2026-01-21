@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List
 
 # Configuration
-BASE_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+BASE_URL = "https://app.perenniaai.com"
 # BASE_URL = "http://localhost:8000"  # Uncomment for local testing
 
 # Test data for 10 people

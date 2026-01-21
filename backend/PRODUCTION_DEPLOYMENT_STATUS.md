@@ -7,7 +7,7 @@
 - **Email**: tloss@cmgfi.com
 - **Environment**: Production
 - **Frontend URL**: https://perenniaai.com
-- **Backend URL**: https://mortgage-crm-production-7a9a.up.railway.app
+- **Backend URL**: https://app.perenniaai.com
 
 ---
 

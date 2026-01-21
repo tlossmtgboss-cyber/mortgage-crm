@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import requests
 
-API_BASE_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+API_BASE_URL = "https://app.perenniaai.com"
 
 print("🏆 Testing Performance Coach Endpoint\n")
 

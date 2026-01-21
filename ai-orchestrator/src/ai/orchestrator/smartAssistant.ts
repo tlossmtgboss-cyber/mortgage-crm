@@ -20,7 +20,7 @@ import {
 } from "../memory/memoryService";
 import { logInteraction } from "../../lib/logger";
 
-const API_BASE_URL = process.env.CRM_API_URL || "https://mortgage-crm-production-7a9a.up.railway.app";
+const API_BASE_URL = process.env.CRM_API_URL || "https://app.perenniaai.com";
 
 async function apiCall(endpoint: string, token?: string): Promise<any> {
   const headers: Record<string, string> = {

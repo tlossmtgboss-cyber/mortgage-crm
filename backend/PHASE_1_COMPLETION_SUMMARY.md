@@ -70,7 +70,7 @@
 ## 🚀 Production Deployment Status
 
 ### **Railway Production:**
-- **URL:** `https://mortgage-crm-production-7a9a.up.railway.app`
+- **URL:** `https://app.perenniaai.com`
 - **Health:** ✅ Healthy
 - **Database:** ✅ Connected (Postgres-G0ma)
 - **Migration:** ✅ Complete (7 tables created)
@@ -161,7 +161,7 @@ railway logs
 
 **Health Check:**
 ```bash
-curl https://mortgage-crm-production-7a9a.up.railway.app/health
+curl https://app.perenniaai.com/health
 ```
 
 **Test Claude Parser Locally:**

@@ -45,7 +45,7 @@ Mortgage CRM Teams Integration
 - Platform: **Web** (select from dropdown)
 - URL:
 ```
-https://mortgage-crm-production-7a9a.up.railway.app/auth/microsoft/callback
+https://app.perenniaai.com/auth/microsoft/callback
 ```
 
 ### 2.3 Register

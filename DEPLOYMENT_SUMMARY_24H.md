@@ -3,7 +3,7 @@
 **Account:** tloss@cmgfi.com
 **Repository:** tlossmtgboss-cyber/mortgage-crm
 **Production Environments:**
-- **Backend:** Railway (https://mortgage-crm-production-7a9a.up.railway.app)
+- **Backend:** Railway (https://app.perenniaai.com)
 - **Frontend:** Vercel
 
 ---
@@ -263,7 +263,7 @@ Once Railway database is resolved:
 ## Contact & Access
 
 **Production URLs:**
-- Backend: https://mortgage-crm-production-7a9a.up.railway.app
+- Backend: https://app.perenniaai.com
 - Frontend: (Vercel URL from deployment)
 - Repository: https://github.com/tlossmtgboss-cyber/mortgage-crm
 

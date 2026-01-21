@@ -338,10 +338,10 @@ railway up
 openssl rand -hex 32
 
 # Check if backend is reachable
-curl -I https://mortgage-crm-production-7a9a.up.railway.app/health
+curl -I https://app.perenniaai.com/health
 
 # Check API docs
-curl https://mortgage-crm-production-7a9a.up.railway.app/docs
+curl https://app.perenniaai.com/docs
 ```
 
 ---

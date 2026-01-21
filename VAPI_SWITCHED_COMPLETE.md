@@ -23,14 +23,14 @@ Found that Vapi was already configured in Railway:
 
 **Before:**
 ```
-Voice URL: https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voice/incoming
+Voice URL: https://app.perenniaai.com/api/v1/voice/incoming
 (Railway WebSocket - causing calls to drop)
 ```
 
 **After:**
 ```
 Voice URL: https://api.vapi.ai/call/twilio?assistantId=120e239e-4d19-4e43-ad92-1f8b07d08c8c
-Status Callback: https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/webhook
+Status Callback: https://app.perenniaai.com/api/vapi/webhook
 ```
 
 ### 3. **Verified Vapi Assistant Configuration**
@@ -104,7 +104,7 @@ Status: ACTIVE
 
 ### Test 2: CRM Webhook ✅
 ```
-URL: https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/webhook
+URL: https://app.perenniaai.com/api/vapi/webhook
 Response: {"status": "received"}
 Status: WORKING
 ```
@@ -307,7 +307,7 @@ railway logs | grep vapi
 ### Your Configuration
 - Assistant ID: `120e239e-4d19-4e43-ad92-1f8b07d08c8c`
 - Phone Number: `+18326482297`
-- CRM Webhook: `https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/webhook`
+- CRM Webhook: `https://app.perenniaai.com/api/vapi/webhook`
 
 ---
 

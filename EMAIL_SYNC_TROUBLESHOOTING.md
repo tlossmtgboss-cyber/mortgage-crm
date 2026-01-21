@@ -15,7 +15,7 @@ I've added diagnostic tools to help identify the issue. Let's check your email s
 3. **Run this command in the Console tab**:
 
 ```javascript
-fetch('https://mortgage-crm-production-7a9a.up.railway.app/api/v1/microsoft/sync-diagnostics', {
+fetch('https://app.perenniaai.com/api/v1/microsoft/sync-diagnostics', {
   headers: {
     'Authorization': 'Bearer ' + localStorage.getItem('token')
   }
@@ -114,7 +114,7 @@ If you want to trigger an immediate sync (bypasses the 5-minute wait):
 
 ### Via Browser Console:
 ```javascript
-fetch('https://mortgage-crm-production-7a9a.up.railway.app/api/v1/microsoft/force-sync', {
+fetch('https://app.perenniaai.com/api/v1/microsoft/force-sync', {
   method: 'POST',
   headers: {
     'Authorization': 'Bearer ' + localStorage.getItem('token'),

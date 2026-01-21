@@ -2,10 +2,10 @@
 
 # Test compliance system endpoints in production
 
-API_URL="https://mortgage-crm-production-7a9a.up.railway.app/api/v1"
+API_URL="https://app.perenniaai.com/api/v1"
 
 echo "🔐 Logging in..."
-TOKEN_RESPONSE=$(curl -s "https://mortgage-crm-production-7a9a.up.railway.app/token" \
+TOKEN_RESPONSE=$(curl -s "https://app.perenniaai.com/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "username=admin@perenniaai.com&password=demo123")
 

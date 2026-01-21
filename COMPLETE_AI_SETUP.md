@@ -3,7 +3,7 @@
 ## ✅ Current Status
 
 **Railway**: Deployed successfully!
-**Health**: https://mortgage-crm-production-7a9a.up.railway.app/health ✅ HEALTHY
+**Health**: https://app.perenniaai.com/health ✅ HEALTHY
 **AI Code**: All integrated and pushed (4,085 lines)
 **Deployment**: No circular imports, no breaking changes
 
@@ -143,14 +143,14 @@ Step 4: Verification
 
 ```bash
 # Test 1: List all agents
-curl https://mortgage-crm-production-7a9a.up.railway.app/api/ai/agents
+curl https://app.perenniaai.com/api/ai/agents
 
 # Expected: JSON with 7 agents
 ```
 
 ```bash
 # Test 2: Dispatch a test event
-curl -X POST https://mortgage-crm-production-7a9a.up.railway.app/api/ai/events \
+curl -X POST https://app.perenniaai.com/api/ai/events \
   -H "Content-Type: application/json" \
   -d '{
     "event_type": "LeadCreated",
@@ -167,7 +167,7 @@ curl -X POST https://mortgage-crm-production-7a9a.up.railway.app/api/ai/events \
 
 ```bash
 # Test 3: Check executions
-curl https://mortgage-crm-production-7a9a.up.railway.app/api/ai/executions
+curl https://app.perenniaai.com/api/ai/executions
 
 # Expected: JSON array of agent executions
 ```

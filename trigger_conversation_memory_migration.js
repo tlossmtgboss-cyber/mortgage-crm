@@ -11,7 +11,7 @@
     try {
         console.log('🔄 Running conversation_memory table migration...');
 
-        const response = await fetch('https://mortgage-crm-production-7a9a.up.railway.app/api/v1/migrations/add-conversation-memory', {
+        const response = await fetch('https://app.perenniaai.com/api/v1/migrations/add-conversation-memory', {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${localStorage.getItem('token').replace(/"/g, '')}`,

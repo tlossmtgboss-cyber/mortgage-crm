@@ -4,7 +4,7 @@
 # Must pass all 20 tests consecutively to classify as functioning
 ###############################################################################
 
-BASE_URL="https://mortgage-crm-production-7a9a.up.railway.app"
+BASE_URL="https://app.perenniaai.com"
 TEST_COUNT=0
 FAILED_TESTS=()
 

@@ -116,8 +116,8 @@
 
 ## Important Links
 
-- **Production URL:** https://mortgage-crm-production-7a9a.up.railway.app
-- **API Docs:** https://mortgage-crm-production-7a9a.up.railway.app/docs
+- **Production URL:** https://app.perenniaai.com
+- **API Docs:** https://app.perenniaai.com/docs
 - **Railway Dashboard:** https://railway.app/dashboard
 - **Sentry:** [Your Sentry URL]
 - **Beta Tracking Sheet:** [Your Google Sheet URL]

@@ -11,7 +11,7 @@ echo ""
 
 # Get authentication token
 echo "📝 Logging in..."
-TOKEN_RESPONSE=$(curl -s -X POST "https://mortgage-crm-production-7a9a.up.railway.app/token" \
+TOKEN_RESPONSE=$(curl -s -X POST "https://app.perenniaai.com/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "username=admin@perenniaai.com&password=demo123")
 
@@ -31,7 +31,7 @@ echo "📞 Sending ringless voicemail via Slybroadcast..."
 echo "   (Your phone should NOT ring - check voicemail directly in 1-2 minutes)"
 echo ""
 
-VOICEMAIL_RESPONSE=$(curl -s -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voice/drop-voicemail" \
+VOICEMAIL_RESPONSE=$(curl -s -X POST "https://app.perenniaai.com/api/v1/voice/drop-voicemail" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{

@@ -3,7 +3,7 @@
 # Security Testing Script for Pipeline360
 # =============================================================================
 # Usage: ./tests/security_tests.sh [API_URL]
-# Example: ./tests/security_tests.sh https://mortgage-crm-production-7a9a.up.railway.app
+# Example: ./tests/security_tests.sh https://app.perenniaai.com
 #
 # Environment Variables:
 #   TEST_API_KEY - API key to bypass IP restrictions (set in server .env)
@@ -14,7 +14,7 @@
 
 set -e
 
-API_URL="${1:-https://mortgage-crm-production-7a9a.up.railway.app}"
+API_URL="${1:-https://app.perenniaai.com}"
 TEST_API_KEY="${TEST_API_KEY:-}"
 PASS_COUNT=0
 FAIL_COUNT=0

@@ -145,7 +145,7 @@ if (response.ok) {
 **Request:**
 ```bash
 curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  https://mortgage-crm-production-7a9a.up.railway.app/api/v1/users/me
+  https://app.perenniaai.com/api/v1/users/me
 ```
 
 **Response (Success):**
@@ -197,7 +197,7 @@ TOKEN="<your_token_from_registration>"
 
 # 2. Check user info
 curl -H "Authorization: Bearer $TOKEN" \
-  https://mortgage-crm-production-7a9a.up.railway.app/api/v1/users/me
+  https://app.perenniaai.com/api/v1/users/me
 
 # 3. Verify onboarding_completed is false
 # Expected: "onboarding_completed": false

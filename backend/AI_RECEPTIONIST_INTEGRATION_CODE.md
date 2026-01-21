@@ -426,7 +426,7 @@ def update_system_health():
     db = SessionLocal()
     try:
         components = {
-            "voice_endpoint": "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voice/call-stats",
+            "voice_endpoint": "https://app.perenniaai.com/api/v1/voice/call-stats",
             "openai_api": "https://api.openai.com/v1/models",  # Health check
             "twilio_api": "https://status.twilio.com/api/v2/status.json",
         }

@@ -121,7 +121,7 @@ Your compliance system frontend is deployed to Vercel. The WebFetch tool cannot 
 
 1. **Check Network Tab:**
    - See actual request/response
-   - Verify URL: `https://mortgage-crm-production-7a9a.up.railway.app`
+   - Verify URL: `https://app.perenniaai.com`
    - Check Authorization header has Bearer token
 
 2. **Test API Directly:**

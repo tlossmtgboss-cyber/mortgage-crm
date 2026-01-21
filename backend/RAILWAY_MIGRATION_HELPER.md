@@ -108,10 +108,10 @@ After initialization:
 
 ```bash
 # Test 1: List agents
-curl https://mortgage-crm-production-7a9a.up.railway.app/api/ai/agents
+curl https://app.perenniaai.com/api/ai/agents
 
 # Test 2: Check system health
-curl https://mortgage-crm-production-7a9a.up.railway.app/health
+curl https://app.perenniaai.com/health
 ```
 
 ## Need Help?

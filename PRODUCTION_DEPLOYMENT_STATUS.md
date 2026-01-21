@@ -13,7 +13,7 @@ All Mission Control updates, database tools, and frontend changes have been succ
 ## 🚀 Backend Deployment (Railway)
 
 ### **Service:** mortgage-crm
-**URL:** https://mortgage-crm-production-7a9a.up.railway.app
+**URL:** https://app.perenniaai.com
 **Status:** ✅ ONLINE (HTTP 200)
 **Last Deployment:** November 15, 2025
 
@@ -235,12 +235,12 @@ PROD_DATABASE_URL=postgresql://postgres:PASSWORD@HOST:PORT/railway
 
 ### Backend API (Railway)
 ```
-https://mortgage-crm-production-7a9a.up.railway.app
+https://app.perenniaai.com
 ```
 
 **API Docs:**
 ```
-https://mortgage-crm-production-7a9a.up.railway.app/docs
+https://app.perenniaai.com/docs
 ```
 
 ### Frontend (Vercel)
@@ -320,7 +320,7 @@ Typically: https://mortgage-crm-[project-id].vercel.app
 
 # Or use curl with token:
 curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  https://mortgage-crm-production-7a9a.up.railway.app/api/v1/mission-control/health
+  https://app.perenniaai.com/api/v1/mission-control/health
 ```
 
 ---

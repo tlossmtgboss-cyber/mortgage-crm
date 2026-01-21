@@ -1,6 +1,6 @@
 #!/bin/bash
 
-API_BASE="https://mortgage-crm-production-7a9a.up.railway.app"
+API_BASE="https://app.perenniaai.com"
 
 echo "🔧 Applying MUM Client Fields Migration to Production"
 echo "=================================================="
@@ -29,7 +29,7 @@ echo ""
 echo "=================================================="
 echo ""
 echo "Steps:"
-echo "1. Open https://mortgage-crm-production-7a9a.up.railway.app in your browser"
+echo "1. Open https://app.perenniaai.com in your browser"
 echo "2. Log in with your credentials"
 echo "3. Press F12 to open Developer Console"
 echo "4. Paste the command above and press Enter"

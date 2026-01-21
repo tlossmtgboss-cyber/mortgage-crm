@@ -34,9 +34,9 @@ try:
     call = client.calls.create(
         to=test_to_number,
         from_=from_number,
-        url="https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voice/incoming",
+        url="https://app.perenniaai.com/api/v1/voice/incoming",
         method='POST',
-        status_callback="https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voice/call-status",
+        status_callback="https://app.perenniaai.com/api/v1/voice/call-status",
         status_callback_event=['initiated', 'ringing', 'answered', 'completed'],
         status_callback_method='POST'
     )

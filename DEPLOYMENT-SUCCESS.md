@@ -11,10 +11,10 @@
 - **Environment**: Production
 
 #### **Backend API (Railway)**
-- **URL**: https://mortgage-crm-production-7a9a.up.railway.app
+- **URL**: https://app.perenniaai.com
 - **Status**: ✅ LIVE (Previous deployment still active)
 - **New Deploy**: 🔄 Deploying now (build fix pushed)
-- **API Docs**: https://mortgage-crm-production-7a9a.up.railway.app/docs
+- **API Docs**: https://app.perenniaai.com/docs
 - **Environment**: Production
 
 ---
@@ -48,7 +48,7 @@ Error: Could not find a version that satisfies the requirement python-email==0.3
 
 ### Frontend Environment Variables (Vercel) ✅
 ```
-REACT_APP_API_URL=https://mortgage-crm-production-7a9a.up.railway.app
+REACT_APP_API_URL=https://app.perenniaai.com
 ```
 - **Status**: Correctly configured
 - **Scope**: All Environments
@@ -73,7 +73,7 @@ Visit: https://mortgage-crm-nine.vercel.app
 - UI is responsive
 
 ### 2. Test the Backend API
-Visit: https://mortgage-crm-production-7a9a.up.railway.app/docs
+Visit: https://app.perenniaai.com/docs
 
 **Expected Result**:
 - FastAPI interactive documentation loads
@@ -222,7 +222,7 @@ railway logs
 1. **Wait 3-5 minutes** for Railway to complete new build
 2. **Test the live site**: https://mortgage-crm-nine.vercel.app
 3. **Explore all features** using the demo account
-4. **Check API docs**: https://mortgage-crm-production-7a9a.up.railway.app/docs
+4. **Check API docs**: https://app.perenniaai.com/docs
 
 ---
 
@@ -231,6 +231,6 @@ railway logs
 Your Agentic AI Mortgage CRM is now deployed and accessible worldwide!
 
 **Frontend**: https://mortgage-crm-nine.vercel.app  
-**Backend API**: https://mortgage-crm-production-7a9a.up.railway.app
+**Backend API**: https://app.perenniaai.com
 
 Share these links with your team and start managing your mortgage pipeline! 🚀

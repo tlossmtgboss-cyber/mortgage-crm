@@ -71,7 +71,7 @@ def setup_recallai():
         print("\nIntegration is ready to use!")
         print("\nNext steps:")
         print("1. Configure webhook in Recall.ai dashboard:")
-        print("   URL: https://mortgage-crm-production-7a9a.up.railway.app/api/v1/recallai/webhook")
+        print("   URL: https://app.perenniaai.com/api/v1/recallai/webhook")
         print("   Secret: whsec_suIiYYXb7fgjFjOtVWT0spOfalxNKtldS/MI13wAGV3thi5JbpPjpCUYU2Y0BcxN")
         print("\n2. Test the integration:")
         print("   - Open any lead profile in the frontend")

@@ -127,7 +127,7 @@ try:
     print("  python3 initialize_ai_only.py")
     print()
     print("Or via HTTP:")
-    print("  curl -X POST 'https://mortgage-crm-production-7a9a.up.railway.app/admin/initialize-ai-system' \\")
+    print("  curl -X POST 'https://app.perenniaai.com/admin/initialize-ai-system' \\")
     print("    -H 'Content-Type: application/json' \\")
     print("    -d '{\"secret\": \"migrate-ai-2024\"}'")
     print()

@@ -27,8 +27,8 @@ The Railway backend is returning **502 Bad Gateway** errors. The application is 
 ### Impact
 - Frontend cannot communicate with backend
 - API endpoints are inaccessible
-- Health check failing: `https://mortgage-crm-production-7a9a.up.railway.app/health`
-- API docs failing: `https://mortgage-crm-production-7a9a.up.railway.app/docs`
+- Health check failing: `https://app.perenniaai.com/health`
+- API docs failing: `https://app.perenniaai.com/docs`
 
 ### Root Cause Analysis
 
@@ -117,7 +117,7 @@ ENVIRONMENT = production
 
 ```bash
 # Required
-REACT_APP_API_URL = https://mortgage-crm-production-7a9a.up.railway.app
+REACT_APP_API_URL = https://app.perenniaai.com
 ```
 
 **CORS Configuration in Backend:**
@@ -183,7 +183,7 @@ Latest Commit: a1b5d80
 **Step 1: Azure AD App Registration**
 1. Go to https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps
 2. Create or select app registration
-3. Add redirect URI: `https://mortgage-crm-production-7a9a.up.railway.app/auth/microsoft/callback`
+3. Add redirect URI: `https://app.perenniaai.com/auth/microsoft/callback`
 4. Add API permissions:
    - `Mail.Send`
    - `Mail.Read`
@@ -197,7 +197,7 @@ Latest Commit: a1b5d80
 MICROSOFT_CLIENT_ID = <from Azure AD>
 MICROSOFT_CLIENT_SECRET = <from Azure AD>
 MICROSOFT_TENANT_ID = <from Azure AD>
-MICROSOFT_REDIRECT_URI = https://mortgage-crm-production-7a9a.up.railway.app/auth/microsoft/callback
+MICROSOFT_REDIRECT_URI = https://app.perenniaai.com/auth/microsoft/callback
 MICROSOFT_FROM_EMAIL = your-email@company.com
 ```
 
@@ -361,7 +361,7 @@ python3 verify_env.py
 1. Make empty commit: git commit --allow-empty -m "Trigger redeploy"
 2. Push: git push
 3. Wait 3-5 minutes
-4. Test: curl https://mortgage-crm-production-7a9a.up.railway.app/health
+4. Test: curl https://app.perenniaai.com/health
 ```
 
 **Expected Result:** Backend returns 200 OK
@@ -376,7 +376,7 @@ python3 verify_env.py
 # Check Vercel environment
 1. Go to https://vercel.com/dashboard
 2. Click mortgage-crm → Settings → Environment Variables
-3. Verify: REACT_APP_API_URL = https://mortgage-crm-production-7a9a.up.railway.app
+3. Verify: REACT_APP_API_URL = https://app.perenniaai.com
 
 # Test
 1. Visit https://mortgage-crm-nine.vercel.app
@@ -440,7 +440,7 @@ python3 verify_env.py
 - [ ] `MICROSOFT_CLIENT_ID` = `<azure-ad-client-id>`
 - [ ] `MICROSOFT_CLIENT_SECRET` = `<azure-ad-client-secret>`
 - [ ] `MICROSOFT_TENANT_ID` = `<azure-ad-tenant-id>`
-- [ ] `MICROSOFT_REDIRECT_URI` = `https://mortgage-crm-production-7a9a.up.railway.app/auth/microsoft/callback`
+- [ ] `MICROSOFT_REDIRECT_URI` = `https://app.perenniaai.com/auth/microsoft/callback`
 - [ ] `MICROSOFT_FROM_EMAIL` = `your-email@company.com`
 - [ ] `TWILIO_ACCOUNT_SID` = `<twilio-sid>`
 - [ ] `TWILIO_AUTH_TOKEN` = `<twilio-token>`
@@ -451,7 +451,7 @@ python3 verify_env.py
 
 ### Vercel Frontend
 
-- [ ] `REACT_APP_API_URL` = `https://mortgage-crm-production-7a9a.up.railway.app`
+- [ ] `REACT_APP_API_URL` = `https://app.perenniaai.com`
 
 ---
 
@@ -459,8 +459,8 @@ python3 verify_env.py
 
 ### After Railway Fix
 
-- [ ] Health endpoint responds: `curl https://mortgage-crm-production-7a9a.up.railway.app/health`
-- [ ] API docs load: Visit `https://mortgage-crm-production-7a9a.up.railway.app/docs`
+- [ ] Health endpoint responds: `curl https://app.perenniaai.com/health`
+- [ ] API docs load: Visit `https://app.perenniaai.com/docs`
 - [ ] Database connection works (check Railway logs for "Application startup complete")
 - [ ] No errors in Railway deployment logs
 
@@ -487,8 +487,8 @@ python3 verify_env.py
 
 ```
 Frontend:  https://mortgage-crm-nine.vercel.app
-Backend:   https://mortgage-crm-production-7a9a.up.railway.app
-API Docs:  https://mortgage-crm-production-7a9a.up.railway.app/docs
+Backend:   https://app.perenniaai.com
+API Docs:  https://app.perenniaai.com/docs
 GitHub:    https://github.com/tlossmtgboss-cyber/mortgage-crm
 
 Railway:   https://railway.app/dashboard
@@ -515,7 +515,7 @@ railway logs
 openssl rand -hex 32
 
 # Test backend health
-curl https://mortgage-crm-production-7a9a.up.railway.app/health
+curl https://app.perenniaai.com/health
 
 # Trigger Railway redeploy
 git commit --allow-empty -m "Trigger redeploy"

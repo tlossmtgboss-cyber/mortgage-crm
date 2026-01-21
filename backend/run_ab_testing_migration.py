@@ -8,7 +8,7 @@ import os
 import sys
 
 # Production URL
-BACKEND_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+BACKEND_URL = "https://app.perenniaai.com"
 
 def run_migration():
     """Run the A/B testing tables migration"""

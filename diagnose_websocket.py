@@ -4,7 +4,7 @@ import asyncio
 import websockets
 
 async def test_websocket():
-    url = "wss://mortgage-crm-production-7a9a.up.railway.app/api/v1/voice/ws/voice-stream"
+    url = "wss://app.perenniaai.com/api/v1/voice/ws/voice-stream"
 
     print("=" * 70)
     print("TESTING WEBSOCKET ENDPOINT")

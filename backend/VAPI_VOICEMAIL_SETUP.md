@@ -115,7 +115,7 @@ CREATE INDEX idx_voicemail_created ON voicemail_drops(created_at);
 1. Go to Vapi Dashboard → Your Assistant → Settings
 2. Set Server URL to:
 ```
-https://mortgage-crm-production-7a9a.up.railway.app/api/v1/webhooks/vapi/voicemail-status
+https://app.perenniaai.com/api/v1/webhooks/vapi/voicemail-status
 ```
 3. Enable Server Messages: `end-of-call-report`
 

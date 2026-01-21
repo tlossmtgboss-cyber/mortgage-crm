@@ -2,7 +2,7 @@
 import requests
 from datetime import datetime
 
-BACKEND_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+BACKEND_URL = "https://app.perenniaai.com"
 
 print("🧪 TESTING NEW BUYER INTAKE FIELDS\n")
 print("Testing: DOB, SSN, Employer, Years with Employer\n")

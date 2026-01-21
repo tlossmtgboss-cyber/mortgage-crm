@@ -6,7 +6,7 @@ Test script to verify referral partner creation works with proper authentication
 import requests
 import json
 
-BASE_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+BASE_URL = "https://app.perenniaai.com"
 
 def test_referral_partner_creation():
     """Test creating a referral partner with authentication"""

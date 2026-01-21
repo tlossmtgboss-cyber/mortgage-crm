@@ -2,7 +2,7 @@
 import requests
 import time
 
-API_BASE_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+API_BASE_URL = "https://app.perenniaai.com"
 
 print("Waiting 30 seconds for Railway deployment...")
 time.sleep(30)

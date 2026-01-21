@@ -2680,7 +2680,7 @@ async def get_voice_os_status():
 
     return {
         "system_status": "running" if system_running else "degraded" if (twilio_healthy or openai_healthy) else "stopped",
-        "voice_os_url": os.getenv("RAILWAY_PUBLIC_DOMAIN", "https://mortgage-crm-production-7a9a.up.railway.app"),
+        "voice_os_url": os.getenv("RAILWAY_PUBLIC_DOMAIN", "https://app.perenniaai.com"),
         "twilio_configured": bool(voice_client.from_number),
         "openai_configured": voice_client.openai_enabled,
         "phone_number": voice_client.from_number,

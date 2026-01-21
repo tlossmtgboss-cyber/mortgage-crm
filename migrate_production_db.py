@@ -100,7 +100,7 @@ def migrate_database():
         print(f"\n📝 Next steps:")
         print(f"   1. Wait for Railway to restart (if it auto-restarts)")
         print(f"   2. Run: python3 create_production_user.py")
-        print(f"   3. Test login at: https://mortgage-crm-production-7a9a.up.railway.app/docs")
+        print(f"   3. Test login at: https://app.perenniaai.com/docs")
 
         return True
 

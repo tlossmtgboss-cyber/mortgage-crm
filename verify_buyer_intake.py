@@ -3,7 +3,7 @@ import requests
 import json
 from datetime import datetime
 
-BACKEND_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+BACKEND_URL = "https://app.perenniaai.com"
 
 print("🔍 VERIFYING BUYER INTAKE DATA FLOW TO CRM\n")
 

@@ -46,7 +46,7 @@ except Exception as e:
 
 # Step 2: Test analyze endpoint
 print("\n2. Testing /api/v1/data-import/analyze endpoint...")
-BACKEND_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+BACKEND_URL = "https://app.perenniaai.com"
 
 # First get a token
 print("   Getting auth token...")

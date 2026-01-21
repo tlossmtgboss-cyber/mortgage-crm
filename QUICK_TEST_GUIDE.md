@@ -100,7 +100,7 @@ python3 test_it_helpdesk_and_integrations.py
 
 ```javascript
 // Test 1: Check Email Sync Status
-fetch('https://mortgage-crm-production-7a9a.up.railway.app/api/v1/microsoft/sync-diagnostics', {
+fetch('https://app.perenniaai.com/api/v1/microsoft/sync-diagnostics', {
   headers: {'Authorization': 'Bearer ' + localStorage.getItem('token')}
 })
 .then(r => r.json())
@@ -115,7 +115,7 @@ fetch('https://mortgage-crm-production-7a9a.up.railway.app/api/v1/microsoft/sync
 
 ```javascript
 // Test 2: Force Immediate Sync
-fetch('https://mortgage-crm-production-7a9a.up.railway.app/api/v1/microsoft/force-sync', {
+fetch('https://app.perenniaai.com/api/v1/microsoft/force-sync', {
   method: 'POST',
   headers: {
     'Authorization': 'Bearer ' + localStorage.getItem('token'),
@@ -168,7 +168,7 @@ After testing, you should see:
 ## 🐛 Troubleshooting
 
 ### If IT Helpdesk doesn't work:
-1. Check backend: https://mortgage-crm-production-7a9a.up.railway.app/health
+1. Check backend: https://app.perenniaai.com/health
 2. Check browser console for errors (F12)
 3. Try refreshing the page
 4. Check Railway logs: `railway logs | grep helpdesk`

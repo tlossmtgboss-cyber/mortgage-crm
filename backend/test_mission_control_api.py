@@ -1,7 +1,7 @@
 import requests
 import json
 
-API_BASE = "https://mortgage-crm-production-7a9a.up.railway.app"
+API_BASE = "https://app.perenniaai.com"
 
 # Try to get token
 print("🔐 Getting authentication token...")

@@ -98,7 +98,7 @@ ORDER BY table_name;
 
 ### 3. API Endpoints - All 13 Endpoints Deployed and Tested ✅
 
-**Base URL:** `https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard`
+**Base URL:** `https://app.perenniaai.com/api/v1/ai-receptionist/dashboard`
 
 #### Activity Feed Endpoints
 1. **GET /activity/feed** ✅
@@ -337,8 +337,8 @@ Changes:
 
 ## Production URLs
 
-**Base API:** https://mortgage-crm-production-7a9a.up.railway.app
-**Dashboard API:** https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard
+**Base API:** https://app.perenniaai.com
+**Dashboard API:** https://app.perenniaai.com/api/v1/ai-receptionist/dashboard
 
 **Test Credentials:**
 - Email: tloss@cmgfi.com
@@ -360,19 +360,19 @@ Changes:
 **Get today's activity:**
 ```bash
 curl -H "Authorization: Bearer TOKEN" \
-  https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard/activity/feed?limit=10
+  https://app.perenniaai.com/api/v1/ai-receptionist/dashboard/activity/feed?limit=10
 ```
 
 **Get real-time metrics:**
 ```bash
 curl -H "Authorization: Bearer TOKEN" \
-  https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard/metrics/realtime
+  https://app.perenniaai.com/api/v1/ai-receptionist/dashboard/metrics/realtime
 ```
 
 **Get ROI calculations:**
 ```bash
 curl -H "Authorization: Bearer TOKEN" \
-  https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard/roi
+  https://app.perenniaai.com/api/v1/ai-receptionist/dashboard/roi
 ```
 
 ---

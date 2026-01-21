@@ -135,7 +135,7 @@ The call connects directly via WebSocket. If it fails:
 
 ```bash
 # From local machine
-wscat -c "wss://mortgage-crm-production-7a9a.up.railway.app/api/v1/voice/ws/voice-stream"
+wscat -c "wss://app.perenniaai.com/api/v1/voice/ws/voice-stream"
 ```
 
 Should connect successfully (even if you don't send data, connection should open)

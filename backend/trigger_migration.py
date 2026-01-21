@@ -138,7 +138,7 @@ print("Step 4: Triggering migration via HTTP...")
 # Trigger migration
 result = subprocess.run([
     'curl', '-s', '-X', 'POST',
-    'https://mortgage-crm-production-7a9a.up.railway.app/admin/run-ai-migration',
+    'https://app.perenniaai.com/admin/run-ai-migration',
     '-H', 'Content-Type: application/json',
     '-d', '{"secret": "migrate-ai-2024"}'
 ], capture_output=True, text=True)
@@ -154,7 +154,7 @@ if '"success": true' in result.stdout:
 
     result = subprocess.run([
         'curl', '-s', '-X', 'POST',
-        'https://mortgage-crm-production-7a9a.up.railway.app/admin/initialize-ai-system',
+        'https://app.perenniaai.com/admin/initialize-ai-system',
         '-H', 'Content-Type: application/json',
         '-d', '{"secret": "migrate-ai-2024"}'
     ], capture_output=True, text=True)

@@ -269,7 +269,7 @@ railway run python3 backend/initialize_ai_system.py
 #### Phase 3: Test and Verify (15 minutes)
 ```bash
 # Test AI endpoints
-curl https://mortgage-crm-production-7a9a.up.railway.app/api/ai/agents
+curl https://app.perenniaai.com/api/ai/agents
 
 # Dispatch test event
 curl -X POST .../api/ai/events -d '{"event_type":"LeadCreated",...}'
@@ -386,7 +386,7 @@ All AI system code is **ready and waiting**:
 - **Broken**: `backend/public_routes.py` (_init_imports function)
 
 ### Railway Details:
-- **URL**: https://mortgage-crm-production-7a9a.up.railway.app
+- **URL**: https://app.perenniaai.com
 - **Health Endpoint**: /health
 - **Status**: ✅ HEALTHY
 

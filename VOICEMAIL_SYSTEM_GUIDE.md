@@ -3,7 +3,7 @@
 ## ✅ System Status
 
 **Deployment:** ✅ COMPLETE
-**Backend:** https://mortgage-crm-production-7a9a.up.railway.app
+**Backend:** https://app.perenniaai.com
 **Frontend:** https://mortgage-crm-nine.vercel.app
 **Database:** ✅ All tables created and migrated
 **Templates:** ✅ 5 default templates seeded
@@ -141,7 +141,7 @@ OPENAI_API_KEY=your_openai_api_key_here
 
 4. **Set Webhook URL:**
    ```
-   https://mortgage-crm-production-7a9a.up.railway.app/api/v1/webhooks/vapi/voicemail-status
+   https://app.perenniaai.com/api/v1/webhooks/vapi/voicemail-status
    ```
 
 ---
@@ -249,7 +249,7 @@ railway logs --service backend | grep voicemail
 
 # Check recent failures
 curl -H "Authorization: Bearer $TOKEN" \
-  "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voicemail/history?status=failed"
+  "https://app.perenniaai.com/api/v1/voicemail/history?status=failed"
 ```
 
 ### Transcription Not Working

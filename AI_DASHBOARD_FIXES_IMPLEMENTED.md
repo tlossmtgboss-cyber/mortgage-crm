@@ -179,7 +179,7 @@ action_type = 'outbound_call' if vapi_call.direction == 'outbound' else 'incomin
 
 ```bash
 # Aggregate last 30 days of activity data
-curl -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard/admin/aggregate-metrics?days=30" \
+curl -X POST "https://app.perenniaai.com/api/v1/ai-receptionist/dashboard/admin/aggregate-metrics?days=30" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
@@ -205,7 +205,7 @@ Check AI Receptionist Dashboard → Activity Feed
 
 ```bash
 # Aggregate today's metrics
-curl -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard/admin/aggregate-metrics?days=1" \
+curl -X POST "https://app.perenniaai.com/api/v1/ai-receptionist/dashboard/admin/aggregate-metrics?days=1" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 

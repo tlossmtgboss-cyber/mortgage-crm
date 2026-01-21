@@ -2,7 +2,7 @@
 
 ## 🎉 Mortgage Currency Removed - Official Sources Active!
 
-**Production Backend URL**: https://mortgage-crm-production-7a9a.up.railway.app
+**Production Backend URL**: https://app.perenniaai.com
 **Production Frontend URL**: https://mortgage-crm-nine.vercel.app
 
 ---
@@ -172,7 +172,7 @@ The system automatically uses the guideline_updates database. To add new guideli
 
 2. **Or add manually via API**:
    ```bash
-   curl -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/migrations/seed-guideline-updates"
+   curl -X POST "https://app.perenniaai.com/api/v1/migrations/seed-guideline-updates"
    ```
 
 3. **Sources update automatically** - AI Underwriter will start using new guidelines immediately

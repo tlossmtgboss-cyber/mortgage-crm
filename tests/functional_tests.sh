@@ -14,7 +14,7 @@
 
 set -e
 
-API_URL="${1:-https://mortgage-crm-production-7a9a.up.railway.app}"
+API_URL="${1:-https://app.perenniaai.com}"
 TEST_API_KEY="${TEST_API_KEY:-}"
 PASS_COUNT=0
 FAIL_COUNT=0

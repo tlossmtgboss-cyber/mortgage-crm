@@ -7,7 +7,7 @@ Checks if the Teams endpoints are working and configured properly
 import requests
 import time
 
-API_BASE_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+API_BASE_URL = "https://app.perenniaai.com"
 
 # Get a valid token (using demo credentials)
 def get_auth_token():

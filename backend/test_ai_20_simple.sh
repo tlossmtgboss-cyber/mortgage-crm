@@ -4,7 +4,7 @@
 # Tests the operational AI system without event dispatch
 ###############################################################################
 
-BASE_URL="https://mortgage-crm-production-7a9a.up.railway.app"
+BASE_URL="https://app.perenniaai.com"
 TEST_COUNT=0
 
 # Colors

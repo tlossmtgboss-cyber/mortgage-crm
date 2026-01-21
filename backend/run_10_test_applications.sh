@@ -3,7 +3,7 @@
 # Run 10 test mortgage applications
 # Each will create a lead, generate documents, and send email to admin
 
-BASE_URL="https://mortgage-crm-production-7a9a.up.railway.app"
+BASE_URL="https://app.perenniaai.com"
 ADMIN_LO_ID="57"
 
 echo "============================================================"

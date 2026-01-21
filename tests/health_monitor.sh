@@ -3,7 +3,7 @@
 # Health Monitoring Script for Pipeline360
 # =============================================================================
 # Usage: ./tests/health_monitor.sh [API_URL] [--continuous]
-# Example: ./tests/health_monitor.sh https://mortgage-crm-production-7a9a.up.railway.app
+# Example: ./tests/health_monitor.sh https://app.perenniaai.com
 #          ./tests/health_monitor.sh --continuous   # Run every 5 minutes
 #
 # Environment Variables:
@@ -15,7 +15,7 @@
 
 set -e
 
-API_URL="${1:-https://mortgage-crm-production-7a9a.up.railway.app}"
+API_URL="${1:-https://app.perenniaai.com}"
 TEST_API_KEY="${TEST_API_KEY:-}"
 CONTINUOUS=false
 INTERVAL=300  # 5 minutes

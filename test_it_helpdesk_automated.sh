@@ -3,7 +3,7 @@
 # Automated IT Helpdesk and Integration Tests
 # Tests API endpoints to verify they're responding correctly
 
-API_BASE="https://mortgage-crm-production-7a9a.up.railway.app"
+API_BASE="https://app.perenniaai.com"
 
 # Colors
 RED='\033[0;31m'

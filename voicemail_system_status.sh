@@ -7,7 +7,7 @@ echo "╚═══════════════════════�
 echo ""
 
 # Get authentication token
-TOKEN_RESPONSE=$(curl -s -X POST "https://mortgage-crm-production-7a9a.up.railway.app/token" \
+TOKEN_RESPONSE=$(curl -s -X POST "https://app.perenniaai.com/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "username=admin@perenniaai.com&password=demo123")
 
@@ -21,7 +21,7 @@ fi
 echo "✅ BACKEND STATUS"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "   Deployment: Railway Production"
-echo "   URL: https://mortgage-crm-production-7a9a.up.railway.app"
+echo "   URL: https://app.perenniaai.com"
 echo "   Status: ✅ Online"
 echo ""
 
@@ -42,11 +42,11 @@ ENDPOINTS=("voicemail/drop" "voicemail/transcribe" "voicemail/templates" "voicem
 for endpoint in "${ENDPOINTS[@]}"; do
   if echo "$endpoint" | grep -q "drop"; then
     # POST endpoint - just check it responds
-    RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/$endpoint" \
+    RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "https://app.perenniaai.com/api/v1/$endpoint" \
       -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{}')
   else
     # GET endpoint
-    RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/$endpoint" \
+    RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "https://app.perenniaai.com/api/v1/$endpoint" \
       -H "Authorization: Bearer $TOKEN")
   fi
   
@@ -60,7 +60,7 @@ echo ""
 
 echo "✅ TEMPLATES"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-TEMPLATES_RESPONSE=$(curl -s "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voicemail/templates" \
+TEMPLATES_RESPONSE=$(curl -s "https://app.perenniaai.com/api/v1/voicemail/templates" \
   -H "Authorization: Bearer $TOKEN")
 TEMPLATE_COUNT=$(echo "$TEMPLATES_RESPONSE" | jq -r '.templates | length')
 echo "   Total templates: $TEMPLATE_COUNT"
@@ -69,7 +69,7 @@ echo ""
 
 echo "✅ ANALYTICS"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-ANALYTICS_RESPONSE=$(curl -s "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voicemail/analytics" \
+ANALYTICS_RESPONSE=$(curl -s "https://app.perenniaai.com/api/v1/voicemail/analytics" \
   -H "Authorization: Bearer $TOKEN")
 
 echo "$ANALYTICS_RESPONSE" | jq -r '.analytics | "   Total sent (last 30 days): \(.total_sent)
@@ -122,7 +122,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "   1. Configure VAPI_ASSISTANT_ID in Railway"
 echo "   2. Create Vapi Voicemail Assistant in Vapi dashboard"
 echo "   3. Set webhook URL in Vapi: "
-echo "      https://mortgage-crm-production-7a9a.up.railway.app/api/v1/webhooks/vapi/voicemail-status"
+echo "      https://app.perenniaai.com/api/v1/webhooks/vapi/voicemail-status"
 echo "   4. Test end-to-end voicemail drop"
 echo "   5. Monitor analytics and adjust as needed"
 echo ""

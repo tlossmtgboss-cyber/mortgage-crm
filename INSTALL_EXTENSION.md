@@ -150,7 +150,7 @@ From each page, the extension captures:
 
 ### API Endpoint (Auto-configured)
 ```
-https://mortgage-crm-production-7a9a.up.railway.app/api/v1/migrations/import-browser-guidelines
+https://app.perenniaai.com/api/v1/migrations/import-browser-guidelines
 ```
 
 ### Login Credentials

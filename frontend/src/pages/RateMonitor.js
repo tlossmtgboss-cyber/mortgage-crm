@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { rateMonitorAPI } from '../services/api';
+import { rateMonitorAPI, rateSheetAPI } from '../services/api';
 import RateTargetModal from '../components/RateTargetModal';
 import './RateMonitor.css';
 
@@ -35,6 +35,25 @@ function RateMonitor() {
 
   // Current rates
   const [currentRates, setCurrentRates] = useState(null);
+
+  // Rate Sheet Upload state
+  const [rateSheets, setRateSheets] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(null);
+  const [selectedSheet, setSelectedSheet] = useState(null);
+  const [sheetRates, setSheetRates] = useState([]);
+  const fileInputRef = useRef(null);
+
+  // Opportunities state
+  const [opportunities, setOpportunities] = useState([]);
+  const [opportunitiesTotal, setOpportunitiesTotal] = useState(0);
+  const [opportunitiesMetrics, setOpportunitiesMetrics] = useState(null);
+  const [opportunityFilters, setOpportunityFilters] = useState({
+    status: 'identified',
+    priority: '',
+  });
+  const [selectedOpportunities, setSelectedOpportunities] = useState([]);
+  const [processingOutreach, setProcessingOutreach] = useState(false);
 
   const loadDashboard = useCallback(async () => {
     try {
@@ -75,15 +94,212 @@ function RateMonitor() {
     }
   }, [alertFilters]);
 
+  const loadRateSheets = useCallback(async () => {
+    try {
+      const data = await rateSheetAPI.getSheets({ limit: 20 });
+      setRateSheets(data.sheets || []);
+    } catch (err) {
+      console.error('Failed to load rate sheets:', err);
+    }
+  }, []);
+
+  const loadOpportunities = useCallback(async () => {
+    try {
+      const params = {};
+      if (opportunityFilters.status) params.status = opportunityFilters.status;
+      if (opportunityFilters.priority) params.priority = opportunityFilters.priority;
+
+      const [oppData, metricsData] = await Promise.all([
+        rateSheetAPI.getOpportunities(params),
+        rateSheetAPI.getOpportunitiesDashboard(),
+      ]);
+
+      setOpportunities(oppData.opportunities || []);
+      setOpportunitiesTotal(oppData.total || 0);
+      setOpportunitiesMetrics(metricsData);
+    } catch (err) {
+      console.error('Failed to load opportunities:', err);
+    }
+  }, [opportunityFilters]);
+
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      await Promise.all([loadDashboard(), loadTargets(), loadAlerts()]);
+      await Promise.all([loadDashboard(), loadTargets(), loadAlerts(), loadRateSheets(), loadOpportunities()]);
       setLoading(false);
     };
     loadData();
-  }, [loadDashboard, loadTargets, loadAlerts]);
+  }, [loadDashboard, loadTargets, loadAlerts, loadRateSheets, loadOpportunities]);
 
+  // Rate Sheet handlers
+  const handleFileSelect = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const allowedTypes = ['.pdf', '.xlsx', '.xls', '.csv'];
+    const ext = '.' + file.name.split('.').pop().toLowerCase();
+    if (!allowedTypes.includes(ext)) {
+      alert('Please upload a PDF, Excel, or CSV file');
+      return;
+    }
+
+    setUploading(true);
+    setUploadProgress('Uploading...');
+
+    try {
+      const result = await rateSheetAPI.uploadSheet(file);
+      if (result.success) {
+        setUploadProgress('Processing...');
+        await loadRateSheets();
+        setUploadProgress(null);
+        alert(`Rate sheet uploaded! ${result.rate_sheet_id ? 'Parsing in progress.' : ''}`);
+      } else {
+        alert(result.error || 'Upload failed');
+        setUploadProgress(null);
+      }
+    } catch (err) {
+      console.error('Upload failed:', err);
+      alert('Failed to upload rate sheet');
+      setUploadProgress(null);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleViewSheetRates = async (sheet) => {
+    setSelectedSheet(sheet);
+    try {
+      const data = await rateSheetAPI.getSheetRates(sheet.id);
+      setSheetRates(data.rates || []);
+    } catch (err) {
+      console.error('Failed to load rates:', err);
+      setSheetRates([]);
+    }
+  };
+
+  const handleScanSheet = async (sheetId) => {
+    if (!window.confirm('Scan for refinance opportunities using this rate sheet?')) return;
+
+    try {
+      const result = await rateSheetAPI.scanForOpportunities(sheetId);
+      if (result.success) {
+        alert(`Scan complete! Found ${result.opportunities_created} opportunities from ${result.loans_scanned} loans.`);
+        await loadOpportunities();
+      } else {
+        alert(result.error || 'Scan failed');
+      }
+    } catch (err) {
+      console.error('Scan failed:', err);
+      alert('Failed to scan for opportunities');
+    }
+  };
+
+  const handleDeleteSheet = async (sheetId) => {
+    if (!window.confirm('Delete this rate sheet?')) return;
+
+    try {
+      await rateSheetAPI.deleteSheet(sheetId);
+      await loadRateSheets();
+      if (selectedSheet?.id === sheetId) {
+        setSelectedSheet(null);
+        setSheetRates([]);
+      }
+    } catch (err) {
+      console.error('Delete failed:', err);
+      alert('Failed to delete rate sheet');
+    }
+  };
+
+  // Opportunity handlers
+  const handleSelectOpportunity = (oppId, checked) => {
+    if (checked) {
+      setSelectedOpportunities([...selectedOpportunities, oppId]);
+    } else {
+      setSelectedOpportunities(selectedOpportunities.filter(id => id !== oppId));
+    }
+  };
+
+  const handleSelectAll = (checked) => {
+    if (checked) {
+      setSelectedOpportunities(opportunities.map(o => o.id));
+    } else {
+      setSelectedOpportunities([]);
+    }
+  };
+
+  const handleSingleOutreach = async (oppId, skipSms = false) => {
+    const action = skipSms ? 'call' : 'outreach (SMS + Call)';
+    if (!window.confirm(`Start ${action} for this opportunity?`)) return;
+
+    setProcessingOutreach(true);
+    try {
+      let result;
+      if (skipSms) {
+        result = await rateSheetAPI.initiateCall(oppId);
+      } else {
+        result = await rateSheetAPI.triggerOutreach(oppId);
+      }
+
+      if (result.success) {
+        alert('Outreach initiated!');
+        await loadOpportunities();
+      } else {
+        alert(result.error || 'Outreach failed');
+      }
+    } catch (err) {
+      console.error('Outreach failed:', err);
+      alert('Failed to initiate outreach');
+    } finally {
+      setProcessingOutreach(false);
+    }
+  };
+
+  const handleBulkOutreach = async () => {
+    if (selectedOpportunities.length === 0) {
+      alert('Please select opportunities first');
+      return;
+    }
+
+    if (!window.confirm(`Start outreach for ${selectedOpportunities.length} opportunities?`)) return;
+
+    setProcessingOutreach(true);
+    try {
+      const result = await rateSheetAPI.bulkOutreach(selectedOpportunities, false);
+      alert(`Outreach complete: ${result.success_count} succeeded, ${result.error_count} failed`);
+      setSelectedOpportunities([]);
+      await loadOpportunities();
+    } catch (err) {
+      console.error('Bulk outreach failed:', err);
+      alert('Bulk outreach failed');
+    } finally {
+      setProcessingOutreach(false);
+    }
+  };
+
+  const handleUpdateOpportunityStatus = async (oppId, status) => {
+    try {
+      await rateSheetAPI.updateOpportunity(oppId, { status });
+      await loadOpportunities();
+    } catch (err) {
+      console.error('Failed to update status:', err);
+    }
+  };
+
+  const handleMarkConverted = async (oppId) => {
+    if (!window.confirm('Mark this opportunity as converted?')) return;
+
+    try {
+      await rateSheetAPI.markConverted(oppId);
+      await loadOpportunities();
+    } catch (err) {
+      console.error('Failed to mark converted:', err);
+    }
+  };
+
+  // Existing handlers
   const handleCreateTarget = () => {
     setEditingTarget(null);
     setShowTargetModal(true);
@@ -192,11 +408,24 @@ function RateMonitor() {
   const getStatusClass = (status) => {
     switch (status) {
       case 'pending': return 'status-pending';
+      case 'identified': return 'status-pending';
       case 'acknowledged': return 'status-acknowledged';
+      case 'sms_sent': return 'status-acknowledged';
       case 'called': return 'status-called';
+      case 'scheduled': return 'status-called';
       case 'converted': return 'status-converted';
       case 'dismissed': return 'status-dismissed';
+      case 'declined': return 'status-dismissed';
       default: return '';
+    }
+  };
+
+  const getSheetStatusClass = (status) => {
+    switch (status) {
+      case 'parsed': return 'status-success';
+      case 'processing': return 'status-processing';
+      case 'failed': return 'status-error';
+      default: return 'status-pending';
     }
   };
 
@@ -247,6 +476,18 @@ function RateMonitor() {
           onClick={() => setActiveTab('dashboard')}
         >
           Dashboard
+        </button>
+        <button
+          className={`tab ${activeTab === 'rateSheets' ? 'active' : ''}`}
+          onClick={() => setActiveTab('rateSheets')}
+        >
+          Rate Sheets ({rateSheets.length})
+        </button>
+        <button
+          className={`tab ${activeTab === 'opportunities' ? 'active' : ''}`}
+          onClick={() => setActiveTab('opportunities')}
+        >
+          Opportunities ({opportunitiesTotal})
         </button>
         <button
           className={`tab ${activeTab === 'targets' ? 'active' : ''}`}
@@ -300,6 +541,27 @@ function RateMonitor() {
             </div>
           </div>
 
+          {/* Opportunities Summary */}
+          {opportunitiesMetrics && (
+            <div className="opportunities-summary">
+              <h3>Refinance Opportunities</h3>
+              <div className="summary-stats">
+                <div className="stat">
+                  <span className="stat-value">{opportunitiesMetrics.pending_total || 0}</span>
+                  <span className="stat-label">Pending</span>
+                </div>
+                <div className="stat">
+                  <span className="stat-value">{opportunitiesMetrics.by_priority?.urgent || 0}</span>
+                  <span className="stat-label">Urgent</span>
+                </div>
+                <div className="stat highlight">
+                  <span className="stat-value">{formatCurrency(opportunitiesMetrics.total_monthly_savings)}</span>
+                  <span className="stat-label">Monthly Savings Potential</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="savings-summary">
             <h3>Potential Monthly Savings from Pending Alerts</h3>
             <div className="savings-value">{formatCurrency(metrics.pending_monthly_savings)}</div>
@@ -345,6 +607,306 @@ function RateMonitor() {
                 <div className="no-alerts">No pending alerts</div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rate Sheets Tab */}
+      {activeTab === 'rateSheets' && (
+        <div className="rate-sheets-content">
+          {/* Upload Section */}
+          <div className="upload-section">
+            <h3>Upload Rate Sheet</h3>
+            <p className="upload-description">
+              Upload a rate sheet (PDF/Excel) and AI will extract the rates. Then scan to find refinance opportunities.
+            </p>
+            <div className="upload-controls">
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileSelect}
+                accept=".pdf,.xlsx,.xls,.csv"
+                style={{ display: 'none' }}
+              />
+              <button
+                className="btn-primary"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+              >
+                {uploading ? uploadProgress : 'Choose File'}
+              </button>
+              <span className="file-types">Accepts: PDF, Excel, CSV</span>
+            </div>
+          </div>
+
+          {/* Recent Uploads */}
+          <div className="recent-uploads">
+            <h3>Recent Rate Sheets</h3>
+            <div className="sheets-list">
+              {rateSheets.map(sheet => (
+                <div key={sheet.id} className="sheet-item">
+                  <div className="sheet-info">
+                    <span className="sheet-filename">{sheet.filename}</span>
+                    <span className={`sheet-status ${getSheetStatusClass(sheet.status)}`}>
+                      {sheet.status}
+                    </span>
+                    {sheet.lender_name && (
+                      <span className="sheet-lender">{sheet.lender_name}</span>
+                    )}
+                  </div>
+                  <div className="sheet-meta">
+                    <span>{sheet.rates_count || 0} rates</span>
+                    <span>{new Date(sheet.created_at).toLocaleDateString()}</span>
+                  </div>
+                  <div className="sheet-actions">
+                    {sheet.status === 'parsed' && (
+                      <>
+                        <button
+                          className="btn-sm btn-primary"
+                          onClick={() => handleScanSheet(sheet.id)}
+                        >
+                          Scan Opportunities
+                        </button>
+                        <button
+                          className="btn-sm btn-secondary"
+                          onClick={() => handleViewSheetRates(sheet)}
+                        >
+                          View Rates
+                        </button>
+                      </>
+                    )}
+                    <button
+                      className="btn-sm btn-danger"
+                      onClick={() => handleDeleteSheet(sheet.id)}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {rateSheets.length === 0 && (
+                <div className="no-sheets">No rate sheets uploaded yet</div>
+              )}
+            </div>
+          </div>
+
+          {/* Parsed Rates Modal/Section */}
+          {selectedSheet && (
+            <div className="rates-section">
+              <div className="section-header">
+                <h3>Rates from: {selectedSheet.filename}</h3>
+                <button className="btn-link" onClick={() => setSelectedSheet(null)}>
+                  Close
+                </button>
+              </div>
+              <div className="rates-table-container">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Loan Type</th>
+                      <th>Term</th>
+                      <th>Rate</th>
+                      <th>APR</th>
+                      <th>Points</th>
+                      <th>Credit Score</th>
+                      <th>LTV</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sheetRates.map(rate => (
+                      <tr key={rate.id}>
+                        <td>{rate.loan_type}</td>
+                        <td>{rate.loan_term}yr</td>
+                        <td className="rate-cell">{formatRate(rate.rate)}</td>
+                        <td>{rate.apr ? formatRate(rate.apr) : '-'}</td>
+                        <td>{rate.points || 0}</td>
+                        <td>
+                          {rate.min_credit_score || '-'}
+                          {rate.max_credit_score ? ` - ${rate.max_credit_score}` : ''}
+                        </td>
+                        <td>
+                          {rate.max_ltv ? `<${rate.max_ltv}%` : '-'}
+                        </td>
+                      </tr>
+                    ))}
+                    {sheetRates.length === 0 && (
+                      <tr>
+                        <td colSpan="7" className="no-data">No rates parsed</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Opportunities Tab */}
+      {activeTab === 'opportunities' && (
+        <div className="opportunities-content">
+          {/* Opportunities Metrics */}
+          {opportunitiesMetrics && (
+            <div className="opp-metrics-bar">
+              <div className="opp-metric">
+                <span className="label">Identified:</span>
+                <span className="value">{opportunitiesMetrics.by_status?.identified || 0}</span>
+              </div>
+              <div className="opp-metric">
+                <span className="label">SMS Sent:</span>
+                <span className="value">{opportunitiesMetrics.by_status?.sms_sent || 0}</span>
+              </div>
+              <div className="opp-metric">
+                <span className="label">Called:</span>
+                <span className="value">{opportunitiesMetrics.by_status?.called || 0}</span>
+              </div>
+              <div className="opp-metric">
+                <span className="label">Scheduled:</span>
+                <span className="value">{opportunitiesMetrics.by_status?.scheduled || 0}</span>
+              </div>
+              <div className="opp-metric success">
+                <span className="label">Converted:</span>
+                <span className="value">{opportunitiesMetrics.by_status?.converted || 0}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Filters and Bulk Actions */}
+          <div className="filters-bar">
+            <select
+              value={opportunityFilters.status}
+              onChange={(e) => setOpportunityFilters({ ...opportunityFilters, status: e.target.value })}
+            >
+              <option value="">All Statuses</option>
+              <option value="identified">Identified</option>
+              <option value="sms_sent">SMS Sent</option>
+              <option value="called">Called</option>
+              <option value="scheduled">Scheduled</option>
+              <option value="converted">Converted</option>
+              <option value="declined">Declined</option>
+            </select>
+            <select
+              value={opportunityFilters.priority}
+              onChange={(e) => setOpportunityFilters({ ...opportunityFilters, priority: e.target.value })}
+            >
+              <option value="">All Priorities</option>
+              <option value="urgent">Urgent</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+            {selectedOpportunities.length > 0 && (
+              <button
+                className="btn-primary"
+                onClick={handleBulkOutreach}
+                disabled={processingOutreach}
+              >
+                {processingOutreach ? 'Processing...' : `Start Outreach (${selectedOpportunities.length})`}
+              </button>
+            )}
+          </div>
+
+          {/* Opportunities Table */}
+          <div className="opportunities-table-container">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>
+                    <input
+                      type="checkbox"
+                      checked={selectedOpportunities.length === opportunities.length && opportunities.length > 0}
+                      onChange={(e) => handleSelectAll(e.target.checked)}
+                    />
+                  </th>
+                  <th>Client</th>
+                  <th>Current Rate</th>
+                  <th>New Rate</th>
+                  <th>Monthly Savings</th>
+                  <th>Priority</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {opportunities.map(opp => (
+                  <tr key={opp.id} className={`priority-row-${opp.priority}`}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={selectedOpportunities.includes(opp.id)}
+                        onChange={(e) => handleSelectOpportunity(opp.id, e.target.checked)}
+                      />
+                    </td>
+                    <td>
+                      <div className="client-info">
+                        <span className="client-name">{opp.client_name || 'Unknown'}</span>
+                        {opp.client_phone && (
+                          <span className="client-phone">{opp.client_phone}</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="rate-cell">{formatRate(opp.current_rate)}</td>
+                    <td className="rate-cell highlight">{formatRate(opp.new_rate)}</td>
+                    <td className="savings-cell">{formatCurrency(opp.monthly_savings)}</td>
+                    <td>
+                      <span className={`priority-badge ${getPriorityClass(opp.priority)}`}>
+                        {opp.priority}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`status-badge ${getStatusClass(opp.status)}`}>
+                        {opp.status.replace('_', ' ')}
+                      </span>
+                    </td>
+                    <td className="actions-cell">
+                      {(opp.status === 'identified' || opp.status === 'sms_sent') && (
+                        <>
+                          <button
+                            className="btn-sm btn-primary"
+                            onClick={() => handleSingleOutreach(opp.id, false)}
+                            disabled={processingOutreach}
+                            title="Send SMS + Call"
+                          >
+                            Outreach
+                          </button>
+                          <button
+                            className="btn-sm btn-secondary"
+                            onClick={() => handleSingleOutreach(opp.id, true)}
+                            disabled={processingOutreach}
+                            title="Call Only"
+                          >
+                            Call
+                          </button>
+                        </>
+                      )}
+                      {opp.status === 'called' && (
+                        <button
+                          className="btn-sm btn-success"
+                          onClick={() => handleMarkConverted(opp.id)}
+                        >
+                          Convert
+                        </button>
+                      )}
+                      {opp.status !== 'converted' && opp.status !== 'declined' && (
+                        <button
+                          className="btn-sm btn-secondary"
+                          onClick={() => handleUpdateOpportunityStatus(opp.id, 'declined')}
+                        >
+                          Decline
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {opportunities.length === 0 && (
+                  <tr>
+                    <td colSpan="8" className="no-data">
+                      No opportunities found. Upload a rate sheet and scan to find opportunities.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

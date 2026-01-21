@@ -10,7 +10,7 @@ echo ""
 echo "Step 1: Testing the query_daily_focus_priorities directly..."
 echo ""
 
-curl -s "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/query/execute" \
+curl -s "https://app.perenniaai.com/api/v1/query/execute" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{

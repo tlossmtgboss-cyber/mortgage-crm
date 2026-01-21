@@ -3,7 +3,7 @@
 import requests
 import json
 
-API_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+API_URL = "https://app.perenniaai.com"
 
 # Get auth token
 print("Getting auth token...")

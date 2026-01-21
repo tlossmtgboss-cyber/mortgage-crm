@@ -62,7 +62,7 @@ TWILIO_PHONE_NUMBER=+18005551234
 OPENAI_API_KEY=sk-proj-xxxxxxxxxxxxxxxxxxxxxxxx
 
 # CRM (you already have this)
-CRM_API_URL=https://mortgage-crm-production-7a9a.up.railway.app
+CRM_API_URL=https://app.perenniaai.com
 CRM_API_KEY=your-crm-api-key-here
 ```
 

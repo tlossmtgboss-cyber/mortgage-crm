@@ -42,14 +42,18 @@ export class StreamingTTS {
         throw new Error('ElevenLabs client not initialized');
       }
 
+      // Human-like voice settings:
+      // - Lower stability (0.35) = more natural variation in tone
+      // - Higher similarity (0.85) = preserves voice character
+      // - Moderate style (0.4) = adds emotional expression without overdoing it
       const audioStream = await this.client.textToSpeech.convertAsStream(this.voiceId, {
         text,
-        model_id: options?.model || 'eleven_turbo_v2_5',
+        model_id: options?.model || 'eleven_turbo_v2_5', // Latest model - most natural
         voice_settings: {
-          stability: options?.stability || 0.5,
-          similarity_boost: options?.similarity || 0.75,
-          style: options?.style || 0.5,
-          use_speaker_boost: true
+          stability: options?.stability || 0.35,  // Lower = more expressive
+          similarity_boost: options?.similarity || 0.85,  // Higher = preserves character
+          style: options?.style || 0.4,  // Moderate emotional expression
+          use_speaker_boost: true  // Better projection
         },
         output_format: 'ulaw_8000' // Match Twilio format
       });
@@ -99,14 +103,15 @@ export class StreamingTTS {
         throw new Error('ElevenLabs client not initialized');
       }
 
+      // Human-like voice settings for streaming
       const audioStream = await this.client.textToSpeech.convertAsStream(this.voiceId, {
         text,
-        model_id: options?.model || 'eleven_turbo_v2_5',
+        model_id: options?.model || 'eleven_turbo_v2_5', // Latest model - most natural
         voice_settings: {
-          stability: options?.stability || 0.5,
-          similarity_boost: options?.similarity || 0.75,
-          style: options?.style || 0.5,
-          use_speaker_boost: true
+          stability: options?.stability || 0.35,  // Lower = more expressive
+          similarity_boost: options?.similarity || 0.85,  // Higher = preserves character
+          style: options?.style || 0.4,  // Moderate emotional expression
+          use_speaker_boost: true  // Better projection
         },
         output_format: 'ulaw_8000'
       });
@@ -130,6 +135,7 @@ export class StreamingTTS {
 
   /**
    * Convert text to audio optimized for phone calls
+   * Uses human-like voice settings for natural conversation
    */
   async synthesizeForPhone(text: string): Promise<Buffer> {
     // Split into sentences for more natural pauses
@@ -139,8 +145,9 @@ export class StreamingTTS {
     for (const sentence of sentences) {
       if (sentence.trim()) {
         const audio = await this.synthesize(sentence.trim(), {
-          stability: 0.6, // Slightly more stable for phone calls
-          similarity: 0.8
+          stability: 0.4,  // Natural variation while maintaining clarity
+          similarity: 0.85,  // Preserve voice character
+          style: 0.45  // Slightly more expressive for phone engagement
         });
         audioChunks.push(audio);
 

@@ -6,7 +6,7 @@ import requests
 from datetime import datetime, timedelta
 import random
 
-API_BASE_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+API_BASE_URL = "https://app.perenniaai.com"
 
 # Get token
 response = requests.post(

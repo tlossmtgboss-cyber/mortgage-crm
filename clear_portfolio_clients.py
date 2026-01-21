@@ -6,7 +6,7 @@ Run this script to remove all portfolio clients.
 import requests
 
 # Your production backend URL
-BACKEND_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+BACKEND_URL = "https://app.perenniaai.com"
 
 print("🧹 Clear Portfolio Clients")
 print("=" * 50)

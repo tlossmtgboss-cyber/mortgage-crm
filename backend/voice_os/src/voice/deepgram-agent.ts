@@ -244,6 +244,15 @@ export class DeepgramVoiceAgent {
 
 /**
  * Create a voice agent session for handling Twilio calls
+ *
+ * Voice model options for human-like speech:
+ * - aura-asteria-en: Female, warm and professional (default)
+ * - aura-luna-en: Female, soft and gentle
+ * - aura-stella-en: Female, confident and clear
+ * - aura-athena-en: Female, mature and authoritative
+ * - aura-helios-en: Male, warm and friendly
+ * - aura-arcas-en: Male, confident and professional
+ * - aura-perseus-en: Male, deep and resonant
  */
 export function createTwilioVoiceAgent(
   systemPrompt: string,
@@ -252,9 +261,10 @@ export function createTwilioVoiceAgent(
 ): DeepgramVoiceAgent {
   const config: VoiceAgentConfig = {
     systemPrompt,
+    // aura-asteria-en is the most natural-sounding female voice for phone calls
     voiceModel: options?.voiceModel || 'aura-asteria-en',
-    llmModel: options?.llmModel || 'claude-3-haiku-20240307',
-    sttModel: options?.sttModel || 'nova-2',
+    llmModel: options?.llmModel || 'claude-3-5-haiku-20241022',  // Updated to latest Haiku
+    sttModel: options?.sttModel || 'nova-2',  // Best accuracy for phone audio
     greeting: options?.greeting
   };
 

@@ -53,7 +53,7 @@ AFTER ADDING VARIABLES:
 1. Railway will automatically redeploy (watch Deployments tab)
 2. Wait 3-5 minutes
 3. Check logs for: "Application startup complete" ✅
-4. Test: curl https://mortgage-crm-production-7a9a.up.railway.app/health
+4. Test: curl https://app.perenniaai.com/health
 
 ═══════════════════════════════════════════════════════════════════
 OPTIONAL: MICROSOFT GRAPH API (After backend works)
@@ -89,7 +89,7 @@ Name:
 MICROSOFT_REDIRECT_URI
 
 Value (copy this):
-https://mortgage-crm-production-7a9a.up.railway.app/auth/microsoft/callback
+https://app.perenniaai.com/auth/microsoft/callback
 
 Variable 9: MICROSOFT_FROM_EMAIL
 ───────────────────────────────────────────────────────────────────
@@ -112,7 +112,7 @@ Name:
 REACT_APP_API_URL
 
 Value (copy this):
-https://mortgage-crm-production-7a9a.up.railway.app
+https://app.perenniaai.com
 
 Environments:
 ☑ Production
@@ -124,10 +124,10 @@ TESTING COMMANDS
 ═══════════════════════════════════════════════════════════════════
 
 # Test backend health
-curl https://mortgage-crm-production-7a9a.up.railway.app/health
+curl https://app.perenniaai.com/health
 
 # Test API docs (open in browser)
-https://mortgage-crm-production-7a9a.up.railway.app/docs
+https://app.perenniaai.com/docs
 
 # Test frontend (open in browser)
 https://mortgage-crm-nine.vercel.app

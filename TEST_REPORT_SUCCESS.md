@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-Successfully executed 20 comprehensive tests against the production CRM system at `https://mortgage-crm-production-7a9a.up.railway.app`. All endpoints responded correctly with HTTP 200 status codes, demonstrating system stability and reliability.
+Successfully executed 20 comprehensive tests against the production CRM system at `https://app.perenniaai.com`. All endpoints responded correctly with HTTP 200 status codes, demonstrating system stability and reliability.
 
 ---
 
@@ -20,7 +20,7 @@ Successfully executed 20 comprehensive tests against the production CRM system a
 | **Passed** | ✅ 20 |
 | **Failed** | ❌ 0 |
 | **Success Rate** | 100% |
-| **API Endpoint** | https://mortgage-crm-production-7a9a.up.railway.app |
+| **API Endpoint** | https://app.perenniaai.com |
 | **Test Duration** | < 30 seconds |
 
 ---

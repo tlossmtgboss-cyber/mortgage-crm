@@ -345,7 +345,7 @@ class User(Base):
 
 ### Step 1: Verify Migration Ran
 ```bash
-curl https://mortgage-crm-production-7a9a.up.railway.app/api/v1/migrations/check-phase2-permissions
+curl https://app.perenniaai.com/api/v1/migrations/check-phase2-permissions
 ```
 
 **Expected**: `"migration_complete": true`

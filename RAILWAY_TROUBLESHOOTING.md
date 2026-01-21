@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Production API: https://mortgage-crm-production-7a9a.up.railway.app
+Production API: https://app.perenniaai.com
 
 **Issue:** Application returning 502 errors
 
@@ -43,7 +43,7 @@ MICROSOFT_CLIENT_ID=<your-client-id>
 MICROSOFT_CLIENT_SECRET=<your-client-secret>
 MICROSOFT_TENANT_ID=<your-tenant-id>
 MICROSOFT_FROM_EMAIL=<your-email>
-MICROSOFT_REDIRECT_URI=https://mortgage-crm-production-7a9a.up.railway.app/auth/microsoft/callback
+MICROSOFT_REDIRECT_URI=https://app.perenniaai.com/auth/microsoft/callback
 ```
 
 ### 3. Manual Database Migration (if needed)
@@ -140,7 +140,7 @@ Once deployed successfully, test these endpoints:
 
 ```bash
 # Health check
-curl https://mortgage-crm-production-7a9a.up.railway.app/api/v1/health
+curl https://app.perenniaai.com/api/v1/health
 
 # Should return:
 # {"status":"healthy","database":"connected"}
@@ -148,7 +148,7 @@ curl https://mortgage-crm-production-7a9a.up.railway.app/api/v1/health
 
 ```bash
 # API docs (should load in browser)
-open https://mortgage-crm-production-7a9a.up.railway.app/docs
+open https://app.perenniaai.com/docs
 ```
 
 ## Creating Production User
@@ -183,10 +183,10 @@ If issues persist:
 
 ```bash
 # Check if deployment is running
-curl -I https://mortgage-crm-production-7a9a.up.railway.app
+curl -I https://app.perenniaai.com
 
 # Check health endpoint
-curl https://mortgage-crm-production-7a9a.up.railway.app/api/v1/health
+curl https://app.perenniaai.com/api/v1/health
 
 # View recent logs (requires railway link)
 railway logs

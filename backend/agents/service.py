@@ -1813,7 +1813,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
         lead_id = args.get("lead_id")
         loan_id = args.get("loan_id")
 
-        base_url = os.getenv("BASE_URL", "https://mortgage-crm-production-7a9a.up.railway.app")
+        base_url = os.getenv("BASE_URL", "https://app.perenniaai.com")
 
         try:
             result = click_to_dial(

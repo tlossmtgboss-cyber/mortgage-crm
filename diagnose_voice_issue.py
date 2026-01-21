@@ -16,7 +16,7 @@ print("\n✅ TEST 1: Backend Webhook")
 print("-" * 80)
 try:
     response = requests.post(
-        "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voice/incoming",
+        "https://app.perenniaai.com/api/v1/voice/incoming",
         data={
             "From": "+15555551234",
             "To": "+18326482297",
@@ -132,7 +132,7 @@ SOLUTION:
 3. Scroll to "Voice Configuration"
 4. Set "A CALL COMES IN" to:
 
-   Webhook: https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voice/incoming
+   Webhook: https://app.perenniaai.com/api/v1/voice/incoming
    HTTP POST
 
 5. Click Save

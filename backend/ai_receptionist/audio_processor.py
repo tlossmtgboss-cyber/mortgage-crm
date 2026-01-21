@@ -204,19 +204,26 @@ class STTConfig:
 
 @dataclass
 class TTSConfig:
-    """Text-to-speech configuration."""
+    """Text-to-speech configuration.
+
+    Human-like voice optimization:
+    - Lower stability (0.3-0.4) = more natural variation in tone
+    - Higher similarity_boost (0.8-0.9) = preserves voice character
+    - Style parameter (0.3-0.5) = adds emotional expression
+    - Speaker boost = better projection and clarity
+    """
 
     provider: str = "elevenlabs"  # elevenlabs, azure, openai
 
-    # ElevenLabs settings
+    # ElevenLabs settings - optimized for natural, human-like speech
     elevenlabs_api_key: Optional[str] = None
     elevenlabs_voice_id: str = "21m00Tcm4TlvDq8ikWAM"  # Rachel - warm female voice
-    elevenlabs_model: str = "eleven_turbo_v2"
+    elevenlabs_model: str = "eleven_turbo_v2_5"  # Latest model - most natural sounding
 
     # OpenAI TTS settings
     openai_api_key: Optional[str] = None
     openai_voice: str = "nova"  # alloy, echo, fable, onyx, nova, shimmer
-    openai_model: str = "tts-1"
+    openai_model: str = "tts-1-hd"  # HD model for better quality
 
     # Azure settings
     azure_key: Optional[str] = None
@@ -227,9 +234,11 @@ class TTSConfig:
     output_format: str = "mulaw"  # mp3, wav, pcm, mulaw (best for Twilio)
     sample_rate: int = 8000  # 8000 for telephony, 16000/24000 for high quality
 
-    # Voice customization
-    stability: float = 0.5  # ElevenLabs: 0-1
-    similarity_boost: float = 0.75  # ElevenLabs: 0-1
+    # Voice customization - tuned for human-like speech
+    stability: float = 0.35  # Lower = more expressive, natural variation (was 0.5)
+    similarity_boost: float = 0.85  # Higher preserves voice character (was 0.75)
+    style: float = 0.4  # Adds emotional expression (new parameter)
+    use_speaker_boost: bool = True  # Better projection and clarity (new parameter)
     speaking_rate: float = 1.0  # Speed multiplier
 
     # Retry settings
@@ -796,6 +805,8 @@ class ElevenLabsTTS(TTSProvider):
                 "voice_settings": {
                     "stability": self.config.stability,
                     "similarity_boost": self.config.similarity_boost,
+                    "style": getattr(self.config, 'style', 0.4),
+                    "use_speaker_boost": getattr(self.config, 'use_speaker_boost', True),
                 },
             }
 
@@ -841,6 +852,8 @@ class ElevenLabsTTS(TTSProvider):
             "voice_settings": {
                 "stability": self.config.stability,
                 "similarity_boost": self.config.similarity_boost,
+                "style": getattr(self.config, 'style', 0.4),
+                "use_speaker_boost": getattr(self.config, 'use_speaker_boost', True),
             },
         }
 

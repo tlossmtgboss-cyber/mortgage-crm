@@ -4,7 +4,7 @@ import requests
 import time
 import json
 
-API_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+API_URL = "https://app.perenniaai.com"
 
 # Get token
 token_response = requests.post(
@@ -86,7 +86,7 @@ if found_test:
     print("\nHere's what happens when you call:")
     print("1. You dial +1 (832) 648-2297")
     print("2. Twilio receives the call")
-    print("3. Twilio sends webhook to: https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voice/incoming")
+    print("3. Twilio sends webhook to: https://app.perenniaai.com/api/v1/voice/incoming")
     print("4. Backend logs call to 'ai_receptionist_activity' table in production database")
     print("5. Dashboard queries same database every 30 seconds")
     print("6. Your call appears in the dashboard!")
@@ -105,5 +105,5 @@ print("\nTo configure Twilio:")
 print("1. Go to: https://console.twilio.com/us1/develop/phone-numbers/manage/incoming")
 print("2. Click on +1 (832) 648-2297")
 print("3. Set Voice Webhook to:")
-print("   https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voice/incoming")
+print("   https://app.perenniaai.com/api/v1/voice/incoming")
 print("4. Save")

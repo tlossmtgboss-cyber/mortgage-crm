@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 import random
 
 # API Configuration
-API_BASE_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
+API_BASE_URL = "https://app.perenniaai.com"
 API_KEY = "185b7101-9435-44da-87ab-b7582c4e4607"
 
 # User credentials - using Quick Login demo account

@@ -175,7 +175,7 @@ If you want to test the API directly with curl:
 ### Get Auth Token
 ```bash
 # Login to get token
-curl -X POST https://mortgage-crm-production-7a9a.up.railway.app/api/v1/login \
+curl -X POST https://app.perenniaai.com/api/v1/login \
   -H "Content-Type: application/json" \
   -d '{"email":"your@email.com","password":"your-password"}'
 
@@ -184,7 +184,7 @@ curl -X POST https://mortgage-crm-production-7a9a.up.railway.app/api/v1/login \
 
 ### Test Duplicate Detection
 ```bash
-curl -X GET https://mortgage-crm-production-7a9a.up.railway.app/api/v1/merge/duplicates \
+curl -X GET https://app.perenniaai.com/api/v1/merge/duplicates \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
@@ -206,7 +206,7 @@ curl -X GET https://mortgage-crm-production-7a9a.up.railway.app/api/v1/merge/dup
 
 ### Test Merge Execution
 ```bash
-curl -X POST https://mortgage-crm-production-7a9a.up.railway.app/api/v1/merge/execute \
+curl -X POST https://app.perenniaai.com/api/v1/merge/execute \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{

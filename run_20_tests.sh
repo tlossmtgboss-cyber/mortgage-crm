@@ -3,7 +3,7 @@
 # 20 Comprehensive CRM Tests
 # Tests all major endpoints and functionality
 
-API_URL="https://mortgage-crm-production-7a9a.up.railway.app/api/v1"
+API_URL="https://app.perenniaai.com/api/v1"
 PASSED=0
 FAILED=0
 
@@ -14,7 +14,7 @@ echo ""
 
 # Get auth token first
 echo "🔐 Authenticating..."
-TOKEN_RESPONSE=$(curl -s -X POST "https://mortgage-crm-production-7a9a.up.railway.app/token" \
+TOKEN_RESPONSE=$(curl -s -X POST "https://app.perenniaai.com/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "username=admin@perenniaai.com&password=demo123")
 

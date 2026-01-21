@@ -29,7 +29,7 @@
           }
         },
         "server": {
-          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/create-task"
+          "url": "https://app.perenniaai.com/api/vapi/functions/create-task"
         }
       },
       {
@@ -51,7 +51,7 @@
           }
         },
         "server": {
-          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/schedule-appointment"
+          "url": "https://app.perenniaai.com/api/vapi/functions/schedule-appointment"
         }
       },
       {
@@ -69,7 +69,7 @@
           }
         },
         "server": {
-          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/available-time-slots"
+          "url": "https://app.perenniaai.com/api/vapi/functions/available-time-slots"
         }
       }
     ]

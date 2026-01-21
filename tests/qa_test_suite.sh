@@ -3,7 +3,7 @@
 # Perennia AI QA Test Suite v2
 # Tests all critical API endpoints with correct paths
 
-BASE_URL="https://mortgage-crm-production-7a9a.up.railway.app"
+BASE_URL="https://app.perenniaai.com"
 PASS=0
 FAIL=0
 SKIP=0

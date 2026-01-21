@@ -12,7 +12,7 @@
 4. ✅ **Built comprehensive AI Receptionist roadmap** - 16-week plan to industry leadership
 5. ✅ **Documented AI Receptionist specs** - Current implementation vs. enterprise requirements
 
-**Production Status:** ✅ HEALTHY (https://mortgage-crm-production-7a9a.up.railway.app/health)
+**Production Status:** ✅ HEALTHY (https://app.perenniaai.com/health)
 
 ---
 
@@ -62,7 +62,7 @@
 9. `GET /api/v1/experiments/{id}` - Get experiment details
 10. `DELETE /api/v1/experiments/{id}` - Delete experiment (draft/archived only)
 
-**API Documentation:** https://mortgage-crm-production-7a9a.up.railway.app/docs#/A/B%20Testing
+**API Documentation:** https://app.perenniaai.com/docs#/A/B%20Testing
 
 ### Features Implemented:
 - ✅ Experiment lifecycle management (draft → running → completed → archived)
@@ -251,7 +251,7 @@ python run_ab_testing_migration.py
    - Enables experimentation framework
 
 2. **Test A/B testing endpoints**
-   - Visit: https://mortgage-crm-production-7a9a.up.railway.app/docs#/A/B%20Testing
+   - Visit: https://app.perenniaai.com/docs#/A/B%20Testing
    - Create a test experiment
    - Verify variant assignment works
    - Record some test results
@@ -389,7 +389,7 @@ python run_ab_testing_migration.py
 
 ### General:
 - **Main Roadmap:** `NEXT_STEPS_ROADMAP.md` - Overall priorities
-- **API Docs:** https://mortgage-crm-production-7a9a.up.railway.app/docs
+- **API Docs:** https://app.perenniaai.com/docs
 
 ---
 
@@ -495,9 +495,9 @@ python run_ab_testing_migration.py
 ## 📞 Quick Reference
 
 ### URLs:
-- **API Docs:** https://mortgage-crm-production-7a9a.up.railway.app/docs
-- **Health:** https://mortgage-crm-production-7a9a.up.railway.app/health
-- **A/B Testing:** https://mortgage-crm-production-7a9a.up.railway.app/docs#/A/B%20Testing
+- **API Docs:** https://app.perenniaai.com/docs
+- **Health:** https://app.perenniaai.com/health
+- **A/B Testing:** https://app.perenniaai.com/docs#/A/B%20Testing
 
 ### Commands:
 ```bash
@@ -511,7 +511,7 @@ python -c "from database import get_db; print('✅ OK')"
 python -c "from ab_testing_routes import router; print('✅ OK')"
 
 # Check production health
-curl https://mortgage-crm-production-7a9a.up.railway.app/health
+curl https://app.perenniaai.com/health
 ```
 
 ### Files:

@@ -6,7 +6,7 @@
 
 **Completion Time:** 2.5 hours
 **Date:** November 15, 2025
-**Production URL:** https://mortgage-crm-production-7a9a.up.railway.app
+**Production URL:** https://app.perenniaai.com
 
 ---
 
@@ -155,7 +155,7 @@ All endpoints tested and returning HTTP 200 in production:
 
 ### 1. Get Authentication Token
 ```bash
-curl -X POST "https://mortgage-crm-production-7a9a.up.railway.app/token" \
+curl -X POST "https://app.perenniaai.com/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "username=tloss@cmgfi.com&password=Woodwindow00!"
 ```
@@ -164,27 +164,27 @@ curl -X POST "https://mortgage-crm-production-7a9a.up.railway.app/token" \
 ```bash
 # Get today's activity
 curl -H "Authorization: Bearer YOUR_TOKEN" \
-  https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard/activity/feed?limit=10
+  https://app.perenniaai.com/api/v1/ai-receptionist/dashboard/activity/feed?limit=10
 
 # Get real-time metrics
 curl -H "Authorization: Bearer YOUR_TOKEN" \
-  https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard/metrics/realtime
+  https://app.perenniaai.com/api/v1/ai-receptionist/dashboard/metrics/realtime
 
 # Get ROI
 curl -H "Authorization: Bearer YOUR_TOKEN" \
-  https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard/roi
+  https://app.perenniaai.com/api/v1/ai-receptionist/dashboard/roi
 
 # Get skills performance
 curl -H "Authorization: Bearer YOUR_TOKEN" \
-  https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard/skills
+  https://app.perenniaai.com/api/v1/ai-receptionist/dashboard/skills
 
 # Get system health
 curl -H "Authorization: Bearer YOUR_TOKEN" \
-  https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard/system-health
+  https://app.perenniaai.com/api/v1/ai-receptionist/dashboard/system-health
 
 # Get conversations
 curl -H "Authorization: Bearer YOUR_TOKEN" \
-  https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard/conversations
+  https://app.perenniaai.com/api/v1/ai-receptionist/dashboard/conversations
 ```
 
 ### 3. Make a Real AI Call
@@ -341,4 +341,4 @@ The AI Receptionist Dashboard backend infrastructure is fully functional. All AP
 **Completion Date:** November 15, 2025
 **Time to Complete:** 2.5 hours
 **Production Status:** ✅ LIVE
-**Dashboard API:** https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai-receptionist/dashboard
+**Dashboard API:** https://app.perenniaai.com/api/v1/ai-receptionist/dashboard
