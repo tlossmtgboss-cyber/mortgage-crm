@@ -2052,3 +2052,91 @@ async def delete_unknown_borrowers(key: str = ""):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
+
+
+@router.get("/debug-mum-clients")
+async def debug_mum_clients(key: str = ""):
+    """
+    Debug endpoint to check mum_clients data.
+    Call with: GET /api/v1/migrations/debug-mum-clients?key=debug
+    """
+    if key != "debug":
+        raise HTTPException(status_code=403, detail="Invalid key")
+
+    db = SessionLocal()
+    try:
+        # Get sample mum_clients data
+        result = db.execute(text("""
+            SELECT id, name, loan_number, user_id, created_at
+            FROM mum_clients
+            ORDER BY created_at DESC
+            LIMIT 10
+        """))
+        clients = [dict(row._mapping) for row in result.fetchall()]
+
+        # Get counts by user_id
+        user_counts = db.execute(text("""
+            SELECT user_id, COUNT(*) as count
+            FROM mum_clients
+            GROUP BY user_id
+        """))
+        by_user = [dict(row._mapping) for row in user_counts.fetchall()]
+
+        # Get total count
+        total = db.execute(text("SELECT COUNT(*) FROM mum_clients")).scalar()
+
+        return {
+            "sample_clients": clients,
+            "by_user_id": by_user,
+            "total_clients": total
+        }
+    except Exception as e:
+        logger.error(f"Debug mum_clients error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@router.post("/fix-mum-clients-user-id")
+async def fix_mum_clients_user_id(key: str = "", user_id: int = 118):
+    """
+    Fix mum_clients with NULL user_id by assigning them to specified user.
+    Call with: POST /api/v1/migrations/fix-mum-clients-user-id?key=fix-mum&user_id=118
+    """
+    if key != "fix-mum":
+        raise HTTPException(status_code=403, detail="Invalid key")
+
+    db = SessionLocal()
+    try:
+        # Count affected rows
+        count = db.execute(text("""
+            SELECT COUNT(*) FROM mum_clients WHERE user_id IS NULL
+        """)).scalar()
+
+        if count == 0:
+            return {
+                "status": "success",
+                "message": "No mum_clients with NULL user_id",
+                "updated_count": 0
+            }
+
+        # Update all NULL user_ids
+        db.execute(text("""
+            UPDATE mum_clients
+            SET user_id = :user_id
+            WHERE user_id IS NULL
+        """), {"user_id": user_id})
+        db.commit()
+
+        return {
+            "status": "success",
+            "updated_count": count,
+            "assigned_to_user_id": user_id,
+            "message": f"Updated {count} mum_clients with user_id = {user_id}"
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Fix mum_clients user_id error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
