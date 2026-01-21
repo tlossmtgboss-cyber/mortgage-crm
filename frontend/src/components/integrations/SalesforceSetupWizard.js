@@ -450,7 +450,19 @@ function SalesforceSetupWizard({ onComplete }) {
         <p>We'll scan your Salesforce org to find available objects and fields</p>
       </div>
 
-      {schemas.length === 0 ? (
+      {/* If not connected, show connect button instead */}
+      {!connectionStatus?.connected ? (
+        <div className="discovery-card">
+          <h3>Connection Required</h3>
+          <p>Please connect your Salesforce account first before discovering schema</p>
+          <button
+            className="btn btn-primary btn-lg"
+            onClick={handleConnect}
+          >
+            Connect Salesforce
+          </button>
+        </div>
+      ) : schemas.length === 0 ? (
         <div className="discovery-card">
           <h3>Ready to Discover</h3>
           <p>Click below to scan your Salesforce organization</p>
