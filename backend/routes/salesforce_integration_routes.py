@@ -35,9 +35,26 @@ router = APIRouter(prefix="/api/integrations/salesforce", tags=["Salesforce Inte
 
 # ============ Database Schema Fix ============
 
+def ensure_salesforce_tables():
+    """Ensure all Salesforce OAuth tables exist."""
+    try:
+        from migrations.add_salesforce_oauth_tables import run_migration
+        return run_migration()
+    except Exception as e:
+        logger.error(f"Failed to run Salesforce OAuth tables migration: {e}")
+        return False
+
+
 def fix_salesforce_schema(db: Session) -> dict:
     """Fix missing columns in Salesforce integration tables"""
     fixes = []
+
+    # First, ensure all tables exist
+    try:
+        ensure_salesforce_tables()
+        fixes.append("Ensured all OAuth tables exist")
+    except Exception as e:
+        logger.warning(f"Could not run OAuth tables migration: {e}")
 
     # Check and add integration_profile_id to sf_user_schemas if missing
     try:
@@ -110,6 +127,47 @@ async def fix_schema_endpoint(
     """Fix missing columns in Salesforce integration tables (admin only)"""
     result = fix_salesforce_schema(db)
     return {"status": "success", **result}
+
+
+@router.post("/ensure-tables")
+async def ensure_tables_endpoint(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Ensure all Salesforce OAuth tables exist.
+    Call this before trying to connect if you get connection errors.
+    """
+    try:
+        from migrations.add_salesforce_oauth_tables import run_migration
+        success = run_migration()
+
+        # Check which tables exist now
+        tables_status = {}
+        tables = ["integration_profiles", "sf_user_schemas", "field_mappings",
+                  "oauth_states", "sync_queue", "integration_events",
+                  "integration_record_tracking", "calendar_sync_settings"]
+
+        for table in tables:
+            try:
+                result = db.execute(text(f"SELECT COUNT(*) FROM {table}"))
+                count = result.scalar()
+                tables_status[table] = {"exists": True, "count": count}
+            except Exception as e:
+                tables_status[table] = {"exists": False, "error": str(e)[:100]}
+
+        return {
+            "status": "success" if success else "partial",
+            "tables": tables_status,
+            "message": "Tables created/verified successfully" if success else "Some tables may have issues"
+        }
+    except Exception as e:
+        logger.error(f"ensure-tables failed: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "message": "Failed to ensure tables exist"
+        }
 
 
 # ============ Pydantic Models ============
@@ -359,10 +417,25 @@ async def get_connection_status(
     except:
         pass
 
-    user_id = require_user(request, db)
-    profile = get_integration_profile(db, user_id)
+    try:
+        user_id = require_user(request, db)
+        logger.info(f"Checking Salesforce status for user_id: {user_id}")
+    except HTTPException:
+        logger.warning("Salesforce status check: User not authenticated")
+        raise
+    except Exception as e:
+        logger.error(f"Salesforce status check: Error getting user: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting user: {str(e)}")
+
+    try:
+        profile = get_integration_profile(db, user_id)
+        logger.info(f"Found profile for user {user_id}: {profile.id if profile else 'None'}, status: {profile.status if profile else 'N/A'}")
+    except Exception as e:
+        logger.error(f"Salesforce status check: Error getting profile: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting profile: {str(e)}")
 
     if not profile:
+        logger.info(f"No Salesforce profile found for user {user_id}")
         return ConnectionStatus(connected=False)
 
     return ConnectionStatus(
@@ -376,6 +449,69 @@ async def get_connection_status(
         last_error=profile.last_error,
         sync_enabled=profile.sync_enabled
     )
+
+
+@router.get("/debug-status")
+async def get_debug_status(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Debug endpoint to check Salesforce integration status with detailed info."""
+    try:
+        db.rollback()
+    except:
+        pass
+
+    debug_info = {
+        "user_auth": None,
+        "profile_exists": False,
+        "profile_details": None,
+        "tables_exist": {},
+        "errors": []
+    }
+
+    # Check user authentication
+    try:
+        user_id = get_current_user_id(request, db)
+        debug_info["user_auth"] = {"user_id": user_id, "authenticated": user_id is not None}
+    except Exception as e:
+        debug_info["errors"].append(f"Auth check error: {str(e)}")
+
+    if not user_id:
+        return debug_info
+
+    # Check if tables exist
+    tables_to_check = ["integration_profiles", "sf_user_schemas", "field_mappings", "oauth_states", "sync_queue"]
+    for table in tables_to_check:
+        try:
+            result = db.execute(text(f"SELECT COUNT(*) FROM {table}"))
+            count = result.scalar()
+            debug_info["tables_exist"][table] = {"exists": True, "count": count}
+        except Exception as e:
+            debug_info["tables_exist"][table] = {"exists": False, "error": str(e)}
+
+    # Check profile
+    try:
+        profile = get_integration_profile(db, user_id)
+        debug_info["profile_exists"] = profile is not None
+        if profile:
+            debug_info["profile_details"] = {
+                "id": profile.id,
+                "user_id": profile.user_id,
+                "provider": profile.provider,
+                "status": profile.status,
+                "instance_url": profile.instance_url,
+                "sf_username": profile.sf_username,
+                "sf_org_id": profile.sf_org_id,
+                "connected_at": profile.connected_at.isoformat() if profile.connected_at else None,
+                "last_error": profile.last_error,
+                "has_access_token": bool(profile.access_token_encrypted),
+                "has_refresh_token": bool(profile.refresh_token_encrypted),
+            }
+    except Exception as e:
+        debug_info["errors"].append(f"Profile check error: {str(e)}")
+
+    return debug_info
 
 
 @router.delete("/disconnect")
@@ -440,13 +576,32 @@ async def get_schema_objects(
     except:
         pass
 
-    user_id = require_user(request, db)
-    profile = get_integration_profile(db, user_id)
+    try:
+        user_id = require_user(request, db)
+        logger.info(f"Getting schema objects for user_id: {user_id}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Schema objects: Error getting user: {e}")
+        raise HTTPException(status_code=500, detail=f"Authentication error: {str(e)}")
+
+    try:
+        profile = get_integration_profile(db, user_id)
+        logger.info(f"Schema objects: profile for user {user_id}: {profile.id if profile else 'None'}")
+    except Exception as e:
+        logger.error(f"Schema objects: Error getting profile: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting profile: {str(e)}")
 
     if not profile:
+        logger.warning(f"Schema objects: No profile found for user {user_id}")
         raise HTTPException(status_code=400, detail="Salesforce not connected")
 
-    schemas = salesforce_schema.get_all_schemas(db, profile.id)
+    try:
+        schemas = salesforce_schema.get_all_schemas(db, profile.id)
+        logger.info(f"Schema objects: Found {len(schemas)} schemas for profile {profile.id}")
+    except Exception as e:
+        logger.error(f"Schema objects: Error getting schemas: {e}")
+        raise HTTPException(status_code=500, detail=f"Error loading schemas: {str(e)}")
 
     return {
         "objects": [
