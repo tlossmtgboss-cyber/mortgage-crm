@@ -2451,3 +2451,221 @@ async def fix_mum_client_names(key: str = ""):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
+
+
+@router.post("/migrate-leads-to-mum-clients")
+async def migrate_leads_to_mum_clients(
+    key: str = "",
+    source_filter: str = "Auto Import",
+    user_id: int = 0,
+    delete_after: bool = True
+):
+    """
+    Migrate leads to MUM clients.
+    This moves leads that were accidentally imported as leads to the mum_clients table.
+
+    Call with: POST /api/v1/migrations/migrate-leads-to-mum-clients?key=migrate-to-mum&source_filter=Auto%20Import&user_id=118&delete_after=true
+
+    Parameters:
+    - key: Security key (must be "migrate-to-mum")
+    - source_filter: Only migrate leads with this source (default: "Auto Import")
+    - user_id: User ID to assign MUM clients to (if 0, uses lead's owner_id)
+    - delete_after: Delete leads after successful migration (default: true)
+    """
+    if key != "migrate-to-mum":
+        raise HTTPException(status_code=403, detail="Invalid key. Use ?key=migrate-to-mum")
+
+    db = SessionLocal()
+    try:
+        # Get leads to migrate
+        leads_query = """
+            SELECT
+                id, name, first_name, last_name, email, phone,
+                loan_number, loan_amount, interest_rate,
+                appraisal_value, property_value, closing_date,
+                loan_type, ltv, owner_id, source, created_at
+            FROM leads
+            WHERE source = :source_filter
+            ORDER BY created_at DESC
+        """
+        leads = db.execute(text(leads_query), {"source_filter": source_filter}).fetchall()
+
+        if not leads:
+            return {
+                "status": "success",
+                "message": f"No leads found with source '{source_filter}'",
+                "migrated_count": 0
+            }
+
+        migrated = []
+        errors = []
+        lead_ids_to_delete = []
+
+        for lead in leads:
+            try:
+                # Build client_name from available fields
+                client_name = lead.name
+                if not client_name or client_name.strip() == '':
+                    first = lead.first_name or ''
+                    last = lead.last_name or ''
+                    client_name = f"{first} {last}".strip()
+                if not client_name:
+                    client_name = f"Client (Lead #{lead.id})"
+
+                # Determine user_id for the MUM client
+                mum_user_id = user_id if user_id > 0 else lead.owner_id
+
+                # Get loan amount (default to 0 if not available)
+                loan_amount = lead.loan_amount or 0
+
+                # Get interest rate (default to 0 if not available)
+                rate = lead.interest_rate or 0
+
+                # Get property value - try appraisal first, then property_value
+                prop_value = lead.appraisal_value or lead.property_value or 0
+
+                # Get closing date (default to today if not available)
+                from datetime import date, timedelta
+                closing = lead.closing_date
+                if closing is None:
+                    closing = date.today()
+                elif hasattr(closing, 'date'):
+                    closing = closing.date()
+
+                # First payment date is typically ~30 days after closing
+                first_payment = closing + timedelta(days=30)
+
+                # Insert into mum_clients
+                insert_query = """
+                    INSERT INTO mum_clients (
+                        client_name, email, phone,
+                        origination_loan_number,
+                        original_loan_amount, current_loan_amount,
+                        interest_rate,
+                        appraisal_value_at_closing, current_property_value,
+                        closing_date, first_payment_date,
+                        loan_type, ltv,
+                        user_id, status, is_active,
+                        created_at, updated_at
+                    ) VALUES (
+                        :client_name, :email, :phone,
+                        :loan_number,
+                        :loan_amount, :loan_amount,
+                        :interest_rate,
+                        :prop_value, :prop_value,
+                        :closing_date, :first_payment_date,
+                        :loan_type, :ltv,
+                        :user_id, 'active', true,
+                        NOW(), NOW()
+                    )
+                    RETURNING id
+                """
+
+                result = db.execute(text(insert_query), {
+                    "client_name": client_name,
+                    "email": lead.email,
+                    "phone": lead.phone,
+                    "loan_number": lead.loan_number,
+                    "loan_amount": loan_amount,
+                    "interest_rate": rate,
+                    "prop_value": prop_value,
+                    "closing_date": closing,
+                    "first_payment_date": first_payment,
+                    "loan_type": lead.loan_type,
+                    "ltv": lead.ltv,
+                    "user_id": mum_user_id
+                })
+
+                new_mum_id = result.fetchone()[0]
+
+                migrated.append({
+                    "lead_id": lead.id,
+                    "mum_client_id": new_mum_id,
+                    "client_name": client_name,
+                    "email": lead.email
+                })
+                lead_ids_to_delete.append(lead.id)
+
+            except Exception as e:
+                errors.append({
+                    "lead_id": lead.id,
+                    "name": lead.name,
+                    "error": str(e)
+                })
+
+        # Delete migrated leads if requested
+        deleted_count = 0
+        if delete_after and lead_ids_to_delete:
+            # Delete in batches to avoid issues with large lists
+            for i in range(0, len(lead_ids_to_delete), 100):
+                batch = lead_ids_to_delete[i:i+100]
+                db.execute(text("""
+                    DELETE FROM leads WHERE id = ANY(:ids)
+                """), {"ids": batch})
+                deleted_count += len(batch)
+
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": f"Migrated {len(migrated)} leads to MUM clients",
+            "source_filter": source_filter,
+            "total_leads_found": len(leads),
+            "migrated_count": len(migrated),
+            "deleted_count": deleted_count if delete_after else 0,
+            "error_count": len(errors),
+            "migrated_sample": migrated[:20],  # First 20 for reference
+            "errors": errors[:10] if errors else []  # First 10 errors
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Migrate leads to MUM clients error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@router.post("/create-salesforce-oauth-tables")
+async def create_salesforce_oauth_tables(key: str = ""):
+    """
+    Create all Salesforce OAuth integration tables.
+    Required for the new per-user Salesforce OAuth system.
+
+    Call with: POST /api/v1/migrations/create-salesforce-oauth-tables?key=create-sf-oauth
+    """
+    if key != "create-sf-oauth":
+        raise HTTPException(status_code=403, detail="Invalid key. Use ?key=create-sf-oauth")
+
+    try:
+        from migrations.add_salesforce_oauth_tables import run_migration
+        success = run_migration()
+
+        # Check which tables exist now
+        db = SessionLocal()
+        try:
+            tables_status = {}
+            tables = ["integration_profiles", "sf_user_schemas", "field_mappings",
+                      "oauth_states", "sync_queue", "integration_events",
+                      "integration_record_tracking", "calendar_sync_settings"]
+
+            for table in tables:
+                try:
+                    result = db.execute(text(f"SELECT COUNT(*) FROM {table}"))
+                    count = result.scalar()
+                    tables_status[table] = {"exists": True, "count": count}
+                except Exception as e:
+                    tables_status[table] = {"exists": False, "error": str(e)[:100]}
+
+            return {
+                "status": "success" if success else "partial",
+                "migration_success": success,
+                "tables": tables_status,
+                "message": "Salesforce OAuth tables created/verified successfully" if success else "Migration completed with some issues"
+            }
+        finally:
+            db.close()
+
+    except Exception as e:
+        logger.error(f"Create Salesforce OAuth tables error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
