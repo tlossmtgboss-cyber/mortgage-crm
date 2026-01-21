@@ -110,6 +110,7 @@ class EndSessionRequest(BaseModel):
     final_transcript: Optional[str] = None
     run_agents: bool = True
     agent_types: Optional[List[str]] = None  # If None, run all agents
+    full_workflow: bool = True  # If True, runs complete workflow: agents + portal + notifications
 
 
 class TranscriptChunkRequest(BaseModel):
@@ -321,15 +322,17 @@ async def end_session(
         }
 
         if request.run_agents:
-            # Run agents in background
+            # Run agents in background (with optional full workflow)
             background_tasks.add_task(
                 run_agents_background,
                 db_url=str(db.get_bind().url),
                 session_id=session_id,
                 agent_types=request.agent_types,
-                user_id=current_user.get("id"),
+                user_id=str(current_user.get("id")),
+                full_workflow=request.full_workflow,
             )
             response["agents_queued"] = True
+            response["full_workflow"] = request.full_workflow
 
         return response
 
@@ -1096,6 +1099,133 @@ async def list_ci_recordings(
 
 
 # =============================================================================
+# FULL WORKFLOW ENDPOINT
+# =============================================================================
+
+@router.post("/sessions/{session_id}/run-full-workflow", response_model=Dict[str, Any])
+async def run_full_workflow(
+    session_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Trigger the full call-end workflow on a session.
+
+    This runs the complete AI-JrLO workflow:
+    1. Run AI agents (Scribe, Jr. LO, Underwriter)
+    2. Calculate application completeness score
+    3. Generate MISMO 3.4 file (if completeness >= threshold)
+    4. Create/update borrower portal
+    5. Send borrower notifications (SMS + Email)
+    6. Create tasks for Production Assistants
+    7. Send internal notifications to LO and Ops team
+
+    Use this to manually trigger the workflow on a session that was
+    processed without the full workflow, or to re-run the workflow.
+    """
+    try:
+        orchestrator = CallMonitoringOrchestrator(db)
+        session = orchestrator.get_session(session_id)
+
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        # Queue full workflow in background
+        background_tasks.add_task(
+            run_agents_background,
+            db_url=str(db.get_bind().url),
+            session_id=session_id,
+            user_id=str(current_user.get("id")),
+            full_workflow=True,
+        )
+
+        return {
+            "status": "queued",
+            "session_id": session_id,
+            "message": "Full workflow has been queued for processing",
+            "workflow_steps": [
+                "1. AI Agents (Scribe, Jr. LO, Underwriter)",
+                "2. Completeness scoring",
+                "3. MISMO 3.4 generation",
+                "4. Portal creation",
+                "5. Borrower notifications (SMS + Email)",
+                "6. Production Assistant tasks",
+                "7. Internal team notifications",
+            ],
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error queuing full workflow for session {session_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/sessions/{session_id}/workflow-status", response_model=Dict[str, Any])
+async def get_workflow_status(
+    session_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get the workflow status for a call session.
+
+    Returns completeness score, portal status, notifications sent, etc.
+    """
+    try:
+        # Get session with workflow metadata
+        result = db.execute(text("""
+            SELECT
+                cs.id, cs.status, cs.metadata,
+                cs.loan_id, cs.processing_started_at, cs.processing_completed_at,
+                l.loan_number, l.borrower_name,
+                (SELECT COUNT(*) FROM call_artifacts WHERE session_id = cs.id) as artifact_count,
+                (SELECT COUNT(*) FROM intake_field_updates WHERE session_id = cs.id) as fields_captured,
+                (SELECT COUNT(*) FROM call_risk_flags WHERE session_id = cs.id) as risk_flags,
+                (SELECT COUNT(*) FROM tasks WHERE source_id = cs.id::text) as tasks_created
+            FROM call_sessions cs
+            LEFT JOIN loans l ON l.id = cs.loan_id
+            WHERE cs.id = :session_id
+        """), {"session_id": session_id}).fetchone()
+
+        if not result:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        metadata = result[2] if result[2] else {}
+
+        return {
+            "session_id": str(result[0]),
+            "status": result[1],
+            "loan_id": str(result[3]) if result[3] else None,
+            "loan_number": result[6],
+            "borrower_name": result[7],
+            "processing": {
+                "started_at": result[4].isoformat() if result[4] else None,
+                "completed_at": result[5].isoformat() if result[5] else None,
+            },
+            "completeness": {
+                "score": metadata.get("completeness_score"),
+                "percentage": metadata.get("completeness_percentage"),
+                "meets_threshold": metadata.get("meets_threshold"),
+            },
+            "artifacts": {
+                "total": result[8],
+                "fields_captured": result[9],
+                "risk_flags": result[10],
+                "tasks_created": result[11],
+            },
+            "workflow_completed": result[1] == "completed",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting workflow status for session {session_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
 # BACKGROUND TASK HELPERS
 # =============================================================================
 
@@ -1103,10 +1233,22 @@ async def run_agents_background(
     db_url: str,
     session_id: str,
     agent_types: Optional[List[str]] = None,
-    user_id: Optional[int] = None,
+    user_id: Optional[str] = None,
     force_rerun: bool = False,
+    full_workflow: bool = True,
 ):
-    """Background task to run agents."""
+    """
+    Background task to run agents and optionally the full call-end workflow.
+
+    When full_workflow=True (default), this runs:
+    1. AI Agents (Scribe, Jr. LO, Underwriter)
+    2. Completeness scoring
+    3. MISMO 3.4 generation
+    4. Client portal creation
+    5. Borrower notifications (SMS + Email)
+    6. Task creation for Production Assistants
+    7. Internal team notifications
+    """
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
 
@@ -1116,14 +1258,28 @@ async def run_agents_background(
         db = SessionLocal()
 
         try:
-            orchestrator = CallMonitoringOrchestrator(db)
-            await orchestrator.run_agents(
-                session_id=UUID(session_id),
-                agent_types=agent_types,
-                trigger="api_request",
-            )
+            if full_workflow:
+                # Run full call-end orchestration
+                from services.call_monitoring.call_end_orchestrator import CallEndOrchestrator
+                call_end_orchestrator = CallEndOrchestrator(db)
+                result = await call_end_orchestrator.process_call_end(
+                    session_id=str(session_id),
+                    user_id=str(user_id) if user_id else None,
+                    auto_approve=True,
+                )
+                logger.info(f"Full workflow completed for session {session_id}: {result.get('status')}")
+            else:
+                # Run agents only (legacy behavior)
+                orchestrator = CallMonitoringOrchestrator(db)
+                await orchestrator.run_agents(
+                    session_id=str(session_id),
+                    agent_types=agent_types,
+                    trigger="api_request",
+                )
         finally:
             db.close()
 
     except Exception as e:
         logger.error(f"Background agent processing failed: {e}")
+        import traceback
+        traceback.print_exc()

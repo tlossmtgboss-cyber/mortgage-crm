@@ -60730,6 +60730,14 @@ async def startup_event():
             except Exception as e:
                 logger.warning(f"⚠️ Call Monitoring System migration skipped: {e}")
 
+            # Run Call End Workflow migration (portal access tokens, doc requirements)
+            try:
+                from migrations.add_call_end_workflow_tables import run_migration as run_call_end_workflow_migration
+                run_call_end_workflow_migration()
+                logger.info("✅ Call End Workflow migration completed")
+            except Exception as e:
+                logger.warning(f"⚠️ Call End Workflow migration skipped: {e}")
+
             # Run Document Extraction migration (AI extraction, owner detection)
             try:
                 from migrations.add_document_extraction_tables import run_migration as run_doc_extraction_migration
