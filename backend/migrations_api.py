@@ -2319,3 +2319,89 @@ async def fix_mum_clients_user_id(key: str = "", user_id: int = 118):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
+
+
+@router.post("/fix-mum-client-names")
+async def fix_mum_client_names(key: str = ""):
+    """
+    Fix mum_clients with generic 'Client N' names by looking up borrower names from loans table.
+    Call with: POST /api/v1/migrations/fix-mum-client-names?key=fix-names
+    """
+    if key != "fix-names":
+        raise HTTPException(status_code=403, detail="Invalid key. Use ?key=fix-names")
+
+    db = SessionLocal()
+    try:
+        # Find mum_clients with generic names (matching 'Client N' pattern)
+        generic_clients = db.execute(text("""
+            SELECT id, client_name, loan_number
+            FROM mum_clients
+            WHERE client_name ~ '^Client [0-9]+$'
+               OR client_name ~ '^Client \\(Loan #'
+            ORDER BY id
+        """)).fetchall()
+
+        if not generic_clients:
+            return {
+                "status": "success",
+                "message": "No mum_clients with generic 'Client N' names found",
+                "updated_count": 0,
+                "checked_count": 0
+            }
+
+        updated_count = 0
+        not_found = []
+        updated_details = []
+
+        for client in generic_clients:
+            client_id, current_name, loan_number = client
+
+            if not loan_number:
+                not_found.append({"id": client_id, "name": current_name, "reason": "no loan_number"})
+                continue
+
+            # Try to find borrower name from loans table
+            loan = db.execute(text("""
+                SELECT borrower_name FROM loans WHERE loan_number = :loan_number
+            """), {"loan_number": loan_number}).fetchone()
+
+            if loan and loan[0] and loan[0] != 'Unknown Borrower':
+                borrower_name = loan[0]
+                db.execute(text("""
+                    UPDATE mum_clients
+                    SET client_name = :name, updated_at = NOW()
+                    WHERE id = :id
+                """), {"name": borrower_name, "id": client_id})
+                updated_count += 1
+                updated_details.append({
+                    "id": client_id,
+                    "old_name": current_name,
+                    "new_name": borrower_name,
+                    "loan_number": loan_number
+                })
+            else:
+                not_found.append({
+                    "id": client_id,
+                    "name": current_name,
+                    "loan_number": loan_number,
+                    "reason": "loan not found or no borrower_name"
+                })
+
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": f"Updated {updated_count} mum_client names from loans table",
+            "checked_count": len(generic_clients),
+            "updated_count": updated_count,
+            "not_found_count": len(not_found),
+            "updated_details": updated_details[:20],  # Limit to first 20
+            "not_found_sample": not_found[:10]  # Sample of not found
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Fix mum_client names error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()

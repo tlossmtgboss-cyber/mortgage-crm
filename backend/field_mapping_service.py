@@ -107,6 +107,13 @@ def validate_email(v):
 FIELD_MAPPINGS: List[FieldMapping] = [
     # ===== BORROWER INFORMATION =====
     FieldMapping(
+        crm_field='borrower_name',
+        excel_patterns=['borrower name', 'borrower full name', 'bor name', 'bor full name',
+                       'client name', 'name', 'full name', 'bor 1 name', 'bor 1 full name'],
+        data_type='string',
+        transform=lambda v: str(v).strip() if v else None,
+    ),
+    FieldMapping(
         crm_field='borrower_last_name',
         excel_patterns=['last name', 'lastname', 'bor last', 'borrower last', 'bor 1 last name'],
         data_type='string',

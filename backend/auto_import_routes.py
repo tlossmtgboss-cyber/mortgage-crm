@@ -234,9 +234,7 @@ def map_to_existing_columns(row_data: dict, destination: str) -> dict:
     elif destination == 'mum_clients':
         # Map from auto-import fields to mum_clients table columns
         field_map = {
-            # Client info
-            'borrower_first_name': 'name',
-            'borrower_last_name': 'name',  # Will be combined below
+            # Client info - skip name fields, handled separately below
             'borrower_email': 'email',
             'borrower_mobile_phone': 'phone',
             'file_name': 'loan_number',
@@ -271,12 +269,29 @@ def map_to_existing_columns(row_data: dict, destination: str) -> dict:
             if auto_field in row_data and row_data[auto_field] is not None:
                 result[db_field] = row_data[auto_field]
 
-        # Combine first and last name for client_name
-        first_name = row_data.get('borrower_first_name', '')
-        last_name = row_data.get('borrower_last_name', '')
+        # Enhanced name extraction - try multiple sources
+        client_name = None
+
+        # Priority 1: Combine first and last name if both exist
+        first_name = row_data.get('borrower_first_name', '') or ''
+        last_name = row_data.get('borrower_last_name', '') or ''
         if first_name or last_name:
-            result['name'] = f"{first_name or ''} {last_name or ''}".strip()
-            result['client_name'] = result['name']
+            client_name = f"{first_name} {last_name}".strip()
+
+        # Priority 2: Use combined borrower_name field
+        if not client_name and row_data.get('borrower_name'):
+            client_name = str(row_data['borrower_name']).strip()
+
+        # Priority 3: Check for direct name or client_name fields
+        if not client_name and row_data.get('name'):
+            client_name = str(row_data['name']).strip()
+        if not client_name and row_data.get('client_name'):
+            client_name = str(row_data['client_name']).strip()
+
+        # Set the client_name if we found one
+        if client_name:
+            result['client_name'] = client_name
+            result['name'] = client_name
 
     return result
 
@@ -562,11 +577,28 @@ async def auto_import(
                         )
 
                     elif destination == 'mum_clients':
-                        # Map 'name' to 'client_name' (required NOT NULL field)
-                        if 'name' in row_data and 'client_name' not in row_data:
-                            row_data['client_name'] = row_data.pop('name')
-                        elif 'client_name' not in row_data:
-                            row_data['client_name'] = row_data.get('borrower_name', f'Client {idx + 1}')
+                        # Ensure client_name is set from various sources
+                        if 'client_name' not in row_data:
+                            # Try to get name from various sources in priority order
+                            name_sources = [
+                                row_data.get('name'),
+                                row_data.get('borrower_name'),
+                                # Last resort: create from first/last from original transformed data
+                                f"{transformed_row.get('borrower_first_name', '')} {transformed_row.get('borrower_last_name', '')}".strip() if transformed_row.get('borrower_first_name') or transformed_row.get('borrower_last_name') else None,
+                                transformed_row.get('borrower_name'),
+                                transformed_row.get('name'),
+                            ]
+                            for name_source in name_sources:
+                                if name_source and str(name_source).strip():
+                                    row_data['client_name'] = str(name_source).strip()
+                                    break
+                            else:
+                                # No name found - use loan number as identifier instead of generic Client N
+                                loan_num = row_data.get('loan_number', '')
+                                row_data['client_name'] = f'Client (Loan #{loan_num})' if loan_num else f'Client {idx + 1}'
+                        # Remove 'name' if it exists since mum_clients uses 'client_name'
+                        if 'name' in row_data:
+                            row_data.pop('name')
 
                         # Ensure required NOT NULL fields
                         if 'original_loan_amount' not in row_data:
