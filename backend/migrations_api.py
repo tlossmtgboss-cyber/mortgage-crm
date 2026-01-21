@@ -2587,6 +2587,8 @@ async def migrate_leads_to_mum_clients(
                 lead_ids_to_delete.append(lead.id)
 
             except Exception as e:
+                # Rollback the failed transaction and start fresh
+                db.rollback()
                 errors.append({
                     "lead_id": lead.id,
                     "name": lead.name,
