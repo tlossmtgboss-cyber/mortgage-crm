@@ -5,7 +5,9 @@
  * Owner-only access.
  */
 
-const API_BASE = process.env.REACT_APP_API_URL || '';
+import { API_BASE_URL } from './api';
+
+const API_BASE = API_BASE_URL;
 
 /**
  * Get dashboard overview data with KPIs

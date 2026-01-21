@@ -4,7 +4,9 @@
  * Handles all API calls to the Follow Up Boss integration backend endpoints.
  */
 
-const API_BASE = process.env.REACT_APP_API_URL || '';
+import { API_BASE_URL } from './api';
+
+const API_BASE = API_BASE_URL;
 
 /**
  * Make an authenticated API request
