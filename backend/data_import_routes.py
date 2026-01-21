@@ -1055,11 +1055,16 @@ async def execute_import(
                         placeholders = ', '.join(['%s'] * len(columns))
                         columns_str = ', '.join(columns)
 
+                        # Log what we're about to insert for debugging
+                        logger.info(f"MUM insert - columns: {columns_str[:200]}")
+                        logger.info(f"MUM insert - values count: {len(values)}, client_name: {values[columns.index('client_name')] if 'client_name' in columns else 'N/A'}")
+
                         cursor.execute(
                             f"INSERT INTO mum_clients ({columns_str}) VALUES ({placeholders})",
                             values
                         )
                         imported += 1
+                        logger.info(f"MUM insert successful - row {idx + 1}")
 
                     # Commit each successful row immediately to prevent cascade failures
                     conn.commit()
@@ -1068,7 +1073,9 @@ async def execute_import(
                     # Rollback just this failed row and continue with the next
                     conn.rollback()
                     failed += 1
-                    errors.append(f"Row {idx + 1}: {str(row_error)}")
+                    error_msg = f"Row {idx + 1}: {str(row_error)}"
+                    errors.append(error_msg)
+                    logger.error(f"Import error - {destination}: {error_msg}")
                     if len(errors) >= 100:  # Limit error messages
                         errors.append("... (additional errors truncated)")
                         break
