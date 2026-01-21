@@ -10,7 +10,7 @@ const isNativeApp = Capacitor.isNativePlatform() && !isLocalhost; // Don't treat
 
 export const API_BASE_URL = isLocalhost
   ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
-  : 'https://api.perenniaai.com'; // Production custom domain
+  : 'https://api.perenniaai.com'; // Production Railway API
 
 // Create axios instance with mobile app identification
 const api = axios.create({
