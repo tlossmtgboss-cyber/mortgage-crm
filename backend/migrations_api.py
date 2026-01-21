@@ -1851,3 +1851,34 @@ async def add_missing_database_columns(
     except Exception as e:
         logger.error(f"Missing columns migration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/fix-loan-stages")
+async def fix_loan_stages(key: str = ""):
+    """
+    Fix NULL loan stage values to 'Processing'.
+    Call with: POST /api/v1/migrations/fix-loan-stages?key=fix-stages
+    """
+    if key != "fix-stages":
+        raise HTTPException(status_code=403, detail="Invalid key")
+
+    db = SessionLocal()
+    try:
+        # Count NULLs before fix
+        result = db.execute(text("SELECT COUNT(*) FROM loans WHERE stage IS NULL"))
+        null_count = result.scalar()
+
+        # Fix NULL stages
+        db.execute(text("UPDATE loans SET stage = 'Processing' WHERE stage IS NULL"))
+        db.commit()
+
+        return {
+            "status": "success",
+            "null_count_before": null_count,
+            "message": f"Fixed {null_count} NULL loan stages to 'Processing'"
+        }
+    except Exception as e:
+        logger.error(f"Fix loan stages error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
