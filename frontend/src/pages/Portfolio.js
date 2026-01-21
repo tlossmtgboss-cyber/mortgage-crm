@@ -117,6 +117,7 @@ function Portfolio() {
         primary_residence: '0%',
         second_home: '0%',
         investment_property: '0%',
+        new_construction: '0%',
         conventional_mi: '0%',
         fha: '0%',
         va: '0%',
@@ -131,6 +132,7 @@ function Portfolio() {
       primary_residence: 0,
       second_home: 0,
       investment_property: 0,
+      new_construction: 0,
       conventional_mi: 0,
       fha: 0,
       va: 0,
@@ -147,6 +149,15 @@ function Portfolio() {
         counts.second_home++;
       } else if (occupancy.includes('invest') || occupancy === 'investment' || occupancy === 'non_owner_occupied') {
         counts.investment_property++;
+      }
+
+      // New construction check
+      const propertyType = (client.property_type || '').toLowerCase();
+      const isNewConstruction = client.is_new_construction || client.new_construction ||
+        propertyType.includes('new construction') || propertyType.includes('new_construction') ||
+        (client.loan_purpose || '').toLowerCase().includes('construction');
+      if (isNewConstruction) {
+        counts.new_construction++;
       }
 
       // Loan type segmentation
@@ -173,6 +184,7 @@ function Portfolio() {
       primary_residence: toPercent(counts.primary_residence),
       second_home: toPercent(counts.second_home),
       investment_property: toPercent(counts.investment_property),
+      new_construction: toPercent(counts.new_construction),
       conventional_mi: toPercent(counts.conventional_mi),
       fha: toPercent(counts.fha),
       va: toPercent(counts.va),
@@ -508,6 +520,14 @@ function Portfolio() {
             >
               <div className="mum-stat-value">{clientSegments?.investment_property || '0%'}</div>
               <div className="mum-stat-label">INVESTMENT PROPERTY</div>
+            </div>
+            <div
+              className="mum-stat-card segment-card clickable"
+              onClick={() => navigate('/portfolio/detail?metric=new_construction')}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="mum-stat-value">{clientSegments?.new_construction || '0%'}</div>
+              <div className="mum-stat-label">NEW CONSTRUCTION</div>
             </div>
           </div>
 
