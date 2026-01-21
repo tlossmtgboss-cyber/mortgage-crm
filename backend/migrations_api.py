@@ -1882,3 +1882,126 @@ async def fix_loan_stages(key: str = ""):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
+
+
+@router.post("/fix-loan-required-fields")
+async def fix_loan_required_fields(key: str = ""):
+    """
+    Fix NULL values in required loan fields that cause validation errors.
+    Call with: POST /api/v1/migrations/fix-loan-required-fields?key=fix-loans
+    """
+    if key != "fix-loans":
+        raise HTTPException(status_code=403, detail="Invalid key")
+
+    db = SessionLocal()
+    try:
+        fixes = {}
+
+        # Check for NULL amounts
+        result = db.execute(text("SELECT COUNT(*) FROM loans WHERE amount IS NULL"))
+        null_amounts = result.scalar()
+        if null_amounts > 0:
+            db.execute(text("UPDATE loans SET amount = 0 WHERE amount IS NULL"))
+            fixes["amount"] = null_amounts
+
+        # Check for NULL days_in_stage
+        result = db.execute(text("SELECT COUNT(*) FROM loans WHERE days_in_stage IS NULL"))
+        null_days = result.scalar()
+        if null_days > 0:
+            db.execute(text("UPDATE loans SET days_in_stage = 0 WHERE days_in_stage IS NULL"))
+            fixes["days_in_stage"] = null_days
+
+        # Check for NULL sla_status
+        result = db.execute(text("SELECT COUNT(*) FROM loans WHERE sla_status IS NULL"))
+        null_sla = result.scalar()
+        if null_sla > 0:
+            db.execute(text("UPDATE loans SET sla_status = 'On Track' WHERE sla_status IS NULL"))
+            fixes["sla_status"] = null_sla
+
+        # Check for NULL stage
+        result = db.execute(text("SELECT COUNT(*) FROM loans WHERE stage IS NULL"))
+        null_stage = result.scalar()
+        if null_stage > 0:
+            db.execute(text("UPDATE loans SET stage = 'Processing' WHERE stage IS NULL"))
+            fixes["stage"] = null_stage
+
+        # Check for NULL borrower_name
+        result = db.execute(text("SELECT COUNT(*) FROM loans WHERE borrower_name IS NULL OR borrower_name = ''"))
+        null_borrower = result.scalar()
+        if null_borrower > 0:
+            db.execute(text("UPDATE loans SET borrower_name = 'Unknown Borrower' WHERE borrower_name IS NULL OR borrower_name = ''"))
+            fixes["borrower_name"] = null_borrower
+
+        # Check for NULL loan_number
+        result = db.execute(text("SELECT COUNT(*) FROM loans WHERE loan_number IS NULL OR loan_number = ''"))
+        null_loan_number = result.scalar()
+        if null_loan_number > 0:
+            db.execute(text("UPDATE loans SET loan_number = 'LN-' || id WHERE loan_number IS NULL OR loan_number = ''"))
+            fixes["loan_number"] = null_loan_number
+
+        # Check for NULL created_at
+        result = db.execute(text("SELECT COUNT(*) FROM loans WHERE created_at IS NULL"))
+        null_created = result.scalar()
+        if null_created > 0:
+            db.execute(text("UPDATE loans SET created_at = NOW() WHERE created_at IS NULL"))
+            fixes["created_at"] = null_created
+
+        db.commit()
+
+        return {
+            "status": "success",
+            "fixes": fixes,
+            "total_fixed": sum(fixes.values()),
+            "message": f"Fixed {sum(fixes.values())} NULL values in required fields"
+        }
+    except Exception as e:
+        logger.error(f"Fix loan required fields error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@router.get("/debug-loans")
+async def debug_loans(key: str = ""):
+    """
+    Debug endpoint to check loan data for validation issues.
+    Call with: GET /api/v1/migrations/debug-loans?key=debug
+    """
+    if key != "debug":
+        raise HTTPException(status_code=403, detail="Invalid key")
+
+    db = SessionLocal()
+    try:
+        # Get sample loan data
+        result = db.execute(text("""
+            SELECT id, loan_number, borrower_name, stage, amount,
+                   days_in_stage, sla_status, created_at, loan_officer_id
+            FROM loans
+            LIMIT 5
+        """))
+        loans = [dict(row._mapping) for row in result.fetchall()]
+
+        # Check for NULL values in required fields
+        nulls = db.execute(text("""
+            SELECT
+                COUNT(*) FILTER (WHERE loan_number IS NULL OR loan_number = '') as null_loan_number,
+                COUNT(*) FILTER (WHERE borrower_name IS NULL OR borrower_name = '') as null_borrower,
+                COUNT(*) FILTER (WHERE stage IS NULL) as null_stage,
+                COUNT(*) FILTER (WHERE amount IS NULL) as null_amount,
+                COUNT(*) FILTER (WHERE days_in_stage IS NULL) as null_days,
+                COUNT(*) FILTER (WHERE sla_status IS NULL OR sla_status = '') as null_sla,
+                COUNT(*) FILTER (WHERE created_at IS NULL) as null_created,
+                COUNT(*) as total
+            FROM loans
+        """)).fetchone()
+
+        return {
+            "sample_loans": loans,
+            "null_counts": dict(nulls._mapping),
+            "total_loans": nulls._mapping["total"]
+        }
+    except Exception as e:
+        logger.error(f"Debug loans error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
