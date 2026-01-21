@@ -1214,19 +1214,30 @@ async def create_workspace(
     # Get lead if lead_id provided
     lead = None
     if request.lead_id:
+        # First try to find lead owned by current user
         lead = db.query(Lead).filter(
             Lead.id == request.lead_id,
             Lead.owner_id == current_user.id
         ).first()
 
+        # If not found, try to find lead within the same organization
         if not lead:
-            raise HTTPException(status_code=404, detail="Lead not found")
+            lead = db.query(Lead).filter(
+                Lead.id == request.lead_id,
+                Lead.organization_id == org_id
+            ).first()
 
-        # Check for existing workspace for this lead
+        # Check for existing workspace for this lead/loan (even if lead not found)
         existing = db.query(PURLWorkspace).filter(
             PURLWorkspace.organization_id == org_id,
             PURLWorkspace.meta_data['lead_id'].astext == str(request.lead_id)
         ).first()
+
+        if not existing and request.loan_id:
+            existing = db.query(PURLWorkspace).filter(
+                PURLWorkspace.organization_id == org_id,
+                PURLWorkspace.meta_data['loan_id'].astext == str(request.loan_id)
+            ).first()
 
         if existing:
             raise HTTPException(

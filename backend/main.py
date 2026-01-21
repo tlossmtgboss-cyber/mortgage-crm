@@ -49259,11 +49259,14 @@ def copy_loan_to_mum_client(loan: Loan, db: Session, user_id: int) -> Optional[M
     """
     from datetime import timedelta
 
+    # Use a savepoint so we can rollback just the MUM client creation without affecting the loan update
+    savepoint = db.begin_nested()
     try:
         # Check if MUM client already exists for this loan
         existing = db.query(MUMClient).filter(MUMClient.loan_number == loan.loan_number).first()
         if existing:
             logger.info(f"MUM client already exists for loan {loan.loan_number}")
+            savepoint.commit()
             return existing
 
         # Calculate days since funding
@@ -49272,12 +49275,16 @@ def copy_loan_to_mum_client(loan: Loan, db: Session, user_id: int) -> Optional[M
             funded_date = funded_date.replace(tzinfo=timezone.utc)
         days_since = (datetime.now(timezone.utc) - funded_date).days
 
+        # Get loan amount with fallback to 0 if not set
+        loan_amount = loan.amount or 0.0
+        loan_rate = loan.rate or 0.0
+
         # Estimate property value (assume 80% LTV if not available)
-        estimated_property_value = loan.appraisal_value or (loan.amount * 1.25)
+        estimated_property_value = loan.appraisal_value or (loan_amount * 1.25 if loan_amount else 0.0)
 
         # Create MUM client from loan data
         mum_client = MUMClient(
-            client_name=loan.borrower_name,
+            client_name=loan.borrower_name or "Unknown Borrower",
             email=loan.borrower_email,
             phone=loan.borrower_phone,
             loan_number=loan.loan_number,
@@ -49285,14 +49292,14 @@ def copy_loan_to_mum_client(loan: Loan, db: Session, user_id: int) -> Optional[M
             closing_date=funded_date,
             first_payment_date=funded_date + timedelta(days=45),  # Estimate first payment ~45 days after close
             days_since_funding=days_since,
-            original_rate=loan.rate,
-            current_rate=loan.rate,
-            interest_rate=loan.rate or 0.0,
-            original_loan_amount=loan.amount,
-            current_loan_amount=loan.amount,
-            appraisal_value_at_closing=estimated_property_value,
-            current_property_value=estimated_property_value,
-            loan_balance=loan.amount,
+            original_rate=loan_rate,
+            current_rate=loan_rate,
+            interest_rate=loan_rate,
+            original_loan_amount=loan_amount,
+            current_loan_amount=loan_amount,
+            appraisal_value_at_closing=estimated_property_value or 0.0,
+            current_property_value=estimated_property_value or 0.0,
+            loan_balance=loan_amount,
             refinance_opportunity=False,
             engagement_score=100,  # Start with high engagement for new funded loans
             status="Active",
@@ -49316,8 +49323,8 @@ def copy_loan_to_mum_client(loan: Loan, db: Session, user_id: int) -> Optional[M
 
         # Create post-close welcome task using Task model
         welcome_task = Task(
-            title=f"Post-Close Welcome Call - {loan.borrower_name}",
-            description=f"""Congratulations! {loan.borrower_name}'s loan has funded!
+            title=f"Post-Close Welcome Call - {loan.borrower_name or 'Borrower'}",
+            description=f"""Congratulations! {loan.borrower_name or 'Borrower'}'s loan has funded!
 
 Action items:
 1. Make welcome call to congratulate and thank them
@@ -49329,8 +49336,8 @@ Action items:
 Loan Details:
 - Loan #: {loan.loan_number}
 - Program: {loan.program or 'N/A'}
-- Amount: ${loan.amount:,.2f}
-- Rate: {loan.rate or 0}%
+- Amount: ${loan_amount:,.2f}
+- Rate: {loan_rate}%
 - Close Date: {funded_date.strftime('%Y-%m-%d')}""",
             priority="high",
             loan_id=loan.id,
@@ -49344,11 +49351,11 @@ Loan Details:
 
         # Create AMR reminder task for 11 months from now
         amr_task = Task(
-            title=f"Annual Mortgage Review Due - {loan.borrower_name}",
-            description=f"""Annual Mortgage Review (AMR) is coming up for {loan.borrower_name}.
+            title=f"Annual Mortgage Review Due - {loan.borrower_name or 'Borrower'}",
+            description=f"""Annual Mortgage Review (AMR) is coming up for {loan.borrower_name or 'Borrower'}.
 
 Review items:
-1. Check current market rates vs their rate ({loan.rate or 0}%)
+1. Check current market rates vs their rate ({loan_rate}%)
 2. Evaluate refinance opportunities
 3. Review home value appreciation
 4. Discuss any life changes affecting mortgage needs
@@ -49356,8 +49363,8 @@ Review items:
 
 Original Loan:
 - Loan #: {loan.loan_number}
-- Original Amount: ${loan.amount:,.2f}
-- Rate: {loan.rate or 0}%""",
+- Original Amount: ${loan_amount:,.2f}
+- Rate: {loan_rate}%""",
             priority="medium",
             loan_id=loan.id,
             owner_id=user_id,
@@ -49370,12 +49377,16 @@ Original Loan:
 
         logger.info(f"Created post-close tasks for MUM client {mum_client.id}")
 
+        # Commit the savepoint
+        savepoint.commit()
         return mum_client
 
     except Exception as e:
         logger.error(f"Error creating MUM client from loan {loan.loan_number}: {e}")
         import traceback
         logger.error(traceback.format_exc())
+        # Rollback only the savepoint, not the entire transaction (preserves loan status update)
+        savepoint.rollback()
         return None
 
 

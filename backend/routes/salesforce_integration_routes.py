@@ -246,6 +246,91 @@ async def diagnose_salesforce_connection(
     return diagnosis
 
 
+@router.get("/test-schema/{profile_id}")
+async def test_schema_query(
+    profile_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Test endpoint to query schemas for a profile - no auth required for debugging.
+    """
+    try:
+        db.rollback()
+    except:
+        pass
+
+    result = {
+        "profile_id": profile_id,
+        "profile_exists": False,
+        "schemas": [],
+        "schema_count": 0,
+        "errors": []
+    }
+
+    try:
+        # Check if profile exists
+        profile = db.query(IntegrationProfile).filter(IntegrationProfile.id == profile_id).first()
+        if profile:
+            result["profile_exists"] = True
+            result["profile_status"] = profile.status
+            result["profile_user_id"] = profile.user_id
+    except Exception as e:
+        result["errors"].append(f"Profile query error: {str(e)}")
+
+    try:
+        # Get schemas using the same method as the real endpoint
+        schemas = salesforce_schema.get_all_schemas(db, profile_id)
+        result["schema_count"] = len(schemas)
+        result["schemas"] = [
+            {"name": s["name"], "field_count": len(s.get("fields", []))}
+            for s in schemas[:10]  # Limit to first 10 for debugging
+        ]
+    except Exception as e:
+        result["errors"].append(f"Schema query error: {str(e)}")
+        import traceback
+        result["traceback"] = traceback.format_exc()
+
+    return result
+
+
+@router.post("/trigger-discovery/{profile_id}")
+async def trigger_discovery_for_profile(
+    profile_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Trigger schema discovery for a specific profile - no auth required for debugging.
+    """
+    try:
+        db.rollback()
+    except:
+        pass
+
+    try:
+        # Get profile
+        profile = db.query(IntegrationProfile).filter(IntegrationProfile.id == profile_id).first()
+        if not profile:
+            return {"error": "Profile not found"}
+
+        if profile.status == 'disconnected':
+            return {"error": "Profile is disconnected"}
+
+        # Trigger schema discovery
+        schemas = await salesforce_schema.discover_schema(db, profile_id)
+        return {
+            "status": "success",
+            "objects_discovered": len(schemas),
+            "objects": [s.get("name") for s in schemas[:20]] if schemas else []
+        }
+    except Exception as e:
+        import traceback
+        return {
+            "status": "error",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+
 # ============ Pydantic Models ============
 
 class ConnectionStatus(BaseModel):
@@ -463,12 +548,27 @@ async def oauth_callback(
         result = await salesforce_oauth.handle_callback(db, code, state)
         logger.info(f"OAuth callback successful for user {result.get('user_id')}, profile status: {result.get('profile').status if result.get('profile') else 'N/A'}")
 
+        # Trigger schema discovery in the background after successful OAuth
+        profile = result.get('profile')
+        if profile:
+            try:
+                logger.info(f"Triggering initial schema discovery for profile {profile.id}...")
+                schemas = await salesforce_schema.discover_schema(db, profile.id)
+                logger.info(f"Initial schema discovery completed: {len(schemas)} objects discovered")
+            except Exception as schema_error:
+                # Don't fail OAuth callback if schema discovery fails - it can be retried later
+                logger.warning(f"Initial schema discovery failed (non-fatal): {schema_error}")
+
         frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
         final_redirect = result.get('return_url') or f"{frontend_url}/settings/integrations"
 
-        # Properly append query parameter
-        separator = '&' if '?' in final_redirect else '?'
-        redirect_url = f"{final_redirect}{separator}salesforce=connected"
+        # Properly append query parameter - avoid double ?
+        if '?salesforce=' in final_redirect:
+            redirect_url = final_redirect  # Already has the parameter
+        elif '?' in final_redirect:
+            redirect_url = f"{final_redirect}&salesforce=connected"
+        else:
+            redirect_url = f"{final_redirect}?salesforce=connected"
         logger.info(f"Redirecting to: {redirect_url}")
 
         return RedirectResponse(url=redirect_url)

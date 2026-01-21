@@ -229,19 +229,29 @@ const PortalSelectorModal = ({ isOpen, onClose, loan }) => {
     try {
       switch (type) {
         case 'client': {
+          // Build borrower name from loan data
+          const borrowerFirstName = loan.borrower_first_name || loan.first_name || (loan.borrower_name?.split(' ')[0]) || '';
+          const borrowerLastName = loan.borrower_last_name || loan.last_name || (loan.borrower_name?.split(' ').slice(1).join(' ')) || '';
+          const borrowerName = loan.borrower_name || `${borrowerFirstName} ${borrowerLastName}`.trim() || 'Borrower';
+
           const response = await fetch(`${API_BASE_URL}/api/v1/purl-admin/workspaces`, {
             method: 'POST',
             headers: getAuthHeaders(),
             body: JSON.stringify({
               lead_id: loan.lead_id || null,
               loan_id: loan.id,
-              slug: `loan-${loan.id}-${Date.now()}`,
+              borrower_name: borrowerName,
+              first_name: borrowerFirstName || null,
+              last_name: borrowerLastName || null,
+              email: loan.borrower_email || loan.email || null,
+              phone: loan.borrower_phone || loan.phone || null,
+              custom_slug: null,  // Let backend generate slug from borrower name
             }),
           });
 
           if (response.ok) {
             const data = await response.json();
-            const slug = data.data?.slug || data.slug;
+            const slug = data.workspace?.slug || data.data?.slug || data.slug;
             setPortalStatus(prev => ({
               ...prev,
               client: {
@@ -251,7 +261,8 @@ const PortalSelectorModal = ({ isOpen, onClose, loan }) => {
               },
             }));
           } else {
-            throw new Error('Failed to create client portal');
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.detail || errorData.error || 'Failed to create client portal');
           }
           break;
         }
