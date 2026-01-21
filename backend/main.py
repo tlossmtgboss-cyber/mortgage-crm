@@ -23014,6 +23014,42 @@ async def add_morning_checkin_migration(db: Session = Depends(get_db)):
         logger.error(f"Migration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# Rate Sheet Migration Endpoint
+@app.post("/api/v1/migrations/add-rate-sheets")
+async def add_rate_sheets_migration(db: Session = Depends(get_db)):
+    """Run migration to add rate sheet and refinance opportunity tables"""
+    try:
+        from sqlalchemy import text as sql_text
+
+        # Create tables using SQLAlchemy models (handles SQLite/PostgreSQL automatically)
+        from models.rate_sheet import RateSheet, RateSheetRate, RefinanceOpportunity
+        from database import engine
+
+        tables_created = []
+        errors = []
+
+        for model in [RateSheet, RateSheetRate, RefinanceOpportunity]:
+            try:
+                model.__table__.create(engine, checkfirst=True)
+                tables_created.append(model.__tablename__)
+            except Exception as e:
+                error_msg = str(e)
+                if 'already exists' in error_msg.lower():
+                    tables_created.append(f"{model.__tablename__} (already exists)")
+                else:
+                    errors.append(f"{model.__tablename__}: {error_msg[:100]}")
+
+        return {
+            "success": len(errors) == 0,
+            "message": f"Rate sheet migration complete: {len(tables_created)} tables",
+            "tables_created": tables_created,
+            "errors": errors if errors else None
+        }
+    except Exception as e:
+        logger.error(f"Rate sheet migration error: {e}")
+        return {"success": False, "error": str(e)}
+
+
 # ============================================================================
 # API KEY HELPER FUNCTIONS
 # ============================================================================
