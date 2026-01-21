@@ -231,6 +231,53 @@ def map_to_existing_columns(row_data: dict, destination: str) -> dict:
         if first_name or last_name:
             result['borrower_name'] = f"{first_name or ''} {last_name or ''}".strip()
 
+    elif destination == 'mum_clients':
+        # Map from auto-import fields to mum_clients table columns
+        field_map = {
+            # Client info
+            'borrower_first_name': 'name',
+            'borrower_last_name': 'name',  # Will be combined below
+            'borrower_email': 'email',
+            'borrower_mobile_phone': 'phone',
+            'file_name': 'loan_number',
+
+            # Loan details
+            'loan_amount': 'loan_balance',
+            'interest_rate': 'current_rate',
+            'original_interest_rate': 'original_rate',
+
+            # Property values
+            'appraised_value': 'appraisal_value_at_closing',
+            'current_value': 'current_property_value',
+
+            # Dates
+            'funded_date': 'original_close_date',
+            'scheduled_closing_date': 'closing_date',
+            'close_date': 'closing_date',
+
+            # Team
+            'loan_officer_name': 'loan_officer',
+            'loan_officer_email': 'loan_officer_email',
+            'loan_processor_name': 'processor',
+            'loan_processor_email': 'processor_email',
+            'underwriter_name': 'underwriter',
+            'closer_name': 'closer',
+
+            # Loan type
+            'loan_program_name': 'loan_type',
+        }
+
+        for auto_field, db_field in field_map.items():
+            if auto_field in row_data and row_data[auto_field] is not None:
+                result[db_field] = row_data[auto_field]
+
+        # Combine first and last name for client_name
+        first_name = row_data.get('borrower_first_name', '')
+        last_name = row_data.get('borrower_last_name', '')
+        if first_name or last_name:
+            result['name'] = f"{first_name or ''} {last_name or ''}".strip()
+            result['client_name'] = result['name']
+
     return result
 
 
@@ -511,6 +558,74 @@ async def auto_import(
                         placeholders = ', '.join([f":{k}" for k in columns])
                         db.execute(
                             text(f"INSERT INTO loans ({', '.join(columns)}) VALUES ({placeholders})"),
+                            row_data
+                        )
+
+                    elif destination == 'mum_clients':
+                        # Map 'name' to 'client_name' (required NOT NULL field)
+                        if 'name' in row_data and 'client_name' not in row_data:
+                            row_data['client_name'] = row_data.pop('name')
+                        elif 'client_name' not in row_data:
+                            row_data['client_name'] = row_data.get('borrower_name', f'Client {idx + 1}')
+
+                        # Ensure required NOT NULL fields
+                        if 'original_loan_amount' not in row_data:
+                            row_data['original_loan_amount'] = row_data.get('loan_balance', row_data.get('amount', 0)) or 0
+                        if 'current_loan_amount' not in row_data:
+                            row_data['current_loan_amount'] = row_data.get('loan_balance', row_data.get('amount', 0)) or 0
+                        if 'interest_rate' not in row_data:
+                            row_data['interest_rate'] = row_data.get('current_rate', row_data.get('rate', 0)) or 0
+                        if 'appraisal_value_at_closing' not in row_data:
+                            lb = row_data.get('loan_balance', row_data.get('amount', 0)) or 0
+                            row_data['appraisal_value_at_closing'] = lb * 1.25 if lb else 0
+                        if 'current_property_value' not in row_data:
+                            lb = row_data.get('loan_balance', row_data.get('amount', 0)) or 0
+                            row_data['current_property_value'] = lb * 1.25 if lb else 0
+                        if 'closing_date' not in row_data:
+                            row_data['closing_date'] = row_data.get('original_close_date', datetime.utcnow().date())
+                        if 'first_payment_date' not in row_data:
+                            row_data['first_payment_date'] = row_data.get('closing_date', datetime.utcnow().date())
+                        if 'created_at' not in row_data:
+                            row_data['created_at'] = datetime.utcnow()
+                        if 'status' not in row_data:
+                            row_data['status'] = 'active'
+
+                        # CRITICAL: Set user_id for multi-tenancy
+                        user_id = getattr(current_user, 'id', None)
+                        if user_id and 'user_id' not in row_data:
+                            row_data['user_id'] = user_id
+
+                        # Filter to valid columns
+                        row_data = {k: v for k, v in row_data.items() if k in valid_columns}
+
+                        # Check for existing by loan_number
+                        loan_number = row_data.get('loan_number')
+                        if loan_number:
+                            result = db.execute(
+                                text("SELECT id FROM mum_clients WHERE loan_number = :ln"),
+                                {"ln": loan_number}
+                            )
+                            existing = result.fetchone()
+                            if existing:
+                                # Update existing
+                                update_data = {k: v for k, v in row_data.items() if k not in ['created_at', 'loan_number']}
+                                update_data['updated_at'] = datetime.utcnow()
+                                if update_data:
+                                    set_clause = ', '.join([f"{k} = :{k}" for k in update_data.keys()])
+                                    update_data['id'] = existing[0]
+                                    db.execute(
+                                        text(f"UPDATE mum_clients SET {set_clause} WHERE id = :id"),
+                                        update_data
+                                    )
+                                    db.commit()
+                                    imported += 1
+                                    continue
+
+                        # Insert new
+                        columns = list(row_data.keys())
+                        placeholders = ', '.join([f":{k}" for k in columns])
+                        db.execute(
+                            text(f"INSERT INTO mum_clients ({', '.join(columns)}) VALUES ({placeholders})"),
                             row_data
                         )
 
