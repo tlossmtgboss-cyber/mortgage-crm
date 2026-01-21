@@ -2107,6 +2107,52 @@ async def debug_mum_clients(key: str = ""):
         db.close()
 
 
+@router.post("/test-mum-insert")
+async def test_mum_insert(key: str = "", user_id: int = 118):
+    """
+    Test direct insert into mum_clients to debug issues.
+    Call with: POST /api/v1/migrations/test-mum-insert?key=test-mum&user_id=118
+    """
+    if key != "test-mum":
+        raise HTTPException(status_code=403, detail="Invalid key")
+
+    db = SessionLocal()
+    try:
+        from datetime import datetime
+        # Try inserting a test record with all required fields
+        db.execute(text("""
+            INSERT INTO mum_clients (
+                client_name, original_loan_amount, current_loan_amount,
+                interest_rate, appraisal_value_at_closing, current_property_value,
+                closing_date, first_payment_date, user_id, status, created_at, name
+            ) VALUES (
+                'Test Client', 300000, 290000,
+                6.5, 375000, 400000,
+                '2024-01-15', '2024-03-01', :user_id, 'active', NOW(), 'Test Client'
+            )
+        """), {"user_id": user_id})
+        db.commit()
+
+        # Verify it was inserted
+        count = db.execute(text("SELECT COUNT(*) FROM mum_clients")).scalar()
+
+        return {
+            "status": "success",
+            "message": "Test record inserted successfully",
+            "total_mum_clients": count
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Test mum insert error: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "error_type": type(e).__name__
+        }
+    finally:
+        db.close()
+
+
 @router.post("/fix-mum-clients-user-id")
 async def fix_mum_clients_user_id(key: str = "", user_id: int = 118):
     """

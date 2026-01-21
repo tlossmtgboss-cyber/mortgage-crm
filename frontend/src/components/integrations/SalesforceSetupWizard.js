@@ -41,6 +41,7 @@ function SalesforceSetupWizard({ onComplete }) {
   const [syncingCalendar, setSyncingCalendar] = useState(false);
   const [importingClosedLoans, setImportingClosedLoans] = useState(false);
   const [importResults, setImportResults] = useState(null);
+  const [connectionError, setConnectionError] = useState(false); // Track if Salesforce connection is broken
 
   const token = localStorage.getItem('token');
 
@@ -116,9 +117,15 @@ function SalesforceSetupWizard({ onComplete }) {
       if (res.ok) {
         const data = await res.json();
         setSchemas(data.objects || []);
+        setConnectionError(false);
+      } else if (res.status === 500 || res.status === 401) {
+        // Connection is broken - tokens may be expired
+        console.error('Salesforce connection error:', res.status);
+        setConnectionError(true);
       }
     } catch (err) {
       console.error('Failed to load schemas:', err);
+      setConnectionError(true);
     }
   };
 
@@ -131,14 +138,20 @@ function SalesforceSetupWizard({ onComplete }) {
       });
       if (res.ok) {
         toast.success('Schema discovered successfully');
+        setConnectionError(false);
         await loadSchemas();
         setStep(2);
+      } else if (res.status === 500 || res.status === 401) {
+        // Connection is broken - tokens may be expired
+        setConnectionError(true);
+        toast.error('Salesforce connection error. Please reconnect your account.');
       } else {
         const error = await res.json();
         toast.error(error.detail || 'Failed to discover schema');
       }
     } catch (err) {
       toast.error('Failed to discover schema');
+      setConnectionError(true);
     }
     setLoading(false);
   };
