@@ -2321,6 +2321,52 @@ async def fix_mum_clients_user_id(key: str = "", user_id: int = 118):
         db.close()
 
 
+@router.post("/clear-mum-clients-for-reimport")
+async def clear_mum_clients_for_reimport(key: str = "", user_id: int = 0):
+    """
+    Delete all mum_clients for a user to allow fresh re-import with corrected names.
+    Call with: POST /api/v1/migrations/clear-mum-clients-for-reimport?key=clear-mum&user_id=118
+    """
+    if key != "clear-mum":
+        raise HTTPException(status_code=403, detail="Invalid key. Use ?key=clear-mum&user_id=N")
+
+    if user_id <= 0:
+        raise HTTPException(status_code=400, detail="Must specify a valid user_id")
+
+    db = SessionLocal()
+    try:
+        # Count records to delete
+        count = db.execute(text("""
+            SELECT COUNT(*) FROM mum_clients WHERE user_id = :user_id
+        """), {"user_id": user_id}).scalar()
+
+        if count == 0:
+            return {
+                "status": "success",
+                "message": f"No mum_clients found for user_id {user_id}",
+                "deleted_count": 0
+            }
+
+        # Delete all mum_clients for this user
+        db.execute(text("""
+            DELETE FROM mum_clients WHERE user_id = :user_id
+        """), {"user_id": user_id})
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": f"Deleted {count} mum_clients for user_id {user_id}. Ready for re-import.",
+            "deleted_count": count,
+            "user_id": user_id
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Clear mum_clients error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
 @router.post("/fix-mum-client-names")
 async def fix_mum_client_names(key: str = ""):
     """
