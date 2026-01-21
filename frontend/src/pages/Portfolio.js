@@ -38,6 +38,7 @@ function Portfolio() {
   });
   const [mumClients, setMumClients] = useState([]);
   const [mumMetrics, setMumMetrics] = useState(null);
+  const [clientSegments, setClientSegments] = useState({});
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [filterView, setFilterView] = useState('all');
@@ -86,8 +87,12 @@ function Portfolio() {
         })) : []
       });
 
-      setMumClients(Array.isArray(mum) ? mum : []);
+      const mumClientsList = Array.isArray(mum) ? mum : [];
+      setMumClients(mumClientsList);
       setMumMetrics(metrics || null);
+
+      // Calculate client segments from MUM data
+      calculateClientSegments(mumClientsList);
     } catch (error) {
       console.error('Failed to load portfolio data:', error);
       // Set empty data on error
@@ -103,6 +108,77 @@ function Portfolio() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Calculate client segments from MUM client data
+  const calculateClientSegments = (clients) => {
+    if (!clients || clients.length === 0) {
+      setClientSegments({
+        primary_residence: '0%',
+        second_home: '0%',
+        investment_property: '0%',
+        conventional_mi: '0%',
+        fha: '0%',
+        va: '0%',
+        usda: '0%',
+        aio: '0%'
+      });
+      return;
+    }
+
+    const total = clients.length;
+    const counts = {
+      primary_residence: 0,
+      second_home: 0,
+      investment_property: 0,
+      conventional_mi: 0,
+      fha: 0,
+      va: 0,
+      usda: 0,
+      aio: 0
+    };
+
+    clients.forEach(client => {
+      // Occupancy type segmentation
+      const occupancy = (client.occupancy_type || client.occupancy || '').toLowerCase();
+      if (occupancy.includes('primary') || occupancy === 'owner occupied' || occupancy === 'owner_occupied') {
+        counts.primary_residence++;
+      } else if (occupancy.includes('second') || occupancy === 'second_home') {
+        counts.second_home++;
+      } else if (occupancy.includes('invest') || occupancy === 'investment' || occupancy === 'non_owner_occupied') {
+        counts.investment_property++;
+      }
+
+      // Loan type segmentation
+      const loanType = (client.loan_type || '').toLowerCase();
+      const hasMI = client.has_mi || client.has_pmi || client.mi_amount > 0 || client.pmi_amount > 0;
+
+      if (loanType.includes('fha')) {
+        counts.fha++;
+      } else if (loanType.includes('va')) {
+        counts.va++;
+      } else if (loanType.includes('usda')) {
+        counts.usda++;
+      } else if (loanType.includes('aio') || loanType.includes('all-in-one') || loanType.includes('heloc')) {
+        counts.aio++;
+      } else if ((loanType.includes('conv') || loanType.includes('conventional')) && hasMI) {
+        counts.conventional_mi++;
+      }
+    });
+
+    // Calculate percentages
+    const toPercent = (count) => `${Math.round((count / total) * 100)}%`;
+
+    setClientSegments({
+      primary_residence: toPercent(counts.primary_residence),
+      second_home: toPercent(counts.second_home),
+      investment_property: toPercent(counts.investment_property),
+      conventional_mi: toPercent(counts.conventional_mi),
+      fha: toPercent(counts.fha),
+      va: toPercent(counts.va),
+      usda: toPercent(counts.usda),
+      aio: toPercent(counts.aio)
+    });
   };
 
   const handleAddClient = async (clientData) => {
@@ -407,38 +483,75 @@ function Portfolio() {
             <h2>CLIENT SEGMENTS</h2>
           </div>
 
+          {/* Occupancy Type Segments */}
           <div className="mum-stats-grid mum-segments-row">
             <div
               className="mum-stat-card segment-card clickable"
               onClick={() => navigate('/portfolio/detail?metric=primary_residence')}
               style={{ cursor: 'pointer' }}
             >
-              <div className="mum-stat-value">62%</div>
+              <div className="mum-stat-value">{clientSegments?.primary_residence || '0%'}</div>
               <div className="mum-stat-label">PRIMARY RESIDENCE</div>
             </div>
             <div
               className="mum-stat-card segment-card clickable"
-              onClick={() => navigate('/portfolio/detail?metric=investors')}
+              onClick={() => navigate('/portfolio/detail?metric=second_home')}
               style={{ cursor: 'pointer' }}
             >
-              <div className="mum-stat-value">18%</div>
-              <div className="mum-stat-label">INVESTORS</div>
+              <div className="mum-stat-value">{clientSegments?.second_home || '0%'}</div>
+              <div className="mum-stat-label">SECOND HOME</div>
             </div>
             <div
               className="mum-stat-card segment-card clickable"
-              onClick={() => navigate('/portfolio/detail?metric=builders')}
+              onClick={() => navigate('/portfolio/detail?metric=investment_property')}
               style={{ cursor: 'pointer' }}
             >
-              <div className="mum-stat-value">12%</div>
-              <div className="mum-stat-label">BUILDERS / RTO</div>
+              <div className="mum-stat-value">{clientSegments?.investment_property || '0%'}</div>
+              <div className="mum-stat-label">INVESTMENT PROPERTY</div>
+            </div>
+          </div>
+
+          {/* Loan Type Segments */}
+          <div className="mum-stats-grid mum-segments-row" style={{ marginTop: '16px' }}>
+            <div
+              className="mum-stat-card segment-card clickable"
+              onClick={() => navigate('/portfolio/detail?metric=conventional_mi')}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="mum-stat-value">{clientSegments?.conventional_mi || '0%'}</div>
+              <div className="mum-stat-label">CONVENTIONAL W/MI</div>
             </div>
             <div
               className="mum-stat-card segment-card clickable"
-              onClick={() => navigate('/portfolio/detail?metric=refinance_other')}
+              onClick={() => navigate('/portfolio/detail?metric=fha')}
               style={{ cursor: 'pointer' }}
             >
-              <div className="mum-stat-value">8%</div>
-              <div className="mum-stat-label">REFINANCE / OTHER</div>
+              <div className="mum-stat-value">{clientSegments?.fha || '0%'}</div>
+              <div className="mum-stat-label">FHA</div>
+            </div>
+            <div
+              className="mum-stat-card segment-card clickable"
+              onClick={() => navigate('/portfolio/detail?metric=va')}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="mum-stat-value">{clientSegments?.va || '0%'}</div>
+              <div className="mum-stat-label">VA</div>
+            </div>
+            <div
+              className="mum-stat-card segment-card clickable"
+              onClick={() => navigate('/portfolio/detail?metric=usda')}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="mum-stat-value">{clientSegments?.usda || '0%'}</div>
+              <div className="mum-stat-label">USDA</div>
+            </div>
+            <div
+              className="mum-stat-card segment-card clickable"
+              onClick={() => navigate('/portfolio/detail?metric=aio')}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="mum-stat-value">{clientSegments?.aio || '0%'}</div>
+              <div className="mum-stat-label">AIO</div>
             </div>
           </div>
 
