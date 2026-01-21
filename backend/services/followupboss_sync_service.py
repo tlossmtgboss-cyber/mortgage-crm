@@ -647,13 +647,8 @@ class FollowUpBossSyncService:
         }
 
         try:
-            # Get current user ID in FUB
-            fub_user = client.get_current_user()
-            fub_user_id = fub_user.get("id")
-
-            # Get people assigned to this user
+            # Get all people from FUB (admin mode - syncs all leads, not just assigned)
             result = client.get_people(
-                assigned_to=fub_user_id,
                 limit=limit
             )
 
