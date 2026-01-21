@@ -553,14 +553,6 @@ function Portfolio() {
               <div className="mum-stat-value">{clientSegments?.new_construction || '0%'}</div>
               <div className="mum-stat-label">NEW CONSTRUCTION</div>
             </div>
-            <div
-              className="mum-stat-card segment-card clickable"
-              onClick={() => navigate('/portfolio/detail?metric=first_time_buyer')}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="mum-stat-value">{clientSegments?.first_time_buyer || '0%'}</div>
-              <div className="mum-stat-label">FIRST TIME BUYERS</div>
-            </div>
           </div>
 
           {/* Loan Type Segments */}
@@ -604,6 +596,14 @@ function Portfolio() {
             >
               <div className="mum-stat-value">{clientSegments?.aio || '0%'}</div>
               <div className="mum-stat-label">AIO</div>
+            </div>
+            <div
+              className="mum-stat-card segment-card clickable"
+              onClick={() => navigate('/portfolio/detail?metric=first_time_buyer')}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="mum-stat-value">{clientSegments?.first_time_buyer || '0%'}</div>
+              <div className="mum-stat-label">FIRST TIME BUYERS</div>
             </div>
           </div>
 
