@@ -575,6 +575,24 @@ def transform_columns_for_destination(row_dict: dict, destination: str) -> dict:
                 # Both exist, prefer the transformed one and remove old
                 result.pop(old_col)
 
+    elif destination == 'mum_clients':
+        # Transform loan-style columns to MUM client columns
+        column_transforms = {
+            'borrower_name': 'name',
+            'borrower_email': 'email',
+            'borrower_phone': 'phone',
+            'amount': 'loan_balance',
+            'loan_amount': 'loan_balance',
+            'rate': 'current_rate',
+            'interest_rate': 'current_rate',
+            'closing_date': 'original_close_date',
+        }
+        for old_col, new_col in column_transforms.items():
+            if old_col in result and new_col not in result:
+                result[new_col] = result.pop(old_col)
+            elif old_col in result and new_col in result:
+                result.pop(old_col)
+
     return result
 
 
@@ -895,6 +913,101 @@ async def execute_import(
 
                         cursor.execute(
                             f"INSERT INTO portfolio_loans ({columns_str}) VALUES ({placeholders})",
+                            values
+                        )
+                        imported += 1
+
+                    elif destination == 'mum_clients':
+                        # Import as MUM (Mortgages Under Management) client - closed loans
+                        columns = list(row_dict.keys())
+                        values = list(row_dict.values())
+
+                        # Map common loan fields to MUM client fields
+                        field_mapping = {
+                            'borrower_name': 'name',
+                            'borrower_email': 'email',
+                            'borrower_phone': 'phone',
+                            'amount': 'loan_balance',
+                            'rate': 'current_rate',
+                            'interest_rate': 'current_rate',
+                            'closing_date': 'original_close_date',
+                        }
+
+                        # Apply field mapping
+                        mapped_columns = []
+                        mapped_values = []
+                        for col, val in zip(columns, values):
+                            mapped_col = field_mapping.get(col, col)
+                            mapped_columns.append(mapped_col)
+                            mapped_values.append(val)
+                        columns = mapped_columns
+                        values = mapped_values
+
+                        # Ensure 'name' exists
+                        if 'name' not in columns:
+                            name_val = row_dict.get('borrower_name') or row_dict.get('first_name', '') + ' ' + row_dict.get('last_name', '')
+                            if name_val.strip():
+                                columns.append('name')
+                                values.append(name_val.strip())
+                            else:
+                                columns.append('name')
+                                values.append('Unknown Client')
+
+                        # Get name and loan_number for duplicate checking
+                        client_name = values[columns.index('name')] if 'name' in columns else None
+                        loan_number = row_dict.get('loan_number')
+
+                        # Check for duplicate
+                        existing_client = None
+                        if loan_number:
+                            cursor.execute("SELECT id FROM mum_clients WHERE loan_number = %s", (loan_number,))
+                            existing_client = cursor.fetchone()
+
+                        if not existing_client and client_name and client_name != 'Unknown Client':
+                            cursor.execute(
+                                "SELECT id FROM mum_clients WHERE LOWER(name) = LOWER(%s)",
+                                (client_name,)
+                            )
+                            existing_client = cursor.fetchone()
+
+                        if existing_client:
+                            if duplicate_handling == 'skip':
+                                continue
+                            elif duplicate_handling == 'update':
+                                update_cols = []
+                                update_vals = []
+                                for col, val in zip(columns, values):
+                                    if col not in ['loan_number', 'created_at'] and val is not None:
+                                        update_cols.append(f"{col} = %s")
+                                        update_vals.append(val)
+                                if update_cols:
+                                    update_vals.append(existing_client[0])
+                                    cursor.execute(
+                                        f"UPDATE mum_clients SET {', '.join(update_cols)}, updated_at = NOW() WHERE id = %s",
+                                        update_vals
+                                    )
+                                imported += 1
+                                continue
+
+                        # Add required fields
+                        if 'created_at' not in columns:
+                            columns.append('created_at')
+                            values.append(datetime.utcnow())
+                        if 'status' not in columns:
+                            columns.append('status')
+                            values.append('active')
+
+                        # Set user_id for multi-tenancy
+                        user_id = getattr(current_user, 'id', None)
+                        if user_id and 'user_id' not in columns:
+                            columns.append('user_id')
+                            values.append(user_id)
+
+                        placeholders = ', '.join(['%s'] * len(columns))
+                        columns_str = ', '.join(columns)
+
+                        cursor.execute(
+                            f"INSERT INTO mum_clients ({columns_str}) VALUES ({placeholders})",
                             values
                         )
                         imported += 1

@@ -137,6 +137,18 @@ function AutoDataImport({ onImportComplete }) {
                 </svg>
                 <span>Loans</span>
               </button>
+              <button
+                type="button"
+                className={`destination-btn ${destination === 'mum_clients' ? 'active' : ''}`}
+                onClick={() => setDestination('mum_clients')}
+                disabled={uploading}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                  <polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
+                <span>Closed Loans</span>
+              </button>
             </div>
           </div>
 
@@ -270,7 +282,7 @@ function AutoDataImport({ onImportComplete }) {
               <div className="stats-grid">
                 <StatCard
                   label="Imported To"
-                  value={destination === 'leads' ? 'Leads' : 'Loans'}
+                  value={destination === 'leads' ? 'Leads' : destination === 'mum_clients' ? 'Closed Loans (MUM)' : 'Loans'}
                   variant="default"
                 />
                 <StatCard
