@@ -170,6 +170,82 @@ async def ensure_tables_endpoint(
         }
 
 
+@router.get("/diagnose")
+async def diagnose_salesforce_connection(
+    db: Session = Depends(get_db)
+):
+    """
+    Diagnose Salesforce connection issues - no auth required for debugging.
+    Shows all integration profiles and their status.
+    """
+    try:
+        db.rollback()
+    except:
+        pass
+
+    diagnosis = {
+        "profiles": [],
+        "oauth_states_recent": [],
+        "errors": []
+    }
+
+    try:
+        # Get all integration profiles
+        result = db.execute(text("""
+            SELECT id, user_id, provider, status, instance_url, sf_username, sf_org_id,
+                   connected_at, last_sync_at, last_error, sync_enabled,
+                   CASE WHEN access_token_encrypted IS NOT NULL THEN true ELSE false END as has_access_token,
+                   CASE WHEN refresh_token_encrypted IS NOT NULL THEN true ELSE false END as has_refresh_token
+            FROM integration_profiles
+            ORDER BY id DESC
+            LIMIT 10
+        """))
+        profiles = result.fetchall()
+
+        for p in profiles:
+            diagnosis["profiles"].append({
+                "id": p[0],
+                "user_id": p[1],
+                "provider": p[2],
+                "status": p[3],
+                "instance_url": p[4],
+                "sf_username": p[5],
+                "sf_org_id": p[6],
+                "connected_at": str(p[7]) if p[7] else None,
+                "last_sync_at": str(p[8]) if p[8] else None,
+                "last_error": p[9],
+                "sync_enabled": p[10],
+                "has_access_token": p[11],
+                "has_refresh_token": p[12]
+            })
+    except Exception as e:
+        diagnosis["errors"].append(f"Error fetching profiles: {str(e)}")
+
+    try:
+        # Get recent OAuth states
+        result = db.execute(text("""
+            SELECT id, user_id, provider, created_at, expires_at, used
+            FROM oauth_states
+            ORDER BY created_at DESC
+            LIMIT 5
+        """))
+        states = result.fetchall()
+
+        for s in states:
+            diagnosis["oauth_states_recent"].append({
+                "id": s[0],
+                "user_id": s[1],
+                "provider": s[2],
+                "created_at": str(s[3]) if s[3] else None,
+                "expires_at": str(s[4]) if s[4] else None,
+                "used": s[5]
+            })
+    except Exception as e:
+        diagnosis["errors"].append(f"Error fetching oauth_states: {str(e)}")
+
+    return diagnosis
+
+
 # ============ Pydantic Models ============
 
 class ConnectionStatus(BaseModel):
