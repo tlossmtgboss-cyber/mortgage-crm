@@ -325,12 +325,19 @@ async def oauth_callback(
         )
 
     try:
+        logger.info(f"Processing OAuth callback with code length: {len(code)}, state: {state[:20]}...")
         result = await salesforce_oauth.handle_callback(db, code, state)
+        logger.info(f"OAuth callback successful for user {result.get('user_id')}, profile status: {result.get('profile').status if result.get('profile') else 'N/A'}")
 
         frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
         final_redirect = result.get('return_url') or f"{frontend_url}/settings/integrations"
 
-        return RedirectResponse(url=f"{final_redirect}?salesforce=connected")
+        # Properly append query parameter
+        separator = '&' if '?' in final_redirect else '?'
+        redirect_url = f"{final_redirect}{separator}salesforce=connected"
+        logger.info(f"Redirecting to: {redirect_url}")
+
+        return RedirectResponse(url=redirect_url)
 
     except ValueError as e:
         logger.error(f"OAuth callback error: {e}")
