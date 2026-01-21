@@ -1837,3 +1837,307 @@ async def import_closed_loans_from_salesforce(
     except Exception as e:
         logger.error(f"Import closed loans failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ Import Funded Loans to MUM Clients ============
+
+@router.post("/import-to-mum")
+async def import_funded_loans_to_mum(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Import all funded loans from the loans table to MUM clients.
+
+    This creates MUM client records for portfolio management from any funded loan
+    that doesn't already exist in the mum_clients table.
+    """
+    user_id = get_current_user_id(request, db)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    try:
+        results = {'imported': 0, 'skipped': 0, 'errors': []}
+
+        # Get funded loans not already in mum_clients
+        funded_loans = db.execute(text("""
+            SELECT l.id, l.loan_number, l.borrower_name, l.borrower_first_name, l.borrower_last_name,
+                   l.borrower_email, l.borrower_phone, l.amount, l.interest_rate,
+                   l.funded_date, l.closing_date, l.property_address,
+                   l.property_city, l.property_state, l.property_zip,
+                   l.loan_type, l.stage, l.status
+            FROM loans l
+            WHERE (l.stage IN ('FUNDED', 'Funded', 'funded')
+                   OR l.status IN ('funded', 'FUNDED', 'Funded', 'closed', 'CLOSED')
+                   OR l.funded_date IS NOT NULL)
+            AND NOT EXISTS (
+                SELECT 1 FROM mum_clients m
+                WHERE m.loan_number = l.loan_number
+            )
+        """)).fetchall()
+
+        logger.info(f"Found {len(funded_loans)} funded loans to import to MUM clients")
+
+        imported_clients = []
+
+        for loan in funded_loans:
+            try:
+                # Build client name
+                client_name = loan[2]  # borrower_name
+                if not client_name and (loan[3] or loan[4]):  # first/last name
+                    client_name = f"{loan[3] or ''} {loan[4] or ''}".strip()
+                if not client_name:
+                    client_name = f"Client - {loan[1]}"  # loan_number
+
+                # Get closing date
+                close_date = loan[9] or loan[10]  # funded_date or closing_date
+
+                # Insert into mum_clients
+                db.execute(text("""
+                    INSERT INTO mum_clients (
+                        name, loan_number, original_close_date,
+                        original_rate, loan_balance,
+                        status, engagement_score, created_at
+                    ) VALUES (
+                        :name, :loan_number, :close_date,
+                        :rate, :balance,
+                        'active', 50, CURRENT_TIMESTAMP
+                    )
+                """), {
+                    'name': client_name,
+                    'loan_number': loan[1],
+                    'close_date': close_date,
+                    'rate': loan[8],  # interest_rate
+                    'balance': loan[7],  # amount
+                })
+
+                results['imported'] += 1
+                imported_clients.append({
+                    'name': client_name,
+                    'loan_number': loan[1],
+                    'amount': float(loan[7]) if loan[7] else None
+                })
+
+            except Exception as e:
+                results['errors'].append(f"Loan {loan[1]}: {str(e)}")
+                logger.error(f"Error importing loan {loan[1]} to MUM: {e}")
+
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": f"Imported {results['imported']} funded loans to MUM clients",
+            "imported": results['imported'],
+            "skipped": results['skipped'],
+            "errors": results['errors'][:20],
+            "clients": imported_clients[:50]
+        }
+
+    except Exception as e:
+        logger.error(f"Import to MUM failed: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/sync-and-import-mum")
+async def sync_salesforce_and_import_mum(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Full sync: Pull closed loans from Salesforce, then import to MUM clients.
+
+    1. Pulls all funded/closed loans from Salesforce
+    2. Imports/updates them in the loans table
+    3. Creates MUM client records for portfolio management
+    """
+    user_id = get_current_user_id(request, db)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    results = {
+        'salesforce_sync': {'created': 0, 'updated': 0, 'errors': []},
+        'mum_import': {'imported': 0, 'errors': []},
+        'salesforce_connected': False
+    }
+
+    # Step 1: Check for Salesforce connection and sync
+    integration = db.execute(text("""
+        SELECT user_id, access_token, refresh_token, scopes
+        FROM user_integrations
+        WHERE provider = 'salesforce' AND access_token IS NOT NULL
+        ORDER BY updated_at DESC
+        LIMIT 1
+    """)).fetchone()
+
+    if integration and integration[1]:
+        results['salesforce_connected'] = True
+        access_token = integration[1]
+
+        # Parse instance_url
+        instance_url = None
+        scopes = integration[3] or ""
+        if "instance_url:" in scopes:
+            instance_url = scopes.split("instance_url:")[1].split(",")[0]
+
+        if instance_url:
+            try:
+                # Pull from Salesforce
+                headers = {
+                    "Authorization": f"Bearer {access_token}",
+                    "Content-Type": "application/json"
+                }
+
+                sf_object = "MtgPlanner_CRM__Transaction_Property__c"
+
+                # Get fields
+                describe_url = f"{instance_url}/services/data/v58.0/sobjects/{sf_object}/describe/"
+                describe_resp = requests.get(describe_url, headers=headers, timeout=30)
+
+                if describe_resp.status_code == 200:
+                    describe_data = describe_resp.json()
+                    queryable_fields = [f['name'] for f in describe_data.get('fields', [])
+                                       if f.get('type') not in ['base64', 'address', 'location']]
+
+                    field_list = ", ".join(queryable_fields[:50])
+
+                    soql = f"""
+                        SELECT {field_list}
+                        FROM {sf_object}
+                        WHERE MtgPlanner_CRM__Status__c IN ('Funded', 'Closed', 'Closed Won')
+                           OR MtgPlanner_CRM__Funded_Date__c != null
+                        ORDER BY LastModifiedDate DESC
+                        LIMIT 200
+                    """
+
+                    query_url = f"{instance_url}/services/data/v58.0/query/"
+                    query_resp = requests.get(query_url, headers=headers, params={"q": soql}, timeout=60)
+
+                    if query_resp.status_code == 200:
+                        records = query_resp.json().get('records', [])
+                        logger.info(f"Found {len(records)} closed loans in Salesforce")
+
+                        # Import records
+                        from services.salesforce_sync_service import DEFAULT_FIELD_MAPPING, STAGE_MAPPING
+
+                        for record in records:
+                            try:
+                                sf_id = record.get('Id')
+                                existing = db.execute(text(
+                                    "SELECT id FROM loans WHERE salesforce_id = :sf_id"
+                                ), {"sf_id": sf_id}).fetchone()
+
+                                loan_data = {'salesforce_id': sf_id}
+                                for sf_field, (crm_field, transform) in DEFAULT_FIELD_MAPPING.items():
+                                    if sf_field in record and record[sf_field] is not None:
+                                        value = record[sf_field]
+                                        if transform == "decimal":
+                                            try:
+                                                value = float(value)
+                                            except:
+                                                continue
+                                        elif transform == "date":
+                                            try:
+                                                value = datetime.fromisoformat(value.replace('Z', '+00:00')).date()
+                                            except:
+                                                try:
+                                                    value = datetime.strptime(value[:10], "%Y-%m-%d").date()
+                                                except:
+                                                    continue
+                                        elif transform == "stage_mapping":
+                                            value = STAGE_MAPPING.get(str(value), "FUNDED")
+                                        loan_data[crm_field] = value
+
+                                loan_data['salesforce_last_synced_at'] = datetime.utcnow()
+                                loan_data['salesforce_sync_status'] = 'synced'
+                                if not loan_data.get('loan_number'):
+                                    loan_data['loan_number'] = f"SF-{sf_id[-8:]}"
+                                if not loan_data.get('stage'):
+                                    loan_data['stage'] = 'FUNDED'
+
+                                if existing:
+                                    update_fields = ", ".join([f"{k} = :{k}" for k in loan_data.keys() if k != 'salesforce_id'])
+                                    db.execute(text(f"""
+                                        UPDATE loans SET {update_fields}, updated_at = CURRENT_TIMESTAMP
+                                        WHERE salesforce_id = :salesforce_id
+                                    """), loan_data)
+                                    results['salesforce_sync']['updated'] += 1
+                                else:
+                                    loan_data['organization_id'] = 1
+                                    columns = ", ".join(loan_data.keys())
+                                    placeholders = ", ".join([f":{k}" for k in loan_data.keys()])
+                                    db.execute(text(f"""
+                                        INSERT INTO loans ({columns}, created_at, updated_at)
+                                        VALUES ({placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                                    """), loan_data)
+                                    results['salesforce_sync']['created'] += 1
+
+                            except Exception as e:
+                                results['salesforce_sync']['errors'].append(str(e))
+
+                        db.commit()
+
+            except Exception as e:
+                logger.error(f"Salesforce sync error: {e}")
+                results['salesforce_sync']['errors'].append(str(e))
+
+    # Step 2: Import funded loans to MUM clients
+    try:
+        funded_loans = db.execute(text("""
+            SELECT l.id, l.loan_number, l.borrower_name, l.borrower_first_name, l.borrower_last_name,
+                   l.amount, l.interest_rate, l.funded_date, l.closing_date
+            FROM loans l
+            WHERE (l.stage IN ('FUNDED', 'Funded', 'funded')
+                   OR l.status IN ('funded', 'FUNDED', 'Funded', 'closed', 'CLOSED')
+                   OR l.funded_date IS NOT NULL)
+            AND NOT EXISTS (
+                SELECT 1 FROM mum_clients m
+                WHERE m.loan_number = l.loan_number
+            )
+        """)).fetchall()
+
+        for loan in funded_loans:
+            try:
+                client_name = loan[2]
+                if not client_name and (loan[3] or loan[4]):
+                    client_name = f"{loan[3] or ''} {loan[4] or ''}".strip()
+                if not client_name:
+                    client_name = f"Client - {loan[1]}"
+
+                close_date = loan[7] or loan[8]
+
+                db.execute(text("""
+                    INSERT INTO mum_clients (
+                        name, loan_number, original_close_date,
+                        original_rate, loan_balance,
+                        status, engagement_score, created_at
+                    ) VALUES (
+                        :name, :loan_number, :close_date,
+                        :rate, :balance,
+                        'active', 50, CURRENT_TIMESTAMP
+                    )
+                """), {
+                    'name': client_name,
+                    'loan_number': loan[1],
+                    'close_date': close_date,
+                    'rate': loan[6],
+                    'balance': loan[5],
+                })
+                results['mum_import']['imported'] += 1
+
+            except Exception as e:
+                results['mum_import']['errors'].append(str(e))
+
+        db.commit()
+
+    except Exception as e:
+        logger.error(f"MUM import error: {e}")
+        results['mum_import']['errors'].append(str(e))
+
+    return {
+        "status": "success",
+        "salesforce_connected": results['salesforce_connected'],
+        "message": f"Synced from Salesforce: {results['salesforce_sync']['created']} new, {results['salesforce_sync']['updated']} updated. MUM clients: {results['mum_import']['imported']} imported.",
+        "salesforce_sync": results['salesforce_sync'],
+        "mum_import": results['mum_import']
+    }
