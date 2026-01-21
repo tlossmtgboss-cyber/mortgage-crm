@@ -1,9 +1,12 @@
 """
-Migration: Add Call End Workflow Tables
+Migration: Add Voice-to-Application Workflow Tables
 
-Adds tables required for the AI-JrLO call-end workflow:
+Adds tables required for the Voice-to-Application feature:
 - portal_access_tokens: Magic links for borrower portal access
 - portal_document_requirements: Document requirements pushed to borrower portal
+
+The Voice-to-Application workflow converts phone conversations into
+complete loan applications automatically.
 
 Run with: python -m migrations.add_call_end_workflow_tables
 """

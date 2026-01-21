@@ -1,14 +1,19 @@
 """
-Call End Orchestrator - Event-Driven Pipeline for AI Junior Loan Officer
+Voice-to-Application Orchestrator
 
-Implements the complete workflow when a call ends:
-1. AI-JrLO Final Pass - Validate & score completeness
-2. Application Finalization - Generate MISMO 3.4 file
-3. Portal Creation - Auto-provision borrower portal
-4. Borrower Notification - SMS + Email with portal link
-5. Internal Distribution - Email team, create tasks for Production Assistants
+Converts phone conversations into complete loan applications automatically.
 
-This orchestrator connects existing components into a seamless workflow.
+The Voice-to-Application workflow:
+1. AI Agents process call transcript (Scribe, Jr. LO, Underwriter)
+2. Application completeness scoring
+3. MISMO 3.4 / Fannie Mae file generation
+4. Client portal auto-provisioning
+5. Borrower notification (SMS + Email with portal link)
+6. Task creation for Production Assistants
+7. Internal team notifications (LO + Ops)
+
+This orchestrator connects existing components into a seamless,
+event-driven pipeline triggered when a call ends.
 """
 
 import os
@@ -178,14 +183,14 @@ def calculate_completeness(captured_fields: List[Dict[str, Any]]) -> Completenes
 
 
 # =============================================================================
-# CALL END ORCHESTRATOR
+# VOICE-TO-APPLICATION ORCHESTRATOR
 # =============================================================================
 
-class CallEndOrchestrator:
+class VoiceToApplicationOrchestrator:
     """
-    Orchestrates the complete workflow when a call ends.
+    Voice-to-Application: Converts phone conversations into loan applications.
 
-    Flow:
+    Workflow:
     1. Run AI agents (Scribe, Jr. LO, Underwriter)
     2. Calculate completeness score
     3. Generate MISMO 3.4 file if complete enough
@@ -243,7 +248,7 @@ class CallEndOrchestrator:
         Returns:
             Complete processing result
         """
-        logger.info(f"Processing call end for session {session_id}")
+        logger.info(f"Voice-to-Application: Processing session {session_id}")
 
         result = {
             "session_id": session_id,
@@ -336,7 +341,7 @@ class CallEndOrchestrator:
             result["completed_at"] = datetime.utcnow().isoformat()
 
         except Exception as e:
-            logger.exception(f"Error processing call end for session {session_id}")
+            logger.exception(f"Voice-to-Application error for session {session_id}")
             result["status"] = "error"
             result["errors"].append(str(e))
             await self._update_session_status(session_id, "error")
@@ -1040,12 +1045,12 @@ class CallEndOrchestrator:
 
         borrower_name = f"{borrower.get('first_name', '')} {borrower.get('last_name', '')}".strip() or "Unknown Borrower"
 
-        subject = f"New Loan Application - {borrower_name} - Fannie Mae 3.4 {'Attached' if mismo_file else 'Pending'}"
+        subject = f"Voice-to-Application: {borrower_name} - Fannie Mae 3.4 {'Attached' if mismo_file else 'Pending'}"
 
         html_content = f"""
         <html>
         <body style="font-family: Arial, sans-serif;">
-            <h2>New Loan Application from Call Recording</h2>
+            <h2>New Loan Application via Voice-to-Application</h2>
 
             <h3>Borrower Information</h3>
             <ul>
@@ -1079,7 +1084,7 @@ class CallEndOrchestrator:
             <p>View full details in the CRM: <a href="{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/loans/{loan.get('id')}">Open Loan</a></p>
 
             <p>Best regards,<br>
-            AI Call Monitoring System</p>
+            Voice-to-Application System</p>
         </body>
         </html>
         """
@@ -1131,3 +1136,7 @@ class CallEndOrchestrator:
             WHERE id = :session_id
         """), {"session_id": session_id, "status": status})
         self.db.commit()
+
+
+# Backward compatibility alias
+CallEndOrchestrator = VoiceToApplicationOrchestrator

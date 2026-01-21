@@ -106,11 +106,11 @@ class UpdateSessionRequest(BaseModel):
 
 
 class EndSessionRequest(BaseModel):
-    """Request to end a call session and trigger processing."""
+    """Request to end a call session and trigger Voice-to-Application processing."""
     final_transcript: Optional[str] = None
     run_agents: bool = True
     agent_types: Optional[List[str]] = None  # If None, run all agents
-    full_workflow: bool = True  # If True, runs complete workflow: agents + portal + notifications
+    full_workflow: bool = True  # If True, runs Voice-to-Application: agents + portal + notifications
 
 
 class TranscriptChunkRequest(BaseModel):
@@ -1110,9 +1110,10 @@ async def run_full_workflow(
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Trigger the full call-end workflow on a session.
+    Trigger Voice-to-Application processing on a session.
 
-    This runs the complete AI-JrLO workflow:
+    Voice-to-Application converts phone conversations into complete
+    loan applications automatically:
     1. Run AI agents (Scribe, Jr. LO, Underwriter)
     2. Calculate application completeness score
     3. Generate MISMO 3.4 file (if completeness >= threshold)
@@ -1143,7 +1144,7 @@ async def run_full_workflow(
         return {
             "status": "queued",
             "session_id": session_id,
-            "message": "Full workflow has been queued for processing",
+            "message": "Voice-to-Application processing has been queued",
             "workflow_steps": [
                 "1. AI Agents (Scribe, Jr. LO, Underwriter)",
                 "2. Completeness scoring",
@@ -1238,9 +1239,9 @@ async def run_agents_background(
     full_workflow: bool = True,
 ):
     """
-    Background task to run agents and optionally the full call-end workflow.
+    Background task to run Voice-to-Application processing.
 
-    When full_workflow=True (default), this runs:
+    When full_workflow=True (default), this runs Voice-to-Application:
     1. AI Agents (Scribe, Jr. LO, Underwriter)
     2. Completeness scoring
     3. MISMO 3.4 generation
@@ -1259,15 +1260,15 @@ async def run_agents_background(
 
         try:
             if full_workflow:
-                # Run full call-end orchestration
-                from services.call_monitoring.call_end_orchestrator import CallEndOrchestrator
-                call_end_orchestrator = CallEndOrchestrator(db)
-                result = await call_end_orchestrator.process_call_end(
+                # Run Voice-to-Application processing
+                from services.call_monitoring.call_end_orchestrator import VoiceToApplicationOrchestrator
+                v2a_orchestrator = VoiceToApplicationOrchestrator(db)
+                result = await v2a_orchestrator.process_call_end(
                     session_id=str(session_id),
                     user_id=str(user_id) if user_id else None,
                     auto_approve=True,
                 )
-                logger.info(f"Full workflow completed for session {session_id}: {result.get('status')}")
+                logger.info(f"Voice-to-Application completed for session {session_id}: {result.get('status')}")
             else:
                 # Run agents only (legacy behavior)
                 orchestrator = CallMonitoringOrchestrator(db)
