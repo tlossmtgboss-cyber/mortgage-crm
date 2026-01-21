@@ -240,7 +240,7 @@ class VideoHostingService:
         if not video or not video.get("allow_embed"):
             return None
 
-        base_url = os.getenv("API_URL", "https://api.perenniaai.com")
+        base_url = os.getenv("API_URL", "https://app.perenniaai.com")
         embed_url = f"{base_url}/api/v1/video-os/embed/{video['share_token']}"
 
         params = []

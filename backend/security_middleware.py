@@ -318,7 +318,7 @@ class IPAccessControlMiddleware(BaseHTTPMiddleware):
                     "https://www.perenniaai.com",
                     "https://perenniaai.com",
                     "https://app.perenniaai.com",
-                    "https://api.perenniaai.com",
+                    "https://app.perenniaai.com",
                     "http://localhost:3000",
                     "http://localhost:3001",
                 ]

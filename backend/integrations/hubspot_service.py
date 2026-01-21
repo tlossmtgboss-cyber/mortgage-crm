@@ -21,7 +21,7 @@ class HubSpotClient:
         self.client_secret = os.getenv("HUBSPOT_CLIENT_SECRET", "")
         self.redirect_uri = os.getenv(
             "HUBSPOT_REDIRECT_URI",
-            "https://api.perenniaai.com/api/v1/hubspot/callback"
+            "https://app.perenniaai.com/api/v1/hubspot/callback"
         )
 
         self.auth_url = "https://app.hubspot.com/oauth/authorize"

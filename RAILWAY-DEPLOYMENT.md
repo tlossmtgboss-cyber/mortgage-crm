@@ -80,7 +80,7 @@ Copy the output and use it as SECRET_KEY.
 2. Wait 2-3 minutes for build
 3. Railway will give you a public URL like:
    ```
-   https://mortgage-crm-production.up.railway.app
+   https://app.perenniaai.com
    ```
 
 ---

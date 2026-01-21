@@ -207,7 +207,7 @@ function LoanDetail() {
   const loadClientPortalWorkspaceId = async () => {
     if (!id) return;
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://app.perenniaai.com';
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
       const token = localStorage.getItem('token');
       // Try looking up by loan ID first
       let response = await fetch(`${apiUrl}/api/v1/purl-admin/workspaces/by-loan/${id}`, {
@@ -649,7 +649,7 @@ function LoanDetail() {
   const loadTeamMembers = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'https://app.perenniaai.com'}/api/v1/loans/${id}/team-members`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'https://api.perenniaai.com'}/api/v1/loans/${id}/team-members`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -748,7 +748,7 @@ function LoanDetail() {
     setTeamMemberLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://app.perenniaai.com';
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
       if (editingTeamMember) {
         // Update existing member
@@ -806,7 +806,7 @@ function LoanDetail() {
   const handleDeleteTeamMember = async (memberId) => {
     try {
       const token = localStorage.getItem('token');
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://app.perenniaai.com';
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
       const response = await fetch(`${apiUrl}/api/v1/loans/${id}/team-members/${memberId}`, {
         method: 'DELETE',

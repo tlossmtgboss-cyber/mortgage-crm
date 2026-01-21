@@ -153,8 +153,8 @@ def create_test_realtor():
         print(f"\nSession Token (use for API calls):")
         print(f"  {token}")
         print(f"\nTest the portal:")
-        print(f"  curl 'https://api.perenniaai.com/api/v1/realtor-portal/me?token={token}'")
-        print(f"  curl 'https://api.perenniaai.com/api/v1/realtor-portal/loans?token={token}'")
+        print(f"  curl 'https://app.perenniaai.com/api/v1/realtor-portal/me?token={token}'")
+        print(f"  curl 'https://app.perenniaai.com/api/v1/realtor-portal/loans?token={token}'")
         print("="*60)
 
         return realtor_id, token

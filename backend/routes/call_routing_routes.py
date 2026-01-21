@@ -298,7 +298,7 @@ async def get_routing_config(
     return {
         "assistants": ASSISTANT_CONFIG,
         "phone_number_id": PHONE_NUMBER_ID,
-        "webhook_url": f"{os.getenv('RAILWAY_PUBLIC_DOMAIN', 'https://api.perenniaai.com')}/api/v1/call-routing/webhook/route-call",
+        "webhook_url": f"{os.getenv('RAILWAY_PUBLIC_DOMAIN', 'https://app.perenniaai.com')}/api/v1/call-routing/webhook/route-call",
         "routing_enabled": True
     }
 

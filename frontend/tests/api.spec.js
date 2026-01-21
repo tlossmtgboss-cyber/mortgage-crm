@@ -1,7 +1,7 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
 
-const API_BASE_URL = process.env.API_BASE_URL || 'https://api.perenniaai.com';
+const API_BASE_URL = process.env.API_BASE_URL || 'https://app.perenniaai.com';
 
 test.describe('API - Authentication', () => {
   test('should return 401 for invalid credentials', async ({ request }) => {

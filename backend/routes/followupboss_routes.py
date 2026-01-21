@@ -132,7 +132,7 @@ async def connect_fub_account(
 
     # Generate webhook secret and URL
     webhook_secret = generate_webhook_secret()
-    base_url = os.getenv("API_BASE_URL", "https://api.perenniaai.com")
+    base_url = os.getenv("API_BASE_URL", "https://app.perenniaai.com")
     webhook_url = f"{base_url}/api/webhooks/followupboss/{get_user_id(current_user)}"
 
     # Create connection

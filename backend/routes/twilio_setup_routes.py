@@ -593,7 +593,7 @@ async def create_messaging_service(
         client = get_subaccount_client(config["subaccount_sid"])
 
         # Create messaging service
-        base_url = os.getenv("API_URL", "https://api.perenniaai.com")
+        base_url = os.getenv("API_URL", "https://app.perenniaai.com")
 
         messaging_service = client.messaging.v1.services.create(
             friendly_name=service.friendly_name,

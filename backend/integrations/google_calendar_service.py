@@ -28,7 +28,7 @@ class GoogleCalendarClient:
         self.client_secret = os.getenv("GOOGLE_CLIENT_SECRET", "")
         self.redirect_uri = os.getenv(
             "GOOGLE_CALENDAR_REDIRECT_URI",
-            "https://api.perenniaai.com/api/v1/google-calendar/callback"
+            "https://app.perenniaai.com/api/v1/google-calendar/callback"
         )
 
         self.auth_url = "https://accounts.google.com/o/oauth2/v2/auth"

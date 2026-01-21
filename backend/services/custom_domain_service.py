@@ -35,7 +35,7 @@ class CustomDomainService:
         "https://perenniaai.com",
         "https://www.perenniaai.com",
         "https://app.perenniaai.com",
-        "https://api.perenniaai.com",
+        "https://app.perenniaai.com",
     }
 
     def __init__(self, refresh_interval: int = 60):

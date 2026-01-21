@@ -2034,8 +2034,8 @@ async def create_test_realtor(
             "expires_at": expires_at.isoformat(),
             "associated_loans": associated_loans,
             "test_urls": {
-                "profile": f"https://api.perenniaai.com/api/v1/realtor-portal/me?token={session_token}",
-                "loans": f"https://api.perenniaai.com/api/v1/realtor-portal/loans?token={session_token}"
+                "profile": f"https://app.perenniaai.com/api/v1/realtor-portal/me?token={session_token}",
+                "loans": f"https://app.perenniaai.com/api/v1/realtor-portal/loans?token={session_token}"
             }
         }
 

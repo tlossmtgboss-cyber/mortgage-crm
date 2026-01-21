@@ -28,7 +28,7 @@ class DocuSignClient:
         self.client_secret = os.getenv("DOCUSIGN_CLIENT_SECRET", "")
         self.redirect_uri = os.getenv(
             "DOCUSIGN_REDIRECT_URI",
-            "https://api.perenniaai.com/api/v1/docusign/callback"
+            "https://app.perenniaai.com/api/v1/docusign/callback"
         )
 
         # Use demo environment by default, switch to production when ready

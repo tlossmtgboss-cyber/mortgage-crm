@@ -743,7 +743,7 @@ async def connect_integration(
                     "integration_id": integration_id,
                     "auth_type": "oauth2",
                     "oauth_url": oauth_url,
-                    "redirect_uri": os.getenv("HUBSPOT_REDIRECT_URI", "https://api.perenniaai.com/api/v1/hubspot/callback")
+                    "redirect_uri": os.getenv("HUBSPOT_REDIRECT_URI", "https://app.perenniaai.com/api/v1/hubspot/callback")
                 }, "OAuth flow initiated - redirect to HubSpot")
 
             # Handle Google Calendar OAuth
@@ -762,7 +762,7 @@ async def connect_integration(
                     "integration_id": integration_id,
                     "auth_type": "oauth2",
                     "oauth_url": oauth_url,
-                    "redirect_uri": os.getenv("GOOGLE_CALENDAR_REDIRECT_URI", "https://api.perenniaai.com/api/v1/google-calendar/callback")
+                    "redirect_uri": os.getenv("GOOGLE_CALENDAR_REDIRECT_URI", "https://app.perenniaai.com/api/v1/google-calendar/callback")
                 }, "OAuth flow initiated - redirect to Google")
 
             # Handle Zoom OAuth
@@ -781,7 +781,7 @@ async def connect_integration(
                     "integration_id": integration_id,
                     "auth_type": "oauth2",
                     "oauth_url": oauth_url,
-                    "redirect_uri": os.getenv("ZOOM_REDIRECT_URI", "https://api.perenniaai.com/api/v1/zoom/callback")
+                    "redirect_uri": os.getenv("ZOOM_REDIRECT_URI", "https://app.perenniaai.com/api/v1/zoom/callback")
                 }, "OAuth flow initiated - redirect to Zoom")
 
             # Handle Slack OAuth
@@ -800,7 +800,7 @@ async def connect_integration(
                     "integration_id": integration_id,
                     "auth_type": "oauth2",
                     "oauth_url": oauth_url,
-                    "redirect_uri": os.getenv("SLACK_REDIRECT_URI", "https://api.perenniaai.com/api/v1/slack/callback")
+                    "redirect_uri": os.getenv("SLACK_REDIRECT_URI", "https://app.perenniaai.com/api/v1/slack/callback")
                 }, "OAuth flow initiated - redirect to Slack")
 
             # Handle DocuSign OAuth
@@ -819,7 +819,7 @@ async def connect_integration(
                     "integration_id": integration_id,
                     "auth_type": "oauth2",
                     "oauth_url": oauth_url,
-                    "redirect_uri": os.getenv("DOCUSIGN_REDIRECT_URI", "https://api.perenniaai.com/api/v1/docusign/callback")
+                    "redirect_uri": os.getenv("DOCUSIGN_REDIRECT_URI", "https://app.perenniaai.com/api/v1/docusign/callback")
                 }, "OAuth flow initiated - redirect to DocuSign")
 
             # Handle Outlook Calendar OAuth (Microsoft Graph API)
@@ -866,7 +866,7 @@ async def connect_integration(
                 "integration_id": integration_id,
                 "auth_type": "oauth2",
                 "oauth_url": oauth_url,
-                "redirect_uri": f"https://api.perenniaai.com/oauth/callback/{integration_id}"
+                "redirect_uri": f"https://app.perenniaai.com/oauth/callback/{integration_id}"
             }, "OAuth flow initiated")
         else:
             # Test API key connection

@@ -40,7 +40,7 @@ class SlackClient:
         self.client_secret = os.getenv("SLACK_CLIENT_SECRET", "")
         self.redirect_uri = os.getenv(
             "SLACK_REDIRECT_URI",
-            "https://api.perenniaai.com/api/v1/slack/callback"
+            "https://app.perenniaai.com/api/v1/slack/callback"
         )
 
         self.auth_url = "https://slack.com/oauth/v2/authorize"

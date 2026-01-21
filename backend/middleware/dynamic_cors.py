@@ -69,10 +69,6 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
             "https://perenniaai.com",
             "https://www.perenniaai.com",
             "https://app.perenniaai.com",
-            "https://api.perenniaai.com",
-            # Railway production domains
-            "https://app.perenniaai.com",
-            "https://mortgage-crm-production-79a9.up.railway.app",
         }
 
         if origin in static_allowed:

@@ -29,7 +29,7 @@ class ZoomClient:
         self.client_secret = os.getenv("ZOOM_CLIENT_SECRET", "")
         self.redirect_uri = os.getenv(
             "ZOOM_REDIRECT_URI",
-            "https://api.perenniaai.com/api/v1/zoom/callback"
+            "https://app.perenniaai.com/api/v1/zoom/callback"
         )
 
         self.auth_url = "https://zoom.us/oauth/authorize"

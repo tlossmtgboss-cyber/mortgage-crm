@@ -1177,7 +1177,7 @@ async def end_viewer_session(
 
 def _generate_player_html(video: dict, autoplay: bool, muted: bool) -> str:
     """Generate the video player HTML."""
-    api_url = os.getenv("API_URL", "https://api.perenniaai.com")
+    api_url = os.getenv("API_URL", "https://app.perenniaai.com")
     video_url = video.get("video_url", "")
     poster_url = video.get("poster_url") or video.get("thumbnail_url", "")
 
@@ -1264,7 +1264,7 @@ def _generate_player_html(video: dict, autoplay: bool, muted: bool) -> str:
 
 def _generate_watch_page_html(video: dict) -> str:
     """Generate the public watch page HTML."""
-    api_url = os.getenv("API_URL", "https://api.perenniaai.com")
+    api_url = os.getenv("API_URL", "https://app.perenniaai.com")
     frontend_url = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
 
     return f'''<!DOCTYPE html>
