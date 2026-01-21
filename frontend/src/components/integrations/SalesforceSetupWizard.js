@@ -463,16 +463,19 @@ function SalesforceSetupWizard({ onComplete }) {
         <p>We'll scan your Salesforce org to find available objects and fields</p>
       </div>
 
-      {/* If not connected, show connect button instead */}
-      {!connectionStatus?.connected ? (
+      {/* If not connected or connection error, show connect button */}
+      {!connectionStatus?.connected || connectionError ? (
         <div className="discovery-card">
-          <h3>Connection Required</h3>
-          <p>Please connect your Salesforce account first before discovering schema</p>
+          <h3>{connectionError ? 'Connection Error' : 'Connection Required'}</h3>
+          <p>{connectionError
+            ? 'Your Salesforce connection has expired or is invalid. Please reconnect your account.'
+            : 'Please connect your Salesforce account first before discovering schema'
+          }</p>
           <button
             className="btn btn-primary btn-lg"
             onClick={handleConnect}
           >
-            Connect Salesforce
+            {connectionError ? 'Reconnect Salesforce' : 'Connect Salesforce'}
           </button>
         </div>
       ) : schemas.length === 0 ? (
