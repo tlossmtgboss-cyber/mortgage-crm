@@ -51,12 +51,25 @@ function Portfolio() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [stats, loans, mum, metrics] = await Promise.all([
+      // Use Promise.allSettled to handle partial failures gracefully
+      const results = await Promise.allSettled([
         portfolioAPI.getStats(),
         portfolioAPI.getAll(),
         mumAPI.getAll(),
         mumAPI.getMetrics()
       ]);
+
+      const stats = results[0].status === 'fulfilled' ? results[0].value : {};
+      const loans = results[1].status === 'fulfilled' ? results[1].value : [];
+      const mum = results[2].status === 'fulfilled' ? results[2].value : [];
+      const metrics = results[3].status === 'fulfilled' ? results[3].value : null;
+
+      // Log any failures for debugging
+      results.forEach((result, idx) => {
+        if (result.status === 'rejected') {
+          console.warn(`Portfolio data load ${idx} failed:`, result.reason);
+        }
+      });
 
       const totalVolume = stats.total_volume || 0;
       const totalLoans = stats.total_loans || 0;
