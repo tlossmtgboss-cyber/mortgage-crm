@@ -386,7 +386,12 @@ async def auto_import(
             )
 
         # Determine destination
-        destination = 'loans' if table_name == 'loans' else 'leads'
+        if table_name == 'loans':
+            destination = 'loans'
+        elif table_name == 'mum_clients':
+            destination = 'mum_clients'
+        else:
+            destination = 'leads'
 
         # Get database session
         db = SessionLocal()
