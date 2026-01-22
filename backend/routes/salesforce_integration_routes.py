@@ -3082,7 +3082,7 @@ async def admin_test_sync_simple(
                     original_rate, loan_balance, status, engagement_score, salesforce_id, created_at
                 )
                 SELECT
-                    COALESCE(l.borrower_name, l.borrower_first_name || ' ' || l.borrower_last_name, 'Client - ' || l.loan_number),
+                    COALESCE(l.borrower_name, 'Client - ' || l.loan_number),
                     l.loan_number,
                     COALESCE(l.funded_date, l.closing_date, CURRENT_DATE),
                     COALESCE(l.closing_date, l.funded_date, CURRENT_DATE),
