@@ -2909,7 +2909,24 @@ async def admin_run_all_syncs(
 
         results.append(profile_result)
 
-    # Step 3: Sync all funded loans to MUM
+    # Step 3: Ensure salesforce_id column exists on mum_clients
+    try:
+        check = db.execute(text("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'mum_clients' AND column_name = 'salesforce_id'
+        """)).fetchone()
+        if not check:
+            db.execute(text("""
+                ALTER TABLE mum_clients ADD COLUMN salesforce_id VARCHAR(100)
+            """))
+            db.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_mum_clients_salesforce_id ON mum_clients(salesforce_id)
+            """))
+            db.commit()
+    except Exception as e:
+        logger.warning(f"Could not add salesforce_id column: {e}")
+
+    # Step 4: Sync all funded loans to MUM
     try:
         mum_result = db.execute(text("""
             INSERT INTO mum_clients (
@@ -3021,6 +3038,26 @@ async def admin_test_sync_simple(
 
         # Just sync funded loans to MUM (no Salesforce API calls)
         result = {"status": "started", "steps": []}
+
+        # Step 0: Ensure salesforce_id column exists on mum_clients
+        try:
+            check = db.execute(text("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_name = 'mum_clients' AND column_name = 'salesforce_id'
+            """)).fetchone()
+            if not check:
+                db.execute(text("""
+                    ALTER TABLE mum_clients ADD COLUMN salesforce_id VARCHAR(100)
+                """))
+                db.execute(text("""
+                    CREATE INDEX IF NOT EXISTS idx_mum_clients_salesforce_id ON mum_clients(salesforce_id)
+                """))
+                db.commit()
+                result["steps"].append({"step": "add_salesforce_id_column", "status": "created"})
+            else:
+                result["steps"].append({"step": "add_salesforce_id_column", "status": "already_exists"})
+        except Exception as e:
+            result["steps"].append({"step": "add_salesforce_id_column", "error": str(e)[:100]})
 
         # Step 1: Count loans that could be synced
         try:

@@ -446,7 +446,7 @@ const IntegrationSettings = () => {
             <div
               key={integration.id}
               className={`integration-card ${selectedIntegration?.id === integration.id ? 'selected' : ''}`}
-              onClick={() => loadIntegrationDetails(integration.id)}
+              onClick={() => handleIntegrationClick(integration.id)}
             >
               <div className="card-header">
                 <div className="integration-logo">
