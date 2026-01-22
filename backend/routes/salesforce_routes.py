@@ -27,6 +27,66 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# Whitelist of allowed column names for loans table to prevent SQL injection
+ALLOWED_LOAN_COLUMNS = frozenset([
+    'id', 'loan_number', 'borrower_name', 'borrower_email', 'borrower_phone',
+    'preferred_communication', 'coborrower_name', 'co_borrower_email', 'stage',
+    'program', 'loan_type', 'amount', 'loan_amount', 'purchase_price', 'down_payment',
+    'rate', 'term', 'property_address', 'property_city', 'property_state', 'property_zip',
+    'lock_date', 'closing_date', 'funded_date', 'loan_officer_id', 'processor',
+    'underwriter', 'realtor_agent', 'title_company', 'days_in_stage', 'sla_status',
+    'milestones', 'ai_insights', 'predicted_close_date', 'risk_score', 'user_metadata',
+    'appraisal_ordered_date', 'appraisal_scheduled_date', 'appraisal_completed_date',
+    'appraisal_value', 'lock_expiration_date', 'rate_lock_status', 'rate_lock_recommendation',
+    'lock_term_days', 'salesforce_id', 'salesforce_last_synced_at', 'salesforce_sync_status',
+    'prospect_date', 'application_date', 'le_pending_date', 'credit_only_date',
+    'file_received_date', 'preapproval_date', 'uw_received_date', 'conditions_for_review_date',
+    'suspended_date', 'loan_approved_date', 'approved_not_accepted_date', 'approval_expires_date',
+    'appraisal_docs_expire_date', 'clear_to_close_date', 'cd_requested_date',
+    'cd_sent_to_borrower_date', 'cd_acknowledged_date', 'docs_ordered_date', 'docs_out_date',
+    'signing_date', 'wire_ordered_date', 'funding_date', 'funding_verified_date',
+    'contract_received_date', 'earnest_money_verified_date', 'lender', 'origination_channel',
+    'referral_source', 'created_at', 'updated_at', 'notes', 'ltv', 'cltv', 'dti',
+])
+
+
+def sanitize_loan_data(loan_data: dict) -> dict:
+    """
+    Filter loan data to only include allowed column names.
+    This prevents SQL injection via malicious field names from Salesforce.
+    """
+    return {k: v for k, v in loan_data.items() if k in ALLOWED_LOAN_COLUMNS}
+
+
+def build_safe_update_sql(loan_data: dict, table: str = "loans") -> tuple:
+    """
+    Build a safe UPDATE SQL statement using only whitelisted column names.
+    Returns (sql_string, filtered_data_dict)
+    """
+    safe_data = sanitize_loan_data(loan_data)
+    if not safe_data:
+        raise ValueError("No valid columns to update")
+
+    # Build update fields, excluding the key field
+    update_fields = ", ".join([f"{k} = :{k}" for k in safe_data.keys() if k != 'salesforce_id'])
+    sql = f"UPDATE {table} SET {update_fields}, updated_at = CURRENT_TIMESTAMP WHERE salesforce_id = :salesforce_id"
+    return sql, safe_data
+
+
+def build_safe_insert_sql(loan_data: dict, table: str = "loans") -> tuple:
+    """
+    Build a safe INSERT SQL statement using only whitelisted column names.
+    Returns (sql_string, filtered_data_dict)
+    """
+    safe_data = sanitize_loan_data(loan_data)
+    if not safe_data:
+        raise ValueError("No valid columns to insert")
+
+    columns = ", ".join(safe_data.keys())
+    placeholders = ", ".join([f":{k}" for k in safe_data.keys()])
+    sql = f"INSERT INTO {table} ({columns}, created_at, updated_at) VALUES ({placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+    return sql, safe_data
+
 
 # Request/Response Models
 class SalesforceConnectionStatus(BaseModel):
@@ -1145,22 +1205,25 @@ async def import_closed_loans(
                     loan_data['loan_number'] = f"SF-{sf_id[-8:]}"
 
                 if existing:
-                    # Update existing loan
-                    update_fields = ", ".join([f"{k} = :{k}" for k in loan_data.keys() if k != 'salesforce_id'])
-                    db.execute(text(f"""
-                        UPDATE loans SET {update_fields}, updated_at = CURRENT_TIMESTAMP
-                        WHERE salesforce_id = :salesforce_id
-                    """), loan_data)
-                    results['updated'] += 1
+                    # Update existing loan - use safe SQL builder to prevent injection
+                    try:
+                        update_sql, safe_data = build_safe_update_sql(loan_data)
+                        db.execute(text(update_sql), safe_data)
+                        results['updated'] += 1
+                    except ValueError as ve:
+                        logger.warning(f"No valid columns to update for {sf_id}: {ve}")
+                        results['skipped'] += 1
+                        continue
                 else:
-                    # Insert new loan
-                    columns = ", ".join(loan_data.keys())
-                    placeholders = ", ".join([f":{k}" for k in loan_data.keys()])
-                    db.execute(text(f"""
-                        INSERT INTO loans ({columns}, created_at, updated_at)
-                        VALUES ({placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                    """), loan_data)
-                    results['imported'] += 1
+                    # Insert new loan - use safe SQL builder to prevent injection
+                    try:
+                        insert_sql, safe_data = build_safe_insert_sql(loan_data)
+                        db.execute(text(insert_sql), safe_data)
+                        results['imported'] += 1
+                    except ValueError as ve:
+                        logger.warning(f"No valid columns to insert for {sf_id}: {ve}")
+                        results['skipped'] += 1
+                        continue
 
                 results['loans'].append({
                     'salesforce_id': sf_id,
@@ -1173,7 +1236,7 @@ async def import_closed_loans(
                 logger.error(f"Error importing loan {record.get('Id')}: {e}")
                 results['errors'].append({
                     'salesforce_id': record.get('Id'),
-                    'error': str(e)
+                    'error': str(e)[:200]  # Truncate to avoid exposing sensitive data
                 })
                 results['skipped'] += 1
 

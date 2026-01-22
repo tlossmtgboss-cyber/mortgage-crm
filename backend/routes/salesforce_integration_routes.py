@@ -417,10 +417,61 @@ async def import_funded_loans_to_mum_debug(
     try:
         results = {'imported': 0, 'skipped': 0, 'errors': []}
 
-        # Get funded loans not already in mum_clients - use only columns that exist
-        funded_loans = db.execute(text("""
-            SELECT l.id, l.loan_number, l.borrower_name, l.amount, l.interest_rate,
-                   l.funded_date, l.closing_date, l.stage, l.status
+        # First, check what columns exist in loans table
+        loans_columns_result = db.execute(text("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'loans'
+            ORDER BY ordinal_position
+        """)).fetchall()
+        loans_columns = [row[0] for row in loans_columns_result]
+        logger.info(f"Loans table columns: {loans_columns}")
+
+        # Build dynamic query based on available columns
+        select_cols = ["l.id", "l.loan_number"]
+
+        # Check for name columns
+        if "borrower_name" in loans_columns:
+            select_cols.append("l.borrower_name")
+        else:
+            select_cols.append("NULL as borrower_name")
+
+        # Check for amount
+        if "amount" in loans_columns:
+            select_cols.append("l.amount")
+        elif "loan_amount" in loans_columns:
+            select_cols.append("l.loan_amount as amount")
+        else:
+            select_cols.append("NULL as amount")
+
+        # Check for rate
+        if "interest_rate" in loans_columns:
+            select_cols.append("l.interest_rate")
+        elif "rate" in loans_columns:
+            select_cols.append("l.rate as interest_rate")
+        else:
+            select_cols.append("NULL as interest_rate")
+
+        # Check for dates
+        if "funded_date" in loans_columns:
+            select_cols.append("l.funded_date")
+        else:
+            select_cols.append("NULL as funded_date")
+
+        if "closing_date" in loans_columns:
+            select_cols.append("l.closing_date")
+        else:
+            select_cols.append("NULL as closing_date")
+
+        # Check for stage/status
+        stage_col = "l.stage" if "stage" in loans_columns else "NULL as stage"
+        status_col = "l.status" if "status" in loans_columns else "NULL as status"
+        select_cols.extend([stage_col, status_col])
+
+        select_clause = ", ".join(select_cols)
+
+        # Get funded loans not already in mum_clients
+        query = f"""
+            SELECT {select_clause}
             FROM loans l
             WHERE (l.stage IN ('FUNDED', 'Funded', 'funded')
                    OR l.status IN ('funded', 'FUNDED', 'Funded', 'closed', 'CLOSED')
@@ -429,7 +480,8 @@ async def import_funded_loans_to_mum_debug(
                 SELECT 1 FROM mum_clients m
                 WHERE m.loan_number = l.loan_number
             )
-        """)).fetchall()
+        """
+        funded_loans = db.execute(text(query)).fetchall()
 
         logger.info(f"Found {len(funded_loans)} funded loans to import to MUM clients")
 
@@ -437,10 +489,8 @@ async def import_funded_loans_to_mum_debug(
 
         for loan in funded_loans:
             try:
-                # Build client name from borrower_name or fallback to loan number
+                # loan: id, loan_number, borrower_name, amount, interest_rate, funded_date, closing_date, stage, status
                 client_name = loan[2] if loan[2] else f"Client - {loan[1]}"
-
-                # Get closing date (funded_date or closing_date)
                 close_date = loan[5] or loan[6]
 
                 # Insert into mum_clients
