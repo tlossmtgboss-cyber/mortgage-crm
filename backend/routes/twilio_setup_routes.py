@@ -1025,9 +1025,7 @@ class OutboundCallRequest(BaseModel):
 async def make_outbound_ai_call(
     request: OutboundCallRequest,
     admin_key: str = None,
-    user_email: str = None,
-    current_user=None,
-    db=None
+    user_email: str = None
 ):
     """
     Make an outbound AI call using user's Twilio credentials.
@@ -1038,10 +1036,10 @@ async def make_outbound_ai_call(
     """
     from twilio.rest import Client as TwilioClient
     from sqlalchemy import text
+    from database import get_db as db_getter
 
-    # Get database session
-    if db is None:
-        db = get_db()
+    # Get database session using context manager
+    db = next(db_getter())
 
     try:
         # Determine which user's credentials to use
@@ -1053,11 +1051,8 @@ async def make_outbound_ai_call(
             if not user_result:
                 raise HTTPException(status_code=404, detail=f"User {user_email} not found")
             user_id = user_result[0]
-        elif current_user:
-            # Authenticated user mode
-            user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
         else:
-            raise HTTPException(status_code=401, detail="Authentication required")
+            raise HTTPException(status_code=401, detail="Admin key and user_email required")
 
         # Get user's Twilio config
         config = await get_user_twilio_config(user_id, db)
