@@ -183,9 +183,9 @@ def fix_salesforce_schema(db: Session) -> dict:
             db.execute(text(f"ALTER TABLE integration_record_tracking ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
             db.commit()
             fixes.append(f"Added {col_name} to integration_record_tracking")
-    except Exception as e:
-        db.rollback()
-        logger.debug(f"integration_record_tracking fix: {e}")
+        except Exception as e:
+            db.rollback()
+            logger.debug(f"integration_record_tracking.{col_name} fix: {e}")
 
     return {"fixes_applied": fixes}
 
