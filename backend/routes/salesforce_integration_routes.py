@@ -2839,6 +2839,11 @@ async def admin_run_all_syncs(
         }
 
         try:
+            # Ensure profile is set to 'active' so sync can proceed
+            if profile.status in ['connected', 'mapping_required']:
+                profile.status = 'active'
+                db.commit()
+
             # Step 1: Auto-create mappings
             source_object = "MtgPlanner_CRM__Transaction_Property__c"
             schema = salesforce_schema.get_object_schema(db, profile.id, source_object)
