@@ -118,7 +118,7 @@ async def smart_chat_with_memory(
                     impact_score=0.0,
                     metadata={"error": str(e)}
                 )
-            except:
+            except Exception:
                 pass
 
         return {

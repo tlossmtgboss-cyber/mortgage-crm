@@ -836,7 +836,7 @@ async def process_document_background(doc_id: str, file_path: str, user_id: int)
             if doc:
                 doc.processing_error = str(e)
                 db.commit()
-        except:
+        except Exception:
             pass
     finally:
         db.close()

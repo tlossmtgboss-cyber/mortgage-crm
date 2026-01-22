@@ -62,7 +62,7 @@ async def get_current_user(
                 if isinstance(raw_metadata, str):
                     try:
                         metadata = json.loads(raw_metadata)
-                    except:
+                    except Exception:
                         metadata = {}
                 else:
                     metadata = raw_metadata
@@ -604,7 +604,7 @@ async def cron_sync_all_gmail(
             if isinstance(settings, str):
                 try:
                     settings = json.loads(settings)
-                except:
+                except Exception:
                     settings = {}
 
             token_data = settings.get('gmail_tokens')

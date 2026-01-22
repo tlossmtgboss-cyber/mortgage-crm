@@ -138,7 +138,7 @@ def generate_bill_number(db: Session, org_id: int) -> str:
         try:
             num = int(last.bill_number.replace("BILL-", ""))
             return f"BILL-{num + 1:06d}"
-        except:
+        except Exception:
             pass
     return "BILL-000001"
 
@@ -153,7 +153,7 @@ def generate_payment_number(db: Session, org_id: int) -> str:
         try:
             num = int(last.payment_number.replace("CHK-", ""))
             return f"CHK-{num + 1:06d}"
-        except:
+        except Exception:
             pass
     return "CHK-000001"
 

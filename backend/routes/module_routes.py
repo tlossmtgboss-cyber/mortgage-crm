@@ -572,14 +572,14 @@ async def debug_modules(
                         except Exception as inner_e:
                             try:
                                 conn.rollback()  # Rollback failed permission insert
-                            except:
+                            except Exception:
                                 pass
                             results.setdefault("perm_errors", []).append(f"{perm}: {str(inner_e)[:50]}")
 
                 except Exception as e:
                     try:
                         conn.rollback()
-                    except:
+                    except Exception:
                         pass
                     results["admin_error"] = str(e)
 
@@ -798,7 +798,7 @@ async def clear_demo_data(
                 except Exception as e:
                     try:
                         conn.rollback()
-                    except:
+                    except Exception:
                         pass
                     error_str = str(e).lower()
                     if "does not exist" in error_str or "undefined table" in error_str:
@@ -818,7 +818,7 @@ async def clear_demo_data(
                 except Exception as e:
                     try:
                         conn.rollback()
-                    except:
+                    except Exception:
                         pass
                     error_str = str(e).lower()
                     if "does not exist" not in error_str and "undefined table" not in error_str:
@@ -832,7 +832,7 @@ async def clear_demo_data(
                 ))
                 conn.commit()
                 deleted["activity_logs"] = result.rowcount
-            except:
+            except Exception:
                 pass
 
         total_deleted = sum(v for v in deleted.values() if isinstance(v, int))

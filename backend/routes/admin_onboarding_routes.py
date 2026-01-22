@@ -205,7 +205,7 @@ def get_invite_data(db: Session, token: str) -> Optional[dict]:
                 data = json.loads(audit_result.new_values)
         else:
             data = audit_result.new_values
-    except:
+    except Exception:
         return None
 
     # Check expiration
@@ -215,7 +215,7 @@ def get_invite_data(db: Session, token: str) -> Optional[dict]:
             expires_at = datetime.fromisoformat(expires_at_str.replace('Z', '+00:00'))
             if datetime.now(timezone.utc) > expires_at:
                 return {'expired': True, **data}
-        except:
+        except Exception:
             pass
 
     return {
@@ -438,7 +438,7 @@ async def start_onboarding(
                 os.getenv('JWT_SECRET', 'your-secret-key'),
                 algorithm='HS256'
             )
-        except:
+        except Exception:
             token = session_id  # Fallback
 
         return success_response(
@@ -482,7 +482,7 @@ async def save_company_profile(
             import jwt
             payload = jwt.decode(token, os.getenv('JWT_SECRET', 'your-secret-key'), algorithms=['HS256'])
             email = payload.get('sub')
-        except:
+        except Exception:
             raise HTTPException(status_code=401, detail="Invalid token")
 
         # Get user and tenant
@@ -546,7 +546,7 @@ async def save_user_profile(
             import jwt
             payload = jwt.decode(token, os.getenv('JWT_SECRET', 'your-secret-key'), algorithms=['HS256'])
             email = payload.get('sub')
-        except:
+        except Exception:
             raise HTTPException(status_code=401, detail="Invalid token")
 
         # Update user profile
@@ -607,7 +607,7 @@ async def queue_team_invites(
             import jwt
             payload = jwt.decode(token, os.getenv('JWT_SECRET', 'your-secret-key'), algorithms=['HS256'])
             email = payload.get('sub')
-        except:
+        except Exception:
             raise HTTPException(status_code=401, detail="Invalid token")
 
         if invites.skip:
@@ -692,7 +692,7 @@ async def create_subscription(
             import jwt
             payload = jwt.decode(token, os.getenv('JWT_SECRET', 'your-secret-key'), algorithms=['HS256'])
             email = payload.get('sub')
-        except:
+        except Exception:
             raise HTTPException(status_code=401, detail="Invalid token")
 
         # Get user and tenant
@@ -807,7 +807,7 @@ async def create_subscription(
                 promo = stripe.PromotionCode.list(code=payment.promo_code, active=True, limit=1)
                 if promo.data:
                     coupon_id = promo.data[0].coupon.id
-            except:
+            except Exception:
                 pass  # Ignore invalid promo codes
 
         # Create subscription
@@ -901,7 +901,7 @@ async def complete_onboarding(
             import jwt
             payload = jwt.decode(token, os.getenv('JWT_SECRET', 'your-secret-key'), algorithms=['HS256'])
             email = payload.get('sub')
-        except:
+        except Exception:
             raise HTTPException(status_code=401, detail="Invalid token")
 
         # Get user and tenant with pending invites

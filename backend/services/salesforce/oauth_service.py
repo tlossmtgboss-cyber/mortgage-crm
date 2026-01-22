@@ -152,7 +152,7 @@ class SalesforceOAuthService:
             logger.error(f"Failed to store OAuth state in database: {type(e).__name__}: {e}")
             try:
                 db.rollback()
-            except:
+            except Exception:
                 pass
             # Re-raise with more detail
             raise Exception(f"OAuth state storage failed ({type(e).__name__}): {e}")

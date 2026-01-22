@@ -154,28 +154,28 @@ def backup_data(db):
     try:
         mum_clients = db.execute(text("SELECT * FROM mum_clients")).fetchall()
         backup["mum_clients"] = [dict(row._mapping) for row in mum_clients] if mum_clients else []
-    except:
+    except Exception:
         backup["mum_clients"] = []
 
     # Backup tasks
     try:
         tasks = db.execute(text("SELECT * FROM tasks")).fetchall()
         backup["tasks"] = [dict(row._mapping) for row in tasks] if tasks else []
-    except:
+    except Exception:
         backup["tasks"] = []
 
     # Backup AI tasks
     try:
         ai_tasks = db.execute(text("SELECT * FROM ai_tasks")).fetchall()
         backup["ai_tasks"] = [dict(row._mapping) for row in ai_tasks] if ai_tasks else []
-    except:
+    except Exception:
         backup["ai_tasks"] = []
 
     # Backup activities
     try:
         activities = db.execute(text("SELECT * FROM activities")).fetchall()
         backup["activities"] = [dict(row._mapping) for row in activities] if activities else []
-    except:
+    except Exception:
         backup["activities"] = []
 
     # Write backup file

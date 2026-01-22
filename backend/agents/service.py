@@ -1145,7 +1145,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             if due_date:
                 try:
                     due_datetime = datetime.fromisoformat(due_date.replace('Z', '+00:00'))
-                except:
+                except Exception:
                     due_datetime = datetime.now() + timedelta(days=1)
 
             # Insert into ai_tasks table (the active task table)

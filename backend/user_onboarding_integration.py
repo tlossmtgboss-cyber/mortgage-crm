@@ -1081,7 +1081,7 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
                     import json
                     try:
                         user_metadata = json.loads(user_metadata)
-                    except:
+                    except Exception:
                         continue
 
                 if user_metadata and user_metadata.get("invitation_token") == token:
@@ -1199,7 +1199,7 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
                     import json
                     try:
                         user_metadata = json.loads(user_metadata_raw)
-                    except:
+                    except Exception:
                         continue
                 else:
                     user_metadata = user_metadata_raw

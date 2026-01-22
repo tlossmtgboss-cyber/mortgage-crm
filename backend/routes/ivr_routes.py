@@ -125,7 +125,7 @@ async def create_ivr_menu(
 
         try:
             menu_id = result.fetchone()[0]
-        except:
+        except Exception:
             menu_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
 
         db.commit()
@@ -403,7 +403,7 @@ async def create_ivr_option(
 
         try:
             option_id = result.fetchone()[0]
-        except:
+        except Exception:
             option_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
 
         db.commit()
@@ -902,7 +902,7 @@ async def apply_ivr_template(
 
         try:
             menu_id = result.fetchone()[0]
-        except:
+        except Exception:
             menu_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
 
         # Create options

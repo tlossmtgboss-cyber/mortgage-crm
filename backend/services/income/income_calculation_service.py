@@ -669,7 +669,7 @@ class IncomeCalculationService:
                 if not value:
                     return Decimal(0)
             return Decimal(str(value))
-        except:
+        except Exception:
             return Decimal(0)
 
     def _get_pay_frequency_multiplier(self, frequency: str) -> int:

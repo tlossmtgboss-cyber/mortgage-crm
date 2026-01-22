@@ -676,7 +676,7 @@ class VideoRenderWorker:
         result = subprocess.run(cmd, capture_output=True, text=True)
         try:
             return float(result.stdout.strip())
-        except:
+        except Exception:
             return 3.0
 
     def _get_video_metadata(self, video_path: Path) -> Tuple[float, int]:
@@ -692,7 +692,7 @@ class VideoRenderWorker:
         result = subprocess.run(cmd, capture_output=True, text=True)
         try:
             duration = float(result.stdout.strip())
-        except:
+        except Exception:
             duration = 0.0
 
         # Get file size

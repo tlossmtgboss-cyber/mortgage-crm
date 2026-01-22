@@ -368,7 +368,7 @@ class SSLCertificateService:
         # Parse response
         try:
             response_json = response.json()
-        except:
+        except Exception:
             response_json = {}
 
         return response_json, dict(response.headers)

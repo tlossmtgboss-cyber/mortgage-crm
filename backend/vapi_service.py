@@ -1000,7 +1000,7 @@ class VapiCRMIntegration:
             return None
         try:
             return datetime.fromisoformat(dt_string.replace('Z', '+00:00'))
-        except:
+        except Exception:
             return None
 
     async def create_outbound_call(

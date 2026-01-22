@@ -187,7 +187,7 @@ async def create_queue(
 
         try:
             queue_id = result.fetchone()[0]
-        except:
+        except Exception:
             queue_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
 
         # Create Twilio queue
@@ -489,7 +489,7 @@ async def add_queue_member(
 
         try:
             member_id = result.fetchone()[0]
-        except:
+        except Exception:
             member_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
 
         db.commit()

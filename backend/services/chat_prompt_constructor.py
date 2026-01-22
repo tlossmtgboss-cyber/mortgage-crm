@@ -281,7 +281,7 @@ class PromptConstructor:
                     from datetime import datetime
                     dt = datetime.fromisoformat(last_msg.replace('Z', '+00:00'))
                     parts.append(f"\nLast interaction: {dt.strftime('%B %d at %I:%M %p')}")
-                except:
+                except Exception:
                     pass
 
             known_context = self.session_context_summary.get('context_summary', 'General mortgage questions')

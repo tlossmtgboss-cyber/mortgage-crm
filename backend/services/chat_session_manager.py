@@ -379,7 +379,7 @@ class ChatSessionManager:
                 if match:
                     try:
                         value = config['extract'](match)
-                    except:
+                    except Exception:
                         value = match.group(0)
 
                     detected.append({

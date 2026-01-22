@@ -419,7 +419,7 @@ async def salesforce_callback(
                 logger.debug(f"oauth_states table check: {table_err}")
                 try:
                     db.rollback()
-                except:
+                except Exception:
                     pass
 
             # Check if this state exists in oauth_states table
@@ -1509,7 +1509,7 @@ async def import_closed_loans(
         error_detail = str(e)
         try:
             error_detail = e.response.json()
-        except:
+        except Exception:
             pass
         raise HTTPException(status_code=502, detail=f"Salesforce API error: {error_detail}")
     except Exception as e:
@@ -2031,13 +2031,13 @@ async def admin_pull_recent_loans(
                         if transform == "decimal" and value:
                             try:
                                 value = float(value)
-                            except:
+                            except Exception:
                                 pass
                         elif transform == "date" and value:
                             try:
                                 from datetime import datetime as dt
                                 value = dt.fromisoformat(value.replace('Z', '+00:00')).date()
-                            except:
+                            except Exception:
                                 pass
 
                         loan_data[crm_field] = value
@@ -2101,7 +2101,7 @@ async def admin_pull_recent_loans(
         error_detail = str(e)
         try:
             error_detail = e.response.json()
-        except:
+        except Exception:
             pass
         return {
             "status": "error",
@@ -2354,15 +2354,15 @@ async def sync_salesforce_and_import_mum(
                                         if transform == "decimal":
                                             try:
                                                 value = float(value)
-                                            except:
+                                            except Exception:
                                                 continue
                                         elif transform == "date":
                                             try:
                                                 value = datetime.fromisoformat(value.replace('Z', '+00:00')).date()
-                                            except:
+                                            except Exception:
                                                 try:
                                                     value = datetime.strptime(value[:10], "%Y-%m-%d").date()
-                                                except:
+                                                except Exception:
                                                     continue
                                         elif transform == "stage_mapping":
                                             value = STAGE_MAPPING.get(str(value), "FUNDED")

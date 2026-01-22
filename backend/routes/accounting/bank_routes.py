@@ -702,7 +702,7 @@ async def disconnect_plaid_account(
         try:
             request = ItemRemoveRequest(access_token=plaid_item.access_token)
             client.item_remove(request)
-        except:
+        except Exception:
             pass  # Continue even if Plaid removal fails
 
     # Check if other accounts use this plaid item
@@ -749,7 +749,7 @@ async def handle_plaid_webhook(
 
     try:
         payload = json.loads(body)
-    except:
+    except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON")
 
     webhook_type = payload.get('webhook_type')

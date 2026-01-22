@@ -229,7 +229,7 @@ async def initiate_cold_transfer(
 
         try:
             transfer_id = result.fetchone()[0]
-        except:
+        except Exception:
             transfer_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
 
         db.commit()
@@ -429,7 +429,7 @@ async def initiate_warm_transfer(
 
         try:
             transfer_id = result.fetchone()[0]
-        except:
+        except Exception:
             transfer_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
 
         db.commit()
@@ -573,7 +573,7 @@ async def complete_warm_transfer(
             if transfer.consultation_call_sid:
                 try:
                     client.calls(transfer.consultation_call_sid).update(status="completed")
-                except:
+                except Exception:
                     pass  # Call may already be ended
 
             # Update original call to return from hold

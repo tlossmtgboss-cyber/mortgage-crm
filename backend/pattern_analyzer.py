@@ -30,7 +30,7 @@ class PatternAnalyzer:
         """
         try:
             db.rollback()  # Clear any previous failed transaction
-        except:
+        except Exception:
             pass
 
         logger.info(f"Analyzing patterns for user {user_id}")
@@ -55,7 +55,7 @@ class PatternAnalyzer:
             logger.error(f"Error analyzing patterns: {e}")
             try:
                 db.rollback()
-            except:
+            except Exception:
                 pass
             return {}
 

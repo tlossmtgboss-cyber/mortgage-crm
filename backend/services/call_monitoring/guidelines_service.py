@@ -119,7 +119,7 @@ async def process_guideline(guideline_id: str, file_path: str, file_ext: str):
             guideline.processing_notes = f"Processing error: {e}"
             guideline.is_processed = True
             db.commit()
-        except:
+        except Exception:
             pass
 
     finally:

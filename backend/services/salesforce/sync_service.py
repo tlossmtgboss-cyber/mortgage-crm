@@ -547,7 +547,7 @@ class SalesforceSyncService:
             if isinstance(closing_date, str):
                 try:
                     loan_data['closing_date'] = closing_date
-                except:
+                except Exception:
                     pass
 
         # Map stage from Salesforce StageName

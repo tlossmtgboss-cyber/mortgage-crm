@@ -128,7 +128,7 @@ def generate_invoice_number(db: Session, org_id: int) -> str:
         try:
             num = int(last.invoice_number.replace("INV-", ""))
             return f"INV-{num + 1:06d}"
-        except:
+        except Exception:
             pass
     return "INV-000001"
 
@@ -143,7 +143,7 @@ def generate_payment_number(db: Session, org_id: int) -> str:
         try:
             num = int(last.payment_number.replace("PMT-", ""))
             return f"PMT-{num + 1:06d}"
-        except:
+        except Exception:
             pass
     return "PMT-000001"
 

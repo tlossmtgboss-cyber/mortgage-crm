@@ -375,7 +375,7 @@ class BlogPDFExtractionService:
                     if document:
                         document.processing_error = str(e)
                         db_session.commit()
-                except:
+                except Exception:
                     pass
             return False
 

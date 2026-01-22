@@ -233,7 +233,7 @@ class CIIntegrationService:
         if isinstance(metadata, str):
             try:
                 metadata = json.loads(metadata)
-            except:
+            except Exception:
                 metadata = {}
 
         if metadata.get("meeting_platform") in ["zoom", "teams", "meet"]:
@@ -369,7 +369,7 @@ class CIIntegrationService:
                 """), {"session_id": session_id, "error": json.dumps(str(e))})
                 db.commit()
                 db.close()
-            except:
+            except Exception:
                 pass
 
 

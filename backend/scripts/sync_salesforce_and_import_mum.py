@@ -141,15 +141,15 @@ class SalesforceImporter:
                             if transform == "decimal" and value:
                                 try:
                                     value = float(value)
-                                except:
+                                except Exception:
                                     continue
                             elif transform == "date" and value:
                                 try:
                                     value = datetime.fromisoformat(value.replace('Z', '+00:00')).date()
-                                except:
+                                except Exception:
                                     try:
                                         value = datetime.strptime(value[:10], "%Y-%m-%d").date()
-                                    except:
+                                    except Exception:
                                         continue
                             elif transform == "stage_mapping":
                                 from services.salesforce_sync_service import STAGE_MAPPING
@@ -157,7 +157,7 @@ class SalesforceImporter:
                             elif transform == "integer" and value:
                                 try:
                                     value = int(value)
-                                except:
+                                except Exception:
                                     continue
 
                             loan_data[crm_field] = value

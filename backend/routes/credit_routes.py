@@ -243,7 +243,7 @@ async def get_loan_credit_reports(
     # Get current user from request state if available
     try:
         current_user = db.info.get("current_user")
-    except:
+    except Exception:
         current_user = None
 
     # Verify loan exists
@@ -263,7 +263,7 @@ async def get_loan_credit_reports(
         try:
             if r.doc_category and (r.doc_category.value == "Credit" or str(r.doc_category) == "Credit"):
                 credit_reports.append(r)
-        except:
+        except Exception:
             pass
 
     # Get credit items from database
@@ -372,7 +372,7 @@ async def get_lead_credit_reports(
         try:
             if r.doc_category and (r.doc_category.value == "Credit" or str(r.doc_category) == "Credit"):
                 credit_reports.append(r)
-        except:
+        except Exception:
             pass
 
     # Get credit items from database

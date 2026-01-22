@@ -1149,7 +1149,7 @@ class MultiLoanPortalService:
             if loan.get("property_address") and isinstance(loan["property_address"], str):
                 try:
                     loan["property_address"] = json.loads(loan["property_address"])
-                except:
+                except Exception:
                     pass
             loans.append(loan)
 
@@ -1576,7 +1576,7 @@ def get_portal_by_token(
         try:
             import json
             property_address = json.loads(property_address)
-        except:
+        except Exception:
             pass
 
     return {

@@ -134,7 +134,7 @@ def grant_admin_access(user_identifier):
         try:
             result = conn.execute(text("SELECT 1 FROM user_permissions LIMIT 1"))
             table_exists = True
-        except:
+        except Exception:
             table_exists = False
 
         if table_exists:

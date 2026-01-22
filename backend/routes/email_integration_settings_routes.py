@@ -362,7 +362,7 @@ def check_dns_status(domain: str) -> Dict[str, Any]:
             if 'v=DKIM1' in dkim_result.stdout:
                 result["dkim_configured"] = True
                 break
-        except:
+        except Exception:
             pass
 
     if not result["dkim_configured"]:

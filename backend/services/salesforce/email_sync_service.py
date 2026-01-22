@@ -228,7 +228,7 @@ class SalesforceEmailSyncService:
         if message_date:
             try:
                 received_at = datetime.fromisoformat(message_date.replace('Z', '+00:00'))
-            except:
+            except Exception:
                 received_at = datetime.now(timezone.utc)
         else:
             received_at = datetime.now(timezone.utc)
@@ -308,7 +308,7 @@ class SalesforceEmailSyncService:
         if created_date:
             try:
                 received_at = datetime.fromisoformat(created_date.replace('Z', '+00:00'))
-            except:
+            except Exception:
                 received_at = datetime.now(timezone.utc)
         else:
             received_at = datetime.now(timezone.utc)

@@ -341,7 +341,7 @@ async def import_browser_guidelines(
                         try:
                             published_date = datetime.strptime(date_str, fmt)
                             break
-                        except:
+                        except Exception:
                             continue
 
                 # Generate hash
@@ -544,7 +544,7 @@ async def add_concierge_responsible_column(
                     "status": "success",
                     "message": "Column concierge_responsible already exists"
                 }
-            except:
+            except Exception:
                 pass  # Column doesn't exist, proceed with adding it
 
             # Add the column
@@ -2846,7 +2846,7 @@ async def fix_500_errors(
             try:
                 db.execute(text("CREATE INDEX IF NOT EXISTS idx_user_permissions_user ON user_permissions(user_id)"))
                 db.commit()
-            except:
+            except Exception:
                 db.rollback()
 
             # ================================================================
@@ -2945,17 +2945,17 @@ async def fix_500_errors(
             try:
                 db.execute(text("CREATE INDEX IF NOT EXISTS idx_ai_tasks_assigned ON ai_tasks(assigned_to_id)"))
                 db.commit()
-            except:
+            except Exception:
                 db.rollback()
             try:
                 db.execute(text("CREATE INDEX IF NOT EXISTS idx_ai_tasks_status ON ai_tasks(status)"))
                 db.commit()
-            except:
+            except Exception:
                 db.rollback()
             try:
                 db.execute(text("CREATE INDEX IF NOT EXISTS idx_ai_tasks_created ON ai_tasks(created_at DESC)"))
                 db.commit()
-            except:
+            except Exception:
                 db.rollback()
 
             # ================================================================

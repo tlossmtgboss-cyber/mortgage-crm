@@ -289,7 +289,7 @@ async def diagnose_salesforce_connection(
     """
     try:
         db.rollback()
-    except:
+    except Exception:
         pass
 
     diagnosis = {
@@ -365,7 +365,7 @@ async def test_schema_query(
     """
     try:
         db.rollback()
-    except:
+    except Exception:
         pass
 
     result = {
@@ -412,7 +412,7 @@ async def trigger_discovery_for_profile(
     """
     try:
         db.rollback()
-    except:
+    except Exception:
         pass
 
     try:
@@ -450,7 +450,7 @@ async def test_mapping_debug(
     """
     try:
         db.rollback()
-    except:
+    except Exception:
         pass
 
     try:
@@ -507,7 +507,7 @@ async def debug_schema_for_object(
     """
     try:
         db.rollback()
-    except:
+    except Exception:
         pass
 
     result = {
@@ -597,7 +597,7 @@ async def debug_create_mapping(
     """
     try:
         db.rollback()
-    except:
+    except Exception:
         pass
 
     result = {
@@ -672,7 +672,7 @@ async def get_loans_status_debug(
     """
     try:
         db.rollback()
-    except:
+    except Exception:
         pass
 
     try:
@@ -725,7 +725,7 @@ async def import_funded_loans_to_mum_debug(
     """
     try:
         db.rollback()
-    except:
+    except Exception:
         pass
 
     try:
@@ -941,7 +941,7 @@ def get_current_user_id(request: Request, db: Session) -> Optional[int]:
                 try:
                     # Ensure clean transaction state before query
                     db.rollback()
-                except:
+                except Exception:
                     pass
                 result = db.execute(
                     text("SELECT id FROM users WHERE email = :email"),
@@ -954,7 +954,7 @@ def get_current_user_id(request: Request, db: Session) -> Optional[int]:
         logger.warning(f"Failed to extract user ID: {e}")
         try:
             db.rollback()
-        except:
+        except Exception:
             pass
     return None
 
@@ -972,7 +972,7 @@ def get_integration_profile(db: Session, user_id: int) -> Optional[IntegrationPr
     try:
         # Ensure clean transaction state
         db.rollback()
-    except:
+    except Exception:
         pass
     return db.query(IntegrationProfile).filter(
         IntegrationProfile.user_id == user_id,
@@ -1027,7 +1027,7 @@ async def connect_salesforce(
                     # Ensure clean transaction state before query
                     try:
                         db.rollback()
-                    except:
+                    except Exception:
                         pass
                     result = db.execute(
                         text("SELECT id FROM users WHERE email = :email"),
@@ -1057,7 +1057,7 @@ async def connect_salesforce(
         # Ensure clean session state
         try:
             db.rollback()
-        except:
+        except Exception:
             pass
 
         logger.info(f"Generating Salesforce auth URL for user {user_id}, return_url: {return_url}")
@@ -1218,7 +1218,7 @@ async def get_debug_status(
     """Debug endpoint to check Salesforce integration status with detailed info."""
     try:
         db.rollback()
-    except:
+    except Exception:
         pass
 
     debug_info = {
@@ -1324,7 +1324,7 @@ async def discover_schema(
     except Exception as e:
         try:
             db.rollback()
-        except:
+        except Exception:
             pass
         logger.error(f"Schema discovery failed: {e}")
         import traceback

@@ -1087,7 +1087,7 @@ class DataAccuracyTest(TestCase):
                     json_match = re.search(r'\{.*\}', response, re.DOTALL)
                     if json_match:
                         response = json.loads(json_match.group())
-                except:
+                except Exception:
                     pass
 
             if not isinstance(response, dict):

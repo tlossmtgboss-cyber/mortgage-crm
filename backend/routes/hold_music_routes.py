@@ -165,7 +165,7 @@ async def create_hold_music(
         # For SQLite compatibility
         try:
             music_id = result.fetchone()[0]
-        except:
+        except Exception:
             music_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
 
         db.commit()
@@ -207,7 +207,7 @@ async def list_hold_music(
             if row.comfort_messages:
                 try:
                     comfort_msgs = json.loads(row.comfort_messages)
-                except:
+                except Exception:
                     comfort_msgs = None
 
             music_list.append({
@@ -270,7 +270,7 @@ async def get_hold_music(
         if result.comfort_messages:
             try:
                 comfort_msgs = json.loads(result.comfort_messages)
-            except:
+            except Exception:
                 comfort_msgs = None
 
         return {

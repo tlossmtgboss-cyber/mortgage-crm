@@ -3582,7 +3582,7 @@ IMPORTANT: When answering questions about SLAs or turnaround times:
                             status_label = "Due TODAY"
                         else:
                             status_label = f"Due {due_date_obj.strftime('%m/%d')}"
-                    except:
+                    except Exception:
                         status_label = "Due date unknown"
                 else:
                     status_label = "No due date"

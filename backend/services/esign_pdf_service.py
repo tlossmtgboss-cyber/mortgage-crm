@@ -197,7 +197,7 @@ class EsignPDFService:
 
         try:
             canvas.setFillColor(HexColor(font_color))
-        except:
+        except Exception:
             canvas.setFillColor(HexColor("#000000"))
 
         if field_type in ["signature", "initial"]:

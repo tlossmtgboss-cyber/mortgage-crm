@@ -228,7 +228,7 @@ class SalesforceCalendarSyncService:
         if start_time:
             try:
                 start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
-            except:
+            except Exception:
                 start_dt = datetime.now(timezone.utc)
         else:
             start_dt = datetime.now(timezone.utc)
@@ -236,7 +236,7 @@ class SalesforceCalendarSyncService:
         if end_time:
             try:
                 end_dt = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
-            except:
+            except Exception:
                 end_dt = start_dt + timedelta(hours=1)
         else:
             end_dt = start_dt + timedelta(hours=1)
@@ -315,7 +315,7 @@ class SalesforceCalendarSyncService:
         if activity_date:
             try:
                 due_date = datetime.fromisoformat(activity_date)
-            except:
+            except Exception:
                 due_date = datetime.now(timezone.utc)
         else:
             due_date = datetime.now(timezone.utc)

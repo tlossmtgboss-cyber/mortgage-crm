@@ -535,7 +535,7 @@ class AIIncomeDetectionService:
         if field_name in ["tax_year"]:
             try:
                 return int(cleaned)
-            except:
+            except Exception:
                 return None
 
         if field_name in [
@@ -549,7 +549,7 @@ class AIIncomeDetectionService:
         ]:
             try:
                 return Decimal(cleaned)
-            except:
+            except Exception:
                 return None
 
         return cleaned
@@ -572,7 +572,7 @@ class AIIncomeDetectionService:
             value = Decimal(matched_value.replace(",", "").replace("$", ""))
             if Decimal("10") < value < Decimal("10000000"):
                 base_confidence += 10
-        except:
+        except Exception:
             pass
 
         # Reduce for ambiguous matches
@@ -640,7 +640,7 @@ class AIIncomeDetectionService:
                     year = int(match.group(1))
                     if 2000 <= year <= 2030:
                         return year
-                except:
+                except Exception:
                     pass
 
         return None

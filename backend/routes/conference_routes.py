@@ -184,7 +184,7 @@ async def create_conference(
 
         try:
             conf_id = result.fetchone()[0]
-        except:
+        except Exception:
             conf_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
 
         db.commit()
@@ -593,7 +593,7 @@ async def add_participant(
 
         try:
             participant_id = result.fetchone()[0]
-        except:
+        except Exception:
             participant_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
 
         # Dial out to add participant
@@ -1112,7 +1112,7 @@ async def create_quick_conference(
 
         try:
             conf_id = result.fetchone()[0]
-        except:
+        except Exception:
             conf_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
 
         db.commit()

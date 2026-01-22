@@ -309,7 +309,7 @@ def create_followup_task(
         if summary.followUpDate:
             try:
                 due_date = datetime.fromisoformat(summary.followUpDate.replace("Z", "+00:00"))
-            except:
+            except Exception:
                 due_date = datetime.utcnow() + timedelta(days=1)
         else:
             due_date = datetime.utcnow() + timedelta(days=1)

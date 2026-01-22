@@ -907,7 +907,7 @@ async def process_analysis(
             """), {"id": analysis_id, "error": str(e)})
             db.commit()
             db.close()
-        except:
+        except Exception:
             pass
 
 
@@ -1323,7 +1323,7 @@ async def realtime_websocket(
     finally:
         try:
             await websocket.close()
-        except:
+        except Exception:
             pass
 
 

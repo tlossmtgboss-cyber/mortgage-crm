@@ -39,7 +39,7 @@ class QueryExecutor:
         """
         try:
             db.rollback()  # Clear any failed transactions
-        except:
+        except Exception:
             pass
 
         logger.info(f"Executing {query_type} for user {user_id} with params {params}")
@@ -351,7 +351,7 @@ class QueryExecutor:
             logger.error(f"Query execution error: {e}")
             try:
                 db.rollback()
-            except:
+            except Exception:
                 pass
             return {
                 "success": False,

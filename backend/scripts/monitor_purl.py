@@ -59,14 +59,14 @@ def get_metrics(engine):
                 GROUP BY status
             """))
             metrics['workspaces_by_status'] = {r[0]: r[1] for r in result.fetchall()}
-        except:
+        except Exception:
             metrics['workspaces_by_status'] = {}
 
         # Total workspaces
         try:
             result = conn.execute(text("SELECT COUNT(*) FROM purl_workspaces"))
             metrics['total_workspaces'] = result.fetchone()[0]
-        except:
+        except Exception:
             metrics['total_workspaces'] = 0
 
         # Active tokens
@@ -75,7 +75,7 @@ def get_metrics(engine):
                 SELECT COUNT(*) FROM purl_access_tokens WHERE status = 'active'
             """))
             metrics['active_tokens'] = result.fetchone()[0]
-        except:
+        except Exception:
             metrics['active_tokens'] = 0
 
         # Recent sessions (last 24h)
@@ -85,7 +85,7 @@ def get_metrics(engine):
                 WHERE started_at > datetime('now', '-1 day')
             """))
             metrics['recent_sessions'] = result.fetchone()[0]
-        except:
+        except Exception:
             metrics['recent_sessions'] = 0
 
         # Applications by status
@@ -96,21 +96,21 @@ def get_metrics(engine):
                 GROUP BY status
             """))
             metrics['applications_by_status'] = {r[0]: r[1] for r in result.fetchall()}
-        except:
+        except Exception:
             metrics['applications_by_status'] = {}
 
         # Total applications
         try:
             result = conn.execute(text("SELECT COUNT(*) FROM purl_applications"))
             metrics['total_applications'] = result.fetchone()[0]
-        except:
+        except Exception:
             metrics['total_applications'] = 0
 
         # Documents uploaded
         try:
             result = conn.execute(text("SELECT COUNT(*) FROM purl_documents"))
             metrics['total_documents'] = result.fetchone()[0]
-        except:
+        except Exception:
             metrics['total_documents'] = 0
 
         # Events by status
@@ -121,7 +121,7 @@ def get_metrics(engine):
                 GROUP BY status
             """))
             metrics['events_by_status'] = {r[0]: r[1] for r in result.fetchall()}
-        except:
+        except Exception:
             metrics['events_by_status'] = {}
 
         # Failed events
@@ -131,7 +131,7 @@ def get_metrics(engine):
                 WHERE status = 'failed'
             """))
             metrics['failed_events'] = result.fetchone()[0]
-        except:
+        except Exception:
             metrics['failed_events'] = 0
 
         # Recent timeline events
@@ -146,7 +146,7 @@ def get_metrics(engine):
                 {'type': r[0], 'title': r[1], 'time': r[2]}
                 for r in result.fetchall()
             ]
-        except:
+        except Exception:
             metrics['recent_timeline'] = []
 
         # Audit log count (last hour)
@@ -156,7 +156,7 @@ def get_metrics(engine):
                 WHERE created_at > datetime('now', '-1 hour')
             """))
             metrics['recent_audit_count'] = result.fetchone()[0]
-        except:
+        except Exception:
             metrics['recent_audit_count'] = 0
 
     return metrics

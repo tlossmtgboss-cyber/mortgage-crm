@@ -308,7 +308,7 @@ def authenticated_client(db_session, mock_user):
         try:
             workflow_sla_routes._get_current_user = original_get_current_user
             workflow_sla_routes._get_db = original_get_db
-        except:
+        except Exception:
             pass
 
     app.dependency_overrides.clear()

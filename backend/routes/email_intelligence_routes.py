@@ -2367,7 +2367,7 @@ class ConversationIntelligenceService:
         if isinstance(analysis, str):
             try:
                 analysis = json.loads(analysis)
-            except:
+            except Exception:
                 analysis = {}
 
         if not analysis and self.anthropic_api_key:
@@ -2455,7 +2455,7 @@ class ConversationIntelligenceService:
         # Update email status - handle potential transaction failures
         try:
             self.db.rollback()  # Clear any failed transaction state
-        except:
+        except Exception:
             pass
 
         try:
@@ -2482,7 +2482,7 @@ class ConversationIntelligenceService:
             result["errors"].append(f"Status update failed: {str(e)}")
             try:
                 self.db.rollback()
-            except:
+            except Exception:
                 pass
 
         return result
@@ -2633,7 +2633,7 @@ class ConversationIntelligenceService:
             if isinstance(attachments, str):
                 try:
                     attachments = json.loads(attachments)
-                except:
+                except Exception:
                     attachments = []
 
             docs_mentioned = analysis.get('documents_attached', []) or analysis.get('documents_mentioned', [])
@@ -2762,7 +2762,7 @@ class ConversationIntelligenceService:
         if isinstance(received_at, str):
             try:
                 received_at = datetime.fromisoformat(received_at.replace('Z', '+00:00'))
-            except:
+            except Exception:
                 received_at = datetime.now(timezone.utc)
 
         due_at = received_at + timedelta(hours=sla_hours)
@@ -3003,7 +3003,7 @@ async def batch_process_emails_with_intelligence(
         if isinstance(analysis, str):
             try:
                 analysis = json.loads(analysis)
-            except:
+            except Exception:
                 analysis = {}
 
         try:
@@ -3154,7 +3154,7 @@ async def get_sla_tracking(
             if isinstance(due_at, str):
                 try:
                     due_at = datetime.fromisoformat(due_at.replace('Z', '+00:00'))
-                except:
+                except Exception:
                     pass
             if isinstance(due_at, datetime):
                 is_overdue = due_at < datetime.now(timezone.utc)

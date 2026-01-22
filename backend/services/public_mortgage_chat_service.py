@@ -184,7 +184,7 @@ class PublicMortgageChatService:
             try:
                 start_hour, start_min = map(int, start_time_str.split(":"))
                 end_hour, end_min = map(int, end_time_str.split(":"))
-            except:
+            except Exception:
                 continue
 
             # Generate slots for this day

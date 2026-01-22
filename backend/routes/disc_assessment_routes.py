@@ -911,25 +911,25 @@ async def download_disc_pdf(candidate_id: int):
             import json
             try:
                 generated_content['communication_tips'] = json.loads(disc[15]) if isinstance(disc[15], str) else disc[15]
-            except:
+            except Exception:
                 pass
         if disc[16]:  # strengths
             import json
             try:
                 generated_content['strengths'] = json.loads(disc[16]) if isinstance(disc[16], str) else disc[16]
-            except:
+            except Exception:
                 pass
         if disc[17]:  # stress_behaviors
             import json
             try:
                 generated_content['stress_behaviors'] = json.loads(disc[17]) if isinstance(disc[17], str) else disc[17]
-            except:
+            except Exception:
                 pass
         if disc[18]:  # improvements
             import json
             try:
                 generated_content['improvements'] = json.loads(disc[18]) if isinstance(disc[18], str) else disc[18]
-            except:
+            except Exception:
                 pass
 
         # Generate PDF
