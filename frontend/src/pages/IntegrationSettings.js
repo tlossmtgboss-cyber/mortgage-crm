@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAsyncOperation, useFormSubmit, APIError } from '../utils/errorHandling';
 import { toast } from '../utils/toast';
 import SalesforceFieldMapping from '../components/integrations/SalesforceFieldMapping';
@@ -11,6 +12,7 @@ import './IntegrationSettings.css';
 const API_URL = API_BASE_URL;
 
 const IntegrationSettings = () => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('all');
   const [integrations, setIntegrations] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -306,6 +308,15 @@ const IntegrationSettings = () => {
       case 'error': return 'status-error';
       case 'pending': return 'status-pending';
       default: return 'status-disconnected';
+    }
+  };
+
+  // Handle integration card click - navigate to dedicated page for Salesforce
+  const handleIntegrationClick = (integrationId) => {
+    if (integrationId === 'salesforce') {
+      navigate('/settings/integrations/salesforce');
+    } else {
+      loadIntegrationDetails(integrationId);
     }
   };
 

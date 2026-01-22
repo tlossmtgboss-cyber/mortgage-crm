@@ -1294,6 +1294,7 @@ class MUMClient(Base):
     closer = Column(String)
     closer_email = Column(String)
     user_id = Column(Integer, ForeignKey("users.id"))
+    salesforce_id = Column(String(100), index=True, nullable=True)  # Salesforce record ID
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Property to access client_name as 'name' for backwards compatibility

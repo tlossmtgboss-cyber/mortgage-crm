@@ -176,6 +176,7 @@ const LeadCaptureSettings = lazy(() => import('./pages/LeadCaptureSettings'));
 const ClientPortalSettings = lazy(() => import('./pages/ClientPortalSettings'));
 const CommunicationPreferences = lazy(() => import('./pages/CommunicationPreferences'));
 const IntegrationSettings = lazy(() => import('./pages/IntegrationSettings'));
+const SalesforceIntegrationPage = lazy(() => import('./pages/SalesforceIntegrationPage'));
 const TwilioSetup = lazy(() => import('./pages/settings/TwilioSetup'));
 const StateRecordingRules = lazy(() => import('./pages/settings/StateRecordingRules'));
 const TwilioStatusCallbacks = lazy(() => import('./pages/settings/TwilioStatusCallbacks'));
@@ -2560,6 +2561,28 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><IntegrationSettings /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/settings/integrations/salesforce"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><SalesforceIntegrationPage /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>

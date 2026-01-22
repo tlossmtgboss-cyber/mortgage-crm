@@ -3077,3 +3077,51 @@ async def fix_500_errors(
     except Exception as e:
         logger.error(f"Fix 500 errors migration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/add-mum-salesforce-id")
+async def add_mum_salesforce_id(
+    admin: Any = Depends(verify_admin_access)
+):
+    """
+    Add salesforce_id column to mum_clients table for Salesforce sync.
+    """
+    try:
+        db = SessionLocal()
+        results = {"columns_added": [], "skipped": [], "errors": []}
+
+        try:
+            # Check if column exists
+            check = db.execute(text("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_name = 'mum_clients' AND column_name = 'salesforce_id'
+            """)).fetchone()
+
+            if not check:
+                db.execute(text("""
+                    ALTER TABLE mum_clients
+                    ADD COLUMN salesforce_id VARCHAR(100)
+                """))
+                db.execute(text("""
+                    CREATE INDEX IF NOT EXISTS idx_mum_clients_salesforce_id
+                    ON mum_clients(salesforce_id)
+                """))
+                db.commit()
+                results["columns_added"].append("salesforce_id")
+            else:
+                results["skipped"].append("salesforce_id (already exists)")
+
+            logger.info(f"MUM salesforce_id migration completed: {results}")
+
+            return {
+                "status": "success",
+                "message": "MUM salesforce_id column migration completed",
+                "results": results
+            }
+
+        finally:
+            db.close()
+
+    except Exception as e:
+        logger.error(f"MUM salesforce_id migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
