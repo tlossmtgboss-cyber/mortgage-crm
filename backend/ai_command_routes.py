@@ -4167,10 +4167,9 @@ async def process_command(
     Process a natural language command and return intent with preview.
     """
     # Get current user ID from authenticated user
-    try:
-        current_user_id = current_user.id if hasattr(current_user, 'id') else 1
-    except Exception:
-        current_user_id = 1  # Fallback for unauthenticated requests
+    if not current_user or not hasattr(current_user, 'id'):
+        raise HTTPException(status_code=401, detail="Authentication required")
+    current_user_id = current_user.id
 
     # Get or create session ID for permanent memory
     session_id = request.session_id or str(uuid.uuid4())
@@ -4271,19 +4270,16 @@ async def process_command(
 async def execute_action(
     request: ActionExecuteRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_dependency)
 ):
     """
     Execute a previously previewed action.
     """
-    # Get actual user from database
-    main = get_main_module()
-    try:
-        User = main.User
-        demo_user = db.query(User).filter(User.email == "admin@perenniaai.com").first()
-        current_user_id = demo_user.id if demo_user else 1
-    except Exception:
-        current_user_id = 1  # Fallback
+    # Require authenticated user
+    if not current_user or not hasattr(current_user, 'id'):
+        raise HTTPException(status_code=401, detail="Authentication required")
+    current_user_id = current_user.id
 
     try:
         # Get cached action
@@ -4716,7 +4712,8 @@ class SendEmailRequest(BaseModel):
 @router.post("/send-daily-priorities-email")
 async def send_daily_priorities_email(
     request: SendEmailRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_dependency)
 ):
     """
     Send daily priorities report to specified email address
@@ -4724,18 +4721,12 @@ async def send_daily_priorities_email(
     from email_service import email_service
     from query_executor import QueryExecutor
 
-    # Get current user
-    main = get_main_module()
-    try:
-        User = main.User
-        demo_user = db.query(User).filter(User.email == "admin@perenniaai.com").first()
-        current_user_id = demo_user.id if demo_user else 1
-        user_name = f"{demo_user.first_name} {demo_user.last_name}" if demo_user else "User"
-        user_email = demo_user.email if demo_user else ""
-    except Exception:
-        current_user_id = 1
-        user_name = "User"
-        user_email = ""
+    # Require authenticated user
+    if not current_user or not hasattr(current_user, 'id'):
+        raise HTTPException(status_code=401, detail="Authentication required")
+    current_user_id = current_user.id
+    user_name = f"{current_user.first_name} {current_user.last_name}" if hasattr(current_user, 'first_name') else "User"
+    user_email = current_user.email if hasattr(current_user, 'email') else ""
 
     # Use provided email or fallback to user's email
     to_email = request.email_address or user_email
@@ -4966,23 +4957,21 @@ Return ONLY the JSON object, no additional text."""
 @router.post("/create-lead-from-screenshot")
 async def create_lead_from_screenshot(
     request: CreateLeadFromScreenshotRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_dependency)
 ):
     """
     Create a new lead from parsed screenshot data.
     The lead will be created in the 'Attempted Contact' stage.
     """
+    # Require authenticated user
+    if not current_user or not hasattr(current_user, 'id'):
+        raise HTTPException(status_code=401, detail="Authentication required")
+    current_user_id = current_user.id
+
     main = get_main_module()
     Lead = main.Lead
     LeadStage = main.LeadStage
-
-    # Get current user
-    try:
-        User = main.User
-        demo_user = db.query(User).filter(User.email == "admin@perenniaai.com").first()
-        current_user_id = demo_user.id if demo_user else 1
-    except Exception:
-        current_user_id = 1
 
     try:
         # Construct the full name
@@ -5097,21 +5086,22 @@ EMAIL_TEMPLATE_PROMPTS = {
 async def generate_ai_email(
     request: EmailGenerateRequest,
     authorization: str = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_dependency)
 ):
     """Generate AI-powered email content based on template and recipient data"""
     try:
-        # Get current user lazily to avoid circular import
-        main = get_main_module()
-        User = main.User
-        demo_user = db.query(User).filter(User.email == "admin@perenniaai.com").first()
-        current_user = {
-            "id": demo_user.id if demo_user else 1,
-            "name": demo_user.full_name if demo_user else "Loan Officer",
-            "email": demo_user.email if demo_user else "admin@perenniaai.com",
-            "phone": getattr(demo_user, 'phone', '') if demo_user else "",
-            "title": getattr(demo_user, 'current_role', 'Loan Officer') if demo_user else "Loan Officer",
-            "nmls_id": getattr(demo_user, 'nmls_number', '') if demo_user else ""
+        # Require authenticated user
+        if not current_user or not hasattr(current_user, 'id'):
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        current_user_data = {
+            "id": current_user.id,
+            "name": current_user.full_name if hasattr(current_user, 'full_name') else "Loan Officer",
+            "email": current_user.email if hasattr(current_user, 'email') else "",
+            "phone": getattr(current_user, 'phone', ''),
+            "title": getattr(current_user, 'current_role', 'Loan Officer'),
+            "nmls_id": getattr(current_user, 'nmls_number', '')
         }
 
         # Get the base prompt for this template
@@ -5121,11 +5111,11 @@ async def generate_ai_email(
         )
 
         # Get user info for signature
-        user_name = current_user.get("name", current_user.get("email", "Your Loan Officer"))
-        user_email = current_user.get("email", "")
-        user_phone = current_user.get("phone", "")
-        user_title = current_user.get("title", "Loan Officer")
-        user_nmls = current_user.get("nmls_id", "")
+        user_name = current_user_data.get("name", current_user_data.get("email", "Your Loan Officer"))
+        user_email = current_user_data.get("email", "")
+        user_phone = current_user_data.get("phone", "")
+        user_title = current_user_data.get("title", "Loan Officer")
+        user_nmls = current_user_data.get("nmls_id", "")
 
         # Build context about the recipient
         recipient_context = f"Recipient Name: {request.recipient_name}"
@@ -5225,25 +5215,20 @@ Generate the email now:"""
 async def send_composed_email(
     request: EmailSendRequest,
     authorization: str = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_dependency)
 ):
     """Send a composed email via the email service"""
     try:
         from email_service import email_service
 
-        # Get current user lazily to avoid circular import
-        main = get_main_module()
-        User = main.User
-        demo_user = db.query(User).filter(User.email == "admin@perenniaai.com").first()
-        current_user = {
-            "id": demo_user.id if demo_user else 1,
-            "name": demo_user.full_name if demo_user else "Perennia AI",
-            "email": demo_user.email if demo_user else "admin@perenniaai.com"
-        }
+        # Require authenticated user
+        if not current_user or not hasattr(current_user, 'id'):
+            raise HTTPException(status_code=401, detail="Authentication required")
 
         # Get sender info
-        sender_name = current_user.get("name", current_user.get("email", "Perennia AI"))
-        sender_email = current_user.get("email", "")
+        sender_name = current_user.full_name if hasattr(current_user, 'full_name') else "Perennia AI"
+        sender_email = current_user.email if hasattr(current_user, 'email') else ""
 
         # Format the email body as HTML
         html_body = f"""

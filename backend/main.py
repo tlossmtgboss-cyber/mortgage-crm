@@ -65156,6 +65156,8 @@ async def add_post_closing_workflow_migration(
         results = {"tables_created": [], "tables_existing": [], "columns_added": [], "indexes_created": []}
 
         # Add missing columns to leads
+        # Whitelist of allowed column names and types to prevent SQL injection
+        ALLOWED_COL_TYPES = {"VARCHAR(255)", "VARCHAR(100)", "INTEGER", "TEXT", "BOOLEAN", "TIMESTAMP"}
         new_lead_columns = [
             ("employer_name", "VARCHAR(255)"),
             ("industry", "VARCHAR(100)"),
@@ -65163,9 +65165,20 @@ async def add_post_closing_workflow_migration(
 
         for col_name, col_type in new_lead_columns:
             try:
-                check_sql = text(f"SELECT column_name FROM information_schema.columns WHERE table_name = 'leads' AND column_name = '{col_name}'")
-                result = db.execute(check_sql)
+                # Validate column name (alphanumeric and underscore only)
+                if not col_name.replace("_", "").isalnum():
+                    logger.warning(f"Invalid column name skipped: {col_name}")
+                    continue
+                # Validate column type against whitelist
+                if col_type not in ALLOWED_COL_TYPES:
+                    logger.warning(f"Invalid column type skipped: {col_type}")
+                    continue
+
+                # Use parameterized query for the check
+                check_sql = text("SELECT column_name FROM information_schema.columns WHERE table_name = 'leads' AND column_name = :col_name")
+                result = db.execute(check_sql, {"col_name": col_name})
                 if result.fetchone() is None:
+                    # Column names cannot be parameterized in DDL, but we validated above
                     db.execute(text(f"ALTER TABLE leads ADD COLUMN {col_name} {col_type}"))
                     results["columns_added"].append(f"leads.{col_name}")
             except Exception as e:
