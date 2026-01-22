@@ -1005,3 +1005,195 @@ async def get_owned_phone_numbers(
     except Exception as e:
         logger.error(f"Error getting phone numbers: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# Outbound AI Call Endpoint
+# =============================================================================
+
+class OutboundCallRequest(BaseModel):
+    """Request to make an outbound AI call"""
+    to_number: str = Field(..., description="Phone number to call (E.164 format)")
+    client_name: str = Field(..., description="Name of the person being called")
+    purpose: str = Field(..., description="Purpose of the call")
+    context: Optional[str] = Field(None, description="Additional context for the AI")
+    lo_name: Optional[str] = Field(None, description="Loan officer name")
+    callback_url: Optional[str] = Field(None, description="Custom TwiML callback URL")
+
+
+@router.post("/outbound-call")
+async def make_outbound_ai_call(
+    request: OutboundCallRequest,
+    admin_key: str = None,
+    user_email: str = None,
+    current_user=None,
+    db=None
+):
+    """
+    Make an outbound AI call using user's Twilio credentials.
+
+    Can be called with:
+    1. Authentication (current_user) - uses logged-in user's credentials
+    2. Admin key + user_email - uses specified user's credentials
+    """
+    from twilio.rest import Client as TwilioClient
+    from sqlalchemy import text
+
+    # Get database session
+    if db is None:
+        db = get_db()
+
+    try:
+        # Determine which user's credentials to use
+        user_id = None
+
+        if admin_key == "perennia-admin-2024" and user_email:
+            # Admin mode - look up user by email
+            user_result = db.execute(text("SELECT id FROM users WHERE email = :email"), {"email": user_email}).fetchone()
+            if not user_result:
+                raise HTTPException(status_code=404, detail=f"User {user_email} not found")
+            user_id = user_result[0]
+        elif current_user:
+            # Authenticated user mode
+            user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
+        else:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        # Get user's Twilio config
+        config = await get_user_twilio_config(user_id, db)
+        if not config:
+            raise HTTPException(status_code=400, detail="Twilio not configured for this user")
+
+        account_sid = config.get("account_sid") or config.get("subaccount_sid")
+        auth_token = config.get("auth_token")
+        from_number = config.get("phone_number")
+
+        if not all([account_sid, auth_token, from_number]):
+            raise HTTPException(status_code=400, detail="Incomplete Twilio configuration")
+
+        # Format phone number
+        to_number = request.to_number
+        if not to_number.startswith('+'):
+            to_number = f"+1{to_number.replace('-', '').replace(' ', '').replace('(', '').replace(')', '')}"
+
+        # Get the LO name from user record if not provided
+        lo_name = request.lo_name
+        if not lo_name:
+            user_info = db.execute(text("SELECT name FROM users WHERE id = :user_id"), {"user_id": user_id}).fetchone()
+            lo_name = user_info[0] if user_info else "your loan officer"
+
+        # Build the first message for the AI
+        first_name = request.client_name.split()[0] if request.client_name else "there"
+
+        # Create the Twilio client with user's credentials
+        twilio_client = TwilioClient(account_sid, auth_token)
+
+        # Determine the TwiML URL for AI handling
+        # This should connect to VAPI or our AI receptionist
+        api_base = os.getenv("API_URL", "https://api.perenniaai.com")
+
+        # Build context for the AI
+        ai_context = f"""
+Purpose: {request.purpose}
+Client Name: {request.client_name}
+Loan Officer: {lo_name}
+Additional Context: {request.context or 'None'}
+
+Instructions:
+- Greet the client warmly and introduce yourself as an AI assistant calling on behalf of {lo_name}
+- Explain the reason for the call: {request.purpose}
+- Your goal is to schedule a call with {lo_name}
+- Be helpful, professional, and conversational
+- If they're busy, offer to call back at a better time
+"""
+
+        # Use VAPI to handle the call if configured
+        vapi_api_key = os.getenv("VAPI_API_KEY")
+        vapi_assistant_id = os.getenv("VAPI_ASSISTANT_ID")
+
+        if vapi_api_key and vapi_assistant_id:
+            # Make call via VAPI with user's phone number as caller ID
+            import httpx
+
+            vapi_payload = {
+                "assistantId": vapi_assistant_id,
+                "customer": {
+                    "number": to_number,
+                    "name": request.client_name
+                },
+                "assistantOverrides": {
+                    "firstMessage": f"Hi {first_name}, this is an AI assistant calling on behalf of {lo_name}. {request.purpose}. Do you have a moment to talk?",
+                    "model": {
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": ai_context
+                            }
+                        ]
+                    }
+                }
+            }
+
+            # Check if we have a VAPI phone number ID for this user's number
+            # For now, use the default VAPI phone number
+            vapi_phone_id = os.getenv("VAPI_PHONE_NUMBER_ID")
+            if vapi_phone_id:
+                vapi_payload["phoneNumberId"] = vapi_phone_id
+
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    "https://api.vapi.ai/call/phone",
+                    headers={
+                        "Authorization": f"Bearer {vapi_api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json=vapi_payload,
+                    timeout=30
+                )
+
+                if response.status_code == 201:
+                    call_data = response.json()
+                    return {
+                        "success": True,
+                        "method": "vapi",
+                        "call_id": call_data.get("id"),
+                        "status": call_data.get("status"),
+                        "from_number": from_number,
+                        "to_number": to_number,
+                        "client_name": request.client_name,
+                        "message": f"AI call initiated to {request.client_name} at {to_number}"
+                    }
+                else:
+                    logger.error(f"VAPI call failed: {response.status_code} - {response.text}")
+                    # Fall back to direct Twilio call
+
+        # Fallback: Direct Twilio call with TwiML
+        # This plays a message since we don't have VAPI
+        twiml_url = request.callback_url or f"{api_base}/api/v1/webhooks/twilio/ai-receptionist"
+
+        call = twilio_client.calls.create(
+            to=to_number,
+            from_=from_number,
+            url=twiml_url,
+            status_callback=f"{api_base}/api/v1/webhooks/twilio/call-status",
+            status_callback_event=['initiated', 'ringing', 'answered', 'completed'],
+            machine_detection='Enable',
+            async_amd=True
+        )
+
+        return {
+            "success": True,
+            "method": "twilio_direct",
+            "call_sid": call.sid,
+            "status": call.status,
+            "from_number": from_number,
+            "to_number": to_number,
+            "client_name": request.client_name,
+            "message": f"Call initiated to {request.client_name} at {to_number}"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error making outbound call: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
