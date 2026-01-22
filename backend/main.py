@@ -36789,7 +36789,7 @@ async def health_check(db: Session = Depends(get_db)):
     """Basic health check - database connectivity"""
     try:
         db.execute(text("SELECT 1"))
-        return {"status": "healthy", "database": "connected", "timestamp": datetime.now(timezone.utc), "version": "2026.01.20.1"}
+        return {"status": "healthy", "database": "connected", "timestamp": datetime.now(timezone.utc), "version": "2026.01.22.1"}
     except Exception as e:
         logger.error(f"Health check failed: {e}")
         return JSONResponse(
@@ -36988,7 +36988,7 @@ async def api_health_check(db: Session = Depends(get_db)):
     """API health check endpoint at /api/v1/health - database connectivity"""
     try:
         db.execute(text("SELECT 1"))
-        return {"status": "healthy", "database": "connected", "timestamp": datetime.now(timezone.utc), "version": "2026.01.20.1"}
+        return {"status": "healthy", "database": "connected", "timestamp": datetime.now(timezone.utc), "version": "2026.01.22.1"}
     except Exception as e:
         logger.error(f"API health check failed: {e}")
         return JSONResponse(
@@ -37000,7 +37000,7 @@ async def api_health_check(db: Session = Depends(get_db)):
 @app.get("/deploy-test")
 async def deploy_test():
     """Simple endpoint to verify deployment - added 2025-12-27T22:45"""
-    return {"deployed_at": "2025-12-28T08:00:00Z", "version": "2026.01.19.1", "test": "smart-docs-actions"}
+    return {"deployed_at": "2026-01-22T09:10:00Z", "version": "2026.01.22.1", "test": "db-pool-fixes"}
 
 
 @app.get("/debug/routers")
