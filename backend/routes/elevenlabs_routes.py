@@ -444,3 +444,283 @@ async def get_config(
     except Exception as e:
         logger.warning(f"Could not get ElevenLabs config: {e}")
         return {"data": {"configured": False}}
+
+
+# =============================================================================
+# Conversational AI - Outbound Calls
+# =============================================================================
+
+class OutboundCallRequest(BaseModel):
+    """Request to make an outbound AI call via ElevenLabs"""
+    to_number: str = Field(..., description="Phone number to call (E.164 format)")
+    client_name: str = Field(..., description="Name of the person being called")
+    purpose: str = Field(..., description="Purpose of the call")
+    lo_name: Optional[str] = Field(None, description="Loan officer name")
+    first_message: Optional[str] = Field(None, description="Custom first message")
+
+
+class AgentConfig(BaseModel):
+    """Configuration for creating an ElevenLabs agent"""
+    name: str = Field(..., description="Agent name")
+    voice_id: str = Field(..., description="ElevenLabs voice ID to use")
+    system_prompt: str = Field(..., description="System prompt for the agent")
+    first_message: str = Field(..., description="First message when call connects")
+
+
+@router.get("/agents")
+async def list_agents(
+    admin_key: str = None,
+    user_email: str = None,
+    current_user=None,
+    db: Session = Depends(get_db)
+):
+    """List ElevenLabs Conversational AI agents."""
+    # Get API key
+    api_key = await _get_elevenlabs_api_key(admin_key, user_email, current_user, db)
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{ELEVENLABS_API_URL}/convai/agents",
+                headers={"xi-api-key": api_key}
+            )
+            if response.status_code == 200:
+                return {"data": response.json()}
+            else:
+                raise HTTPException(status_code=response.status_code, detail=response.text)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to list agents: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/agents")
+async def create_agent(
+    config: AgentConfig,
+    admin_key: str = None,
+    user_email: str = None,
+    current_user=None,
+    db: Session = Depends(get_db)
+):
+    """Create an ElevenLabs Conversational AI agent."""
+    api_key = await _get_elevenlabs_api_key(admin_key, user_email, current_user, db)
+
+    agent_payload = {
+        "name": config.name,
+        "conversation_config": {
+            "agent": {
+                "prompt": {
+                    "prompt": config.system_prompt
+                },
+                "first_message": config.first_message,
+                "language": "en"
+            },
+            "tts": {
+                "voice_id": config.voice_id
+            }
+        }
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{ELEVENLABS_API_URL}/convai/agents/create",
+                headers={
+                    "xi-api-key": api_key,
+                    "Content-Type": "application/json"
+                },
+                json=agent_payload
+            )
+            if response.status_code in [200, 201]:
+                return {"data": response.json()}
+            else:
+                raise HTTPException(status_code=response.status_code, detail=response.text)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to create agent: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/phone-numbers")
+async def list_phone_numbers(
+    admin_key: str = None,
+    user_email: str = None,
+    current_user=None,
+    db: Session = Depends(get_db)
+):
+    """List phone numbers registered with ElevenLabs."""
+    api_key = await _get_elevenlabs_api_key(admin_key, user_email, current_user, db)
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{ELEVENLABS_API_URL}/convai/phone-numbers",
+                headers={"xi-api-key": api_key}
+            )
+            if response.status_code == 200:
+                return {"data": response.json()}
+            else:
+                raise HTTPException(status_code=response.status_code, detail=response.text)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to list phone numbers: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/phone-numbers/import-twilio")
+async def import_twilio_number(
+    phone_number: str,
+    twilio_account_sid: str,
+    twilio_auth_token: str,
+    label: str = "Perennia AI",
+    admin_key: str = None,
+    user_email: str = None,
+    current_user=None,
+    db: Session = Depends(get_db)
+):
+    """Import a Twilio phone number into ElevenLabs for Conversational AI."""
+    api_key = await _get_elevenlabs_api_key(admin_key, user_email, current_user, db)
+
+    payload = {
+        "phone_number": phone_number,
+        "label": label,
+        "twilio_config": {
+            "account_sid": twilio_account_sid,
+            "auth_token": twilio_auth_token
+        }
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{ELEVENLABS_API_URL}/convai/phone-numbers/create",
+                headers={
+                    "xi-api-key": api_key,
+                    "Content-Type": "application/json"
+                },
+                json=payload
+            )
+            if response.status_code in [200, 201]:
+                return {"data": response.json()}
+            else:
+                logger.error(f"Failed to import Twilio number: {response.text}")
+                raise HTTPException(status_code=response.status_code, detail=response.text)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to import Twilio number: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/outbound-call")
+async def make_outbound_call(
+    request: OutboundCallRequest,
+    agent_id: str = None,
+    phone_number_id: str = None,
+    admin_key: str = None,
+    user_email: str = None,
+    current_user=None,
+    db: Session = Depends(get_db)
+):
+    """
+    Make an outbound AI call using ElevenLabs Conversational AI.
+
+    Requires:
+    - ElevenLabs API key configured
+    - An agent_id (create one via /agents endpoint)
+    - A phone_number_id (import Twilio number via /phone-numbers/import-twilio)
+    """
+    api_key = await _get_elevenlabs_api_key(admin_key, user_email, current_user, db)
+
+    # Format phone number
+    to_number = request.to_number
+    if not to_number.startswith('+'):
+        to_number = f"+1{to_number.replace('-', '').replace(' ', '').replace('(', '').replace(')', '')}"
+
+    # Build conversation initiation data
+    first_name = request.client_name.split()[0] if request.client_name else "there"
+    lo_name = request.lo_name or "your loan officer"
+
+    conversation_data = {
+        "dynamic_variables": {
+            "client_name": request.client_name,
+            "first_name": first_name,
+            "lo_name": lo_name,
+            "purpose": request.purpose
+        }
+    }
+
+    if request.first_message:
+        conversation_data["first_message"] = request.first_message
+
+    payload = {
+        "agent_id": agent_id,
+        "agent_phone_number_id": phone_number_id,
+        "to_number": to_number,
+        "conversation_initiation_client_data": conversation_data
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{ELEVENLABS_API_URL}/convai/twilio/outbound-call",
+                headers={
+                    "xi-api-key": api_key,
+                    "Content-Type": "application/json"
+                },
+                json=payload
+            )
+
+            if response.status_code in [200, 201]:
+                result = response.json()
+                return {
+                    "success": True,
+                    "data": result,
+                    "message": f"AI call initiated to {request.client_name} at {to_number}"
+                }
+            else:
+                logger.error(f"ElevenLabs outbound call failed: {response.text}")
+                raise HTTPException(status_code=response.status_code, detail=response.text)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to make outbound call: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def _get_elevenlabs_api_key(admin_key: str, user_email: str, current_user, db: Session) -> str:
+    """Get ElevenLabs API key for the specified user."""
+    user_id = None
+
+    if admin_key == "perennia-admin-2024" and user_email:
+        # Admin mode - look up user by email
+        user_result = db.execute(text("SELECT id FROM users WHERE email = :email"), {"email": user_email}).fetchone()
+        if not user_result:
+            raise HTTPException(status_code=404, detail=f"User {user_email} not found")
+        user_id = user_result[0]
+    elif current_user:
+        user_id = get_user_id(current_user)
+    else:
+        # Try to use system-wide ElevenLabs API key
+        system_key = os.getenv("ELEVENLABS_API_KEY")
+        if system_key:
+            return system_key
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    # Get user's ElevenLabs API key
+    result = db.execute(text("""
+        SELECT api_key FROM user_elevenlabs_config WHERE user_id = :user_id
+    """), {"user_id": user_id}).fetchone()
+
+    if not result or not result[0]:
+        # Fall back to system key
+        system_key = os.getenv("ELEVENLABS_API_KEY")
+        if system_key:
+            return system_key
+        raise HTTPException(status_code=400, detail="ElevenLabs not configured for this user")
+
+    return result[0]
