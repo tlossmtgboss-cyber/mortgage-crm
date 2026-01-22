@@ -63,15 +63,25 @@ def fix_salesforce_schema(db: Session) -> dict:
         ("crm_entity", "ALTER TABLE field_mappings ALTER COLUMN crm_entity DROP NOT NULL"),
         ("crm_field", "ALTER TABLE field_mappings ALTER COLUMN crm_field DROP NOT NULL"),
     ]
+    logger.info(f"Attempting to fix {len(old_columns_to_fix)} old columns in field_mappings...")
     for col_name, sql in old_columns_to_fix:
         try:
+            logger.info(f"Executing: {sql}")
             db.execute(text(sql))
             db.commit()
             fixes.append(f"Made {col_name} nullable in field_mappings")
+            logger.info(f"Successfully made {col_name} nullable")
         except Exception as e:
             db.rollback()
-            # Might fail if column doesn't exist or is already nullable
-            logger.debug(f"field_mappings.{col_name} fix: {e}")
+            error_msg = str(e)
+            # Check if it's just because column doesn't exist or is already nullable
+            if "does not exist" in error_msg.lower():
+                fixes.append(f"Column {col_name} does not exist (OK)")
+            elif "not null" in error_msg.lower() and "does not have" in error_msg.lower():
+                fixes.append(f"Column {col_name} already nullable (OK)")
+            else:
+                fixes.append(f"Could not fix {col_name}: {error_msg[:100]}")
+            logger.info(f"field_mappings.{col_name} fix result: {error_msg[:100]}")
 
     # Fix sf_user_schemas table - add all required columns
     sf_user_schemas_columns = [
