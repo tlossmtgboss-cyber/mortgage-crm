@@ -27,7 +27,6 @@ export const emitTaskEvent = (eventName, data = {}) => {
     }
   });
   window.dispatchEvent(event);
-  console.log(`[TaskEvents] Emitted: ${eventName}`, data);
 };
 
 /**

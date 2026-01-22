@@ -208,7 +208,7 @@ async def handle_incoming_call(request: Request, db: Session = Depends(get_db)):
         try:
             twiml = voice_client.create_greeting_response(ai_config.business_name)
             return Response(content=str(twiml), media_type="application/xml")
-        except:
+        except Exception:
             # Last resort: voicemail
             twiml = voice_client.create_voicemail_response()
             return Response(content=str(twiml), media_type="application/xml")
@@ -697,14 +697,14 @@ async def browser_voice_websocket(websocket: WebSocket):
         logger.error(f"Browser voice error: {e}")
         try:
             await websocket.send_json({"type": "error", "message": str(e)})
-        except:
-            pass
+        except Exception:
+            pass  # Client may have disconnected
     finally:
         if openai_ws:
             try:
                 await openai_ws.close()
-            except:
-                pass
+            except Exception:
+                pass  # WebSocket may already be closed
         logger.info("🔚 Browser voice session ended")
 
 
@@ -1009,17 +1009,17 @@ async def voice_stream_websocket(websocket: WebSocket):
     finally:
         try:
             await websocket.close()
-        except:
-            pass
+        except Exception:
+            pass  # WebSocket may already be closed
         try:
             if openai_ws:
                 await openai_ws.close()
-        except:
-            pass
+        except Exception:
+            pass  # OpenAI WebSocket may already be closed
         try:
             db.close()
-        except:
-            pass
+        except Exception:
+            pass  # Session may already be closed
         logger.info("🔚 Voice stream cleanup complete")
 
 
@@ -1439,7 +1439,7 @@ async def save_call_summary(call_context: dict, db: Session):
             )
             db.add(error_log)
             db.commit()
-        except:
+        except Exception:
             pass  # Don't fail on error logging
 
 
@@ -1599,7 +1599,7 @@ async def handle_transcript_complete(request: Request, db: Session = Depends(get
         # Try JSON first, then form data (Twilio sometimes uses either)
         try:
             data = await request.json()
-        except:
+        except (json.JSONDecodeError, ValueError):
             form_data = await request.form()
             data = dict(form_data)
 

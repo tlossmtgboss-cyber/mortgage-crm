@@ -134,14 +134,12 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
     const unsubscribeCompleted = subscribeToTaskEvent(TASK_EVENTS.TASK_COMPLETED, (detail) => {
       // Only refresh if the event came from somewhere else
       if (detail.source !== 'action-sidebar') {
-        console.log('[ActionSidebar] Task completed elsewhere, refreshing...');
         fetchData();
       }
     });
 
     const unsubscribeRefresh = subscribeToTaskEvent(TASK_EVENTS.TASKS_REFRESH, (detail) => {
       if (detail.source !== 'action-sidebar') {
-        console.log('[ActionSidebar] Refresh requested, refreshing...');
         fetchData();
       }
     });
@@ -345,7 +343,7 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
           });
         } else if (item.loan_id) {
           // For loan tasks, we could update loan's last_activity
-          console.log(`Completing workflow task for loan: ${item.loan_id}`);
+          // Workflow task completion for loan - no additional action needed
         }
       }
       // Handle manual tasks (task-XXX format)
@@ -367,7 +365,7 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
       }
       // For deadline items and other types, just dismiss from UI
       else if (itemIdStr.startsWith('deadline_') || itemIdStr.startsWith('sla_') || itemIdStr.startsWith('active_loan_')) {
-        console.log(`Dismissing informational item: ${itemId}`);
+        // Informational item dismissed - no additional action needed
       }
 
       // Remove from local workflow tasks immediately for instant UI feedback

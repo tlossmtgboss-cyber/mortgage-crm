@@ -601,7 +601,7 @@ async def get_workflow_definitions(
                 count = result.scalar()
                 if count and count > 0:
                     workflow_data["task_count"] = count
-            except:
+            except Exception:
                 pass  # Use default count if table doesn't exist
 
             workflows.append(workflow_data)

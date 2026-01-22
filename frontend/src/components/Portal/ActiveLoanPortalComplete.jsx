@@ -76,7 +76,6 @@ export default function ActiveLoanPortalComplete() {
     const enableWs = process.env.REACT_APP_ENABLE_WEBSOCKET !== 'false';
 
     if (!enableWs) {
-      console.log('WebSocket disabled, using polling only');
       return;
     }
 
@@ -85,7 +84,6 @@ export default function ActiveLoanPortalComplete() {
       wsRef.current = new WebSocket(`${wsUrl}/ws/loan/${loanId}`);
 
       wsRef.current.onopen = () => {
-        console.log('WebSocket connected');
         setWsStatus(WS_STATUS.CONNECTED);
       };
 
@@ -99,7 +97,6 @@ export default function ActiveLoanPortalComplete() {
       };
 
       wsRef.current.onclose = () => {
-        console.log('WebSocket disconnected');
         setWsStatus(WS_STATUS.DISCONNECTED);
         // Attempt reconnect after 5 seconds
         reconnectTimeoutRef.current = setTimeout(connectWebSocket, 5000);
@@ -117,8 +114,6 @@ export default function ActiveLoanPortalComplete() {
 
   // Handle incoming WebSocket messages
   const handleWebSocketMessage = (message) => {
-    console.log('WebSocket message received:', message.type);
-
     switch (message.type) {
       case 'MILESTONE_UPDATE':
       case 'LIFECYCLE_CHANGE':
@@ -138,7 +133,8 @@ export default function ActiveLoanPortalComplete() {
         break;
 
       default:
-        console.log('Unknown message type:', message.type);
+        // Unknown message type - ignore
+        break;
     }
   };
 

@@ -434,7 +434,7 @@ async def google_callback(
 
     try:
         state_data = json.loads(state)
-    except:
+    except (json.JSONDecodeError, TypeError):
         state_data = {}
 
     try:
@@ -559,7 +559,7 @@ async def facebook_callback(
 
     try:
         state_data = json.loads(state)
-    except:
+    except (json.JSONDecodeError, TypeError):
         state_data = {}
 
     try:
@@ -688,7 +688,7 @@ async def linkedin_callback(
 
     try:
         state_data = json.loads(state)
-    except:
+    except (json.JSONDecodeError, TypeError):
         state_data = {}
 
     try:
@@ -839,7 +839,7 @@ async def apple_callback(
 
     try:
         state_data = json.loads(state)
-    except:
+    except (json.JSONDecodeError, TypeError):
         state_data = {}
 
     try:
@@ -885,8 +885,8 @@ async def apple_callback(
                 if "name" in user_info:
                     first_name = user_info["name"].get("firstName")
                     last_name = user_info["name"].get("lastName")
-            except:
-                pass
+            except (json.JSONDecodeError, TypeError, KeyError):
+                pass  # Apple user data parsing failed, continue without name
 
         email = id_token_payload.get("email", f"{id_token_payload['sub']}@privaterelay.appleid.com")
 

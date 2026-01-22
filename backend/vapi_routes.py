@@ -355,7 +355,7 @@ async def create_task_function(
         if due_date_str:
             try:
                 due_date = datetime.fromisoformat(due_date_str.replace('Z', '+00:00'))
-            except:
+            except (ValueError, TypeError):
                 # Default to 24 hours from now if parsing fails
                 due_date = datetime.now(timezone.utc) + timedelta(days=1)
         else:
@@ -468,8 +468,8 @@ async def schedule_appointment_function(
         if appointment_time_str:
             try:
                 appointment_time = datetime.fromisoformat(appointment_time_str.replace('Z', '+00:00'))
-            except:
-                pass
+            except (ValueError, TypeError):
+                pass  # Leave appointment_time as None if parsing fails
 
         # Map appointment type to ActivityType
         activity_type_map = {
@@ -576,7 +576,7 @@ async def available_time_slots_function(
         if date:
             try:
                 target_date = datetime.fromisoformat(date.replace('Z', '+00:00')).date()
-            except:
+            except (ValueError, TypeError):
                 target_date = (datetime.now(timezone.utc) + timedelta(days=1)).date()
         else:
             target_date = (datetime.now(timezone.utc) + timedelta(days=1)).date()

@@ -11,6 +11,9 @@ from typing import Optional, List
 from datetime import datetime, timezone
 from enum import Enum
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["Credit Reports"])
 
@@ -174,7 +177,7 @@ def ensure_tables():
                     )
                 """))
                 conn.commit()
-                print("✅ credit_items table created")
+                logger.info("credit_items table created")
 
             # Check if credit_summaries table exists
             result = conn.execute(text("""
@@ -214,11 +217,11 @@ def ensure_tables():
                     )
                 """))
                 conn.commit()
-                print("✅ credit_summaries table created")
+                logger.info("credit_summaries table created")
 
         _tables_created = True
     except Exception as e:
-        print(f"⚠️ Could not ensure credit tables: {e}")
+        logger.warning(f"Could not ensure credit tables: {e}")
         # Don't raise - allow routes to work with empty data
 
 
@@ -298,7 +301,7 @@ async def get_loan_credit_reports(
                 "document_id": row[12]
             })
     except Exception as e:
-        print(f"Could not fetch credit items: {e}")
+        logger.error(f"Could not fetch credit items: {e}")
 
     # Get credit summary
     summary = None
@@ -324,7 +327,7 @@ async def get_loan_credit_reports(
                 "utilization": summary_result[9]
             }
     except Exception as e:
-        print(f"Could not fetch credit summary: {e}")
+        logger.error(f"Could not fetch credit summary: {e}")
 
     return {
         "reports": [
@@ -407,7 +410,7 @@ async def get_lead_credit_reports(
                 "document_id": row[12]
             })
     except Exception as e:
-        print(f"Could not fetch credit items for lead: {e}")
+        logger.error(f"Could not fetch credit items for lead: {e}")
 
     # Get credit summary
     summary = None
@@ -433,7 +436,7 @@ async def get_lead_credit_reports(
                 "utilization": summary_result[9]
             }
     except Exception as e:
-        print(f"Could not fetch credit summary for lead: {e}")
+        logger.error(f"Could not fetch credit summary for lead: {e}")
 
     return {
         "reports": [

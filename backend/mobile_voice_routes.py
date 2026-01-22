@@ -636,14 +636,14 @@ async def mobile_voice_websocket(
                 "type": "error",
                 "message": str(e)
             })
-        except:
-            pass
+        except Exception:
+            pass  # Client may have disconnected
 
     finally:
         try:
             await session.close()
-        except:
-            pass
+        except Exception:
+            pass  # Session may already be closed
 
 
 # =============================================================================

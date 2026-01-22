@@ -68,7 +68,6 @@ export default function PartnerPortalView() {
       wsRef.current = new WebSocket(`${wsUrl}/ws/loan/${portalData.loan_id}`);
 
       wsRef.current.onopen = () => {
-        console.log('Partner portal WebSocket connected');
         setWsStatus(WS_STATUS.CONNECTED);
       };
 

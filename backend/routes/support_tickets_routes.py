@@ -203,7 +203,7 @@ async def get_tickets(
             "is_admin": is_platform_admin(current_user)
         }
     except Exception as e:
-        print(f"Error fetching tickets: {e}")
+        logger.error(f"Error fetching tickets: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -268,7 +268,7 @@ async def create_ticket(
         }
     except Exception as e:
         db.rollback()
-        print(f"Error creating ticket: {e}")
+        logger.error(f"Error creating ticket: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -309,7 +309,7 @@ async def get_ticket(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error fetching ticket: {e}")
+        logger.error(f"Error fetching ticket: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -361,7 +361,7 @@ async def update_ticket(
         raise
     except Exception as e:
         db.rollback()
-        print(f"Error updating ticket: {e}")
+        logger.error(f"Error updating ticket: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -402,7 +402,7 @@ async def complete_ticket(
         raise
     except Exception as e:
         db.rollback()
-        print(f"Error completing ticket: {e}")
+        logger.error(f"Error completing ticket: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -434,7 +434,7 @@ async def delete_ticket(
         raise
     except Exception as e:
         db.rollback()
-        print(f"Error deleting ticket: {e}")
+        logger.error(f"Error deleting ticket: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -604,5 +604,5 @@ async def get_ticket_analytics(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error fetching analytics: {e}")
+        logger.error(f"Error fetching analytics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
