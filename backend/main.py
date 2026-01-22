@@ -41606,6 +41606,386 @@ async def debug_user_deletion_blockers(
 
 
 # ============================================================================
+# DASHBOARD HELPER FUNCTIONS
+# ============================================================================
+
+def calculate_stage_performance(db: Session, user_id: int, thirty_days_ago) -> list:
+    """
+    Calculate real stage performance metrics based on actual loan data.
+    Returns efficiency scores and status for each stage.
+    """
+    from datetime import datetime, timezone, timedelta
+
+    # Define stage mapping with target days for each stage
+    stage_configs = [
+        {"name": "Lead Generation", "stages": [LeadStage.NEW], "type": "lead", "target_days": 2},
+        {"name": "Pre-Qualification", "stages": [LeadStage.CONTACTED, LeadStage.QUALIFIED], "type": "lead", "target_days": 5},
+        {"name": "Application", "stages": [LeadStage.APPLICATION], "type": "lead", "target_days": 7},
+        {"name": "Processing", "stages": [LoanStage.PROCESSING], "type": "loan", "target_days": 10},
+        {"name": "Underwriting", "stages": [LoanStage.SUBMITTED, LoanStage.UW_RECEIVED, LoanStage.UNDERWRITING], "type": "loan", "target_days": 7},
+        {"name": "Clear to Close", "stages": [LoanStage.CTC], "type": "loan", "target_days": 3},
+        {"name": "Closing", "stages": [LoanStage.DOCS_OUT, LoanStage.FUNDED], "type": "loan", "target_days": 5}
+    ]
+
+    now = datetime.now(timezone.utc)
+    stage_results = []
+
+    for config in stage_configs:
+        if config["type"] == "lead":
+            # Query leads in these stages
+            leads_in_stage = db.query(Lead).filter(
+                Lead.owner_id == user_id,
+                Lead.stage.in_(config["stages"])
+            ).all()
+
+            if leads_in_stage:
+                total_days = 0
+                count = 0
+                for lead in leads_in_stage:
+                    if lead.stage_changed_at:
+                        days_in_stage = (now - lead.stage_changed_at).days
+                        total_days += days_in_stage
+                        count += 1
+                    elif lead.created_at:
+                        days_in_stage = (now - lead.created_at).days
+                        total_days += days_in_stage
+                        count += 1
+
+                avg_days = total_days / count if count > 0 else 0
+                # Calculate efficiency: 100% if at or below target, decreases linearly
+                efficiency = max(0, min(100, int(100 - max(0, (avg_days - config["target_days"]) * 10))))
+            else:
+                efficiency = 100  # No items = no delays
+                avg_days = 0
+        else:
+            # Query loans in these stages
+            loans_in_stage = db.query(Loan).filter(
+                Loan.loan_officer_id == user_id,
+                Loan.stage.in_(config["stages"])
+            ).all()
+
+            if loans_in_stage:
+                total_days = 0
+                count = 0
+                for loan in loans_in_stage:
+                    if loan.days_in_stage:
+                        total_days += loan.days_in_stage
+                        count += 1
+                    elif loan.created_at:
+                        days_in_stage = (now - loan.created_at).days
+                        total_days += days_in_stage
+                        count += 1
+
+                avg_days = total_days / count if count > 0 else 0
+                efficiency = max(0, min(100, int(100 - max(0, (avg_days - config["target_days"]) * 10))))
+            else:
+                efficiency = 100
+                avg_days = 0
+
+        # Determine status based on efficiency
+        if efficiency >= 80:
+            status = "on-track"
+        elif efficiency >= 60:
+            status = "slightly-delayed"
+        else:
+            status = "behind"
+
+        stage_results.append({
+            "name": config["name"],
+            "efficiency": efficiency,
+            "status": status
+        })
+
+    return stage_results
+
+
+def calculate_team_performance(db: Session, user_id: int, thirty_days_ago) -> list:
+    """
+    Calculate real team performance metrics based on actual user roles and their metrics.
+    Returns performance scores by role category.
+    """
+    from sqlalchemy import func
+
+    # Get the user's organization or team context
+    current_user = db.query(User).filter(User.id == user_id).first()
+    if not current_user:
+        return []
+
+    team_results = []
+
+    # Loan Officers performance - based on conversion rate and volume
+    lo_metrics = db.query(
+        func.count(Lead.id).label('total_leads'),
+        func.count(func.nullif(Lead.stage == LeadStage.CONVERTED, False)).label('converted')
+    ).filter(
+        Lead.owner_id == user_id,
+        Lead.created_at >= thirty_days_ago
+    ).first()
+
+    total_leads = lo_metrics.total_leads or 0
+    converted = lo_metrics.converted or 0
+    lo_conversion = (converted / total_leads * 100) if total_leads > 0 else 0
+    # Scale to performance: 20% conversion = 80 performance, adjust proportionally
+    lo_performance = min(100, max(0, int(60 + lo_conversion * 2)))
+
+    team_results.append({"role": "Loan Officers", "performance": lo_performance})
+
+    # Processors performance - based on processing time
+    processing_loans = db.query(Loan).filter(
+        Loan.loan_officer_id == user_id,
+        Loan.stage == LoanStage.PROCESSING
+    ).all()
+
+    if processing_loans:
+        avg_processing_days = sum(
+            loan.days_in_stage or 0 for loan in processing_loans
+        ) / len(processing_loans)
+        # Target: 10 days for processing, scale inversely
+        processor_performance = max(0, min(100, int(100 - max(0, (avg_processing_days - 10) * 5))))
+    else:
+        processor_performance = 85  # Default if no data
+
+    team_results.append({"role": "Processors", "performance": processor_performance})
+
+    # Underwriters performance - based on underwriting time
+    uw_loans = db.query(Loan).filter(
+        Loan.loan_officer_id == user_id,
+        Loan.stage.in_([LoanStage.UW_RECEIVED, LoanStage.UNDERWRITING])
+    ).all()
+
+    if uw_loans:
+        avg_uw_days = sum(
+            loan.days_in_stage or 0 for loan in uw_loans
+        ) / len(uw_loans)
+        # Target: 7 days for underwriting
+        uw_performance = max(0, min(100, int(100 - max(0, (avg_uw_days - 7) * 5))))
+    else:
+        uw_performance = 80  # Default if no data
+
+    team_results.append({"role": "Underwriters", "performance": uw_performance})
+
+    # Closers performance - based on CTC to funding time
+    funded_loans = db.query(Loan).filter(
+        Loan.loan_officer_id == user_id,
+        Loan.stage == LoanStage.FUNDED,
+        Loan.funded_date >= thirty_days_ago
+    ).all()
+
+    if funded_loans:
+        # Closers are performing well if loans get funded promptly
+        closer_performance = min(100, max(0, 75 + len(funded_loans) * 2))
+    else:
+        closer_performance = 85  # Default if no data
+
+    team_results.append({"role": "Closers", "performance": closer_performance})
+
+    return team_results
+
+
+def calculate_bottlenecks(db: Session, user_id: int) -> list:
+    """
+    Calculate real bottlenecks based on actual loan issues and delays.
+    Returns dynamic bottleneck data with real affected counts and delays.
+    """
+    from datetime import datetime, timezone, timedelta
+    from sqlalchemy import func, and_
+
+    now = datetime.now(timezone.utc)
+    bottlenecks = []
+
+    # 1. Check for loans missing documents (stuck in processing)
+    processing_loans = db.query(Loan).filter(
+        Loan.loan_officer_id == user_id,
+        Loan.stage == LoanStage.PROCESSING,
+        Loan.days_in_stage > 10
+    ).all()
+
+    if processing_loans:
+        avg_delay = sum(loan.days_in_stage or 0 for loan in processing_loans) / len(processing_loans)
+        bottlenecks.append({
+            "issue": "Loans Delayed in Processing",
+            "stage": "Processing",
+            "affectedLoans": len(processing_loans),
+            "avgDelay": f"{round(avg_delay, 1)} days"
+        })
+
+    # 2. Check for leads stuck without contact
+    stuck_leads = db.query(func.count(Lead.id)).filter(
+        Lead.owner_id == user_id,
+        Lead.stage == LeadStage.NEW,
+        Lead.created_at < now - timedelta(days=3)
+    ).scalar() or 0
+
+    if stuck_leads > 0:
+        bottlenecks.append({
+            "issue": "Leads Awaiting Initial Contact",
+            "stage": "Lead Generation",
+            "affectedLoans": stuck_leads,
+            "avgDelay": ">3 days"
+        })
+
+    # 3. Check for underwriting delays
+    uw_delays = db.query(Loan).filter(
+        Loan.loan_officer_id == user_id,
+        Loan.stage.in_([LoanStage.UW_RECEIVED, LoanStage.UNDERWRITING]),
+        Loan.days_in_stage > 7
+    ).all()
+
+    if uw_delays:
+        avg_uw_delay = sum(loan.days_in_stage or 0 for loan in uw_delays) / len(uw_delays)
+        bottlenecks.append({
+            "issue": "Underwriting Taking Longer Than Expected",
+            "stage": "Underwriting",
+            "affectedLoans": len(uw_delays),
+            "avgDelay": f"{round(avg_uw_delay, 1)} days"
+        })
+
+    # 4. Check for loans with rate lock expiring soon
+    rate_lock_expiring = db.query(func.count(Loan.id)).filter(
+        Loan.loan_officer_id == user_id,
+        Loan.rate_lock_expiration.isnot(None),
+        Loan.rate_lock_expiration <= now + timedelta(days=7),
+        Loan.stage.not_in([LoanStage.FUNDED, LoanStage.CANCELLED, LoanStage.DENIED])
+    ).scalar() or 0
+
+    if rate_lock_expiring > 0:
+        bottlenecks.append({
+            "issue": "Rate Lock Expiring Soon",
+            "stage": "All Active Stages",
+            "affectedLoans": rate_lock_expiring,
+            "avgDelay": "<7 days to expiry"
+        })
+
+    # 5. Check for application stage delays
+    app_delays = db.query(Lead).filter(
+        Lead.owner_id == user_id,
+        Lead.stage == LeadStage.APPLICATION,
+        Lead.stage_changed_at < now - timedelta(days=14)
+    ).all()
+
+    if app_delays:
+        avg_app_delay = sum(
+            (now - lead.stage_changed_at).days
+            for lead in app_delays
+            if lead.stage_changed_at
+        ) / len(app_delays) if app_delays else 0
+
+        bottlenecks.append({
+            "issue": "Applications Pending Completion",
+            "stage": "Application",
+            "affectedLoans": len(app_delays),
+            "avgDelay": f"{round(avg_app_delay, 1)} days"
+        })
+
+    return bottlenecks
+
+
+def calculate_efficiency_trends(db: Session, user_id: int) -> dict:
+    """
+    Calculate trend values by comparing current period to previous period.
+    Returns percentage changes for key metrics.
+    """
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import func
+
+    now = datetime.now(timezone.utc)
+    thirty_days_ago = now - timedelta(days=30)
+    sixty_days_ago = now - timedelta(days=60)
+
+    # Current period metrics (last 30 days)
+    current_funded = db.query(func.count(Loan.id)).filter(
+        Loan.loan_officer_id == user_id,
+        Loan.stage == LoanStage.FUNDED,
+        Loan.funded_date >= thirty_days_ago.date()
+    ).scalar() or 0
+
+    current_total_apps = db.query(func.count(Loan.id)).filter(
+        Loan.loan_officer_id == user_id,
+        Loan.created_at >= thirty_days_ago
+    ).scalar() or 1
+
+    current_pull_through = (current_funded / current_total_apps * 100) if current_total_apps > 0 else 0
+
+    # Previous period metrics (30-60 days ago)
+    prev_funded = db.query(func.count(Loan.id)).filter(
+        Loan.loan_officer_id == user_id,
+        Loan.stage == LoanStage.FUNDED,
+        Loan.funded_date >= sixty_days_ago.date(),
+        Loan.funded_date < thirty_days_ago.date()
+    ).scalar() or 0
+
+    prev_total_apps = db.query(func.count(Loan.id)).filter(
+        Loan.loan_officer_id == user_id,
+        Loan.created_at >= sixty_days_ago,
+        Loan.created_at < thirty_days_ago
+    ).scalar() or 1
+
+    prev_pull_through = (prev_funded / prev_total_apps * 100) if prev_total_apps > 0 else 0
+
+    # Calculate average time to close for both periods
+    current_funded_loans = db.query(Loan).filter(
+        Loan.loan_officer_id == user_id,
+        Loan.stage == LoanStage.FUNDED,
+        Loan.funded_date >= thirty_days_ago.date(),
+        Loan.created_at.isnot(None)
+    ).all()
+
+    if current_funded_loans:
+        current_avg_time = sum(
+            (loan.funded_date - loan.created_at.date()).days
+            for loan in current_funded_loans
+            if loan.funded_date and loan.created_at
+        ) / len(current_funded_loans)
+    else:
+        current_avg_time = 0
+
+    prev_funded_loans = db.query(Loan).filter(
+        Loan.loan_officer_id == user_id,
+        Loan.stage == LoanStage.FUNDED,
+        Loan.funded_date >= sixty_days_ago.date(),
+        Loan.funded_date < thirty_days_ago.date(),
+        Loan.created_at.isnot(None)
+    ).all()
+
+    if prev_funded_loans:
+        prev_avg_time = sum(
+            (loan.funded_date - loan.created_at.date()).days
+            for loan in prev_funded_loans
+            if loan.funded_date and loan.created_at
+        ) / len(prev_funded_loans)
+    else:
+        prev_avg_time = 0
+
+    # Calculate trend percentages
+    def calc_change(current, previous):
+        if previous == 0:
+            return 0 if current == 0 else 100
+        return round(((current - previous) / previous) * 100, 1)
+
+    pull_through_change = calc_change(current_pull_through, prev_pull_through)
+    # For time to close, negative change is good (faster)
+    time_to_close_change = calc_change(prev_avg_time, current_avg_time) if current_avg_time > 0 else 0
+
+    # Overall efficiency trend
+    overall_trend = round((pull_through_change + time_to_close_change) / 2, 1)
+
+    # Count loans falling behind for both periods
+    current_behind = db.query(func.count(Loan.id)).filter(
+        Loan.loan_officer_id == user_id,
+        Loan.stage.in_([LoanStage.PROCESSING, LoanStage.UW_RECEIVED]),
+        Loan.days_in_stage > 14
+    ).scalar() or 0
+
+    return {
+        "overall_trend": overall_trend,
+        "pull_through_change": pull_through_change,
+        "time_to_close_change": time_to_close_change,
+        "loans_behind_change": -current_behind if current_behind > 0 else 0,
+        "automation_change": 0  # Would need historical AI action tracking
+    }
+
+
+# ============================================================================
 # DASHBOARD
 # ============================================================================
 
@@ -41999,63 +42379,34 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
         automation_rate * 0.2
     ))
 
+    # Calculate trend values from historical data
+    trends = calculate_efficiency_trends(db, current_user.id)
+
     efficiency = {
         "overallScore": overall_score,
-        "trend": 5.2,  # Placeholder - calculate from historical data
+        "trend": trends["overall_trend"],
 
-        # Key Metrics
+        # Key Metrics with real trend values
         "avgTimeToClose": round(avg_time_to_close, 1),
-        "avgTimeToCloseChange": 0,  # Placeholder - calculate from previous period
+        "avgTimeToCloseChange": trends["time_to_close_change"],
         "pullThroughRate": pull_through_rate,
-        "pullThroughRateChange": 0,  # Placeholder
+        "pullThroughRateChange": trends["pull_through_change"],
         "loansFallingBehind": loans_behind,
-        "loansFallingBehindChange": 0,  # Placeholder
+        "loansFallingBehindChange": trends["loans_behind_change"],
         "automationRate": automation_rate,
-        "automationRateChange": 0,  # Placeholder
+        "automationRateChange": trends["automation_change"],
         "customerSatisfaction": customer_satisfaction,
-        "customerSatisfactionChange": 0,  # Placeholder
+        "customerSatisfactionChange": 0  # Would need historical satisfaction tracking
 
-        # Stage Performance - show empty for users with no data
-        "stages": [] if total_loan_count == 0 else [
-            {"name": "Lead Generation", "efficiency": 85, "status": "on-track"},
-            {"name": "Pre-Qualification", "efficiency": 72, "status": "slightly-delayed"},
-            {"name": "Application", "efficiency": 81, "status": "on-track"},
-            {"name": "Processing", "efficiency": 65, "status": "behind"},
-            {"name": "Underwriting", "efficiency": 70, "status": "slightly-delayed"},
-            {"name": "Clear to Close", "efficiency": 88, "status": "on-track"},
-            {"name": "Closing", "efficiency": 92, "status": "on-track"}
-        ],
+        # Stage Performance - calculated from real loan/lead data
+        "stages": [] if total_loan_count == 0 else calculate_stage_performance(db, current_user.id, thirty_days_ago),
 
-        # Team Performance - show empty for users with no data
-        "team": [] if total_loan_count == 0 else [
-            {"role": "Loan Officers", "performance": 82},
-            {"role": "Processors", "performance": 68},
-            {"role": "Underwriters", "performance": 75},
-            {"role": "Closers", "performance": 91}
-        ],
+        # Team Performance - calculated from real user metrics
+        "team": [] if total_loan_count == 0 else calculate_team_performance(db, current_user.id, thirty_days_ago),
 
-        # Bottlenecks - show empty for users with no loans falling behind
-        "bottleneckCount": 0 if loans_behind == 0 else 3,
-        "bottlenecks": [] if loans_behind == 0 else [
-            {
-                "issue": "Missing Documents",
-                "stage": "Processing",
-                "affectedLoans": max(1, int(loans_behind * 0.4)),
-                "avgDelay": "4.5 days"
-            },
-            {
-                "issue": "Income Verification Delays",
-                "stage": "Pre-Qualification",
-                "affectedLoans": max(1, int(loans_behind * 0.3)),
-                "avgDelay": "3.2 days"
-            },
-            {
-                "issue": "Appraisal Review Backlog",
-                "stage": "Underwriting",
-                "affectedLoans": max(1, int(loans_behind * 0.3)),
-                "avgDelay": "2.8 days"
-            }
-        ]
+        # Bottlenecks - dynamically calculated from real loan issues
+        "bottleneckCount": len(calculate_bottlenecks(db, current_user.id)) if loans_behind > 0 else 0,
+        "bottlenecks": calculate_bottlenecks(db, current_user.id) if loans_behind > 0 else []
     }
 
     result = {

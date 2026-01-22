@@ -759,7 +759,7 @@ async def import_funded_loans_to_mum_debug(
 
         # Check for rate
         if "interest_rate" in loans_columns:
-            select_cols.append("l.interest_rate")
+            select_cols.append("l.rate")
         elif "rate" in loans_columns:
             select_cols.append("l.rate as interest_rate")
         else:
@@ -2538,7 +2538,7 @@ async def sync_funded_loans_to_mum_clients(
         # Find funded loans not yet in mum_clients
         result = db.execute(text("""
             SELECT l.id, l.loan_number, l.borrower_name,
-                   l.borrower_email, l.borrower_phone, l.amount, l.interest_rate,
+                   l.borrower_email, l.borrower_phone, l.amount, l.rate,
                    l.funded_date, l.closing_date, l.property_address,
                    l.property_city, l.property_state, l.property_zip,
                    l.loan_type, l.stage::text as stage, l.salesforce_id
@@ -2722,12 +2722,12 @@ async def full_sync_pipeline(
                 COALESCE(l.funded_date, l.closing_date, CURRENT_DATE),
                 COALESCE(l.closing_date, l.funded_date, CURRENT_DATE),
                 COALESCE(l.funded_date, l.closing_date, CURRENT_DATE) + INTERVAL '30 days',
-                COALESCE(l.interest_rate, 0),
+                COALESCE(l.rate, 0),
                 COALESCE(l.amount, 0),
                 COALESCE(l.amount, 0),
-                COALESCE(l.property_value, l.amount, 0),
-                COALESCE(l.property_value, l.amount, 0),
-                l.interest_rate,
+                COALESCE(l.appraisal_value, l.amount, 0),
+                COALESCE(l.appraisal_value, l.amount, 0),
+                l.rate,
                 l.amount,
                 'active',
                 50,
@@ -2950,12 +2950,12 @@ async def admin_run_all_syncs(
                 COALESCE(l.funded_date, l.closing_date, CURRENT_DATE),
                 COALESCE(l.closing_date, l.funded_date, CURRENT_DATE),
                 COALESCE(l.funded_date, l.closing_date, CURRENT_DATE) + INTERVAL '30 days',
-                COALESCE(l.interest_rate, 0),
+                COALESCE(l.rate, 0),
                 COALESCE(l.amount, 0),
                 COALESCE(l.amount, 0),
-                COALESCE(l.property_value, l.amount, 0),
-                COALESCE(l.property_value, l.amount, 0),
-                l.interest_rate,
+                COALESCE(l.appraisal_value, l.amount, 0),
+                COALESCE(l.appraisal_value, l.amount, 0),
+                l.rate,
                 l.amount,
                 'active',
                 50,
@@ -3096,12 +3096,12 @@ async def admin_test_sync_simple(
                     COALESCE(l.funded_date, l.closing_date, CURRENT_DATE),
                     COALESCE(l.closing_date, l.funded_date, CURRENT_DATE),
                     COALESCE(l.funded_date, l.closing_date, CURRENT_DATE) + INTERVAL '30 days',
-                    COALESCE(l.interest_rate, 0),
+                    COALESCE(l.rate, 0),
                     COALESCE(l.amount, 0),
                     COALESCE(l.amount, 0),
-                    COALESCE(l.property_value, l.amount, 0),
-                    COALESCE(l.property_value, l.amount, 0),
-                    l.interest_rate,
+                    COALESCE(l.appraisal_value, l.amount, 0),
+                    COALESCE(l.appraisal_value, l.amount, 0),
+                    l.rate,
                     l.amount,
                     'active',
                     50,
