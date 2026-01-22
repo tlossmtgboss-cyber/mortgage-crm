@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, case, and_, or_
 from collections import defaultdict
 import statistics
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 

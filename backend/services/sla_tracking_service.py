@@ -28,6 +28,7 @@ from crud.sla_tracking import (
     update_milestone_status
 )
 from schemas.sla_tracking import SLAAlertCreate
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 

@@ -59,7 +59,7 @@ async def get_current_user_id(
     """Get user ID from authentication token (supports JWT and session tokens)."""
     import jwt
 
-    SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+    SECRET_KEY = os.getenv("SECRET_KEY", "")
     ALGORITHM = "HS256"
 
     # First try JWT token
@@ -168,7 +168,7 @@ async def voice_workflow_websocket(
 
     try:
         import jwt
-        SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+        SECRET_KEY = os.getenv("SECRET_KEY", "")
         ALGORITHM = "HS256"
 
         user_id = None
@@ -596,7 +596,7 @@ async def debug_test_session(
     try:
         # Step 1: Auth check
         import jwt
-        SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+        SECRET_KEY = os.getenv("SECRET_KEY", "")
         ALGORITHM = "HS256"
 
         user_id = None

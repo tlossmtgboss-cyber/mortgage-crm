@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from twilio.rest import Client
 from twilio.twiml.voice_response import VoiceResponse, Dial, Gather
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -389,7 +390,7 @@ class RecruitingTwilioService:
             )
             row = result.fetchone()
             return row.phone if row else None
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error getting user phone: {e}")
             return None
 
@@ -448,7 +449,7 @@ class RecruitingTwilioService:
             self.db.execute(text(query), params)
             self.db.commit()
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error updating call record: {e}")
             self.db.rollback()
 

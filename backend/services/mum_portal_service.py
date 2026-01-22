@@ -34,6 +34,7 @@ from models.purl import (
     PURLTokenGenerator,
 )
 from models.mum_client_profile import MUMClientProfile
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +152,7 @@ class MUMPortalService:
                 ).first()
                 if lo:
                     owner_user_id = lo.id
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.warning(f"Could not find LO by email: {e}")
 
         # Generate unique slug from client name
@@ -297,7 +298,7 @@ class MUMPortalService:
                         "headshot_url": getattr(lo, 'headshot_url', None),
                         "title": getattr(lo, 'title', None),
                     }
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.warning(f"Could not load LO info: {e}")
 
         # Get unread count

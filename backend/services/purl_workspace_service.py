@@ -16,6 +16,7 @@ from typing import Optional, Dict, Any, List, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 
+from sqlalchemy.exc import SQLAlchemyError
 from models.purl import (
     PURLWorkspace,
     PURLContact,
@@ -521,7 +522,7 @@ class PURLWorkspaceService:
                     modules = self.db.query(PURLPortalModule).filter(
                         PURLPortalModule.workspace_id == workspace_id
                     ).order_by(PURLPortalModule.order_index).all()
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.warning(f"Failed to query/initialize portal modules: {e}")
                 self.db.rollback()
                 # Return default modules as fallback (without persisting)
@@ -600,7 +601,7 @@ class PURLWorkspaceService:
                         PURLLoanMilestone.loan_id == current_loan.id
                     ).order_by(PURLLoanMilestone.id).all()
                     milestones = [self._milestone_to_dict(m) for m in milestone_records]
-                except Exception as e:
+                except SQLAlchemyError as e:
                     logger.warning(f"Failed to load milestones: {e}")
                     self.db.rollback()
             logger.debug(f"get_complete_workspace_data: Found {len(milestones)} milestones")
@@ -645,7 +646,7 @@ class PURLWorkspaceService:
                             "first_name": lead.first_name,
                             "last_name": lead.last_name
                         }
-                except Exception as e:
+                except SQLAlchemyError as e:
                     logger.warning(f"Failed to fetch linked lead {lead_id}: {e}")
 
             # Get loan officer info from workspace owner
@@ -667,7 +668,7 @@ class PURLWorkspaceService:
                             "team_name": getattr(lo_user, 'team_name', None),
                         }
                         logger.info(f"Loaded LO info for workspace {workspace.id}: {loan_officer_data.get('name')}")
-                except Exception as e:
+                except SQLAlchemyError as e:
                     logger.warning(f"Failed to fetch loan officer {workspace.owner_user_id}: {e}")
 
             logger.debug(f"get_complete_workspace_data: Building final response dict")

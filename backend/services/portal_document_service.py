@@ -13,6 +13,7 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func
 
+from sqlalchemy.exc import SQLAlchemyError
 from models.portal_models import (
     DocumentType, DocumentStatus,
     PortalDocument, DocumentExtraction, PropertyCosts,
@@ -571,7 +572,7 @@ class PortalDocumentService:
                     PortalLoan.id == loan_id
                 ).first()
             resolved_loan_id = portal_loan.id if portal_loan else loan_id
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Could not resolve loan_id {loan_id} for document summary: {e}")
             self.db.rollback()
 
@@ -597,7 +598,7 @@ class PortalDocumentService:
                     by_status["rejected"] += 1
                 else:
                     by_status["pending"] += 1
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Could not get documents for loan {loan_id}: {e}")
             self.db.rollback()
             docs = []

@@ -16,6 +16,7 @@ from typing import Optional, Dict, Any, List, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 
+from sqlalchemy.exc import SQLAlchemyError
 from models.purl import (
     PURLApplication,
     PURLWorkspace,
@@ -601,7 +602,7 @@ class PURLApplicationService:
                 """), {"lead_id": int(lead_id)})
 
                 logger.info(f"Created {len(initial_conditions)} lead_conditions for lead {lead_id} and updated stage to Document Fulfillment")
-            except Exception as e:
+            except SQLAlchemyError as e:
                 # Log but don't fail if lead_conditions table doesn't exist
                 logger.warning(f"Failed to create lead_conditions for lead {lead_id}: {e}")
 
@@ -865,7 +866,7 @@ class PURLApplicationService:
 
             self.db.commit()
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Failed to create income sources: {e}")
             self.db.rollback()
 

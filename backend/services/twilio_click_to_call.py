@@ -34,6 +34,7 @@ from twilio.twiml.voice_response import VoiceResponse, Dial, Say, Gather
 from sqlalchemy.orm import Session
 
 from chat_state_machine_models import CallRequest, ChatSession, CallStatus
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +154,7 @@ class ClickToCallService:
                 "message": "Calling your phone now..."
             }
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Failed to initiate call: {e}")
             call_request.status = CallStatus.FAILED.value
             self.db.commit()

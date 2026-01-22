@@ -21,6 +21,7 @@ from typing import Dict, Any, Optional, List
 import redis
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -260,7 +261,7 @@ class GracefulDegradation:
             latency = (time.time() - start) * 1000
             return ServiceHealth(name='database', healthy=True, latency_ms=latency)
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             return ServiceHealth(name='database', healthy=False, error=str(e))
 
     async def _check_redis_health(self) -> ServiceHealth:
@@ -276,7 +277,7 @@ class GracefulDegradation:
             latency = (time.time() - start) * 1000
             return ServiceHealth(name='redis', healthy=True, latency_ms=latency)
 
-        except Exception as e:
+        except redis.RedisError as e:
             return ServiceHealth(name='redis', healthy=False, error=str(e))
 
     async def _check_twilio_health(self) -> ServiceHealth:

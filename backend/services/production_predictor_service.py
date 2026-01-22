@@ -21,6 +21,7 @@ from enum import Enum
 from decimal import Decimal
 import statistics
 import math
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 

@@ -158,7 +158,7 @@ class RedisCacheService:
                 '1' if granted else '0'
             )
             return True
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"❌ Redis cache error: {e}")
             return False
 
@@ -184,7 +184,7 @@ class RedisCacheService:
             if value is None:
                 return None
             return value.decode() == '1'
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"❌ Redis cache error: {e}")
             return None
 
@@ -212,7 +212,7 @@ class RedisCacheService:
                 json.dumps(permissions)
             )
             return True
-        except Exception as e:
+        except (redis.RedisError, json.JSONDecodeError) as e:
             logger.error(f"❌ Redis cache error: {e}")
             return False
 
@@ -236,7 +236,7 @@ class RedisCacheService:
             if value is None:
                 return None
             return json.loads(value.decode())
-        except Exception as e:
+        except (redis.RedisError, json.JSONDecodeError) as e:
             logger.error(f"❌ Redis cache error: {e}")
             return None
 
@@ -268,7 +268,7 @@ class RedisCacheService:
                 json.dumps(info)
             )
             return True
-        except Exception as e:
+        except (redis.RedisError, json.JSONDecodeError) as e:
             logger.error(f"❌ Redis cache error: {e}")
             return False
 
@@ -292,7 +292,7 @@ class RedisCacheService:
             if value is None:
                 return None
             return json.loads(value.decode())
-        except Exception as e:
+        except (redis.RedisError, json.JSONDecodeError) as e:
             logger.error(f"❌ Redis cache error: {e}")
             return None
 
@@ -324,7 +324,7 @@ class RedisCacheService:
                 json.dumps(template)
             )
             return True
-        except Exception as e:
+        except (redis.RedisError, json.JSONDecodeError) as e:
             logger.error(f"❌ Redis cache error: {e}")
             return False
 
@@ -348,7 +348,7 @@ class RedisCacheService:
             if value is None:
                 return None
             return json.loads(value.decode())
-        except Exception as e:
+        except (redis.RedisError, json.JSONDecodeError) as e:
             logger.error(f"❌ Redis cache error: {e}")
             return None
 
@@ -386,7 +386,7 @@ class RedisCacheService:
 
             logger.info(f"✅ Invalidated {deleted_count} cache keys for employee {employee_id}")
 
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"❌ Redis cache invalidation error: {e}")
 
         return deleted_count
@@ -407,7 +407,7 @@ class RedisCacheService:
             if deleted:
                 logger.info(f"✅ Invalidated template {template_id} cache")
             return bool(deleted)
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"❌ Redis cache error: {e}")
             return False
 
@@ -430,7 +430,7 @@ class RedisCacheService:
 
             logger.info(f"✅ Invalidated {deleted_count} permission cache keys")
 
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"❌ Redis cache invalidation error: {e}")
 
         return deleted_count
@@ -447,7 +447,7 @@ class RedisCacheService:
             self.client.flushdb()
             logger.warning("⚠️  Flushed entire Redis cache")
             return True
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"❌ Redis flush error: {e}")
             return False
 
@@ -467,7 +467,7 @@ class RedisCacheService:
             self.client.set('permissions_dirty', '1')
             logger.info("✅ Marked permissions as dirty")
             return True
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"❌ Redis error: {e}")
             return False
 
@@ -482,7 +482,7 @@ class RedisCacheService:
         try:
             value = self.client.get('permissions_dirty')
             return value is not None and value.decode() == '1'
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"❌ Redis error: {e}")
             return False
 
@@ -498,7 +498,7 @@ class RedisCacheService:
             self.client.delete('permissions_dirty')
             logger.info("✅ Cleared permissions dirty flag")
             return True
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"❌ Redis error: {e}")
             return False
 
@@ -533,7 +533,7 @@ class RedisCacheService:
                 'connected_clients': info.get('connected_clients', 0),
                 'used_memory_human': info.get('used_memory_human', 'N/A'),
             }
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"❌ Redis stats error: {e}")
             return {}
 
@@ -553,7 +553,7 @@ class RedisCacheService:
             for _ in self.client.scan_iter(match='perm:*'):
                 count += 1
             return count
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"❌ Redis error: {e}")
             return 0
 
@@ -583,7 +583,7 @@ class RedisCacheService:
                 'cluster_mode': self.cluster_mode,
                 'connected': True
             }
-        except Exception as e:
+        except redis.RedisError as e:
             return {
                 'healthy': False,
                 'error': str(e),
@@ -649,7 +649,7 @@ class MaterializedViewRefresher:
             logger.info("✅ Materialized views refreshed successfully")
             return True
 
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"❌ Materialized view refresh error: {e}")
             self.db.rollback()
             return False

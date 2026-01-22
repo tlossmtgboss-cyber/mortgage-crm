@@ -20,6 +20,7 @@ from datetime import datetime, timedelta, date
 from dataclasses import dataclass, field
 from enum import Enum
 import uuid
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 

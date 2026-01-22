@@ -21,6 +21,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List, Optional, Set
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -256,7 +257,7 @@ class SLATaskHookService:
             logger.info(f"Initial SLA tasks created for loan {loan_id}: {result}")
             return result
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error creating initial SLA tasks for loan {loan_id}: {e}")
             return {"error": str(e), "loan_id": loan_id}
         finally:

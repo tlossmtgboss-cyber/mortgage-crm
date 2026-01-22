@@ -20,6 +20,7 @@ from models.active_loan_profile import ActiveLoanProfile
 from models.mum_client_profile import MUMClientProfile
 from models.team_member_profile import TeamMemberProfile
 from models.data_conflict import DataConflict
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -259,7 +260,7 @@ class EmailProcessor:
                     "profile_type": profile_type
                 }
             return None
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Error in preliminary profile lookup: {e}")
             return None
 

@@ -19,6 +19,7 @@ from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 import uuid
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -152,7 +153,7 @@ class TaskGeneratorService:
                 "last_day_generated": last_day_generated
             }
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Task generation failed: {e}")
             return {"success": False, "error": str(e)}
@@ -505,7 +506,7 @@ class TaskGeneratorService:
 
             return result[0] if result else None
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Failed to create task instance: {e}")
             return None
 
@@ -620,7 +621,7 @@ Email: {contact_info.get('email', 'N/A')}
 
             return None
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Failed to create linked task: {e}")
             return None
 
@@ -789,7 +790,7 @@ Email: {contact_info.get('email', 'N/A')}
             if assignments:
                 logger.debug(f"Role assignments for lead={lead_id}, loan={loan_id}: {assignments}")
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Error getting role assignments: {e}")
             # Fall back to basic owner/LO assignment
             if lead_id:

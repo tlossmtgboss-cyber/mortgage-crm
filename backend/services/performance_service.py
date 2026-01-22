@@ -19,6 +19,7 @@ from enum import Enum
 import logging
 
 from database import get_db
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -995,7 +996,7 @@ class PerformanceService:
                     organization_id=organization_id
                 )
                 count += 1
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.warning(f"Failed to calculate performance for user {user_row.id}: {e}")
 
         return count
@@ -1024,7 +1025,7 @@ class PerformanceService:
                     organization_id=organization_id
                 )
                 count += 1
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.warning(f"Failed to calculate weekly performance for user {user_row.id}: {e}")
 
         return count
@@ -1053,7 +1054,7 @@ class PerformanceService:
                     organization_id=organization_id
                 )
                 count += 1
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.warning(f"Failed to calculate monthly performance for user {user_row.id}: {e}")
 
         return count

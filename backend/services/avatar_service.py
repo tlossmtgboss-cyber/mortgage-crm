@@ -17,6 +17,7 @@ from typing import Optional, Dict, Any, List, Tuple
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from sqlalchemy.exc import SQLAlchemyError
 from models.avatar_models import (
     AvatarStatus,
     AvatarJobStatus,
@@ -301,7 +302,7 @@ class AvatarService:
                 "allowed_formats": ["mp4", "mov", "webm"],
             }
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Failed to generate upload URL: {e}")
             # Fallback for local development
             return {

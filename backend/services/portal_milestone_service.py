@@ -11,6 +11,7 @@ from datetime import datetime, date, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func
 
+from sqlalchemy.exc import SQLAlchemyError
 from models.portal_models import (
     LifecycleStage, MilestoneStatus, TaskStatus, PortalUserRole,
     MilestoneTemplate, MilestoneInstance, TaskTemplate, TaskInstance,
@@ -44,7 +45,7 @@ class PortalMilestoneService:
 
             if portal_loan:
                 return portal_loan.id
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Could not resolve loan_id {loan_id}: {e}")
             self.db.rollback()
 
@@ -219,7 +220,7 @@ class PortalMilestoneService:
                 MilestoneTemplate.stage,
                 MilestoneTemplate.display_order
             ).all()
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Could not get milestones for loan {loan_id}: {e}")
             self.db.rollback()
             return []
@@ -276,7 +277,7 @@ class PortalMilestoneService:
             milestones = self.db.query(MilestoneInstance).filter(
                 MilestoneInstance.loan_id == resolved_loan_id
             ).all()
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Could not get milestones for loan {loan_id}: {e}")
             self.db.rollback()
             milestones = []

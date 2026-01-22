@@ -19,6 +19,7 @@ from sqlalchemy import text
 from database import SessionLocal
 
 import logging
+from sqlalchemy.exc import SQLAlchemyError
 from models.recruit_portal_models import (
     PortalData,
     CalculatorInput,

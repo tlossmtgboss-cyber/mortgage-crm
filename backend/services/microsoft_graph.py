@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 import logging
 import os
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -219,7 +220,7 @@ class MicrosoftGraphUserService:
                 self.access_token = tokens["access_token"]
                 return True
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Token refresh error: {e}")
             return False
 

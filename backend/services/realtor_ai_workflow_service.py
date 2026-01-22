@@ -17,6 +17,7 @@ import re
 
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -717,6 +718,6 @@ SCHEDULE [loan_id] - Schedule meeting"""
                 "metadata": json.dumps({"question": question[:500]})
             })
             self.db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error logging AI interaction: {e}")
             self.db.rollback()

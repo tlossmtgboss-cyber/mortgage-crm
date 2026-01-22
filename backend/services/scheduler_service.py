@@ -12,6 +12,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -269,13 +270,13 @@ class SchedulerService:
                     sent_count += 1
                     logger.info(f"Sent reminder #{reminder_count + 1} for application {app_id}")
 
-                except Exception as e:
+                except SQLAlchemyError as e:
                     logger.error(f"Failed to send reminder for application {app_dict.get('id')}: {e}")
                     session.rollback()
 
             logger.info(f"Application reminder job complete: {sent_count} reminders sent")
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Application reminder job failed: {e}")
         finally:
             session.close()
@@ -340,11 +341,11 @@ class SchedulerService:
 
                     logger.info(f"Sent expiration notice for document {doc_dict['doc_id']}")
 
-                except Exception as e:
+                except SQLAlchemyError as e:
                     logger.error(f"Failed to send expiration notice for document {doc_dict.get('doc_id')}: {e}")
                     session.rollback()
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Document expiration check failed: {e}")
         finally:
             session.close()
@@ -430,7 +431,7 @@ class SchedulerService:
 
                     logger.info(f"Sent legacy reminder for appointment {appt_dict['appointment_id']}")
 
-                except Exception as e:
+                except SQLAlchemyError as e:
                     logger.error(f"Failed to send legacy reminder for appointment {appt_dict.get('appointment_id')}: {e}")
                     session.rollback()
 
@@ -444,7 +445,7 @@ class SchedulerService:
             # =====================================================================
             self._send_chat_widget_reminders(session, notifier)
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Appointment reminder job failed: {e}")
         finally:
             session.close()
@@ -523,7 +524,7 @@ class SchedulerService:
 
             logger.info(f"Processed {len(appointments_24h)} 24h reminders and {len(appointments_1h)} 1h reminders")
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Smart scheduler reminders failed: {e}")
             session.rollback()
 
@@ -609,7 +610,7 @@ class SchedulerService:
                 session.commit()
                 logger.info(f"Sent {hours_before}h reminder for smart appointment {appointment_id} (email={email_sent}, sms={sms_sent})")
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Failed to send reminder for smart appointment: {e}")
             session.rollback()
 
@@ -711,7 +712,7 @@ class SchedulerService:
 
             logger.info(f"Chat widget reminders: {len(appointments_24h)} 24h, {len(appointments_1h)} 1h")
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Chat widget reminders failed: {e}")
             session.rollback()
 
@@ -785,7 +786,7 @@ class SchedulerService:
                 session.commit()
                 logger.info(f"Sent {hours_before}h reminder for chat appointment {appointment_id} (email={email_sent}, sms={sms_sent})")
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Failed to send reminder for chat appointment: {e}")
             session.rollback()
 
@@ -813,7 +814,7 @@ class SchedulerService:
 
             logger.info(f"Marked {len(abandoned)} applications as abandoned")
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Stale application cleanup failed: {e}")
             session.rollback()
         finally:

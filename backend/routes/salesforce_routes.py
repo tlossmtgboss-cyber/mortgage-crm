@@ -281,7 +281,7 @@ def get_current_user_id(request: Request, db: Session = None) -> Optional[int]:
         auth_header = request.headers.get("Authorization", "")
         if auth_header.startswith("Bearer "):
             token = auth_header[7:]
-            secret_key = os.getenv("SECRET_KEY", "your-secret-key-here")
+            secret_key = os.getenv("SECRET_KEY", "")
             payload = jwt.decode(token, secret_key, algorithms=["HS256"])
             email = payload.get("sub")
             if email and db:
@@ -1818,7 +1818,7 @@ async def run_salesforce_migration(
     Run Salesforce database migration.
     Protected by admin API key.
     """
-    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    expected_key = os.getenv("ADMIN_API_KEY", "")
     if admin_key != expected_key:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
@@ -1907,7 +1907,7 @@ async def admin_pull_recent_loans(
     Uses the first connected Salesforce account found.
     Protected by admin API key.
     """
-    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    expected_key = os.getenv("ADMIN_API_KEY", "")
     if admin_key != expected_key:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 

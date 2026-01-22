@@ -879,7 +879,7 @@ async def run_twilio_migration(
     from sqlalchemy import text
 
     # Verify admin key
-    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    expected_key = os.getenv("ADMIN_API_KEY", "")
     if admin_key != expected_key:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 

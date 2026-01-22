@@ -14,6 +14,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -237,7 +238,7 @@ class RefinanceCallService:
                 alert.call_status = 'initiated'
                 self.db.commit()
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error logging call attempt: {e}")
 
     async def send_post_call_followup(
@@ -411,7 +412,7 @@ class RefinanceCallService:
                             },
                             appointment_scheduled=(alert.call_outcome == 'appointment_scheduled'),
                         )
-                except Exception as e:
+                except SQLAlchemyError as e:
                     logger.error(f"Error sending post-call SMS: {e}")
 
             logger.info(f"Processed refinance call completion for alert {alert.id}, outcome: {alert.call_outcome}")

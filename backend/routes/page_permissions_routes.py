@@ -967,7 +967,7 @@ async def run_page_permissions_migration(
     Requires admin_key for authorization.
     """
     import os
-    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    expected_key = os.getenv("ADMIN_API_KEY", "")
     if admin_key != expected_key:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 

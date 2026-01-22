@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
 from decimal import Decimal
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -237,7 +238,7 @@ class RefinanceOutreachService:
                 'client_name': opportunity.client_name,
             }
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Failed to initiate call for opportunity {opportunity_id}: {e}")
             return {
                 'success': False,

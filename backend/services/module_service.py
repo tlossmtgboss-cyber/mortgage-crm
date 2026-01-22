@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -409,7 +410,7 @@ class ModuleService:
             }
         except ValueError as e:
             raise
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Error enabling module: {e}")
             return {"success": False, "error": str(e)}
@@ -433,7 +434,7 @@ class ModuleService:
             db.commit()
 
             return {"success": True, "module_key": module_key}
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Error disabling module: {e}")
             return {"success": False, "error": str(e)}

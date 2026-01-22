@@ -20,6 +20,7 @@ import io
 
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -344,7 +345,7 @@ class LetterGenerationService:
                 "share_url": f"/letters/shared/{share_token}"
             }
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Error generating letter: {e}")
             return {"success": False, "error": str(e)}
@@ -550,7 +551,7 @@ class LetterGenerationService:
             logger.info(f"Voided letter {letter_id} by user {voided_by}")
             return {"success": True, "letter_id": letter_id}
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Error voiding letter: {e}")
             return {"success": False, "error": str(e)}
@@ -566,7 +567,7 @@ class LetterGenerationService:
                 WHERE id = :letter_id
             """), {"letter_id": letter_id})
             self.db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error recording download: {e}")
             self.db.rollback()
 
@@ -583,7 +584,7 @@ class LetterGenerationService:
             """), {"letter_id": letter_id, "token": new_token})
             self.db.commit()
             return new_token
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error regenerating token: {e}")
             self.db.rollback()
             return None
@@ -689,6 +690,6 @@ class LetterRateLimiter:
                     AND (organization_id = :org_id OR organization_id IS NULL)
             """), {"org_id": organization_id, "letter_type": letter_type})
             self.db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error incrementing usage: {e}")
             self.db.rollback()

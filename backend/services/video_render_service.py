@@ -14,6 +14,7 @@ from enum import Enum
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +116,7 @@ class VideoRenderService:
 
             return self.get_render_job(db, render_id)
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Error creating render job: {e}")
             raise
@@ -289,7 +290,7 @@ class VideoRenderService:
             logger.info(f"Render job {job_id} transitioned from {current_state} to {new_state}")
             return True, f"Transitioned to {new_state}"
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"State transition failed: {e}")
             return False, str(e)
@@ -324,7 +325,7 @@ class VideoRenderService:
             db.commit()
             return True
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Progress update failed: {e}")
             return False
@@ -392,7 +393,7 @@ class VideoRenderService:
 
             return self.get_artifact(db, artifact_id)
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Error adding artifact: {e}")
             raise
@@ -457,7 +458,7 @@ class VideoRenderService:
             db.commit()
             return True
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Resource tracking failed: {e}")
             return False
@@ -485,7 +486,7 @@ class VideoRenderService:
             db.commit()
             return True
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Output metrics update failed: {e}")
             return False
@@ -596,7 +597,7 @@ class VideoRenderService:
 
             return None
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Job claim failed: {e}")
             return None
@@ -612,7 +613,7 @@ class VideoRenderService:
             db.commit()
             return True
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Job release failed: {e}")
             return False

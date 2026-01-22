@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from services.ai_insights_service import AIInsightsService
 from services.profitability_service import ProfitabilityService
+from sqlalchemy.exc import SQLAlchemyError
 
 
 class WeeklyDigestService:

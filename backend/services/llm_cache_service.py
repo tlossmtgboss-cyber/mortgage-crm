@@ -146,7 +146,7 @@ class LLMCacheService:
             self._connected = True
             self._enabled = True
             logger.info("✅ LLM Cache connected to Redis")
-        except Exception as e:
+        except redis.RedisError as e:
             logger.warning(f"⚠️ LLM Cache Redis unavailable: {str(e)}")
             self._client = None
             self._connected = False
@@ -248,7 +248,7 @@ class LLMCacheService:
 
         try:
             self._client.delete(key)
-        except Exception as e:
+        except redis.RedisError as e:
             logger.warning(f"LLM Cache delete error: {str(e)}")
 
     def invalidate_pattern(self, pattern: str):
@@ -261,7 +261,7 @@ class LLMCacheService:
             if keys:
                 self._client.delete(*keys)
                 logger.info(f"🧹 LLM Cache invalidated: {len(keys)} keys")
-        except Exception as e:
+        except redis.RedisError as e:
             logger.warning(f"LLM Cache invalidate error: {str(e)}")
 
     def cached(

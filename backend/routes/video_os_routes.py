@@ -1314,7 +1314,7 @@ async def run_video_os_migration(
     admin_key: str = Query(..., description="Admin API key"),
 ):
     """Run the Video OS migration (admin only)."""
-    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    expected_key = os.getenv("ADMIN_API_KEY", "")
 
     if admin_key != expected_key:
         raise HTTPException(status_code=403, detail="Invalid admin key")

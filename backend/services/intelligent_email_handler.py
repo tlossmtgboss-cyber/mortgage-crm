@@ -15,6 +15,7 @@ from typing import Dict, List, Optional, Any, Tuple
 from enum import Enum
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -1004,7 +1005,7 @@ Sarah"""
                     "description": f"Pre-approval letter sent to {client_name} ({client_email}) via AI assistant",
                 })
                 self.db.commit()
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.warning(f"Could not log activity: {e}")
 
             return {
@@ -1356,10 +1357,10 @@ AI Mortgage Assistant | Perennia AI"""
                     "description": f"{request_type}: {message[:200]}",
                 })
                 self.db.commit()
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.warning(f"Could not create activity: {e}")
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error notifying LO: {e}")
 
     # =========================================================================

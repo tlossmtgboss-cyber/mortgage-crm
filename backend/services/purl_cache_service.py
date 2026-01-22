@@ -35,7 +35,7 @@ def get_redis_client():
             # Test connection
             _redis_client.ping()
             logger.info("Redis connected successfully")
-        except Exception as e:
+        except redis.RedisError as e:
             logger.warning(f"Redis not available: {e}. Caching disabled.")
             _redis_client = None
 
@@ -109,7 +109,7 @@ class PURLCacheService:
 
             logger.debug(f"Cached workspace {workspace_id} for {ttl}s")
             return True
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"Failed to cache workspace: {e}")
             return False
 
@@ -136,7 +136,7 @@ class PURLCacheService:
 
             logger.debug(f"Cache miss for workspace {workspace_id}")
             return None
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"Failed to get cached workspace: {e}")
             return None
 
@@ -158,7 +158,7 @@ class PURLCacheService:
             self.redis.delete(key)
             logger.debug(f"Invalidated cache for workspace {workspace_id}")
             return True
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"Failed to invalidate workspace cache: {e}")
             return False
 
@@ -194,7 +194,7 @@ class PURLCacheService:
             self.redis.setex(key, ttl, serialized)
 
             return True
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"Failed to cache token validation: {e}")
             return False
 
@@ -218,7 +218,7 @@ class PURLCacheService:
             key = f"{self.PREFIX_TOKEN}:{token_hash}"
             data = self.redis.get(key)
             return self._deserialize(data) if data else None
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"Failed to get cached token validation: {e}")
             return None
 
@@ -231,7 +231,7 @@ class PURLCacheService:
             key = f"{self.PREFIX_TOKEN}:{token_hash}"
             self.redis.delete(key)
             return True
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"Failed to invalidate token cache: {e}")
             return False
 
@@ -256,7 +256,7 @@ class PURLCacheService:
             serialized = self._serialize(data)
             self.redis.setex(key, ttl, serialized)
             return True
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"Failed to cache application: {e}")
             return False
 
@@ -272,7 +272,7 @@ class PURLCacheService:
             key = f"{self.PREFIX_APPLICATION}:{workspace_id}"
             data = self.redis.get(key)
             return self._deserialize(data) if data else None
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"Failed to get cached application: {e}")
             return None
 
@@ -285,7 +285,7 @@ class PURLCacheService:
             key = f"{self.PREFIX_APPLICATION}:{workspace_id}"
             self.redis.delete(key)
             return True
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"Failed to invalidate application cache: {e}")
             return False
 
@@ -328,7 +328,7 @@ class PURLCacheService:
                 logger.warning(f"Rate limit exceeded for {identifier}: {current_count}/{limit}")
 
             return is_allowed, current_count
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"Rate limit check failed: {e}")
             return True, 0
 
@@ -345,7 +345,7 @@ class PURLCacheService:
             key = f"{self.PREFIX_RATE_LIMIT}:{identifier}"
             current = int(self.redis.get(key) or 0)
             return max(0, limit - current)
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"Failed to get rate limit remaining: {e}")
             return limit
 
@@ -370,7 +370,7 @@ class PURLCacheService:
             serialized = self._serialize(data)
             self.redis.setex(key, ttl, serialized)
             return True
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"Failed to set session data: {e}")
             return False
 
@@ -383,7 +383,7 @@ class PURLCacheService:
             key = f"{self.PREFIX_SESSION}:{session_id}"
             data = self.redis.get(key)
             return self._deserialize(data) if data else None
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"Failed to get session data: {e}")
             return None
 
@@ -396,7 +396,7 @@ class PURLCacheService:
             key = f"{self.PREFIX_SESSION}:{session_id}"
             self.redis.delete(key)
             return True
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"Failed to delete session: {e}")
             return False
 
@@ -433,7 +433,7 @@ class PURLCacheService:
 
             logger.info(f"Invalidated {deleted} cache keys for workspace {workspace_id}")
             return deleted
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"Failed to invalidate workspace cache: {e}")
             return 0
 
@@ -461,7 +461,7 @@ class PURLCacheService:
                 "key_counts": key_counts,
                 "total_keys": sum(key_counts.values()),
             }
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"Failed to get cache stats: {e}")
             return {"enabled": True, "error": str(e)}
 
@@ -484,7 +484,7 @@ class PURLCacheService:
 
             logger.warning("Flushed all PURL cache keys")
             return True
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"Failed to flush cache: {e}")
             return False
 

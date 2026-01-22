@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -488,7 +489,7 @@ Respond in JSON format:
                     "transcript": f"Customer: {row[2] or ''}\nAI: {row[3] or ''}",
                     "action_type": row[4]
                 })
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.debug(f"Could not fetch from ai_receptionist_activity: {e}")
 
         return conversations

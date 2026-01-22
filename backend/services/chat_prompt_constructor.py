@@ -10,6 +10,7 @@ This service constructs phase-appropriate system prompts for the chat AI:
 
 from typing import Dict, Any, Optional, List
 from datetime import datetime
+from sqlalchemy.exc import SQLAlchemyError
 
 
 # =============================================================================

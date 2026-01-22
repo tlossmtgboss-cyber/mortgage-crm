@@ -2757,7 +2757,7 @@ async def seed_salesforce_sla_workflows(
     import os
 
     # Verify admin key
-    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    expected_key = os.getenv("ADMIN_API_KEY", "")
     if admin_key != expected_key:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
@@ -2932,7 +2932,7 @@ async def fix_salesforce_sla_day_configs(
     from sqlalchemy import text
     from datetime import timezone
 
-    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    expected_key = os.getenv("ADMIN_API_KEY", "")
     if admin_key != expected_key:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 

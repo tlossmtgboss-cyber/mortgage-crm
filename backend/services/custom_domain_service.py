@@ -13,6 +13,7 @@ from datetime import datetime
 
 from sqlalchemy import text
 from database import SessionLocal
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,7 @@ class CustomDomainService:
             finally:
                 db.close()
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Failed to refresh custom domains cache: {e}")
             # Keep using existing cache if refresh fails
             if not self._initialized:
@@ -167,7 +168,7 @@ class CustomDomainService:
             finally:
                 db.close()
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Failed to add domain {domain}: {e}")
             return False
 
@@ -190,7 +191,7 @@ class CustomDomainService:
             finally:
                 db.close()
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Failed to remove domain {domain}: {e}")
             return False
 
@@ -227,7 +228,7 @@ class CustomDomainService:
             finally:
                 db.close()
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Failed to list domains: {e}")
             return []
 

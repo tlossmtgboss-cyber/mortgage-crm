@@ -18,6 +18,7 @@ from datetime import datetime, date
 from typing import Dict, Any, List, Optional, Tuple
 from decimal import Decimal
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -161,7 +162,7 @@ class RateSheetParserService:
                 'rates': [r.to_dict() for r in rates_created],
             }
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Failed to parse rate sheet {rate_sheet_id}: {e}")
 
             # Update rate sheet with error

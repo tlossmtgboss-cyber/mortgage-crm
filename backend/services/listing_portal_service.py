@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
+from sqlalchemy.exc import SQLAlchemyError
 from models.listing_portal import (
     TransactionSnapshot, validate_no_pii, FORBIDDEN_PII_KEYS
 )
@@ -79,7 +80,7 @@ class ListingPortalService:
 
             return None
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error creating transaction: {e}")
             db.rollback()
             return None
@@ -126,7 +127,7 @@ class ListingPortalService:
 
             db.commit()
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error creating default milestones: {e}")
             db.rollback()
 
@@ -189,7 +190,7 @@ class ListingPortalService:
                 return self.get_transaction(db, row.id)
             return None
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error getting transaction by loan: {e}")
             return None
 
@@ -255,7 +256,7 @@ class ListingPortalService:
 
             return None
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error adding party: {e}")
             db.rollback()
             return None
@@ -315,7 +316,7 @@ class ListingPortalService:
 
             return [self.get_party(db, row.id) for row in result.fetchall()]
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error getting parties: {e}")
             return []
 
@@ -446,7 +447,7 @@ class ListingPortalService:
                 "transaction": transaction
             }, None
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error validating magic link: {e}")
             db.rollback()
             return None, "Internal error"
@@ -629,7 +630,7 @@ class ListingPortalService:
 
             return None
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error sending message: {e}")
             db.rollback()
             return None
@@ -695,7 +696,7 @@ class ListingPortalService:
 
             return [self.get_message(db, row.id) for row in result.fetchall()]
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error getting messages: {e}")
             return []
 
@@ -732,7 +733,7 @@ class ListingPortalService:
 
             return result.rowcount
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error marking messages read: {e}")
             db.rollback()
             return 0
@@ -759,7 +760,7 @@ class ListingPortalService:
 
             return row.cnt if row else 0
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error getting unread count: {e}")
             return 0
 
@@ -794,7 +795,7 @@ class ListingPortalService:
 
             return token
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error creating unsubscribe token: {e}")
             db.rollback()
             return ""
@@ -861,7 +862,7 @@ class ListingPortalService:
             db.commit()
             return True, "Successfully unsubscribed"
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error processing unsubscribe: {e}")
             db.rollback()
             return False, "Error processing unsubscribe"

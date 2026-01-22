@@ -35,6 +35,7 @@ from models.calendar_sync_models import (
 )
 from salesforce_integration_models import IntegrationProfile
 from services.salesforce.oauth_service import salesforce_oauth
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -462,7 +463,7 @@ class CalendarSyncService:
                 "success" if result.success else "failed", result.error, start_time
             )
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.exception(f"Error pushing event to Salesforce: {e}")
             result.error = str(e)
 
@@ -638,7 +639,7 @@ class CalendarSyncService:
             )
             self.db.add(log_entry)
             self.db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Failed to log sync operation: {e}")
 
     # =========================================================================
@@ -727,7 +728,7 @@ class CalendarSyncService:
             settings.last_poll_watermark = datetime.utcnow()
             self.db.commit()
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.exception(f"Error pulling events from Salesforce: {e}")
             results["errors"].append(str(e))
 

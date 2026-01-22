@@ -13,6 +13,8 @@ from enum import Enum
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
+from requests.exceptions import RequestException
 
 logger = logging.getLogger(__name__)
 
@@ -511,7 +513,7 @@ class SalesforceSyncService:
 
                 return loan_id, "created"
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error upserting loan from Salesforce {salesforce_id}: {e}")
             self.db.rollback()
             return None, "error"
@@ -762,7 +764,7 @@ class SalesforceSyncService:
                 "org_id": self.organization_id,
             })
             self.db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Failed to log sync event: {e}")
 
     # =========================================================================
@@ -921,7 +923,7 @@ class SalesforceSyncService:
                     logger.error(f"Failed to create Salesforce record: {error_msg}")
                     return False, "error", error_msg
 
-        except Exception as e:
+        except RequestException as e:
             logger.error(f"Error pushing loan {loan_id} to Salesforce: {e}")
             return False, "error", str(e)
 
@@ -941,7 +943,7 @@ class SalesforceSyncService:
                 "loan_id": loan_id
             })
             self.db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Failed to update loan sync status: {e}")
             self.db.rollback()
 

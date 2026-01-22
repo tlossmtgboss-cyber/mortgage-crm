@@ -19,6 +19,7 @@ from enum import Enum
 import logging
 
 from database import get_db
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -523,7 +524,7 @@ class RiskDetectionService:
                 "org_id": organization_id
             })
             self.db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Failed to update burnout score for user {user_id}: {e}")
 
     # =========================================================================
@@ -882,7 +883,7 @@ class RiskDetectionService:
                 "org_id": organization_id
             })
             self.db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Failed to update attrition score for user {user_id}: {e}")
 
     # =========================================================================
@@ -1157,7 +1158,7 @@ class RiskDetectionService:
             try:
                 await self.calculate_burnout_risk(user_row.user_id, organization_id)
                 count += 1
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.warning(f"Failed to calculate burnout risk for user {user_row.user_id}: {e}")
 
         return count
@@ -1182,7 +1183,7 @@ class RiskDetectionService:
             try:
                 await self.calculate_attrition_risk(user_row.user_id, organization_id)
                 count += 1
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.warning(f"Failed to calculate attrition risk for user {user_row.user_id}: {e}")
 
         return count
@@ -1218,7 +1219,7 @@ class RiskDetectionService:
                 assessment = await self.calculate_burnout_risk(user_row.user_id, organization_id)
                 if assessment.overall_risk_score >= min_risk_score:
                     assessments.append(assessment)
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.warning(f"Failed to get burnout risk for user {user_row.user_id}: {e}")
 
         return sorted(assessments, key=lambda x: x.overall_risk_score, reverse=True)
@@ -1253,7 +1254,7 @@ class RiskDetectionService:
                 assessment = await self.calculate_attrition_risk(user_row.user_id, organization_id)
                 if assessment.overall_risk_score >= min_risk_score:
                     assessments.append(assessment)
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.warning(f"Failed to get attrition risk for user {user_row.user_id}: {e}")
 
         return sorted(assessments, key=lambda x: x.overall_risk_score, reverse=True)

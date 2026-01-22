@@ -17,6 +17,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional, List, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -419,7 +420,7 @@ class SalesforceSLATriggerService:
             if result:
                 return result[0]
             return None
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Could not look up workflow from sla_measures: {e}")
             return None
 
@@ -644,7 +645,7 @@ class SalesforceSLATriggerService:
             })
             self.db.commit()
             return True
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error updating workflow trigger date: {e}")
             self.db.rollback()
             return False
@@ -690,7 +691,7 @@ class SalesforceSLATriggerService:
                 f"Completed active workflows for {entity_type} {entity_id} "
                 f"due to terminal status: {terminal_status}"
             )
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error completing workflows: {e}")
             self.db.rollback()
 
@@ -752,7 +753,7 @@ class SalesforceSLATriggerService:
             self.db.commit()
             logger.info(f"Generated countdown tasks for workflow instance {workflow_instance_id}")
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error generating countdown tasks: {e}")
             self.db.rollback()
 

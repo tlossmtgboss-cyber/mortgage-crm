@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -157,7 +158,7 @@ class RoleAssignmentService:
             else:
                 return {"success": False, "error": "No active assignment found"}
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Failed to remove role: {e}")
             return {"success": False, "error": str(e)}
@@ -310,7 +311,7 @@ class RoleAssignmentService:
             else:
                 return {"success": False, "error": "No active assignment found"}
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Failed to remove role: {e}")
             return {"success": False, "error": str(e)}
@@ -506,7 +507,7 @@ class RoleAssignmentService:
                 "copied_count": copied
             }
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Failed to copy assignments: {e}")
             return {"success": False, "error": str(e)}

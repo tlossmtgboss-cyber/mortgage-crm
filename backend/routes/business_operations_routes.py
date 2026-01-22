@@ -1524,7 +1524,7 @@ async def run_business_ops_migration(
     This endpoint is for initial deployment setup.
     """
     import os
-    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    expected_key = os.getenv("ADMIN_API_KEY", "")
     if admin_key != expected_key:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 

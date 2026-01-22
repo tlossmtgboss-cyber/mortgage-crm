@@ -20,6 +20,7 @@ from datetime import datetime, timezone, timedelta
 
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -300,7 +301,7 @@ class CallScreeningService:
                     extra_data={"blocked_at": str(row[2]), "expires_at": str(row[3]) if row[3] else None}
                 )
             return None
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Blocklist check error: {e}")
             return None
 
@@ -402,7 +403,7 @@ class CallScreeningService:
             })
             self.db.commit()
             logger.info(f"Cached lookup for {phone} (expires {expires_at})")
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Cache write error: {e}")
 
     def _decide_from_spam_score(self, spam_score: int) -> ScreeningDecision:
@@ -451,7 +452,7 @@ class CallScreeningService:
                 f"Screening logged: {phone} -> {result.decision.value} "
                 f"({result.reason}) in {duration_ms}ms"
             )
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Failed to log screening decision: {e}")
             try:
                 self.db.rollback()
@@ -497,7 +498,7 @@ async def add_to_whitelist(
         })
         db.commit()
         logger.info(f"Added {phone} to whitelist ({category})")
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Failed to add to whitelist: {e}")
         db.rollback()
 
@@ -543,6 +544,6 @@ async def add_to_blocklist(
         })
         db.commit()
         logger.info(f"Added {phone} to blocklist ({reason})")
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Failed to add to blocklist: {e}")
         db.rollback()

@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -223,7 +224,7 @@ class WorkflowDialerIntegration:
                 "workflow_task_ids": workflow_task_ids
             }
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Failed to create dialer session: {e}")
             return {"success": False, "error": str(e)}
@@ -339,7 +340,7 @@ class WorkflowDialerIntegration:
                 "siblings_cancelled": siblings_cancelled
             }
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Failed to handle dialer completion: {e}")
             return {"success": False, "error": str(e)}
@@ -423,7 +424,7 @@ class WorkflowDialerIntegration:
                 "tasks_added": tasks_added
             }
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Failed to add tasks to session: {e}")
             return {"success": False, "error": str(e)}

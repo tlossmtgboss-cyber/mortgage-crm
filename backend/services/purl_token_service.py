@@ -17,6 +17,7 @@ import hashlib
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 
+from sqlalchemy.exc import SQLAlchemyError
 from models.purl import (
     PURLAccessToken,
     PURLWorkspace,
@@ -121,7 +122,7 @@ class PURLTokenService:
             )
             # Commit event separately so failure doesn't affect token creation
             self.db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             # Rollback just the event, keep the token
             self.db.rollback()
             logger.warning(f"Failed to emit token_created event: {e}")
@@ -191,7 +192,7 @@ class PURLTokenService:
                 {"now": datetime.now(timezone.utc), "id": token_record.id}
             )
             self.db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             # Don't fail verification if we can't update last_used_at
             logger.warning(f"Failed to update last_used_at for token {token_record.id}: {e}")
 
@@ -282,7 +283,7 @@ class PURLTokenService:
                 }
             )
             self.db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.warning(f"Failed to emit token_revoked event: {e}")
 
@@ -334,7 +335,7 @@ class PURLTokenService:
                         }
                     )
                     self.db.commit()
-                except Exception as e:
+                except SQLAlchemyError as e:
                     self.db.rollback()
                     logger.warning(f"Failed to emit all_tokens_revoked event: {e}")
 
@@ -473,6 +474,6 @@ class PURLTokenService:
             )
             self.db.add(event)
             # Don't commit here - let caller handle transaction
-        except Exception as e:
+        except SQLAlchemyError as e:
             # Don't fail the main operation if event emission fails
             logger.warning(f"Failed to emit event {event_key}: {e}")

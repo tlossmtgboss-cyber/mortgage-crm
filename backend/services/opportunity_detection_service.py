@@ -16,6 +16,7 @@ from decimal import Decimal
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -238,7 +239,7 @@ class OpportunityDetectionService:
 
             return loans
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Could not query loans table: {e}")
 
             # Try MUM clients as fallback

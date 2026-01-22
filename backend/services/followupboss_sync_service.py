@@ -25,6 +25,7 @@ from integrations.followupboss_service import (
     format_phones_for_fub,
     compute_sync_hash
 )
+from sqlalchemy.exc import SQLAlchemyError
 from models.followupboss_models import (
     FUBUserConnection,
     FUBLeadMapping,
@@ -316,7 +317,7 @@ class FollowUpBossSyncService:
             logger.info(f"Synced FUB person {fub_person_id} to lead {lead.id} (new={is_new})")
             return lead.id, is_new
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.exception(f"Error syncing FUB person {fub_person_id}: {e}")
             sync_event.status = FUBSyncStatus.FAILED.value
             sync_event.error_message = str(e)
@@ -400,7 +401,7 @@ class FollowUpBossSyncService:
             logger.info(f"Synced FUB note {fub_note_id} to activity {activity.id}")
             return activity.id
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.exception(f"Error syncing FUB note: {e}")
             sync_event.status = FUBSyncStatus.FAILED.value
             sync_event.error_message = str(e)
@@ -520,7 +521,7 @@ class FollowUpBossSyncService:
             logger.info(f"Synced lead {lead_id} to FUB person {mapping.fub_person_id}")
             return True
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.exception(f"Error syncing lead {lead_id} to FUB: {e}")
             sync_event.status = FUBSyncStatus.FAILED.value
             sync_event.error_message = str(e)
@@ -611,7 +612,7 @@ class FollowUpBossSyncService:
             logger.info(f"Synced activity {activity_id} to FUB note {response.get('id')}")
             return True
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.exception(f"Error syncing activity {activity_id} to FUB: {e}")
             sync_event.status = FUBSyncStatus.FAILED.value
             sync_event.error_message = str(e)
@@ -675,7 +676,7 @@ class FollowUpBossSyncService:
             connection.last_sync_status = "completed"
             self.db.commit()
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.exception(f"Error in full sync: {e}")
             connection.last_sync_status = "failed"
             connection.last_error = str(e)

@@ -605,7 +605,7 @@ async def run_deal_alerts_migration(
     Creates deal_alerts, whisper_sessions, whisper_messages, and production_forecasts tables.
     """
     import os
-    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    expected_key = os.getenv("ADMIN_API_KEY", "")
     if admin_key != expected_key:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 

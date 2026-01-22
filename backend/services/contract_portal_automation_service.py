@@ -17,6 +17,7 @@ from typing import Optional, Dict, Any, List, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 import secrets
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +146,7 @@ class ContractPortalAutomationService:
                 WHERE id = :loan_id
             """), {"loan_id": loan_id})
             self.db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Could not update contract date for loan {loan_id}: {e}")
             self.db.rollback()
 
@@ -211,7 +212,7 @@ class ContractPortalAutomationService:
             if loan_info.get("borrower_email") and self.notification_service:
                 self._send_client_portal_invitation(loan_info, slug)
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Failed to create client portal for loan {loan_id}: {e}")
             result["status"] = "error"
             result["error"] = str(e)
@@ -394,7 +395,7 @@ class ContractPortalAutomationService:
                     if invitation:
                         result["invitation_sent"] = invitation
 
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.error(f"Failed to create listing transaction for loan {loan_id}: {e}")
                 result["status"] = "error"
                 result["error"] = str(e)
@@ -452,7 +453,7 @@ class ContractPortalAutomationService:
 
                 return partner[0]
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Failed to create referral partner from team member: {e}")
             self.db.rollback()
 
@@ -502,7 +503,7 @@ class ContractPortalAutomationService:
                 "assigned_to": owner_id
             }
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Failed to create realtor task: {e}")
             self.db.rollback()
 
@@ -693,7 +694,7 @@ class ContractPortalAutomationService:
                 "payload": str(results)  # JSON serialize in production
             })
             self.db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Failed to queue contract_received event: {e}")
 
     def on_realtor_added(

@@ -355,6 +355,7 @@ portal_ws_manager = PortalConnectionManager()
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from database import get_db
+from sqlalchemy.exc import SQLAlchemyError
 
 router = APIRouter(tags=["Portal WebSocket"])
 
@@ -433,7 +434,7 @@ async def partner_websocket(
 
         loan_id = access.loan_id
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error validating partner token: {e}")
         await websocket.close(code=4000, reason="Token validation failed")
         return
@@ -450,7 +451,7 @@ async def partner_websocket(
 
     except WebSocketDisconnect:
         await portal_ws_manager.disconnect(websocket)
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Partner WebSocket error: {e}")
         await portal_ws_manager.disconnect(websocket)
 

@@ -12,6 +12,7 @@ from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail, Email, To, Content, Attachment, FileContent, FileName, FileType
 from twilio.rest import Client as TwilioClient
 import base64
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -1281,7 +1282,7 @@ View application: {dashboard_link}"""
                 return result is not None
             finally:
                 db.close()
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Error checking opt-out status for {phone}: {e}")
             # Fail open - allow sending if we can't check
             return False

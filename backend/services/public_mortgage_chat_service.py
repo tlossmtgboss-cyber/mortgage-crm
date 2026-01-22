@@ -16,6 +16,7 @@ from datetime import datetime, timedelta, time
 from typing import Dict, List, Optional, Any, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +135,7 @@ class PublicMortgageChatService:
                 self.scheduler_settings["custom_hours"] = lo_schedule.custom_hours
                 self.scheduler_settings["blocked_times"] = lo_schedule.blocked_times or []
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Could not load scheduler settings: {e}")
             self.scheduler_settings = None
 
@@ -891,7 +892,7 @@ Still keep responses reasonably short, but DO include the value messaging when o
                 for r in rates:
                     rate_text.append(f"- {r.loan_type.title()} {r.term_years}yr: {float(r.base_rate):.3f}% (APR: {float(r.apr):.3f}%)")
                 return "\n".join(rate_text)
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Could not fetch rates from database: {e}")
 
         # Provide reasonable market rate ranges as fallback (updated periodically)

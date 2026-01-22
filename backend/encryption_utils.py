@@ -23,7 +23,7 @@ class EncryptionManager:
             # Fallback to SECRET_KEY for backward compatibility
             # But log a warning - should use dedicated key
             logger.warning("⚠️ DATA_ENCRYPTION_KEY not set, using SECRET_KEY (not recommended)")
-            secret_key = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
+            secret_key = os.getenv("SECRET_KEY", "")
             key_material = secret_key.encode()[:32].ljust(32, b'0')
             encryption_key = base64.urlsafe_b64encode(key_material).decode()
 

@@ -11,6 +11,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 import logging
+import os
 import uuid
 
 from database import get_db
@@ -272,7 +273,7 @@ async def run_account_management_migration(
     import os
 
     # Verify admin key
-    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    expected_key = os.getenv("ADMIN_API_KEY", "")
     if admin_key != expected_key:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
@@ -507,7 +508,7 @@ async def run_cleanup_migration(
     import os
 
     # Verify admin key
-    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    expected_key = os.getenv("ADMIN_API_KEY", "")
     if admin_key != expected_key:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
@@ -658,7 +659,7 @@ async def run_invitations_migration(
     import os
 
     # Verify admin key
-    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    expected_key = os.getenv("ADMIN_API_KEY", "")
     if admin_key != expected_key:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
@@ -2498,7 +2499,7 @@ async def start_impersonation(
         from datetime import datetime, timedelta, timezone
         import os
 
-        SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+        SECRET_KEY = os.getenv("SECRET_KEY", "")
         ALGORITHM = "HS256"
 
         # Create token data for the target user
@@ -3059,7 +3060,7 @@ async def cleanup_sample_data(
     import os
 
     # Check for admin key bypass
-    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    expected_key = os.getenv("ADMIN_API_KEY", "")
     if admin_key and admin_key == expected_key:
         logger.info("Cleanup authorized via admin API key")
     else:
@@ -3145,7 +3146,7 @@ async def cleanup_users(
     admin_id = None
 
     # Check for admin key bypass
-    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    expected_key = os.getenv("ADMIN_API_KEY", "")
     if admin_key and admin_key == expected_key:
         logger.info("User cleanup authorized via admin API key")
         # Find admin user by email
@@ -3262,7 +3263,7 @@ async def cleanup_all_sample_data(
     import os
 
     # Check for admin key bypass
-    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    expected_key = os.getenv("ADMIN_API_KEY", "")
     if admin_key and admin_key == expected_key:
         logger.info("Cleanup authorized via admin API key")
     else:
@@ -3443,7 +3444,7 @@ async def emergency_admin_reset(
     import bcrypt
 
     # Verify secret key
-    expected_key = os.getenv("EMERGENCY_ADMIN_KEY", "perennia-emergency-2024")
+    expected_key = os.getenv("EMERGENCY_ADMIN_KEY", "")
     if secret_key != expected_key:
         raise HTTPException(status_code=403, detail="Invalid secret key")
 

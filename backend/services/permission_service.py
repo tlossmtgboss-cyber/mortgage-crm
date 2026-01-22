@@ -21,6 +21,7 @@ from fastapi import HTTPException, status, Depends
 from functools import wraps
 import json
 import hashlib
+from sqlalchemy.exc import SQLAlchemyError
 
 # Redis imports (will implement caching in next phase)
 try:
@@ -468,7 +469,7 @@ class PermissionService:
             cached = self.redis_client.get(cache_key)
             if cached:
                 return cached.decode() == 'true'
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"Redis cache error: {e}")
 
         return None
@@ -491,7 +492,7 @@ class PermissionService:
                 self.cache_ttl,
                 'true' if granted else 'false'
             )
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"Redis cache error: {e}")
 
     def _get_from_cache(self, key: str) -> Optional[str]:
@@ -503,7 +504,7 @@ class PermissionService:
         try:
             cached = self.redis_client.get(key)
             return cached.decode() if cached else None
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"Redis cache error: {e}")
             return None
 
@@ -515,7 +516,7 @@ class PermissionService:
 
         try:
             self.redis_client.setex(key, self.cache_ttl, value)
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"Redis cache error: {e}")
 
     def invalidate_employee_cache(self, employee_id: int):
@@ -533,7 +534,7 @@ class PermissionService:
             # Delete employee info
             self.redis_client.delete(f"employee_info:{employee_id}")
             self.redis_client.delete(f"employee_permissions:{employee_id}")
-        except Exception as e:
+        except redis.RedisError as e:
             logger.error(f"Redis cache invalidation error: {e}")
 
     # ============================================================================

@@ -36,7 +36,7 @@ def get_encryption_key() -> bytes:
     key = os.getenv("FUB_ENCRYPTION_KEY")
     if not key:
         # Fall back to SECRET_KEY if FUB-specific key not set
-        secret = os.getenv("SECRET_KEY", "default-secret-key-change-me")
+        secret = os.getenv("SECRET_KEY", "")
         # Derive a valid Fernet key from SECRET_KEY
         key = b64encode(hashlib.sha256(secret.encode()).digest())
     else:

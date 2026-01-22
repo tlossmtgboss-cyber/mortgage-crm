@@ -11,6 +11,7 @@ from uuid import UUID
 from datetime import datetime
 from sqlalchemy import func, or_, and_
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 

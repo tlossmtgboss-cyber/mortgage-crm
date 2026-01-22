@@ -16,6 +16,7 @@ from decimal import Decimal
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +118,7 @@ class EsignService:
                 "message": "Envelope created successfully"
             }
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Error creating envelope: {e}")
             raise EsignError(str(e), "CREATE_ENVELOPE_FAILED")
@@ -250,7 +251,7 @@ class EsignService:
                 "message": f"Envelope sent to {len(signers)} signer(s)"
             }
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Error sending envelope: {e}")
             raise EsignError(str(e), "SEND_ENVELOPE_FAILED")
@@ -304,7 +305,7 @@ class EsignService:
                 "message": "Envelope voided successfully"
             }
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Error voiding envelope: {e}")
             raise EsignError(str(e), "VOID_ENVELOPE_FAILED")
@@ -359,7 +360,7 @@ class EsignService:
                 "message": f"Signer '{name}' added"
             }
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             if "unique_signer_per_envelope" in str(e):
                 raise EsignError(f"Signer with email '{email}' already exists", "DUPLICATE_SIGNER")
@@ -390,7 +391,7 @@ class EsignService:
                 "message": "Signer removed"
             }
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Error removing signer: {e}")
             raise EsignError(str(e), "REMOVE_SIGNER_FAILED")
@@ -466,7 +467,7 @@ class EsignService:
                 "message": f"{field_type} field added"
             }
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Error adding field: {e}")
             raise EsignError(str(e), "ADD_FIELD_FAILED")
@@ -521,7 +522,7 @@ class EsignService:
                 "message": "Field updated"
             }
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Error updating field: {e}")
             raise EsignError(str(e), "UPDATE_FIELD_FAILED")
@@ -550,7 +551,7 @@ class EsignService:
                 "message": "Field deleted"
             }
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Error deleting field: {e}")
             raise EsignError(str(e), "DELETE_FIELD_FAILED")
@@ -613,7 +614,7 @@ class EsignService:
                 "message": f"{len(fields)} fields saved"
             }
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Error bulk saving fields: {e}")
             raise EsignError(str(e), "BULK_SAVE_FAILED")
@@ -780,7 +781,7 @@ class EsignService:
                 "message": "Signature adopted"
             }
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Error adopting signature: {e}")
             raise EsignError(str(e), "ADOPT_SIGNATURE_FAILED")
@@ -886,7 +887,7 @@ class EsignService:
                 "message": "Field value saved"
             }
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Error submitting field value: {e}")
             raise EsignError(str(e), "SUBMIT_VALUE_FAILED")
@@ -991,7 +992,7 @@ class EsignService:
                 "message": "Signing completed" + (" - all signers done!" if envelope_completed else "")
             }
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Error completing signing: {e}")
             raise EsignError(str(e), "COMPLETE_SIGNING_FAILED")

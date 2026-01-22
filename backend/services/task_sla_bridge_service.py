@@ -17,6 +17,7 @@ from datetime import datetime, timezone, timedelta, date
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -418,7 +419,7 @@ class TaskSLABridgeService:
                 "tasks_updated": updated_count,
             }
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Failed to update SLA statuses: {e}")
             return {"success": False, "error": str(e)}
@@ -670,7 +671,7 @@ class TaskSLABridgeService:
                 "final_status": "completed" if completed_on_time else "completed_late",
             }
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Failed to complete SLA milestone: {e}")
             return {"success": False, "error": str(e)}
@@ -755,7 +756,7 @@ class TaskSLABridgeService:
                     trigger_date = trigger_date.replace(tzinfo=timezone.utc)
                 return trigger_date
             return None
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Failed to get trigger date: {e}")
             return None
 

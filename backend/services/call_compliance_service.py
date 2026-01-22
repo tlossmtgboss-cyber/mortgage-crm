@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -368,7 +369,7 @@ class CallComplianceService:
                 "created_at": record.created_at
             })
             self.db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Could not store consent record: {e}")
             # Table may not exist yet - that's OK for now
 
@@ -415,7 +416,7 @@ class CallComplianceService:
             self.db.commit()
             logger.info(f"Added {clean_number[-4:]} to DNC list: {reason}")
             return True
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Failed to add to DNC list: {e}")
             return False
 
@@ -429,7 +430,7 @@ class CallComplianceService:
             """), {"phone_number": clean_number})
             self.db.commit()
             return True
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Failed to remove from DNC list: {e}")
             return False
 
@@ -513,7 +514,7 @@ class CallComplianceService:
                 "resolved": False
             })
             self.db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Could not store violation: {e}")
 
         # Alert on critical violations

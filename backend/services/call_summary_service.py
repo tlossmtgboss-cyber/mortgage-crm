@@ -26,6 +26,7 @@ from enum import Enum
 import anthropic
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -748,7 +749,7 @@ Important:
 
             self.db.commit()
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Failed to save summary: {e}")
             self.db.rollback()
             raise
@@ -798,7 +799,7 @@ Important:
             self.db.commit()
             logger.info(f"Created {len(summary.follow_up_tasks)} follow-up tasks from call summary")
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Failed to create follow-up tasks: {e}")
             # Don't fail the summary generation if task creation fails
             self.db.rollback()

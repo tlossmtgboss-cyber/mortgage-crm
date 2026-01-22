@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -345,7 +346,7 @@ class WorkflowAIExecutor:
 
             return result
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Autonomous execution failed: {e}")
             return {"success": False, "error": str(e)}
 

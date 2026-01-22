@@ -54,6 +54,8 @@ except ImportError:
 
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
+from requests.exceptions import RequestException
 
 logger = logging.getLogger(__name__)
 
@@ -307,7 +309,7 @@ class WebhookAutomationService:
                         DELETE FROM webhook_endpoints WHERE id = :id
                     """), {"id": endpoint_id})
                     self.db.commit()
-                except Exception as e:
+                except SQLAlchemyError as e:
                     logger.warning(f"Could not delete endpoint from DB: {e}")
 
             return True
@@ -358,7 +360,7 @@ class WebhookAutomationService:
                 "created_at": endpoint.created_at
             })
             self.db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Could not store endpoint: {e}")
 
     def _generate_secret(self) -> str:
@@ -547,7 +549,7 @@ class WebhookAutomationService:
                 "delivered_at": delivery.delivered_at
             })
             self.db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.debug(f"Could not store delivery: {e}")
 
     # ========================================================================

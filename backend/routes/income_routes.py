@@ -1138,7 +1138,7 @@ async def fix_paystub_columns(
     """Add missing columns to paystub_extractions table."""
     from sqlalchemy import text
 
-    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    expected_key = os.getenv("ADMIN_API_KEY", "")
     if admin_key != expected_key:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
@@ -1211,7 +1211,7 @@ async def run_income_migration(
     import os
     from sqlalchemy import text
 
-    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    expected_key = os.getenv("ADMIN_API_KEY", "")
     if admin_key != expected_key:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
@@ -1550,7 +1550,7 @@ async def seed_test_income_data(
     Seed test income data for a loan.
     Admin endpoint - requires admin_key parameter.
     """
-    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    expected_key = os.getenv("ADMIN_API_KEY", "")
     if admin_key != expected_key:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
@@ -1647,7 +1647,7 @@ async def run_income_migration(
     Run database migration to create income tables.
     This endpoint is public for initial setup.
     """
-    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    expected_key = os.getenv("ADMIN_API_KEY", "")
     if admin_key != expected_key:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 

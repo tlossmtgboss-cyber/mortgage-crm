@@ -9,6 +9,7 @@ from datetime import datetime, timezone, timedelta
 from dataclasses import dataclass, field
 from enum import Enum
 import hashlib
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -849,7 +850,7 @@ class VoiceABTestingService:
                 })
 
             self.db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error persisting experiment: {e}")
             self.db.rollback()
 
@@ -878,7 +879,7 @@ class VoiceABTestingService:
                 """), {"id": experiment_id, "status": status, "ts": timestamp, "winner": winner_id})
 
             self.db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error updating experiment status: {e}")
             self.db.rollback()
 
@@ -918,7 +919,7 @@ class VoiceABTestingService:
                 })
 
             self.db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error persisting results: {e}")
             self.db.rollback()
 

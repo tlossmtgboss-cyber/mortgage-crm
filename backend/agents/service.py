@@ -2188,7 +2188,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                 try:
                     from cryptography.fernet import Fernet
                     import base64
-                    secret_key = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
+                    secret_key = os.getenv("SECRET_KEY", "")
                     key_material = secret_key.encode()[:32].ljust(32, b'0')
                     encryption_key = base64.urlsafe_b64encode(key_material)
                     f = Fernet(encryption_key)
@@ -2234,7 +2234,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                             try:
                                 from cryptography.fernet import Fernet
                                 import base64
-                                secret_key = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
+                                secret_key = os.getenv("SECRET_KEY", "")
                                 key_material = secret_key.encode()[:32].ljust(32, b'0')
                                 enc_key = base64.urlsafe_b64encode(key_material)
                                 f = Fernet(enc_key)

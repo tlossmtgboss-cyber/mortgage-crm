@@ -20,6 +20,7 @@ from botocore.exceptions import ClientError
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 
+from sqlalchemy.exc import SQLAlchemyError
 from models.purl import (
     PURLDocument,
     PURLWorkspace,

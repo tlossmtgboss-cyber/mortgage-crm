@@ -19,6 +19,7 @@ from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 import json
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -592,7 +593,7 @@ class WorkflowAIEvaluator:
             else:
                 return {"success": False, "error": f"Task type {task_type} not supported for AI execution"}
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"AI task execution failed: {e}")
             return {"success": False, "error": str(e)}
 
@@ -636,7 +637,7 @@ Context: This is an automated workflow task for lead/loan follow-up."""
 
             return {"success": True, "result": result}
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Email task execution failed: {e}")
             return {"success": False, "error": str(e)}
 
@@ -679,7 +680,7 @@ Context: This is an automated workflow task. Keep the message brief and professi
 
             return {"success": True, "result": result}
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"SMS task execution failed: {e}")
             return {"success": False, "error": str(e)}
 

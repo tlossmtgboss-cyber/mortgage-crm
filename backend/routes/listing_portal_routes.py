@@ -575,7 +575,7 @@ async def run_migration(
     db: Session = Depends(get_db)
 ):
     """Run the listing portal migration (admin only)"""
-    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    expected_key = os.getenv("ADMIN_API_KEY", "")
 
     if admin_key != expected_key:
         raise HTTPException(status_code=403, detail="Invalid admin key")
@@ -597,7 +597,7 @@ async def trigger_weekly_updates(
     db: Session = Depends(get_db)
 ):
     """Manually trigger the weekly update job (admin only)"""
-    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    expected_key = os.getenv("ADMIN_API_KEY", "")
 
     if admin_key != expected_key:
         raise HTTPException(status_code=403, detail="Invalid admin key")
@@ -622,7 +622,7 @@ async def get_scheduler_status(
     admin_key: str = Query(..., description="Admin API key")
 ):
     """Get the status of all scheduled jobs (admin only)"""
-    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    expected_key = os.getenv("ADMIN_API_KEY", "")
 
     if admin_key != expected_key:
         raise HTTPException(status_code=403, detail="Invalid admin key")

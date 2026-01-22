@@ -11,6 +11,7 @@ from datetime import datetime, date
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
 
+from sqlalchemy.exc import SQLAlchemyError
 from models.portal_models import (
     LifecycleStage, PortalLoan, LifecycleStateHistory,
     MilestoneInstance, MilestoneStatus, LoanActivityLog, RiskFlag
@@ -118,7 +119,7 @@ class PortalLifecycleService:
                 logger.info(f"Created portal loan record for crm_deal_id={loan_id}")
 
             return portal_loan
-        except Exception as e:
+        except SQLAlchemyError as e:
             # portal_loans table may not exist - rollback and return None
             logger.warning(f"Could not get/create portal loan for {loan_id}: {e}")
             self.db.rollback()
@@ -464,7 +465,7 @@ class PortalLifecycleService:
                     MilestoneInstance.status == MilestoneStatus.COMPLETE
                 )
             ).count()
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Could not query milestones for {loan_id}: {e}")
             self.db.rollback()
 
@@ -477,7 +478,7 @@ class PortalLifecycleService:
                     RiskFlag.is_resolved == False
                 )
             ).count()
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Could not query risks for {loan_id}: {e}")
             self.db.rollback()
 

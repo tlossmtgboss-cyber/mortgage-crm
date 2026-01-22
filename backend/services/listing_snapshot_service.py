@@ -11,6 +11,7 @@ from datetime import datetime, date, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
+from sqlalchemy.exc import SQLAlchemyError
 from models.listing_portal import (
     TransactionSnapshot, validate_no_pii, FORBIDDEN_PII_KEYS
 )
@@ -150,7 +151,7 @@ class ListingSnapshotService:
                 "changed": True
             }
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error creating snapshot: {e}")
             db.rollback()
             return None
@@ -197,7 +198,7 @@ class ListingSnapshotService:
                     "timestamp": datetime.utcnow().isoformat()
                 })
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error getting recent activity: {e}")
 
         return activity
@@ -353,7 +354,7 @@ class ListingSnapshotService:
 
             return row.id if row else None
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error recording delivery: {e}")
             db.rollback()
             return None
@@ -394,7 +395,7 @@ class ListingSnapshotService:
             })
             db.commit()
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error updating delivery status: {e}")
             db.rollback()
 

@@ -17,6 +17,7 @@ from models.portal_models import (
     PortalLoan, MilestoneInstance, MilestoneStatus, PortalUserRole
 )
 from services.notification_service import NotificationService
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 

@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from dataclasses import dataclass, field
 import logging
 import json
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 

@@ -812,7 +812,7 @@ async def list_assessments():
 @router.post("/admin/run-migration")
 async def run_disc_migration(admin_key: str = Query(...)):
     """Run DISC migration (admin only)."""
-    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    expected_key = os.getenv("ADMIN_API_KEY", "")
     if admin_key != expected_key:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 

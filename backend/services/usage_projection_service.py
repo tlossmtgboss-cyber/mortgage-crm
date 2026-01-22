@@ -27,6 +27,7 @@ from collections import defaultdict
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -425,7 +426,7 @@ class UsageProjectionService:
                 "alerts": alerts
             })
             self.db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Failed to save forecast: {e}")
             self.db.rollback()
 
@@ -640,7 +641,7 @@ class UsageProjectionService:
                 "recommendations": result["recommendations"]
             })
             self.db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Failed to save pricing recommendation: {e}")
             self.db.rollback()
 

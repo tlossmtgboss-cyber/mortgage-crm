@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from dataclasses import dataclass
 import logging
 import json
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 

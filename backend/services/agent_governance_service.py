@@ -1132,3 +1132,4 @@ class AgentGovernanceService:
 
 # Add missing import for Integer cast
 from sqlalchemy import Integer
+from sqlalchemy.exc import SQLAlchemyError

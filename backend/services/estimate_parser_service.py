@@ -34,6 +34,7 @@ from botocore.exceptions import ClientError
 from pydantic import BaseModel, Field, validator
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 # PDF parsing
 try:
@@ -405,7 +406,7 @@ class EstimateParserService:
             if row:
                 return row[0]  # parsed_json
             return None
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Cache lookup error: {e}")
             return None
 
@@ -438,7 +439,7 @@ class EstimateParserService:
             })
             self.db.commit()
             self.log_stage('CACHE_STORE', {'doc_hash': doc_hash})
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Cache storage error: {e}")
             self.db.rollback()
 
@@ -459,7 +460,7 @@ class EstimateParserService:
                 'raw_text': raw_text[:10000],  # Truncate
             })
             self.db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Failed to log failure: {e}")
             self.db.rollback()
 

@@ -20,6 +20,7 @@ from typing import Optional, List, Dict, Any, Tuple, Union
 from sqlalchemy import and_, or_, text
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +142,7 @@ class WorkflowSLAService:
             error_detail = str(e.orig) if hasattr(e, 'orig') else str(e)
             logger.error(f"Enrollment integrity error: {error_detail}")
             return {"success": False, "error": f"Workflow enrollment conflict: {error_detail}"}
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Enrollment failed: {e}")
             return {"success": False, "error": str(e)}
@@ -224,7 +225,7 @@ class WorkflowSLAService:
             error_detail = str(e.orig) if hasattr(e, 'orig') else str(e)
             logger.error(f"Enrollment integrity error: {error_detail}")
             return {"success": False, "error": f"Workflow enrollment conflict: {error_detail}"}
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Enrollment failed: {e}")
             return {"success": False, "error": str(e)}
@@ -255,7 +256,7 @@ class WorkflowSLAService:
             logger.info(f"Workflow instance {instance_id} paused")
             return {"success": True, "message": "Workflow paused"}
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Failed to pause workflow: {e}")
             return {"success": False, "error": str(e)}
@@ -284,7 +285,7 @@ class WorkflowSLAService:
             logger.info(f"Workflow instance {instance_id} resumed")
             return {"success": True, "message": "Workflow resumed", "tasks_created": tasks_created}
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Failed to resume workflow: {e}")
             return {"success": False, "error": str(e)}
@@ -319,7 +320,7 @@ class WorkflowSLAService:
             logger.info(f"Workflow instance {instance_id} cancelled: {reason}")
             return {"success": True, "message": "Workflow cancelled"}
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Failed to cancel workflow: {e}")
             return {"success": False, "error": str(e)}
@@ -348,7 +349,7 @@ class WorkflowSLAService:
             logger.info(f"Workflow instance {instance_id} completed")
             return {"success": True, "message": "Workflow completed"}
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Failed to complete workflow: {e}")
             return {"success": False, "error": str(e)}
@@ -421,7 +422,7 @@ class WorkflowSLAService:
                 "siblings_cancelled": siblings_cancelled
             }
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Failed to complete task: {e}")
             return {"success": False, "error": str(e)}
@@ -458,7 +459,7 @@ class WorkflowSLAService:
 
             return {"success": True, "message": "Task skipped"}
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Failed to skip task: {e}")
             return {"success": False, "error": str(e)}
@@ -935,7 +936,7 @@ class WorkflowSLAService:
             logger.info(f"Generated {tasks_created} tasks for instance {inst_id}")
             return tasks_created
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             import traceback
             logger.error(f"Error generating tasks: {e}")

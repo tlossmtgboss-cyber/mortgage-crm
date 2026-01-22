@@ -100,7 +100,7 @@ class CRMContextCache:
                 self.enabled = True
                 logger.info("CRM Context Cache connected to Redis")
                 return True
-            except Exception as e:
+            except redis.RedisError as e:
                 logger.warning(f"CRM Context Cache: Redis unavailable ({e}), running uncached")
                 self.enabled = False
                 return False
@@ -111,7 +111,7 @@ class CRMContextCache:
             try:
                 await self.redis.aclose()
                 logger.info("CRM Context Cache disconnected")
-            except Exception as e:
+            except redis.RedisError as e:
                 logger.warning(f"Error closing CRM Context Cache connection: {e}")
             finally:
                 self.redis = None
@@ -151,7 +151,7 @@ class CRMContextCache:
             logger.debug(f"CRM Context cache miss for user {user_id}")
             return None
 
-        except Exception as e:
+        except redis.RedisError as e:
             self._stats["errors"] += 1
             logger.warning(f"CRM Cache get error: {e}")
             return None
@@ -184,7 +184,7 @@ class CRMContextCache:
             )
             logger.info(f"CRM Context cached for user {user_id} (TTL: {ttl}s)")
 
-        except Exception as e:
+        except redis.RedisError as e:
             self._stats["errors"] += 1
             logger.warning(f"CRM Cache set error: {e}")
 
@@ -217,7 +217,7 @@ class CRMContextCache:
                 logger.info(f"CRM Cache: Invalidated {deleted} keys for user {user_id}")
             return deleted
 
-        except Exception as e:
+        except redis.RedisError as e:
             logger.warning(f"CRM Cache invalidation error: {e}")
             return 0
 
@@ -268,7 +268,7 @@ class CRMContextCache:
 
             return deleted
 
-        except Exception as e:
+        except redis.RedisError as e:
             logger.warning(f"CRM Cache type invalidation error: {e}")
             return 0
 
@@ -293,7 +293,7 @@ class CRMContextCache:
                 logger.info(f"CRM Cache: Cleared all ({deleted} keys)")
             return deleted
 
-        except Exception as e:
+        except redis.RedisError as e:
             logger.warning(f"CRM Cache clear error: {e}")
             return 0
 

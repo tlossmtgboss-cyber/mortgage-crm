@@ -12,6 +12,7 @@ from typing import Optional, List, Dict, Any
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +108,7 @@ class VideoProjectService:
 
             return self.get_project(db, project_id)
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Error creating video project: {e}")
             raise
@@ -209,7 +210,7 @@ class VideoProjectService:
 
             return self.get_project(db, project_id)
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Error updating video project: {e}")
             raise
@@ -224,7 +225,7 @@ class VideoProjectService:
             """), {"id": project_id})
             db.commit()
             return True
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Error deleting video project: {e}")
             return False
@@ -444,7 +445,7 @@ class VideoProjectService:
 
             return self._row_to_dict(result) if result else None
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Error updating scene: {e}")
             raise
@@ -510,7 +511,7 @@ class VideoProjectService:
 
             return self.get_brand_template(db, template_id)
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Error creating brand template: {e}")
             raise
@@ -594,7 +595,7 @@ class VideoProjectService:
 
             return self.get_voice_profile(db, profile_id)
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Error creating voice profile: {e}")
             raise
@@ -651,7 +652,7 @@ class VideoProjectService:
 
             return self.get_voice_profile(db, profile_id)
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Error updating voice profile: {e}")
             raise
@@ -666,7 +667,7 @@ class VideoProjectService:
             """), {"id": profile_id})
             db.commit()
             return True
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Error deleting voice profile: {e}")
             return False
@@ -720,7 +721,7 @@ class VideoProjectService:
 
             return self._row_to_dict(scene)
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Error creating scene: {e}")
             raise
@@ -753,7 +754,7 @@ class VideoProjectService:
             db.commit()
             return True
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Error deleting scene: {e}")
             return False
@@ -780,7 +781,7 @@ class VideoProjectService:
             db.commit()
             return self.get_storyboard(db, project_id)
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Error reordering scenes: {e}")
             raise
@@ -858,7 +859,7 @@ class VideoProjectService:
 
             return self.get_brand_template(db, template_id)
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Error updating brand template: {e}")
             raise

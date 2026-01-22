@@ -20,6 +20,7 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -276,7 +277,7 @@ class PipelineProbabilityService:
             try:
                 score = await self.calculate_probability(loan_id)
                 scores.append(score)
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.error(f"Failed to calculate probability for loan {loan_id}: {e}")
 
         # Sort by probability (lowest first - needs attention)

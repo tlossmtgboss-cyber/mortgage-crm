@@ -16,6 +16,7 @@ from enum import Enum
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, JSON, Text, ForeignKey, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from database import Base, engine, SessionLocal
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 

@@ -18,6 +18,7 @@ from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from anthropic import Anthropic
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -170,7 +171,7 @@ class CandidateAIAnalyzer:
                 FROM mm_candidates c
                 WHERE c.id = :candidate_id
             """), {"candidate_id": candidate_id}).fetchone()
-        except Exception as e:
+        except SQLAlchemyError as e:
             # If query fails, try to rollback and re-query with minimal columns
             self.db.rollback()
             candidate = self.db.execute(text("""

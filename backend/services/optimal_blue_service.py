@@ -22,6 +22,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from models.rate_monitor import OptimalBlueRateCache
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -406,7 +407,7 @@ class OptimalBlueService:
 
         try:
             self.db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error caching rate: {e}")
             self.db.rollback()
 

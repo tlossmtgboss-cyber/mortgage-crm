@@ -24,6 +24,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -996,7 +997,7 @@ class EmailIdentityResolver:
             self.db.commit()
             logger.info(f"Populated known_client_emails for user {user_id}: {counts}")
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error populating known_client_emails: {e}")
             self.db.rollback()
 

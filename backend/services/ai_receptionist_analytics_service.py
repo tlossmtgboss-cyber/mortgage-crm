@@ -23,6 +23,7 @@ from decimal import Decimal
 from enum import Enum
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -302,7 +303,7 @@ class AIReceptionistAnalyticsService:
                 funnel.total_calls = calls_result[0] or 0
                 funnel.engaged_calls = calls_result[1] or 0
                 funnel.appointments_scheduled = calls_result[2] or 0
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Could not fetch AI receptionist activity: {e}")
             # Try alternative table
             try:
@@ -334,7 +335,7 @@ class AIReceptionistAnalyticsService:
                 funnel.applications_started = funnel.applications_submitted  # Simplification
                 funnel.loans_approved = loans_result[1] or 0
                 funnel.loans_funded = loans_result[2] or 0
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Could not fetch loan metrics: {e}")
 
         return funnel
@@ -506,7 +507,7 @@ class AIReceptionistAnalyticsService:
                     unit="seconds",
                     higher_is_better=False  # Lower is better
                 ))
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Could not fetch response time metrics: {e}")
 
         # After-hours coverage

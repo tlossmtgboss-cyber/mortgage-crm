@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from database import get_db
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -211,7 +212,7 @@ class CapacityService:
                 metrics = await self.calculate_user_capacity(user_row.id, organization_id)
                 await self._update_capacity_record(metrics, organization_id)
                 count += 1
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.error(f"Error calculating capacity for user {user_row.id}: {e}")
 
         return count

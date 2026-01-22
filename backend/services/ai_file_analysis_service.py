@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 import anthropic
 import logging
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 

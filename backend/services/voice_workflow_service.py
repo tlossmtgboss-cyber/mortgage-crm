@@ -29,6 +29,7 @@ from models.voice_workflow_models import (
 )
 from services.voice_slot_extractor import get_slot_extractor
 from services.voice_response_generator import get_response_generator
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -593,7 +594,7 @@ View the letter here: {result.get('share_url')}
                         """.strip(),
                     )
                     email_sent = True
-                except Exception as e:
+                except SQLAlchemyError as e:
                     logger.warning(f"Failed to send email: {e}")
 
             return WorkflowExecutionResult(
@@ -607,7 +608,7 @@ View the letter here: {result.get('share_url')}
                 },
             )
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Pre-approval letter execution error: {e}")
             return WorkflowExecutionResult(
                 success=False,

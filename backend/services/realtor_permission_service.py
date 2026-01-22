@@ -16,6 +16,7 @@ import logging
 
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -512,7 +513,7 @@ class RealtorAccessValidator:
             self.db.commit()
 
             return {"success": True, "loan_id": loan_id, "role": role}
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Error granting access: {e}")
             return {"success": False, "error": str(e)}
@@ -534,7 +535,7 @@ class RealtorAccessValidator:
             self.db.commit()
 
             return {"success": True, "loan_id": loan_id, "revoked": True}
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Error revoking access: {e}")
             return {"success": False, "error": str(e)}
@@ -550,6 +551,6 @@ class RealtorAccessValidator:
                 WHERE realtor_id = :realtor_id AND loan_id = :loan_id
             """), {"realtor_id": realtor_id, "loan_id": loan_id})
             self.db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error recording view: {e}")
             self.db.rollback()

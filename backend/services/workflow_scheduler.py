@@ -16,6 +16,7 @@ from typing import Optional, List, Dict, Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 import asyncio
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -327,7 +328,7 @@ class WorkflowScheduler:
                 "escalated_count": escalated
             }
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Task escalation failed: {e}")
             return {"success": False, "error": str(e)}

@@ -921,7 +921,7 @@ async def seed_questions(
     """Seed initial confidence questions and education content (admin only)."""
     import os
 
-    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    expected_key = os.getenv("ADMIN_API_KEY", "")
     if admin_key != expected_key:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
@@ -952,7 +952,7 @@ async def debug_tables(
     import os
     import json
 
-    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    expected_key = os.getenv("ADMIN_API_KEY", "")
     if admin_key != expected_key:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
@@ -1019,7 +1019,7 @@ async def run_migration(
     """Run the Borrower Confidence Engine migration (admin only)."""
     import os
 
-    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    expected_key = os.getenv("ADMIN_API_KEY", "")
     if admin_key != expected_key:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 

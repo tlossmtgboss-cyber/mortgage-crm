@@ -17,6 +17,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
+from sqlalchemy.exc import SQLAlchemyError
 from chat_state_machine_models import (
     ChatSession, ChatMessage, CallRequest,
     ChatPhase, UrgencyLevel, CTAType, MessageRole, CallStatus,
