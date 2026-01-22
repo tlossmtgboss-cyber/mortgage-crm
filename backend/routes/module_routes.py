@@ -151,6 +151,11 @@ async def get_my_modules(
         }
     }
 
+    # Handle case where current_user might be None or invalid
+    if current_user is None:
+        logger.warning("get_my_modules: current_user is None, returning defaults")
+        return default_response
+
     try:
         org_id = getattr(current_user, 'organization_id', None)
         user_id = getattr(current_user, 'id', None)
