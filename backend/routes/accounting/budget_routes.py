@@ -30,6 +30,26 @@ router = APIRouter(prefix="/api/v1/accounting/budgets", tags=["Budgeting"])
 
 
 # =============================================================================
+# Dependency Injection
+# =============================================================================
+
+_get_current_user = None
+
+
+def set_dependencies(get_current_user_func=None):
+    """Set dependencies from main.py."""
+    global _get_current_user
+    _get_current_user = get_current_user_func
+
+
+def get_current_user():
+    """Get current user dependency."""
+    if _get_current_user is None:
+        return None
+    return _get_current_user
+
+
+# =============================================================================
 # Pydantic Schemas
 # =============================================================================
 
@@ -109,6 +129,15 @@ class ApprovalRequest(BaseModel):
 
 def get_organization_id(current_user=None) -> int:
     """Get organization ID from current user or default."""
+    if current_user and hasattr(current_user, 'organization_id') and current_user.organization_id:
+        return current_user.organization_id
+    return 1
+
+
+def get_user_id(current_user=None) -> int:
+    """Get user ID from current user or default."""
+    if current_user and hasattr(current_user, 'id') and current_user.id:
+        return current_user.id
     return 1
 
 
@@ -275,9 +304,11 @@ async def get_budget(
 async def create_budget(
     data: BudgetCreate,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Create a new budget template."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(current_user)
+    user_id = get_user_id(current_user)
 
     # Check for duplicate
     existing = db.query(BudgetTemplate).filter(
@@ -300,14 +331,14 @@ async def create_budget(
         budget_type=data.budget_type,
         notes=data.notes,
         status='draft',
-        created_by=1,
+        created_by=user_id,
     )
 
     db.add(budget)
     db.flush()
 
     log_audit(
-        db, org_id, 1, 'create', 'budget_template', budget.id,
+        db, org_id, user_id, 'create', 'budget_template', budget.id,
         entity_number=budget.name,
         summary=f"Created budget {budget.name} for FY{budget.fiscal_year}"
     )
@@ -326,9 +357,11 @@ async def update_budget(
     budget_id: str,
     data: BudgetUpdate,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Update a budget template."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(current_user)
+    user_id = get_user_id(current_user)
 
     budget = db.query(BudgetTemplate).filter(
         BudgetTemplate.id == budget_id,
@@ -351,7 +384,7 @@ async def update_budget(
         setattr(budget, key, value)
 
     log_audit(
-        db, org_id, 1, 'update', 'budget_template', budget.id,
+        db, org_id, user_id, 'update', 'budget_template', budget.id,
         entity_number=budget.name,
         old_values=old_values,
         summary=f"Updated budget {budget.name}"
@@ -370,9 +403,11 @@ async def update_budget(
 async def submit_budget_for_approval(
     budget_id: str,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Submit a budget for approval."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(current_user)
+    user_id = get_user_id(current_user)
 
     budget = db.query(BudgetTemplate).filter(
         BudgetTemplate.id == budget_id,
@@ -398,7 +433,7 @@ async def submit_budget_for_approval(
     budget.status = 'pending_approval'
 
     log_audit(
-        db, org_id, 1, 'submit', 'budget_template', budget.id,
+        db, org_id, user_id, 'submit', 'budget_template', budget.id,
         entity_number=budget.name,
         summary=f"Submitted budget {budget.name} for approval"
     )
@@ -417,9 +452,11 @@ async def approve_budget(
     budget_id: str,
     data: ApprovalRequest,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Approve or reject a budget."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(current_user)
+    user_id = get_user_id(current_user)
 
     budget = db.query(BudgetTemplate).filter(
         BudgetTemplate.id == budget_id,
@@ -438,7 +475,7 @@ async def approve_budget(
     if data.approved:
         budget.status = 'approved'
         budget.approved_at = datetime.utcnow()
-        budget.approved_by = 1
+        budget.approved_by = user_id
 
         if data.notes:
             budget.notes = (budget.notes or '') + f"\nApproval: {data.notes}"
@@ -455,7 +492,7 @@ async def approve_budget(
         message = f"Budget '{budget.name}' rejected - returned to draft"
 
     log_audit(
-        db, org_id, 1, action, 'budget_template', budget.id,
+        db, org_id, user_id, action, 'budget_template', budget.id,
         entity_number=budget.name,
         summary=message
     )
@@ -473,9 +510,11 @@ async def approve_budget(
 async def activate_budget(
     budget_id: str,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Activate an approved budget (makes it the active budget for the year)."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(current_user)
+    user_id = get_user_id(current_user)
 
     budget = db.query(BudgetTemplate).filter(
         BudgetTemplate.id == budget_id,
@@ -502,7 +541,7 @@ async def activate_budget(
     budget.activated_at = datetime.utcnow()
 
     log_audit(
-        db, org_id, 1, 'activate', 'budget_template', budget.id,
+        db, org_id, user_id, 'activate', 'budget_template', budget.id,
         entity_number=budget.name,
         summary=f"Activated budget {budget.name} for FY{budget.fiscal_year}"
     )
@@ -520,9 +559,11 @@ async def activate_budget(
 async def close_budget(
     budget_id: str,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Close a budget (end of year or replaced by new budget)."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(current_user)
+    user_id = get_user_id(current_user)
 
     budget = db.query(BudgetTemplate).filter(
         BudgetTemplate.id == budget_id,
@@ -538,7 +579,7 @@ async def close_budget(
     budget.status = 'closed'
 
     log_audit(
-        db, org_id, 1, 'close', 'budget_template', budget.id,
+        db, org_id, user_id, 'close', 'budget_template', budget.id,
         entity_number=budget.name,
         summary=f"Closed budget {budget.name}"
     )
@@ -962,9 +1003,11 @@ async def delete_budget_item(
 async def copy_budget(
     data: CopyBudgetRequest,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Copy a budget to create a new one (useful for year-over-year planning)."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(current_user)
+    user_id = get_user_id(current_user)
 
     source = db.query(BudgetTemplate).filter(
         BudgetTemplate.id == data.source_budget_id,
@@ -996,7 +1039,7 @@ async def copy_budget(
         budget_type=source.budget_type,
         status='draft',
         copied_from_budget_id=source.id,
-        created_by=1,
+        created_by=user_id,
         notes=f"Copied from {source.name} (FY{source.fiscal_year})",
     )
 
@@ -1033,7 +1076,7 @@ async def copy_budget(
     calculate_budget_totals(db, new_budget)
 
     log_audit(
-        db, org_id, 1, 'create', 'budget_template', new_budget.id,
+        db, org_id, user_id, 'create', 'budget_template', new_budget.id,
         entity_number=new_budget.name,
         summary=f"Copied budget from {source.name} to {new_budget.name}"
     )

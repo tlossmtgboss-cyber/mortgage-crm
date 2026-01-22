@@ -77,6 +77,111 @@ def get_client_ip(request: Request) -> str:
 
 
 # =============================================================================
+# BACKGROUND TASKS
+# =============================================================================
+
+def send_signer_invitations(signers: List[Dict], envelope_name: str = None):
+    """
+    Background task to send email invitations to signers.
+
+    Args:
+        signers: List of signer dicts with 'name', 'email', 'token', 'expires_at'
+        envelope_name: Optional envelope name for the email subject
+    """
+    try:
+        from email_service import EmailService
+        email_service = EmailService()
+
+        for signer in signers:
+            try:
+                # Build signing URL
+                signing_url = f"/sign/{signer['token']}"
+
+                subject = f"Signature Required: {envelope_name}" if envelope_name else "Your Signature is Required"
+
+                html_content = f"""
+                <html>
+                <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h2>Hello {signer['name']},</h2>
+                    <p>You have been requested to sign a document.</p>
+                    <p>Please click the button below to review and sign the document:</p>
+                    <p style="margin: 20px 0;">
+                        <a href="{signing_url}"
+                           style="background-color: #2563eb; color: white; padding: 12px 24px;
+                                  text-decoration: none; border-radius: 6px; display: inline-block;">
+                            Review & Sign Document
+                        </a>
+                    </p>
+                    <p><strong>This link will expire on {signer['expires_at'][:10]}.</strong></p>
+                    <p style="color: #666; font-size: 12px; margin-top: 30px;">
+                        If you have any questions, please contact the sender directly.
+                    </p>
+                </body>
+                </html>
+                """
+
+                email_service.send_email(
+                    to_email=signer['email'],
+                    subject=subject,
+                    html_content=html_content
+                )
+                logger.info(f"Sent signing invitation to {signer['email']}")
+
+            except Exception as e:
+                logger.error(f"Failed to send invitation to {signer['email']}: {e}")
+                # Continue with other signers even if one fails
+
+    except ImportError:
+        logger.error("EmailService not available for sending signer invitations")
+    except Exception as e:
+        logger.error(f"Error in send_signer_invitations background task: {e}")
+
+
+def generate_signed_documents(envelope_id: int):
+    """
+    Background task to generate the final signed PDF with all signatures applied.
+
+    Args:
+        envelope_id: The envelope ID to generate documents for
+    """
+    try:
+        # Get database session
+        if _get_db is None:
+            logger.error("Database not available for document generation")
+            return
+
+        # Create a new session for the background task
+        db_gen = _get_db()
+        db = next(db_gen)
+
+        try:
+            from services.esign_pdf_service import EsignPdfService
+            pdf_service = EsignPdfService(db)
+
+            # Generate the signed PDF
+            result = pdf_service.generate_signed_pdf(envelope_id)
+
+            if result.get("success"):
+                logger.info(f"Successfully generated signed PDF for envelope {envelope_id}")
+            else:
+                logger.error(f"Failed to generate signed PDF for envelope {envelope_id}: {result.get('error')}")
+
+        except ImportError:
+            logger.error("EsignPdfService not available for document generation")
+        except Exception as e:
+            logger.error(f"Error generating signed PDF for envelope {envelope_id}: {e}")
+        finally:
+            # Close the session
+            try:
+                next(db_gen, None)
+            except StopIteration:
+                pass
+
+    except Exception as e:
+        logger.error(f"Error in generate_signed_documents background task: {e}")
+
+
+# =============================================================================
 # REQUEST/RESPONSE MODELS
 # =============================================================================
 
@@ -249,8 +354,11 @@ async def send_envelope(
     try:
         result = service.send_envelope(envelope_id, current_user.id)
 
-        # TODO: Queue email sending in background
-        # background_tasks.add_task(send_signer_invitations, result["signers"])
+        # Queue email sending in background
+        if result.get("signers"):
+            envelope = service.get_envelope(envelope_id)
+            envelope_name = envelope.get("name") if envelope else None
+            background_tasks.add_task(send_signer_invitations, result["signers"], envelope_name)
 
         return result
     except EsignError as e:
@@ -542,10 +650,8 @@ async def complete_signing(
         )
 
         # If envelope is complete, generate signed PDF in background
-        if result.get("envelope_completed"):
-            # TODO: Queue PDF generation
-            # background_tasks.add_task(generate_signed_documents, envelope_id)
-            pass
+        if result.get("envelope_completed") and result.get("envelope_id"):
+            background_tasks.add_task(generate_signed_documents, result["envelope_id"])
 
         return result
     except EsignError as e:

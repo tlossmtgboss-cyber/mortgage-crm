@@ -17,7 +17,7 @@ import uuid
 from database import get_db
 from models.accounting.core import (
     ChartOfAccounts, JournalEntry, JournalEntryLine,
-    AccountingPeriod, AccountingAuditLog
+    AccountingPeriod, AccountingAuditLog, TaxRate
 )
 from models.accounting.accounts_receivable import (
     ARCustomer, ARInvoice, ARInvoiceLine, ARPayment, ARPaymentApplication
@@ -478,7 +478,15 @@ async def create_invoice(
         if line_data.discount_percent:
             line_discount = line_subtotal * (line_data.discount_percent / 100)
 
-        # TODO: Calculate tax if tax_rate_id provided
+        # Calculate tax if tax_rate_id provided (tax is on amount after discount)
+        if line_data.tax_rate_id:
+            tax_rate = db.query(TaxRate).filter(
+                TaxRate.id == line_data.tax_rate_id,
+                TaxRate.is_active == True
+            ).first()
+            if tax_rate:
+                taxable_amount = line_subtotal - line_discount
+                line_tax = taxable_amount * tax_rate.rate
 
         line_total = line_subtotal - line_discount + line_tax
 

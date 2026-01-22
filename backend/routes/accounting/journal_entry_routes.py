@@ -24,6 +24,26 @@ router = APIRouter(prefix="/api/v1/accounting/journal-entries", tags=["Journal E
 
 
 # =============================================================================
+# Dependency Injection
+# =============================================================================
+
+_get_current_user = None
+
+
+def set_dependencies(get_current_user_func=None):
+    """Set dependencies from main.py."""
+    global _get_current_user
+    _get_current_user = get_current_user_func
+
+
+def get_current_user():
+    """Get current user dependency."""
+    if _get_current_user is None:
+        return None
+    return _get_current_user
+
+
+# =============================================================================
 # Pydantic Schemas
 # =============================================================================
 
@@ -102,6 +122,15 @@ class ReverseEntryRequest(BaseModel):
 
 def get_organization_id(current_user=None) -> int:
     """Get organization ID from current user or default."""
+    if current_user and hasattr(current_user, 'organization_id') and current_user.organization_id:
+        return current_user.organization_id
+    return 1
+
+
+def get_user_id(current_user=None) -> int:
+    """Get user ID from current user or default."""
+    if current_user and hasattr(current_user, 'id') and current_user.id:
+        return current_user.id
     return 1
 
 
@@ -254,9 +283,11 @@ async def create_journal_entry(
     data: JournalEntryCreate,
     auto_post: bool = Query(False, description="Automatically post the entry"),
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Create a new journal entry."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(current_user)
+    user_id = get_user_id(current_user)
 
     # Generate entry number
     entry_number = get_next_entry_number(db, org_id)
@@ -275,7 +306,7 @@ async def create_journal_entry(
         reference_number=data.reference_number,
         memo=data.memo,
         status='draft',
-        created_by=1,
+        created_by=user_id,
     )
 
     db.add(entry)
@@ -321,7 +352,7 @@ async def create_journal_entry(
 
     # Log audit
     log_audit(
-        db, org_id, 1, 'create', 'journal_entry', entry.id,
+        db, org_id, user_id, 'create', 'journal_entry', entry.id,
         entity_number=entry.entry_number,
         summary=f"Created journal entry {entry.entry_number}"
     )
@@ -331,10 +362,10 @@ async def create_journal_entry(
         check_period_open(db, org_id, data.entry_date)
         entry.status = 'posted'
         entry.posted_at = datetime.utcnow()
-        entry.posted_by = 1
+        entry.posted_by = user_id
 
         log_audit(
-            db, org_id, 1, 'post', 'journal_entry', entry.id,
+            db, org_id, user_id, 'post', 'journal_entry', entry.id,
             entity_number=entry.entry_number,
             summary=f"Posted journal entry {entry.entry_number}"
         )
@@ -353,9 +384,11 @@ async def update_journal_entry(
     entry_id: str,
     data: JournalEntryUpdate,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Update a draft journal entry."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(current_user)
+    user_id = get_user_id(current_user)
 
     entry = db.query(JournalEntry).filter(
         JournalEntry.id == entry_id,
@@ -414,7 +447,7 @@ async def update_journal_entry(
         entry.total_credits = total_credits
 
     log_audit(
-        db, org_id, 1, 'update', 'journal_entry', entry.id,
+        db, org_id, user_id, 'update', 'journal_entry', entry.id,
         entity_number=entry.entry_number,
         old_values=old_values,
         summary=f"Updated journal entry {entry.entry_number}"
@@ -434,9 +467,11 @@ async def post_journal_entry(
     entry_id: str,
     data: PostEntryRequest,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Post a draft journal entry."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(current_user)
+    user_id = get_user_id(current_user)
 
     entry = db.query(JournalEntry).filter(
         JournalEntry.id == entry_id,
@@ -459,10 +494,10 @@ async def post_journal_entry(
     # Post the entry
     entry.status = 'posted'
     entry.posted_at = datetime.utcnow()
-    entry.posted_by = 1
+    entry.posted_by = user_id
 
     log_audit(
-        db, org_id, 1, 'post', 'journal_entry', entry.id,
+        db, org_id, user_id, 'post', 'journal_entry', entry.id,
         entity_number=entry.entry_number,
         summary=f"Posted journal entry {entry.entry_number}"
     )
@@ -481,9 +516,11 @@ async def void_journal_entry(
     entry_id: str,
     data: VoidEntryRequest,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Void a posted journal entry."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(current_user)
+    user_id = get_user_id(current_user)
 
     entry = db.query(JournalEntry).filter(
         JournalEntry.id == entry_id,
@@ -508,11 +545,11 @@ async def void_journal_entry(
     # Void the entry
     entry.status = 'void'
     entry.voided_at = datetime.utcnow()
-    entry.voided_by = 1
+    entry.voided_by = user_id
     entry.void_reason = data.reason
 
     log_audit(
-        db, org_id, 1, 'void', 'journal_entry', entry.id,
+        db, org_id, user_id, 'void', 'journal_entry', entry.id,
         entity_number=entry.entry_number,
         new_values={'void_reason': data.reason},
         summary=f"Voided journal entry {entry.entry_number}: {data.reason}"
@@ -532,9 +569,11 @@ async def reverse_journal_entry(
     entry_id: str,
     data: ReverseEntryRequest,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Create a reversing entry for a posted journal entry."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(current_user)
+    user_id = get_user_id(current_user)
 
     original = db.query(JournalEntry).filter(
         JournalEntry.id == entry_id,
@@ -570,10 +609,10 @@ async def reverse_journal_entry(
         reverses_entry_id=original.id,
         status='posted',
         posted_at=datetime.utcnow(),
-        posted_by=1,
+        posted_by=user_id,
         total_debits=original.total_credits,  # Swap
         total_credits=original.total_debits,
-        created_by=1,
+        created_by=user_id,
     )
 
     db.add(reversing)
@@ -600,7 +639,7 @@ async def reverse_journal_entry(
     original.reversed_by_entry_id = reversing.id
 
     log_audit(
-        db, org_id, 1, 'reverse', 'journal_entry', original.id,
+        db, org_id, user_id, 'reverse', 'journal_entry', original.id,
         entity_number=original.entry_number,
         new_values={'reversed_by': entry_number},
         summary=f"Reversed {original.entry_number} with {entry_number}"

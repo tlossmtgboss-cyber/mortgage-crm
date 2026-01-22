@@ -17,7 +17,7 @@ import uuid
 from database import get_db
 from models.accounting.core import (
     ChartOfAccounts, JournalEntry, JournalEntryLine,
-    AccountingPeriod, AccountingAuditLog
+    AccountingPeriod, AccountingAuditLog, TaxRate
 )
 from models.accounting.accounts_payable import (
     APVendor, APBill, APBillLine, APPayment, APPaymentApplication
@@ -550,7 +550,14 @@ async def create_bill(
         line_subtotal = line_data.quantity * line_data.unit_price
         line_tax = Decimal("0")
 
-        # TODO: Calculate tax if tax_rate_id provided
+        # Calculate tax if tax_rate_id provided
+        if line_data.tax_rate_id:
+            tax_rate = db.query(TaxRate).filter(
+                TaxRate.id == line_data.tax_rate_id,
+                TaxRate.is_active == True
+            ).first()
+            if tax_rate:
+                line_tax = line_subtotal * tax_rate.rate
 
         line_total = line_subtotal + line_tax
 

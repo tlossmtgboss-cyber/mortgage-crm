@@ -21,6 +21,27 @@ router = APIRouter(prefix="/api/v1/accounting/accounts", tags=["Chart of Account
 
 
 # =============================================================================
+# Dependency Injection
+# =============================================================================
+
+_get_current_user = None
+
+
+def set_dependencies(get_current_user_func=None):
+    """Set dependencies from main.py."""
+    global _get_current_user
+    _get_current_user = get_current_user_func
+
+
+def get_current_user():
+    """Get current user dependency."""
+    if _get_current_user is None:
+        # Return a default that will use fallback values
+        return None
+    return _get_current_user
+
+
+# =============================================================================
 # Pydantic Schemas
 # =============================================================================
 
@@ -91,8 +112,16 @@ AccountTreeNode.model_rebuild()
 
 def get_organization_id(current_user=None) -> int:
     """Get organization ID from current user or default."""
-    # TODO: Implement proper user context
-    return 1
+    if current_user and hasattr(current_user, 'organization_id') and current_user.organization_id:
+        return current_user.organization_id
+    return 1  # Default for development/testing
+
+
+def get_user_id(current_user=None) -> int:
+    """Get user ID from current user or default."""
+    if current_user and hasattr(current_user, 'id') and current_user.id:
+        return current_user.id
+    return 1  # Default for development/testing
 
 
 def log_audit(db: Session, org_id: int, user_id: int, action: str,
@@ -300,9 +329,11 @@ async def get_account(
 async def create_account(
     data: AccountCreate,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Create a new account."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(current_user)
+    user_id = get_user_id(current_user)
 
     # Check for duplicate account number
     existing = db.query(ChartOfAccounts).filter(
@@ -339,7 +370,7 @@ async def create_account(
         display_order=data.display_order,
         opening_balance=Decimal(str(data.opening_balance or 0)),
         opening_balance_date=data.opening_balance_date,
-        created_by=1,  # TODO: Get from user context
+        created_by=user_id,
     )
 
     db.add(account)
@@ -347,7 +378,7 @@ async def create_account(
 
     # Log audit
     log_audit(
-        db, org_id, 1, 'create', 'chart_of_accounts', account.id,
+        db, org_id, user_id, 'create', 'chart_of_accounts', account.id,
         entity_number=account.account_number,
         new_values=data.model_dump(),
         summary=f"Created account {account.account_number} - {account.name}"
