@@ -1160,18 +1160,21 @@ Instructions:
                     logger.error(f"VAPI call failed: {response.status_code} - {response.text}")
                     # Fall back to direct Twilio call
 
-        # Fallback: Direct Twilio call with TwiML
-        # Use the outbound-script endpoint for AI conversation
-        callback_twiml_url = request.callback_url or twiml_url
+        # Fallback: Direct Twilio call with embedded TwiML
+        # Create TwiML directly for the call
+        twiml_content = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say voice="Polly.Joanna">Hi {first_name}, this is an AI assistant calling on behalf of {lo_name}. {request.purpose}.</Say>
+    <Pause length="2"/>
+    <Say voice="Polly.Joanna">Would you have a few minutes to discuss your options and potentially schedule a call with {lo_name}?</Say>
+    <Pause length="3"/>
+    <Say voice="Polly.Joanna">If now isn't a good time, please feel free to call us back at your convenience. Thank you and have a great day!</Say>
+</Response>"""
 
         call = twilio_client.calls.create(
             to=to_number,
             from_=from_number,
-            url=twiml_url,
-            status_callback=f"{api_base}/api/v1/webhooks/twilio/call-status",
-            status_callback_event=['initiated', 'ringing', 'answered', 'completed'],
-            machine_detection='Enable',
-            async_amd=True
+            twiml=twiml_content
         )
 
         return {
