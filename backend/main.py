@@ -4184,9 +4184,9 @@ class LoanResponse(BaseModel):
     amount: float
     rate: Optional[float]
     closing_date: Optional[datetime]
-    days_in_stage: int
-    sla_status: str
-    created_at: datetime
+    days_in_stage: Optional[int] = 0
+    sla_status: Optional[str] = "on-track"
+    created_at: Optional[datetime] = None
     # Team member fields
     loan_officer_name: Optional[str] = None
     loan_officer_email: Optional[str] = None
@@ -7060,8 +7060,8 @@ async def smart_chat_with_memory(
                     impact_score=0.0,
                     metadata={"error": str(e)}
                 )
-            except:
-                pass
+            except Exception:
+                pass  # Don't fail main response if logging fails
 
         return {
             "success": False,
@@ -7304,7 +7304,7 @@ async def import_document_notification_email(
         if request.received_date:
             try:
                 received_at = datetime.fromisoformat(request.received_date.replace('Z', '+00:00'))
-            except:
+            except (ValueError, TypeError):
                 received_at = now
 
         results = {
@@ -7345,8 +7345,8 @@ async def import_document_notification_email(
             results["activity_error"] = str(e)
             try:
                 db.rollback()
-            except:
-                pass
+            except Exception:
+                pass  # Session may be in an invalid state
 
         # 2. Create conversation log entry for email intelligence
         try:
@@ -8581,7 +8581,7 @@ The Team menu item appears for managers and management roles.
             if due_date_str:
                 try:
                     due_date = datetime.strptime(due_date_str, "%Y-%m-%d")
-                except:
+                except (ValueError, TypeError):
                     due_date = datetime.now() + timedelta(days=1)
 
             new_task = Task(title=title, description=description, due_date=due_date, priority=priority, status="pending", owner_id=current_user.id, lead_id=lead_id)
@@ -8994,8 +8994,8 @@ The Team menu item appears for managers and management roles.
                             "status": wt.status,
                             "due": wt.due_date.isoformat() if wt.due_date else None
                         })
-            except:
-                ctc_checklist = []
+            except Exception:
+                ctc_checklist = []  # Table may not exist
 
             # Get activities/notes
             activities = db.query(Activity).filter(Activity.loan_id == loan.id).order_by(Activity.created_at.desc()).limit(10).all()
@@ -9640,8 +9640,8 @@ The Team menu item appears for managers and management roles.
                             text("SELECT id, stage, amount FROM loans WHERE loan_officer_id = :user_id"),
                             {"user_id": current_user.id}
                         ).fetchall()
-                    except:
-                        loan_rows = []
+                    except Exception:
+                        loan_rows = []  # Query failed, use empty list
 
                     lead_stages = {}
                     for lead in leads:
@@ -14750,7 +14750,7 @@ async def orchestrator_chat_stream(
                 try:
                     from dateutil import parser
                     due_date = parser.parse(due_date_str)
-                except:
+                except (ValueError, TypeError):
                     due_date = today + timedelta(days=1)
         else:
             due_date = datetime.now() + timedelta(days=1)
@@ -14807,7 +14807,7 @@ async def orchestrator_chat_stream(
                 try:
                     from dateutil import parser
                     start_time = parser.parse(date_time_str)
-                except:
+                except (ValueError, TypeError):
                     start_time = today + timedelta(days=1)
                     start_time = start_time.replace(hour=10, minute=0, second=0)
 
@@ -15644,7 +15644,7 @@ async def orchestrator_chat_stream(
                 try:
                     from dateutil import parser
                     due_date = parser.parse(new_due_date)
-                except:
+                except (ValueError, TypeError):
                     due_date = today + timedelta(days=1)
             task.due_date = due_date
             updates.append(f"due date to {due_date.strftime('%Y-%m-%d')}")
@@ -15837,8 +15837,8 @@ async def orchestrator_chat_stream(
                     try:
                         from dateutil import parser
                         due_date = parser.parse(due_date_str)
-                    except:
-                        pass
+                    except (ValueError, TypeError):
+                        pass  # Keep default due_date
 
             new_task = AITask(
                 title=title,
@@ -15960,8 +15960,8 @@ async def orchestrator_chat_stream(
                         recordings = twilio_client.calls(call_id).recordings.list(limit=1)
                         if recordings:
                             audio_url = f"https://api.twilio.com{recordings[0].uri.replace('.json', '.mp3')}"
-                    except:
-                        pass
+                    except Exception:
+                        pass  # Twilio API error, will be handled by outer except
                 except Exception as e:
                     logger.warning(f"Could not fetch recording from Twilio: {e}")
 
@@ -16392,8 +16392,8 @@ Transcript:
                 # Map to LeadStage enum if available
                 try:
                     entity.stage = stage
-                except:
-                    entity.stage = stage
+                except (ValueError, AttributeError):
+                    entity.stage = stage  # Use raw value if enum conversion fails
         else:
             entity = db.query(Loan).filter(Loan.id == entity_id).first()
             if entity:
@@ -16729,7 +16729,7 @@ Thank you!"""
         try:
             from dateutil import parser
             parsed_time = parser.parse(new_start_time)
-        except:
+        except (ValueError, TypeError):
             # Try natural language parsing
             time_lower = new_start_time.lower()
             today = datetime.now()
@@ -19999,8 +19999,8 @@ When scheduling appointments, confirm the time first via SMS before creating the
                     outcome="failure",
                     metadata={"error": str(e)}
                 )
-        except:
-            pass
+        except Exception:
+            pass  # Don't fail main response if logging fails
 
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -21081,6 +21081,17 @@ try:
     logger.info("✅ Phase 4 AI Learning & Optimization routes loaded (Voice A/B, AI Learning, Meta-Agent)")
 except Exception as e:
     logger.warning(f"⚠️ Phase 4 routes not loaded: {e}")
+
+# Phase 5 Premium Features & White-Label routes
+try:
+    from routes.phase5_routes import escalation_router, qa_router, biometrics_router, tenant_router
+    app.include_router(escalation_router, tags=["Live Agent Escalation"])
+    app.include_router(qa_router, tags=["Call Quality Assurance"])
+    app.include_router(biometrics_router, tags=["Voice Biometrics"])
+    app.include_router(tenant_router, tags=["Multi-Tenant Management"])
+    logger.info("✅ Phase 5 Premium Features routes loaded (Escalation, QA, Biometrics, Multi-Tenant)")
+except Exception as e:
+    logger.warning(f"⚠️ Phase 5 routes not loaded: {e}")
 
 # OAuth routes (Microsoft, Google integrations)
 try:
@@ -24675,12 +24686,12 @@ def apply_extracted_data(extracted_data: ExtractedData, db: Session) -> bool:
                 return date_str
             # Try ISO format first
             return datetime.fromisoformat(str(date_str).replace('Z', '+00:00'))
-        except:
+        except (ValueError, TypeError):
             try:
                 # Try common formats
                 from dateutil import parser
                 return parser.parse(str(date_str))
-            except:
+            except (ValueError, TypeError):
                 return None
 
     try:
@@ -29312,14 +29323,14 @@ async def create_lead_from_extracted(
         if "loan_amount" in fields:
             try:
                 new_lead.preapproval_amount = float(fields["loan_amount"]["value"])
-            except:
-                pass
+            except (ValueError, TypeError, KeyError):
+                pass  # Skip if conversion fails
 
         if "credit_score" in fields:
             try:
                 new_lead.credit_score = int(fields["credit_score"]["value"])
-            except:
-                pass
+            except (ValueError, TypeError, KeyError):
+                pass  # Skip if conversion fails
 
         if "loan_type" in fields:
             new_lead.loan_type = fields["loan_type"]["value"]
@@ -29330,8 +29341,8 @@ async def create_lead_from_extracted(
         if "property_value" in fields:
             try:
                 new_lead.property_value = float(fields["property_value"]["value"])
-            except:
-                pass
+            except (ValueError, TypeError, KeyError):
+                pass  # Skip if conversion fails
 
         db.add(new_lead)
         db.flush()  # Get the new lead ID
@@ -39726,7 +39737,7 @@ async def update_current_user_profile(
             elif isinstance(user_result[6], str):
                 try:
                     business_hours = json_module.loads(user_result[6])
-                except:
+                except (json.JSONDecodeError, TypeError):
                     business_hours = {}
 
         logger.info(f"Profile updated successfully for user {current_user.email}")
@@ -41397,8 +41408,8 @@ async def delete_user(
                     ).scalar()
                     if count and count > 0:
                         tables_with_data.append((table_name, column_name, count))
-                except:
-                    pass
+                except Exception:
+                    pass  # Table or column may not exist
         except Exception as e:
             logger.warning(f"FK scan failed: {e}")
 
@@ -41425,8 +41436,8 @@ async def delete_user(
         for child_table, child_col, parent_subquery in cascade_order:
             try:
                 db.execute(text(f"DELETE FROM {child_table} WHERE {child_col} IN ({parent_subquery})"), params)
-            except:
-                pass
+            except Exception:
+                pass  # Table may not exist or no matching data
 
         # =========================================================================
         # STEP 3: Clean only tables that have data for this user
@@ -41553,8 +41564,8 @@ async def cleanup_sample_users(
                 for table_name, column_name in cleanup_tables:
                     try:
                         db.execute(text(f"DELETE FROM {table_name} WHERE {column_name} = :user_id"), params)
-                    except:
-                        pass
+                    except Exception:
+                        pass  # Table may not exist or no matching data
 
                 # Delete the user
                 db.execute(text("DELETE FROM users WHERE id = :user_id"), params)
@@ -47830,7 +47841,7 @@ async def delegate_task(
         if hasattr(task, 'metadata') and task.metadata:
             try:
                 meta = json.loads(task.metadata) if isinstance(task.metadata, str) else task.metadata
-            except:
+            except (json.JSONDecodeError, TypeError):
                 meta = {}
             meta['delegated_from'] = current_user.id
             meta['delegated_from_name'] = current_user.full_name
@@ -51235,11 +51246,11 @@ async def execute_ai_function(
                                 hour=time_parsed.hour,
                                 minute=time_parsed.minute
                             )
-                        except:
+                        except (ValueError, TypeError):
                             scheduled_time = scheduled_time.replace(hour=10, minute=0)  # Default 10am
                 else:
                     scheduled_time = date_parser.parse(date_time_str)
-            except:
+            except (ValueError, TypeError):
                 scheduled_time = datetime.now(timezone.utc) + timedelta(days=1)
                 scheduled_time = scheduled_time.replace(hour=10, minute=0)
 
@@ -51992,8 +52003,8 @@ async def get_calendar_assignment_by_purpose(
                 calendly = get_calendly_integration_for_user(db, assignment.assigned_user_id)
                 if calendly and calendly.get("scheduling_url"):
                     result["assigned_user_calendly"] = calendly["scheduling_url"]
-            except:
-                pass
+            except Exception:
+                pass  # Calendly integration may not be available
 
     return result
 
@@ -52137,8 +52148,8 @@ async def get_users_with_calendars(
             if calendly:
                 user_data["has_calendly"] = True
                 user_data["calendly_url"] = calendly.get("scheduling_url")
-        except:
-            pass
+        except Exception:
+            pass  # Calendly integration may not be available
 
         result.append(user_data)
 
@@ -54813,7 +54824,7 @@ async def get_team_member_detail(
         if hasattr(user, 'user_metadata') and user.user_metadata:
             try:
                 user_metadata = json.loads(user.user_metadata) if isinstance(user.user_metadata, str) else user.user_metadata
-            except:
+            except (json.JSONDecodeError, TypeError):
                 user_metadata = {}
 
         # Split full_name into first_name and last_name if not in metadata
@@ -55383,8 +55394,8 @@ def get_user_permissions(user_id: int, db: Session) -> Dict[str, bool]:
         logger.error(f"Get user permissions error for user {user_id}: {e}")
         try:
             db.rollback()  # Recover from SQL errors (e.g., missing table)
-        except:
-            pass
+        except Exception:
+            pass  # Session may be in an invalid state
         return {}
 
 
@@ -56537,8 +56548,8 @@ async def get_notifications(
         # Return empty notifications on error (e.g., table doesn't exist) instead of 500
         try:
             db.rollback()
-        except:
-            pass
+        except Exception:
+            pass  # Session may be in an invalid state
         return {
             "notifications": [],
             "unread_count": 0,
@@ -59927,7 +59938,7 @@ async def initialize_mission_control(db: Session = Depends(get_db)):
                     VALUES (:name, :status, :latency, :errors, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 """)
                 db.execute(insert_query, {"name": name, "status": status, "latency": latency, "errors": errors})
-            except:
+            except Exception:
                 pass  # Ignore if already exists
 
         # Insert initial AI metrics
@@ -59945,8 +59956,8 @@ async def initialize_mission_control(db: Session = Depends(get_db)):
                 ON CONFLICT (date) DO NOTHING
             """)
             db.execute(metrics_query, {"date": today})
-        except:
-            pass
+        except Exception:
+            pass  # Table may not exist
 
         # Insert initial security snapshot
         try:
@@ -59960,8 +59971,8 @@ async def initialize_mission_control(db: Session = Depends(get_db)):
                 ON CONFLICT (date) DO NOTHING
             """)
             db.execute(security_query, {"date": today})
-        except:
-            pass
+        except Exception:
+            pass  # Table may not exist
 
         db.commit()
 
@@ -60105,7 +60116,7 @@ async def auto_sync_gmail():
             if isinstance(metadata, str):
                 try:
                     metadata = json.loads(metadata)
-                except:
+                except (json.JSONDecodeError, TypeError):
                     metadata = {}
 
             settings = metadata.get('settings', {}) if isinstance(metadata, dict) else {}
@@ -60124,8 +60135,8 @@ async def auto_sync_gmail():
                     last_sync_dt = datetime.fromisoformat(last_sync.replace('Z', '+00:00'))
                     if datetime.now(timezone.utc) - last_sync_dt < timedelta(minutes=5):
                         continue
-                except:
-                    pass
+                except (ValueError, TypeError):
+                    pass  # Invalid date format, continue with sync
 
             try:
                 logger.info(f"📧 Gmail Auto-syncing for user {user_id} ({user_email})")
@@ -63655,8 +63666,8 @@ async def check_phase2_permission_migration(db: Session = Depends(get_db)):
         try:
             db.execute(text("SELECT permission_role FROM users LIMIT 1"))
             results["permission_role_column_exists"] = True
-        except:
-            pass
+        except Exception:
+            pass  # Column doesn't exist
 
         # Check if permission_templates table exists
         try:
@@ -63667,15 +63678,15 @@ async def check_phase2_permission_migration(db: Session = Depends(get_db)):
             # Get template names
             templates = db.execute(text("SELECT id, name, category FROM permission_templates"))
             results["templates"] = [{"id": t[0], "name": t[1], "category": t[2]} for t in templates]
-        except:
-            pass
+        except Exception:
+            pass  # Table doesn't exist
 
         # Check if user_permissions table exists
         try:
             db.execute(text("SELECT COUNT(*) FROM user_permissions LIMIT 1"))
             results["user_permissions_table_exists"] = True
-        except:
-            pass
+        except Exception:
+            pass  # Table doesn't exist
 
         results["migration_complete"] = (
             results["permission_role_column_exists"] and
