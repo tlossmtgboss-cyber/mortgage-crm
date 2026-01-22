@@ -470,12 +470,13 @@ async def import_funded_loans_to_mum_debug(
         select_clause = ", ".join(select_cols)
 
         # Get funded loans not already in mum_clients
+        # Use funded_date as the primary criterion since stage might be an enum
         query = f"""
             SELECT {select_clause}
             FROM loans l
-            WHERE (l.stage IN ('FUNDED', 'Funded', 'funded')
-                   OR l.status IN ('funded', 'FUNDED', 'Funded', 'closed', 'CLOSED')
-                   OR l.funded_date IS NOT NULL)
+            WHERE (l.funded_date IS NOT NULL
+                   OR l.stage::text ILIKE '%funded%'
+                   OR l.stage::text ILIKE '%closed%')
             AND NOT EXISTS (
                 SELECT 1 FROM mum_clients m
                 WHERE m.loan_number = l.loan_number

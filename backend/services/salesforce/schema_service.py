@@ -338,17 +338,25 @@ class SalesforceSchemaService:
         self,
         db: Session,
         integration_profile_id: int,
-        object_name: str
+        object_name: str,
+        include_all: bool = False
     ) -> List[Dict[str, Any]]:
-        """Suggest field mappings based on name similarity"""
+        """Suggest field mappings based on name similarity.
+
+        Args:
+            include_all: If True, returns ALL fields with suggestions for each,
+                        not just fields that match canonical mappings.
+        """
         schema = self.get_object_schema(db, integration_profile_id, object_name)
         if not schema:
             return []
 
         suggestions = []
+        matched_fields = set()
 
         for field in schema.get('fields', []):
-            field_name_lower = field['name'].lower().replace('_', '')
+            field_name_lower = field['name'].lower().replace('_', '').replace('c', '')
+            found_match = False
 
             for canonical_field, mapping in CANONICAL_MAPPINGS.items():
                 all_names = [canonical_field.lower().replace('_', '')]
@@ -358,11 +366,15 @@ class SalesforceSchemaService:
                 if field_name_lower in all_names:
                     suggestions.append({
                         'sourceField': field['name'],
+                        'sourceLabel': field.get('label', field['name']),
+                        'sourceType': field.get('type', 'string'),
                         'targetEntity': mapping['entity'],
                         'targetField': mapping['field'],
                         'confidence': 0.95,
                         'reason': 'Exact name match'
                     })
+                    matched_fields.add(field['name'])
+                    found_match = True
                     break
 
                 # Check for partial match
@@ -374,16 +386,54 @@ class SalesforceSchemaService:
                 if has_partial:
                     suggestions.append({
                         'sourceField': field['name'],
+                        'sourceLabel': field.get('label', field['name']),
+                        'sourceType': field.get('type', 'string'),
                         'targetEntity': mapping['entity'],
                         'targetField': mapping['field'],
                         'confidence': 0.7,
                         'reason': 'Partial name match'
                     })
+                    matched_fields.add(field['name'])
+                    found_match = True
                     break
+
+            # If include_all is True, add unmatched fields with default mapping
+            if include_all and not found_match:
+                # Determine target entity based on field name patterns
+                target_entity = 'loan'  # Default to loan
+                if any(x in field_name_lower for x in ['borrower', 'contact', 'name', 'email', 'phone', 'ssn']):
+                    target_entity = 'borrower'
+                elif any(x in field_name_lower for x in ['property', 'address', 'city', 'state', 'zip']):
+                    target_entity = 'property'
+
+                # Convert Salesforce field name to snake_case for CRM
+                target_field = self._to_snake_case(field['name'])
+
+                suggestions.append({
+                    'sourceField': field['name'],
+                    'sourceLabel': field.get('label', field['name']),
+                    'sourceType': field.get('type', 'string'),
+                    'targetEntity': target_entity,
+                    'targetField': target_field,
+                    'confidence': 0.3,
+                    'reason': 'Auto-mapped (no canonical match)'
+                })
 
         # Sort by confidence
         suggestions.sort(key=lambda x: x['confidence'], reverse=True)
         return suggestions
+
+    def _to_snake_case(self, name: str) -> str:
+        """Convert CamelCase or Salesforce field name to snake_case."""
+        import re
+        # Remove __c suffix for custom fields
+        name = re.sub(r'__c$', '', name)
+        # Convert CamelCase to snake_case
+        name = re.sub(r'([A-Z])', r'_\1', name)
+        # Clean up
+        name = re.sub(r'_+', '_', name)
+        name = name.strip('_').lower()
+        return name
 
     async def refresh_schema(self, db: Session, integration_profile_id: int):
         """Refresh schema (re-discover)"""

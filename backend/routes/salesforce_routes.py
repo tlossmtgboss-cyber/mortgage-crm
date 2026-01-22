@@ -25,6 +25,17 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
+# Import encryption functions for secure token storage
+try:
+    from main import encrypt_token, decrypt_token
+except ImportError:
+    # Fallback if main.py encryption not available
+    logger.warning("Token encryption not available - using plaintext (INSECURE)")
+    def encrypt_token(token: str) -> str:
+        return token
+    def decrypt_token(token: str) -> str:
+        return token
+
 router = APIRouter()
 
 # Whitelist of allowed column names for loans table to prevent SQL injection
@@ -1793,24 +1804,27 @@ async def admin_pull_recent_loans(
                     loan_data['loan_number'] = f"SF-{sf_id[-8:]}"
 
                 if existing:
-                    # Update existing loan
-                    update_fields = ", ".join([f"{k} = :{k}" for k in loan_data.keys() if k != 'salesforce_id'])
-                    db.execute(text(f"""
-                        UPDATE loans SET {update_fields}, updated_at = CURRENT_TIMESTAMP
-                        WHERE salesforce_id = :salesforce_id
-                    """), loan_data)
-                    results['updated'] += 1
-                    action = 'updated'
+                    # Update existing loan - use safe SQL builder to prevent injection
+                    try:
+                        update_sql, safe_data = build_safe_update_sql(loan_data)
+                        db.execute(text(update_sql), safe_data)
+                        results['updated'] += 1
+                        action = 'updated'
+                    except ValueError as ve:
+                        logger.warning(f"No valid columns to update for {sf_id}: {ve}")
+                        results['skipped'] += 1
+                        continue
                 else:
-                    # Insert new loan
-                    columns = ", ".join(loan_data.keys())
-                    placeholders = ", ".join([f":{k}" for k in loan_data.keys()])
-                    db.execute(text(f"""
-                        INSERT INTO loans ({columns}, created_at, updated_at)
-                        VALUES ({placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                    """), loan_data)
-                    results['imported'] += 1
-                    action = 'imported'
+                    # Insert new loan - use safe SQL builder to prevent injection
+                    try:
+                        insert_sql, safe_data = build_safe_insert_sql(loan_data)
+                        db.execute(text(insert_sql), safe_data)
+                        results['imported'] += 1
+                        action = 'imported'
+                    except ValueError as ve:
+                        logger.warning(f"No valid columns to insert for {sf_id}: {ve}")
+                        results['skipped'] += 1
+                        continue
 
                 results['loans'].append({
                     'salesforce_id': sf_id,
@@ -1824,7 +1838,7 @@ async def admin_pull_recent_loans(
                 logger.error(f"Error importing loan {record.get('Id')}: {e}")
                 results['errors'].append({
                     'salesforce_id': record.get('Id'),
-                    'error': str(e)
+                    'error': str(e)[:200]  # Truncate to avoid exposing sensitive data
                 })
                 results['skipped'] += 1
 
