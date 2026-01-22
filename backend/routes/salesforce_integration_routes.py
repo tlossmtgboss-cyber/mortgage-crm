@@ -56,6 +56,23 @@ def fix_salesforce_schema(db: Session) -> dict:
     except Exception as e:
         logger.warning(f"Could not run OAuth tables migration: {e}")
 
+    # Fix field_mappings table - make old columns nullable or drop them
+    old_columns_to_fix = [
+        ("sf_object", "ALTER TABLE field_mappings ALTER COLUMN sf_object DROP NOT NULL"),
+        ("sf_field", "ALTER TABLE field_mappings ALTER COLUMN sf_field DROP NOT NULL"),
+        ("crm_entity", "ALTER TABLE field_mappings ALTER COLUMN crm_entity DROP NOT NULL"),
+        ("crm_field", "ALTER TABLE field_mappings ALTER COLUMN crm_field DROP NOT NULL"),
+    ]
+    for col_name, sql in old_columns_to_fix:
+        try:
+            db.execute(text(sql))
+            db.commit()
+            fixes.append(f"Made {col_name} nullable in field_mappings")
+        except Exception as e:
+            db.rollback()
+            # Might fail if column doesn't exist or is already nullable
+            logger.debug(f"field_mappings.{col_name} fix: {e}")
+
     # Fix sf_user_schemas table - add all required columns
     sf_user_schemas_columns = [
         ("integration_profile_id", "INTEGER REFERENCES integration_profiles(id) ON DELETE CASCADE"),
