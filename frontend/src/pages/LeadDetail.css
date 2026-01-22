@@ -1020,7 +1020,9 @@ button.borrower-btn.add-borrower-btn:hover {
 .action-btn.teams,
 .action-btn.voicemail,
 .action-btn.escalation,
-.action-btn.application {
+.action-btn.application,
+.action-btn.record-video,
+.action-btn.portal {
   background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
   border-color: #218D8D;
   color: white;
@@ -1036,94 +1038,31 @@ button.borrower-btn.add-borrower-btn:hover {
 .action-btn.teams:hover:not(:disabled),
 .action-btn.voicemail:hover:not(:disabled),
 .action-btn.escalation:hover:not(:disabled),
-.action-btn.application:hover:not(:disabled) {
+.action-btn.application:hover:not(:disabled),
+.action-btn.record-video:hover:not(:disabled),
+.action-btn.portal:hover:not(:disabled) {
   background: linear-gradient(135deg, #1a7070 0%, #155858 100%);
   border-color: #1a7070;
   box-shadow: 0 8px 24px rgba(33, 141, 141, 0.4);
 }
 
-.action-btn.call .icon,
-.action-btn.sms .icon,
-.action-btn.email .icon,
-.action-btn.task .icon,
-.action-btn.calendar .icon,
-.action-btn.video .icon,
-.action-btn.teams .icon,
-.action-btn.voicemail .icon,
-.action-btn.escalation .icon,
-.action-btn.application .icon {
+.action-btn .icon {
   color: white;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
 }
 
-/* Record Video button - red/recording theme */
-.action-btn.record-video {
-  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
-  border-color: #dc2626;
-  color: white;
-  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
-}
-
-.action-btn.record-video:hover:not(:disabled) {
-  background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
-  border-color: #b91c1c;
-  box-shadow: 0 8px 24px rgba(220, 38, 38, 0.4);
-}
-
-.action-btn.record-video:disabled {
-  background: #374151;
-  border-color: #374151;
-  color: #6b7280;
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-/* Client Portal button - teal/cyan theme */
-.action-btn.portal {
-  background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
-  border-color: #0891b2;
-  color: white;
-  box-shadow: 0 2px 8px rgba(8, 145, 178, 0.3);
-}
-
-.action-btn.portal:hover:not(:disabled) {
-  background: linear-gradient(135deg, #0e7490 0%, #155e75 100%);
-  border-color: #0e7490;
-  box-shadow: 0 8px 24px rgba(8, 145, 178, 0.4);
-}
-
-.action-btn.portal .icon {
-  color: white;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
-}
-
-/* Salesforce button - blue cloud theme */
+/* Salesforce button - unified teal theme */
 .action-btn.salesforce {
-  background: linear-gradient(135deg, #00A1E0 0%, #009CDE 100%);
-  border-color: #00A1E0;
+  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
+  border-color: #218D8D;
   color: white;
-  box-shadow: 0 2px 8px rgba(0, 161, 224, 0.3);
+  box-shadow: 0 2px 8px rgba(33, 141, 141, 0.3);
 }
 
 .action-btn.salesforce:hover:not(:disabled) {
-  background: linear-gradient(135deg, #009CDE 0%, #0077B5 100%);
-  border-color: #009CDE;
-  box-shadow: 0 8px 24px rgba(0, 161, 224, 0.4);
-}
-
-.action-btn.salesforce .icon {
-  color: white;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
-}
-
-.action-btn.salesforce.synced {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  border-color: #10b981;
-}
-
-.action-btn.salesforce.synced:hover:not(:disabled) {
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
-  border-color: #059669;
+  background: linear-gradient(135deg, #1a7070 0%, #155858 100%);
+  border-color: #1a7070;
+  box-shadow: 0 8px 24px rgba(33, 141, 141, 0.4);
 }
 
 .action-btn.salesforce.loading {
@@ -1137,23 +1076,18 @@ button.borrower-btn.add-borrower-btn:hover {
   cursor: not-allowed;
 }
 
-/* Salesforce Pull button - teal/cyan theme for inbound sync */
+/* Salesforce Pull button - unified teal theme */
 .action-btn.salesforce-pull {
-  background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
-  border-color: #06b6d4;
+  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
+  border-color: #218D8D;
   color: white;
-  box-shadow: 0 2px 8px rgba(6, 182, 212, 0.3);
+  box-shadow: 0 2px 8px rgba(33, 141, 141, 0.3);
 }
 
 .action-btn.salesforce-pull:hover:not(:disabled) {
-  background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
-  border-color: #0891b2;
-  box-shadow: 0 8px 24px rgba(6, 182, 212, 0.4);
-}
-
-.action-btn.salesforce-pull .icon {
-  color: white;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+  background: linear-gradient(135deg, #1a7070 0%, #155858 100%);
+  border-color: #1a7070;
+  box-shadow: 0 8px 24px rgba(33, 141, 141, 0.4);
 }
 
 .action-btn.salesforce-pull.loading {

@@ -27944,6 +27944,15 @@ async def get_pending_reconciliation(
         }
     except Exception as e:
         logger.error(f"Get pending error: {e}")
+        # Return empty data on error (e.g., table doesn't exist) instead of 500
+        error_msg = str(e).lower()
+        if "does not exist" in error_msg or "relation" in error_msg or "no such table" in error_msg:
+            return {
+                "status": "success",
+                "count": 0,
+                "items": [],
+                "note": "Reconciliation system not yet initialized"
+            }
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/v1/reconciliation/completed")
@@ -42396,7 +42405,7 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
         "automationRate": automation_rate,
         "automationRateChange": trends["automation_change"],
         "customerSatisfaction": customer_satisfaction,
-        "customerSatisfactionChange": 0  # Would need historical satisfaction tracking
+        "customerSatisfactionChange": 0,  # Would need historical satisfaction tracking
 
         # Stage Performance - calculated from real loan/lead data
         "stages": [] if total_loan_count == 0 else calculate_stage_performance(db, current_user.id, thirty_days_ago),
@@ -55289,6 +55298,10 @@ def get_user_permissions(user_id: int, db: Session) -> Dict[str, bool]:
 
     except Exception as e:
         logger.error(f"Get user permissions error for user {user_id}: {e}")
+        try:
+            db.rollback()  # Recover from SQL errors (e.g., missing table)
+        except:
+            pass
         return {}
 
 
@@ -55609,13 +55622,16 @@ async def get_user_permissions_endpoint(
                 db.commit()
                 logger.info(f"Auto-fixed permission_role to 'admin' for user {user.email}")
 
-        # Get permissions
+        # Get permissions (handles missing table gracefully)
         permissions = get_user_permissions(user_id, db)
+
+        # Safe access to permission_role (might not exist as column)
+        permission_role = getattr(user, 'permission_role', None) or 'sales'
 
         return {
             "user_id": user_id,
             "email": user.email,
-            "permission_role": user.permission_role,
+            "permission_role": permission_role,
             "permissions": permissions,
             "permission_count": len(permissions)
         }
@@ -55624,7 +55640,15 @@ async def get_user_permissions_endpoint(
         raise
     except Exception as e:
         logger.error(f"Get permissions error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Return empty permissions on error instead of 500
+        return {
+            "user_id": user_id,
+            "email": current_user.email if current_user else "unknown",
+            "permission_role": "sales",
+            "permissions": {},
+            "permission_count": 0,
+            "error": "Could not fetch permissions"
+        }
 
 
 @app.get("/api/v1/permissions/templates")
@@ -56427,7 +56451,16 @@ async def get_notifications(
 
     except Exception as e:
         logger.error(f"Get notifications error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Return empty notifications on error (e.g., table doesn't exist) instead of 500
+        try:
+            db.rollback()
+        except:
+            pass
+        return {
+            "notifications": [],
+            "unread_count": 0,
+            "error": "Notifications unavailable"
+        }
 
 
 @app.put("/api/v1/notifications/{notification_id}/read")

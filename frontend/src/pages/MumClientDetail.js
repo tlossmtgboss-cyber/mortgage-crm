@@ -2631,85 +2631,37 @@ function MumClientDetail() {
       <div className="actions-card">
         <h3>QUICK ACTIONS</h3>
         <div className="action-buttons">
-          <button
-            className="action-btn call"
-            onClick={() => handleAction('call')}
-            disabled={!client.phone}
-            title="Click to call using your phone"
-          >
-            <span className="icon">📞</span>
+          <button className="action-btn call" onClick={() => handleAction('call')} disabled={!client.phone} title="Click to call">
             <span>Call</span>
           </button>
-          <button
-            className="action-btn sms"
-            onClick={() => handleAction('sms')}
-            disabled={!client.phone}
-            title="Send SMS using your phone"
-          >
-            <span className="icon">💬</span>
+          <button className="action-btn sms" onClick={() => handleAction('sms')} disabled={!client.phone} title="Send SMS">
             <span>SMS Text</span>
           </button>
-          <button
-            className="action-btn email"
-            onClick={() => handleAction('email')}
-            disabled={!client.email}
-          >
-            <span className="icon">✉️</span>
+          <button className="action-btn email" onClick={() => handleAction('email')} disabled={!client.email} title="Send email">
             <span>Send Email</span>
           </button>
-          <button
-            className="action-btn task"
-            onClick={() => handleAction('task')}
-          >
-            <span className="icon">✓</span>
+          <button className="action-btn task" onClick={() => handleAction('task')} title="Create task">
             <span>Create Task</span>
           </button>
-          <button
-            className="action-btn calendar"
-            onClick={() => handleAction('calendar')}
-          >
-            <span className="icon">📅</span>
+          <button className="action-btn calendar" onClick={() => handleAction('calendar')} title="Set appointment">
             <span>Set Appointment</span>
           </button>
-          <button
-            className="action-btn video"
-            onClick={() => handleAction('video')}
-            title="Start UVIP video call"
-          >
-            <span className="icon">🎥</span>
-            <span>UVIP Video Call</span>
+          <button className="action-btn video" onClick={() => handleAction('video')} title="Start video call">
+            <span>Video Call</span>
           </button>
-          <button
-            className="action-btn voicemail"
-            onClick={() => handleAction('voicemail')}
-            disabled={!client.phone}
-            title="Drop voicemail message"
-          >
-            <span className="icon">📞</span>
+          <button className="action-btn voicemail" onClick={() => handleAction('voicemail')} disabled={!client.phone} title="Drop voicemail">
             <span>Voicemail Drop</span>
           </button>
-          <button
-            className="action-btn application"
-            onClick={() => handleAction('send_application')}
-            title="Send borrower application link"
-          >
-            <span className="icon">📝</span>
+          <button className="action-btn record-video" onClick={() => handleAction('record')} title="Record and send a video message">
+            <span>Record Video</span>
+          </button>
+          <button className="action-btn application" onClick={() => handleAction('send_application')} title="Send application link">
             <span>Send Application</span>
           </button>
-          <button
-            className="action-btn portal"
-            onClick={() => handleAction('client_portal')}
-            title="Open or create client portal"
-          >
-            <span className="icon">🌐</span>
-            <span>Client Portal</span>
+          <button className="action-btn portal" onClick={() => handleAction('client_portal')} title="Access portals">
+            <span>Portals</span>
           </button>
-          <button
-            className="action-btn escalation"
-            onClick={() => handleAction('escalation')}
-            title="Escalate issue to team member"
-          >
-            <span className="icon">🚨</span>
+          <button className="action-btn escalation" onClick={() => handleAction('escalation')} title="Escalate issue">
             <span>Escalation</span>
           </button>
         </div>
