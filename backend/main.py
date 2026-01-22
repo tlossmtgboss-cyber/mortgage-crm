@@ -20816,6 +20816,23 @@ except Exception as e:
 from blog_routes import router as blog_router
 app.include_router(blog_router, tags=["AI Daily Blog"])
 
+# Include Content Marketing Automation routes (Vocable.ai-style)
+try:
+    from routes.content_marketing_routes import router as content_marketing_router
+    app.include_router(content_marketing_router, tags=["Content Marketing"])
+    logger.info("✅ Content Marketing routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load Content Marketing routes: {e}")
+
+# Include Carousel Builder routes (AI-powered social media carousels)
+try:
+    from routes.carousel_builder_routes import router as carousel_builder_router, set_dependencies as set_carousel_deps
+    set_carousel_deps(User, get_current_user)
+    app.include_router(carousel_builder_router, tags=["Carousel Builder"])
+    logger.info("✅ Carousel Builder routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load Carousel Builder routes: {e}")
+
 # Include Email Monitor routes
 from email_monitor_routes import router as email_monitor_router
 app.include_router(email_monitor_router, tags=["Email Monitor"])
