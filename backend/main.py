@@ -36871,6 +36871,105 @@ async def reset_pool_endpoint(admin_key: str = Query(...)):
         )
 
 
+@app.post("/api/v1/admin/update-twilio-config")
+async def update_user_twilio_config(
+    admin_key: str = Query(...),
+    email: str = Query(..., description="User email"),
+    phone_number: str = Query(None, description="Twilio phone number in E.164 format"),
+    account_sid: str = Query(None, description="Twilio Account SID"),
+    auth_token: str = Query(None, description="Twilio Auth Token"),
+    db: Session = Depends(get_db)
+):
+    """
+    Update Twilio configuration for a user by email.
+    Requires admin key for safety.
+    """
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        # Find the user
+        user = db.execute(text("SELECT id, email, full_name FROM users WHERE email = :email"), {"email": email}).fetchone()
+        if not user:
+            raise HTTPException(status_code=404, detail=f"User with email {email} not found")
+
+        user_id = user[0]
+        user_email = user[1]
+        user_name = user[2]
+
+        # Check if user_twilio_config exists for this user
+        existing = db.execute(text("SELECT id FROM user_twilio_config WHERE user_id = :user_id"), {"user_id": user_id}).fetchone()
+
+        updates = []
+        params = {"user_id": user_id}
+
+        if phone_number:
+            updates.append("phone_number = :phone_number")
+            params["phone_number"] = phone_number
+        if account_sid:
+            updates.append("account_sid = :account_sid")
+            params["account_sid"] = account_sid
+        if auth_token:
+            updates.append("auth_token = :auth_token")
+            params["auth_token"] = auth_token
+
+        if not updates:
+            raise HTTPException(status_code=400, detail="No fields to update provided")
+
+        updates.append("updated_at = NOW()")
+
+        if existing:
+            # Update existing config
+            update_sql = f"UPDATE user_twilio_config SET {', '.join(updates)} WHERE user_id = :user_id"
+            db.execute(text(update_sql), params)
+            action = "updated"
+        else:
+            # Insert new config
+            insert_fields = ["user_id"]
+            insert_values = [":user_id"]
+            if phone_number:
+                insert_fields.append("phone_number")
+                insert_values.append(":phone_number")
+            if account_sid:
+                insert_fields.append("account_sid")
+                insert_values.append(":account_sid")
+            if auth_token:
+                insert_fields.append("auth_token")
+                insert_values.append(":auth_token")
+            insert_fields.extend(["created_at", "updated_at"])
+            insert_values.extend(["NOW()", "NOW()"])
+
+            insert_sql = f"INSERT INTO user_twilio_config ({', '.join(insert_fields)}) VALUES ({', '.join(insert_values)})"
+            db.execute(text(insert_sql), params)
+            action = "created"
+
+        db.commit()
+
+        # Verify the update
+        config = db.execute(text("""
+            SELECT phone_number, account_sid,
+                   CASE WHEN auth_token IS NOT NULL THEN '***masked***' ELSE NULL END as auth_token
+            FROM user_twilio_config WHERE user_id = :user_id
+        """), {"user_id": user_id}).fetchone()
+
+        return {
+            "status": "success",
+            "action": action,
+            "user": {"id": user_id, "email": user_email, "name": user_name},
+            "config": {
+                "phone_number": config[0] if config else None,
+                "account_sid": config[1] if config else None,
+                "auth_token": config[2] if config else None
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to update Twilio config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/ping")
 async def ping(db: Session = Depends(get_db)):
     """Simple ping endpoint - also creates Salesforce tables if needed"""
