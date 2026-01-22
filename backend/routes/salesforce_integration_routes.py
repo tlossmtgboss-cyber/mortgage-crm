@@ -458,6 +458,173 @@ async def test_mapping_debug(
         }
 
 
+@router.get("/debug-schema/{profile_id}/{object_name}")
+async def debug_schema_for_object(
+    profile_id: int,
+    object_name: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Debug endpoint to inspect schema data for a specific object.
+    """
+    try:
+        db.rollback()
+    except:
+        pass
+
+    result = {
+        "profile_id": profile_id,
+        "object_name": object_name,
+        "schema_found": False,
+        "fields_data_type": None,
+        "fields_count": 0,
+        "fields_sample": [],
+        "raw_query": None,
+        "errors": []
+    }
+
+    try:
+        # Query the schema directly
+        schema_row = db.execute(text("""
+            SELECT id, integration_profile_id, object_name, fields, record_types, picklist_values
+            FROM sf_user_schemas
+            WHERE integration_profile_id = :profile_id AND object_name = :object_name
+        """), {"profile_id": profile_id, "object_name": object_name}).fetchone()
+
+        if schema_row:
+            result["schema_found"] = True
+            result["raw_query"] = {
+                "id": schema_row[0],
+                "integration_profile_id": schema_row[1],
+                "object_name": schema_row[2],
+                "fields_type": str(type(schema_row[3])),
+                "fields_is_none": schema_row[3] is None,
+                "record_types_type": str(type(schema_row[4])),
+                "picklist_values_type": str(type(schema_row[5]))
+            }
+
+            fields = schema_row[3]
+            if fields:
+                result["fields_data_type"] = str(type(fields))
+                if isinstance(fields, list):
+                    result["fields_count"] = len(fields)
+                    result["fields_sample"] = [
+                        {"name": f.get("name"), "type": f.get("type"), "label": f.get("label")}
+                        for f in fields[:5]
+                    ] if fields else []
+                elif isinstance(fields, str):
+                    # Fields might be stored as a JSON string
+                    import json
+                    parsed_fields = json.loads(fields)
+                    result["fields_count"] = len(parsed_fields)
+                    result["fields_sample"] = [
+                        {"name": f.get("name"), "type": f.get("type"), "label": f.get("label")}
+                        for f in parsed_fields[:5]
+                    ]
+                    result["warning"] = "Fields stored as string, not JSON"
+        else:
+            result["errors"].append("No schema found for this profile/object combination")
+
+        # Also get via the service to compare
+        try:
+            schema_via_service = salesforce_schema.get_object_schema(db, profile_id, object_name)
+            if schema_via_service:
+                result["service_result"] = {
+                    "name": schema_via_service.get("name"),
+                    "fields_count": len(schema_via_service.get("fields", [])),
+                    "fields_type": str(type(schema_via_service.get("fields")))
+                }
+        except Exception as e:
+            result["errors"].append(f"Service error: {str(e)}")
+
+    except Exception as e:
+        import traceback
+        result["errors"].append(str(e))
+        result["traceback"] = traceback.format_exc()
+
+    return result
+
+
+@router.post("/debug-create-mapping/{profile_id}")
+async def debug_create_mapping(
+    profile_id: int,
+    source_object: str = Query(..., description="Salesforce object name"),
+    source_field: str = Query(..., description="Salesforce field name"),
+    target_entity: str = Query("loan", description="Target entity"),
+    target_field: str = Query(..., description="Target field name"),
+    db: Session = Depends(get_db)
+):
+    """
+    Debug endpoint to test creating a single mapping with full diagnostics.
+    """
+    try:
+        db.rollback()
+    except:
+        pass
+
+    result = {
+        "profile_id": profile_id,
+        "source_object": source_object,
+        "source_field": source_field,
+        "target_entity": target_entity,
+        "target_field": target_field,
+        "steps": [],
+        "errors": []
+    }
+
+    try:
+        # Step 1: Check schema exists
+        result["steps"].append("Checking schema...")
+        schema = salesforce_schema.get_object_schema(db, profile_id, source_object)
+        if not schema:
+            result["errors"].append(f"Schema not found for object: {source_object}")
+            return result
+        result["steps"].append(f"Schema found with {len(schema.get('fields', []))} fields")
+
+        # Step 2: Find field in schema
+        result["steps"].append(f"Looking for field '{source_field}' in schema...")
+        fields = schema.get('fields', [])
+        if isinstance(fields, str):
+            import json
+            fields = json.loads(fields)
+
+        field = next((f for f in fields if f.get('name') == source_field), None)
+        if not field:
+            result["errors"].append(f"Field '{source_field}' not found in schema")
+            result["available_fields"] = [f.get("name") for f in fields[:20]]
+            return result
+        result["steps"].append(f"Field found: {field.get('name')} (type: {field.get('type')})")
+
+        # Step 3: Create mapping
+        result["steps"].append("Creating mapping...")
+        mapping = field_mapping.create_mapping(
+            db=db,
+            integration_profile_id=profile_id,
+            source_object=source_object,
+            source_field=source_field,
+            target_entity=target_entity,
+            target_field=target_field,
+            transform_type='direct',
+            transform_config={},
+            data_type=field.get('type'),
+            required=False,
+            sync_direction='bidirectional',
+            enabled=True
+        )
+
+        result["steps"].append(f"Mapping created with id: {mapping.id}")
+        result["mapping_id"] = mapping.id
+        result["success"] = True
+
+    except Exception as e:
+        import traceback
+        result["errors"].append(str(e))
+        result["traceback"] = traceback.format_exc()
+        db.rollback()
+
+    return result
+
+
 @router.get("/loans-status-debug")
 async def get_loans_status_debug(
     db: Session = Depends(get_db)
@@ -1278,6 +1445,45 @@ async def create_mappings_bulk(
         suggestions = [s.dict() for s in bulk_request.suggestions]
         logger.info(f"Creating {len(suggestions)} mappings for profile {profile.id}, object: {bulk_request.source_object}")
         logger.info(f"Suggestions: {suggestions}")
+
+        # First, verify the schema exists and has fields
+        schema = salesforce_schema.get_object_schema(db, profile.id, bulk_request.source_object)
+        if not schema:
+            # Try to list available schemas
+            all_schemas = salesforce_schema.get_all_schemas(db, profile.id)
+            available_objects = [s.get('name') for s in all_schemas]
+            raise HTTPException(
+                status_code=400,
+                detail=f"Schema not found for object '{bulk_request.source_object}'. Available objects: {available_objects[:10]}"
+            )
+
+        # Check schema has fields
+        fields = schema.get('fields', [])
+        if isinstance(fields, str):
+            import json
+            fields = json.loads(fields)
+
+        if not fields:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Schema for '{bulk_request.source_object}' has no fields. Try re-discovering schema."
+            )
+
+        logger.info(f"Schema has {len(fields)} fields")
+
+        # Validate all source fields exist in schema before creating
+        field_names = {f.get('name') for f in fields}
+        missing_fields = []
+        for suggestion in suggestions:
+            if suggestion.get('sourceField') not in field_names:
+                missing_fields.append(suggestion.get('sourceField'))
+
+        if missing_fields:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Fields not found in schema: {missing_fields}. Available fields sample: {list(field_names)[:10]}"
+            )
+
         mappings = field_mapping.create_from_suggestions(
             db=db,
             integration_profile_id=profile.id,
@@ -1289,6 +1495,8 @@ async def create_mappings_bulk(
             "mappings_created": len(mappings),
             "message": f"Created {len(mappings)} field mappings"
         }
+    except HTTPException:
+        raise
     except Exception as e:
         import traceback
         logger.error(f"Failed to create mappings: {e}")
