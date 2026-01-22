@@ -2989,3 +2989,76 @@ async def admin_get_connected_profiles(
             for p in profiles
         ]
     }
+
+
+@router.post("/admin/test-sync-simple")
+async def admin_test_sync_simple(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Simplified admin sync that only imports funded loans to MUM (no SF API calls).
+    Used for debugging.
+    """
+    try:
+        user_id = require_user(request, db)
+
+        # Check if user is admin
+        user = db.execute(text("SELECT role FROM users WHERE id = :id"), {"id": user_id}).fetchone()
+        if not user or user[0] != 'admin':
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        # Just sync funded loans to MUM (no Salesforce API calls)
+        result = {"status": "started", "steps": []}
+
+        # Step 1: Count loans that could be synced
+        try:
+            count_result = db.execute(text("""
+                SELECT COUNT(*) FROM loans l
+                WHERE (l.stage::text ILIKE '%fund%' OR l.stage::text ILIKE '%closed%' OR l.funded_date IS NOT NULL)
+                AND l.salesforce_id IS NOT NULL
+                AND NOT EXISTS (
+                    SELECT 1 FROM mum_clients m WHERE m.loan_number = l.loan_number OR m.salesforce_id = l.salesforce_id
+                )
+            """)).scalar()
+            result["steps"].append({"step": "count_eligible", "count": count_result})
+        except Exception as e:
+            result["steps"].append({"step": "count_eligible", "error": str(e)[:100]})
+
+        # Step 2: Try the insert
+        try:
+            mum_result = db.execute(text("""
+                INSERT INTO mum_clients (name, loan_number, original_close_date, original_rate, loan_balance, status, engagement_score, salesforce_id, created_at)
+                SELECT
+                    COALESCE(l.borrower_name, l.borrower_first_name || ' ' || l.borrower_last_name, 'Client - ' || l.loan_number),
+                    l.loan_number,
+                    COALESCE(l.funded_date, l.closing_date),
+                    l.interest_rate,
+                    l.amount,
+                    'active',
+                    50,
+                    l.salesforce_id,
+                    CURRENT_TIMESTAMP
+                FROM loans l
+                WHERE (l.stage::text ILIKE '%fund%' OR l.stage::text ILIKE '%closed%' OR l.funded_date IS NOT NULL)
+                AND l.salesforce_id IS NOT NULL
+                AND NOT EXISTS (
+                    SELECT 1 FROM mum_clients m WHERE m.loan_number = l.loan_number OR m.salesforce_id = l.salesforce_id
+                )
+            """))
+            db.commit()
+            result["steps"].append({"step": "mum_insert", "rows_affected": mum_result.rowcount})
+            result["status"] = "success"
+        except Exception as e:
+            db.rollback()
+            result["steps"].append({"step": "mum_insert", "error": str(e)[:200]})
+            result["status"] = "partial_error"
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        logger.error(f"Test sync failed: {traceback.format_exc()}")
+        return {"error": str(e)[:500], "status": "failed"}

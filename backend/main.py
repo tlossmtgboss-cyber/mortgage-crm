@@ -45023,24 +45023,30 @@ async def update_loan(loan_id: int, loan_update: LoanUpdate, db: Session = Depen
             # Calculate duration in previous stage
             duration_days = None
             if loan.stage_changed_at:
-                duration_days = (datetime.now(timezone.utc) - loan.stage_changed_at.replace(tzinfo=timezone.utc)).days
+                try:
+                    duration_days = (datetime.now(timezone.utc) - loan.stage_changed_at.replace(tzinfo=timezone.utc)).days
+                except Exception:
+                    duration_days = None
 
             # Update stage_changed_at
             loan.stage_changed_at = datetime.now(timezone.utc)
 
-            # Record stage change in history
-            stage_history = StageHistory(
-                entity_type='loan',
-                entity_id=loan.id,
-                loan_id=loan.id,
-                from_stage=old_stage_str,
-                to_stage=new_stage_str,
-                changed_at=datetime.now(timezone.utc),
-                changed_by_id=current_user.id,
-                duration_in_previous_stage=duration_days
-            )
-            db.add(stage_history)
-            logger.info(f"Stage changed for loan {loan.id}: {old_stage_str} → {new_stage_str}, history recorded")
+            # Record stage change in history (non-critical, don't fail update if this fails)
+            try:
+                stage_history = StageHistory(
+                    entity_type='loan',
+                    entity_id=loan.id,
+                    loan_id=loan.id,
+                    from_stage=old_stage_str,
+                    to_stage=new_stage_str,
+                    changed_at=datetime.now(timezone.utc),
+                    changed_by_id=current_user.id,
+                    duration_in_previous_stage=duration_days
+                )
+                db.add(stage_history)
+                logger.info(f"Stage changed for loan {loan.id}: {old_stage_str} → {new_stage_str}, history recorded")
+            except Exception as history_error:
+                logger.warning(f"Could not record stage history: {history_error}")
 
         # If stage changed to FUNDED, set funded_date and copy to MUM portfolio
         if new_stage == LoanStage.FUNDED and old_stage != LoanStage.FUNDED:
@@ -45052,7 +45058,10 @@ async def update_loan(loan_id: int, loan_update: LoanUpdate, db: Session = Depen
             if mum_client:
                 logger.info(f"✅ MUM client {mum_client.id} created for {loan.borrower_name}")
 
-        loan.ai_insights = generate_ai_insights(loan)
+        try:
+            loan.ai_insights = generate_ai_insights(loan)
+        except Exception as ai_err:
+            logger.warning(f"Could not generate AI insights: {ai_err}")
         loan.updated_at = datetime.now(timezone.utc)
 
         db.commit()
@@ -45093,7 +45102,9 @@ async def update_loan(loan_id: int, loan_update: LoanUpdate, db: Session = Depen
         raise
     except Exception as e:
         db.rollback()
-        logger.error(f"Error updating loan {loan_id}: {str(e)}")
+        import traceback
+        error_traceback = traceback.format_exc()
+        logger.error(f"Error updating loan {loan_id}: {str(e)}\nTraceback:\n{error_traceback}")
         raise HTTPException(status_code=500, detail=f"Failed to update loan: {str(e)}")
 
 @app.delete("/api/v1/loans/{loan_id}", status_code=204)
