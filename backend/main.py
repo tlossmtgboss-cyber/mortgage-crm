@@ -38269,6 +38269,209 @@ async def authentication_test_get(current_user: User = Depends(get_current_user_
         "timestamp": datetime.now(timezone.utc)
     }
 
+@app.post("/admin/run-essential-migrations")
+async def run_essential_migrations(
+    admin_key: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Run essential table migrations using existing connection pool.
+    Creates: notifications, user_permissions, permission_templates, ai_tasks tables.
+    """
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    results = {"created": [], "already_exists": [], "errors": []}
+
+    try:
+        # 1. Create notifications table
+        try:
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS notifications (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    type VARCHAR(50) NOT NULL,
+                    title VARCHAR(255) NOT NULL,
+                    message TEXT NOT NULL,
+                    link VARCHAR(500),
+                    is_read BOOLEAN DEFAULT FALSE,
+                    read_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(is_read)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at DESC)"))
+            db.commit()
+            results["created"].append("notifications")
+            logger.info("Created notifications table")
+        except Exception as e:
+            db.rollback()
+            if "already exists" in str(e).lower():
+                results["already_exists"].append("notifications")
+            else:
+                results["errors"].append(f"notifications: {str(e)[:100]}")
+
+        # 2. Create permission_templates table
+        try:
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS permission_templates (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL UNIQUE,
+                    description TEXT,
+                    category VARCHAR(50) NOT NULL,
+                    permissions JSONB NOT NULL DEFAULT '{}',
+                    is_system_default BOOLEAN DEFAULT FALSE,
+                    created_by INTEGER REFERENCES users(id),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_permission_templates_category ON permission_templates(category)"))
+            db.commit()
+            results["created"].append("permission_templates")
+            logger.info("Created permission_templates table")
+        except Exception as e:
+            db.rollback()
+            if "already exists" in str(e).lower():
+                results["already_exists"].append("permission_templates")
+            else:
+                results["errors"].append(f"permission_templates: {str(e)[:100]}")
+
+        # 3. Create user_permissions table
+        try:
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS user_permissions (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    permission_key VARCHAR(255) NOT NULL,
+                    granted BOOLEAN DEFAULT TRUE,
+                    granted_by INTEGER REFERENCES users(id),
+                    granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TIMESTAMP,
+                    inherited_from VARCHAR(50) DEFAULT 'template',
+                    CONSTRAINT unique_user_permission UNIQUE (user_id, permission_key)
+                )
+            """))
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_user_permissions_user ON user_permissions(user_id)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_user_permissions_composite ON user_permissions(user_id, permission_key, granted)"))
+            db.commit()
+            results["created"].append("user_permissions")
+            logger.info("Created user_permissions table")
+        except Exception as e:
+            db.rollback()
+            if "already exists" in str(e).lower():
+                results["already_exists"].append("user_permissions")
+            else:
+                results["errors"].append(f"user_permissions: {str(e)[:100]}")
+
+        # 4. Add permission_role column to users if missing
+        try:
+            db.execute(text("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_name='users' AND column_name='permission_role'
+                    ) THEN
+                        ALTER TABLE users ADD COLUMN permission_role VARCHAR(50) DEFAULT 'sales';
+                    END IF;
+                END $$;
+            """))
+            db.commit()
+            results["created"].append("users.permission_role column")
+        except Exception as e:
+            db.rollback()
+            results["errors"].append(f"permission_role column: {str(e)[:100]}")
+
+        # 5. Seed default permission templates if empty
+        try:
+            count = db.execute(text("SELECT COUNT(*) FROM permission_templates")).scalar()
+            if count == 0:
+                # Management template
+                db.execute(text("""
+                    INSERT INTO permission_templates (name, description, category, permissions, is_system_default)
+                    VALUES ('Management', 'Full access for management roles', 'management',
+                            '{"dashboard.view_all_widgets": true, "leads.view_all": true, "loans.view_all": true, "team.manage_permissions": true}'::jsonb,
+                            true)
+                    ON CONFLICT (name) DO NOTHING
+                """))
+                # Sales template
+                db.execute(text("""
+                    INSERT INTO permission_templates (name, description, category, permissions, is_system_default)
+                    VALUES ('Sales', 'Sales-focused template', 'sales',
+                            '{"dashboard.view_all_widgets": false, "leads.view_assigned": true, "loans.view_assigned": true}'::jsonb,
+                            true)
+                    ON CONFLICT (name) DO NOTHING
+                """))
+                # Operations template
+                db.execute(text("""
+                    INSERT INTO permission_templates (name, description, category, permissions, is_system_default)
+                    VALUES ('Operations', 'Operations-focused template', 'operations',
+                            '{"loans.view_all": true, "loans.process": true}'::jsonb,
+                            true)
+                    ON CONFLICT (name) DO NOTHING
+                """))
+                db.commit()
+                results["created"].append("default permission templates (3)")
+        except Exception as e:
+            db.rollback()
+            results["errors"].append(f"permission templates seed: {str(e)[:100]}")
+
+        # 6. Create ai_tasks table if not exists
+        try:
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS ai_tasks (
+                    id SERIAL PRIMARY KEY,
+                    title VARCHAR(255) NOT NULL,
+                    description TEXT,
+                    type VARCHAR(50),
+                    category VARCHAR(100),
+                    priority INTEGER DEFAULT 0,
+                    ai_confidence FLOAT,
+                    ai_reasoning TEXT,
+                    suggested_action TEXT,
+                    completed_action TEXT,
+                    borrower_name VARCHAR(255),
+                    lead_id INTEGER,
+                    loan_id INTEGER,
+                    assigned_to_id INTEGER REFERENCES users(id),
+                    due_date TIMESTAMP,
+                    completed_at TIMESTAMP,
+                    estimated_time INTEGER,
+                    feedback TEXT,
+                    user_metadata JSONB,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_ai_tasks_assigned ON ai_tasks(assigned_to_id)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_ai_tasks_type ON ai_tasks(type)"))
+            db.commit()
+            results["created"].append("ai_tasks")
+            logger.info("Created ai_tasks table")
+        except Exception as e:
+            db.rollback()
+            if "already exists" in str(e).lower():
+                results["already_exists"].append("ai_tasks")
+            else:
+                results["errors"].append(f"ai_tasks: {str(e)[:100]}")
+
+        return {
+            "success": True,
+            "message": f"Created {len(results['created'])} items, {len(results['already_exists'])} already existed",
+            "details": results
+        }
+
+    except Exception as e:
+        logger.error(f"Essential migrations failed: {e}")
+        return {
+            "success": False,
+            "message": str(e),
+            "details": results
+        }
+
+
 @app.post("/admin/create-api-keys-table")
 async def create_api_keys_table(db: Session = Depends(get_db)):
     """Admin endpoint to manually create the api_keys table"""
