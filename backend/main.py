@@ -21061,6 +21061,17 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Performance Monitoring routes not loaded: {e}")
 
+# Phase 3 Advanced Features routes
+try:
+    from routes.phase3_routes import bi_router, insights_router, compliance_router, webhook_router
+    app.include_router(bi_router, tags=["AI Receptionist Analytics"])
+    app.include_router(insights_router, tags=["Conversational Insights"])
+    app.include_router(compliance_router, tags=["Call Compliance"])
+    app.include_router(webhook_router, tags=["Webhook Automation"])
+    logger.info("✅ Phase 3 Advanced Features routes loaded (Analytics, Insights, Compliance, Webhooks)")
+except Exception as e:
+    logger.warning(f"⚠️ Phase 3 routes not loaded: {e}")
+
 # OAuth routes (Microsoft, Google integrations)
 try:
     from oauth_routes import router as oauth_router
