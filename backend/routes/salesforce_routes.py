@@ -399,7 +399,31 @@ async def salesforce_callback(
         try:
             from services.salesforce.oauth_service import salesforce_oauth
 
+            # Ensure oauth_states table exists with correct schema
+            try:
+                db.execute(text("""
+                    CREATE TABLE IF NOT EXISTS oauth_states (
+                        id SERIAL PRIMARY KEY,
+                        state_token VARCHAR(255) UNIQUE NOT NULL,
+                        user_id INTEGER NOT NULL,
+                        provider VARCHAR(50) NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        expires_at TIMESTAMP NOT NULL,
+                        used BOOLEAN DEFAULT FALSE,
+                        return_url TEXT,
+                        state_metadata JSONB
+                    )
+                """))
+                db.commit()
+            except Exception as table_err:
+                logger.debug(f"oauth_states table check: {table_err}")
+                try:
+                    db.rollback()
+                except:
+                    pass
+
             # Check if this state exists in oauth_states table
+            logger.info(f"Looking up OAuth state in database: {state[:20]}...")
             oauth_state = db.execute(text("""
                 SELECT id, user_id, return_url, state_metadata, expires_at, used
                 FROM oauth_states
@@ -408,6 +432,20 @@ async def salesforce_callback(
 
             if oauth_state:
                 logger.info(f"Found OAuth state in database for state token")
+
+                # Check if state has expired
+                if oauth_state[4] and oauth_state[4] < datetime.utcnow():
+                    logger.error(f"OAuth state has expired")
+                    return RedirectResponse(
+                        url=f"{frontend_url}/settings/integrations?error=state_expired&message=OAuth+session+expired.+Please+try+again."
+                    )
+
+                # Check if state was already used
+                if oauth_state[5]:
+                    logger.error(f"OAuth state has already been used")
+                    return RedirectResponse(
+                        url=f"{frontend_url}/settings/integrations?error=state_used&message=OAuth+state+already+used.+Please+try+again."
+                    )
 
                 # Use the oauth service to handle the callback
                 try:
@@ -420,8 +458,37 @@ async def salesforce_callback(
                     return RedirectResponse(
                         url=f"{frontend_url}/settings/integrations?error=salesforce_auth_failed&message={str(e)}"
                     )
+            else:
+                # State not found in oauth_states - check if it's a long hex token that should have been there
+                if len(state) > 20 and all(c in '0123456789abcdefABCDEF' for c in state[:20]):
+                    logger.error(f"Secure OAuth state not found in database - may have expired or been cleaned up")
+                    return RedirectResponse(
+                        url=f"{frontend_url}/settings/integrations?error=state_not_found&message=OAuth+session+not+found.+Please+try+again."
+                    )
         except Exception as e:
-            logger.warning(f"OAuth state lookup failed, trying legacy format: {e}")
+            logger.error(f"OAuth state lookup failed with exception: {type(e).__name__}: {e}")
+            # Check if state looks like a secure hex token - if so, it should be in the database
+            # This prevents falling through to legacy format for secure states
+            if state and len(state) >= 32:
+                # Check if it's a hex string (secure state token format)
+                try:
+                    int(state[:32], 16)  # Will succeed for hex strings
+                    # It's a hex token but wasn't found - return clear error
+                    logger.error(f"Secure OAuth state token not found in database. State: {state[:20]}..., Error: {e}")
+
+                    # Try to get more info about what's in the database
+                    try:
+                        count_result = db.execute(text("SELECT COUNT(*) FROM oauth_states WHERE provider = 'salesforce'")).fetchone()
+                        logger.info(f"oauth_states table has {count_result[0]} salesforce entries")
+                    except Exception as count_err:
+                        logger.error(f"Could not query oauth_states table: {count_err}")
+
+                    return RedirectResponse(
+                        url=f"{frontend_url}/settings/integrations?error=state_not_found&message=OAuth+session+not+found.+Please+try+connecting+again."
+                    )
+                except ValueError:
+                    logger.info(f"State is not a hex token, trying legacy format")
+                    pass  # Not a hex string, continue to legacy format
 
     # Fall back to legacy format: user_id:redirect_url
     from integrations.salesforce_service import salesforce_client
@@ -439,8 +506,21 @@ async def salesforce_callback(
             redirect_url = parts[1]
 
     if not user_id:
+        # Check one more time if this looks like a secure state that we couldn't handle
+        if state and len(state) >= 32:
+            try:
+                int(state[:32], 16)
+                logger.error(f"Cannot parse secure state token - database lookup failed")
+                return RedirectResponse(
+                    url=f"{frontend_url}/settings/integrations?error=state_lookup_failed&message=Could+not+look+up+OAuth+state.+Please+ensure+database+migrations+are+run."
+                )
+            except ValueError:
+                pass
         logger.error(f"Invalid state parameter: {state[:50] if state else 'None'}...")
-        raise HTTPException(status_code=400, detail="Invalid state parameter")
+        # Return redirect with error instead of JSON HTTPException for OAuth callback flow
+        return RedirectResponse(
+            url=f"{frontend_url}/settings/integrations?error=invalid_state&message=Invalid+OAuth+state+parameter.+Please+try+connecting+again."
+        )
 
     # Retrieve PKCE code_verifier using state
     code_verifier = salesforce_client.get_code_verifier(state) if state else None

@@ -127,24 +127,31 @@ class SalesforceOAuthService:
         """
         # Generate secure state token
         state_token = secrets.token_hex(32)
+        logger.info(f"Generated OAuth state token for user {user_id}: {state_token[:20]}...")
 
         # Generate PKCE values
         code_verifier, code_challenge = self._generate_pkce()
 
         # Store state for CSRF protection (include code_verifier for token exchange)
-        oauth_state = OAuthState(
-            state_token=state_token,
-            user_id=user_id,
-            provider='salesforce',
-            expires_at=datetime.utcnow() + timedelta(minutes=15),
-            return_url=return_url,
-            state_metadata={
-                'created_from': 'user_settings',
-                'code_verifier': code_verifier  # Store for token exchange
-            }
-        )
-        db.add(oauth_state)
-        db.commit()
+        try:
+            oauth_state = OAuthState(
+                state_token=state_token,
+                user_id=user_id,
+                provider='salesforce',
+                expires_at=datetime.utcnow() + timedelta(minutes=15),
+                return_url=return_url,
+                state_metadata={
+                    'created_from': 'user_settings',
+                    'code_verifier': code_verifier  # Store for token exchange
+                }
+            )
+            db.add(oauth_state)
+            db.commit()
+            logger.info(f"Successfully stored OAuth state in database for user {user_id}")
+        except Exception as e:
+            logger.error(f"Failed to store OAuth state in database: {e}")
+            db.rollback()
+            raise ValueError(f"Failed to store OAuth state: {e}")
 
         # Build authorization URL with PKCE
         params = {

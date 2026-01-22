@@ -1053,7 +1053,33 @@ async def connect_salesforce(
             detail="Salesforce integration not configured"
         )
 
+    # Ensure oauth_states table exists with correct schema before generating auth URL
+    try:
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS oauth_states (
+                id SERIAL PRIMARY KEY,
+                state_token VARCHAR(255) UNIQUE NOT NULL,
+                user_id INTEGER NOT NULL,
+                provider VARCHAR(50) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP NOT NULL,
+                used BOOLEAN DEFAULT FALSE,
+                return_url TEXT,
+                state_metadata JSONB
+            )
+        """))
+        db.commit()
+        logger.info("oauth_states table verified/created")
+    except Exception as table_err:
+        logger.warning(f"oauth_states table check: {table_err}")
+        try:
+            db.rollback()
+        except:
+            pass
+
+    logger.info(f"Generating Salesforce auth URL for user {user_id}, return_url: {return_url}")
     auth_url = salesforce_oauth.generate_auth_url(db, user_id, return_url)
+    logger.info(f"Generated auth URL, redirect_uri will be: {salesforce_oauth.config.redirect_uri}")
     return RedirectResponse(url=auth_url)
 
 
@@ -2290,3 +2316,466 @@ async def push_calendar_event_to_salesforce(
     except Exception as e:
         logger.error(f"Failed to push calendar event {event_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ Auto-Mapping and Sync Endpoints ============
+
+# Default field mappings for MtgPlanner_CRM__Transaction_Property__c to loans table
+TRANSACTION_PROPERTY_MAPPINGS = [
+    # Borrower info
+    {"source_field": "MtgPlanner_CRM__Borrower_First_Name__c", "target_entity": "loan", "target_field": "borrower_first_name", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Borrower_Last_Name__c", "target_entity": "loan", "target_field": "borrower_last_name", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Borrower_Email__c", "target_entity": "loan", "target_field": "borrower_email", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Borrower_Phone__c", "target_entity": "loan", "target_field": "borrower_phone", "transform_type": "direct"},
+    {"source_field": "Name", "target_entity": "loan", "target_field": "borrower_name", "transform_type": "direct"},
+    # Loan details
+    {"source_field": "MtgPlanner_CRM__Loan_Amount__c", "target_entity": "loan", "target_field": "amount", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Interest_Rate__c", "target_entity": "loan", "target_field": "interest_rate", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Loan_Type__c", "target_entity": "loan", "target_field": "loan_type", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Loan_Purpose__c", "target_entity": "loan", "target_field": "loan_purpose", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Loan_Number__c", "target_entity": "loan", "target_field": "loan_number", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__LTV__c", "target_entity": "loan", "target_field": "ltv", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Term_Months__c", "target_entity": "loan", "target_field": "term_months", "transform_type": "direct"},
+    # Dates
+    {"source_field": "MtgPlanner_CRM__Close_Date__c", "target_entity": "loan", "target_field": "closing_date", "transform_type": "date_format"},
+    {"source_field": "MtgPlanner_CRM__Funded_Date__c", "target_entity": "loan", "target_field": "funded_date", "transform_type": "date_format"},
+    {"source_field": "MtgPlanner_CRM__Application_Date__c", "target_entity": "loan", "target_field": "application_date", "transform_type": "date_format"},
+    {"source_field": "MtgPlanner_CRM__Lock_Expiration_Date__c", "target_entity": "loan", "target_field": "lock_expiration_date", "transform_type": "date_format"},
+    # Property info
+    {"source_field": "MtgPlanner_CRM__Property_Address__c", "target_entity": "loan", "target_field": "property_address", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Property_City__c", "target_entity": "loan", "target_field": "property_city", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Property_State__c", "target_entity": "loan", "target_field": "property_state", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Property_Zip__c", "target_entity": "loan", "target_field": "property_zip", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Property_Type__c", "target_entity": "loan", "target_field": "property_type", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Property_Value__c", "target_entity": "loan", "target_field": "property_value", "transform_type": "direct"},
+    # Status
+    {"source_field": "MtgPlanner_CRM__Status__c", "target_entity": "loan", "target_field": "stage", "transform_type": "stage_map"},
+]
+
+
+@router.post("/auto-map-transaction-property")
+async def auto_map_transaction_property(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Automatically create field mappings for MtgPlanner_CRM__Transaction_Property__c.
+    Maps common fields to the loans table.
+    """
+    user_id = require_user(request, db)
+    profile = get_integration_profile(db, user_id)
+
+    if not profile:
+        raise HTTPException(status_code=400, detail="Salesforce not connected")
+
+    source_object = "MtgPlanner_CRM__Transaction_Property__c"
+
+    # Get schema to verify which fields exist
+    schema = salesforce_schema.get_object_schema(db, profile.id, source_object)
+    if not schema:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Schema not found for {source_object}. Please re-discover schema."
+        )
+
+    schema_fields = {f.get('name') for f in schema.get('fields', [])}
+    logger.info(f"Schema has {len(schema_fields)} fields for {source_object}")
+
+    created = 0
+    skipped = 0
+    errors = []
+
+    for mapping_def in TRANSACTION_PROPERTY_MAPPINGS:
+        source_field = mapping_def['source_field']
+
+        # Check if field exists in schema
+        if source_field not in schema_fields:
+            skipped += 1
+            continue
+
+        # Check if mapping already exists
+        existing = db.query(FieldMapping).filter(
+            FieldMapping.integration_profile_id == profile.id,
+            FieldMapping.source_object == source_object,
+            FieldMapping.source_field == source_field
+        ).first()
+
+        if existing:
+            skipped += 1
+            continue
+
+        try:
+            mapping = FieldMapping(
+                integration_profile_id=profile.id,
+                source_object=source_object,
+                source_field=source_field,
+                target_entity=mapping_def['target_entity'],
+                target_field=mapping_def['target_field'],
+                transform_type=mapping_def['transform_type'],
+                transform_config={},
+                data_type='string',
+                required=False,
+                sync_direction='bidirectional',
+                enabled=True,
+                validation_status='valid'
+            )
+            db.add(mapping)
+            db.commit()
+            created += 1
+        except Exception as e:
+            db.rollback()
+            errors.append(f"{source_field}: {str(e)[:50]}")
+
+    # Activate the integration if mappings were created
+    if created > 0:
+        profile.status = 'active'
+        db.commit()
+
+    return {
+        "status": "success",
+        "mappings_created": created,
+        "mappings_skipped": skipped,
+        "errors": errors,
+        "integration_status": profile.status,
+        "message": f"Created {created} field mappings for {source_object}"
+    }
+
+
+@router.post("/sync-from-salesforce")
+async def sync_from_salesforce(
+    request: Request,
+    full_sync: bool = Query(False, description="Full sync or incremental"),
+    batch_size: int = Query(200, description="Number of records per batch"),
+    db: Session = Depends(get_db)
+):
+    """
+    Trigger inbound sync from Salesforce to CRM.
+    Pulls records from Salesforce and updates/creates loans in the CRM.
+    """
+    user_id = require_user(request, db)
+    profile = get_integration_profile(db, user_id)
+
+    if not is_profile_connected(profile):
+        raise HTTPException(status_code=400, detail="Salesforce not connected")
+
+    # Check if there are any mappings
+    mappings = db.query(FieldMapping).filter(
+        FieldMapping.integration_profile_id == profile.id,
+        FieldMapping.enabled == True
+    ).count()
+
+    if mappings == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="No field mappings configured. Use /auto-map-transaction-property first."
+        )
+
+    try:
+        # Run the sync
+        result = await salesforce_sync.sync(
+            db=db,
+            integration_profile_id=profile.id,
+            direction='inbound',
+            full_sync=full_sync,
+            batch_size=batch_size
+        )
+
+        return {
+            "status": "success" if result.success else "partial",
+            "records_processed": result.records_processed,
+            "records_succeeded": result.records_succeeded,
+            "records_failed": result.records_failed,
+            "errors": result.errors[:10],  # Limit errors returned
+            "duration_ms": result.duration_ms
+        }
+
+    except Exception as e:
+        logger.error(f"Sync from Salesforce failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/sync-funded-to-mum")
+async def sync_funded_loans_to_mum_clients(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Sync funded loans to mum_clients table for portfolio management.
+    Creates MUM client records for loans that are funded.
+    """
+    user_id = require_user(request, db)
+    profile = get_integration_profile(db, user_id)
+
+    if not profile:
+        raise HTTPException(status_code=400, detail="Salesforce not connected")
+
+    try:
+        # Find funded loans not yet in mum_clients
+        result = db.execute(text("""
+            SELECT l.id, l.loan_number, l.borrower_name, l.borrower_first_name, l.borrower_last_name,
+                   l.borrower_email, l.borrower_phone, l.amount, l.interest_rate,
+                   l.funded_date, l.closing_date, l.property_address,
+                   l.property_city, l.property_state, l.property_zip,
+                   l.loan_type, l.stage::text as stage, l.salesforce_id
+            FROM loans l
+            WHERE (l.stage::text ILIKE '%fund%'
+                   OR l.stage::text ILIKE '%closed%'
+                   OR l.funded_date IS NOT NULL)
+            AND l.salesforce_id IS NOT NULL
+            AND NOT EXISTS (
+                SELECT 1 FROM mum_clients m
+                WHERE m.loan_number = l.loan_number
+                   OR m.salesforce_id = l.salesforce_id
+            )
+        """))
+
+        loans_to_import = result.fetchall()
+        logger.info(f"Found {len(loans_to_import)} funded loans to import to MUM clients")
+
+        imported = 0
+        errors = []
+
+        for loan in loans_to_import:
+            try:
+                # Build client name
+                client_name = loan[2]  # borrower_name
+                if not client_name and (loan[3] or loan[4]):  # first/last name
+                    client_name = f"{loan[3] or ''} {loan[4] or ''}".strip()
+                if not client_name:
+                    client_name = f"Client - {loan[1]}"  # loan_number
+
+                # Get closing date
+                close_date = loan[9] or loan[10]  # funded_date or closing_date
+
+                # Insert into mum_clients
+                db.execute(text("""
+                    INSERT INTO mum_clients (
+                        name, loan_number, original_close_date,
+                        original_rate, loan_balance,
+                        status, engagement_score, salesforce_id, created_at
+                    ) VALUES (
+                        :name, :loan_number, :close_date,
+                        :rate, :balance,
+                        'active', 50, :sf_id, CURRENT_TIMESTAMP
+                    )
+                """), {
+                    'name': client_name,
+                    'loan_number': loan[1],
+                    'close_date': close_date,
+                    'rate': loan[8],  # interest_rate
+                    'balance': loan[7],  # amount
+                    'sf_id': loan[17],  # salesforce_id
+                })
+
+                imported += 1
+                logger.info(f"Imported MUM client: {client_name} ({loan[1]})")
+
+            except Exception as e:
+                errors.append(f"Loan {loan[1]}: {str(e)[:50]}")
+                logger.error(f"Error importing loan {loan[1]} to MUM: {e}")
+
+        db.commit()
+
+        return {
+            "status": "success",
+            "clients_imported": imported,
+            "errors": errors[:10],
+            "message": f"Imported {imported} funded loans to MUM clients"
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to sync funded loans to MUM: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/full-sync-pipeline")
+async def full_sync_pipeline(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Run the full sync pipeline:
+    1. Auto-create field mappings if needed
+    2. Pull data from Salesforce
+    3. Sync funded loans to MUM clients
+    """
+    user_id = require_user(request, db)
+    profile = get_integration_profile(db, user_id)
+
+    if not is_profile_connected(profile):
+        raise HTTPException(status_code=400, detail="Salesforce not connected")
+
+    results = {
+        "mapping": None,
+        "sync": None,
+        "mum_sync": None,
+        "success": True
+    }
+
+    # Step 1: Auto-create mappings
+    try:
+        source_object = "MtgPlanner_CRM__Transaction_Property__c"
+        schema = salesforce_schema.get_object_schema(db, profile.id, source_object)
+
+        if schema:
+            schema_fields = {f.get('name') for f in schema.get('fields', [])}
+            created = 0
+
+            for mapping_def in TRANSACTION_PROPERTY_MAPPINGS:
+                source_field = mapping_def['source_field']
+                if source_field not in schema_fields:
+                    continue
+
+                existing = db.query(FieldMapping).filter(
+                    FieldMapping.integration_profile_id == profile.id,
+                    FieldMapping.source_object == source_object,
+                    FieldMapping.source_field == source_field
+                ).first()
+
+                if not existing:
+                    try:
+                        mapping = FieldMapping(
+                            integration_profile_id=profile.id,
+                            source_object=source_object,
+                            source_field=source_field,
+                            target_entity=mapping_def['target_entity'],
+                            target_field=mapping_def['target_field'],
+                            transform_type=mapping_def['transform_type'],
+                            transform_config={},
+                            enabled=True,
+                            validation_status='valid'
+                        )
+                        db.add(mapping)
+                        db.commit()
+                        created += 1
+                    except Exception:
+                        db.rollback()
+
+            if created > 0 or profile.status != 'active':
+                profile.status = 'active'
+                db.commit()
+
+            results["mapping"] = {"created": created, "status": "success"}
+        else:
+            results["mapping"] = {"status": "no_schema", "message": "Schema not found"}
+
+    except Exception as e:
+        results["mapping"] = {"status": "error", "error": str(e)[:100]}
+
+    # Step 2: Sync from Salesforce
+    try:
+        sync_result = await salesforce_sync.sync(
+            db=db,
+            integration_profile_id=profile.id,
+            direction='inbound',
+            full_sync=True,
+            batch_size=200
+        )
+        results["sync"] = {
+            "status": "success" if sync_result.success else "partial",
+            "records_processed": sync_result.records_processed,
+            "records_succeeded": sync_result.records_succeeded,
+            "records_failed": sync_result.records_failed
+        }
+    except Exception as e:
+        results["sync"] = {"status": "error", "error": str(e)[:100]}
+        results["success"] = False
+
+    # Step 3: Sync funded loans to MUM
+    try:
+        mum_result = db.execute(text("""
+            INSERT INTO mum_clients (name, loan_number, original_close_date, original_rate, loan_balance, status, engagement_score, salesforce_id, created_at)
+            SELECT
+                COALESCE(l.borrower_name, l.borrower_first_name || ' ' || l.borrower_last_name, 'Client - ' || l.loan_number),
+                l.loan_number,
+                COALESCE(l.funded_date, l.closing_date),
+                l.interest_rate,
+                l.amount,
+                'active',
+                50,
+                l.salesforce_id,
+                CURRENT_TIMESTAMP
+            FROM loans l
+            WHERE (l.stage::text ILIKE '%fund%' OR l.stage::text ILIKE '%closed%' OR l.funded_date IS NOT NULL)
+            AND l.salesforce_id IS NOT NULL
+            AND NOT EXISTS (
+                SELECT 1 FROM mum_clients m WHERE m.loan_number = l.loan_number OR m.salesforce_id = l.salesforce_id
+            )
+        """))
+        db.commit()
+        results["mum_sync"] = {"status": "success", "imported": mum_result.rowcount}
+    except Exception as e:
+        db.rollback()
+        results["mum_sync"] = {"status": "error", "error": str(e)[:100]}
+
+    return results
+
+
+@router.get("/sync-status")
+async def get_sync_status(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Get current sync status and recent sync events.
+    """
+    user_id = require_user(request, db)
+    profile = get_integration_profile(db, user_id)
+
+    if not profile:
+        raise HTTPException(status_code=400, detail="Salesforce not connected")
+
+    # Get recent sync events
+    events = db.query(IntegrationEvent).filter(
+        IntegrationEvent.integration_profile_id == profile.id,
+        IntegrationEvent.event_type.in_(['sync_completed', 'sync_failed', 'record_synced'])
+    ).order_by(IntegrationEvent.created_at.desc()).limit(20).all()
+
+    # Get mapping stats
+    mappings = db.query(FieldMapping).filter(
+        FieldMapping.integration_profile_id == profile.id,
+        FieldMapping.enabled == True
+    ).count()
+
+    # Get record tracking stats
+    tracking_stats = db.execute(text("""
+        SELECT
+            COUNT(*) as total_tracked,
+            COUNT(CASE WHEN sync_status = 'synced' THEN 1 END) as synced,
+            COUNT(CASE WHEN sync_status = 'pending' THEN 1 END) as pending,
+            MAX(last_synced_at) as last_sync
+        FROM integration_record_tracking
+        WHERE integration_profile_id = :profile_id
+    """), {"profile_id": profile.id}).fetchone()
+
+    return {
+        "profile_id": profile.id,
+        "status": profile.status,
+        "last_sync_at": profile.last_sync_at.isoformat() if profile.last_sync_at else None,
+        "last_error": profile.last_error,
+        "sync_enabled": profile.sync_enabled,
+        "mappings_count": mappings,
+        "tracking": {
+            "total_tracked": tracking_stats[0] if tracking_stats else 0,
+            "synced": tracking_stats[1] if tracking_stats else 0,
+            "pending": tracking_stats[2] if tracking_stats else 0,
+            "last_sync": tracking_stats[3].isoformat() if tracking_stats and tracking_stats[3] else None
+        },
+        "recent_events": [
+            {
+                "type": e.event_type,
+                "status": e.status,
+                "records_processed": e.records_processed,
+                "records_succeeded": e.records_succeeded,
+                "records_failed": e.records_failed,
+                "error": e.error_message[:100] if e.error_message else None,
+                "created_at": e.created_at.isoformat()
+            }
+            for e in events
+        ]
+    }

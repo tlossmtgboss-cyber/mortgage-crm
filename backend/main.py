@@ -51747,6 +51747,23 @@ def init_db():
         except Exception as e:
             logger.warning(f"oauth_states table creation: {e}")
 
+        # Create oauth_pkce_store table for PKCE verifier storage
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS oauth_pkce_store (
+                        id SERIAL PRIMARY KEY,
+                        state VARCHAR(255) UNIQUE NOT NULL,
+                        code_verifier TEXT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        expires_at TIMESTAMP NOT NULL
+                    )
+                """))
+                conn.commit()
+                logger.info("✅ oauth_pkce_store table created/verified")
+        except Exception as e:
+            logger.warning(f"oauth_pkce_store table creation: {e}")
+
         # Run schema migrations for existing tables (PostgreSQL only)
         # Note: SQLite tables are already created with all columns via Base.metadata.create_all()
         try:
