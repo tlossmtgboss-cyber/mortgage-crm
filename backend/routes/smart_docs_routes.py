@@ -1475,70 +1475,85 @@ async def get_applicants_with_pending_review(
     Get all applicants/loans that have documents pending review.
     Returns grouped by loan with summary of pending documents.
     """
-    from sqlalchemy import func, distinct
-    from models.purl import PURLLoan, PURLWorkspace
-
-    # Get loans with pending documents
-    pending_docs_query = db.query(
-        SmartDocument.loan_id,
-        func.count(SmartDocument.id).label('pending_count'),
-        func.min(SmartDocument.uploaded_at).label('oldest_upload')
-    ).filter(
-        SmartDocument.status == 'PENDING_REVIEW'
-    ).group_by(SmartDocument.loan_id)
-
-    # Get total count
-    total_query = db.query(func.count(distinct(SmartDocument.loan_id))).filter(
-        SmartDocument.status == 'PENDING_REVIEW'
-    ).scalar() or 0
-
-    # Paginate
-    offset = (page - 1) * limit
-    pending_loans = pending_docs_query.order_by(
-        func.min(SmartDocument.uploaded_at).asc()
-    ).offset(offset).limit(limit).all()
-
-    applicants = []
-    for loan_id, pending_count, oldest_upload in pending_loans:
-        # Get loan/workspace info
-        loan = db.query(PURLLoan).filter(PURLLoan.id == loan_id).first()
-        workspace = None
-        if loan and loan.workspace_id:
-            workspace = db.query(PURLWorkspace).filter(
-                PURLWorkspace.id == loan.workspace_id
-            ).first()
-
-        # Get pending document details
-        pending_docs = db.query(SmartDocument).filter(
-            SmartDocument.loan_id == loan_id,
-            SmartDocument.status == 'PENDING_REVIEW'
-        ).all()
-
-        applicants.append({
-            "loan_id": loan_id,
-            "loan_number": loan.loan_number if loan else None,
-            "borrower_name": workspace.display_name if workspace else f"Loan {loan_id}",
-            "loan_purpose": loan.loan_purpose if loan else None,
-            "pending_count": pending_count,
-            "oldest_upload": oldest_upload.isoformat() if oldest_upload else None,
-            "documents": [
-                {
-                    "id": doc.id,
-                    "file_name": doc.original_filename or doc.file_name,
-                    "doc_type": doc.doc_type.value if doc.doc_type else None,
-                    "uploaded_at": (doc.uploaded_at or doc.created_at).isoformat() if (doc.uploaded_at or doc.created_at) else None,
-                }
-                for doc in pending_docs
-            ]
-        })
-
-    return {
-        "total": total_query,
+    # Default empty response
+    default_response = {
+        "total": 0,
         "page": page,
         "limit": limit,
-        "total_pages": (total_query + limit - 1) // limit,
-        "applicants": applicants,
+        "total_pages": 0,
+        "applicants": [],
     }
+
+    try:
+        from sqlalchemy import func, distinct
+        from models.purl import PURLLoan, PURLWorkspace
+
+        # Get loans with pending documents
+        pending_docs_query = db.query(
+            SmartDocument.loan_id,
+            func.count(SmartDocument.id).label('pending_count'),
+            func.min(SmartDocument.uploaded_at).label('oldest_upload')
+        ).filter(
+            SmartDocument.status == 'PENDING_REVIEW'
+        ).group_by(SmartDocument.loan_id)
+
+        # Get total count
+        total_query = db.query(func.count(distinct(SmartDocument.loan_id))).filter(
+            SmartDocument.status == 'PENDING_REVIEW'
+        ).scalar() or 0
+
+        # Paginate
+        offset = (page - 1) * limit
+        pending_loans = pending_docs_query.order_by(
+            func.min(SmartDocument.uploaded_at).asc()
+        ).offset(offset).limit(limit).all()
+
+        applicants = []
+        for loan_id, pending_count, oldest_upload in pending_loans:
+            # Get loan/workspace info
+            loan = db.query(PURLLoan).filter(PURLLoan.id == loan_id).first()
+            workspace = None
+            if loan and loan.workspace_id:
+                workspace = db.query(PURLWorkspace).filter(
+                    PURLWorkspace.id == loan.workspace_id
+                ).first()
+
+            # Get pending document details
+            pending_docs = db.query(SmartDocument).filter(
+                SmartDocument.loan_id == loan_id,
+                SmartDocument.status == 'PENDING_REVIEW'
+            ).all()
+
+            applicants.append({
+                "loan_id": loan_id,
+                "loan_number": loan.loan_number if loan else None,
+                "borrower_name": workspace.display_name if workspace else f"Loan {loan_id}",
+                "loan_purpose": loan.loan_purpose if loan else None,
+                "pending_count": pending_count,
+                "oldest_upload": oldest_upload.isoformat() if oldest_upload else None,
+                "documents": [
+                    {
+                        "id": doc.id,
+                        "file_name": doc.original_filename or doc.file_name,
+                        "doc_type": doc.doc_type.value if doc.doc_type else None,
+                        "uploaded_at": (doc.uploaded_at or doc.created_at).isoformat() if (doc.uploaded_at or doc.created_at) else None,
+                    }
+                    for doc in pending_docs
+                ]
+            })
+
+        return {
+            "total": total_query,
+            "page": page,
+            "limit": limit,
+            "total_pages": (total_query + limit - 1) // limit,
+            "applicants": applicants,
+        }
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error fetching pending review applicants: {e}")
+        return default_response
 
 
 @router.get("/applicants/outstanding-docs")

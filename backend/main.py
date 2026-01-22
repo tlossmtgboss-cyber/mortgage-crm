@@ -42009,11 +42009,53 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     from sqlalchemy import func, extract, case
     import traceback
 
+    # Default dashboard data for error cases
+    default_dashboard = {
+        "prioritized_tasks": [],
+        "pipeline_stats": [
+            {"id": "new", "name": "New Leads", "count": 0, "alerts": 0, "alert_text": "", "volume": None},
+            {"id": "preapproved", "name": "Pre-Approved", "count": 0, "alerts": 0, "alert_text": "", "volume": None},
+            {"id": "processing", "name": "In Processing", "count": 0, "alerts": 0, "alert_text": "", "volume": 0},
+            {"id": "underwriting", "name": "In Underwriting", "count": 0, "alerts": 0, "alert_text": "", "volume": 0},
+            {"id": "ctc", "name": "Clear to Close", "count": 0, "alerts": 0, "alert_text": "", "volume": 0},
+            {"id": "funded", "name": "Funded This Month", "count": 0, "alerts": 0, "alert_text": "", "volume": 0}
+        ],
+        "production": {
+            "annualGoal": 222, "annualActual": 0, "annualProgress": 0,
+            "monthlyGoal": 18.5, "monthlyActual": 0, "monthlyProgress": 0,
+            "weeklyGoal": 5, "weeklyActual": 0, "weeklyProgress": 0,
+            "dailyGoal": 1, "dailyActual": 0, "dailyProgress": 0
+        },
+        "lead_metrics": {"new_today": 0, "avg_contact_time": 1.2, "conversion_rate": 0, "hot_leads": 0, "alerts": []},
+        "loan_issues": [],
+        "ai_tasks": {"pending": [], "waiting": []},
+        "referral_stats": {"top_partners": [], "engagement": []},
+        "team_stats": {"has_team": False, "avg_workload": 0, "backlog": 0, "sla_missed": 0, "insights": []},
+        "messages": [],
+        "efficiency": {
+            "overallScore": 0, "trend": "stable",
+            "avgTimeToClose": 35, "avgTimeToCloseChange": 0,
+            "pullThroughRate": 0, "pullThroughRateChange": 0,
+            "loansFallingBehind": 0, "loansFallingBehindChange": 0,
+            "automationRate": 0, "automationRateChange": 0,
+            "customerSatisfaction": 85, "customerSatisfactionChange": 0,
+            "stages": [], "team": [], "bottleneckCount": 0, "bottlenecks": []
+        }
+    }
+
     # Check cache first for blazing fast retrieval
     cache_key = f"dashboard:{current_user.id}"
     cached_data = get_cached(cache_key)
     if cached_data:
         return cached_data
+
+    # Verify database tables exist before proceeding
+    try:
+        # Quick check if core tables are accessible
+        db.execute(text("SELECT 1 FROM loans LIMIT 1"))
+    except Exception as table_err:
+        logger.warning(f"Dashboard: loans table not accessible ({table_err}), returning defaults")
+        return default_dashboard
 
     # Get current date ranges
     today = date.today()
@@ -42030,20 +42072,24 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     goals = user_metadata.get('goals', {})
 
     # OPTIMIZED: Single query to get all funded loan counts with CASE statements
-    funded_counts = db.query(
-        func.count(case((extract('year', Loan.funded_date) == today.year, 1))).label('annual'),
-        func.count(case((Loan.funded_date >= start_of_month, 1))).label('monthly'),
-        func.count(case((Loan.funded_date >= start_of_week, 1))).label('weekly'),
-        func.count(case((Loan.funded_date == today, 1))).label('daily')
-    ).filter(
-        Loan.loan_officer_id == current_user.id,
-        Loan.stage == LoanStage.FUNDED
-    ).first()
+    try:
+        funded_counts = db.query(
+            func.count(case((extract('year', Loan.funded_date) == today.year, 1))).label('annual'),
+            func.count(case((Loan.funded_date >= start_of_month, 1))).label('monthly'),
+            func.count(case((Loan.funded_date >= start_of_week, 1))).label('weekly'),
+            func.count(case((Loan.funded_date == today, 1))).label('daily')
+        ).filter(
+            Loan.loan_officer_id == current_user.id,
+            Loan.stage == LoanStage.FUNDED
+        ).first()
 
-    annual_actual = funded_counts.annual or 0
-    monthly_actual = funded_counts.monthly or 0
-    weekly_actual = funded_counts.weekly or 0
-    daily_actual = funded_counts.daily or 0
+        annual_actual = funded_counts.annual or 0
+        monthly_actual = funded_counts.monthly or 0
+        weekly_actual = funded_counts.weekly or 0
+        daily_actual = funded_counts.daily or 0
+    except Exception as prod_err:
+        logger.warning(f"Dashboard: Error getting production metrics: {prod_err}")
+        annual_actual = monthly_actual = weekly_actual = daily_actual = 0
 
     # Use goals from Goal Tracker or defaults
     annual_goal = goals.get('annualGoal', 222)

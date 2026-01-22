@@ -122,24 +122,62 @@ async def get_my_modules(
     current_user = Depends(get_current_user)
 ):
     """Get current user's organization modules with enabled status."""
-    org_id = getattr(current_user, 'organization_id', None)
-    user_id = getattr(current_user, 'id', None)
-    user_email = getattr(current_user, 'email', None)
-    user_role = getattr(current_user, 'role', None) or getattr(current_user, 'permission_role', None)
-
-    # Default to org 1 if user doesn't have an org (single-tenant fallback)
-    if not org_id:
-        # For admins or if no org set, default to org 1
-        org_id = 1
-        logger.info(f"User {user_id} ({user_email}) has no organization_id, defaulting to org 1")
-
-    modules = ModuleService.get_organization_modules_detailed(db, org_id)
-    pricing = ModuleService.get_pricing_summary(db, org_id)
-
-    return {
-        'modules': modules,
-        'pricing': pricing
+    # Default response when modules system is unavailable
+    default_response = {
+        'modules': [
+            {
+                "module_key": "base",
+                "module_name": "Base Package",
+                "description": "Core CRM features",
+                "category": "base",
+                "icon": "home",
+                "monthly_price": 99.0,
+                "annual_price": 990.0,
+                "included_features": ["Dashboard", "Leads", "Loans", "Tasks", "Calendar"],
+                "gated_routes": [],
+                "is_enabled": True,
+                "enabled_at": None,
+                "is_trial": False,
+                "trial_ends_at": None,
+            }
+        ],
+        'pricing': {
+            "base_price": 99.0,
+            "modules_price": 0,
+            "total_monthly": 99.0,
+            "total_annual": 990.0,
+            "enabled_modules": ["base"],
+            "premium_modules_count": 0,
+        }
     }
+
+    try:
+        org_id = getattr(current_user, 'organization_id', None)
+        user_id = getattr(current_user, 'id', None)
+        user_email = getattr(current_user, 'email', None)
+        user_role = getattr(current_user, 'role', None) or getattr(current_user, 'permission_role', None)
+
+        # Default to org 1 if user doesn't have an org (single-tenant fallback)
+        if not org_id:
+            # For admins or if no org set, default to org 1
+            org_id = 1
+            logger.info(f"User {user_id} ({user_email}) has no organization_id, defaulting to org 1")
+
+        modules = ModuleService.get_organization_modules_detailed(db, org_id)
+        pricing = ModuleService.get_pricing_summary(db, org_id)
+
+        # If no modules returned (table might not exist), return default
+        if not modules:
+            logger.warning("No modules returned from ModuleService, using defaults")
+            return default_response
+
+        return {
+            'modules': modules,
+            'pricing': pricing
+        }
+    except Exception as e:
+        logger.error(f"Error fetching user modules: {e}")
+        return default_response
 
 
 @router.get("/check/{module_key}")

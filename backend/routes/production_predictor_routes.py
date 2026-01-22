@@ -41,11 +41,11 @@ class ForecastRequest(BaseModel):
 
 class GoalAttainmentRequest(BaseModel):
     """Request for goal attainment prediction."""
-    entity_id: str
-    goal_units: int = Field(..., ge=0)
-    goal_volume: float = Field(..., ge=0)
-    goal_period_start: date
-    goal_period_end: date
+    entity_id: Optional[str] = None
+    goal_units: int = Field(default=0, ge=0)
+    goal_volume: float = Field(default=0, ge=0)
+    goal_period_start: Optional[date] = None
+    goal_period_end: Optional[date] = None
 
 
 class TeamForecastRequest(BaseModel):
@@ -224,6 +224,29 @@ async def predict_goal_attainment(request: GoalAttainmentRequest, db: Session = 
     Analyzes current progress, forecasts remaining production, and
     provides risk assessment with recommendations.
     """
+    # Default response for missing/invalid data
+    default_response = GoalAttainmentResponse(
+        goal_units=request.goal_units or 0,
+        goal_volume=request.goal_volume or 0,
+        current_units=0,
+        current_volume=0,
+        predicted_final_units=0,
+        predicted_final_volume=0,
+        units_progress_pct=0,
+        volume_progress_pct=0,
+        units_on_track_pct=0,
+        volume_on_track_pct=0,
+        risk_level="unknown",
+        days_remaining=0,
+        units_per_day_needed=0,
+        volume_per_day_needed=0,
+        recommendations=["Set up your production goals to get personalized predictions"],
+    )
+
+    # Return default if required fields are missing
+    if not request.entity_id or not request.goal_period_start or not request.goal_period_end:
+        return default_response
+
     try:
         predictor = get_production_predictor(db_session=db)
 
@@ -254,7 +277,7 @@ async def predict_goal_attainment(request: GoalAttainmentRequest, db: Session = 
         )
     except Exception as e:
         logger.error(f"Error predicting goal attainment: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return default_response
 
 
 @router.post("/team-forecast")

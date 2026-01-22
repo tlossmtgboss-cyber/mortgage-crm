@@ -444,10 +444,36 @@ async def get_ticket_metrics(
     current_user = Depends(get_current_user)
 ):
     """Get ticket metrics summary (admin only)"""
+    # Default metrics to return on error
+    default_metrics = {
+        "avg_per_day": 0,
+        "turn_time_display": "N/A",
+        "turn_time_hours": 0,
+        "tickets_this_month": 0,
+        "open_tickets": 0,
+        "resolved_tickets": 0,
+        "total_tickets": 0,
+    }
+
     try:
         # Only admin can view metrics
         if not is_platform_admin(current_user):
             raise HTTPException(status_code=403, detail="Only administrators can view metrics")
+
+        # Check if table exists first
+        try:
+            table_check = db.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'support_tickets'
+                )
+            """)).scalar()
+            if not table_check:
+                logger.warning("support_tickets table does not exist, returning default metrics")
+                return default_metrics
+        except Exception as table_err:
+            logger.warning(f"Could not check for support_tickets table: {table_err}")
+            return default_metrics
 
         # Get current month start
         now = datetime.now(timezone.utc)
@@ -508,8 +534,9 @@ async def get_ticket_metrics(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error fetching metrics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error fetching support metrics: {e}")
+        # Return default metrics instead of 500 error
+        return default_metrics
 
 
 @router.get("/analytics")
