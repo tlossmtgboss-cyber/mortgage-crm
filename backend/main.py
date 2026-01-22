@@ -21072,6 +21072,16 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Phase 3 routes not loaded: {e}")
 
+# Phase 4 AI Learning & Optimization routes
+try:
+    from routes.phase4_routes import voice_ab_router, ai_learning_router, meta_agent_router
+    app.include_router(voice_ab_router, tags=["Voice A/B Testing"])
+    app.include_router(ai_learning_router, tags=["AI Learning"])
+    app.include_router(meta_agent_router, tags=["Continuous Learning Meta-Agent"])
+    logger.info("✅ Phase 4 AI Learning & Optimization routes loaded (Voice A/B, AI Learning, Meta-Agent)")
+except Exception as e:
+    logger.warning(f"⚠️ Phase 4 routes not loaded: {e}")
+
 # OAuth routes (Microsoft, Google integrations)
 try:
     from oauth_routes import router as oauth_router
