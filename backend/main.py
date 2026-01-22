@@ -149,10 +149,16 @@ if ENVIRONMENT == "production" and not _SECRET_KEY:
         "Generate with: python -c \"import secrets; print(secrets.token_hex(32))\""
     )
 
-# Use secure default only in development
-SECRET_KEY = _SECRET_KEY or "dev-only-09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"
-if not _SECRET_KEY and ENVIRONMENT != "development":
-    logger.warning("⚠️ Using fallback SECRET_KEY - set SECRET_KEY env var for security!")
+# Require SECRET_KEY - no fallback for security
+if not _SECRET_KEY:
+    if ENVIRONMENT == "development":
+        logger.warning("⚠️ SECRET_KEY not set - using generated key for development only")
+        import secrets
+        SECRET_KEY = secrets.token_hex(32)
+    else:
+        raise ValueError("SECRET_KEY environment variable is required in production")
+else:
+    SECRET_KEY = _SECRET_KEY
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
@@ -877,51 +883,51 @@ class Loan(Base):
     # SLA Date Fields - All 33 Jungo Custom Byte Mappings
     # ============================================================
     # Lead & Application Phase
-    prospect_date = Column(Date)
-    application_date = Column(Date)
-    le_pending_date = Column(Date)
-    credit_only_date = Column(Date)
-    file_received_date = Column(Date)
-    preapproval_date = Column(Date)
+    prospect_date = Column(DateTime)
+    application_date = Column(DateTime)
+    le_pending_date = Column(DateTime)
+    credit_only_date = Column(DateTime)
+    file_received_date = Column(DateTime)
+    preapproval_date = Column(DateTime)
 
     # Lock Phase (lock_date and lock_expiration_date already exist above)
 
     # Processing & Underwriting Phase
-    uw_received_date = Column(Date)
-    conditions_for_review_date = Column(Date)
-    suspended_date = Column(Date)
-    loan_approved_date = Column(Date)
-    approved_not_accepted_date = Column(Date)
-    approval_expires_date = Column(Date)
+    uw_received_date = Column(DateTime)
+    conditions_for_review_date = Column(DateTime)
+    suspended_date = Column(DateTime)
+    loan_approved_date = Column(DateTime)
+    approved_not_accepted_date = Column(DateTime)
+    approval_expires_date = Column(DateTime)
 
     # Appraisal Phase (appraisal_ordered_date exists above)
-    appraisal_received_date = Column(Date)
-    appraisal_docs_expire_date = Column(Date)
+    appraisal_received_date = Column(DateTime)
+    appraisal_docs_expire_date = Column(DateTime)
 
     # Closing Disclosure Phase
-    cd_requested_date = Column(Date)
-    cd_sent_to_borrower_date = Column(Date)
-    cd_acknowledged_date = Column(Date)
+    cd_requested_date = Column(DateTime)
+    cd_sent_to_borrower_date = Column(DateTime)
+    cd_acknowledged_date = Column(DateTime)
 
     # Clear to Close & Docs Phase
-    clear_to_close_date = Column(Date)
-    docs_ordered_date = Column(Date)
-    docs_out_date = Column(Date)
-    credit_docs_expire_date = Column(Date)
+    clear_to_close_date = Column(DateTime)
+    docs_ordered_date = Column(DateTime)
+    docs_out_date = Column(DateTime)
+    credit_docs_expire_date = Column(DateTime)
 
     # Funding Phase
-    scheduled_closing_date = Column(Date)
-    scheduled_funding_date = Column(Date)
-    funds_ordered_date = Column(Date)
-    funds_sent_date = Column(Date)
+    scheduled_closing_date = Column(DateTime)
+    scheduled_funding_date = Column(DateTime)
+    funds_ordered_date = Column(DateTime)
+    funds_sent_date = Column(DateTime)
     # funded_date already exists above as DateTime
-    first_payment_date = Column(Date)
+    first_payment_date = Column(DateTime)
 
     # Post-Closing
-    investor_purchased_date = Column(Date)
+    investor_purchased_date = Column(DateTime)
 
     # Status Changes
-    withdrawn_date = Column(Date)
+    withdrawn_date = Column(DateTime)
     # contract_received_date already exists above
 
     # ============================================================
@@ -4121,55 +4127,55 @@ class LoanUpdate(BaseModel):
 
     # SLA Date Fields - All 33 Jungo Custom Byte Mappings
     # Lead & Application Phase
-    prospect_date: Optional[date] = None
-    application_date: Optional[date] = None
-    le_pending_date: Optional[date] = None
-    credit_only_date: Optional[date] = None
-    file_received_date: Optional[date] = None
-    preapproval_date: Optional[date] = None
+    prospect_date: Optional[datetime] = None
+    application_date: Optional[datetime] = None
+    le_pending_date: Optional[datetime] = None
+    credit_only_date: Optional[datetime] = None
+    file_received_date: Optional[datetime] = None
+    preapproval_date: Optional[datetime] = None
 
     # Lock Phase
-    lock_date: Optional[date] = None
-    lock_expiration_date: Optional[date] = None
+    lock_date: Optional[datetime] = None
+    lock_expiration_date: Optional[datetime] = None
 
     # Processing & Underwriting Phase
-    uw_received_date: Optional[date] = None
-    conditions_for_review_date: Optional[date] = None
-    suspended_date: Optional[date] = None
-    loan_approved_date: Optional[date] = None
-    approved_not_accepted_date: Optional[date] = None
-    approval_expires_date: Optional[date] = None
+    uw_received_date: Optional[datetime] = None
+    conditions_for_review_date: Optional[datetime] = None
+    suspended_date: Optional[datetime] = None
+    loan_approved_date: Optional[datetime] = None
+    approved_not_accepted_date: Optional[datetime] = None
+    approval_expires_date: Optional[datetime] = None
 
     # Appraisal Phase
-    appraisal_ordered_date: Optional[date] = None
-    appraisal_received_date: Optional[date] = None
-    appraisal_docs_expire_date: Optional[date] = None
+    appraisal_ordered_date: Optional[datetime] = None
+    appraisal_received_date: Optional[datetime] = None
+    appraisal_docs_expire_date: Optional[datetime] = None
 
     # Closing Disclosure Phase
-    cd_requested_date: Optional[date] = None
-    cd_sent_to_borrower_date: Optional[date] = None
-    cd_acknowledged_date: Optional[date] = None
+    cd_requested_date: Optional[datetime] = None
+    cd_sent_to_borrower_date: Optional[datetime] = None
+    cd_acknowledged_date: Optional[datetime] = None
 
     # Clear to Close & Docs Phase
-    clear_to_close_date: Optional[date] = None
-    docs_ordered_date: Optional[date] = None
-    docs_out_date: Optional[date] = None
-    credit_docs_expire_date: Optional[date] = None
+    clear_to_close_date: Optional[datetime] = None
+    docs_ordered_date: Optional[datetime] = None
+    docs_out_date: Optional[datetime] = None
+    credit_docs_expire_date: Optional[datetime] = None
 
     # Funding Phase
-    scheduled_closing_date: Optional[date] = None
-    scheduled_funding_date: Optional[date] = None
-    funds_ordered_date: Optional[date] = None
-    funds_sent_date: Optional[date] = None
-    funded_date: Optional[date] = None
-    first_payment_date: Optional[date] = None
+    scheduled_closing_date: Optional[datetime] = None
+    scheduled_funding_date: Optional[datetime] = None
+    funds_ordered_date: Optional[datetime] = None
+    funds_sent_date: Optional[datetime] = None
+    funded_date: Optional[datetime] = None
+    first_payment_date: Optional[datetime] = None
 
     # Post-Closing
-    investor_purchased_date: Optional[date] = None
+    investor_purchased_date: Optional[datetime] = None
 
     # Status Changes
-    withdrawn_date: Optional[date] = None
-    contract_received_date: Optional[date] = None
+    withdrawn_date: Optional[datetime] = None
+    contract_received_date: Optional[datetime] = None
 
 class LoanResponse(BaseModel):
     id: int
@@ -4199,55 +4205,55 @@ class LoanResponse(BaseModel):
 
     # SLA Date Fields - All 33 Jungo Custom Byte Mappings
     # Lead & Application Phase
-    prospect_date: Optional[date] = None
-    application_date: Optional[date] = None
-    le_pending_date: Optional[date] = None
-    credit_only_date: Optional[date] = None
-    file_received_date: Optional[date] = None
-    preapproval_date: Optional[date] = None
+    prospect_date: Optional[datetime] = None
+    application_date: Optional[datetime] = None
+    le_pending_date: Optional[datetime] = None
+    credit_only_date: Optional[datetime] = None
+    file_received_date: Optional[datetime] = None
+    preapproval_date: Optional[datetime] = None
 
     # Lock Phase
-    lock_date: Optional[date] = None
-    lock_expiration_date: Optional[date] = None
+    lock_date: Optional[datetime] = None
+    lock_expiration_date: Optional[datetime] = None
 
     # Processing & Underwriting Phase
-    uw_received_date: Optional[date] = None
-    conditions_for_review_date: Optional[date] = None
-    suspended_date: Optional[date] = None
-    loan_approved_date: Optional[date] = None
-    approved_not_accepted_date: Optional[date] = None
-    approval_expires_date: Optional[date] = None
+    uw_received_date: Optional[datetime] = None
+    conditions_for_review_date: Optional[datetime] = None
+    suspended_date: Optional[datetime] = None
+    loan_approved_date: Optional[datetime] = None
+    approved_not_accepted_date: Optional[datetime] = None
+    approval_expires_date: Optional[datetime] = None
 
     # Appraisal Phase
-    appraisal_ordered_date: Optional[date] = None
-    appraisal_received_date: Optional[date] = None
-    appraisal_docs_expire_date: Optional[date] = None
+    appraisal_ordered_date: Optional[datetime] = None
+    appraisal_received_date: Optional[datetime] = None
+    appraisal_docs_expire_date: Optional[datetime] = None
 
     # Closing Disclosure Phase
-    cd_requested_date: Optional[date] = None
-    cd_sent_to_borrower_date: Optional[date] = None
-    cd_acknowledged_date: Optional[date] = None
+    cd_requested_date: Optional[datetime] = None
+    cd_sent_to_borrower_date: Optional[datetime] = None
+    cd_acknowledged_date: Optional[datetime] = None
 
     # Clear to Close & Docs Phase
-    clear_to_close_date: Optional[date] = None
-    docs_ordered_date: Optional[date] = None
-    docs_out_date: Optional[date] = None
-    credit_docs_expire_date: Optional[date] = None
+    clear_to_close_date: Optional[datetime] = None
+    docs_ordered_date: Optional[datetime] = None
+    docs_out_date: Optional[datetime] = None
+    credit_docs_expire_date: Optional[datetime] = None
 
     # Funding Phase
-    scheduled_closing_date: Optional[date] = None
-    scheduled_funding_date: Optional[date] = None
-    funds_ordered_date: Optional[date] = None
-    funds_sent_date: Optional[date] = None
-    funded_date: Optional[date] = None
-    first_payment_date: Optional[date] = None
+    scheduled_closing_date: Optional[datetime] = None
+    scheduled_funding_date: Optional[datetime] = None
+    funds_ordered_date: Optional[datetime] = None
+    funds_sent_date: Optional[datetime] = None
+    funded_date: Optional[datetime] = None
+    first_payment_date: Optional[datetime] = None
 
     # Post-Closing
-    investor_purchased_date: Optional[date] = None
+    investor_purchased_date: Optional[datetime] = None
 
     # Status Changes
-    withdrawn_date: Optional[date] = None
-    contract_received_date: Optional[date] = None
+    withdrawn_date: Optional[datetime] = None
+    contract_received_date: Optional[datetime] = None
 
     # Property Details (Salesforce sync)
     property_address: Optional[str] = None
@@ -21092,6 +21098,17 @@ try:
     logger.info("✅ Phase 5 Premium Features routes loaded (Escalation, QA, Biometrics, Multi-Tenant)")
 except Exception as e:
     logger.warning(f"⚠️ Phase 5 routes not loaded: {e}")
+
+# Phase 6 Advanced AI Orchestration & Automation routes
+try:
+    from routes.phase6_routes import workflow_router, predictive_router, agent_coordination_router, healing_router
+    app.include_router(workflow_router, tags=["Advanced Workflow Orchestration"])
+    app.include_router(predictive_router, tags=["Predictive AI & Recommendations"])
+    app.include_router(agent_coordination_router, tags=["AI Agent Coordination"])
+    app.include_router(healing_router, tags=["Self-Healing System"])
+    logger.info("✅ Phase 6 Advanced AI Orchestration routes loaded (Workflows, Predictive AI, Agent Coordination, Self-Healing)")
+except Exception as e:
+    logger.warning(f"⚠️ Phase 6 routes not loaded: {e}")
 
 # OAuth routes (Microsoft, Google integrations)
 try:

@@ -111,17 +111,17 @@ AccountTreeNode.model_rebuild()
 # =============================================================================
 
 def get_organization_id(current_user=None) -> int:
-    """Get organization ID from current user or default."""
+    """Get organization ID from current user. Raises if not authenticated."""
     if current_user and hasattr(current_user, 'organization_id') and current_user.organization_id:
         return current_user.organization_id
-    return 1  # Default for development/testing
+    raise HTTPException(status_code=401, detail="Authentication required - organization context missing")
 
 
 def get_user_id(current_user=None) -> int:
-    """Get user ID from current user or default."""
+    """Get user ID from current user. Raises if not authenticated."""
     if current_user and hasattr(current_user, 'id') and current_user.id:
         return current_user.id
-    return 1  # Default for development/testing
+    raise HTTPException(status_code=401, detail="Authentication required - user context missing")
 
 
 def log_audit(db: Session, org_id: int, user_id: int, action: str,

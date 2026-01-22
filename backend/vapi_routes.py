@@ -13,10 +13,45 @@ import logging
 from database import get_db
 from vapi_service import VapiService, VapiCRMIntegration
 from vapi_models import VapiCall, VapiCallNote, VapiAssistant
+import os
+import hmac
+import hashlib
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/vapi", tags=["vapi"])
+
+# Vapi webhook secret for server-to-server authentication
+VAPI_WEBHOOK_SECRET = os.getenv("VAPI_WEBHOOK_SECRET")
+
+
+async def verify_vapi_request(request: Request):
+    """
+    Verify that the request comes from Vapi using a shared secret.
+    Checks the X-Vapi-Secret header against the configured VAPI_WEBHOOK_SECRET.
+    """
+    if not VAPI_WEBHOOK_SECRET:
+        logger.warning("VAPI_WEBHOOK_SECRET not configured - webhook verification disabled")
+        return True  # Allow in development if not configured
+
+    # Check for Vapi signature header
+    vapi_secret = request.headers.get("X-Vapi-Secret")
+    if not vapi_secret:
+        # Also check alternative header names
+        vapi_secret = request.headers.get("x-vapi-signature") or request.headers.get("Authorization")
+        if vapi_secret and vapi_secret.startswith("Bearer "):
+            vapi_secret = vapi_secret[7:]
+
+    if not vapi_secret:
+        logger.warning(f"Vapi request missing authentication header from {request.client.host}")
+        raise HTTPException(status_code=401, detail="Missing Vapi authentication")
+
+    # Constant-time comparison to prevent timing attacks
+    if not hmac.compare_digest(vapi_secret, VAPI_WEBHOOK_SECRET):
+        logger.warning(f"Invalid Vapi secret from {request.client.host}")
+        raise HTTPException(status_code=401, detail="Invalid Vapi authentication")
+
+    return True
 
 
 def get_current_user_flexible():
@@ -66,12 +101,13 @@ class AssistantConfigRequest(BaseModel):
     language: Optional[str] = "en"
 
 
-# Webhook Endpoints (No Auth - Vapi webhooks)
+# Webhook Endpoints (Authenticated via Vapi secret)
 @router.post("/webhook")
 async def vapi_webhook(
     request: Request,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_vapi_request)
 ):
     """
     Main Vapi webhook endpoint
@@ -112,7 +148,8 @@ async def process_webhook_background(payload: Dict[str, Any], db: Session):
 @router.post("/webhook/assistant-request")
 async def assistant_request_webhook(
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_vapi_request)
 ):
     """
     Handle assistant-request webhook
@@ -166,12 +203,14 @@ async def assistant_request_webhook(
 
 # ============================================================================
 # FUNCTION CALLING ENDPOINTS (Called by Vapi during conversations)
+# All endpoints authenticated via verify_vapi_request
 # ============================================================================
 
 @router.post("/functions/get-lead-info")
 async def get_lead_info_function(
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_vapi_request)
 ):
     """
     Get lead information by phone number
@@ -230,7 +269,8 @@ async def get_lead_info_function(
 @router.post("/functions/update-lead-status")
 async def update_lead_status_function(
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_vapi_request)
 ):
     """
     Update lead status/stage
@@ -313,7 +353,8 @@ async def update_lead_status_function(
 @router.post("/functions/create-task")
 async def create_task_function(
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_vapi_request)
 ):
     """
     Create a follow-up task
@@ -429,7 +470,8 @@ async def create_task_function(
 @router.post("/functions/schedule-appointment")
 async def schedule_appointment_function(
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_vapi_request)
 ):
     """
     Schedule an appointment/meeting
@@ -562,8 +604,10 @@ async def schedule_appointment_function(
 
 @router.get("/functions/available-time-slots")
 async def available_time_slots_function(
+    request: Request,
     date: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_vapi_request)
 ):
     """
     Get available appointment time slots
@@ -609,7 +653,8 @@ async def available_time_slots_function(
 @router.post("/functions/submit-preapproval-application")
 async def submit_preapproval_application_function(
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_vapi_request)
 ):
     """
     Submit pre-approval application collected over the phone
@@ -744,7 +789,8 @@ async def submit_preapproval_application_function(
 @router.post("/functions/schedule-calendly-appointment")
 async def schedule_calendly_appointment_function(
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_vapi_request)
 ):
     """
     Provide Calendly link for scheduling discovery call.
@@ -854,7 +900,8 @@ async def schedule_calendly_appointment_function(
 @router.post("/functions/identify-caller")
 async def identify_caller_function(
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_vapi_request)
 ):
     """
     Identify caller and get routing recommendation
@@ -883,7 +930,8 @@ async def identify_caller_function(
 @router.post("/functions/transfer-to-production-assistant")
 async def transfer_to_production_assistant_function(
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_vapi_request)
 ):
     """
     Transfer call to Production Assistant with whisper context
@@ -966,7 +1014,8 @@ async def transfer_to_production_assistant_function(
 @router.post("/functions/transfer-to-loan-officer")
 async def transfer_to_loan_officer_function(
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_vapi_request)
 ):
     """
     Transfer call to Loan Officer with whisper context
@@ -1056,7 +1105,8 @@ async def transfer_to_loan_officer_function(
 @router.post("/functions/transfer-to-processor")
 async def transfer_to_processor_function(
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_vapi_request)
 ):
     """
     Transfer call to Processor with whisper context
@@ -2216,7 +2266,8 @@ async def run_vapi_migration(
 async def ai_receptionist_sms_webhook(
     request: Request,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_vapi_request)
 ):
     """
     Webhook for inbound SMS to AI Receptionist.
@@ -2403,7 +2454,8 @@ async def get_sms_config(
 @router.post("/functions/send-sms-calendly-link")
 async def send_sms_calendly_link_function(
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_vapi_request)
 ):
     """
     VAPI Function: Send Calendly link via SMS.

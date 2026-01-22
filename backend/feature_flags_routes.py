@@ -113,10 +113,13 @@ def get_current_company_id(request: Request) -> int:
         token = auth_header[7:]
         try:
             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-            return payload.get("company_id", 1)
+            company_id = payload.get("company_id")
+            if not company_id:
+                raise HTTPException(status_code=401, detail="Token missing company_id")
+            return company_id
         except JWTError:
-            pass
-    return 1  # Default company
+            raise HTTPException(status_code=401, detail="Invalid authentication token")
+    raise HTTPException(status_code=401, detail="Authentication required")
 
 
 def get_current_user_id(request: Request) -> int:
@@ -137,11 +140,10 @@ def get_current_user_id(request: Request) -> int:
             # Get user ID from email (sub) by querying database, or from user_id claim
             if "user_id" in payload:
                 return payload["user_id"]
-            # Fallback to querying by email
-            return 1
+            raise HTTPException(status_code=401, detail="Token missing user_id")
         except JWTError:
-            pass
-    return 1  # Default user
+            raise HTTPException(status_code=401, detail="Invalid authentication token")
+    raise HTTPException(status_code=401, detail="Authentication required")
 
 
 def log_feature_audit(

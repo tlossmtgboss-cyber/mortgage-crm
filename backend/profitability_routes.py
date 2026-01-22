@@ -51,8 +51,8 @@ def get_organization_id(db: Session, request: Request = None) -> int:
                 if "company_id" in payload:
                     return payload["company_id"]
             except JWTError:
-                pass
-    return 1  # Default organization
+                raise HTTPException(status_code=401, detail="Invalid authentication token")
+    raise HTTPException(status_code=401, detail="Authentication required")
 
 
 # ============ Dashboard Endpoints ============
