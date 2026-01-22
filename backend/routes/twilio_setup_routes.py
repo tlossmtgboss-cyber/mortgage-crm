@@ -1025,7 +1025,8 @@ class OutboundCallRequest(BaseModel):
 async def make_outbound_ai_call(
     request: OutboundCallRequest,
     admin_key: str = None,
-    user_email: str = None
+    user_email: str = None,
+    db: Session = Depends(get_db)
 ):
     """
     Make an outbound AI call using user's Twilio credentials.
@@ -1036,10 +1037,6 @@ async def make_outbound_ai_call(
     """
     from twilio.rest import Client as TwilioClient
     from sqlalchemy import text
-    from database import get_db as db_getter
-
-    # Get database session using context manager
-    db = next(db_getter())
 
     try:
         # Determine which user's credentials to use
