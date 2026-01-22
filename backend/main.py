@@ -42181,20 +42181,24 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     pipeline_stats = []
 
     # OPTIMIZED: Single query to get all lead counts
-    lead_counts = db.query(
-        func.count(case((Lead.stage == LeadStage.NEW, 1))).label('new_leads'),
-        func.count(case((
-            (Lead.stage == LeadStage.NEW) &
-            (Lead.created_at < datetime.now(timezone.utc) - timedelta(hours=24)), 1
-        ))).label('uncontacted'),
-        func.count(case((Lead.stage == LeadStage.PRE_APPROVED, 1))).label('preapproved')
-    ).filter(
-        Lead.owner_id == current_user.id
-    ).first()
+    try:
+        lead_counts = db.query(
+            func.count(case((Lead.stage == LeadStage.NEW, 1))).label('new_leads'),
+            func.count(case((
+                (Lead.stage == LeadStage.NEW) &
+                (Lead.created_at < datetime.now(timezone.utc) - timedelta(hours=24)), 1
+            ))).label('uncontacted'),
+            func.count(case((Lead.stage == LeadStage.PRE_APPROVED, 1))).label('preapproved')
+        ).filter(
+            Lead.owner_id == current_user.id
+        ).first()
 
-    new_leads = lead_counts.new_leads or 0
-    uncontacted_alerts = lead_counts.uncontacted or 0
-    preapproved = lead_counts.preapproved or 0
+        new_leads = lead_counts.new_leads or 0
+        uncontacted_alerts = lead_counts.uncontacted or 0
+        preapproved = lead_counts.preapproved or 0
+    except Exception as lead_err:
+        logger.warning(f"Dashboard: Error getting lead counts: {lead_err}")
+        new_leads = uncontacted_alerts = preapproved = 0
 
     pipeline_stats.append({
         "id": "new",
@@ -42215,23 +42219,29 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     })
 
     # OPTIMIZED: Fetch all active loans in one query and aggregate in memory
-    active_loans = db.query(Loan).filter(
-        Loan.loan_officer_id == current_user.id,
-        Loan.stage.in_([LoanStage.PROCESSING, LoanStage.UW_RECEIVED, LoanStage.CTC])
-    ).all()
+    try:
+        active_loans = db.query(Loan).filter(
+            Loan.loan_officer_id == current_user.id,
+            Loan.stage.in_([LoanStage.PROCESSING, LoanStage.UW_RECEIVED, LoanStage.CTC])
+        ).all()
 
-    # Process data in memory instead of separate queries
-    processing = [l for l in active_loans if l.stage == LoanStage.PROCESSING]
-    underwriting = [l for l in active_loans if l.stage == LoanStage.UW_RECEIVED]
-    ctc = [l for l in active_loans if l.stage == LoanStage.CTC]
+        # Process data in memory instead of separate queries
+        processing = [l for l in active_loans if l.stage == LoanStage.PROCESSING]
+        underwriting = [l for l in active_loans if l.stage == LoanStage.UW_RECEIVED]
+        ctc = [l for l in active_loans if l.stage == LoanStage.CTC]
 
-    processing_volume = sum(loan.amount for loan in processing if loan.amount)
-    processing_alerts = sum(1 for loan in processing if loan.days_in_stage and loan.days_in_stage > 14)
+        processing_volume = sum(loan.amount for loan in processing if loan.amount)
+        processing_alerts = sum(1 for loan in processing if loan.days_in_stage and loan.days_in_stage > 14)
 
-    underwriting_volume = sum(loan.amount for loan in underwriting if loan.amount)
-    underwriting_alerts = sum(1 for loan in underwriting if loan.stage == LoanStage.SUSPENDED)
+        underwriting_volume = sum(loan.amount for loan in underwriting if loan.amount)
+        underwriting_alerts = sum(1 for loan in underwriting if loan.stage == LoanStage.SUSPENDED)
 
-    ctc_volume = sum(loan.amount for loan in ctc if loan.amount)
+        ctc_volume = sum(loan.amount for loan in ctc if loan.amount)
+    except Exception as loan_err:
+        logger.warning(f"Dashboard: Error getting active loans: {loan_err}")
+        processing = underwriting = ctc = []
+        processing_volume = underwriting_volume = ctc_volume = 0
+        processing_alerts = underwriting_alerts = 0
 
     pipeline_stats.append({
         "id": "processing",
@@ -42261,89 +42271,105 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     })
 
     # Funded this month - use aggregation
-    funded_data = db.query(
-        func.count(Loan.id).label('count'),
-        func.sum(Loan.amount).label('volume')
-    ).filter(
-        Loan.loan_officer_id == current_user.id,
-        Loan.stage == LoanStage.FUNDED,
-        Loan.funded_date >= start_of_month
-    ).first()
+    try:
+        funded_data = db.query(
+            func.count(Loan.id).label('count'),
+            func.sum(Loan.amount).label('volume')
+        ).filter(
+            Loan.loan_officer_id == current_user.id,
+            Loan.stage == LoanStage.FUNDED,
+            Loan.funded_date >= start_of_month
+        ).first()
+        funded_count = funded_data.count or 0
+        funded_volume = int(funded_data.volume or 0)
+    except Exception as funded_err:
+        logger.warning(f"Dashboard: Error getting funded data: {funded_err}")
+        funded_count = funded_volume = 0
 
     pipeline_stats.append({
         "id": "funded",
         "name": "Funded This Month",
-        "count": funded_data.count or 0,
+        "count": funded_count,
         "alerts": 0,
         "alert_text": "",
-        "volume": int(funded_data.volume or 0)
+        "volume": funded_volume
     })
 
     # ============================================================================
     # TASKS FOR TODAY
     # ============================================================================
 
-    tasks_today = db.query(Task).filter(
-        Task.owner_id == current_user.id,
-        Task.status.in_(["pending", "in_progress"]),
-        Task.due_date <= today + timedelta(days=1)
-    ).order_by(Task.priority.desc(), Task.due_date).limit(10).all()
+    try:
+        tasks_today = db.query(Task).filter(
+            Task.owner_id == current_user.id,
+            Task.status.in_(["pending", "in_progress"]),
+            Task.due_date <= today + timedelta(days=1)
+        ).order_by(Task.priority.desc(), Task.due_date).limit(10).all()
 
-    prioritized_tasks = [{
-        "title": task.title,
-        "borrower": task.related_contact_name,
-        "stage": task.related_type,
-        "urgency": task.priority,
-        "ai_action": None
-    } for task in tasks_today]
+        prioritized_tasks = [{
+            "title": task.title,
+            "borrower": task.related_contact_name,
+            "stage": task.related_type,
+            "urgency": task.priority,
+            "ai_action": None
+        } for task in tasks_today]
+    except Exception as task_err:
+        logger.warning(f"Dashboard: Error getting tasks: {task_err}")
+        prioritized_tasks = []
 
     # ============================================================================
     # LEAD METRICS & ALERTS
     # ============================================================================
 
-    # OPTIMIZED: Single query for all lead metrics
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0)
-    lead_metrics_query = db.query(
-        func.count(Lead.id).label('total_leads'),
-        func.count(case((Lead.created_at >= today_start, 1))).label('new_today'),
-        func.count(case((
-            (Lead.ai_score >= 80) &
-            (Lead.stage.in_([LeadStage.NEW, LeadStage.ATTEMPTED_CONTACT])), 1
-        ))).label('hot_leads'),
-        func.count(case((
-            (Lead.ai_score >= 75) &
-            (Lead.stage == LeadStage.ATTEMPTED_CONTACT), 1
-        ))).label('high_intent')
-    ).filter(
-        Lead.owner_id == current_user.id
-    ).first()
+    try:
+        # OPTIMIZED: Single query for all lead metrics
+        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0)
+        lead_metrics_query = db.query(
+            func.count(Lead.id).label('total_leads'),
+            func.count(case((Lead.created_at >= today_start, 1))).label('new_today'),
+            func.count(case((
+                (Lead.ai_score >= 80) &
+                (Lead.stage.in_([LeadStage.NEW, LeadStage.ATTEMPTED_CONTACT])), 1
+            ))).label('hot_leads'),
+            func.count(case((
+                (Lead.ai_score >= 75) &
+                (Lead.stage == LeadStage.ATTEMPTED_CONTACT), 1
+            ))).label('high_intent')
+        ).filter(
+            Lead.owner_id == current_user.id
+        ).first()
 
-    total_leads = lead_metrics_query.total_leads or 1
-    new_today = lead_metrics_query.new_today or 0
-    hot_leads = lead_metrics_query.hot_leads or 0
-    high_intent_leads = lead_metrics_query.high_intent or 0
+        total_leads = lead_metrics_query.total_leads or 1
+        new_today = lead_metrics_query.new_today or 0
+        hot_leads = lead_metrics_query.hot_leads or 0
+        high_intent_leads = lead_metrics_query.high_intent or 0
 
-    # Get applications count (already have it from earlier, but need to query separately)
-    applications = db.query(func.count(Loan.id)).filter(
-        Loan.loan_officer_id == current_user.id
-    ).scalar() or 0
+        # Get applications count (already have it from earlier, but need to query separately)
+        applications = db.query(func.count(Loan.id)).filter(
+            Loan.loan_officer_id == current_user.id
+        ).scalar() or 0
 
-    conversion_rate = int((applications / total_leads * 100)) if total_leads > 0 else 0
+        conversion_rate = int((applications / total_leads * 100)) if total_leads > 0 else 0
 
-    # Calculate average contact time from lead data (time from creation to first contact attempt)
-    # Uses EXTRACT to get hours between lead creation and first contact attempt
-    avg_contact_time_result = db.query(
-        func.avg(
-            func.extract('epoch', Lead.first_contact_attempt_date - Lead.created_at) / 3600
-        ).label('avg_hours')
-    ).filter(
-        Lead.owner_id == current_user.id,
-        Lead.first_contact_attempt_date.isnot(None),
-        Lead.created_at.isnot(None)
-    ).scalar()
+        # Calculate average contact time from lead data (time from creation to first contact attempt)
+        # Uses EXTRACT to get hours between lead creation and first contact attempt
+        avg_contact_time_result = db.query(
+            func.avg(
+                func.extract('epoch', Lead.first_contact_attempt_date - Lead.created_at) / 3600
+            ).label('avg_hours')
+        ).filter(
+            Lead.owner_id == current_user.id,
+            Lead.first_contact_attempt_date.isnot(None),
+            Lead.created_at.isnot(None)
+        ).scalar()
 
-    # Default to 1.2 hours if no data, otherwise round to 1 decimal
-    avg_contact_time = round(float(avg_contact_time_result), 1) if avg_contact_time_result else 1.2
+        # Default to 1.2 hours if no data, otherwise round to 1 decimal
+        avg_contact_time = round(float(avg_contact_time_result), 1) if avg_contact_time_result else 1.2
+    except Exception as lead_metrics_err:
+        logger.warning(f"Dashboard: Error getting lead metrics: {lead_metrics_err}")
+        total_leads = 1
+        new_today = hot_leads = high_intent_leads = applications = conversion_rate = 0
+        avg_contact_time = 1.2
 
     # Generate AI alerts
     alerts = []
@@ -42365,37 +42391,41 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     # REFERRAL PARTNER STATS
     # ============================================================================
 
-    # OPTIMIZED: Get partners and their lead counts in separate queries, then join in memory
-    # NOTE: ReferralPartners are shared resources without ownership
-    partners = db.query(ReferralPartner).filter(
-        ReferralPartner.status == "active"
-    ).limit(5).all()
+    try:
+        # OPTIMIZED: Get partners and their lead counts in separate queries, then join in memory
+        # NOTE: ReferralPartners are shared resources without ownership
+        partners = db.query(ReferralPartner).filter(
+            ReferralPartner.status == "active"
+        ).limit(5).all()
 
-    # Get all lead counts by source in one query
-    partner_names = [p.name for p in partners]
-    if partner_names:
-        lead_counts_by_source = db.query(
-            Lead.source,
-            func.count(Lead.id).label('count')
-        ).filter(
-            Lead.owner_id == current_user.id,
-            Lead.source.in_(partner_names)
-        ).group_by(Lead.source).all()
+        # Get all lead counts by source in one query
+        partner_names = [p.name for p in partners]
+        if partner_names:
+            lead_counts_by_source = db.query(
+                Lead.source,
+                func.count(Lead.id).label('count')
+            ).filter(
+                Lead.owner_id == current_user.id,
+                Lead.source.in_(partner_names)
+            ).group_by(Lead.source).all()
 
-        # Create a lookup dict
-        source_counts = {row.source: row.count for row in lead_counts_by_source}
-    else:
-        source_counts = {}
+            # Create a lookup dict
+            source_counts = {row.source: row.count for row in lead_counts_by_source}
+        else:
+            source_counts = {}
 
-    referral_stats = {
-        "top_partners": [{
-            "name": p.name,
-            "received": source_counts.get(p.name, 0),
-            "sent": p.referrals_out or 0,
-            "balance": (source_counts.get(p.name, 0)) - (p.referrals_out or 0)
-        } for p in partners],
-        "engagement": []
-    }
+        referral_stats = {
+            "top_partners": [{
+                "name": p.name,
+                "received": source_counts.get(p.name, 0),
+                "sent": p.referrals_out or 0,
+                "balance": (source_counts.get(p.name, 0)) - (p.referrals_out or 0)
+            } for p in partners],
+            "engagement": []
+        }
+    except Exception as referral_err:
+        logger.warning(f"Dashboard: Error getting referral stats: {referral_err}")
+        referral_stats = {"top_partners": [], "engagement": []}
 
     # ============================================================================
     # TEAM STATS (if applicable)
@@ -42420,15 +42450,21 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     # ============================================================================
 
     # Get total loan count for this user (to determine if they have any data)
-    total_loan_count = db.query(Loan).filter(Loan.loan_officer_id == current_user.id).count()
+    try:
+        total_loan_count = db.query(Loan).filter(Loan.loan_officer_id == current_user.id).count()
+    except Exception:
+        total_loan_count = 0
 
     # Calculate average time to close from funded loans
     thirty_days_ago = today - timedelta(days=30)
-    funded_loans_recent = db.query(Loan).filter(
-        Loan.loan_officer_id == current_user.id,
-        Loan.stage == LoanStage.FUNDED,
-        Loan.funded_date >= thirty_days_ago
-    ).all()
+    try:
+        funded_loans_recent = db.query(Loan).filter(
+            Loan.loan_officer_id == current_user.id,
+            Loan.stage == LoanStage.FUNDED,
+            Loan.funded_date >= thirty_days_ago
+        ).all()
+    except Exception:
+        funded_loans_recent = []
 
     # Calculate avg time to close
     time_to_close_list = []
@@ -42444,31 +42480,43 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     avg_time_to_close = sum(time_to_close_list) / len(time_to_close_list) if time_to_close_list else 35
 
     # Calculate pull-through rate (funded / total applications)
-    total_applications = db.query(func.count(Loan.id)).filter(
-        Loan.loan_officer_id == current_user.id,
-        Loan.created_at >= thirty_days_ago
-    ).scalar() or 1
+    try:
+        total_applications = db.query(func.count(Loan.id)).filter(
+            Loan.loan_officer_id == current_user.id,
+            Loan.created_at >= thirty_days_ago
+        ).scalar() or 1
+    except Exception:
+        total_applications = 1
 
     funded_count = len(funded_loans_recent)
     pull_through_rate = int((funded_count / total_applications * 100)) if total_applications > 0 else 0
 
     # Count loans falling behind (in stage > 14 days)
-    loans_behind = db.query(func.count(Loan.id)).filter(
-        Loan.loan_officer_id == current_user.id,
-        Loan.stage.in_([LoanStage.PROCESSING, LoanStage.UW_RECEIVED]),
-        Loan.days_in_stage > 14
-    ).scalar() or 0
+    try:
+        loans_behind = db.query(func.count(Loan.id)).filter(
+            Loan.loan_officer_id == current_user.id,
+            Loan.stage.in_([LoanStage.PROCESSING, LoanStage.UW_RECEIVED]),
+            Loan.days_in_stage > 14
+        ).scalar() or 0
+    except Exception:
+        loans_behind = 0
 
     # Calculate automation rate from AI agent actions
-    total_tasks = db.query(func.count(Task.id)).filter(
-        Task.owner_id == current_user.id,
-        Task.created_at >= thirty_days_ago
-    ).scalar() or 1
+    try:
+        total_tasks = db.query(func.count(Task.id)).filter(
+            Task.owner_id == current_user.id,
+            Task.created_at >= thirty_days_ago
+        ).scalar() or 1
+    except Exception:
+        total_tasks = 1
 
-    ai_tasks_count = db.query(func.count(AIColleagueAction.id)).filter(
-        AIColleagueAction.user_id == current_user.id,
-        AIColleagueAction.created_at >= thirty_days_ago
-    ).scalar() or 0
+    try:
+        ai_tasks_count = db.query(func.count(AIColleagueAction.id)).filter(
+            AIColleagueAction.user_id == current_user.id,
+            AIColleagueAction.created_at >= thirty_days_ago
+        ).scalar() or 0
+    except Exception:
+        ai_tasks_count = 0
 
     automation_rate = int((ai_tasks_count / (total_tasks + ai_tasks_count) * 100)) if (total_tasks + ai_tasks_count) > 0 else 0
 
@@ -42497,7 +42545,26 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     ))
 
     # Calculate trend values from historical data
-    trends = calculate_efficiency_trends(db, current_user.id)
+    try:
+        trends = calculate_efficiency_trends(db, current_user.id)
+    except Exception:
+        trends = {"overall_trend": "stable", "time_to_close_change": 0, "pull_through_change": 0, "loans_behind_change": 0, "automation_change": 0}
+
+    # Build efficiency dict with safe helper function calls
+    try:
+        stage_perf = calculate_stage_performance(db, current_user.id, thirty_days_ago) if total_loan_count > 0 else []
+    except Exception:
+        stage_perf = []
+
+    try:
+        team_perf = calculate_team_performance(db, current_user.id, thirty_days_ago) if total_loan_count > 0 else []
+    except Exception:
+        team_perf = []
+
+    try:
+        bottlenecks = calculate_bottlenecks(db, current_user.id) if loans_behind > 0 else []
+    except Exception:
+        bottlenecks = []
 
     efficiency = {
         "overallScore": overall_score,
@@ -42516,14 +42583,14 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
         "customerSatisfactionChange": 0,  # Would need historical satisfaction tracking
 
         # Stage Performance - calculated from real loan/lead data
-        "stages": [] if total_loan_count == 0 else calculate_stage_performance(db, current_user.id, thirty_days_ago),
+        "stages": stage_perf,
 
         # Team Performance - calculated from real user metrics
-        "team": [] if total_loan_count == 0 else calculate_team_performance(db, current_user.id, thirty_days_ago),
+        "team": team_perf,
 
         # Bottlenecks - dynamically calculated from real loan issues
-        "bottleneckCount": len(calculate_bottlenecks(db, current_user.id)) if loans_behind > 0 else 0,
-        "bottlenecks": calculate_bottlenecks(db, current_user.id) if loans_behind > 0 else []
+        "bottleneckCount": len(bottlenecks),
+        "bottlenecks": bottlenecks
     }
 
     result = {
@@ -47695,93 +47762,93 @@ async def get_tasks(
 ):
     try:
         query = db.query(AITask).filter(AITask.assigned_to_id == current_user.id)
-    if type:
-        try:
-            type_enum = TaskType(type)
-            query = query.filter(AITask.type == type_enum)
-        except ValueError:
-            pass
+        if type:
+            try:
+                type_enum = TaskType(type)
+                query = query.filter(AITask.type == type_enum)
+            except ValueError:
+                pass
 
-    tasks = query.order_by(AITask.created_at.desc()).offset(skip).limit(limit).all()
+        tasks = query.order_by(AITask.created_at.desc()).offset(skip).limit(limit).all()
 
-    # Enhance tasks with AI intelligence
-    enhanced_tasks = []
-    for task in tasks:
-        task_dict = {
-            "id": task.id,
-            "title": task.title,
-            "description": task.description,
-            "type": task.type.value if task.type else None,
-            "category": task.category,
-            "priority": task.priority,
-            "ai_confidence": task.ai_confidence,
-            "ai_reasoning": task.ai_reasoning,
-            "suggested_action": task.suggested_action,
-            "completed_action": task.completed_action,
-            "borrower_name": task.borrower_name,
-            "lead_id": task.lead_id,
-            "loan_id": task.loan_id,
-            "assigned_to_id": task.assigned_to_id,
-            "due_date": task.due_date,
-            "completed_at": task.completed_at,
-            "estimated_time": task.estimated_time,
-            "feedback": task.feedback,
-            "user_metadata": task.user_metadata,
-            "created_at": task.created_at,
-            "updated_at": task.updated_at
-        }
+        # Enhance tasks with AI intelligence
+        enhanced_tasks = []
+        for task in tasks:
+            task_dict = {
+                "id": task.id,
+                "title": task.title,
+                "description": task.description,
+                "type": task.type.value if task.type else None,
+                "category": task.category,
+                "priority": task.priority,
+                "ai_confidence": task.ai_confidence,
+                "ai_reasoning": task.ai_reasoning,
+                "suggested_action": task.suggested_action,
+                "completed_action": task.completed_action,
+                "borrower_name": task.borrower_name,
+                "lead_id": task.lead_id,
+                "loan_id": task.loan_id,
+                "assigned_to_id": task.assigned_to_id,
+                "due_date": task.due_date,
+                "completed_at": task.completed_at,
+                "estimated_time": task.estimated_time,
+                "feedback": task.feedback,
+                "user_metadata": task.user_metadata,
+                "created_at": task.created_at,
+                "updated_at": task.updated_at
+            }
 
-        # Add entity name
-        entity_name = None
-        entity_type = None
-        if task.loan_id:
-            entity_type = "loan"
-            entity_name = get_entity_name("loan", task.loan_id, db)
-        elif task.lead_id:
-            entity_type = "lead"
-            entity_name = get_entity_name("lead", task.lead_id, db)
+            # Add entity name
+            entity_name = None
+            entity_type = None
+            if task.loan_id:
+                entity_type = "loan"
+                entity_name = get_entity_name("loan", task.loan_id, db)
+            elif task.lead_id:
+                entity_type = "lead"
+                entity_name = get_entity_name("lead", task.lead_id, db)
 
-        task_dict["entity_name"] = entity_name
-        task_dict["entity_type"] = entity_type
+            task_dict["entity_name"] = entity_name
+            task_dict["entity_type"] = entity_type
 
-        # Classify task intent if description is available
-        if task.description:
-            email_intent = classify_email_intent(
-                task.title or "",
-                task.description or "",
-                {}
-            )
-            task_dict["task_intent"] = email_intent.get("intent")
-            task_dict["task_intent_description"] = email_intent.get("description")
-        else:
-            task_dict["task_intent"] = None
-            task_dict["task_intent_description"] = None
-
-        # Generate recommended action if not already set
-        if not task.suggested_action and task.description:
-            email_intent = classify_email_intent(task.title or "", task.description or "", {})
-            if email_intent.get("confidence", 0) > 0.60:
-                recommended_action = generate_recommended_action(
-                    email_intent,
-                    entity_type,
+            # Classify task intent if description is available
+            if task.description:
+                email_intent = classify_email_intent(
+                    task.title or "",
+                    task.description or "",
                     {}
                 )
-                task_dict["recommended_action"] = recommended_action
+                task_dict["task_intent"] = email_intent.get("intent")
+                task_dict["task_intent_description"] = email_intent.get("description")
             else:
-                task_dict["recommended_action"] = None
-        else:
-            # Use existing suggested_action
-            if task.suggested_action:
-                task_dict["recommended_action"] = {
-                    "title": "Suggested Action",
-                    "description": task.suggested_action,
-                    "action_type": "manual",
-                    "learning_status": "AI suggestion based on task analysis"
-                }
-            else:
-                task_dict["recommended_action"] = None
+                task_dict["task_intent"] = None
+                task_dict["task_intent_description"] = None
 
-        enhanced_tasks.append(task_dict)
+            # Generate recommended action if not already set
+            if not task.suggested_action and task.description:
+                email_intent = classify_email_intent(task.title or "", task.description or "", {})
+                if email_intent.get("confidence", 0) > 0.60:
+                    recommended_action = generate_recommended_action(
+                        email_intent,
+                        entity_type,
+                        {}
+                    )
+                    task_dict["recommended_action"] = recommended_action
+                else:
+                    task_dict["recommended_action"] = None
+            else:
+                # Use existing suggested_action
+                if task.suggested_action:
+                    task_dict["recommended_action"] = {
+                        "title": "Suggested Action",
+                        "description": task.suggested_action,
+                        "action_type": "manual",
+                        "learning_status": "AI suggestion based on task analysis"
+                    }
+                else:
+                    task_dict["recommended_action"] = None
+
+            enhanced_tasks.append(task_dict)
 
         return enhanced_tasks
     except Exception as e:
