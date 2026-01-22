@@ -118,9 +118,20 @@ function SalesforceSetupWizard({ onComplete }) {
         const data = await res.json();
         setSchemas(data.objects || []);
         setConnectionError(false);
+        // If no schemas and needs discovery, user should click "Discover Schema"
+        if (data.needs_discovery) {
+          console.log('No schemas found - user should discover schema');
+        }
+      } else if (res.status === 400) {
+        // Not connected - show connect button
+        console.log('Salesforce not connected');
+        setConnectionError(false);
+        setStep(1);
       } else if (res.status === 500 || res.status === 401) {
         // Connection is broken - tokens may be expired
         console.error('Salesforce connection error:', res.status);
+        const errorData = await res.json().catch(() => ({}));
+        console.error('Error details:', errorData);
         setConnectionError(true);
       }
     } catch (err) {

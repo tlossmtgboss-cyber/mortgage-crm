@@ -402,6 +402,107 @@ async def trigger_discovery_for_profile(
         }
 
 
+@router.post("/import-to-mum-debug")
+async def import_funded_loans_to_mum_debug(
+    db: Session = Depends(get_db)
+):
+    """
+    Import funded loans from loans table to MUM clients - no auth required for debugging.
+    """
+    try:
+        db.rollback()
+    except:
+        pass
+
+    try:
+        results = {'imported': 0, 'skipped': 0, 'errors': []}
+
+        # Get funded loans not already in mum_clients
+        funded_loans = db.execute(text("""
+            SELECT l.id, l.loan_number, l.borrower_name, l.borrower_first_name, l.borrower_last_name,
+                   l.borrower_email, l.borrower_phone, l.amount, l.interest_rate,
+                   l.funded_date, l.closing_date, l.property_address,
+                   l.property_city, l.property_state, l.property_zip,
+                   l.loan_type, l.stage, l.status
+            FROM loans l
+            WHERE (l.stage IN ('FUNDED', 'Funded', 'funded')
+                   OR l.status IN ('funded', 'FUNDED', 'Funded', 'closed', 'CLOSED')
+                   OR l.funded_date IS NOT NULL)
+            AND NOT EXISTS (
+                SELECT 1 FROM mum_clients m
+                WHERE m.loan_number = l.loan_number
+            )
+        """)).fetchall()
+
+        logger.info(f"Found {len(funded_loans)} funded loans to import to MUM clients")
+
+        imported_clients = []
+
+        for loan in funded_loans:
+            try:
+                # Build client name
+                client_name = loan[2]  # borrower_name
+                if not client_name and (loan[3] or loan[4]):  # first/last name
+                    client_name = f"{loan[3] or ''} {loan[4] or ''}".strip()
+                if not client_name:
+                    client_name = f"Client - {loan[1]}"  # loan_number
+
+                # Get closing date
+                close_date = loan[9] or loan[10]  # funded_date or closing_date
+
+                # Insert into mum_clients
+                db.execute(text("""
+                    INSERT INTO mum_clients (
+                        name, loan_number, original_close_date,
+                        original_rate, loan_balance,
+                        status, engagement_score, created_at
+                    ) VALUES (
+                        :name, :loan_number, :close_date,
+                        :rate, :balance,
+                        'active', 50, CURRENT_TIMESTAMP
+                    )
+                """), {
+                    'name': client_name,
+                    'loan_number': loan[1],
+                    'close_date': close_date,
+                    'rate': loan[8],  # interest_rate
+                    'balance': loan[7],  # amount
+                })
+
+                results['imported'] += 1
+                imported_clients.append({
+                    'name': client_name,
+                    'loan_number': loan[1],
+                    'amount': float(loan[7]) if loan[7] else None
+                })
+
+            except Exception as e:
+                results['errors'].append(f"Loan {loan[1]}: {str(e)}")
+                logger.error(f"Error importing loan {loan[1]} to MUM: {e}")
+
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": f"Imported {results['imported']} funded loans to MUM clients",
+            "imported": results['imported'],
+            "found": len(funded_loans),
+            "skipped": results['skipped'],
+            "errors": results['errors'][:20],
+            "clients": imported_clients[:50]
+        }
+
+    except Exception as e:
+        import traceback
+        logger.error(f"Import to MUM failed: {e}")
+        db.rollback()
+        return {
+            "status": "error",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+
 # ============ Pydantic Models ============
 
 class ConnectionStatus(BaseModel):
@@ -658,11 +759,11 @@ async def get_connection_status(
     db: Session = Depends(get_db)
 ):
     """Get Salesforce connection status for current user."""
-    # Rollback any failed transaction from previous requests
+    # Ensure tables exist
     try:
-        db.rollback()
-    except:
-        pass
+        fix_salesforce_schema(db)
+    except Exception as e:
+        logger.warning(f"Could not run schema fix: {e}")
 
     try:
         user_id = require_user(request, db)
@@ -679,6 +780,10 @@ async def get_connection_status(
         logger.info(f"Found profile for user {user_id}: {profile.id if profile else 'None'}, status: {profile.status if profile else 'N/A'}")
     except Exception as e:
         logger.error(f"Salesforce status check: Error getting profile: {e}")
+        # If table doesn't exist, return not connected instead of 500
+        if "does not exist" in str(e).lower() or "relation" in str(e).lower():
+            logger.warning(f"Integration profiles table may not exist: {e}")
+            return ConnectionStatus(connected=False)
         raise HTTPException(status_code=500, detail=f"Error getting profile: {str(e)}")
 
     if not profile:
@@ -786,11 +891,11 @@ async def discover_schema(
     db: Session = Depends(get_db)
 ):
     """Discover/refresh Salesforce schema."""
-    # Rollback any failed transaction from previous requests
+    # Ensure tables exist
     try:
-        db.rollback()
-    except:
-        pass
+        fix_salesforce_schema(db)
+    except Exception as e:
+        logger.warning(f"Could not run schema fix: {e}")
 
     user_id = require_user(request, db)
     profile = get_integration_profile(db, user_id)
@@ -802,12 +907,21 @@ async def discover_schema(
         schemas = await salesforce_schema.discover_schema(db, profile.id)
         return {
             "status": "success",
-            "objects_discovered": len(schemas),
-            "message": f"Discovered {len(schemas)} Salesforce objects"
+            "objects_discovered": len(schemas) if schemas else 0,
+            "message": f"Discovered {len(schemas) if schemas else 0} Salesforce objects"
         }
+    except ValueError as e:
+        # Token/auth issues - user needs to reconnect
+        logger.error(f"Schema discovery auth error: {e}")
+        raise HTTPException(status_code=401, detail=str(e))
     except Exception as e:
-        db.rollback()
+        try:
+            db.rollback()
+        except:
+            pass
         logger.error(f"Schema discovery failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -817,11 +931,11 @@ async def get_schema_objects(
     db: Session = Depends(get_db)
 ):
     """Get all discovered Salesforce objects."""
-    # Rollback any failed transaction from previous requests
+    # Ensure schema tables exist
     try:
-        db.rollback()
-    except:
-        pass
+        fix_salesforce_schema(db)
+    except Exception as e:
+        logger.warning(f"Could not run schema fix: {e}")
 
     try:
         user_id = require_user(request, db)
@@ -848,6 +962,10 @@ async def get_schema_objects(
         logger.info(f"Schema objects: Found {len(schemas)} schemas for profile {profile.id}")
     except Exception as e:
         logger.error(f"Schema objects: Error getting schemas: {e}")
+        # Return empty array instead of 500 if table issues
+        if "does not exist" in str(e).lower() or "relation" in str(e).lower():
+            logger.warning(f"Schema table may not exist, returning empty: {e}")
+            return {"objects": [], "needs_discovery": True}
         raise HTTPException(status_code=500, detail=f"Error loading schemas: {str(e)}")
 
     return {
@@ -859,7 +977,8 @@ async def get_schema_objects(
                 "field_count": len(s.get("fields", []))
             }
             for s in schemas
-        ]
+        ],
+        "needs_discovery": len(schemas) == 0
     }
 
 
