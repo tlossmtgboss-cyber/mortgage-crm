@@ -895,7 +895,7 @@ async def invite_subscriber(
                 'ip': request.client.host if request.client else 'unknown'
             })
             db.commit()
-            logger.info(f"Invitation stored with token: {invitation_token}")
+            logger.info(f"Invitation stored with token: {invitation_token[:8]}...")
         except Exception as store_err:
             logger.error(f"Could not store invitation: {store_err}")
             db.rollback()
