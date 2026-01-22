@@ -56,32 +56,43 @@ def fix_salesforce_schema(db: Session) -> dict:
     except Exception as e:
         logger.warning(f"Could not run OAuth tables migration: {e}")
 
-    # Fix field_mappings table - make old columns nullable or drop them
-    old_columns_to_fix = [
-        ("sf_object", "ALTER TABLE field_mappings ALTER COLUMN sf_object DROP NOT NULL"),
-        ("sf_field", "ALTER TABLE field_mappings ALTER COLUMN sf_field DROP NOT NULL"),
-        ("crm_entity", "ALTER TABLE field_mappings ALTER COLUMN crm_entity DROP NOT NULL"),
-        ("crm_field", "ALTER TABLE field_mappings ALTER COLUMN crm_field DROP NOT NULL"),
-    ]
-    logger.info(f"Attempting to fix {len(old_columns_to_fix)} old columns in field_mappings...")
-    for col_name, sql in old_columns_to_fix:
-        try:
-            logger.info(f"Executing: {sql}")
-            db.execute(text(sql))
-            db.commit()
-            fixes.append(f"Made {col_name} nullable in field_mappings")
-            logger.info(f"Successfully made {col_name} nullable")
-        except Exception as e:
-            db.rollback()
-            error_msg = str(e)
-            # Check if it's just because column doesn't exist or is already nullable
-            if "does not exist" in error_msg.lower():
-                fixes.append(f"Column {col_name} does not exist (OK)")
-            elif "not null" in error_msg.lower() and "does not have" in error_msg.lower():
-                fixes.append(f"Column {col_name} already nullable (OK)")
-            else:
-                fixes.append(f"Could not fix {col_name}: {error_msg[:100]}")
-            logger.info(f"field_mappings.{col_name} fix result: {error_msg[:100]}")
+    # Fix field_mappings table - make ALL old columns nullable
+    # First, get all NOT NULL columns from the table that we're not using in our model
+    model_columns = {
+        'id', 'integration_profile_id', 'source_object', 'source_field',
+        'target_entity', 'target_field', 'transform_type', 'transform_config',
+        'data_type', 'required', 'default_value', 'sync_direction',
+        'enabled', 'validation_status', 'validation_message', 'created_at', 'updated_at'
+    }
+
+    try:
+        # Get all NOT NULL columns in field_mappings table
+        result = db.execute(text("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = 'field_mappings'
+            AND is_nullable = 'NO'
+        """))
+        not_null_columns = [row[0] for row in result.fetchall()]
+        logger.info(f"Found NOT NULL columns in field_mappings: {not_null_columns}")
+
+        # Fix columns that are NOT NULL but not in our model
+        for col_name in not_null_columns:
+            if col_name.lower() not in {c.lower() for c in model_columns}:
+                try:
+                    sql = f"ALTER TABLE field_mappings ALTER COLUMN {col_name} DROP NOT NULL"
+                    logger.info(f"Executing: {sql}")
+                    db.execute(text(sql))
+                    db.commit()
+                    fixes.append(f"Made {col_name} nullable in field_mappings")
+                    logger.info(f"Successfully made {col_name} nullable")
+                except Exception as e:
+                    db.rollback()
+                    fixes.append(f"Could not fix {col_name}: {str(e)[:50]}")
+                    logger.warning(f"Could not make {col_name} nullable: {e}")
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error fixing field_mappings columns: {e}")
 
     # Fix sf_user_schemas table - add all required columns
     sf_user_schemas_columns = [
