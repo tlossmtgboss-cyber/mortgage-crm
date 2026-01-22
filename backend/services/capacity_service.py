@@ -3,6 +3,7 @@ Capacity Service
 Real-time capacity calculation and workload distribution for Master Manager Platform.
 """
 
+import logging
 from datetime import datetime, date, timedelta, timezone
 from typing import List, Dict, Optional, Any, Tuple
 from sqlalchemy import text, func
