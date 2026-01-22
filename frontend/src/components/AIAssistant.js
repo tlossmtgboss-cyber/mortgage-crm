@@ -141,12 +141,10 @@ function AIAssistant({ isOpen, onClose, context = {} }) {
 
     recognition.onstart = () => {
       setIsListening(true);
-      console.log('Voice recognition started. Speak now...');
     };
 
     recognition.onresult = (event) => {
       const transcript = event.results[0][0].transcript;
-      console.log('Voice input received:', transcript);
       setInputValue(transcript);
     };
 
@@ -162,7 +160,6 @@ function AIAssistant({ isOpen, onClose, context = {} }) {
 
     recognition.onend = () => {
       setIsListening(false);
-      console.log('Voice recognition ended');
     };
 
     recognitionRef.current = recognition;

@@ -72,7 +72,6 @@ api.interceptors.response.use(
       // Don't redirect if already on login page or during logout
       const isLoginPage = window.location.pathname === '/login';
       if (!isLoginPage) {
-        console.log('[API] 401 Unauthorized - redirecting to login');
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         window.location.href = '/login';
@@ -133,7 +132,6 @@ export const leadsAPI = {
       } catch (error) {
         lastError = error;
         if (error.message === 'Network Error' && attempt < maxRetries) {
-          console.log(`[leadsAPI.delete] Retrying after Network Error (attempt ${attempt + 1}/${maxRetries})`);
           await new Promise(resolve => setTimeout(resolve, 1000));
           continue;
         }
@@ -152,7 +150,6 @@ export const leadsAPI = {
       } catch (error) {
         lastError = error;
         if (error.message === 'Network Error' && attempt < maxRetries) {
-          console.log(`[leadsAPI.bulkDelete] Retrying after Network Error (attempt ${attempt + 1}/${maxRetries})`);
           await new Promise(resolve => setTimeout(resolve, 1000));
           continue;
         }
@@ -174,7 +171,6 @@ export const leadsAPI = {
       } catch (error) {
         lastError = error;
         if (error.message === 'Network Error' && attempt < maxRetries) {
-          console.log(`[leadsAPI.bulkUpdateStatus] Retrying after Network Error (attempt ${attempt + 1}/${maxRetries})`);
           await new Promise(resolve => setTimeout(resolve, 1000));
           continue;
         }
@@ -202,48 +198,27 @@ export const loansAPI = {
   create: async (data, skipDuplicateCheck = false, retryCount = 0) => {
     const maxRetries = 2;
     try {
-      console.log('Creating loan with data:', data);
-      console.log('API Base URL:', API_BASE_URL);
-      console.log('Auth token exists:', !!localStorage.getItem('token'));
-
       const url = skipDuplicateCheck
         ? '/api/v1/loans/?skip_duplicate_check=true'
         : '/api/v1/loans/';
       const response = await api.post(url, data);
-      console.log('Loan created successfully:', response.data);
       return response.data;
     } catch (error) {
-      console.error('Loan creation error details:', {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        message: error.message,
-        config: {
-          url: error.config?.url,
-          method: error.config?.method,
-          baseURL: error.config?.baseURL
-        }
-      });
-
       // Retry on Network Error (up to maxRetries times)
       if (error.message === 'Network Error' && retryCount < maxRetries) {
-        console.log(`Network error, retrying (${retryCount + 1}/${maxRetries})...`);
         await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
         return loansAPI.create(data, skipDuplicateCheck, retryCount + 1);
       }
 
       // If 405 error, try without trailing slash as fallback
       if (error.response?.status === 405) {
-        console.log('Retrying without trailing slash...');
         try {
           const url = skipDuplicateCheck
             ? '/api/v1/loans?skip_duplicate_check=true'
             : '/api/v1/loans';
           const retryResponse = await api.post(url, data);
-          console.log('Retry successful:', retryResponse.data);
           return retryResponse.data;
         } catch (retryError) {
-          console.error('Retry also failed:', retryError);
           throw retryError;
         }
       }
@@ -2208,22 +2183,9 @@ export const purlAPI = {
   // Health check for debugging
   healthCheck: async () => {
     try {
-      console.log('[PURL API] Health check - API Base URL:', API_BASE_URL);
-      console.log('[PURL API] Health check - Token exists:', !!localStorage.getItem('token'));
       const response = await api.get('/api/v1/purl-admin/health');
-      console.log('[PURL API] Health check response:', response.data);
       return { success: true, data: response.data };
     } catch (error) {
-      console.error('[PURL API] Health check failed:', {
-        message: error.message,
-        code: error.code,
-        status: error.response?.status,
-        data: error.response?.data,
-        config: {
-          url: error.config?.url,
-          baseURL: error.config?.baseURL
-        }
-      });
       return { success: false, error: error.message, details: error.response?.data };
     }
   },
@@ -2232,21 +2194,11 @@ export const purlAPI = {
   getWorkspaceByLead: async (leadId, retryCount = 0) => {
     const maxRetries = 2;
     try {
-      console.log(`[PURL API] Getting workspace for lead ${leadId}, attempt ${retryCount + 1}`);
       const response = await api.get(`/api/v1/purl-admin/workspaces/by-lead/${leadId}`);
-      console.log('[PURL API] Workspace found:', response.data);
       return response.data;
     } catch (error) {
-      console.error('[PURL API] getWorkspaceByLead error:', {
-        message: error.message,
-        status: error.response?.status,
-        data: error.response?.data,
-        leadId
-      });
-
       // Retry on Network Error (transient failures)
       if (error.message === 'Network Error' && retryCount < maxRetries) {
-        console.log(`[PURL API] Network error, retrying (${retryCount + 1}/${maxRetries})...`);
         await new Promise(resolve => setTimeout(resolve, 1000));
         return purlAPI.getWorkspaceByLead(leadId, retryCount + 1);
       }
@@ -2274,19 +2226,10 @@ export const purlAPI = {
   createWorkspace: async (data, retryCount = 0) => {
     const maxRetries = 2;
     try {
-      console.log('[PURL API] Creating workspace:', data);
       const response = await api.post('/api/v1/purl-admin/workspaces', data);
-      console.log('[PURL API] Workspace created:', response.data);
       return response.data;
     } catch (error) {
-      console.error('[PURL API] createWorkspace error:', {
-        message: error.message,
-        status: error.response?.status,
-        data: error.response?.data
-      });
-
       if (error.message === 'Network Error' && retryCount < maxRetries) {
-        console.log(`[PURL API] Network error, retrying (${retryCount + 1}/${maxRetries})...`);
         await new Promise(resolve => setTimeout(resolve, 1000));
         return purlAPI.createWorkspace(data, retryCount + 1);
       }
@@ -2999,20 +2942,3 @@ export const callMonitoringAPI = {
 };
 
 export default api;
-
-// Debug function for console - helps diagnose API issues
-if (typeof window !== 'undefined') {
-  window.debugPURLAPI = async () => {
-    console.log('=== PURL API Debug ===');
-    console.log('API Base URL:', API_BASE_URL);
-    console.log('Token exists:', !!localStorage.getItem('token'));
-
-    console.log('\nTesting PURL health endpoint...');
-    const result = await purlAPI.healthCheck();
-    console.log('Health check result:', result);
-
-    console.log('\n=== End Debug ===');
-    return result;
-  };
-  console.log('[API] Debug function available: window.debugPURLAPI()');
-}

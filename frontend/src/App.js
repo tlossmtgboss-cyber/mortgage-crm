@@ -28,9 +28,6 @@ import ResetPassword from './pages/ResetPassword';
 import AdminOnboarding from './pages/AdminOnboarding';
 import ApplicationSubmitted from './pages/ApplicationSubmitted';
 
-// BUILD VERSION - for debugging deployment
-console.log('[APP] Build version: 2026-01-11-v4 - Voice Agents Debug');
-
 // Lazy load all other pages for instant navigation
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const CommandCenter = lazy(() => import('./pages/CommandCenter'));
@@ -349,7 +346,6 @@ function App() {
   useEffect(() => {
     const handleAuthChange = (event) => {
       const { type } = event.detail || {};
-      console.log('[App] Auth change detected:', type);
 
       // Clear all cached queries on login or logout
       queryClient.clear();

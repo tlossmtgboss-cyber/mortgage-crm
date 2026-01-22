@@ -93,7 +93,6 @@ export const PermissionProvider = ({ children }) => {
     // If in role preview mode, use the preview role
     if (rolePreview && rolePreview.role_name) {
       const previewRoleName = rolePreview.role_name.toLowerCase().replace(/\s+/g, '_');
-      console.log('Role preview mode active, using role:', previewRoleName);
       // Map production_assistant variants and concierge to production_assistant
       if (previewRoleName === 'production_assistant_1' || previewRoleName === 'production_assistant_2' || previewRoleName === 'concierge') {
         return 'production_assistant';
@@ -104,7 +103,6 @@ export const PermissionProvider = ({ children }) => {
     // If user has multi-role and has selected an active role, use that for UI
     if (canSwitchRoles && activeRole && activeRole.name) {
       const mappedRole = mapRoleNameToEffective(activeRole.name);
-      console.log('Multi-role active, using role:', activeRole.name, '-> mapped to:', mappedRole);
       return mappedRole;
     }
 
@@ -140,7 +138,6 @@ export const PermissionProvider = ({ children }) => {
   useEffect(() => {
     const handleAuthChange = (event) => {
       const { type } = event.detail || {};
-      console.log('[PermissionContext] Auth change detected:', type);
 
       if (type === 'logout') {
         // Clear all permission state on logout
@@ -183,7 +180,6 @@ export const PermissionProvider = ({ children }) => {
       const publicRoutes = ['/apply/', '/purl/', '/borrower-portal/'];
       const currentPath = window.location.pathname;
       if (publicRoutes.some(route => currentPath.startsWith(route))) {
-        console.log('PermissionContext: Skipping fetch on public route:', currentPath);
         setLoading(false);
         return;
       }
@@ -191,12 +187,10 @@ export const PermissionProvider = ({ children }) => {
       // Get the current user from localStorage
       const userStr = localStorage.getItem('user');
       if (!userStr) {
-        console.warn('PermissionContext: No user found in localStorage - setting default sales role');
         setUserRole('sales');
         setLoading(false);
         return;
       }
-      console.log('PermissionContext: User from localStorage:', userStr?.substring(0, 100));
 
       const user = JSON.parse(userStr);
       let userId = user.id;
@@ -253,21 +247,11 @@ export const PermissionProvider = ({ children }) => {
       try {
         localStorage.setItem('userRole', role);
       } catch (e) {
-        console.warn('Could not save userRole to localStorage:', e);
+        // Ignore localStorage errors
       }
-
-      console.log('Permissions loaded:', {
-        userId,
-        permissionRole: data.permission_role,
-        legacyRole: userLegacyRole,
-        effectiveRole: getUserEffectiveRole(role, userLegacyRole),
-        permissionCount: Object.keys(data.permissions || {}).length,
-        isImpersonating
-      });
 
     } catch (error) {
       console.error('PermissionContext: Error fetching permissions:', error);
-      console.error('PermissionContext: Error details:', error.message, error.stack);
       // FIXED: Keep existing permissions and role on error - don't demote admins
       // Ignore localStorage errors
     } finally {
@@ -280,7 +264,6 @@ export const PermissionProvider = ({ children }) => {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        console.warn('PermissionContext: No token for fetching roles');
         return;
       }
 
@@ -294,7 +277,6 @@ export const PermissionProvider = ({ children }) => {
       if (!response.ok) {
         // If endpoint doesn't exist yet (404), silently continue
         if (response.status === 404) {
-          console.log('Multi-role endpoint not available yet');
           return;
         }
         throw new Error(`Failed to fetch user roles: ${response.status}`);
@@ -312,14 +294,8 @@ export const PermissionProvider = ({ children }) => {
         localStorage.setItem('activeRole', JSON.stringify(data.active_role || null));
         localStorage.setItem('canSwitchRoles', String(data.can_switch_roles || false));
       } catch (e) {
-        console.warn('Could not save roles to localStorage:', e);
+        // Ignore localStorage errors
       }
-
-      console.log('User roles loaded:', {
-        assignedRoles: data.assigned_roles?.length || 0,
-        activeRole: data.active_role?.name,
-        canSwitchRoles: data.can_switch_roles
-      });
     } catch (error) {
       console.error('Error fetching user roles:', error);
     }
@@ -361,10 +337,9 @@ export const PermissionProvider = ({ children }) => {
       try {
         localStorage.setItem('activeRole', JSON.stringify(newActiveRole));
       } catch (e) {
-        console.warn('Could not save activeRole to localStorage:', e);
+        // Ignore localStorage errors
       }
 
-      console.log('Switched to role:', data.active_role.name);
       return { success: true, message: data.message };
     } catch (error) {
       console.error('Error switching role:', error);
@@ -472,7 +447,7 @@ export const PermissionProvider = ({ children }) => {
         localStorage.removeItem('viewAsRole');
       }
     } catch (e) {
-      console.warn('Could not save viewAsRole to localStorage:', e);
+      // Ignore localStorage errors
     }
   };
 

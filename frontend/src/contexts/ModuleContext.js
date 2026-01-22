@@ -97,7 +97,6 @@ export const ModuleProvider = ({ children }) => {
     const publicRoutes = ['/apply/', '/purl/', '/borrower-portal/'];
     const currentPath = window.location.pathname;
     if (publicRoutes.some(route => currentPath.startsWith(route))) {
-      console.log('ModuleContext: Skipping fetch on public route:', currentPath);
       setLoading(false);
       return;
     }
