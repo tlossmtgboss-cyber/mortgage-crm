@@ -231,6 +231,58 @@ Provide your analysis in the JSON format specified. Be thorough but precise - on
         }
         artifacts.append(summary_artifact)
 
+        # Create scribe_recap artifact with comprehensive recap and next steps
+        next_steps = []
+        for item in parsed.get('action_items', []):
+            owner = item.get('owner', 'LO')
+            deadline = item.get('deadline')
+            next_steps.append({
+                'step': item.get('title', item.get('description', '')),
+                'timeline': deadline if deadline else 'As soon as possible',
+                'owner': owner,
+            })
+
+        scribe_recap_artifact = {
+            'type': 'scribe_recap',
+            'title': 'Call Recap',
+            'content': parsed.get('detailed_summary', parsed.get('executive_summary', '')),
+            'structured_data': {
+                'detailed_recap': parsed.get('detailed_summary', ''),
+                'executive_summary': parsed.get('executive_summary', ''),
+                'next_steps': next_steps,
+                'key_commitments': parsed.get('key_points', []),
+                'follow_up_timeline': parsed.get('next_call_topic', 'Follow up as needed'),
+                'call_outcome': parsed.get('call_outcome'),
+                'borrower_sentiment': parsed.get('borrower_sentiment'),
+            },
+            'confidence': base_confidence,
+        }
+        artifacts.append(scribe_recap_artifact)
+
+        # Create stacked_note artifact for chronological note stacking
+        key_points = parsed.get('key_points', [])
+        stacked_note_content = f"**{parsed.get('call_outcome', 'Call').upper()} CALL**\n\n"
+        stacked_note_content += parsed.get('executive_summary', '') + "\n\n"
+        if key_points:
+            stacked_note_content += "**Key Points:**\n"
+            for point in key_points[:5]:  # Limit to 5 key points
+                stacked_note_content += f"• {point}\n"
+
+        stacked_note_artifact = {
+            'type': 'stacked_note',
+            'title': f"Scribe Notes - {parsed.get('call_outcome', 'Call').title()}",
+            'content': stacked_note_content,
+            'structured_data': {
+                'source': 'scribe',
+                'call_outcome': parsed.get('call_outcome'),
+                'key_points': key_points,
+                'borrower_sentiment': parsed.get('borrower_sentiment'),
+                'next_call_recommended': parsed.get('next_call_recommended'),
+            },
+            'confidence': base_confidence,
+        }
+        artifacts.append(stacked_note_artifact)
+
         # Create action item artifacts
         for item in parsed.get('action_items', []):
             # Determine confidence based on specificity

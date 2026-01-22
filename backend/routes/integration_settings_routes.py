@@ -425,6 +425,15 @@ INTEGRATIONS = {
         "icon": "recallai",
         "features": ["recording", "transcription", "analysis"]
     },
+    "elevenlabs": {
+        "id": "elevenlabs",
+        "name": "ElevenLabs",
+        "category": "ai",
+        "auth_type": "api_key",
+        "description": "Ultra-realistic AI voice synthesis for AI Receptionist",
+        "icon": "elevenlabs",
+        "features": ["text_to_speech", "voice_cloning", "custom_voices", "ai_receptionist"]
+    },
     # Document
     "docusign": {
         "id": "docusign",

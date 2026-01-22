@@ -21388,6 +21388,15 @@ try:
 except Exception as e:
     logger.warning(f"Integration Settings routes not loaded: {e}")
 
+# ElevenLabs Voice AI routes
+try:
+    from routes.elevenlabs_routes import router as elevenlabs_router, set_dependencies as set_elevenlabs_deps
+    set_elevenlabs_deps(User, get_current_user, get_db)
+    app.include_router(elevenlabs_router, tags=["ElevenLabs"])
+    logger.info("ElevenLabs routes loaded")
+except Exception as e:
+    logger.warning(f"ElevenLabs routes not loaded: {e}")
+
 # Twilio Self-Service Setup routes
 try:
     from routes.twilio_setup_routes import router as twilio_setup_router, set_dependencies as set_twilio_setup_deps

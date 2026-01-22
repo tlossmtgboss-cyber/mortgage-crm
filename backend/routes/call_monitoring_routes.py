@@ -9,6 +9,7 @@ API endpoints for the AI call monitoring system:
 - Artifact execution
 """
 
+import json
 import logging
 from datetime import datetime
 from typing import Dict, Any, Optional, List
@@ -18,6 +19,7 @@ from fastapi import (
     APIRouter, Depends, HTTPException, BackgroundTasks,
     Query, Request, status
 )
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -1351,6 +1353,594 @@ async def get_call_metrics(
 
     except Exception as e:
         logger.error(f"Error getting call metrics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# ARTIFACT SHARING ENDPOINTS
+# =============================================================================
+
+class CreateShareLinkRequest(BaseModel):
+    """Request to create a shareable link for an artifact."""
+    expires_in_days: int = Field(default=7, ge=1, le=90, description="Days until link expires")
+    title_override: Optional[str] = Field(None, description="Custom title for shared view")
+    description_override: Optional[str] = Field(None, description="Custom description")
+
+
+@router.post("/artifacts/{artifact_id}/share", response_model=Dict[str, Any])
+async def create_artifact_share_link(
+    artifact_id: str,
+    request: CreateShareLinkRequest,
+    http_request: Request,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Create a shareable link for an artifact (e.g., calculator result).
+
+    The generated link can be shared with borrowers during video calls
+    or via SMS/email to show them calculation results.
+    """
+    try:
+        from services.calculator_share_service import CalculatorShareService
+
+        service = CalculatorShareService(db)
+        result = service.create_share_link(
+            artifact_id=artifact_id,
+            user_id=current_user.get("id"),
+            expires_in_days=request.expires_in_days,
+            title_override=request.title_override,
+            description_override=request.description_override,
+        )
+
+        # Build full URL
+        base_url = str(http_request.base_url).rstrip("/")
+        result["full_url"] = f"{base_url}{result['share_url']}"
+
+        return {
+            "status": "success",
+            **result
+        }
+
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error creating share link: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/shared/{share_token}", response_model=Dict[str, Any])
+async def get_shared_artifact(
+    share_token: str,
+    http_request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Get a shared artifact by its token (PUBLIC endpoint - no auth required).
+
+    This endpoint is used by the public SharedCalculator page to display
+    calculator results to borrowers.
+    """
+    try:
+        from services.calculator_share_service import CalculatorShareService
+
+        # Get viewer info for tracking
+        viewer_ip = http_request.client.host if http_request.client else None
+        viewer_user_agent = http_request.headers.get("user-agent")
+
+        service = CalculatorShareService(db)
+        artifact = service.get_shared_artifact(
+            share_token=share_token,
+            viewer_ip=viewer_ip,
+            viewer_user_agent=viewer_user_agent,
+        )
+
+        if not artifact:
+            raise HTTPException(
+                status_code=404,
+                detail="Share link not found, expired, or deactivated"
+            )
+
+        return {
+            "status": "success",
+            **artifact
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting shared artifact: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/embed/{share_token}", response_class=HTMLResponse)
+async def get_calculator_embed(
+    share_token: str,
+    http_request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Get embeddable HTML for a calculator result (for iframe embedding).
+
+    Used by the portal Video OS for screen sharing calculator results
+    during video calls.
+    """
+    from fastapi.responses import HTMLResponse
+
+    try:
+        from services.calculator_share_service import CalculatorShareService, generate_embed_html
+
+        viewer_ip = http_request.client.host if http_request.client else None
+        viewer_user_agent = http_request.headers.get("user-agent")
+
+        service = CalculatorShareService(db)
+        artifact = service.get_shared_artifact(
+            share_token=share_token,
+            viewer_ip=viewer_ip,
+            viewer_user_agent=viewer_user_agent,
+        )
+
+        if not artifact:
+            return HTMLResponse(
+                content="<html><body><h1>Link expired or not found</h1></body></html>",
+                status_code=404
+            )
+
+        base_url = str(http_request.base_url).rstrip("/")
+        html = generate_embed_html(artifact, base_url)
+
+        return HTMLResponse(content=html)
+
+    except Exception as e:
+        logger.error(f"Error generating embed: {e}")
+        return HTMLResponse(
+            content=f"<html><body><h1>Error loading calculator</h1><p>{str(e)}</p></body></html>",
+            status_code=500
+        )
+
+
+@router.delete("/artifacts/{artifact_id}/share/{share_token}", response_model=Dict[str, Any])
+async def deactivate_share_link(
+    artifact_id: str,
+    share_token: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Deactivate a share link.
+
+    Only the creator or admins can deactivate links.
+    """
+    try:
+        from services.calculator_share_service import CalculatorShareService
+
+        service = CalculatorShareService(db)
+        success = service.deactivate_share(
+            share_token=share_token,
+            user_id=current_user.get("id"),
+        )
+
+        if not success:
+            raise HTTPException(
+                status_code=404,
+                detail="Share link not found or you don't have permission to deactivate it"
+            )
+
+        return {
+            "status": "success",
+            "message": "Share link deactivated",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deactivating share link: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/artifacts/{artifact_id}/shares", response_model=Dict[str, Any])
+async def get_artifact_shares(
+    artifact_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get all share links for an artifact.
+    """
+    try:
+        from services.calculator_share_service import CalculatorShareService
+
+        service = CalculatorShareService(db)
+        shares = service.get_shares_for_artifact(artifact_id)
+
+        return {
+            "status": "success",
+            "artifact_id": artifact_id,
+            "shares": shares,
+            "total": len(shares),
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting artifact shares: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/my-shares", response_model=Dict[str, Any])
+async def get_my_shares(
+    include_expired: bool = Query(False, description="Include expired links"),
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get all share links created by the current user.
+    """
+    try:
+        from services.calculator_share_service import CalculatorShareService
+
+        service = CalculatorShareService(db)
+        shares = service.get_user_shares(
+            user_id=current_user.get("id"),
+            include_expired=include_expired,
+            limit=limit,
+        )
+
+        return {
+            "status": "success",
+            "shares": shares,
+            "total": len(shares),
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting user shares: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# CALL INTELLIGENCE EXPANSION - STACKED NOTES & REVIEW TASKS
+# =============================================================================
+
+class CreateReviewTaskRequest(BaseModel):
+    """Request to create a review task from JR LO or Underwriter analysis."""
+    task_type: str = Field(..., description="Type of task: 'uw_review', 'jrlo_5c_review', etc.")
+    title: str = Field(..., description="Task title")
+    description: str = Field(..., description="Task description")
+    priority: str = Field(default="medium", description="Task priority: low, medium, high")
+    assigned_role: Optional[str] = Field(None, description="Role to assign: 'pa', 'lo', 'processor'")
+
+
+class CompleteUWReviewRequest(BaseModel):
+    """Request to complete UW review and create PA task."""
+    summary: str = Field(..., description="Summary of UW review findings")
+    items_addressed: List[str] = Field(default=[], description="List of items addressed")
+    create_pa_task: bool = Field(default=True, description="Whether to create a PA task")
+    pa_task_title: Optional[str] = Field(None, description="Optional custom PA task title")
+
+
+@router.get("/client/{client_id}/stacked-notes", response_model=Dict[str, Any])
+async def get_stacked_notes(
+    client_id: str,
+    limit: int = Query(default=100, ge=1, le=500, description="Maximum notes to return"),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get all stacked notes for a client across all calls.
+
+    Notes are sorted newest first (new notes on top, prior notes pushed down).
+    Each note includes date stamp, source (Scribe/JR LO/Underwriter), and call mode.
+    """
+    try:
+        # Get all sessions for this client (via loan_id or lead_id)
+        sessions_query = text("""
+            SELECT DISTINCT cs.id as session_id, cs.call_mode, cs.started_at, cs.ended_at
+            FROM call_sessions cs
+            WHERE (cs.loan_id = :client_id OR cs.lead_id = :client_id)
+            ORDER BY cs.started_at DESC
+        """)
+        sessions_result = db.execute(sessions_query, {"client_id": client_id})
+        sessions = [dict(row._mapping) for row in sessions_result]
+
+        if not sessions:
+            return {
+                "status": "success",
+                "client_id": client_id,
+                "notes": [],
+                "total": 0,
+                "message": "No call sessions found for this client"
+            }
+
+        session_ids = [str(s["session_id"]) for s in sessions]
+
+        # Get all stacked notes and related artifacts
+        notes_query = text("""
+            SELECT
+                ca.id,
+                ca.session_id,
+                ca.artifact_type,
+                ca.content,
+                ca.structured_data,
+                ca.created_at,
+                cs.call_mode,
+                cs.started_at as call_started_at,
+                cs.ended_at as call_ended_at
+            FROM call_artifacts ca
+            JOIN call_sessions cs ON cs.id = ca.session_id
+            WHERE ca.session_id = ANY(:session_ids)
+            AND ca.artifact_type IN (
+                'stacked_note', 'scribe_recap', 'summary',
+                'uw_note', 'uw_review_item',
+                'five_c_credit', 'five_c_collateral', 'five_c_capacity',
+                'five_c_characteristics', 'five_c_cash'
+            )
+            ORDER BY ca.created_at DESC
+            LIMIT :limit
+        """)
+
+        notes_result = db.execute(notes_query, {
+            "session_ids": session_ids,
+            "limit": limit
+        })
+
+        notes = []
+        for row in notes_result:
+            row_dict = dict(row._mapping)
+
+            # Determine source based on artifact type
+            artifact_type = row_dict.get("artifact_type", "")
+            if artifact_type in ["scribe_recap", "summary"]:
+                source = "scribe"
+            elif artifact_type.startswith("five_c_"):
+                source = "jrlo"
+            elif artifact_type in ["uw_note", "uw_review_item"]:
+                source = "underwriter"
+            elif artifact_type == "stacked_note":
+                source = row_dict.get("structured_data", {}).get("source", "unknown")
+            else:
+                source = "unknown"
+
+            notes.append({
+                "id": str(row_dict["id"]),
+                "session_id": str(row_dict["session_id"]),
+                "artifact_type": artifact_type,
+                "content": row_dict.get("content"),
+                "structured_data": row_dict.get("structured_data", {}),
+                "source": source,
+                "call_mode": row_dict.get("call_mode"),
+                "created_at": row_dict["created_at"].isoformat() if row_dict.get("created_at") else None,
+                "call_started_at": row_dict["call_started_at"].isoformat() if row_dict.get("call_started_at") else None,
+                "call_ended_at": row_dict["call_ended_at"].isoformat() if row_dict.get("call_ended_at") else None,
+            })
+
+        return {
+            "status": "success",
+            "client_id": client_id,
+            "notes": notes,
+            "total": len(notes),
+            "sessions_count": len(sessions),
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting stacked notes for client {client_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/sessions/{session_id}/complete-uw-review", response_model=Dict[str, Any])
+async def complete_uw_review(
+    session_id: str,
+    request: CompleteUWReviewRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Mark UW review as complete and optionally create a Production Assistant task.
+
+    This endpoint is called when the underwriter completes their review checklist.
+    It updates all UW review items as addressed and creates a PA task if requested.
+    """
+    try:
+        orchestrator = CallMonitoringOrchestrator(db)
+        session = orchestrator.get_session(session_id)
+
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        user_id = current_user.get("id", 1)
+
+        # Mark all UW review items as completed for this session
+        db.execute(text("""
+            UPDATE call_artifacts
+            SET execution_status = 'completed',
+                structured_data = jsonb_set(
+                    COALESCE(structured_data, '{}'::jsonb),
+                    '{addressed_at}',
+                    to_jsonb(NOW()::text)
+                )
+            WHERE session_id = :session_id
+            AND artifact_type = 'uw_review_item'
+            AND (execution_status IS NULL OR execution_status != 'completed')
+        """), {"session_id": session_id})
+
+        # Create UW completion artifact
+        db.execute(text("""
+            INSERT INTO call_artifacts (
+                session_id, artifact_type, content, structured_data,
+                execution_status, created_at
+            ) VALUES (
+                :session_id, 'uw_review_completed', :summary,
+                :structured_data, 'completed', NOW()
+            )
+        """), {
+            "session_id": session_id,
+            "summary": request.summary,
+            "structured_data": json.dumps({
+                "items_addressed": request.items_addressed,
+                "completed_by": user_id,
+                "completed_at": datetime.utcnow().isoformat(),
+            })
+        })
+
+        pa_task_id = None
+
+        # Create PA task if requested
+        if request.create_pa_task:
+            loan_id = session.get("loan_id")
+
+            if loan_id:
+                # Find PA user for this loan
+                pa_result = db.execute(text("""
+                    SELECT u.id
+                    FROM users u
+                    JOIN loans l ON (l.processor_id = u.id OR u.role = 'production_assistant')
+                    WHERE l.id = :loan_id
+                    LIMIT 1
+                """), {"loan_id": loan_id})
+                pa_row = pa_result.fetchone()
+                pa_user_id = pa_row[0] if pa_row else None
+            else:
+                pa_user_id = None
+
+            # Create the task
+            task_title = request.pa_task_title or f"Review UW Notes - Call {session_id[:8]}"
+
+            task_result = db.execute(text("""
+                INSERT INTO tasks (
+                    title, description, status, priority,
+                    task_type, source, source_id,
+                    loan_id, assigned_to, created_by, created_at
+                ) VALUES (
+                    :title, :description, 'pending', 'medium',
+                    'uw_review', 'underwriter_agent', :session_id,
+                    :loan_id, :assigned_to, :created_by, NOW()
+                )
+                RETURNING id
+            """), {
+                "title": task_title,
+                "description": f"UW Review completed. Summary: {request.summary}",
+                "session_id": session_id,
+                "loan_id": loan_id,
+                "assigned_to": pa_user_id,
+                "created_by": user_id,
+            })
+
+            task_row = task_result.fetchone()
+            pa_task_id = task_row[0] if task_row else None
+
+        db.commit()
+
+        return {
+            "status": "success",
+            "session_id": session_id,
+            "items_addressed_count": len(request.items_addressed),
+            "pa_task_created": request.create_pa_task,
+            "pa_task_id": pa_task_id,
+            "message": "UW review completed successfully"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error completing UW review for session {session_id}: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/sessions/{session_id}/create-review-task", response_model=Dict[str, Any])
+async def create_review_task(
+    session_id: str,
+    request: CreateReviewTaskRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Create a review task from JR LO or Underwriter analysis.
+
+    This endpoint allows agents to create tasks for items that need attention,
+    such as 5 C's review items or underwriting conditions.
+    """
+    try:
+        orchestrator = CallMonitoringOrchestrator(db)
+        session = orchestrator.get_session(session_id)
+
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        user_id = current_user.get("id", 1)
+        loan_id = session.get("loan_id")
+
+        # Determine assigned user based on role
+        assigned_to = None
+        if request.assigned_role and loan_id:
+            role_mapping = {
+                "pa": "production_assistant",
+                "lo": "loan_officer",
+                "processor": "processor",
+            }
+            target_role = role_mapping.get(request.assigned_role)
+
+            if target_role:
+                # Try to find user with that role for this loan
+                user_result = db.execute(text("""
+                    SELECT u.id
+                    FROM users u
+                    LEFT JOIN loans l ON (
+                        (l.loan_officer_id = u.id AND :role = 'loan_officer')
+                        OR (l.processor_id = u.id AND :role = 'processor')
+                        OR (u.role = :role)
+                    )
+                    WHERE l.id = :loan_id OR u.role = :role
+                    LIMIT 1
+                """), {"loan_id": loan_id, "role": target_role})
+                user_row = user_result.fetchone()
+                assigned_to = user_row[0] if user_row else None
+
+        # Map priority string to appropriate value
+        priority_map = {"low": "low", "medium": "medium", "high": "high"}
+        priority = priority_map.get(request.priority, "medium")
+
+        # Create the task
+        task_result = db.execute(text("""
+            INSERT INTO tasks (
+                title, description, status, priority,
+                task_type, source, source_id,
+                loan_id, assigned_to, created_by, created_at
+            ) VALUES (
+                :title, :description, 'pending', :priority,
+                :task_type, :source, :session_id,
+                :loan_id, :assigned_to, :created_by, NOW()
+            )
+            RETURNING id
+        """), {
+            "title": request.title,
+            "description": request.description,
+            "priority": priority,
+            "task_type": request.task_type,
+            "source": f"{request.task_type}_agent",
+            "session_id": session_id,
+            "loan_id": loan_id,
+            "assigned_to": assigned_to,
+            "created_by": user_id,
+        })
+
+        task_row = task_result.fetchone()
+        task_id = task_row[0] if task_row else None
+
+        db.commit()
+
+        return {
+            "status": "success",
+            "task_id": task_id,
+            "session_id": session_id,
+            "task_type": request.task_type,
+            "assigned_to": assigned_to,
+            "message": f"Review task '{request.title}' created successfully"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating review task for session {session_id}: {e}")
+        db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
 

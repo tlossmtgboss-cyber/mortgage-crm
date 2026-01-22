@@ -526,6 +526,93 @@ IMPORTANT: Quote specific transcript evidence for each risk flag identified."""
             if not existing:
                 artifacts.append(condition)
 
+        # Create UW review item artifacts (checklist items to address)
+        # These come from risk flags and suggested conditions
+        review_items = []
+
+        # Add review items from high-priority risk flags
+        for i, risk in enumerate(parsed.get('risk_flags', []), 1):
+            if risk.get('severity') in ['high', 'critical', 'medium']:
+                review_item = {
+                    'type': 'uw_review_item',
+                    'title': f"Review: {risk.get('title', 'Risk Item')}",
+                    'content': risk.get('recommended_action', risk.get('description', '')),
+                    'structured_data': {
+                        'category': risk.get('category'),
+                        'severity': risk.get('severity'),
+                        'requires_doc': 'document' in risk.get('recommended_action', '').lower(),
+                        'requires_condition': 'condition' in risk.get('recommended_action', '').lower(),
+                        'suggested_action': risk.get('recommended_action'),
+                        'guideline_reference': risk.get('guideline_reference'),
+                        'item_number': i,
+                    },
+                    'execution_status': None,  # Will be 'completed' when addressed
+                    'priority': self._severity_to_priority(risk.get('severity', 'medium')),
+                    'confidence': 0.90,
+                }
+                review_items.append(review_item)
+                artifacts.append(review_item)
+
+        # Add review items from suggested conditions that need action
+        for j, condition in enumerate(parsed.get('suggested_conditions', []), len(review_items) + 1):
+            if condition.get('responsible_party', '').lower() == 'borrower':
+                review_item = {
+                    'type': 'uw_review_item',
+                    'title': f"Obtain: {condition.get('title', 'Documentation')}",
+                    'content': condition.get('description', ''),
+                    'structured_data': {
+                        'category': condition.get('category'),
+                        'condition_type': condition.get('condition_type'),
+                        'requires_doc': True,
+                        'requires_condition': False,
+                        'suggested_action': f"Request {condition.get('title')} from borrower",
+                        'guideline_reference': condition.get('guideline_reference'),
+                        'item_number': j,
+                    },
+                    'execution_status': None,
+                    'priority': 'high' if condition.get('condition_type') == 'prior_to_docs' else 'medium',
+                    'confidence': 0.90,
+                }
+                artifacts.append(review_item)
+
+        # Create stacked_note artifact summarizing UW findings
+        key_concerns = assessment.get('key_concerns', []) if assessment else []
+        risk_level = assessment.get('risk_level', 'unknown') if assessment else 'unknown'
+
+        stacked_note_content = f"**UNDERWRITER REVIEW - {risk_level.upper()} RISK**\n\n"
+
+        if key_concerns:
+            stacked_note_content += "**Key Concerns:**\n"
+            for concern in key_concerns[:5]:
+                stacked_note_content += f"• {concern}\n"
+            stacked_note_content += "\n"
+
+        if assessment and assessment.get('mitigating_factors'):
+            stacked_note_content += "**Mitigating Factors:**\n"
+            for factor in assessment.get('mitigating_factors', [])[:3]:
+                stacked_note_content += f"+ {factor}\n"
+            stacked_note_content += "\n"
+
+        if assessment and assessment.get('recommendation'):
+            stacked_note_content += f"**Recommendation:** {assessment['recommendation'].replace('_', ' ').title()}\n"
+            if assessment.get('recommendation_rationale'):
+                stacked_note_content += f"  {assessment['recommendation_rationale']}"
+
+        stacked_note_artifact = {
+            'type': 'stacked_note',
+            'title': f"UW Notes - {risk_level.title()} Risk",
+            'content': stacked_note_content,
+            'structured_data': {
+                'source': 'underwriter',
+                'risk_level': risk_level,
+                'key_points': key_concerns,
+                'recommendation': assessment.get('recommendation') if assessment else None,
+                'review_items_count': len(review_items),
+            },
+            'confidence': 0.85,
+        }
+        artifacts.append(stacked_note_artifact)
+
         return artifacts
 
     def _calculate_risk_confidence(self, risk: Dict) -> float:

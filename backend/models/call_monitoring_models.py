@@ -95,6 +95,15 @@ class ArtifactType(str, Enum):
     PRICING_SCENARIO = "pricing_scenario"
     CALCULATOR_RESULT = "calculator_result"
     CALCULATOR_RECOMMENDATION = "calculator_recommendation"
+    # Call Intelligence Expansion - Scribe, JR LO, Underwriter
+    SCRIBE_RECAP = "scribe_recap"  # Comprehensive call recap with next steps
+    FIVE_C_CREDIT = "five_c_credit"  # Credit analysis
+    FIVE_C_COLLATERAL = "five_c_collateral"  # Collateral/property analysis
+    FIVE_C_CAPACITY = "five_c_capacity"  # DTI/income analysis
+    FIVE_C_CHARACTERISTICS = "five_c_characteristics"  # Employment/credit history
+    FIVE_C_CASH = "five_c_cash"  # Reserves/assets analysis
+    UW_REVIEW_ITEM = "uw_review_item"  # Individual UW bullet point to address
+    STACKED_NOTE = "stacked_note"  # Chronological note for stacking across calls
 
 
 class ApprovalStatus(str, Enum):

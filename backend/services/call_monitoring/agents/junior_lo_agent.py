@@ -93,6 +93,40 @@ class JuniorLOAgent(BaseCallAgent):
 {example_output}
 ```
 
+## THE 5 C'S OF CREDIT ANALYSIS FRAMEWORK:
+
+Your analysis MUST include assessment of the 5 C's of Credit based on what was discussed:
+
+1. **CREDIT** - Credit history and score
+   - Credit score mentioned or estimated tier
+   - Payment history issues discussed
+   - Derogatory items (late payments, collections, bankruptcy)
+   - Credit utilization concerns
+
+2. **COLLATERAL** - Property being financed
+   - Property type and condition
+   - Property value discussed
+   - Location and marketability
+   - LTV ratio implications
+
+3. **CAPACITY** - Ability to repay
+   - Income stability and documentation
+   - DTI ratio (discussed or calculated)
+   - Employment tenure
+   - Other financial obligations mentioned
+
+4. **CHARACTERISTICS** - Borrower stability factors
+   - Employment history and stability
+   - Time in residence
+   - Banking relationships
+   - Overall financial behavior patterns
+
+5. **CASH** - Reserves and down payment
+   - Down payment source and amount
+   - Reserves after closing
+   - Gift funds discussed
+   - Asset verification needs
+
 ## YOUR OUTPUT FORMAT:
 
 Respond with a JSON object in this exact format:
@@ -116,6 +150,52 @@ Respond with a JSON object in this exact format:
             "loan_program_required": true/false,
             "priority": "high/medium/low",
             "evidence": "What in the call triggered this requirement"
+        }}
+    ],
+    "five_c_analysis": {{
+        "credit": {{
+            "score": null,
+            "tier": "Excellent/Good/Fair/Poor/Unknown",
+            "issues": ["List of credit issues discussed"],
+            "assessment": "Strong/Adequate/Weak/Unknown",
+            "notes": "Summary of credit discussion"
+        }},
+        "collateral": {{
+            "property_type": "SFR/Condo/Townhouse/Multi/etc.",
+            "property_value": null,
+            "ltv": null,
+            "assessment": "Strong/Adequate/Weak/Unknown",
+            "notes": "Property-related observations"
+        }},
+        "capacity": {{
+            "dti": null,
+            "income_stability": "Stable/Variable/Uncertain/Unknown",
+            "employment_tenure": null,
+            "assessment": "Strong/Adequate/Weak/Unknown",
+            "notes": "Income and repayment ability observations"
+        }},
+        "characteristics": {{
+            "employment_years": null,
+            "residence_years": null,
+            "financial_stability": "Stable/Variable/Unknown",
+            "assessment": "Strong/Adequate/Weak/Unknown",
+            "notes": "Borrower stability factors"
+        }},
+        "cash": {{
+            "down_payment_pct": null,
+            "reserves_months": null,
+            "down_payment_source": "Savings/Gift/Sale of Home/Other/Unknown",
+            "assets_discussed": [],
+            "assessment": "Strong/Adequate/Weak/Unknown",
+            "notes": "Cash and reserves observations"
+        }}
+    }},
+    "review_items": [
+        {{
+            "category": "credit/collateral/capacity/characteristics/cash",
+            "item": "What needs to be addressed",
+            "priority": "high/medium/low",
+            "action_required": "Specific action needed"
         }}
     ],
     "pricing_scenarios": [
@@ -409,7 +489,179 @@ CRITICAL: Only extract information explicitly stated in the transcript. Do not i
             }
             artifacts.append(note_artifact)
 
+        # Create 5 C's analysis artifacts
+        five_c_analysis = parsed.get('five_c_analysis', {})
+
+        # Credit
+        credit_data = five_c_analysis.get('credit', {})
+        if credit_data:
+            credit_artifact = {
+                'type': 'five_c_credit',
+                'title': f"Credit Analysis - {credit_data.get('assessment', 'Unknown')}",
+                'content': credit_data.get('notes', ''),
+                'structured_data': {
+                    'score': credit_data.get('score'),
+                    'tier': credit_data.get('tier'),
+                    'issues': credit_data.get('issues', []),
+                    'assessment': credit_data.get('assessment', 'Unknown'),
+                    'notes': credit_data.get('notes'),
+                },
+                'confidence': 0.85 if credit_data.get('score') else 0.70,
+            }
+            artifacts.append(credit_artifact)
+
+        # Collateral
+        collateral_data = five_c_analysis.get('collateral', {})
+        if collateral_data:
+            collateral_artifact = {
+                'type': 'five_c_collateral',
+                'title': f"Collateral Analysis - {collateral_data.get('assessment', 'Unknown')}",
+                'content': collateral_data.get('notes', ''),
+                'structured_data': {
+                    'property_type': collateral_data.get('property_type'),
+                    'property_value': collateral_data.get('property_value'),
+                    'ltv': collateral_data.get('ltv'),
+                    'assessment': collateral_data.get('assessment', 'Unknown'),
+                    'notes': collateral_data.get('notes'),
+                },
+                'confidence': 0.85 if collateral_data.get('property_value') else 0.70,
+            }
+            artifacts.append(collateral_artifact)
+
+        # Capacity
+        capacity_data = five_c_analysis.get('capacity', {})
+        if capacity_data:
+            capacity_artifact = {
+                'type': 'five_c_capacity',
+                'title': f"Capacity Analysis - {capacity_data.get('assessment', 'Unknown')}",
+                'content': capacity_data.get('notes', ''),
+                'structured_data': {
+                    'dti': capacity_data.get('dti'),
+                    'income_stability': capacity_data.get('income_stability'),
+                    'employment_tenure': capacity_data.get('employment_tenure'),
+                    'assessment': capacity_data.get('assessment', 'Unknown'),
+                    'notes': capacity_data.get('notes'),
+                },
+                'confidence': 0.85 if capacity_data.get('dti') else 0.70,
+            }
+            artifacts.append(capacity_artifact)
+
+        # Characteristics
+        char_data = five_c_analysis.get('characteristics', {})
+        if char_data:
+            char_artifact = {
+                'type': 'five_c_characteristics',
+                'title': f"Characteristics Analysis - {char_data.get('assessment', 'Unknown')}",
+                'content': char_data.get('notes', ''),
+                'structured_data': {
+                    'employment_years': char_data.get('employment_years'),
+                    'residence_years': char_data.get('residence_years'),
+                    'financial_stability': char_data.get('financial_stability'),
+                    'assessment': char_data.get('assessment', 'Unknown'),
+                    'notes': char_data.get('notes'),
+                },
+                'confidence': 0.75,
+            }
+            artifacts.append(char_artifact)
+
+        # Cash
+        cash_data = five_c_analysis.get('cash', {})
+        if cash_data:
+            cash_artifact = {
+                'type': 'five_c_cash',
+                'title': f"Cash/Reserves Analysis - {cash_data.get('assessment', 'Unknown')}",
+                'content': cash_data.get('notes', ''),
+                'structured_data': {
+                    'down_payment_pct': cash_data.get('down_payment_pct'),
+                    'reserves_months': cash_data.get('reserves_months'),
+                    'down_payment_source': cash_data.get('down_payment_source'),
+                    'assets_discussed': cash_data.get('assets_discussed', []),
+                    'assessment': cash_data.get('assessment', 'Unknown'),
+                    'notes': cash_data.get('notes'),
+                },
+                'confidence': 0.85 if cash_data.get('reserves_months') else 0.70,
+            }
+            artifacts.append(cash_artifact)
+
+        # Create review item tasks from 5 C's analysis
+        for item in parsed.get('review_items', []):
+            review_artifact = {
+                'type': 'task',
+                'title': f"Review: {item.get('item', 'Item to Review')}",
+                'content': item.get('action_required', ''),
+                'structured_data': {
+                    'category': item.get('category'),
+                    'item': item.get('item'),
+                    'priority': item.get('priority', 'medium'),
+                    'action_required': item.get('action_required'),
+                    'source': 'jrlo_5c_analysis',
+                },
+                'priority': item.get('priority', 'medium'),
+                'confidence': 0.85,
+            }
+            artifacts.append(review_artifact)
+
+        # Create stacked_note artifact summarizing 5 C's analysis
+        five_c_summary = self._format_five_c_summary(five_c_analysis)
+        if five_c_summary:
+            stacked_note_artifact = {
+                'type': 'stacked_note',
+                'title': 'JR LO 5 C\'s Analysis',
+                'content': five_c_summary,
+                'structured_data': {
+                    'source': 'jrlo',
+                    'analysis_type': '5_c_analysis',
+                    'assessments': {
+                        'credit': credit_data.get('assessment'),
+                        'collateral': collateral_data.get('assessment'),
+                        'capacity': capacity_data.get('assessment'),
+                        'characteristics': char_data.get('assessment'),
+                        'cash': cash_data.get('assessment'),
+                    },
+                    'key_points': [item.get('item') for item in parsed.get('review_items', [])],
+                },
+                'confidence': 0.80,
+            }
+            artifacts.append(stacked_note_artifact)
+
         return artifacts
+
+    def _format_five_c_summary(self, five_c: Dict) -> str:
+        """Format 5 C's analysis as a summary for stacked notes."""
+        if not five_c:
+            return ""
+
+        lines = ["**5 C's ANALYSIS**\n"]
+
+        c_mapping = [
+            ('credit', 'Credit'),
+            ('collateral', 'Collateral'),
+            ('capacity', 'Capacity'),
+            ('characteristics', 'Characteristics'),
+            ('cash', 'Cash/Reserves'),
+        ]
+
+        for key, label in c_mapping:
+            data = five_c.get(key, {})
+            assessment = data.get('assessment', 'Unknown')
+            notes = data.get('notes', '')
+
+            # Format assessment with indicator
+            if assessment == 'Strong':
+                indicator = '✓'
+            elif assessment == 'Adequate':
+                indicator = '~'
+            elif assessment == 'Weak':
+                indicator = '!'
+            else:
+                indicator = '?'
+
+            line = f"• **{label}** [{indicator} {assessment}]"
+            if notes:
+                line += f": {notes[:100]}"
+            lines.append(line)
+
+        return "\n".join(lines)
 
     def _validate_field_confidence(self, field: Dict) -> float:
         """Validate and adjust field confidence based on evidence quality."""

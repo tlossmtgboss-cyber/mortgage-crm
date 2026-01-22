@@ -15,6 +15,7 @@ import AISummary from './sections/AISummary';
 import TasksGenerated from './sections/TasksGenerated';
 import DocumentRequests from './sections/DocumentRequests';
 import UnderwriterNotes from './sections/UnderwriterNotes';
+import CalculatorResults from './sections/CalculatorResults';
 import RecordingPlayer from './sections/RecordingPlayer';
 
 const CallReviewPanel = ({
@@ -107,6 +108,7 @@ const CallReviewPanel = ({
     { id: 'transcript', label: 'Transcript' },
     { id: 'tasks', label: 'Tasks', count: groupedArtifacts.task?.length || 0 },
     { id: 'documents', label: 'Docs', count: groupedArtifacts.document_request?.length || 0 },
+    { id: 'calculators', label: 'Calcs', count: groupedArtifacts.calculator_result?.length || 0 },
     { id: 'uw-notes', label: 'UW Notes', count: groupedArtifacts.uw_note?.length || 0 },
   ];
 
@@ -220,6 +222,15 @@ const CallReviewPanel = ({
             requests={groupedArtifacts.document_request || []}
             intakeFields={groupedArtifacts.intake_field || []}
             onApprove={!isReadOnly ? onApprove : undefined}
+          />
+        )}
+
+        {activeSection === 'calculators' && (
+          <CalculatorResults
+            calculatorResults={groupedArtifacts.calculator_result || []}
+            recommendations={groupedArtifacts.calculator_recommendation || []}
+            onApprove={!isReadOnly ? onApprove : undefined}
+            onReject={!isReadOnly ? onReject : undefined}
           />
         )}
 

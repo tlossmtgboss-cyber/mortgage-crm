@@ -2939,6 +2939,55 @@ export const callMonitoringAPI = {
     const response = await api.get('/api/v1/call-monitoring/metrics', { params: { days } });
     return response.data;
   },
+
+  // Calculator Result Sharing
+  createShareLink: async (artifactId, options = {}) => {
+    const response = await api.post(`/api/v1/call-monitoring/artifacts/${artifactId}/share`, options);
+    return response.data;
+  },
+
+  getSharedArtifact: async (shareToken) => {
+    // This is a public endpoint - no auth required
+    const response = await axios.get(`${API_BASE_URL}/api/v1/call-monitoring/shared/${shareToken}`);
+    return response.data;
+  },
+
+  deactivateShareLink: async (artifactId, shareToken) => {
+    const response = await api.delete(`/api/v1/call-monitoring/artifacts/${artifactId}/share/${shareToken}`);
+    return response.data;
+  },
+
+  getArtifactShares: async (artifactId) => {
+    const response = await api.get(`/api/v1/call-monitoring/artifacts/${artifactId}/shares`);
+    return response.data;
+  },
+
+  getMyShares: async (includeExpired = false, limit = 50) => {
+    const response = await api.get('/api/v1/call-monitoring/my-shares', {
+      params: { include_expired: includeExpired, limit }
+    });
+    return response.data;
+  },
+
+  // Stacked Notes (Call Intelligence Expansion)
+  getStackedNotes: async (clientId, limit = 100) => {
+    const response = await api.get(`/api/v1/call-monitoring/client/${clientId}/stacked-notes`, {
+      params: { limit }
+    });
+    return response.data;
+  },
+
+  // Underwriter Review Completion
+  completeUWReview: async (sessionId, data) => {
+    const response = await api.post(`/api/v1/call-monitoring/sessions/${sessionId}/complete-uw-review`, data);
+    return response.data;
+  },
+
+  // Create Review Task (from JR LO or Underwriter)
+  createReviewTask: async (sessionId, taskData) => {
+    const response = await api.post(`/api/v1/call-monitoring/sessions/${sessionId}/create-review-task`, taskData);
+    return response.data;
+  },
 };
 
 export default api;

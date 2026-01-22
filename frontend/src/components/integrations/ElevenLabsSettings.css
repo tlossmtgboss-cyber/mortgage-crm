@@ -1,0 +1,355 @@
+/* ElevenLabs Settings Styles */
+
+.elevenlabs-settings {
+  padding: 20px;
+  background: var(--surface-color, #fff);
+  border-radius: 8px;
+}
+
+.elevenlabs-settings .settings-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
+}
+
+.elevenlabs-settings .header-icon img {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+}
+
+.elevenlabs-settings .header-info h3 {
+  margin: 0 0 4px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary, #1a1a1a);
+}
+
+.elevenlabs-settings .header-info p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-secondary, #666);
+}
+
+.elevenlabs-settings .status-badge {
+  margin-left: auto;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.elevenlabs-settings .status-badge.connected {
+  background: #e6f4ea;
+  color: #1e7e34;
+}
+
+.elevenlabs-settings .status-badge.disconnected {
+  background: #fce8e6;
+  color: #c62828;
+}
+
+/* Alerts */
+.elevenlabs-settings .alert {
+  padding: 12px 16px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+.elevenlabs-settings .alert-error {
+  background: #fce8e6;
+  color: #c62828;
+  border: 1px solid #f5c6cb;
+}
+
+.elevenlabs-settings .alert-success {
+  background: #e6f4ea;
+  color: #1e7e34;
+  border: 1px solid #c3e6cb;
+}
+
+/* Tabs */
+.elevenlabs-settings .settings-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
+  padding-bottom: 0;
+}
+
+.elevenlabs-settings .settings-tabs .tab {
+  padding: 12px 20px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary, #666);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.elevenlabs-settings .settings-tabs .tab:hover {
+  color: var(--primary-color, #2563eb);
+}
+
+.elevenlabs-settings .settings-tabs .tab.active {
+  color: var(--primary-color, #2563eb);
+  border-bottom-color: var(--primary-color, #2563eb);
+}
+
+/* Content */
+.elevenlabs-settings .settings-content {
+  min-height: 300px;
+}
+
+/* Connect Form */
+.elevenlabs-settings .connect-form {
+  max-width: 500px;
+}
+
+.elevenlabs-settings .connect-form .help-text {
+  margin-bottom: 20px;
+  color: var(--text-secondary, #666);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.elevenlabs-settings .connect-form .help-text a {
+  color: var(--primary-color, #2563eb);
+  text-decoration: none;
+}
+
+.elevenlabs-settings .connect-form .help-text a:hover {
+  text-decoration: underline;
+}
+
+/* Form Groups */
+.elevenlabs-settings .form-group {
+  margin-bottom: 20px;
+}
+
+.elevenlabs-settings .form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary, #1a1a1a);
+}
+
+.elevenlabs-settings .form-group input[type="text"],
+.elevenlabs-settings .form-group input[type="password"],
+.elevenlabs-settings .form-group select,
+.elevenlabs-settings .form-group textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color, #d0d0d0);
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.elevenlabs-settings .form-group input:focus,
+.elevenlabs-settings .form-group select:focus,
+.elevenlabs-settings .form-group textarea:focus {
+  outline: none;
+  border-color: var(--primary-color, #2563eb);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.elevenlabs-settings .form-group input[type="range"] {
+  width: 100%;
+  height: 6px;
+  -webkit-appearance: none;
+  background: var(--border-color, #e0e0e0);
+  border-radius: 3px;
+  outline: none;
+}
+
+.elevenlabs-settings .form-group input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  background: var(--primary-color, #2563eb);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.elevenlabs-settings .form-group.checkbox label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.elevenlabs-settings .form-group.checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+}
+
+.elevenlabs-settings .form-group .help-text {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-secondary, #888);
+}
+
+/* Buttons */
+.elevenlabs-settings .btn-primary,
+.elevenlabs-settings .btn-secondary,
+.elevenlabs-settings .btn-danger {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.elevenlabs-settings .btn-primary {
+  background: var(--primary-color, #2563eb);
+  color: white;
+}
+
+.elevenlabs-settings .btn-primary:hover:not(:disabled) {
+  background: var(--primary-dark, #1d4ed8);
+}
+
+.elevenlabs-settings .btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.elevenlabs-settings .btn-secondary {
+  background: var(--surface-color, #f5f5f5);
+  color: var(--text-primary, #1a1a1a);
+  border: 1px solid var(--border-color, #d0d0d0);
+}
+
+.elevenlabs-settings .btn-secondary:hover:not(:disabled) {
+  background: var(--border-color, #e0e0e0);
+}
+
+.elevenlabs-settings .btn-danger {
+  background: #dc3545;
+  color: white;
+}
+
+.elevenlabs-settings .btn-danger:hover {
+  background: #c82333;
+}
+
+/* Connection Info */
+.elevenlabs-settings .connection-info .info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.elevenlabs-settings .connection-info .info-item {
+  padding: 16px;
+  background: var(--surface-color, #f8f9fa);
+  border-radius: 8px;
+}
+
+.elevenlabs-settings .connection-info .info-item.full-width {
+  grid-column: 1 / -1;
+}
+
+.elevenlabs-settings .connection-info .info-item .label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-secondary, #666);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.elevenlabs-settings .connection-info .info-item .value {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary, #1a1a1a);
+}
+
+.elevenlabs-settings .connection-info .info-item .value.connected {
+  color: #1e7e34;
+}
+
+/* Usage Bar */
+.elevenlabs-settings .usage-bar {
+  height: 8px;
+  background: var(--border-color, #e0e0e0);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.elevenlabs-settings .usage-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #2563eb, #7c3aed);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+/* Voice Preview */
+.elevenlabs-settings .voice-preview {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border-color, #e0e0e0);
+}
+
+.elevenlabs-settings .voice-preview h4 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.elevenlabs-settings .audio-player {
+  margin-top: 16px;
+}
+
+.elevenlabs-settings .audio-player audio {
+  width: 100%;
+  border-radius: 8px;
+}
+
+/* Actions */
+.elevenlabs-settings .actions {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border-color, #e0e0e0);
+}
+
+/* Loading State */
+.elevenlabs-settings .loading-state {
+  padding: 40px;
+  text-align: center;
+  color: var(--text-secondary, #666);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .elevenlabs-settings .settings-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .elevenlabs-settings .status-badge {
+    margin-left: 0;
+    margin-top: 12px;
+  }
+
+  .elevenlabs-settings .settings-tabs {
+    overflow-x: auto;
+  }
+
+  .elevenlabs-settings .connection-info .info-grid {
+    grid-template-columns: 1fr;
+  }
+}

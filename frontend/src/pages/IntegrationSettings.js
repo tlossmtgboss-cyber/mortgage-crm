@@ -5,6 +5,7 @@ import { toast } from '../utils/toast';
 import SalesforceFieldMapping from '../components/integrations/SalesforceFieldMapping';
 import SalesforceSetupWizard from '../components/integrations/SalesforceSetupWizard';
 import FollowUpBossSettings from '../components/integrations/FollowUpBossSettings';
+import ElevenLabsSettings from '../components/integrations/ElevenLabsSettings';
 import { API_BASE_URL } from '../services/api';
 import './IntegrationSettings.css';
 
@@ -342,7 +343,8 @@ const IntegrationSettings = () => {
       zoom: 'zoom.us',
       synthflow: 'synthflow.ai',
       recallai: 'recall.ai',
-      docusign: 'docusign.com'
+      docusign: 'docusign.com',
+      elevenlabs: 'elevenlabs.io'
     };
     const domain = domains[integrationId];
     if (!domain) return null;
@@ -681,6 +683,13 @@ const IntegrationSettings = () => {
             {selectedIntegration.id === 'followupboss' && (
               <div className="detail-section followupboss-integration">
                 <FollowUpBossSettings />
+              </div>
+            )}
+
+            {/* ElevenLabs Integration - Voice AI settings panel */}
+            {selectedIntegration.id === 'elevenlabs' && (
+              <div className="detail-section elevenlabs-integration">
+                <ElevenLabsSettings />
               </div>
             )}
 

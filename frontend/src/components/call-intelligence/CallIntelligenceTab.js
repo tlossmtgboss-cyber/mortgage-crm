@@ -1,8 +1,14 @@
 /**
- * Call Intelligence Tab
+ * Call Intelligence Tab (Enhanced)
  *
  * Main container for the Call Intelligence feature in ClientProfile.
  * Displays call history, AI-generated summaries, tasks, documents, and UW notes.
+ *
+ * New tabs:
+ * - Scribe: Call recap, action items, next steps
+ * - JR LO: 5 C's analysis, documents requested
+ * - Underwriter: Review items checklist, PA task creation
+ * - Notes: Chronological stacked notes across all calls
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -11,10 +17,15 @@ import { callMonitoringAPI } from '../../services/api';
 import CallTimeline from './sections/CallTimeline';
 import RecordingPlayer from './sections/RecordingPlayer';
 import AISummary from './sections/AISummary';
+import ScribeTab from './sections/ScribeTab';
+import JRLOTab from './sections/JRLOTab';
 import TasksGenerated from './sections/TasksGenerated';
 import DocumentRequests from './sections/DocumentRequests';
 import UnderwriterNotes from './sections/UnderwriterNotes';
+import CalculatorResults from './sections/CalculatorResults';
+import StackedNotes from './sections/StackedNotes';
 import ReviewApproveModal from './ReviewApproveModal';
+import ShareCalculatorModal from './ShareCalculatorModal';
 import './CallIntelligenceTab.css';
 
 const CallIntelligenceTab = ({ clientId, loanId, leadId }) => {
@@ -23,7 +34,12 @@ const CallIntelligenceTab = ({ clientId, loanId, leadId }) => {
   const [reviewData, setReviewData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showReviewModal, setShowReviewModal] = useState(false);
-  const [activeSection, setActiveSection] = useState('summary');
+  const [activeSection, setActiveSection] = useState('scribe');
+  const [shareModalArtifact, setShareModalArtifact] = useState(null);
+
+  // Stacked notes state
+  const [stackedNotes, setStackedNotes] = useState([]);
+  const [loadingNotes, setLoadingNotes] = useState(false);
 
   // Fetch call history for the client
   const fetchCalls = useCallback(async () => {
@@ -47,6 +63,20 @@ const CallIntelligenceTab = ({ clientId, loanId, leadId }) => {
       setLoading(false);
     }
   }, [clientId, loanId, selectedCall]);
+
+  // Fetch stacked notes for the client
+  const fetchStackedNotes = useCallback(async () => {
+    if (!clientId) return;
+    try {
+      setLoadingNotes(true);
+      const data = await callMonitoringAPI.getStackedNotes(clientId);
+      setStackedNotes(data.notes || []);
+    } catch (error) {
+      console.error('Error fetching stacked notes:', error);
+    } finally {
+      setLoadingNotes(false);
+    }
+  }, [clientId]);
 
   // Fetch review data for a specific call
   const fetchReviewData = async (sessionId) => {
@@ -77,6 +107,23 @@ const CallIntelligenceTab = ({ clientId, loanId, leadId }) => {
     }
   };
 
+  // Handle artifact rejection
+  const handleRejectArtifacts = async (artifactIds, reason) => {
+    try {
+      await callMonitoringAPI.rejectArtifacts(selectedCall.id, artifactIds, reason);
+      toast.success('Artifacts rejected');
+      fetchReviewData(selectedCall.id);
+    } catch (error) {
+      console.error('Error rejecting artifacts:', error);
+      toast.error('Failed to reject artifacts');
+    }
+  };
+
+  // Handle share calculator result
+  const handleShareCalculator = (artifact) => {
+    setShareModalArtifact(artifact);
+  };
+
   // Handle artifact execution
   const handleExecuteArtifacts = async () => {
     try {
@@ -86,6 +133,36 @@ const CallIntelligenceTab = ({ clientId, loanId, leadId }) => {
     } catch (error) {
       console.error('Error executing artifacts:', error);
       toast.error('Failed to execute artifacts');
+    }
+  };
+
+  // Handle UW review completion with PA task creation
+  const handleCompleteUWReview = async ({ sessionId, summary, items_addressed, create_pa_task }) => {
+    try {
+      const data = await callMonitoringAPI.completeUWReview(sessionId, {
+        summary,
+        items_addressed,
+        create_pa_task,
+      });
+      toast.success(data.pa_task_created
+        ? 'UW review completed and PA task created!'
+        : 'UW review completed!'
+      );
+      fetchReviewData(sessionId);
+    } catch (error) {
+      console.error('Error completing UW review:', error);
+      toast.error('Failed to complete UW review');
+    }
+  };
+
+  // Handle creating review task from JR LO or UW
+  const handleCreateReviewTask = async (taskData) => {
+    try {
+      const data = await callMonitoringAPI.createReviewTask(selectedCall.id, taskData);
+      toast.success(`Review task created: ${data.task_id}`);
+    } catch (error) {
+      console.error('Error creating review task:', error);
+      toast.error('Failed to create review task');
     }
   };
 
@@ -109,6 +186,13 @@ const CallIntelligenceTab = ({ clientId, loanId, leadId }) => {
     fetchCalls();
   }, [fetchCalls]);
 
+  // Fetch stacked notes when notes tab is active
+  useEffect(() => {
+    if (activeSection === 'notes') {
+      fetchStackedNotes();
+    }
+  }, [activeSection, fetchStackedNotes]);
+
   // Group artifacts by type
   const groupedArtifacts = reviewData?.artifacts?.reduce((acc, artifact) => {
     const type = artifact.artifact_type;
@@ -122,8 +206,30 @@ const CallIntelligenceTab = ({ clientId, loanId, leadId }) => {
   // Get summary from artifacts
   const summary = groupedArtifacts.summary?.[0]?.structured_data || null;
 
+  // Get scribe recap
+  const scribeRecap = groupedArtifacts.scribe_recap?.[0] || null;
+
+  // Get 5 C's artifacts
+  const fiveCAnalysis = [
+    ...(groupedArtifacts.five_c_credit || []),
+    ...(groupedArtifacts.five_c_collateral || []),
+    ...(groupedArtifacts.five_c_capacity || []),
+    ...(groupedArtifacts.five_c_characteristics || []),
+    ...(groupedArtifacts.five_c_cash || []),
+  ];
+
+  // Get UW review items
+  const uwReviewItems = groupedArtifacts.uw_review_item || [];
+
   // Count pending approvals
   const pendingCount = reviewData?.artifacts?.filter(a => a.approval_status === 'pending').length || 0;
+
+  // Calculate tab counts
+  const taskCount = (groupedArtifacts.task?.length || 0);
+  const docCount = (groupedArtifacts.document_request?.length || 0);
+  const calcCount = (groupedArtifacts.calculator_result?.length || 0);
+  const uwItemCount = uwReviewItems.length;
+  const fiveCCount = fiveCAnalysis.length;
 
   if (loading && calls.length === 0) {
     return (
@@ -183,10 +289,34 @@ const CallIntelligenceTab = ({ clientId, loanId, leadId }) => {
               {/* Section Navigation */}
               <div className="ci-section-nav">
                 <button
-                  className={activeSection === 'summary' ? 'active' : ''}
-                  onClick={() => setActiveSection('summary')}
+                  className={activeSection === 'scribe' ? 'active' : ''}
+                  onClick={() => setActiveSection('scribe')}
                 >
-                  Summary
+                  Scribe
+                </button>
+                <button
+                  className={activeSection === 'jrlo' ? 'active' : ''}
+                  onClick={() => setActiveSection('jrlo')}
+                >
+                  JR LO {fiveCCount > 0 && `(${fiveCCount})`}
+                </button>
+                <button
+                  className={activeSection === 'uw-notes' ? 'active' : ''}
+                  onClick={() => setActiveSection('uw-notes')}
+                >
+                  UW {uwItemCount > 0 && `(${uwItemCount})`}
+                </button>
+                <button
+                  className={activeSection === 'documents' ? 'active' : ''}
+                  onClick={() => setActiveSection('documents')}
+                >
+                  Docs {docCount > 0 && `(${docCount})`}
+                </button>
+                <button
+                  className={activeSection === 'calculators' ? 'active' : ''}
+                  onClick={() => setActiveSection('calculators')}
+                >
+                  Calcs {calcCount > 0 && `(${calcCount})`}
                 </button>
                 <button
                   className={activeSection === 'transcript' ? 'active' : ''}
@@ -195,48 +325,43 @@ const CallIntelligenceTab = ({ clientId, loanId, leadId }) => {
                   Transcript
                 </button>
                 <button
-                  className={activeSection === 'tasks' ? 'active' : ''}
-                  onClick={() => setActiveSection('tasks')}
+                  className={activeSection === 'notes' ? 'active' : ''}
+                  onClick={() => setActiveSection('notes')}
                 >
-                  Tasks {groupedArtifacts.task?.length > 0 && `(${groupedArtifacts.task.length})`}
-                </button>
-                <button
-                  className={activeSection === 'documents' ? 'active' : ''}
-                  onClick={() => setActiveSection('documents')}
-                >
-                  Docs {groupedArtifacts.document_request?.length > 0 && `(${groupedArtifacts.document_request.length})`}
-                </button>
-                <button
-                  className={activeSection === 'uw-notes' ? 'active' : ''}
-                  onClick={() => setActiveSection('uw-notes')}
-                >
-                  UW Notes
+                  Notes
                 </button>
               </div>
 
               {/* Section Content */}
               <div className="ci-section-content">
-                {activeSection === 'summary' && (
-                  <AISummary
+                {activeSection === 'scribe' && (
+                  <ScribeTab
+                    scribeRecap={scribeRecap}
+                    actionItems={groupedArtifacts.action_item || []}
                     summary={summary}
-                    actionItems={groupedArtifacts.action_item || []}
-                    callOutcome={summary?.call_outcome}
                   />
                 )}
 
-                {activeSection === 'transcript' && (
-                  <RecordingPlayer
-                    transcript={reviewData?.transcript}
-                    participants={reviewData?.participants || []}
-                    session={selectedCall}
+                {activeSection === 'jrlo' && (
+                  <JRLOTab
+                    fiveCAnalysis={fiveCAnalysis}
+                    documentRequests={groupedArtifacts.document_request || []}
+                    reviewTasks={groupedArtifacts.task?.filter(t => t.structured_data?.source === 'jrlo_5c_analysis') || []}
+                    onCreateTask={handleCreateReviewTask}
                   />
                 )}
 
-                {activeSection === 'tasks' && (
-                  <TasksGenerated
-                    tasks={groupedArtifacts.task || []}
-                    actionItems={groupedArtifacts.action_item || []}
-                    onApprove={handleApproveArtifacts}
+                {activeSection === 'uw-notes' && (
+                  <UnderwriterNotes
+                    notes={[
+                      ...(groupedArtifacts.uw_note || []),
+                      ...(groupedArtifacts.uw_assessment || []),
+                    ]}
+                    riskFlags={groupedArtifacts.risk_flag || []}
+                    conditions={groupedArtifacts.condition || []}
+                    reviewItems={uwReviewItems}
+                    sessionId={selectedCall?.id}
+                    onCompleteReview={handleCompleteUWReview}
                   />
                 )}
 
@@ -248,11 +373,30 @@ const CallIntelligenceTab = ({ clientId, loanId, leadId }) => {
                   />
                 )}
 
-                {activeSection === 'uw-notes' && (
-                  <UnderwriterNotes
-                    notes={groupedArtifacts.uw_note || []}
-                    riskFlags={groupedArtifacts.risk_flag || []}
-                    conditions={groupedArtifacts.condition || []}
+                {activeSection === 'calculators' && (
+                  <CalculatorResults
+                    calculatorResults={groupedArtifacts.calculator_result || []}
+                    recommendations={groupedArtifacts.calculator_recommendation || []}
+                    onShare={handleShareCalculator}
+                    onApprove={handleApproveArtifacts}
+                    onReject={handleRejectArtifacts}
+                  />
+                )}
+
+                {activeSection === 'transcript' && (
+                  <RecordingPlayer
+                    transcript={reviewData?.transcript}
+                    participants={reviewData?.participants || []}
+                    session={selectedCall}
+                  />
+                )}
+
+                {activeSection === 'notes' && (
+                  <StackedNotes
+                    clientId={clientId}
+                    notes={stackedNotes}
+                    loading={loadingNotes}
+                    onRefresh={fetchStackedNotes}
                   />
                 )}
               </div>
@@ -271,6 +415,14 @@ const CallIntelligenceTab = ({ clientId, loanId, leadId }) => {
           artifacts={reviewData.artifacts}
           onSubmit={handleSubmitReview}
           onClose={() => setShowReviewModal(false)}
+        />
+      )}
+
+      {/* Share Calculator Modal */}
+      {shareModalArtifact && (
+        <ShareCalculatorModal
+          artifact={shareModalArtifact}
+          onClose={() => setShareModalArtifact(null)}
         />
       )}
     </div>

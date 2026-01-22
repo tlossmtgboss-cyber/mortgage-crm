@@ -1,0 +1,700 @@
+/* Shared Calculator Page Styles */
+
+.shared-calculator-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.shared-calculator-container {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  max-width: 600px;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* Loading State */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 60px 24px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+}
+
+.loading-container .spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid #e5e7eb;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-container p {
+  color: #6b7280;
+  font-size: 1rem;
+}
+
+/* Error State */
+.error-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 60px 24px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  max-width: 480px;
+}
+
+.error-icon {
+  width: 80px;
+  height: 80px;
+  background: #fef2f2;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.error-container h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: #111827;
+}
+
+.error-container p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.error-container .subtext {
+  font-size: 0.875rem;
+  color: #9ca3af;
+}
+
+/* Header */
+.calculator-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 24px;
+  border-bottom: 3px solid #3b82f6;
+  background: #fafafa;
+}
+
+.header-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.75rem;
+}
+
+.header-content h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.header-content .description {
+  margin: 4px 0 0;
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+/* Visualization Container */
+.calculator-visualization {
+  padding: 24px;
+}
+
+/* PITI Visualization */
+.shared-piti .piti-total {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.shared-piti .total-label {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.shared-piti .total-value {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.shared-piti .piti-bar {
+  display: flex;
+  height: 24px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #f3f4f6;
+  margin-bottom: 20px;
+}
+
+.shared-piti .piti-segment {
+  transition: width 0.3s ease;
+}
+
+.shared-piti .piti-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.shared-piti .breakdown-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.shared-piti .item-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.shared-piti .item-label {
+  flex: 1;
+  font-size: 0.9rem;
+  color: #374151;
+}
+
+.shared-piti .item-value {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+/* DTI Visualization */
+.shared-dti .dti-main {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.shared-dti .dti-value {
+  font-size: 3rem;
+  font-weight: 700;
+}
+
+.shared-dti .dti-label {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.shared-dti .dti-gauge {
+  position: relative;
+  height: 20px;
+  background: #f3f4f6;
+  border-radius: 10px;
+  margin-bottom: 24px;
+  overflow: visible;
+}
+
+.shared-dti .gauge-fill {
+  height: 100%;
+  border-radius: 10px;
+  transition: width 0.3s ease;
+}
+
+.shared-dti .gauge-threshold {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.shared-dti .threshold-line {
+  width: 2px;
+  height: 28px;
+  background: #374151;
+}
+
+.shared-dti .threshold-label {
+  font-size: 0.7rem;
+  color: #6b7280;
+  margin-top: 4px;
+  white-space: nowrap;
+}
+
+.shared-dti .dti-details {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.shared-dti .detail-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+  color: #374151;
+}
+
+.shared-dti .dti-status {
+  margin-top: 8px;
+  text-align: center;
+}
+
+.shared-dti .status-pass {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #dcfce7;
+  color: #166534;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.shared-dti .status-warn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #fef9c3;
+  color: #854d0e;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+/* LTV Visualization */
+.shared-ltv .ltv-main {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.shared-ltv .ltv-value {
+  font-size: 3rem;
+  font-weight: 700;
+}
+
+.shared-ltv .ltv-label {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.shared-ltv .ltv-bar {
+  position: relative;
+  height: 20px;
+  background: #f3f4f6;
+  border-radius: 10px;
+  margin-bottom: 24px;
+  overflow: visible;
+}
+
+.shared-ltv .bar-fill {
+  height: 100%;
+  border-radius: 10px;
+  transition: width 0.3s ease;
+}
+
+.shared-ltv .bar-threshold {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.shared-ltv .threshold-line {
+  width: 2px;
+  height: 28px;
+  background: #374151;
+}
+
+.shared-ltv .threshold-label {
+  font-size: 0.7rem;
+  color: #6b7280;
+  margin-top: 4px;
+  white-space: nowrap;
+}
+
+.shared-ltv .ltv-status {
+  text-align: center;
+}
+
+.shared-ltv .pmi-alert {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: #fef9c3;
+  color: #854d0e;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.shared-ltv .no-pmi {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: #dcfce7;
+  color: #166534;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.shared-ltv .cltv-note {
+  margin-top: 12px;
+  text-align: center;
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+/* Affordability Visualization */
+.shared-affordability .affordability-main {
+  text-align: center;
+  padding: 24px;
+  background: linear-gradient(135deg, #eff6ff 0%, #e0e7ff 100%);
+  border-radius: 12px;
+  margin-bottom: 20px;
+}
+
+.shared-affordability .main-label {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.shared-affordability .main-value {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #1e40af;
+}
+
+.shared-affordability .affordability-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.shared-affordability .breakdown-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+
+.shared-affordability .item-label {
+  font-size: 0.9rem;
+  color: #6b7280;
+}
+
+.shared-affordability .item-value {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+/* Closing Costs Visualization */
+.shared-closing-costs .costs-total {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px;
+  background: #faf5ff;
+  border-radius: 12px;
+  margin-bottom: 20px;
+}
+
+.shared-closing-costs .total-label {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.shared-closing-costs .total-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #7c3aed;
+}
+
+.shared-closing-costs .costs-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.shared-closing-costs .cost-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: #f9fafb;
+  border-radius: 6px;
+  font-size: 0.875rem;
+}
+
+.shared-closing-costs .cost-name {
+  color: #374151;
+}
+
+.shared-closing-costs .cost-amount {
+  font-weight: 500;
+  color: #111827;
+}
+
+.shared-closing-costs .cash-to-close {
+  display: flex;
+  justify-content: space-between;
+  padding: 16px;
+  background: #ecfdf5;
+  border-radius: 8px;
+  border: 1px solid #a7f3d0;
+}
+
+.shared-closing-costs .cash-to-close .label {
+  font-weight: 500;
+  color: #065f46;
+}
+
+.shared-closing-costs .cash-to-close .value {
+  font-weight: 700;
+  color: #065f46;
+}
+
+/* Amortization Visualization */
+.shared-amortization .amortization-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.shared-amortization .summary-item {
+  text-align: center;
+  padding: 16px 12px;
+  background: #f9fafb;
+  border-radius: 10px;
+}
+
+.shared-amortization .summary-item .item-label {
+  display: block;
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.shared-amortization .summary-item .item-value {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.shared-amortization .amortization-schedule {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.shared-amortization .schedule-header {
+  display: grid;
+  grid-template-columns: 0.8fr 1fr 1fr 1fr 1.2fr;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #f3f4f6;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+}
+
+.shared-amortization .schedule-row {
+  display: grid;
+  grid-template-columns: 0.8fr 1fr 1fr 1fr 1.2fr;
+  gap: 8px;
+  padding: 10px 16px;
+  font-size: 0.8rem;
+  color: #374151;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.shared-amortization .schedule-row:last-child {
+  border-bottom: none;
+}
+
+.shared-amortization .schedule-more {
+  padding: 12px;
+  text-align: center;
+  font-size: 0.8rem;
+  color: #6b7280;
+  background: #f9fafb;
+}
+
+/* Inputs Section */
+.inputs-section {
+  padding: 0 24px 24px;
+  border-top: 1px solid #e5e7eb;
+  margin-top: 24px;
+  padding-top: 24px;
+}
+
+.inputs-section h4 {
+  margin: 0 0 16px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.inputs-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.input-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.input-label {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.input-value {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #111827;
+}
+
+/* Generic Visualization */
+.generic-visualization {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.generic-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+
+.generic-item .item-label {
+  color: #6b7280;
+}
+
+.generic-item .item-value {
+  font-weight: 500;
+  color: #111827;
+}
+
+/* Footer */
+.calculator-footer {
+  padding: 20px 24px;
+  background: #f9fafb;
+  border-top: 1px solid #e5e7eb;
+}
+
+.calculator-footer .disclaimer {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #9ca3af;
+  line-height: 1.5;
+}
+
+.calculator-footer .expiration {
+  margin: 12px 0 0;
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .shared-calculator-page {
+    padding: 16px;
+  }
+
+  .shared-calculator-container {
+    border-radius: 12px;
+  }
+
+  .calculator-header {
+    padding: 20px;
+  }
+
+  .header-icon {
+    width: 48px;
+    height: 48px;
+    font-size: 1.5rem;
+  }
+
+  .calculator-visualization {
+    padding: 20px;
+  }
+
+  .shared-piti .total-value,
+  .shared-affordability .main-value,
+  .shared-closing-costs .total-value {
+    font-size: 2rem;
+  }
+
+  .shared-dti .dti-value,
+  .shared-ltv .ltv-value {
+    font-size: 2.5rem;
+  }
+
+  .shared-amortization .amortization-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .shared-amortization .schedule-header,
+  .shared-amortization .schedule-row {
+    grid-template-columns: 1fr 1fr 1fr;
+    font-size: 0.7rem;
+  }
+
+  .shared-amortization .schedule-header span:nth-child(3),
+  .shared-amortization .schedule-header span:nth-child(4),
+  .shared-amortization .schedule-row span:nth-child(3),
+  .shared-amortization .schedule-row span:nth-child(4) {
+    display: none;
+  }
+
+  .inputs-grid {
+    grid-template-columns: 1fr;
+  }
+}

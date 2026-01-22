@@ -144,6 +144,7 @@ const ApplyVerify = lazy(() => import('./pages/ApplyVerify'));
 const BorrowerOAuthCallback = lazy(() => import('./pages/BorrowerOAuthCallback'));
 const ApplicationAnalytics = lazy(() => import('./pages/ApplicationAnalytics'));
 const BorrowerPortal = lazy(() => import('./pages/BorrowerPortal'));
+const SharedCalculator = lazy(() => import('./pages/SharedCalculator'));
 const PortalTest = lazy(() => import('./pages/PortalTest'));
 const ThemeRenderer = lazy(() => import('./pages/microsites/ThemeRenderer'));
 const ThemePreview = lazy(() => import('./pages/microsites/ThemePreview'));
@@ -158,6 +159,7 @@ const AgentDashboard = lazy(() => import('./pages/AgentDashboard'));
 const AgentProfile = lazy(() => import('./pages/AgentProfile'));
 const AcquisitionDashboard = lazy(() => import('./pages/AcquisitionDashboard'));
 const Marketing = lazy(() => import('./pages/Marketing'));
+const CarouselBuilder = lazy(() => import('./pages/CarouselBuilder/CarouselBuilderPage'));
 const MasterManagerCapacity = lazy(() => import('./pages/MasterManager/CapacityCommandCenter'));
 const MasterManagerRecruiting = lazy(() => import('./pages/MasterManager/RecruitingDashboard'));
 const RecruitDetail = lazy(() => import('./pages/MasterManager/RecruitDetail'));
@@ -541,6 +543,9 @@ function App() {
           {/* Legacy Borrower Portal - moved to /borrower-portal to avoid conflict with PURL /portal/:slug route */}
           <Route path="/borrower-portal/:token" element={<LazyPage><BorrowerPortal /></LazyPage>} />
           <Route path="/borrower-portal" element={<LazyPage><BorrowerPortal /></LazyPage>} />
+
+          {/* Shared Calculator Result (public - token-based access) */}
+          <Route path="/shared/calculator/:shareToken" element={<LazyPage><SharedCalculator /></LazyPage>} />
 
           {/* Active Loan Portal - Real-time borrower dashboard with WebSocket updates */}
           <Route path="/portal/loan/:loanId" element={<LazyPage><ActiveLoanPortalComplete /></LazyPage>} />
@@ -3494,6 +3499,28 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><MicrositeEditor /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/carousel-builder"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><CarouselBuilder /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
