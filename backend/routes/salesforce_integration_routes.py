@@ -81,50 +81,108 @@ def fix_salesforce_schema(db: Session) -> dict:
             db.rollback()
             logger.debug(f"sf_user_schemas.{col_name} fix: {e}")
 
-    # Check and add integration_profile_id to field_mappings if missing
-    try:
-        db.execute(text("""
-            ALTER TABLE field_mappings
-            ADD COLUMN IF NOT EXISTS integration_profile_id INTEGER REFERENCES integration_profiles(id) ON DELETE CASCADE
-        """))
-        db.commit()
-        fixes.append("Added integration_profile_id to field_mappings")
-    except Exception as e:
-        db.rollback()
-        logger.debug(f"field_mappings fix: {e}")
+    # Fix field_mappings table
+    field_mappings_columns = [
+        ("integration_profile_id", "INTEGER REFERENCES integration_profiles(id) ON DELETE CASCADE"),
+        ("source_object", "VARCHAR(100)"),
+        ("source_field", "VARCHAR(255)"),
+        ("target_entity", "VARCHAR(100)"),
+        ("target_field", "VARCHAR(255)"),
+        ("transform_type", "VARCHAR(50)"),
+        ("transform_config", "JSONB"),
+        ("data_type", "VARCHAR(50)"),
+        ("required", "BOOLEAN DEFAULT FALSE"),
+        ("default_value", "TEXT"),
+        ("sync_direction", "VARCHAR(20) DEFAULT 'bidirectional'"),
+        ("enabled", "BOOLEAN DEFAULT TRUE"),
+        ("validation_status", "VARCHAR(50) DEFAULT 'pending'"),
+        ("validation_message", "TEXT"),
+        ("created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
+        ("updated_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
+    ]
+    for col_name, col_type in field_mappings_columns:
+        try:
+            db.execute(text(f"ALTER TABLE field_mappings ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+            db.commit()
+            fixes.append(f"Added {col_name} to field_mappings")
+        except Exception as e:
+            db.rollback()
+            logger.debug(f"field_mappings.{col_name} fix: {e}")
 
-    # Check and add integration_profile_id to integration_events if missing
-    try:
-        db.execute(text("""
-            ALTER TABLE integration_events
-            ADD COLUMN IF NOT EXISTS integration_profile_id INTEGER REFERENCES integration_profiles(id) ON DELETE CASCADE
-        """))
-        db.commit()
-        fixes.append("Added integration_profile_id to integration_events")
-    except Exception as e:
-        db.rollback()
-        logger.debug(f"integration_events fix: {e}")
+    # Fix integration_events table
+    integration_events_columns = [
+        ("integration_profile_id", "INTEGER REFERENCES integration_profiles(id) ON DELETE CASCADE"),
+        ("event_type", "VARCHAR(100)"),
+        ("direction", "VARCHAR(20)"),
+        ("source_object", "VARCHAR(100)"),
+        ("source_record_id", "VARCHAR(100)"),
+        ("target_entity", "VARCHAR(100)"),
+        ("target_record_id", "INTEGER"),
+        ("records_processed", "INTEGER"),
+        ("records_succeeded", "INTEGER"),
+        ("records_failed", "INTEGER"),
+        ("status", "VARCHAR(50)"),
+        ("error_message", "TEXT"),
+        ("error_details", "JSONB"),
+        ("duration_ms", "INTEGER"),
+        ("event_data", "JSONB"),
+        ("created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
+    ]
+    for col_name, col_type in integration_events_columns:
+        try:
+            db.execute(text(f"ALTER TABLE integration_events ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+            db.commit()
+            fixes.append(f"Added {col_name} to integration_events")
+        except Exception as e:
+            db.rollback()
+            logger.debug(f"integration_events.{col_name} fix: {e}")
 
-    # Check and add integration_profile_id to sync_queue if missing
-    try:
-        db.execute(text("""
-            ALTER TABLE sync_queue
-            ADD COLUMN IF NOT EXISTS integration_profile_id INTEGER REFERENCES integration_profiles(id) ON DELETE CASCADE
-        """))
-        db.commit()
-        fixes.append("Added integration_profile_id to sync_queue")
-    except Exception as e:
-        db.rollback()
-        logger.debug(f"sync_queue fix: {e}")
+    # Fix sync_queue table
+    sync_queue_columns = [
+        ("integration_profile_id", "INTEGER REFERENCES integration_profiles(id) ON DELETE CASCADE"),
+        ("operation", "VARCHAR(50)"),
+        ("direction", "VARCHAR(20)"),
+        ("source_object", "VARCHAR(100)"),
+        ("source_record_id", "VARCHAR(100)"),
+        ("priority", "INTEGER DEFAULT 5"),
+        ("status", "VARCHAR(50) DEFAULT 'pending'"),
+        ("attempts", "INTEGER DEFAULT 0"),
+        ("max_attempts", "INTEGER DEFAULT 3"),
+        ("scheduled_for", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
+        ("started_at", "TIMESTAMP"),
+        ("completed_at", "TIMESTAMP"),
+        ("result", "JSONB"),
+        ("error_message", "TEXT"),
+        ("created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
+        ("updated_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
+    ]
+    for col_name, col_type in sync_queue_columns:
+        try:
+            db.execute(text(f"ALTER TABLE sync_queue ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+            db.commit()
+            fixes.append(f"Added {col_name} to sync_queue")
+        except Exception as e:
+            db.rollback()
+            logger.debug(f"sync_queue.{col_name} fix: {e}")
 
-    # Check and add integration_profile_id to integration_record_tracking if missing
-    try:
-        db.execute(text("""
-            ALTER TABLE integration_record_tracking
-            ADD COLUMN IF NOT EXISTS integration_profile_id INTEGER REFERENCES integration_profiles(id) ON DELETE CASCADE
-        """))
-        db.commit()
-        fixes.append("Added integration_profile_id to integration_record_tracking")
+    # Fix integration_record_tracking table
+    record_tracking_columns = [
+        ("integration_profile_id", "INTEGER REFERENCES integration_profiles(id) ON DELETE CASCADE"),
+        ("source_object", "VARCHAR(100)"),
+        ("source_record_id", "VARCHAR(100)"),
+        ("target_entity", "VARCHAR(100)"),
+        ("target_record_id", "INTEGER"),
+        ("last_synced_at", "TIMESTAMP"),
+        ("sync_hash", "VARCHAR(64)"),
+        ("sync_status", "VARCHAR(50) DEFAULT 'synced'"),
+        ("created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
+        ("updated_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
+    ]
+    for col_name, col_type in record_tracking_columns:
+        try:
+            db.execute(text(f"ALTER TABLE integration_record_tracking ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+            db.commit()
+            fixes.append(f"Added {col_name} to integration_record_tracking")
     except Exception as e:
         db.rollback()
         logger.debug(f"integration_record_tracking fix: {e}")
