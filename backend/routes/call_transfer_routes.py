@@ -15,6 +15,7 @@ import os
 import uuid
 
 from database import get_db
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -278,7 +279,7 @@ async def initiate_cold_transfer(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error initiating cold transfer: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -498,7 +499,7 @@ async def initiate_warm_transfer(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error initiating warm transfer: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -601,7 +602,7 @@ async def complete_warm_transfer(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error completing warm transfer: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -802,7 +803,7 @@ async def warm_transfer_decision_twiml(
 
         return Response(content=str(response), media_type="application/xml")
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error in warm decision TwiML: {e}")
         response = VoiceResponse()
         response.say("Error processing. Goodbye.")
@@ -956,7 +957,7 @@ async def transfer_status_twiml(
         response.hangup()
         return Response(content=str(response), media_type="application/xml")
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error in transfer status TwiML: {e}")
         response = VoiceResponse()
         response.hangup()
@@ -1007,7 +1008,7 @@ async def consultation_status_webhook(
 
         return {"status": "ok"}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error in consultation status webhook: {e}")
         return {"status": "error", "message": str(e)}
 

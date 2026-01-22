@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 from utils.responses import success_response, error_response
+from sqlalchemy.exc import SQLAlchemyError
 from models.video_os_models import (
     VideoProjectCreate, VideoProjectUpdate, VideoProjectResponse,
     BrandTemplateCreate, BrandTemplateUpdate, BrandTemplateResponse,
@@ -204,7 +205,7 @@ async def delete_project(
         service = get_project_service()
         service.archive_project(db, project_id)
         return success_response(message="Project archived")
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.exception("Failed to delete project")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -340,7 +341,7 @@ async def delete_scene(
         service = get_project_service()
         service.delete_scene(db, scene_id)
         return success_response(message="Scene deleted")
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.exception("Failed to delete scene")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -648,7 +649,7 @@ async def delete_video(
         hosting_service = get_hosting_service()
         hosting_service.delete_video(db, video_id)
         return success_response(message="Video deleted")
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.exception("Failed to delete video")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1166,7 +1167,7 @@ async def end_viewer_session(
         hosting_service = get_hosting_service()
         hosting_service.end_viewer_session(db, session_id)
         return success_response(message="Session ended")
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.exception("Failed to end session")
         raise HTTPException(status_code=500, detail=str(e))
 

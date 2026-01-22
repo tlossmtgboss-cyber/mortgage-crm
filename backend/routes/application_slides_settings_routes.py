@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import Column, Integer, String, JSON, DateTime, Boolean
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -361,7 +362,7 @@ async def save_application_slides_config(
             "timestamp": datetime.utcnow().isoformat()
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         import traceback
         logger.error(f"Error saving application slides config: {e}")
         logger.error(f"Traceback: {traceback.format_exc()}")
@@ -406,7 +407,7 @@ async def reset_application_slides_config(
             "profileFields": defaults["profileFields"]
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error resetting application slides config: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to reset configuration: {str(e)}")

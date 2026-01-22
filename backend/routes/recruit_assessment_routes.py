@@ -13,6 +13,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 from services.recruit_assessment_service import recruit_assessment_service
+from sqlalchemy.exc import SQLAlchemyError
 from models.recruit_assessment_models import (
     QuizForDisposition,
     QuizSubmission,

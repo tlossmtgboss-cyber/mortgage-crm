@@ -21,6 +21,7 @@ from services.workflow_role_assignment import RoleAssignmentService, get_role_as
 from services.workflow_scheduler import WorkflowScheduler, run_scheduled_workflow_tasks
 
 import logging
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -885,7 +886,7 @@ async def ensure_tasks_table_columns(
                 logger.info(f"✅ Added '{col_name}' column to tasks table")
             else:
                 already_exists.append(col_name)
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             errors.append({"column": col_name, "error": str(e)})
             logger.warning(f"⚠️ Error with '{col_name}': {e}")
@@ -1058,7 +1059,7 @@ async def run_workflow_migrations(
             db.commit()
             results[f"{migration_type}s"].append({"name": name, "status": "success"})
             logger.info(f"✅ Created {migration_type}: {name}")
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             error_msg = str(e)
             if "already exists" in error_msg.lower():
@@ -1210,7 +1211,7 @@ async def repair_workflow_tables(
                     logger.info(f"✅ Added column {col_name} to {table_name}")
                 else:
                     results[table_name].append({"column": col_name, "status": "exists"})
-            except Exception as e:
+            except SQLAlchemyError as e:
                 db.rollback()
                 results["errors"].append({"table": table_name, "column": col_name, "error": str(e)})
                 logger.error(f"❌ Error adding {col_name} to {table_name}: {e}")
@@ -1228,7 +1229,7 @@ async def repair_workflow_tables(
         try:
             db.execute(text(idx_sql))
             db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             # Ignore index errors - not critical
 
@@ -1291,7 +1292,7 @@ async def repair_workflow_tables(
             if result.fetchone():
                 role_tables_created.append(table_name)
         logger.info(f"Role assignment tables created: {role_tables_created}")
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         results["errors"].append({"section": "role_tables", "error": str(e)})
         logger.error(f"Error creating role assignment tables: {e}")
@@ -1893,7 +1894,7 @@ async def generate_tasks_public(
                 "max_day_generated": max_day_generated
             })
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         import traceback
         results["success"] = False
         results["errors"].append(str(e))
@@ -2042,7 +2043,7 @@ async def workflow_diagnostic_summary(
 
         return summary
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         import traceback
         return {"error": str(e), "traceback": traceback.format_exc()}
 
@@ -2111,7 +2112,7 @@ async def test_create_linked_task(
                 "message": "Task was not found after insert"
             }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         return {
             "success": False,
@@ -2172,7 +2173,7 @@ async def get_linked_tasks_diagnostic(
             "tasks": tasks
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         import traceback
         return {"error": str(e), "traceback": traceback.format_exc()}
 
@@ -2396,7 +2397,7 @@ async def create_missing_linked_tasks(
                     """), {"task_id": result[0], "id": task_instance_id})
                     created += 1
 
-            except Exception as e:
+            except SQLAlchemyError as e:
                 errors.append({"task_instance_id": task_instance_id, "error": str(e)})
 
         db.commit()
@@ -2408,7 +2409,7 @@ async def create_missing_linked_tasks(
             "errors": errors
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         import traceback
         return {"success": False, "error": str(e), "traceback": traceback.format_exc()}
@@ -2674,7 +2675,7 @@ async def cleanup_test_workflow_instances(
             **results
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         return {
             "success": False,
@@ -2908,7 +2909,7 @@ async def seed_salesforce_sla_workflows(
             "results": results
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         import traceback
         raise HTTPException(

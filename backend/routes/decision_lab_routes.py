@@ -21,6 +21,7 @@ from sqlalchemy import text
 from pydantic import BaseModel, Field
 
 from database import get_db
+from sqlalchemy.exc import SQLAlchemyError
 from services.confidence_engine_service import (
     ConfidenceEngineService,
     LoanScenarioService,
@@ -938,7 +939,7 @@ async def seed_questions(
             "questions_seeded": question_count,
             "overlays_seeded": overlay_count
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Seed error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -976,7 +977,7 @@ async def debug_tables(
         )).fetchall()
         result["sample_questions"] = [{"id": q[0], "code": q[1], "text": q[2][:50]} for q in sample_questions]
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         result["errors"].append(f"Table query error: {str(e)}")
 
     # Try to insert a test question directly
@@ -1003,7 +1004,7 @@ async def debug_tables(
         new_count = db.execute(text("SELECT COUNT(*) FROM confidence_questions")).scalar()
         result["new_count"] = new_count
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         result["test_insert_error"] = str(e)
         import traceback
         result["traceback"] = traceback.format_exc()
@@ -1045,7 +1046,7 @@ async def run_migration(
             "questions_count": q_count,
             "overlays_count": o_count
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Migration error: {e}")
         import traceback
         traceback.print_exc()

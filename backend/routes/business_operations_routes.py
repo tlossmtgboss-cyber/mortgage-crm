@@ -27,6 +27,7 @@ from models.business_operations import (
     MarketingCampaign, MarketingMetrics,
     BusinessForecast, BusinessKPI, BudgetAlert
 )
+from sqlalchemy.exc import SQLAlchemyError
 from schemas.business_operations import (
     ServiceProviderCreate, ServiceProviderUpdate, ServiceProviderResponse, ServiceProviderSummary,
     ServiceUsageCreate, ServiceUsageResponse, ServiceUsageImport,
@@ -536,7 +537,7 @@ async def import_usage_csv(
             )
             db.add(record)
             records_created += 1
-        except Exception as e:
+        except SQLAlchemyError as e:
             errors.append(f"Row {row_num}: {str(e)}")
 
     if records_created > 0:
@@ -1568,5 +1569,5 @@ async def run_business_ops_migration(
             "tables_created": created
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")

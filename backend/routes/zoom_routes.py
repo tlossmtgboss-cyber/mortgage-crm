@@ -14,6 +14,7 @@ from sqlalchemy import text
 from pydantic import BaseModel
 
 from utils.responses import success_response, error_response
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -196,7 +197,7 @@ async def zoom_callback(
 
         logger.info(f"Successfully stored Zoom tokens for user {user_id}")
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error storing Zoom tokens: {e}")
         db.rollback()
         return RedirectResponse(
@@ -313,7 +314,7 @@ async def refresh_zoom_token(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error refreshing Zoom token: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -340,7 +341,7 @@ async def disconnect_zoom(
             "disconnected": True
         }, "Zoom integration disconnected")
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error disconnecting Zoom: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

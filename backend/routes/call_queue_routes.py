@@ -15,6 +15,7 @@ import os
 import asyncio
 
 from database import get_db
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -209,7 +210,7 @@ async def create_queue(
             "queue_id": queue_id
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error creating queue: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -405,7 +406,7 @@ async def update_queue(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error updating queue: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -433,7 +434,7 @@ async def delete_queue(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error deleting queue: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -498,7 +499,7 @@ async def add_queue_member(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error adding queue member: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -527,7 +528,7 @@ async def remove_queue_member(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error removing queue member: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -945,7 +946,7 @@ async def dequeue_webhook(
 
         return {"status": "ok"}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error in dequeue webhook: {e}")
         return {"status": "error", "message": str(e)}
 
@@ -1068,7 +1069,7 @@ async def connect_agent_twiml(
 
         return Response(content=str(response), media_type="application/xml")
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error in connect agent TwiML: {e}")
         response = VoiceResponse()
         response.say("Unable to connect. Please try again.")
@@ -1110,6 +1111,6 @@ async def connect_status_webhook(
         db.commit()
         return {"status": "ok"}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error in connect status webhook: {e}")
         return {"status": "error"}

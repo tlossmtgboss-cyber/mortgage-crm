@@ -16,6 +16,7 @@ import secrets
 import asyncio
 
 from database import get_db
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -198,7 +199,7 @@ async def create_conference(
             "participant_pin": participant_pin if conference.pin_required else None
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error creating conference: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -388,7 +389,7 @@ async def update_conference(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error updating conference: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -416,7 +417,7 @@ async def delete_conference(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error deleting conference: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -459,7 +460,7 @@ async def start_conference(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error starting conference: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -514,7 +515,7 @@ async def end_conference(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error ending conference: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -637,7 +638,7 @@ async def add_participant(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error adding participant: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -724,7 +725,7 @@ async def participant_action(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error on participant action: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -763,7 +764,7 @@ async def mute_all_participants(
                 client.conferences(conf.current_conference_sid).participants(p.call_sid).update(muted=True)
                 db.execute(text("UPDATE conference_participants SET is_muted = TRUE WHERE id = :id"), {"id": p.id})
                 muted_count += 1
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.warning(f"Could not mute participant {p.id}: {e}")
 
         db.commit()
@@ -772,7 +773,7 @@ async def mute_all_participants(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error muting all: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1002,7 +1003,7 @@ async def participant_status_webhook(
         db.commit()
         return {"status": "ok"}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error in participant status webhook: {e}")
         return {"status": "error"}
 
@@ -1071,7 +1072,7 @@ async def conference_status_webhook(
         db.commit()
         return {"status": "ok"}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error in conference status webhook: {e}")
         return {"status": "error"}
 
@@ -1130,7 +1131,7 @@ async def create_quick_conference(
 
                 result = await add_participant(conf_id, req, db, current_user)
                 added.append(result)
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.warning(f"Could not add participant {p}: {e}")
                 added.append({"success": False, "participant": p, "error": str(e)})
 

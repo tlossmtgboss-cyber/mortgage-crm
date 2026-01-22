@@ -42,6 +42,7 @@ from models.avatar_models import (
     AvatarJobStatus as AvatarJobStatusEnum,
 )
 from services.avatar_service import avatar_service
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 

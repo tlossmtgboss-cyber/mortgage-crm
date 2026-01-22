@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 from workflows.recruiting_workflows import recruiting_workflow_service, RECRUITING_WORKFLOWS
 from services.recruiting_email_service import get_recruiting_email_service
+from sqlalchemy.exc import SQLAlchemyError
 
 router = APIRouter(prefix="/api/v1/recruiting/workflow", tags=["Recruiting Workflow"])
 

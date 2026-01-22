@@ -13,6 +13,7 @@ from database import get_db
 from services.recruit_social_service import recruit_social_service, SocialProfile
 import logging
 import os
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +104,7 @@ async def facebook_oauth_callback(
             "message": "Facebook connected successfully",
             "expires_in": token_data.get("expires_in")
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Facebook OAuth error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -142,7 +143,7 @@ async def linkedin_oauth_callback(
             "message": "LinkedIn connected successfully",
             "expires_in": token_data.get("expires_in")
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"LinkedIn OAuth error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -221,7 +222,7 @@ async def create_social_post(
         db.commit()
 
         return result
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error creating social post: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -251,7 +252,7 @@ async def get_social_posts(
         posts = [dict(row._mapping) for row in result]
 
         return {"posts": posts, "count": len(posts)}
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error getting social posts: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -325,7 +326,7 @@ async def enrich_from_linkedin(
             "candidate_id": request.candidate_id,
             "enrichment": enrichment
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error enriching from LinkedIn: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -527,7 +528,7 @@ async def run_social_migration(
         db.commit()
 
         return {"status": "success", "message": "Social media tables created"}
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Migration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -600,7 +601,7 @@ async def seed_sample_posts(
 
         db.commit()
         return {"status": "success", "message": f"Seeded {len(sample_posts)} sample posts"}
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error seeding posts: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 

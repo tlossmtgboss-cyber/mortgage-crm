@@ -14,6 +14,7 @@ from sqlalchemy import text
 from pydantic import BaseModel
 
 from utils.responses import success_response, error_response
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -222,7 +223,7 @@ async def docusign_callback(
 
         logger.info(f"Successfully stored DocuSign tokens for user {user_id}")
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error storing DocuSign tokens: {e}")
         db.rollback()
         return RedirectResponse(
@@ -344,7 +345,7 @@ async def refresh_docusign_token(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error refreshing DocuSign token: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -371,7 +372,7 @@ async def disconnect_docusign(
             "disconnected": True
         }, "DocuSign integration disconnected")
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error disconnecting DocuSign: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

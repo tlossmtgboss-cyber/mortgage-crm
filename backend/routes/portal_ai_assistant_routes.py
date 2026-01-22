@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Path
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -476,7 +477,7 @@ async def chat_with_assistant(
             }
         })
         db.commit()
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning(f"Failed to log AI chat interaction: {e}")
 
     return ChatResponse(**response)
@@ -693,6 +694,6 @@ async def submit_assistant_feedback(
 
         return {"success": True, "message": "Thank you for your feedback!"}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Failed to submit feedback: {e}")
         raise HTTPException(status_code=500, detail="Failed to submit feedback")

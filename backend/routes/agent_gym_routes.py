@@ -20,6 +20,7 @@ import logging
 from database import get_db
 
 from services.agent_gym_service import AgentGymService
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/agents/gym", tags=["agent-gym"])
@@ -267,7 +268,7 @@ async def start_training_session(
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error starting session: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -297,7 +298,7 @@ async def complete_training_session(
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error completing session: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -319,7 +320,7 @@ async def fail_training_session(
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error failing session: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 

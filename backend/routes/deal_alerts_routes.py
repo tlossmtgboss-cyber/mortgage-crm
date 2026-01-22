@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from database import get_db
+from sqlalchemy.exc import SQLAlchemyError
 from services.proactive_deal_alerts_service import (
     ProactiveDealAlertsService,
     get_deal_alerts_service,
@@ -753,7 +754,7 @@ async def run_deal_alerts_migration(
             "database_type": "postgresql" if is_postgres else "sqlite"
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Migration failed: {e}")
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")

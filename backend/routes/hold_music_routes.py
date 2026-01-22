@@ -14,6 +14,7 @@ import os
 import json
 
 from database import get_db
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -176,7 +177,7 @@ async def create_hold_music(
             "music_id": music_id
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error creating hold music: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -359,7 +360,7 @@ async def update_hold_music(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error updating hold music: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -387,7 +388,7 @@ async def delete_hold_music(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error deleting hold music: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -419,7 +420,7 @@ async def set_default_hold_music(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error setting default: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -448,7 +449,7 @@ async def stream_default_hold_music(db: Session = Depends(get_db)):
         # Fallback to Twilio default
         return RedirectResponse(url=TWILIO_DEFAULT_MUSIC["classical"]["url"])
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error streaming default music: {e}")
         return RedirectResponse(url=TWILIO_DEFAULT_MUSIC["classical"]["url"])
 
@@ -474,7 +475,7 @@ async def stream_hold_music(
         # Fallback to default
         return RedirectResponse(url=TWILIO_DEFAULT_MUSIC["classical"]["url"])
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error streaming music {music_id}: {e}")
         return RedirectResponse(url=TWILIO_DEFAULT_MUSIC["classical"]["url"])
 

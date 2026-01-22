@@ -35,6 +35,7 @@ from services.conversation_quality import ConversationQualityAnalyzer, get_quali
 from services.session_recovery import SessionRecoveryService
 from middleware.structured_logging import StructuredLogger, get_structured_logger
 from models.chat_state_machine_models import ChatSession, ChatMessage, ConversationPhase
+from sqlalchemy.exc import SQLAlchemyError
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -196,7 +197,7 @@ async def create_session(
                 recovery_source = "visitor_id"
                 logger.info(f"Recovered session {recovered_session.id} for visitor {session_data.visitor_id}")
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Session recovery failed: {e}")
 
     # Create new session if no recovery

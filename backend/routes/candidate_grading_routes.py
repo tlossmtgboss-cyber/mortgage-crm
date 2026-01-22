@@ -12,6 +12,7 @@ import logging
 
 from database import get_db
 from services.candidate_grading_service import CandidateGradingService
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -889,7 +890,7 @@ async def run_grading_migration(
             "columns_added": ["current_assessment_id", "current_grade", "grade_updated_at", "disc_primary_style"]
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.exception("Error running grading migration")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

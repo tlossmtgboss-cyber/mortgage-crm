@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from document_visibility_service import DocumentVisibilityService
 from models.document_visibility import ReleaseMode, ChangeSource
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -210,7 +211,7 @@ async def update_document_visibility(
             "success": True,
             "visibility": visibility.to_dict()
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error updating visibility: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -279,7 +280,7 @@ async def bulk_update_visibility(
             "success": True,
             "updated_count": updated
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error in bulk visibility update: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -322,7 +323,7 @@ async def release_document(
             "message": "Document released",
             "visibility": visibility.to_dict()
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error releasing document: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -404,7 +405,7 @@ async def process_milestone_release(
                 for v in released
             ]
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error processing milestone release: {e}")
         raise HTTPException(status_code=500, detail=str(e))

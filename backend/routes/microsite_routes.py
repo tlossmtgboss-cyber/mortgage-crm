@@ -22,6 +22,7 @@ import hashlib
 from database import get_db
 from services.notification_service import NotificationService
 import logging
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +99,7 @@ async def list_template_packs(
 
         templates = query.order_by(MicrositeTemplatePack.name).all()
         return templates
-    except Exception as e:
+    except SQLAlchemyError as e:
         error_str = str(e).lower()
         # Handle missing table gracefully - return empty list
         if "undefined" in error_str and "table" in error_str or "does not exist" in error_str:

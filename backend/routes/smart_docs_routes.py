@@ -28,6 +28,7 @@ from services.smart_docs.auto_renewal_scheduler import AutoRenewalScheduler
 from services.smart_docs.freshness_validator import FreshnessValidator
 from services.smart_docs.notification_service import SmartDocsNotificationService
 from services.smart_docs.s3_storage_service import get_smart_docs_s3_service
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -417,7 +418,7 @@ async def sync_documents_from_application(
             "message": f"Synced {len(created_requests)} document requirements"
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.exception(f"Failed to sync documents from application: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -464,7 +465,7 @@ async def add_custom_request(
                     borrower_email=body.borrower_email,
                     borrower_name=body.borrower_name or "Borrower",
                 )
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Failed to send notification for custom request: {e}")
 
     # Add notification status to response
@@ -1208,7 +1209,7 @@ async def re_request_document(
         notification_service = SmartDocsNotificationService(db)
         notification_service.send_request_reminder(request)
         notification_sent = True
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning(f"Failed to send re-request notification: {e}")
         notification_sent = False
 
@@ -1829,7 +1830,7 @@ async def get_smart_docs_loans(
             "limit": limit,
             "total_pages": (total + limit - 1) // limit if limit > 0 else 1,
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.exception(f"Error fetching loans for Smart Docs: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -2463,7 +2464,7 @@ async def apply_extracted_fields(
                 "value": str(value),
                 "action": field_req.action,
             })
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Failed to apply field {field_req.field_name}: {e}")
             skipped.append(field_req.field_name)
 
@@ -2584,7 +2585,7 @@ async def approve_document_with_review(
                     UPDATE {table} SET {profile_field} = :value WHERE id = :id
                 """), {"value": str(value), "id": body.apply_fields.profile_id})
                 applied.append(field_req.field_name)
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.warning(f"Failed to apply field: {e}")
 
         if extraction:
@@ -2708,21 +2709,21 @@ async def upload_diagnostic(
     try:
         db.execute(text("SELECT 1")).fetchone()
         results["database"] = "connected"
-    except Exception as e:
+    except SQLAlchemyError as e:
         results["database"] = f"error: {str(e)}"
 
     # Test smart_documents table
     try:
         count = db.execute(text("SELECT COUNT(*) FROM smart_documents")).fetchone()[0]
         results["smart_document_table"] = f"ok ({count} documents)"
-    except Exception as e:
+    except SQLAlchemyError as e:
         results["smart_document_table"] = f"error: {str(e)}"
 
     # Test S3 service
     try:
         s3_service = get_smart_docs_s3_service()
         results["s3"] = f"available: {s3_service.is_available}, bucket: {s3_service.bucket_name}"
-    except Exception as e:
+    except SQLAlchemyError as e:
         results["s3"] = f"error: {str(e)}"
 
     # Test pipeline import
@@ -2789,7 +2790,7 @@ async def test_upload(
         db.commit()
         db.refresh(document)
         steps["create_document"] = f"ok, id: {document.id}"
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         steps["create_document"] = f"error: {str(e)}"
         return {"steps": steps, "error": "Failed at create_document"}
@@ -3569,7 +3570,7 @@ async def fix_loan_id_mismatches(
         try:
             db.commit()
             logger.info(f"Applied {len(fixes_applied)} loan ID fixes")
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Failed to commit loan ID fixes: {e}")
             return {

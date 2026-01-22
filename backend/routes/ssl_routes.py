@@ -21,6 +21,7 @@ from enum import Enum
 from database import get_db
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 router = APIRouter(prefix="/api/admin/ssl", tags=["SSL Certificates"])
 

@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -237,7 +238,7 @@ def get_user_invitation_routes(
                     activation_token=invitation_token,
                     base_url=frontend_url
                 )
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.error(f"Error sending invitation email: {e}")
 
         return InvitationResponse(

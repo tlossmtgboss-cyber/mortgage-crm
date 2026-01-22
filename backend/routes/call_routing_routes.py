@@ -14,6 +14,7 @@ import os
 import httpx
 
 from database import get_db
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -277,7 +278,7 @@ async def route_inbound_call(
         # For other message types, just acknowledge
         return {"status": "received"}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Call routing error: {e}")
         # Default to receptionist on error
         return {
@@ -452,7 +453,7 @@ async def run_routing_migration(
 
         return {"success": True, "message": "Migration completed"}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Migration error: {e}")
         return {"success": False, "error": str(e)}
 

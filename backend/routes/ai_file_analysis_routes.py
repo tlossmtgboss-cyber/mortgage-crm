@@ -19,6 +19,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from services.ai_file_analysis_service import AIFileAnalysisService
+from sqlalchemy.exc import SQLAlchemyError
 
 router = APIRouter(prefix="/api/v1/ai-file-analysis", tags=["ai-file-analysis"])
 

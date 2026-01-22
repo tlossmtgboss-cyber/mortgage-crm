@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from services.notification_service import NotificationService
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -629,7 +630,7 @@ async def download_letter_pdf(
             WHERE id = :letter_id
         """), {"letter_id": letter_id})
         db.commit()
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error recording download: {e}")
 
     # Determine content type based on what we're returning
@@ -897,7 +898,7 @@ async def generate_preapproval_for_lead(
             "share_url": f"/letters/shared/{share_token}"
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         import traceback
         error_details = traceback.format_exc()
@@ -1006,7 +1007,7 @@ async def notify_overlimit_request(
             "description": f"Partner {partner_name} requested pre-approval at ${request.requested_purchase_price:,.0f}, which exceeds the max ${request.max_purchase_price:,.0f}. Please review and contact partner."
         })
         db.commit()
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Failed to create task for over-limit request: {e}")
         db.rollback()
 
@@ -1329,7 +1330,7 @@ async def add_partner_note(
             LEFT JOIN users u ON u.id = l.owner_id
             WHERE l.id = :client_id
         """), {"client_id": client_id}).fetchone()
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Failed to query lead info: {e}")
         return JSONResponse(
             status_code=500,
@@ -1365,7 +1366,7 @@ async def add_partner_note(
             ORDER BY created_at DESC LIMIT 1
         """), {"lead_id": client_id}).fetchone()
         activity_id = result[0] if result else None
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Failed to create activity: {e}")
         db.rollback()
         return JSONResponse(
@@ -2175,7 +2176,7 @@ async def debug_test_preapproval(
 
         result["success"] = True
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         result["error"] = str(e)
         result["traceback"] = traceback.format_exc()
         db.rollback()
@@ -2443,7 +2444,7 @@ async def run_realtor_portal_migration(
                 db.execute(text(sql))
                 db.commit()
                 results.append({"step": name, "status": "success"})
-            except Exception as e:
+            except SQLAlchemyError as e:
                 error_msg = str(e)
                 # Ignore "already exists" type errors
                 if "already exists" in error_msg.lower() or "duplicate" in error_msg.lower():
@@ -2462,7 +2463,7 @@ async def run_realtor_portal_migration(
             "failed": len([r for r in results if r["status"] == "error"])
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         error_msg = str(e)
         stack_trace = traceback.format_exc()

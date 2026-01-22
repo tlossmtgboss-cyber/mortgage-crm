@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from services.perennia_s3_service import get_s3_service
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +79,7 @@ async def get_current_user(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Auth error: {e}")
         raise HTTPException(status_code=401, detail="Invalid token")
 
@@ -185,7 +186,7 @@ Watch it now in the Videos section of your portal."""
         db.commit()
         logger.info(f"Sent video notification to candidate {candidate_id}")
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Failed to send notification: {e}")
 
 
@@ -374,7 +375,7 @@ async def complete_upload(
             "message": "Video uploaded and candidate notified" if request.send_notification else "Video uploaded successfully"
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Failed to complete video upload: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -456,7 +457,7 @@ async def mark_video_viewed(
 
         return {"success": True}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Failed to mark video viewed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -503,7 +504,7 @@ async def run_video_migration(
         db.commit()
         return {"status": "success", "message": "Video messages table created"}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Migration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -569,7 +570,7 @@ async def fix_video_urls(
                     fixed_count += 1
                 else:
                     errors.append(f"Video {row.id}: {public_result.get('error')}")
-            except Exception as e:
+            except SQLAlchemyError as e:
                 errors.append(f"Video {row.id}: {str(e)}")
 
         db.commit()
@@ -580,7 +581,7 @@ async def fix_video_urls(
             "errors": errors[:10] if errors else []
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Fix videos error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -647,7 +648,7 @@ async def add_test_video(
             "recruiter_name": recruiter_name
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Failed to add test video: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

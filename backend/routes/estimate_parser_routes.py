@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from database import get_db
+from sqlalchemy.exc import SQLAlchemyError
 from services.estimate_parser_service import (
     EstimateParserService,
     LoanEstimate,
@@ -317,7 +318,7 @@ async def compare_estimates(
                 'savings': comparison.savings_amount,
             })
             db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Failed to store comparison: {e}")
             db.rollback()
 
@@ -334,7 +335,7 @@ async def compare_estimates(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.exception(f"Compare endpoint error: {e}")
         raise HTTPException(status_code=500, detail='Internal server error')
 
@@ -364,7 +365,7 @@ async def mark_comparison_converted(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Convert endpoint error: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail='Internal server error')

@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 from database import get_db, Base, engine
+from sqlalchemy.exc import SQLAlchemyError
 
 class EmailTrainingLog(Base):
     """Stores email conversations for training review"""
@@ -165,7 +166,7 @@ def log_email_for_training(
             "success": True,
             "training_log_id": log.id
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error logging email for training: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -362,7 +363,7 @@ def review_training_email(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error submitting review: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -525,7 +526,7 @@ def delete_training_log(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error deleting training log: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

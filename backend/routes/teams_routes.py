@@ -19,6 +19,7 @@ from services.microsoft_graph import (
     CalendarResult,
 )
 from integrations.microsoft_graph import graph_client
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +125,7 @@ async def create_teams_meeting(
                         "description": f"Teams meeting scheduled: {request.subject}"
                     })
                     db.commit()
-                except Exception as e:
+                except SQLAlchemyError as e:
                     logger.warning(f"Failed to log meeting activity: {e}")
 
             return MeetingResponse(

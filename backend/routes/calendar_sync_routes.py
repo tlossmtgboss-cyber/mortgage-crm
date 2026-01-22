@@ -46,6 +46,7 @@ from models.calendar_sync_models import (
     EventStatus
 )
 from services.calendar_sync_service import CalendarSyncService, get_calendar_sync_service
+from sqlalchemy.exc import SQLAlchemyError
 from tasks.calendar_sync_tasks import (
     push_event_to_salesforce,
     process_pending_sync_events,
@@ -174,7 +175,7 @@ def get_current_user_id(request: Request, db: Session) -> Optional[int]:
                 if result:
                     return result[0]
             return payload.get("user_id")
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning(f"Failed to extract user ID: {e}")
     return None
 

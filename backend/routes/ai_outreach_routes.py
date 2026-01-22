@@ -14,6 +14,7 @@ import logging
 import os
 
 from database import get_db
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/ai-outreach", tags=["AI Outreach"])
@@ -193,7 +194,7 @@ async def get_contacts_for_outreach(
                     "phone": row[4],
                     "status": row[5]
                 })
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Error searching leads: {e}")
 
         # Search loan borrowers
@@ -225,7 +226,7 @@ async def get_contacts_for_outreach(
                         "phone": row[4],
                         "status": row[5]
                     })
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Error searching loans: {e}")
 
         # Search users (for internal notifications)
@@ -255,7 +256,7 @@ async def get_contacts_for_outreach(
                         "phone": row[4],
                         "status": row[5]
                     })
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Error searching users: {e}")
 
         # Sort by name and limit
@@ -590,7 +591,7 @@ async def _send_sms_outreach(phone: str, first_name: str, message: str, db: Sess
             "message": "SMS sent successfully! AI will handle replies automatically." if success else "Failed to send SMS"
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"SMS outreach error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -641,7 +642,7 @@ async def get_ai_conversations(
             "limit": limit,
             "offset": offset
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error fetching conversations: {e}")
         # Return empty if table doesn't exist yet
         return {"conversations": [], "total": 0, "limit": limit, "offset": offset}
@@ -760,5 +761,5 @@ def create_outreach_table(engine):
             """))
             conn.commit()
             logger.info("✅ AI outreach log table ready")
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning(f"Could not create outreach table: {e}")

@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from utils.responses import success_response, error_response
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -183,7 +184,7 @@ async def google_calendar_callback(
 
         logger.info(f"Successfully stored Google Calendar tokens for user {user_id}")
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error storing Google Calendar tokens: {e}")
         db.rollback()
         return RedirectResponse(
@@ -299,7 +300,7 @@ async def refresh_google_calendar_token(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error refreshing Google Calendar token: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -326,7 +327,7 @@ async def disconnect_google_calendar(
             "disconnected": True
         }, "Google Calendar integration disconnected")
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error disconnecting Google Calendar: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

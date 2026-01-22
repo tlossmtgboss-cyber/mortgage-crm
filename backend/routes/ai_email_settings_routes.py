@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 import logging
 
 from database import get_db, Base
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/ai-email-settings", tags=["AI Email Settings"])

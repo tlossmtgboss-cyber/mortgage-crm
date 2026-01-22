@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from typing import List
 
 from utils.responses import success_response, error_response
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -258,7 +259,7 @@ async def microsoft_callback(
 
         logger.info(f"Successfully stored Microsoft {provider} tokens for user {user_id}")
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error storing Microsoft tokens: {e}")
         db.rollback()
         return RedirectResponse(
@@ -385,7 +386,7 @@ async def refresh_microsoft_token(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error refreshing Microsoft {provider} token: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -416,7 +417,7 @@ async def disconnect_microsoft(
             "disconnected": True
         })
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error disconnecting Microsoft {provider}: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

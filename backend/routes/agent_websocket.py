@@ -11,6 +11,7 @@ import logging
 
 from database import get_db
 from models.agent_governance import AgentProfile, AgentMetricsTimeseries, AgentAlert
+from sqlalchemy.exc import SQLAlchemyError
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -201,7 +202,7 @@ async def agent_metrics_websocket(websocket: WebSocket, agent_id: int):
 
     except WebSocketDisconnect:
         manager.disconnect_agent(websocket, agent_id)
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Agent WebSocket error: {e}")
         manager.disconnect_agent(websocket, agent_id)
 
@@ -234,7 +235,7 @@ async def system_health_websocket(websocket: WebSocket):
 
     except WebSocketDisconnect:
         manager.disconnect_system(websocket)
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"System WebSocket error: {e}")
         manager.disconnect_system(websocket)
 
@@ -283,7 +284,7 @@ async def alerts_websocket(websocket: WebSocket):
 
     except WebSocketDisconnect:
         pass
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Alerts WebSocket error: {e}")
 
 

@@ -13,6 +13,7 @@ from sqlalchemy import text
 from pydantic import BaseModel
 
 from utils.responses import success_response, error_response
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -206,7 +207,7 @@ async def slack_callback(
 
         logger.info(f"Successfully stored Slack tokens for user {user_id}")
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error storing Slack tokens: {e}")
         db.rollback()
         return RedirectResponse(
@@ -288,7 +289,7 @@ async def disconnect_slack(
             "disconnected": True
         }, "Slack integration disconnected")
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error disconnecting Slack: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

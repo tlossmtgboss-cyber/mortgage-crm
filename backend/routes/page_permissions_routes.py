@@ -19,6 +19,7 @@ from datetime import datetime
 import json
 
 import logging
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -381,7 +382,7 @@ async def pin_page(
             "is_pinned": request.is_pinned,
             "pin_order": request.pin_order,
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error pinning page: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -630,7 +631,7 @@ async def update_role_permission(
                 "is_nav_visible": request.is_nav_visible,
             },
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error updating role permission: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -704,7 +705,7 @@ async def create_user_page_override(
                 "expires_at": request.expires_at.isoformat() if request.expires_at else None,
             },
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error creating user page override: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -730,7 +731,7 @@ async def delete_user_page_override(
         db.commit()
 
         return {"success": True, "deleted": result.rowcount > 0}
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error deleting user page override: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -832,7 +833,7 @@ async def bulk_update_permissions(
         db.commit()
 
         return {"success": True, "updated_count": updated}
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error bulk updating permissions: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -879,7 +880,7 @@ async def log_page_access(
         db.commit()
 
         return {"logged": True}
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error logging page access: {e}")
         # Don't fail the request if logging fails
         return {"logged": False, "error": str(e)}
@@ -990,7 +991,7 @@ async def run_page_permissions_migration(
                 )
             """))
             results["tables_created"].append("page_categories")
-        except Exception as e:
+        except SQLAlchemyError as e:
             if "already exists" not in str(e).lower():
                 results["errors"].append(f"page_categories: {str(e)}")
 
@@ -1034,7 +1035,7 @@ async def run_page_permissions_migration(
                 )
             """))
             results["tables_created"].append("page_permissions")
-        except Exception as e:
+        except SQLAlchemyError as e:
             if "already exists" not in str(e).lower():
                 results["errors"].append(f"page_permissions: {str(e)}")
 
@@ -1202,7 +1203,7 @@ async def run_page_permissions_migration(
             "results": results
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Migration error: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

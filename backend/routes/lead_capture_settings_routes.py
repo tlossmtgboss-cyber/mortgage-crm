@@ -9,6 +9,7 @@ from typing import Optional, List
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, validator
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -526,7 +527,7 @@ async def get_assignable_users(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.exception("Error fetching assignable users")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -604,7 +605,7 @@ async def get_lead_statistics(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.exception("Error fetching lead statistics")
         raise HTTPException(status_code=500, detail=str(e))
 

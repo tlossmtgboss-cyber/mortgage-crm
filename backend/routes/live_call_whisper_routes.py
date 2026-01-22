@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from database import get_db
+from sqlalchemy.exc import SQLAlchemyError
 from services.live_call_whisper_service import (
     LiveCallWhisperService,
     CallContext,

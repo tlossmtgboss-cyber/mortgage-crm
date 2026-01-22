@@ -25,6 +25,7 @@ from models.voice_workflow_models import (
     WebSocketMessageType,
 )
 from services.voice_workflow_service import get_workflow_service
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +120,7 @@ async def transcribe_audio(audio_data: bytes) -> Optional[str]:
                     logger.error(f"Deepgram error: {response.status} - {error}")
                     return None
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Transcription error: {e}")
         return None
 
@@ -391,7 +392,7 @@ async def voice_workflow_websocket(
                     "type": WebSocketMessageType.ERROR.value,
                     "error": "Invalid JSON message"
                 })
-            except Exception as e:
+            except SQLAlchemyError as e:
                 import traceback
                 logger.error(f"WebSocket message error: {e}\n{traceback.format_exc()}")
                 try:
@@ -439,7 +440,7 @@ async def create_workflow_session(
             "current_state": session.current_state,
             "response": response,
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error creating workflow session: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to create session: {str(e)}")
 
@@ -509,7 +510,7 @@ async def get_session_details(
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error getting session details: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to get session: {str(e)}")
 
@@ -608,7 +609,7 @@ async def debug_test_session(
                 if result:
                     user_id = result[0]
                     results["steps"].append({"step": "auth", "status": "ok", "user_id": user_id, "email": email})
-        except Exception as e:
+        except SQLAlchemyError as e:
             results["steps"].append({"step": "auth", "status": "error", "error": str(e)})
 
         if not user_id:
@@ -631,7 +632,7 @@ async def debug_test_session(
                 "count": len(loans),
                 "loans": [{"id": l[0], "name": l[1], "amount": float(l[2]) if l[2] else 0, "program": l[3], "stage": l[4]} for l in loans]
             })
-        except Exception as e:
+        except SQLAlchemyError as e:
             results["steps"].append({"step": "loans_query", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
 
         # Step 3: Test response generator import
@@ -684,7 +685,7 @@ async def debug_test_noauth(
                 results["steps"].append({"step": "find_user", "status": "ok", "selected_user_id": user_id})
             else:
                 return {"success": False, "error": "No users found in database", "results": results}
-        except Exception as e:
+        except SQLAlchemyError as e:
             return {"success": False, "error": f"Failed to find users: {str(e)}", "results": results}
 
     results["user_id"] = user_id
@@ -706,7 +707,7 @@ async def debug_test_noauth(
                 "count": len(loans),
                 "loans": [{"id": l[0], "name": l[1], "amount": float(l[2]) if l[2] else 0, "program": l[3], "stage": l[4]} for l in loans]
             })
-        except Exception as e:
+        except SQLAlchemyError as e:
             results["steps"].append({"step": "loans_query", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
             return {"success": False, "results": results}
 
@@ -732,15 +733,15 @@ async def debug_test_noauth(
                     "response_text": response.get("text", "")[:200] if response else None,
                     "available_applicants": len(session.available_applicants) if hasattr(session, 'available_applicants') and session.available_applicants else 0,
                 })
-            except Exception as e:
+            except SQLAlchemyError as e:
                 results["steps"].append({"step": "create_session", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             results["steps"].append({"step": "workflow_service", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
 
         return {"success": True, "results": results}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         return {"success": False, "error": str(e), "traceback": traceback.format_exc(), "results": results}
 
 

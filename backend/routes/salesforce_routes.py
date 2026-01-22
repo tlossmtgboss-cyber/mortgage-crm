@@ -32,6 +32,9 @@ try:
 except ImportError:
     SALESFORCE_API_VERSION = "v58.0"  # Fallback
 
+from sqlalchemy.exc import SQLAlchemyError
+from requests.exceptions import RequestException
+
 # Import encryption functions for secure token storage
 try:
     from main import encrypt_token, decrypt_token
@@ -291,7 +294,7 @@ def get_current_user_id(request: Request, db: Session = None) -> Optional[int]:
                     return result[0]
             # Fallback: try to get user_id from payload
             return payload.get("user_id")
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning(f"Failed to extract user ID: {e}")
     return None
 
@@ -596,7 +599,7 @@ async def salesforce_callback(
         db.commit()
         logger.info(f"Stored Salesforce tokens for user {user_id}")
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Failed to store Salesforce tokens: {e}")
         db.rollback()
         frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
@@ -980,7 +983,7 @@ async def create_field_mapping(
 
         return {"status": "success", "message": "Field mapping saved"}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Failed to save field mapping: {e}")
         raise HTTPException(status_code=500, detail="Failed to save mapping")
@@ -1881,7 +1884,7 @@ async def run_salesforce_migration(
             db.commit()
             results.append({"migration": name, "status": "success"})
             logger.info(f"Migration '{name}' completed successfully")
-        except Exception as e:
+        except SQLAlchemyError as e:
             error_msg = str(e)
             if "already exists" in error_msg.lower():
                 results.append({"migration": name, "status": "skipped", "reason": "already exists"})
@@ -2253,7 +2256,7 @@ async def import_funded_loans_to_mum(
             "clients": imported_clients[:50]
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Import to MUM failed: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -2392,12 +2395,12 @@ async def sync_salesforce_and_import_mum(
                                     """), loan_data)
                                     results['salesforce_sync']['created'] += 1
 
-                            except Exception as e:
+                            except SQLAlchemyError as e:
                                 results['salesforce_sync']['errors'].append(str(e))
 
                         db.commit()
 
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.error(f"Salesforce sync error: {e}")
                 results['salesforce_sync']['errors'].append(str(e))
 
@@ -2450,7 +2453,7 @@ async def sync_salesforce_and_import_mum(
 
         db.commit()
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"MUM import error: {e}")
         results['mum_import']['errors'].append(str(e))
 

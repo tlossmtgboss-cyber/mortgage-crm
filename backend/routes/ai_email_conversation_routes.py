@@ -16,6 +16,7 @@ import uuid
 import json
 import re
 import os
+from sqlalchemy.exc import SQLAlchemyError
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -184,7 +185,7 @@ async def start_conversation(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error starting conversation: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -655,7 +656,7 @@ async def send_manual_reply(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error sending manual reply: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -683,7 +684,7 @@ async def close_conversation(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error closing conversation: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -723,7 +724,7 @@ async def delete_conversation(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error deleting conversation: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -781,7 +782,7 @@ def ensure_conversation_tables(db: Session):
         """))
 
         db.commit()
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning(f"Table creation note: {e}")
         db.rollback()
 
@@ -1160,7 +1161,7 @@ Loan Information:
         else:
             logger.error(f"Failed to send AI response for conversation {conversation_id}")
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         import traceback
         logger.error(f"Error generating AI response for {conversation_id}: {e}")
         logger.error(f"Traceback: {traceback.format_exc()}")

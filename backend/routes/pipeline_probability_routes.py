@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from database import get_db
+from sqlalchemy.exc import SQLAlchemyError
 from services.pipeline_probability_service import (
     PipelineProbabilityService,
     ProbabilityScore,

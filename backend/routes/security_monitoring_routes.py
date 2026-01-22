@@ -17,6 +17,7 @@ import logging
 import os
 
 from database import get_db
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -413,7 +414,7 @@ def _get_recent_security_events(db: Session, limit: int = 50, event_type: Option
                 "details": row[4],
                 "created_at": row[5].isoformat() if row[5] else None
             })
-    except Exception as e:
+    except SQLAlchemyError as e:
         # Table might not exist or different schema
         logger.debug(f"Could not query audit_logs: {e}")
 

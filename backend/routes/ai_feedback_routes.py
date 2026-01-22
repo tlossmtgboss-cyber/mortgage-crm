@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone
 import logging
+from sqlalchemy.exc import SQLAlchemyError
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -160,7 +161,7 @@ def create_feedback(
             "feedback_id": new_feedback.id
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error creating AI feedback: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -344,7 +345,7 @@ def update_feedback_status(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error updating AI feedback: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -377,7 +378,7 @@ def delete_feedback(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error deleting AI feedback: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -419,5 +420,5 @@ def ensure_tables_exist(engine):
             """))
             conn.commit()
             logger.info("AI feedback logs table ensured to exist")
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning(f"Note: AI feedback table check: {e}")

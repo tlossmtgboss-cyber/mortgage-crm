@@ -19,6 +19,7 @@ from sqlalchemy import text
 from pydantic import BaseModel, Field
 
 from database import get_db
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +76,7 @@ async def get_current_user(
 
         raise HTTPException(status_code=401, detail="User not found")
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning(f"Auth error: {e}")
         # Fallback to demo user for development
         result = db.execute(
@@ -396,7 +397,7 @@ async def natural_language_query(
             "result": result
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error processing query: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 

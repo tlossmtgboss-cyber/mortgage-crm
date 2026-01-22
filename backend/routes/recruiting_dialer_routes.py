@@ -18,6 +18,7 @@ from contextlib import contextmanager
 import os
 import uuid
 import logging
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -709,5 +710,5 @@ async def run_dialer_migration(admin_key: str = Query(...)):
 
             conn.commit()
         return {"status": "success", "message": "Call history table created/updated with Twilio columns"}
-    except Exception as e:
+    except SQLAlchemyError as e:
         raise HTTPException(status_code=500, detail=str(e))

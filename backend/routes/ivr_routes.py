@@ -14,6 +14,7 @@ import json
 import os
 
 from database import get_db
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -136,7 +137,7 @@ async def create_ivr_menu(
             "menu_id": menu_id
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error creating IVR menu: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -316,7 +317,7 @@ async def update_ivr_menu(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error updating IVR menu: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -344,7 +345,7 @@ async def delete_ivr_menu(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error deleting IVR menu: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -416,7 +417,7 @@ async def create_ivr_option(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error creating IVR option: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -472,7 +473,7 @@ async def update_ivr_option(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error updating IVR option: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -501,7 +502,7 @@ async def delete_ivr_option(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error deleting IVR option: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -931,7 +932,7 @@ async def apply_ivr_template(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error applying template: {e}")
         raise HTTPException(status_code=500, detail=str(e))

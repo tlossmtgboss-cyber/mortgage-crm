@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from enum import Enum
 import os
 import logging
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -220,7 +221,7 @@ def ensure_tables():
                 logger.info("credit_summaries table created")
 
         _tables_created = True
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning(f"Could not ensure credit tables: {e}")
         # Don't raise - allow routes to work with empty data
 

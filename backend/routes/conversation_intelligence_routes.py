@@ -29,6 +29,7 @@ from services.conversation_intelligence import (
 )
 
 # Agent
+from sqlalchemy.exc import SQLAlchemyError
 from agents.qualification_agent import (
     QualificationAgent,
     create_qualification_agent,
@@ -637,7 +638,7 @@ async def log_conversation_processing(
             logger.warning(f"Could not store analytics (table may not exist): {db_err}")
         finally:
             db.close()
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error logging conversation: {e}")
 
 

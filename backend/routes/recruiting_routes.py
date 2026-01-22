@@ -12,6 +12,7 @@ from datetime import datetime, date
 from database import get_db
 from services.recruiting_service import RecruitingService
 from main import get_current_user, User
+from sqlalchemy.exc import SQLAlchemyError
 
 router = APIRouter(prefix="/api/v1/recruiting", tags=["recruiting"])
 
@@ -1770,13 +1771,13 @@ async def seed_test_data(
                     "salary_min": jp[3], "salary_max": jp[4], "location": jp[5]
                 }).fetchone()
                 results["job_postings"].append({"id": result.id, "slug": result.slug})
-            except Exception as e:
+            except SQLAlchemyError as e:
                 results["errors"].append(f"Job {jp[0]}: {str(e)}")
 
         db.commit()
         return results
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Seed failed: {str(e)}")
 
@@ -1888,7 +1889,7 @@ async def add_quiz_templates(
         db.commit()
         return {"status": "success", "messages": messages}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
@@ -1948,7 +1949,7 @@ async def add_social_production_fields(
                     ADD COLUMN IF NOT EXISTS {col_name} {col_type}
                 """))
                 added.append(col_name)
-            except Exception as e:
+            except SQLAlchemyError as e:
                 if "already exists" in str(e).lower():
                     skipped.append(col_name)
                 else:
@@ -1956,7 +1957,7 @@ async def add_social_production_fields(
 
         db.commit()
         return {"success": True, "added": added, "skipped": skipped}
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 

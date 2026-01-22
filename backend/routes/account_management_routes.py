@@ -23,6 +23,7 @@ from utils.error_handling import (
     success_response
 )
 from email_service import send_subscription_invite_email
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/admin/account-management", tags=["Account Management"])
@@ -161,7 +162,7 @@ def log_admin_action(db: Session, admin_user, action_type: str, target_type: str
             'reason': reason
         })
         db.commit()
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Failed to log admin action: {e}")
 
 
@@ -296,7 +297,7 @@ async def run_account_management_migration(
                     try:
                         result = conn.execute(text(f"DELETE FROM {table}"))
                         results['deleted'][table] = result.rowcount
-                    except Exception as e:
+                    except SQLAlchemyError as e:
                         results['errors'].append(f"{table}: {str(e)[:50]}")
 
                 # Delete team members/profiles
@@ -331,7 +332,7 @@ async def run_account_management_migration(
             return {"status": "success", "message": f"Cleanup done. Deleted {total} rows.", "data": results}
         except HTTPException:
             raise
-        except Exception as e:
+        except SQLAlchemyError as e:
             raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(e)}")
 
     # Default: migration action
@@ -484,7 +485,7 @@ async def run_account_management_migration(
 
         return {"status": "success", "message": "Account management tables created successfully"}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Migration failed: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
@@ -526,7 +527,7 @@ async def run_cleanup_migration(
                 result = db.execute(text(f"DELETE FROM {table}"))
                 results['deleted'][table] = result.rowcount
                 logger.info(f"Cleanup: Deleted {result.rowcount} rows from {table}")
-            except Exception as e:
+            except SQLAlchemyError as e:
                 results['errors'].append(f"{table}: {str(e)[:100]}")
 
         # 2. Delete team members and profiles
@@ -535,21 +536,21 @@ async def run_cleanup_migration(
             try:
                 result = db.execute(text(f"DELETE FROM {table}"))
                 results['deleted'][table] = result.rowcount
-            except Exception as e:
+            except SQLAlchemyError as e:
                 results['errors'].append(f"{table}: {str(e)[:100]}")
 
         # 3. Delete extracted_data (reconciliation)
         try:
             result = db.execute(text("DELETE FROM extracted_data"))
             results['deleted']['extracted_data'] = result.rowcount
-        except Exception as e:
+        except SQLAlchemyError as e:
             results['errors'].append(f"extracted_data: {str(e)[:100]}")
 
         # 4. Delete referral partners
         try:
             result = db.execute(text("DELETE FROM referral_partners"))
             results['deleted']['referral_partners'] = result.rowcount
-        except Exception as e:
+        except SQLAlchemyError as e:
             results['errors'].append(f"referral_partners: {str(e)[:100]}")
 
         # 5. Get admin user ID to preserve
@@ -605,7 +606,7 @@ async def run_cleanup_migration(
                 DELETE FROM tenant_accounts WHERE status IN ('suspended', 'canceled')
             """))
             results['deleted']['suspended_cancelled_accounts'] = result.rowcount
-        except Exception as e:
+        except SQLAlchemyError as e:
             results['errors'].append(f"tenant_accounts: {str(e)[:100]}")
 
         # 9. Clean up account management tables
@@ -644,7 +645,7 @@ async def run_cleanup_migration(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Cleanup migration failed: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(e)}")
@@ -707,7 +708,7 @@ async def run_invitations_migration(
 
         return {"status": "success", "message": "subscriber_invitations table created successfully"}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Invitations migration failed: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
@@ -1207,7 +1208,7 @@ async def revoke_invite(
 
     except (PermissionException, NotFoundException, ValidationException):
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error revoking invitation: {e}")
         db.rollback()
         raise DatabaseException(f"Failed to revoke invitation: {str(e)}")
@@ -1325,7 +1326,7 @@ async def reinstate_invite_by_token(
 
     except (NotFoundException, ValidationException):
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error reinstating invitation: {e}")
         db.rollback()
         raise DatabaseException(f"Failed to reinstate invitation: {str(e)}")
@@ -1637,7 +1638,7 @@ async def suspend_account(
         )
     except (PermissionException, NotFoundException, ValidationException):
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error suspending account: {e}")
         db.rollback()
         raise DatabaseException(f"Failed to suspend account: {str(e)}")
@@ -1694,7 +1695,7 @@ async def reinstate_account(
         )
     except (PermissionException, NotFoundException, ValidationException):
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error reinstating account: {e}")
         db.rollback()
         raise DatabaseException(f"Failed to reinstate account: {str(e)}")
@@ -1751,7 +1752,7 @@ async def cancel_account(
         )
     except (PermissionException, NotFoundException, ValidationException):
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error canceling account: {e}")
         db.rollback()
         raise DatabaseException(f"Failed to cancel account: {str(e)}")
@@ -1790,7 +1791,7 @@ async def update_notes(
         )
     except (PermissionException, NotFoundException):
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error updating notes: {e}")
         db.rollback()
         raise DatabaseException(f"Failed to update notes: {str(e)}")
@@ -1843,7 +1844,7 @@ async def delete_account(
         )
     except (PermissionException, NotFoundException):
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error deleting account: {e}")
         db.rollback()
         raise DatabaseException(f"Failed to delete account: {str(e)}")
@@ -2111,7 +2112,7 @@ async def disable_user(
         )
     except (PermissionException, NotFoundException, ValidationException):
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error disabling user: {e}")
         db.rollback()
         raise DatabaseException(f"Failed to disable user: {str(e)}")
@@ -2155,7 +2156,7 @@ async def enable_user(
         )
     except (PermissionException, NotFoundException, ValidationException):
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error enabling user: {e}")
         db.rollback()
         raise DatabaseException(f"Failed to enable user: {str(e)}")
@@ -2203,7 +2204,7 @@ async def update_user_roles(
         )
     except (PermissionException, NotFoundException):
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error updating roles: {e}")
         db.rollback()
         raise DatabaseException(f"Failed to update roles: {str(e)}")
@@ -2457,7 +2458,7 @@ async def migrate_permissions_table(
             )
     except (PermissionException, NotFoundException):
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error migrating permissions table: {e}")
         db.rollback()
         raise DatabaseException(f"Failed to migrate permissions table: {str(e)}")
@@ -2573,7 +2574,7 @@ async def stop_impersonation(
         )
     except (PermissionException, ValidationException):
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error stopping impersonation: {e}")
         db.rollback()
         raise DatabaseException(f"Failed to stop impersonation: {str(e)}")
@@ -3099,7 +3100,7 @@ async def cleanup_sample_data(
             db.commit()
             deleted_counts['tenant_accounts_cascade'] = 'truncated with cascade'
             logger.info("Truncated tenant_accounts with CASCADE")
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.warning(f"CASCADE truncate failed, trying individual deletes: {e}")
 
@@ -3125,7 +3126,7 @@ async def cleanup_sample_data(
         )
     except PermissionException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error cleaning up sample data: {e}")
         db.rollback()
         raise DatabaseException(f"Failed to cleanup sample data: {str(e)}")
@@ -3194,7 +3195,7 @@ async def cleanup_users(
                     WHERE {column} IS NOT NULL AND {column} != :admin_id
                 """), {'admin_id': admin_id})
                 deleted_counts[f"{table}.{column}"] = result.rowcount
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.warning(f"Could not clean {table}.{column}: {e}")
                 deleted_counts[f"{table}.{column}"] = f"skipped: {str(e)[:50]}"
 
@@ -3203,7 +3204,7 @@ async def cleanup_users(
             try:
                 result = db.execute(text(f"DELETE FROM {table}"))
                 deleted_counts[table] = result.rowcount
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.warning(f"Could not delete from {table}: {e}")
 
         # Delete all tasks
@@ -3211,7 +3212,7 @@ async def cleanup_users(
             try:
                 result = db.execute(text(f"DELETE FROM {table}"))
                 deleted_counts[table] = result.rowcount
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.warning(f"Could not delete from {table}: {e}")
 
         # Now delete all users except the preserved admin
@@ -3290,7 +3291,7 @@ async def cleanup_all_sample_data(
                 result = db.execute(text(f"DELETE FROM {table}"))
                 results['deleted'][table] = result.rowcount
                 logger.info(f"Deleted {result.rowcount} rows from {table}")
-            except Exception as e:
+            except SQLAlchemyError as e:
                 results['errors'].append(f"{table}: {str(e)[:100]}")
                 logger.warning(f"Could not delete from {table}: {e}")
 
@@ -3300,28 +3301,28 @@ async def cleanup_all_sample_data(
             try:
                 result = db.execute(text(f"DELETE FROM {table}"))
                 results['deleted'][table] = result.rowcount
-            except Exception as e:
+            except SQLAlchemyError as e:
                 results['errors'].append(f"{table}: {str(e)[:100]}")
 
         # 3. Delete extracted_data (reconciliation)
         try:
             result = db.execute(text("DELETE FROM extracted_data"))
             results['deleted']['extracted_data'] = result.rowcount
-        except Exception as e:
+        except SQLAlchemyError as e:
             results['errors'].append(f"extracted_data: {str(e)[:100]}")
 
         # 4. Delete referral partners
         try:
             result = db.execute(text("DELETE FROM referral_partners"))
             results['deleted']['referral_partners'] = result.rowcount
-        except Exception as e:
+        except SQLAlchemyError as e:
             results['errors'].append(f"referral_partners: {str(e)[:100]}")
 
         # 5. Delete workflow instances
         try:
             result = db.execute(text("DELETE FROM workflow_instances"))
             results['deleted']['workflow_instances'] = result.rowcount
-        except Exception as e:
+        except SQLAlchemyError as e:
             results['errors'].append(f"workflow_instances: {str(e)[:100]}")
 
         # 6. Get admin user ID to preserve
@@ -3357,7 +3358,7 @@ async def cleanup_all_sample_data(
                     DELETE FROM {table} WHERE {column} != :admin_id
                 """), {'admin_id': admin_id})
                 results['deleted'][f'{table}'] = result.rowcount
-            except Exception as e:
+            except SQLAlchemyError as e:
                 pass  # Silently skip missing tables
 
         # 8. Delete all users except admin
@@ -3375,7 +3376,7 @@ async def cleanup_all_sample_data(
                 DELETE FROM users WHERE id != :admin_id
             """), {'admin_id': admin_id})
             results['deleted']['users'] = result.rowcount
-        except Exception as e:
+        except SQLAlchemyError as e:
             results['errors'].append(f"users: {str(e)[:100]}")
 
         # 9. Delete suspended and cancelled accounts
@@ -3384,7 +3385,7 @@ async def cleanup_all_sample_data(
                 DELETE FROM tenant_accounts WHERE status IN ('suspended', 'canceled')
             """))
             results['deleted']['suspended_cancelled_accounts'] = result.rowcount
-        except Exception as e:
+        except SQLAlchemyError as e:
             results['errors'].append(f"tenant_accounts: {str(e)[:100]}")
 
         # 10. Clean up account management tables
@@ -3423,7 +3424,7 @@ async def cleanup_all_sample_data(
 
     except PermissionException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error in comprehensive cleanup: {e}")
         db.rollback()
         raise DatabaseException(f"Failed to cleanup: {str(e)}")
@@ -3505,7 +3506,7 @@ async def emergency_admin_reset(
                 message=f"Admin user created: {email}"
             )
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Emergency admin reset failed: {e}")
         db.rollback()
         raise DatabaseException(f"Failed to reset admin: {str(e)}")

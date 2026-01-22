@@ -23,6 +23,7 @@ import re
 import os
 
 from database import get_db, Base, engine
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/email-intelligence", tags=["email-intelligence"])
@@ -454,7 +455,7 @@ def ensure_email_intelligence_tables_exist():
             conn.commit()
             logger.info("✅ Email intelligence tables created successfully")
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"❌ Error creating email intelligence tables: {e}")
         raise
 
@@ -462,7 +463,7 @@ def ensure_email_intelligence_tables_exist():
 # Auto-create tables on module load
 try:
     ensure_email_intelligence_tables_exist()
-except Exception as e:
+except SQLAlchemyError as e:
     logger.warning(f"Could not auto-create email intelligence tables: {e}")
 
 
@@ -1625,7 +1626,7 @@ async def import_email_to_queue(
                 })
                 db.commit()
                 identity_resolution_result["update_executed"] = True
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Email identity resolution failed: {e}")
             import traceback
             logger.error(traceback.format_exc())
@@ -1653,7 +1654,7 @@ async def import_email_to_queue(
                 "email_id": email_id
             })
             db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Auto-analysis failed: {e}")
 
     return {
@@ -1932,7 +1933,7 @@ async def queue_email_for_intelligence(
                     "is_priority": match_result.get("is_priority", False),
                     "vendor_type": match_result.get("vendor_type")
                 }
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Email identity resolution failed for email {email_id}: {e}")
 
         # Run AI analysis if requested
@@ -2126,7 +2127,7 @@ async def queue_email_for_intelligence(
                 except Exception as log_error:
                     logger.warning(f"Could not auto-create conversation log: {log_error}")
 
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.warning(f"Auto-analysis failed for email {email_id}: {e}")
 
         return {
@@ -2268,7 +2269,7 @@ async def cron_sync_emails_to_queue(
             "message": "Run the provider-specific sync endpoints to queue emails"
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error in cron sync: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -2383,7 +2384,7 @@ class ConversationIntelligenceService:
                     "email_id": email_id
                 })
                 self.db.commit()
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.error(f"AI analysis failed for email {email_id}: {e}")
                 analysis = self._basic_analysis_dict(email_data)
 
@@ -2477,7 +2478,7 @@ class ConversationIntelligenceService:
                 "email_id": email_id
             })
             self.db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Failed to update email status: {e}")
             result["errors"].append(f"Status update failed: {str(e)}")
             try:
@@ -2842,7 +2843,7 @@ class ConversationIntelligenceService:
             self.db.commit()
             logger.info(f"Created task {task_id} from email {email_data['id']}")
             return task_id
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Could not create task (table may not exist): {e}")
             return None
 
@@ -3141,7 +3142,7 @@ async def get_sla_tracking(
         query += " ORDER BY s.response_due_at ASC"
 
         result = db.execute(text(query), params).fetchall()
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error fetching SLA tracking: {e}")
         # Return empty result instead of crashing
         return {"slas": [], "total": 0, "error": str(e)}
@@ -3312,7 +3313,7 @@ async def debug_add_missing_columns(db: Session = Depends(get_db)):
                     ADD COLUMN IF NOT EXISTS {col_name} {col_type}
                 """))
                 added.append(col_name)
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.warning(f"Could not add column {col_name}: {e}")
 
         db.commit()
@@ -3321,6 +3322,6 @@ async def debug_add_missing_columns(db: Session = Depends(get_db)):
             "status": "success",
             "columns_added": added
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         return {"status": "error", "error": str(e)}

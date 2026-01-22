@@ -29,6 +29,7 @@ from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel
 
 from database import get_db
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -521,7 +522,7 @@ async def handle_recording_callback(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error processing recording callback: {e}")
         return Response(status_code=200)
 
@@ -694,7 +695,7 @@ async def set_agent_outcome(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error setting agent outcome: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

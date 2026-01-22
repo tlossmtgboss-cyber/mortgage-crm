@@ -19,6 +19,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from services.module_service import ModuleService
+from sqlalchemy.exc import SQLAlchemyError
 
 router = APIRouter(prefix="/api/v1/modules", tags=["modules"])
 
@@ -475,7 +476,7 @@ async def check_users_debug(
                 "users": users,
                 "org_1_modules": org_modules
             }
-    except Exception as e:
+    except SQLAlchemyError as e:
         return {"error": str(e)}
 
 
@@ -541,7 +542,7 @@ async def debug_modules(
                             DO UPDATE SET is_enabled = true, enabled_at = NOW(), is_trial = false, disabled_at = NULL, updated_at = NOW()
                         """), {"org_id": org_id, "module_key": module_key})
                         enabled.append(module_key)
-                    except Exception as e:
+                    except SQLAlchemyError as e:
                         pass
                 conn.commit()
                 results["enabled_modules"] = enabled
@@ -576,7 +577,7 @@ async def debug_modules(
                                 pass
                             results.setdefault("perm_errors", []).append(f"{perm}: {str(inner_e)[:50]}")
 
-                except Exception as e:
+                except SQLAlchemyError as e:
                     try:
                         conn.rollback()
                     except Exception:
@@ -609,7 +610,7 @@ async def debug_modules(
                 "modules": modules,
                 **results
             }
-    except Exception as e:
+    except SQLAlchemyError as e:
         return {"error": str(e)}
 
 
@@ -664,7 +665,7 @@ async def enable_all_modules(
                             updated_at = NOW()
                     """), {"org_id": org_id, "module_key": module_key})
                     enabled.append(module_key)
-                except Exception as e:
+                except SQLAlchemyError as e:
                     errors.append({"module": module_key, "error": str(e)})
 
             conn.commit()
@@ -676,7 +677,7 @@ async def enable_all_modules(
             "errors": errors if errors else None,
             "message": f"All {len(enabled)} premium modules enabled for organization {org_id}"
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         raise HTTPException(status_code=500, detail=f"Failed to enable modules: {str(e)}")
 
 
@@ -795,7 +796,7 @@ async def clear_demo_data(
                     conn.execute(text(f"TRUNCATE TABLE {table_name} CASCADE"))
                     conn.commit()
                     deleted[table_name] = count
-                except Exception as e:
+                except SQLAlchemyError as e:
                     try:
                         conn.rollback()
                     except Exception:
@@ -815,7 +816,7 @@ async def clear_demo_data(
                         conn.execute(text(f"TRUNCATE TABLE {table_name} CASCADE"))
                         conn.commit()
                         deleted[table_name] = count
-                except Exception as e:
+                except SQLAlchemyError as e:
                     try:
                         conn.rollback()
                     except Exception:
@@ -844,5 +845,5 @@ async def clear_demo_data(
             "errors": errors if errors else None,
             "message": f"Cleared {total_deleted} records from the CRM"
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         raise HTTPException(status_code=500, detail=f"Failed to clear demo data: {str(e)}")

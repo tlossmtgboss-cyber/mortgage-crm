@@ -36,6 +36,7 @@ from services.acquisition_engine.event_service import EventService
 from services.acquisition_engine.temperature_service import TemperatureService
 from services.acquisition_engine.speed_to_lead_service import SpeedToLeadService, SpeedToLeadConfig
 from services.acquisition_engine.conversion_orchestrator import ConversionOrchestrator
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/acquisition", tags=["acquisition-engine"])
@@ -428,7 +429,7 @@ async def _activate_campaign(campaign_id: str):
             for sequence_id in sms_sequences:
                 try:
                     _activate_sequence(db, sequence_id, campaign_id, "sms")
-                except Exception as e:
+                except SQLAlchemyError as e:
                     logger.warning(f"Failed to activate SMS sequence {sequence_id}: {e}")
 
             # Activate Email sequences
@@ -455,7 +456,7 @@ async def _activate_campaign(campaign_id: str):
             campaign.activated_at = datetime.utcnow()
             db.commit()
             logger.info(f"Campaign {campaign_id} activated with {len(sms_sequences)} SMS and {len(email_sequences)} email sequences")
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Failed to activate campaign {campaign_id}: {e}")
         if campaign:
             campaign.status = CampaignStatus.ERROR.value
@@ -1461,6 +1462,6 @@ async def run_migration(
             "blueprints_seeded": existing_blueprints == 0,
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Migration failed: {e}")
         raise HTTPException(500, f"Migration failed: {e}")

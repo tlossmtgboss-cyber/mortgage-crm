@@ -21,6 +21,7 @@ from sqlalchemy import text
 from pydantic import BaseModel
 
 from database import get_db
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -197,7 +198,7 @@ async def list_all_rules(
             "offset": offset
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error listing state rules: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -254,7 +255,7 @@ async def create_or_update_rule(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error saving state rule: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

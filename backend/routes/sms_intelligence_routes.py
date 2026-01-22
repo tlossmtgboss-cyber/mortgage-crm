@@ -24,6 +24,7 @@ import re
 import os
 
 from database import get_db, Base, engine
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/sms-intelligence", tags=["sms-intelligence"])
@@ -392,7 +393,7 @@ def ensure_sms_intelligence_tables_exist():
             conn.commit()
             logger.info("✅ SMS intelligence tables created successfully")
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"❌ Error creating SMS intelligence tables: {e}")
         raise
 
@@ -400,7 +401,7 @@ def ensure_sms_intelligence_tables_exist():
 # Auto-create tables on module load
 try:
     ensure_sms_intelligence_tables_exist()
-except Exception as e:
+except SQLAlchemyError as e:
     logger.warning(f"Could not auto-create SMS intelligence tables: {e}")
 
 
@@ -983,7 +984,7 @@ async def delete_sms_from_queue(sms_id: int, db: Session = Depends(get_db)):
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error deleting SMS: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1033,7 +1034,7 @@ async def analyze_sms(sms_id: int, db: Session = Depends(get_db)):
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error analyzing SMS: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -1070,7 +1071,7 @@ async def update_sms_disposition(
 
         return {"success": True, "sms_id": sms_id, "disposition": update.disposition}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error updating SMS disposition: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -1193,7 +1194,7 @@ async def create_sms_template(
 
         return {"success": True, "template_id": template_id}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error creating SMS template: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -1265,7 +1266,7 @@ async def get_opt_outs(
             "offset": offset
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error getting opt-outs: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1289,7 +1290,7 @@ async def add_opt_out(
 
         return {"success": True, "phone_number": normalized, "is_opted_out": True}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error adding opt-out: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -1308,7 +1309,7 @@ async def remove_opt_out(phone_number: str, db: Session = Depends(get_db)):
 
         return {"success": True, "phone_number": normalized, "is_opted_out": False}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error removing opt-out: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -1550,7 +1551,7 @@ async def twilio_sms_webhook(
 
         return {"success": True, "message_id": new_id[0] if new_id else None}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error processing Twilio webhook: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -1702,7 +1703,7 @@ async def process_incoming_sms(sms_id: int, db: Session):
         db.commit()
         logger.info(f"Processed incoming SMS {sms_id}: disposition={analysis.disposition}")
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error processing incoming SMS {sms_id}: {e}")
         db.rollback()
 
@@ -1860,7 +1861,7 @@ async def send_sms(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error sending SMS: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -2073,7 +2074,7 @@ async def send_bulk_sms(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error sending bulk SMS: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

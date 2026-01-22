@@ -22,6 +22,7 @@ from models.bank_statement_models import (
 from services.bank_statement_extraction_service import get_bank_statement_extraction_service
 from services.bank_statement_worksheet_generator import get_worksheet_generator
 from services.smart_docs.s3_storage_service import get_smart_docs_s3_service
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 

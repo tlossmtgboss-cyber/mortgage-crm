@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -480,7 +481,7 @@ def get_user_creation_routes(
                 }
             }
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Error creating user: {e}")
             raise HTTPException(
@@ -578,7 +579,7 @@ def get_user_creation_routes(
                 }
             }
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Error saving role builder: {e}")
             raise HTTPException(status_code=500, detail=f"Failed to save role configuration: {str(e)}")
@@ -677,7 +678,7 @@ def get_user_creation_routes(
 
         except HTTPException:
             raise
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Error saving permissions: {e}")
             raise HTTPException(status_code=500, detail=f"Failed to save permissions: {str(e)}")
@@ -1195,7 +1196,7 @@ def get_user_creation_routes(
                 }
             }
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Error activating user: {e}")
             raise HTTPException(status_code=500, detail=f"Failed to activate user: {str(e)}")

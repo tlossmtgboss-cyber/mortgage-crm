@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text, or_, and_
 
 from database import get_db
+from sqlalchemy.exc import SQLAlchemyError
 from models.call_monitoring_models import (
     UnderwritingGuideline,
     GuidelineSection,
@@ -175,7 +176,7 @@ async def add_guideline_text(
         key_points = await extract_key_points(request.content)
         guideline.key_points = key_points
         db.commit()
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning(f"Could not extract key points: {e}")
 
     logger.info(f"Guideline text added: {guideline.id} - {request.name}")
@@ -299,7 +300,7 @@ async def delete_guideline(
     if guideline.source_file_path and os.path.exists(guideline.source_file_path):
         try:
             os.remove(guideline.source_file_path)
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Could not delete file: {e}")
 
     # Delete sections

@@ -23,6 +23,7 @@ from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, JSON
 from pydantic import BaseModel
 from database import get_db, Base, engine
 
+from sqlalchemy.exc import SQLAlchemyError
 from services.calendly_service import (
     get_calendly_service,
     CalendlyService,
@@ -785,7 +786,7 @@ async def process_booking_created(db: Session, payload: Dict[str, Any]):
         # Invalidate availability cache
         availability_cache.invalidate(calendly_user_uri)
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error processing booking created webhook: {e}")
 
 
@@ -825,7 +826,7 @@ async def process_booking_canceled(db: Session, payload: Dict[str, Any]):
             if integration:
                 availability_cache.invalidate(integration.calendly_user_uri)
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error processing booking canceled webhook: {e}")
 
 

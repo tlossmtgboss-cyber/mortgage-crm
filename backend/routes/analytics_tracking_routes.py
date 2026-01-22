@@ -17,6 +17,7 @@ from sqlalchemy import Column, Integer, String, DateTime, JSON, func, text
 from sqlalchemy.orm import Session
 
 from database import get_db, Base, engine
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/analytics", tags=["Analytics Tracking"])
@@ -50,14 +51,14 @@ def ensure_analytics_tables_exist():
             """))
             conn.commit()
             logger.info("Analytics tables ensured to exist")
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning(f"Analytics tables check warning: {e}")
 
 
 # Auto-create tables on module load
 try:
     ensure_analytics_tables_exist()
-except Exception as e:
+except SQLAlchemyError as e:
     logger.warning(f"Could not auto-create analytics tables: {e}")
 
 
@@ -199,7 +200,7 @@ async def track_event(
 
         return {"success": True}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error tracking event: {str(e)}")
         # Don't fail the request - analytics should be non-blocking
         return {"success": False, "error": "Failed to track event"}

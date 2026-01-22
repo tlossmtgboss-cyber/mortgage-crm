@@ -18,6 +18,7 @@ from pydantic import BaseModel, EmailStr
 from datetime import datetime, timezone, timedelta
 import secrets
 import logging
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -164,7 +165,7 @@ async def process_document_background(document_id: int):
         })
         db.commit()
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error processing document {document_id}: {e}")
         db.rollback()
     finally:
@@ -352,7 +353,7 @@ async def create_document_request(
 
         return {"success": True, "request_id": request_id}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -497,7 +498,7 @@ async def update_document_request(
         db.commit()
         return {"success": True, "request_id": request_id}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -523,7 +524,7 @@ async def delete_document_request(
         db.commit()
         return {"success": True, "message": "Document request cancelled"}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -627,7 +628,7 @@ async def create_template_pack(
 
         return {"success": True, "template_id": template_id}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -675,7 +676,7 @@ async def update_template_pack(
         db.commit()
         return {"success": True, "template_id": template_id}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -773,7 +774,7 @@ async def apply_template_pack(
             "requests": created_requests
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -930,7 +931,7 @@ async def bulk_approve_documents(
             "approved_count": len(approved_ids),
             "approved_ids": approved_ids
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -966,7 +967,7 @@ async def bulk_reject_documents(
             "rejected_count": len(rejected_ids),
             "rejected_ids": rejected_ids
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -1061,7 +1062,7 @@ async def approve_or_reject_document(
             "status": new_status
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -1095,7 +1096,7 @@ async def override_document_classification(
         db.commit()
         return {"success": True, "document_id": document_id}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -1282,7 +1283,7 @@ async def complete_upload(
             "processing_queued": background_tasks is not None
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -1331,7 +1332,7 @@ async def generate_magic_link(
             "recipient_email": payload.recipient_email
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -1575,7 +1576,7 @@ async def create_notification(
 
         return {"success": True, "notification_id": notification_id}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -1644,7 +1645,7 @@ async def create_document_rule(
 
         return {"success": True, "rule_id": rule_id}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -1671,7 +1672,7 @@ async def toggle_document_rule(
         db.commit()
         return {"success": True, "rule_id": row[0], "is_active": row[1]}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -1738,7 +1739,7 @@ async def get_docs_system_summary(
             "summary": summary
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         return {
             "system": "perennia_docs_ai",
             "status": "error",

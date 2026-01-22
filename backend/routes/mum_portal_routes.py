@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from services.mum_portal_service import get_mum_portal_service
+from sqlalchemy.exc import SQLAlchemyError
 from models.purl import (
     PURLWorkspace,
     PURLAccessToken,
@@ -241,7 +242,7 @@ async def mum_portal_heartbeat(
             "metadata": {"page": page or "home"}
         })
         db.commit()
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning(f"Failed to record heartbeat: {e}")
 
     return {"success": True}
@@ -312,7 +313,7 @@ async def mark_video_viewed(
             WHERE id = :video_id AND workspace_id = :workspace_id
         """), {"video_id": video_id, "workspace_id": workspace.id})
         db.commit()
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning(f"Failed to mark video viewed: {e}")
 
     return {"success": True}
@@ -352,6 +353,6 @@ def _validate_and_record_token_access(
 
         return True
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning(f"Token validation failed: {e}")
         return False

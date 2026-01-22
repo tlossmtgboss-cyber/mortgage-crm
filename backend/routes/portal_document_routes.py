@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Path, BackgroundTa
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -237,7 +238,7 @@ async def initiate_document_upload(
                     },
                     ExpiresIn=3600
                 )
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.error(f"Failed to generate presigned URL: {e}")
                 presigned_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{storage_key}?presigned=mock"
         else:
@@ -273,7 +274,7 @@ async def initiate_document_upload(
             expires_in=3600
         )
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Failed to initiate upload: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -365,7 +366,7 @@ async def confirm_document_upload(
             "message": "Document uploaded successfully. Processing will begin shortly."
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Failed to confirm upload: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -589,7 +590,7 @@ async def review_document(
             "action": review.action
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Failed to review document: {e}")
         raise HTTPException(status_code=500, detail=str(e))

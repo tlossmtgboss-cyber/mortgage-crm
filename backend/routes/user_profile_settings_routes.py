@@ -14,6 +14,7 @@ import os
 import uuid
 
 from database import get_db
+from sqlalchemy.exc import SQLAlchemyError
 from utils.error_handling import (
     ValidationException,
     PermissionException,
@@ -469,7 +470,7 @@ async def change_password(
         )
     except ValidationException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error changing password: {e}")
         db.rollback()
         raise DatabaseException(f"Failed to change password: {str(e)}")
@@ -535,7 +536,7 @@ async def upload_profile_photo(
         )
     except ValidationException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error uploading photo: {e}")
         raise DatabaseException(f"Failed to upload photo: {str(e)}")
 
@@ -563,7 +564,7 @@ async def delete_profile_photo(
             data={"photo_deleted": True},
             message="Photo deleted successfully"
         )
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error deleting photo: {e}")
         db.rollback()
         raise DatabaseException(f"Failed to delete photo: {str(e)}")

@@ -19,6 +19,7 @@ from enum import Enum
 import logging
 import os
 import re
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -370,7 +371,7 @@ async def initialize_subaccount(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error creating subaccount: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -437,7 +438,7 @@ async def save_credentials(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error saving credentials: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -635,7 +636,7 @@ async def create_messaging_service(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error creating messaging service: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -698,7 +699,7 @@ async def register_brand(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error registering brand: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -766,7 +767,7 @@ async def register_campaign(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error registering campaign: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -954,7 +955,7 @@ async def run_twilio_migration(
 
         return {"status": "success", "message": "Table user_twilio_config created successfully"}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Migration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

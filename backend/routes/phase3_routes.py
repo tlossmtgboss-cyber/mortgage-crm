@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 
 from database import get_db
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -410,7 +411,7 @@ async def remove_from_dnc_list(
         service = CallComplianceService(db)
         success = service.remove_from_dnc_list(phone_number)
         return {"success": success}
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error removing from DNC: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -21,6 +21,7 @@ from salesforce_integration_models import (
     IntegrationEvent,
     SyncQueueItem
 )
+from sqlalchemy.exc import SQLAlchemyError
 from services.salesforce import (
     salesforce_oauth,
     salesforce_schema,
@@ -86,11 +87,11 @@ def fix_salesforce_schema(db: Session) -> dict:
                     db.commit()
                     fixes.append(f"Made {col_name} nullable in field_mappings")
                     logger.info(f"Successfully made {col_name} nullable")
-                except Exception as e:
+                except SQLAlchemyError as e:
                     db.rollback()
                     fixes.append(f"Could not fix {col_name}: {str(e)[:50]}")
                     logger.warning(f"Could not make {col_name} nullable: {e}")
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error fixing field_mappings columns: {e}")
 
@@ -115,7 +116,7 @@ def fix_salesforce_schema(db: Session) -> dict:
             """))
             db.commit()
             fixes.append(f"Added {col_name} to sf_user_schemas")
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.debug(f"sf_user_schemas.{col_name} fix: {e}")
 
@@ -143,7 +144,7 @@ def fix_salesforce_schema(db: Session) -> dict:
             db.execute(text(f"ALTER TABLE field_mappings ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
             db.commit()
             fixes.append(f"Added {col_name} to field_mappings")
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.debug(f"field_mappings.{col_name} fix: {e}")
 
@@ -171,7 +172,7 @@ def fix_salesforce_schema(db: Session) -> dict:
             db.execute(text(f"ALTER TABLE integration_events ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
             db.commit()
             fixes.append(f"Added {col_name} to integration_events")
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.debug(f"integration_events.{col_name} fix: {e}")
 
@@ -199,7 +200,7 @@ def fix_salesforce_schema(db: Session) -> dict:
             db.execute(text(f"ALTER TABLE sync_queue ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
             db.commit()
             fixes.append(f"Added {col_name} to sync_queue")
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.debug(f"sync_queue.{col_name} fix: {e}")
 
@@ -221,7 +222,7 @@ def fix_salesforce_schema(db: Session) -> dict:
             db.execute(text(f"ALTER TABLE integration_record_tracking ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
             db.commit()
             fixes.append(f"Added {col_name} to integration_record_tracking")
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             logger.debug(f"integration_record_tracking.{col_name} fix: {e}")
 
@@ -262,7 +263,7 @@ async def ensure_tables_endpoint(
                 result = db.execute(text(f"SELECT COUNT(*) FROM {table}"))
                 count = result.scalar()
                 tables_status[table] = {"exists": True, "count": count}
-            except Exception as e:
+            except SQLAlchemyError as e:
                 tables_status[table] = {"exists": False, "error": str(e)[:100]}
 
         return {
@@ -270,7 +271,7 @@ async def ensure_tables_endpoint(
             "tables": tables_status,
             "message": "Tables created/verified successfully" if success else "Some tables may have issues"
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"ensure-tables failed: {e}")
         return {
             "status": "error",
@@ -383,7 +384,7 @@ async def test_schema_query(
             result["profile_exists"] = True
             result["profile_status"] = profile.status
             result["profile_user_id"] = profile.user_id
-    except Exception as e:
+    except SQLAlchemyError as e:
         result["errors"].append(f"Profile query error: {str(e)}")
 
     try:
@@ -431,7 +432,7 @@ async def trigger_discovery_for_profile(
             "objects_discovered": len(schemas),
             "objects": [s.get("name") for s in schemas[:20]] if schemas else []
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         import traceback
         return {
             "status": "error",
@@ -486,7 +487,7 @@ async def test_mapping_debug(
             "message": "Test mapping created and deleted successfully",
             "mapping_id": mapping.id
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         import traceback
         db.rollback()
         return {
@@ -850,7 +851,7 @@ async def import_funded_loans_to_mum_debug(
             "clients": imported_clients[:50]
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         import traceback
         logger.error(f"Import to MUM failed: {e}")
         db.rollback()
@@ -950,7 +951,7 @@ def get_current_user_id(request: Request, db: Session) -> Optional[int]:
                 if result:
                     return result[0]
             return payload.get("user_id")
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning(f"Failed to extract user ID: {e}")
         try:
             db.rollback()
@@ -1042,7 +1043,7 @@ async def connect_salesforce(
                 logger.warning("Salesforce connect: token expired")
             except jwt.InvalidTokenError as e:
                 logger.warning(f"Salesforce connect: invalid token: {e}")
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.warning(f"Failed to decode token from query param: {e}")
 
         if not user_id:
@@ -1065,7 +1066,7 @@ async def connect_salesforce(
             auth_url = salesforce_oauth.generate_auth_url(db, user_id, return_url)
             logger.info(f"Generated auth URL, redirect_uri will be: {salesforce_oauth.config.redirect_uri}")
             return RedirectResponse(url=auth_url)
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(f"Failed to generate Salesforce auth URL: {type(e).__name__}: {e}")
             # Try to create the oauth_states table if it doesn't exist
             try:
@@ -1246,7 +1247,7 @@ async def get_debug_status(
             result = db.execute(text(f"SELECT COUNT(*) FROM {table}"))
             count = result.scalar()
             debug_info["tables_exist"][table] = {"exists": True, "count": count}
-        except Exception as e:
+        except SQLAlchemyError as e:
             debug_info["tables_exist"][table] = {"exists": False, "error": str(e)}
 
     # Check profile
@@ -1622,7 +1623,7 @@ async def update_mapping(
             "status": "success",
             "validation_status": updated.validation_status
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
@@ -2445,7 +2446,7 @@ async def auto_map_transaction_property(
             db.add(mapping)
             db.commit()
             created += 1
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             errors.append(f"{source_field}: {str(e)[:50]}")
 
@@ -2606,7 +2607,7 @@ async def sync_funded_loans_to_mum_clients(
             "message": f"Imported {imported} funded loans to MUM clients"
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Failed to sync funded loans to MUM: {e}")
         import traceback
@@ -2685,7 +2686,7 @@ async def full_sync_pipeline(
         else:
             results["mapping"] = {"status": "no_schema", "message": "Schema not found"}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         results["mapping"] = {"status": "error", "error": str(e)[:100]}
 
     # Step 2: Sync from Salesforce
@@ -2741,7 +2742,7 @@ async def full_sync_pipeline(
         """))
         db.commit()
         results["mum_sync"] = {"status": "success", "imported": mum_result.rowcount}
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         results["mum_sync"] = {"status": "error", "error": str(e)[:100]}
 
@@ -2932,7 +2933,7 @@ async def admin_run_all_syncs(
                 CREATE INDEX IF NOT EXISTS idx_mum_clients_salesforce_id ON mum_clients(salesforce_id)
             """))
             db.commit()
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning(f"Could not add salesforce_id column: {e}")
 
     # Step 4: Sync all funded loans to MUM
@@ -2969,7 +2970,7 @@ async def admin_run_all_syncs(
         """))
         db.commit()
         mum_imported = mum_result.rowcount
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         mum_imported = f"Error: {str(e)[:100]}"
 
@@ -3065,7 +3066,7 @@ async def admin_test_sync_simple(
                 result["steps"].append({"step": "add_salesforce_id_column", "status": "created"})
             else:
                 result["steps"].append({"step": "add_salesforce_id_column", "status": "already_exists"})
-        except Exception as e:
+        except SQLAlchemyError as e:
             result["steps"].append({"step": "add_salesforce_id_column", "error": str(e)[:100]})
 
         # Step 1: Count loans that could be synced
@@ -3078,7 +3079,7 @@ async def admin_test_sync_simple(
                 )
             """)).scalar()
             result["steps"].append({"step": "count_eligible", "count": count_result})
-        except Exception as e:
+        except SQLAlchemyError as e:
             result["steps"].append({"step": "count_eligible", "error": str(e)[:100]})
 
         # Step 2: Try the insert
@@ -3116,7 +3117,7 @@ async def admin_test_sync_simple(
             db.commit()
             result["steps"].append({"step": "mum_insert", "rows_affected": mum_result.rowcount})
             result["status"] = "success"
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
             result["steps"].append({"step": "mum_insert", "error": str(e)[:200]})
             result["status"] = "partial_error"
@@ -3125,7 +3126,7 @@ async def admin_test_sync_simple(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         import traceback
         logger.error(f"Test sync failed: {traceback.format_exc()}")
         return {"error": str(e)[:500], "status": "failed"}

@@ -20,6 +20,7 @@ import secrets
 import logging
 
 from services.recruit_portal_service import RecruitPortalService
+from sqlalchemy.exc import SQLAlchemyError
 from models.recruit_portal_models import (
     ChatRequest, ChatResponse, AppointmentCreate, Appointment,
     CalculatorInput, CalculatorResult, PortalData, CompanyUpdate
@@ -132,7 +133,7 @@ async def get_candidate_portal(
             WHERE candidate_id = :id
             ORDER BY scheduled_at DESC
         """), {"id": result.id}).fetchall()
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning(f"Error fetching interviews: {e}")
         interviews = []
 
@@ -146,7 +147,7 @@ async def get_candidate_portal(
             ORDER BY created_at DESC
             LIMIT 20
         """), {"id": result.id}).fetchall()
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning(f"Error fetching activities: {e}")
         activities = []
 
@@ -343,7 +344,7 @@ async def add_portal_columns(
             """))
             added.append(col_name)
             logger.info(f"Added column: {col_name} ({description})")
-        except Exception as e:
+        except SQLAlchemyError as e:
             if "already exists" in str(e).lower():
                 skipped.append(col_name)
             else:
@@ -355,7 +356,7 @@ async def add_portal_columns(
             CREATE INDEX IF NOT EXISTS idx_mm_candidates_portal_token
             ON mm_candidates(portal_token)
         """))
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning(f"Error creating index: {e}")
 
     db.commit()
@@ -476,7 +477,7 @@ async def create_portal_tables(
         db.commit()
 
         return {"status": "success", "message": "Portal tables created successfully"}
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error creating portal tables: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -682,7 +683,7 @@ async def update_workspace_slug_by_candidate(
             raise HTTPException(status_code=404, detail="Workspace not found for this candidate")
 
         return {"id": row.id, "slug": row.slug, "candidate_id": row.candidate_id}
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error updating workspace slug: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -770,7 +771,7 @@ async def update_candidate_email(
             raise HTTPException(status_code=404, detail="Candidate not found")
 
         return {"id": row.id, "name": f"{row.first_name} {row.last_name}", "email": row.email}
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error updating candidate email: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -865,7 +866,7 @@ async def delete_purl_company_update(
     try:
         portal_service.delete_company_update(update_id)
         return {"status": "deleted", "id": update_id}
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error deleting update: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 

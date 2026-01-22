@@ -22,6 +22,7 @@ from database import get_db
 # Use TYPE_CHECKING to avoid circular import - User is only needed for type hints
 if TYPE_CHECKING:
     from main import User
+from sqlalchemy.exc import SQLAlchemyError
 
 # Lazy import wrapper for get_current_user to avoid circular import
 # This function returns a dependency that can be used with Depends()
@@ -148,13 +149,13 @@ def ensure_lead_conditions_table():
         else:
             logger.debug("lead_conditions table already exists")
         db.close()
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning(f"Could not auto-create lead_conditions table: {e}")
 
 # Run table creation check on module load
 try:
     ensure_lead_conditions_table()
-except Exception as e:
+except SQLAlchemyError as e:
     logger.warning(f"Error during lead_conditions table check: {e}")
 
 # =============================================================================
@@ -693,7 +694,7 @@ async def get_download_url(
 
     try:
         url = service.generate_download_url(document.s3_key)
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Failed to generate download URL: {e}")
         raise HTTPException(status_code=500, detail="Failed to generate download URL")
 

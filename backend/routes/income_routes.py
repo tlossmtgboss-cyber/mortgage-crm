@@ -21,6 +21,7 @@ from models.income_models import (
 from services.smart_docs.document_data_extractor import get_document_data_extractor
 from services.smart_docs.s3_storage_service import get_smart_docs_s3_service
 from services.income import get_income_calculation_service
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -1184,7 +1185,7 @@ async def fix_paystub_columns(
                 db.execute(text(stmt))
                 col_name = stmt.split("ADD COLUMN IF NOT EXISTS ")[1].split()[0]
                 results.append({"column": col_name, "status": "added"})
-            except Exception as e:
+            except SQLAlchemyError as e:
                 col_name = stmt.split("ADD COLUMN IF NOT EXISTS ")[1].split()[0] if "ADD COLUMN" in stmt else "unknown"
                 results.append({"column": col_name, "status": "skipped", "error": str(e)[:50]})
 
@@ -1195,7 +1196,7 @@ async def fix_paystub_columns(
             "message": f"Processed {len(results)} column alterations",
             "results": results
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Fix paystub columns failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1423,7 +1424,7 @@ async def run_income_migration(
                 db.execute(text(sql))
                 results.append({"table": table_name, "status": "created"})
                 logger.info(f"Created table: {table_name}")
-            except Exception as e:
+            except SQLAlchemyError as e:
                 results.append({"table": table_name, "status": "error", "error": str(e)})
                 logger.error(f"Error creating table {table_name}: {e}")
 
@@ -1443,7 +1444,7 @@ async def run_income_migration(
             try:
                 db.execute(text(idx_sql))
                 results.append({"index": idx_name, "status": "created"})
-            except Exception as e:
+            except SQLAlchemyError as e:
                 results.append({"index": idx_name, "status": "error", "error": str(e)})
 
         db.commit()
@@ -1522,7 +1523,7 @@ async def run_income_migration(
             try:
                 db.execute(text(stmt))
                 results.append({"alter": stmt.split("ADD COLUMN")[-1].split("RENAME")[0][:40] if "ADD" in stmt else stmt[:40], "status": "ok"})
-            except Exception as e:
+            except SQLAlchemyError as e:
                 # Ignore errors like "column already exists" or "column doesn't exist for rename"
                 if "does not exist" not in str(e) and "already exists" not in str(e):
                     results.append({"alter": stmt[:40], "status": "skipped", "note": str(e)[:50]})
@@ -1535,7 +1536,7 @@ async def run_income_migration(
             "results": results
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Migration failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1628,7 +1629,7 @@ async def seed_test_income_data(
             "total_monthly_income": total_monthly,
             "total_annual_income": total_monthly * 12,
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Seed test data failed: {e}")
         db.rollback()
         return {

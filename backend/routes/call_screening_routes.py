@@ -13,6 +13,7 @@ from pydantic import BaseModel
 import logging
 
 from database import get_db
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +114,7 @@ async def get_blocklist(
             "offset": offset
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error getting blocklist: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -183,7 +184,7 @@ async def remove_from_blocklist(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error removing from blocklist: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -252,7 +253,7 @@ async def get_whitelist(
             "offset": offset
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error getting whitelist: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -321,7 +322,7 @@ async def remove_from_whitelist(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error removing from whitelist: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -434,7 +435,7 @@ async def get_screening_log(
             "offset": offset
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error getting screening log: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -527,7 +528,7 @@ async def clear_lookup_cache(
                 "phone_number": phone
             }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error clearing lookup cache: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -549,7 +550,7 @@ async def clear_expired_cache(db: Session = Depends(get_db)):
             "cleared_count": result.rowcount
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error clearing expired cache: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

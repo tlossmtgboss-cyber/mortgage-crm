@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from database import get_db
+from sqlalchemy.exc import SQLAlchemyError
 from services.production_predictor_service import (
     ProductionPredictorService,
     get_production_predictor,

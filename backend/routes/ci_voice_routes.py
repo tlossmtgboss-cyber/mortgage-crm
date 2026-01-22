@@ -32,6 +32,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from database import get_db
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -423,7 +424,7 @@ async def list_recordings(
             "offset": offset
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         error_str = str(e).lower()
         # Handle missing table gracefully - return empty list
         if "undefined" in error_str and "table" in error_str or "does not exist" in error_str:
@@ -486,7 +487,7 @@ async def upload_audio(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error uploading audio: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -657,7 +658,7 @@ async def process_transcription(
         finally:
             db.close()
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Transcription processing error: {e}")
 
 
@@ -895,7 +896,7 @@ async def process_analysis(
         finally:
             db.close()
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Analysis processing error: {e}")
         # Mark as failed
         try:
@@ -1093,7 +1094,7 @@ async def create_qa_scorecard(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error creating QA scorecard: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1240,7 +1241,7 @@ async def create_realtime_session(
             status="active"
         )
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error creating realtime session: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1378,7 +1379,7 @@ async def end_realtime_session(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error ending session: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1447,7 +1448,7 @@ async def create_coaching_clip(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error creating clip: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1561,7 +1562,7 @@ async def create_coaching_assignment(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error creating assignment: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1640,7 +1641,7 @@ async def complete_coaching_assignment(
 
         return {"status": "success", "assignment_id": assignment_id}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error completing assignment: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -2077,7 +2078,7 @@ async def diagnostic_rubrics(db: Session = Depends(get_db)):
             "rubrics_count": count,
             "samples": sample_list
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         return {
             "status": "error",
             "error": str(e),

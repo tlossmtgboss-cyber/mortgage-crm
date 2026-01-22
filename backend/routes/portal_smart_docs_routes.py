@@ -22,6 +22,7 @@ from models.purl import PURLWorkspace, PURLLoan
 from services.smart_docs.needs_list_generator import NeedsListGenerator
 from services.smart_docs.document_review_pipeline import DocumentReviewPipeline
 from services.smart_docs.s3_storage_service import get_smart_docs_s3_service
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -322,7 +323,7 @@ async def upload_document_for_requirement(
             request.status = RequestStatus.PENDING_REVIEW
         db.commit()
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         import traceback
         processing_error = str(e)
         logger.error(f"Error processing upload (non-fatal): {e}")

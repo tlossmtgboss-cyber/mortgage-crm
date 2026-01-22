@@ -22,6 +22,7 @@ import uuid
 from database import get_db, engine
 
 from services.agent_governance_service import AgentGovernanceService
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/agents", tags=["agent-governance"])
@@ -1352,7 +1353,7 @@ async def setup_agent_tables(db: Session = Depends(get_db)):
             "message": "Agent governance tables created/verified"
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error creating tables: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error creating tables: {str(e)}")
@@ -1439,7 +1440,7 @@ async def seed_missing_agents(db: Session = Depends(get_db)):
             "total_agents": final_count
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error seeding agents: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error seeding agents: {str(e)}")

@@ -13,6 +13,7 @@ from enum import Enum
 import logging
 import re
 import os
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -460,7 +461,7 @@ async def get_all_integrations(
                     SELECT provider FROM user_integrations WHERE user_id = :user_id
                 """), {"user_id": int(user_id)}).fetchall()
                 connected_providers = {row[0] for row in result}
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.warning(f"Could not fetch connected integrations: {e}")
 
         integrations = []
@@ -548,7 +549,7 @@ async def get_integration(
                 if result:
                     is_connected = True
                     connected_email = result[0] if result[0] else None
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.warning(f"Could not check integration status: {e}")
 
         integration["status"] = "connected" if is_connected else "disconnected"
@@ -934,7 +935,7 @@ async def disconnect_integration(
                 """), {"user_id": int(user_id), "provider": integration_id})
                 db.commit()
                 logger.info(f"Disconnected {integration_id} for user {user_id}")
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.error(f"Error disconnecting integration: {e}")
                 db.rollback()
 
@@ -946,7 +947,7 @@ async def disconnect_integration(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error disconnecting integration: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -14,6 +14,7 @@ import re
 import subprocess
 
 from database import get_db, Base
+from sqlalchemy.exc import SQLAlchemyError
 from utils.error_handling import (
     ValidationException,
     PermissionException,

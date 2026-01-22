@@ -632,7 +632,7 @@ async def update_agent_settings(
     except (ValidationException, PermissionException, NotFoundException,
             DatabaseException, BusinessRuleException):
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(
             f"Unexpected error updating agent {agent_id}: {str(e)}",
             extra={"agent_id": agent_id, "user_id": current_user.id},

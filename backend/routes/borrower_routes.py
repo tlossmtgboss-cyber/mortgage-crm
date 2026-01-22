@@ -23,6 +23,7 @@ from pydantic import BaseModel, EmailStr
 
 from database import get_db
 from services.notification_service import NotificationService
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/borrower", tags=["Borrower Portal"])

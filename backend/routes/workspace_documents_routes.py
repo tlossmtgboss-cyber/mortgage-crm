@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from database import get_db
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,7 @@ def get_workspace_by_slug(db: Session, slug: str) -> Optional[Dict[str, Any]]:
                 "lead_id": lead_id
             }
         return None
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning(f"Error getting workspace by slug: {e}")
         return None
 
@@ -341,7 +342,7 @@ async def sync_workspace_documents(
             documents=synced_docs
         )
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.exception(f"Error syncing workspace documents: {e}")
         db.rollback()
         # Return success=True to prevent frontend errors, but log the issue

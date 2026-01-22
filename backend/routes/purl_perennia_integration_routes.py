@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from services.notification_service import NotificationService
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -358,7 +359,7 @@ async def initialize_workspace_documents(
             "requests": created_requests
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Failed to initialize documents: {e}")
         raise HTTPException(status_code=500, detail=str(e))

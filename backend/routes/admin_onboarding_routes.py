@@ -26,6 +26,8 @@ from email_service import email_service
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/admin-onboarding", tags=["Admin Onboarding"])
 
+from sqlalchemy.exc import SQLAlchemyError
+
 # Stripe integration
 try:
     import stripe
@@ -402,7 +404,7 @@ async def start_onboarding(
                 """), {'user_id': user_id, 'role_id': role_id})
 
                 logger.info(f"Assigned Site Administrator role (id={role_id}) to user {user_id}")
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.warning(f"Could not assign Site Administrator role: {e}")
             # Continue signup even if role assignment fails
 
@@ -522,7 +524,7 @@ async def save_company_profile(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error saving company profile: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -583,7 +585,7 @@ async def save_user_profile(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error saving user profile: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -668,7 +670,7 @@ async def queue_team_invites(
         raise
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error queueing team invites: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -878,7 +880,7 @@ async def create_subscription(
         raise ValidationException(f"Card error: {e.user_message}")
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error creating subscription: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -986,7 +988,7 @@ async def complete_onboarding(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error completing onboarding: {e}")
         raise HTTPException(status_code=500, detail=str(e))

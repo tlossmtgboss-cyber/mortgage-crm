@@ -31,6 +31,7 @@ from models.call_monitoring_models import (
     CallArtifactResponse, AgentRunResponse,
 )
 from services.call_monitoring import CallMonitoringOrchestrator
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -335,7 +336,7 @@ async def end_session(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error ending session {session_id}: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -485,7 +486,7 @@ async def get_transcript(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error getting transcript: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -538,7 +539,7 @@ async def run_agents(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error running agents: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -685,7 +686,7 @@ async def execute_artifacts(
             "results": results,
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error executing artifacts: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1161,7 +1162,7 @@ async def get_live_transcript(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error getting live transcript: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1383,5 +1384,5 @@ async def run_agents_background(
         finally:
             db.close()
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Background agent processing failed: {e}")

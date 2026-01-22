@@ -14,6 +14,7 @@ from database import get_db
 from services.capacity_service import CapacityService, get_capacity_service
 from services.performance_service import PerformanceService, get_performance_service
 from services.risk_detection_service import RiskDetectionService, get_risk_detection_service
+from sqlalchemy.exc import SQLAlchemyError
 
 
 router = APIRouter(prefix="/api/v1/master-manager", tags=["Master Manager"])
@@ -1332,7 +1333,7 @@ async def fix_duplicate_roles(
                 for r in roles
             ]
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1433,7 +1434,7 @@ async def fix_duplicate_capacities(
             "message": f"Removed {deleted_count} duplicate capacity records",
             "deleted_count": deleted_count
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 

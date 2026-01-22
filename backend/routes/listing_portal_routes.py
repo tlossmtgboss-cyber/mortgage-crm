@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 
 from utils.responses import success_response, error_response
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 

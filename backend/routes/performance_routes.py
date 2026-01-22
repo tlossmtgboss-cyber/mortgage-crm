@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from database import get_db, get_pool_status
 from monitoring.performance_service import performance_service
 from monitoring.alerts_config import get_monitors_summary, export_monitors_json
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -218,7 +219,7 @@ async def check_database_health(db: Session = Depends(get_db)):
             "pool": pool_status
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Database health check failed: {e}")
         return {
             "status": "unhealthy",

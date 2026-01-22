@@ -21,6 +21,7 @@ import io
 
 from services.esign_service import EsignService, EsignError
 from services.esign_pdf_service import get_esign_pdf_service
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -814,7 +815,7 @@ async def get_esign_system_summary(
             "summary": summary
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         return {
             "system": "esign",
             "status": "error",

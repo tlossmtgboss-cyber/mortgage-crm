@@ -20,6 +20,7 @@ import hashlib
 import os
 
 from database import get_db
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 

@@ -21,6 +21,7 @@ from services.disc.scoring_service import DISCScoringService, DISCResult
 from services.disc.motivators_service import MotivatorsService, MotivatorResult
 from services.disc.wheel_calculator import WheelCalculator, WheelPosition
 from services.disc.content_generator import DISCContentGenerator
+from sqlalchemy.exc import SQLAlchemyError
 
 
 router = APIRouter(prefix="/api/v1/disc", tags=["DISC Assessment"])

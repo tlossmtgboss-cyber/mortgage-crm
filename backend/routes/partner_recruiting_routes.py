@@ -13,6 +13,7 @@ from datetime import datetime, date, timedelta
 from database import get_db
 from main import get_current_user, User
 import json
+from sqlalchemy.exc import SQLAlchemyError
 
 router = APIRouter(prefix="/api/v1/partner-recruiting", tags=["partner-recruiting"])
 

@@ -24,6 +24,7 @@ from database import get_db
 
 from services.agent_governance_service import AgentGovernanceService
 from models.agent_governance import AgentProfile, AgentExecution, AgentChatSession, AgentChatMessage
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -144,7 +145,7 @@ async def create_chat_session(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error creating chat session: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -198,7 +199,7 @@ async def list_chat_sessions(
             "offset": offset
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error listing chat sessions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -414,7 +415,7 @@ async def send_message_stream(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error in streaming message: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 

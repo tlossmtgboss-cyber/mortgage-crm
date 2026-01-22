@@ -14,6 +14,7 @@ import logging
 import json
 
 from database import get_db
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/automated-outreach", tags=["Automated Outreach"])
@@ -205,7 +206,7 @@ async def get_campaigns(
             campaign["active_leads"] = lead_result.scalar() or 0
 
         return {"campaigns": campaigns}
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error fetching campaigns: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -255,7 +256,7 @@ async def create_campaign(
             "campaign_id": campaign_id,
             "message": f"Campaign '{campaign.name}' created with {len(campaign.steps)} steps"
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error creating campaign: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -302,7 +303,7 @@ async def get_campaign_detail(
         return campaign_dict
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error fetching campaign: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -323,7 +324,7 @@ async def update_campaign_status(
         db.commit()
 
         return {"success": True, "message": f"Campaign status updated to {status.value}"}
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -383,7 +384,7 @@ async def assign_leads_to_campaign(
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error assigning leads: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -418,7 +419,7 @@ async def get_triggers(
         triggers = [dict(row._mapping) for row in result.fetchall()]
 
         return {"triggers": triggers}
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error fetching triggers: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -457,7 +458,7 @@ async def create_trigger(
             "trigger_id": result.lastrowid,
             "message": f"Trigger '{trigger.name}' created"
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error creating trigger: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -498,7 +499,7 @@ async def update_trigger(
         db.commit()
 
         return {"success": True, "message": "Trigger updated"}
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -513,7 +514,7 @@ async def delete_trigger(
         db.execute(text("DELETE FROM outreach_triggers WHERE id = :id"), {"id": trigger_id})
         db.commit()
         return {"success": True, "message": "Trigger deleted"}
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -752,7 +753,7 @@ async def setup_default_triggers(
             "created": created,
             "message": f"Created {created} default triggers"
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error setting up defaults: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -890,12 +891,12 @@ async def execute_trigger(
                     "message": message
                 })
 
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.error(f"Error executing trigger {trigger['id']}: {e}")
 
         db.commit()
         return {"executed": executed}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error in execute_trigger: {e}")
         return {"executed": 0, "error": str(e)}

@@ -13,6 +13,7 @@ from datetime import datetime, timezone, timedelta
 import logging
 
 from database import Base, get_db as db_get_db, engine
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -266,7 +267,7 @@ async def create_ticket(
                 "created_at": new_ticket.created_at.isoformat() if new_ticket.created_at else None,
             }
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error creating ticket: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -359,7 +360,7 @@ async def update_ticket(
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error updating ticket: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -400,7 +401,7 @@ async def complete_ticket(
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error completing ticket: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -432,7 +433,7 @@ async def delete_ticket(
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error deleting ticket: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -533,7 +534,7 @@ async def get_ticket_metrics(
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error fetching support metrics: {e}")
         # Return default metrics instead of 500 error
         return default_metrics

@@ -63,6 +63,7 @@ from schemas.sla_tracking import (
     SLAStatusEnum
 )
 
+from sqlalchemy.exc import SQLAlchemyError
 from crud.sla_tracking import (
     create_sla_measure,
     get_sla_measure,
@@ -257,14 +258,14 @@ def ensure_sla_tables_exist():
             else:
                 logger.info("SLA tracking tables already exist")
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning(f"SLA tables check warning: {e}")
 
 
 # Auto-create tables on module load
 try:
     ensure_sla_tables_exist()
-except Exception as e:
+except SQLAlchemyError as e:
     logger.warning(f"Could not auto-create SLA tables: {e}")
 
 
@@ -345,7 +346,7 @@ async def add_trigger_from_columns(db: Session = Depends(get_db)):
                 "message": f"Migration completed. Columns added: {columns_added}" if columns_added else "Columns already exist",
                 "columns_added": columns_added
             }
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Migration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -421,7 +422,7 @@ async def list_sla_measures(
                 seed_default_sla_measures(db)
                 measures = get_all_sla_measures(db, active_only=active_only)
                 logger.info(f"Auto-initialized {len(measures)} default SLA measures")
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logger.error(f"Failed to auto-initialize SLA measures: {e}")
                 import traceback
                 logger.error(traceback.format_exc())
@@ -560,7 +561,7 @@ async def change_measure_stage(
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error changing measure stage: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -741,7 +742,7 @@ async def get_milestone_drilldown(
                         loan_status = loan.status or "Unknown"
                         if loan.loan_officer:
                             lo_name = loan.loan_officer.full_name or loan.loan_officer.email or "Unassigned"
-                except Exception as e:
+                except SQLAlchemyError as e:
                     logger.warning(f"Error fetching loan {m.loan_id}: {e}")
 
             # Get lead details if lead_id exists
@@ -754,7 +755,7 @@ async def get_milestone_drilldown(
                         loan_amount = float(lead.loan_amount or 0)
                         if hasattr(lead, 'assigned_to') and lead.assigned_to:
                             lo_name = lead.assigned_to.full_name if hasattr(lead.assigned_to, 'full_name') else "Assigned"
-                except Exception as e:
+                except SQLAlchemyError as e:
                     logger.warning(f"Error fetching lead {m.lead_id}: {e}")
 
             # Calculate time info

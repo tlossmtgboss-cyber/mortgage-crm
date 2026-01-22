@@ -20,6 +20,7 @@ from datetime import datetime
 
 from database import get_db
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 router = APIRouter(prefix="/api/admin/domains", tags=["Custom Domains"])
 
@@ -363,7 +364,7 @@ async def verify_domain_dns(domain: str, db: Session = Depends(get_db)):
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to verify domain: {str(e)}"

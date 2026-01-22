@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from services.perennia_s3_service import get_s3_service
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +72,7 @@ async def get_current_user(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Auth error: {e}")
         raise HTTPException(status_code=401, detail="Invalid token")
 
@@ -238,7 +239,7 @@ async def complete_upload(
             "message": "Video uploaded successfully"
         }
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Failed to complete video upload: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -366,7 +367,7 @@ async def mark_client_video_viewed(
         logger.info(f"Video {video_id} viewed and deleted from system")
         return {"success": True, "message": "Video viewed and removed"}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Failed to process video view: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -485,7 +486,7 @@ async def mark_realtor_video_viewed(
         logger.info(f"Video {video_id} viewed and deleted from system")
         return {"success": True, "message": "Video viewed and removed"}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Failed to process video view: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -533,6 +534,6 @@ async def run_portal_video_migration(
         db.commit()
         return {"status": "success", "message": "Portal video messages table created"}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Migration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

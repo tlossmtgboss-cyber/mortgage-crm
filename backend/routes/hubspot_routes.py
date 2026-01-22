@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from utils.responses import success_response, error_response
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -184,7 +185,7 @@ async def hubspot_callback(
 
         logger.info(f"Successfully stored HubSpot tokens for user {user_id}")
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error storing HubSpot tokens: {e}")
         db.rollback()
         return RedirectResponse(
@@ -300,7 +301,7 @@ async def refresh_hubspot_token(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error refreshing HubSpot token: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -327,7 +328,7 @@ async def disconnect_hubspot(
             "disconnected": True
         }, "HubSpot integration disconnected")
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error disconnecting HubSpot: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
