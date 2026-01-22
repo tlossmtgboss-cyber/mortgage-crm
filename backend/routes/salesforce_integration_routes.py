@@ -2537,7 +2537,7 @@ async def sync_funded_loans_to_mum_clients(
     try:
         # Find funded loans not yet in mum_clients
         result = db.execute(text("""
-            SELECT l.id, l.loan_number, l.borrower_name, l.borrower_first_name, l.borrower_last_name,
+            SELECT l.id, l.loan_number, l.borrower_name,
                    l.borrower_email, l.borrower_phone, l.amount, l.interest_rate,
                    l.funded_date, l.closing_date, l.property_address,
                    l.property_city, l.property_state, l.property_zip,
@@ -2546,11 +2546,9 @@ async def sync_funded_loans_to_mum_clients(
             WHERE (l.stage::text ILIKE '%fund%'
                    OR l.stage::text ILIKE '%closed%'
                    OR l.funded_date IS NOT NULL)
-            AND l.salesforce_id IS NOT NULL
             AND NOT EXISTS (
                 SELECT 1 FROM mum_clients m
                 WHERE m.loan_number = l.loan_number
-                   OR m.salesforce_id = l.salesforce_id
             )
         """))
 
@@ -2712,11 +2710,23 @@ async def full_sync_pipeline(
     # Step 3: Sync funded loans to MUM
     try:
         mum_result = db.execute(text("""
-            INSERT INTO mum_clients (name, loan_number, original_close_date, original_rate, loan_balance, status, engagement_score, salesforce_id, created_at)
+            INSERT INTO mum_clients (
+                client_name, loan_number, original_close_date, closing_date,
+                first_payment_date, interest_rate, original_loan_amount,
+                current_loan_amount, appraisal_value_at_closing, current_property_value,
+                original_rate, loan_balance, status, engagement_score, salesforce_id, created_at
+            )
             SELECT
-                COALESCE(l.borrower_name, l.borrower_first_name || ' ' || l.borrower_last_name, 'Client - ' || l.loan_number),
+                COALESCE(l.borrower_name, 'Client - ' || l.loan_number),
                 l.loan_number,
-                COALESCE(l.funded_date, l.closing_date),
+                COALESCE(l.funded_date, l.closing_date, CURRENT_DATE),
+                COALESCE(l.closing_date, l.funded_date, CURRENT_DATE),
+                COALESCE(l.funded_date, l.closing_date, CURRENT_DATE) + INTERVAL '30 days',
+                COALESCE(l.interest_rate, 0),
+                COALESCE(l.amount, 0),
+                COALESCE(l.amount, 0),
+                COALESCE(l.property_value, l.amount, 0),
+                COALESCE(l.property_value, l.amount, 0),
                 l.interest_rate,
                 l.amount,
                 'active',
@@ -2725,9 +2735,8 @@ async def full_sync_pipeline(
                 CURRENT_TIMESTAMP
             FROM loans l
             WHERE (l.stage::text ILIKE '%fund%' OR l.stage::text ILIKE '%closed%' OR l.funded_date IS NOT NULL)
-            AND l.salesforce_id IS NOT NULL
             AND NOT EXISTS (
-                SELECT 1 FROM mum_clients m WHERE m.loan_number = l.loan_number OR m.salesforce_id = l.salesforce_id
+                SELECT 1 FROM mum_clients m WHERE m.loan_number = l.loan_number
             )
         """))
         db.commit()
@@ -2936,7 +2945,7 @@ async def admin_run_all_syncs(
                 original_rate, loan_balance, status, engagement_score, salesforce_id, created_at
             )
             SELECT
-                COALESCE(l.borrower_name, l.borrower_first_name || ' ' || l.borrower_last_name, 'Client - ' || l.loan_number),
+                COALESCE(l.borrower_name, 'Client - ' || l.loan_number),
                 l.loan_number,
                 COALESCE(l.funded_date, l.closing_date, CURRENT_DATE),
                 COALESCE(l.closing_date, l.funded_date, CURRENT_DATE),
