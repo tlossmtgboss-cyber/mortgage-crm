@@ -2477,6 +2477,13 @@ async def migrate_leads_to_mum_clients(
 
     db = SessionLocal()
     try:
+        # First, ensure LTV column can handle values >= 100 (VA loans)
+        try:
+            db.execute(text("ALTER TABLE mum_clients ALTER COLUMN ltv TYPE DECIMAL(7,4)"))
+            db.commit()
+        except Exception:
+            db.rollback()  # Column might already be correct type
+
         # Get leads to migrate
         leads_query = """
             SELECT
