@@ -2802,3 +2802,185 @@ async def get_sync_status(
             for e in events
         ]
     }
+
+
+@router.post("/admin/run-all-syncs")
+async def admin_run_all_syncs(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Admin endpoint: Run sync for ALL connected Salesforce profiles.
+    Requires admin role.
+    """
+    user_id = require_user(request, db)
+
+    # Check if user is admin
+    user = db.execute(text("SELECT role FROM users WHERE id = :id"), {"id": user_id}).fetchone()
+    if not user or user[0] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    # Get all connected profiles
+    profiles = db.query(IntegrationProfile).filter(
+        IntegrationProfile.provider == 'salesforce',
+        IntegrationProfile.status.in_(['connected', 'active', 'mapping_required'])
+    ).all()
+
+    if not profiles:
+        return {"message": "No connected Salesforce profiles found", "synced": 0}
+
+    results = []
+    for profile in profiles:
+        profile_result = {
+            "profile_id": profile.id,
+            "user_id": profile.user_id,
+            "status": profile.status,
+            "sync_result": None
+        }
+
+        try:
+            # Step 1: Auto-create mappings
+            source_object = "MtgPlanner_CRM__Transaction_Property__c"
+            schema = salesforce_schema.get_object_schema(db, profile.id, source_object)
+
+            if schema:
+                schema_fields = {f.get('name') for f in schema.get('fields', [])}
+                created = 0
+
+                for mapping_def in TRANSACTION_PROPERTY_MAPPINGS:
+                    source_field = mapping_def['source_field']
+                    if source_field not in schema_fields:
+                        continue
+
+                    existing = db.query(FieldMapping).filter(
+                        FieldMapping.integration_profile_id == profile.id,
+                        FieldMapping.source_object == source_object,
+                        FieldMapping.source_field == source_field
+                    ).first()
+
+                    if not existing:
+                        try:
+                            mapping = FieldMapping(
+                                integration_profile_id=profile.id,
+                                source_object=source_object,
+                                source_field=source_field,
+                                target_entity=mapping_def['target_entity'],
+                                target_field=mapping_def['target_field'],
+                                transform_type=mapping_def['transform_type'],
+                                transform_config={},
+                                enabled=True,
+                                validation_status='valid'
+                            )
+                            db.add(mapping)
+                            db.commit()
+                            created += 1
+                        except Exception:
+                            db.rollback()
+
+                if created > 0 or profile.status != 'active':
+                    profile.status = 'active'
+                    db.commit()
+
+                profile_result["mappings_created"] = created
+
+            # Step 2: Run sync
+            sync_result = await salesforce_sync.sync(
+                db=db,
+                integration_profile_id=profile.id,
+                direction='inbound',
+                full_sync=True,
+                batch_size=200
+            )
+            profile_result["sync_result"] = {
+                "success": sync_result.success,
+                "records_processed": sync_result.records_processed,
+                "records_succeeded": sync_result.records_succeeded,
+                "records_failed": sync_result.records_failed
+            }
+
+        except Exception as e:
+            profile_result["error"] = str(e)[:200]
+            logger.error(f"Sync failed for profile {profile.id}: {e}")
+
+        results.append(profile_result)
+
+    # Step 3: Sync all funded loans to MUM
+    try:
+        mum_result = db.execute(text("""
+            INSERT INTO mum_clients (name, loan_number, original_close_date, original_rate, loan_balance, status, engagement_score, salesforce_id, created_at)
+            SELECT
+                COALESCE(l.borrower_name, l.borrower_first_name || ' ' || l.borrower_last_name, 'Client - ' || l.loan_number),
+                l.loan_number,
+                COALESCE(l.funded_date, l.closing_date),
+                l.interest_rate,
+                l.amount,
+                'active',
+                50,
+                l.salesforce_id,
+                CURRENT_TIMESTAMP
+            FROM loans l
+            WHERE (l.stage::text ILIKE '%fund%' OR l.stage::text ILIKE '%closed%' OR l.funded_date IS NOT NULL)
+            AND l.salesforce_id IS NOT NULL
+            AND NOT EXISTS (
+                SELECT 1 FROM mum_clients m WHERE m.loan_number = l.loan_number OR m.salesforce_id = l.salesforce_id
+            )
+        """))
+        db.commit()
+        mum_imported = mum_result.rowcount
+    except Exception as e:
+        db.rollback()
+        mum_imported = f"Error: {str(e)[:100]}"
+
+    return {
+        "profiles_processed": len(results),
+        "results": results,
+        "mum_clients_imported": mum_imported
+    }
+
+
+@router.get("/admin/connected-profiles")
+async def admin_get_connected_profiles(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Admin endpoint: List all connected Salesforce profiles.
+    """
+    user_id = require_user(request, db)
+
+    # Check if user is admin
+    user = db.execute(text("SELECT role FROM users WHERE id = :id"), {"id": user_id}).fetchone()
+    if not user or user[0] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    profiles = db.execute(text("""
+        SELECT
+            ip.id, ip.user_id, ip.status, ip.instance_url, ip.sf_username,
+            ip.connected_at, ip.last_sync_at, ip.last_error,
+            u.email as user_email, u.full_name as user_name,
+            (SELECT COUNT(*) FROM field_mappings fm WHERE fm.integration_profile_id = ip.id) as mappings_count
+        FROM integration_profiles ip
+        LEFT JOIN users u ON u.id = ip.user_id
+        WHERE ip.provider = 'salesforce'
+        ORDER BY ip.connected_at DESC
+    """)).fetchall()
+
+    return {
+        "count": len(profiles),
+        "profiles": [
+            {
+                "id": p[0],
+                "user_id": p[1],
+                "status": p[2],
+                "instance_url": p[3],
+                "sf_username": p[4],
+                "connected_at": p[5].isoformat() if p[5] else None,
+                "last_sync_at": p[6].isoformat() if p[6] else None,
+                "last_error": p[7],
+                "user_email": p[8],
+                "user_name": p[9],
+                "mappings_count": p[10]
+            }
+            for p in profiles
+        ]
+    }

@@ -23069,13 +23069,21 @@ def generate_ai_insights(loan: Loan) -> str:
     insights = []
 
     if loan.days_in_stage and loan.days_in_stage > 10:
-        insights.append(f"⚠️ Loan has been in {loan.stage.value} stage for {loan.days_in_stage} days")
+        stage_name = loan.stage.value if hasattr(loan.stage, 'value') else str(loan.stage) if loan.stage else 'unknown'
+        insights.append(f"⚠️ Loan has been in {stage_name} stage for {loan.days_in_stage} days")
 
     if loan.closing_date:
-        # Make closing_date timezone-aware if it's naive
-        closing_dt = loan.closing_date if loan.closing_date.tzinfo else loan.closing_date.replace(tzinfo=timezone.utc)
-        if (closing_dt - datetime.now(timezone.utc)).days < 7:
-            insights.append("🔥 Closing date approaching - prioritize tasks")
+        try:
+            # Handle both date and datetime objects
+            if hasattr(loan.closing_date, 'tzinfo'):
+                closing_dt = loan.closing_date if loan.closing_date.tzinfo else loan.closing_date.replace(tzinfo=timezone.utc)
+            else:
+                # It's a date object, convert to datetime
+                closing_dt = datetime.combine(loan.closing_date, datetime.min.time()).replace(tzinfo=timezone.utc)
+            if (closing_dt - datetime.now(timezone.utc)).days < 7:
+                insights.append("🔥 Closing date approaching - prioritize tasks")
+        except Exception:
+            pass  # Skip closing date insight if there's any issue
 
     if loan.rate and loan.rate > 7.0:
         insights.append("💰 Higher rate loan - consider rate lock strategies")

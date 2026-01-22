@@ -2751,3 +2751,297 @@ async def diagnose_salesforce():
 
     finally:
         db.close()
+
+
+@router.post("/fix-500-errors")
+async def fix_500_errors(
+    admin: Any = Depends(verify_admin_access)
+):
+    """
+    Comprehensive fix for 500 Internal Server Errors.
+    Creates missing tables: notifications, user_permissions, permission_templates, ai_tasks.
+    Adds missing columns to users table.
+    """
+    try:
+        db = SessionLocal()
+        results = {
+            "tables_created": [],
+            "columns_added": [],
+            "errors": [],
+            "skipped": []
+        }
+
+        try:
+            # ================================================================
+            # 1. Create notifications table
+            # ================================================================
+            try:
+                db.execute(text("""
+                    CREATE TABLE IF NOT EXISTS notifications (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        type VARCHAR(50) NOT NULL,
+                        title VARCHAR(255) NOT NULL,
+                        message TEXT NOT NULL,
+                        link VARCHAR(500),
+                        is_read BOOLEAN DEFAULT FALSE,
+                        read_at TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+                db.commit()
+
+                # Create indexes
+                db.execute(text("""
+                    CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
+                    CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(is_read);
+                    CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at DESC);
+                """))
+                db.commit()
+                results["tables_created"].append("notifications")
+            except Exception as e:
+                if "already exists" in str(e).lower():
+                    results["skipped"].append("notifications table")
+                else:
+                    results["errors"].append(f"notifications: {str(e)[:100]}")
+                db.rollback()
+
+            # ================================================================
+            # 2. Create user_permissions table
+            # ================================================================
+            try:
+                db.execute(text("""
+                    CREATE TABLE IF NOT EXISTS user_permissions (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        permission_key VARCHAR(255) NOT NULL,
+                        granted BOOLEAN DEFAULT TRUE,
+                        granted_by INTEGER REFERENCES users(id),
+                        granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        expires_at TIMESTAMP,
+                        inherited_from VARCHAR(50) DEFAULT 'template',
+                        CONSTRAINT unique_user_permission UNIQUE (user_id, permission_key)
+                    )
+                """))
+                db.commit()
+
+                # Create indexes
+                db.execute(text("""
+                    CREATE INDEX IF NOT EXISTS idx_user_permissions_user ON user_permissions(user_id);
+                    CREATE INDEX IF NOT EXISTS idx_user_permissions_composite ON user_permissions(user_id, permission_key, granted);
+                """))
+                db.commit()
+                results["tables_created"].append("user_permissions")
+            except Exception as e:
+                if "already exists" in str(e).lower():
+                    results["skipped"].append("user_permissions table")
+                else:
+                    results["errors"].append(f"user_permissions: {str(e)[:100]}")
+                db.rollback()
+
+            # ================================================================
+            # 3. Create permission_templates table
+            # ================================================================
+            try:
+                db.execute(text("""
+                    CREATE TABLE IF NOT EXISTS permission_templates (
+                        id SERIAL PRIMARY KEY,
+                        name VARCHAR(255) NOT NULL UNIQUE,
+                        description TEXT,
+                        category VARCHAR(50) NOT NULL,
+                        permissions JSONB NOT NULL DEFAULT '{}',
+                        is_system_default BOOLEAN DEFAULT FALSE,
+                        created_by INTEGER REFERENCES users(id),
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+                db.commit()
+                results["tables_created"].append("permission_templates")
+            except Exception as e:
+                if "already exists" in str(e).lower():
+                    results["skipped"].append("permission_templates table")
+                else:
+                    results["errors"].append(f"permission_templates: {str(e)[:100]}")
+                db.rollback()
+
+            # ================================================================
+            # 4. Add permission_role column to users table
+            # ================================================================
+            try:
+                db.execute(text("""
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS permission_role VARCHAR(50) DEFAULT 'sales'
+                """))
+                db.commit()
+                results["columns_added"].append("users.permission_role")
+            except Exception as e:
+                if "already exists" in str(e).lower():
+                    results["skipped"].append("users.permission_role")
+                else:
+                    results["errors"].append(f"users.permission_role: {str(e)[:100]}")
+                db.rollback()
+
+            # ================================================================
+            # 5. Create ai_tasks table if it doesn't exist
+            # ================================================================
+            try:
+                db.execute(text("""
+                    CREATE TABLE IF NOT EXISTS ai_tasks (
+                        id SERIAL PRIMARY KEY,
+                        title VARCHAR(255) NOT NULL,
+                        description TEXT,
+                        type VARCHAR(50),
+                        category VARCHAR(100),
+                        priority INTEGER DEFAULT 0,
+                        status VARCHAR(50) DEFAULT 'pending',
+                        ai_confidence FLOAT,
+                        ai_reasoning TEXT,
+                        suggested_action TEXT,
+                        due_date TIMESTAMP,
+                        assigned_to_id INTEGER REFERENCES users(id),
+                        created_by_id INTEGER REFERENCES users(id),
+                        lead_id INTEGER,
+                        loan_id INTEGER,
+                        entity_type VARCHAR(50),
+                        entity_id INTEGER,
+                        completed_at TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+                db.commit()
+
+                # Create indexes
+                db.execute(text("""
+                    CREATE INDEX IF NOT EXISTS idx_ai_tasks_assigned ON ai_tasks(assigned_to_id);
+                    CREATE INDEX IF NOT EXISTS idx_ai_tasks_status ON ai_tasks(status);
+                    CREATE INDEX IF NOT EXISTS idx_ai_tasks_created ON ai_tasks(created_at DESC);
+                """))
+                db.commit()
+                results["tables_created"].append("ai_tasks")
+            except Exception as e:
+                if "already exists" in str(e).lower():
+                    results["skipped"].append("ai_tasks table")
+                else:
+                    results["errors"].append(f"ai_tasks: {str(e)[:100]}")
+                db.rollback()
+
+            # ================================================================
+            # 6. Create incoming_data_events table (for reconciliation)
+            # ================================================================
+            try:
+                db.execute(text("""
+                    CREATE TABLE IF NOT EXISTS incoming_data_events (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER REFERENCES users(id),
+                        source VARCHAR(50) NOT NULL,
+                        source_id VARCHAR(255),
+                        event_type VARCHAR(50),
+                        raw_data JSONB,
+                        processed BOOLEAN DEFAULT FALSE,
+                        processed_at TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+                db.commit()
+                results["tables_created"].append("incoming_data_events")
+            except Exception as e:
+                if "already exists" in str(e).lower():
+                    results["skipped"].append("incoming_data_events table")
+                else:
+                    results["errors"].append(f"incoming_data_events: {str(e)[:100]}")
+                db.rollback()
+
+            # ================================================================
+            # 7. Create extracted_data table (for reconciliation)
+            # ================================================================
+            try:
+                db.execute(text("""
+                    CREATE TABLE IF NOT EXISTS extracted_data (
+                        id SERIAL PRIMARY KEY,
+                        event_id INTEGER REFERENCES incoming_data_events(id) ON DELETE CASCADE,
+                        data_type VARCHAR(50),
+                        fields JSONB,
+                        match_entity_type VARCHAR(50),
+                        match_entity_id INTEGER,
+                        match_confidence FLOAT,
+                        status VARCHAR(50) DEFAULT 'pending_review',
+                        reviewed_by INTEGER REFERENCES users(id),
+                        reviewed_at TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+                db.commit()
+                results["tables_created"].append("extracted_data")
+            except Exception as e:
+                if "already exists" in str(e).lower():
+                    results["skipped"].append("extracted_data table")
+                else:
+                    results["errors"].append(f"extracted_data: {str(e)[:100]}")
+                db.rollback()
+
+            # ================================================================
+            # 8. Seed default permission templates if needed
+            # ================================================================
+            try:
+                # Check if templates already exist
+                result = db.execute(text("""
+                    SELECT COUNT(*) FROM permission_templates WHERE name IN ('Management', 'Sales', 'Operations')
+                """))
+                count = result.scalar()
+
+                if count == 0:
+                    # Seed default templates
+                    import json
+
+                    management_perms = {
+                        "dashboard.view_all_widgets": True, "leads.view_all": True,
+                        "loans.view_all": True, "team.view_all": True,
+                        "team.manage_permissions": True, "permissions.view_all": True,
+                        "permissions.manage": True, "tasks.view_all": True
+                    }
+
+                    sales_perms = {
+                        "leads.view_assigned": True, "leads.create": True,
+                        "leads.edit_own": True, "loans.view_assigned": True,
+                        "tasks.view_assigned": True, "tasks.create": True
+                    }
+
+                    operations_perms = {
+                        "leads.view_all": True, "loans.view_all": True,
+                        "loans.process": True, "tasks.view_all": True
+                    }
+
+                    db.execute(text("""
+                        INSERT INTO permission_templates (name, description, category, permissions, is_system_default)
+                        VALUES
+                        ('Management', 'Full access for management roles', 'management', :mgmt_perms, TRUE),
+                        ('Sales', 'Sales-focused permissions', 'sales', :sales_perms, TRUE),
+                        ('Operations', 'Operations-focused permissions', 'operations', :ops_perms, TRUE)
+                    """), {
+                        "mgmt_perms": json.dumps(management_perms),
+                        "sales_perms": json.dumps(sales_perms),
+                        "ops_perms": json.dumps(operations_perms)
+                    })
+                    db.commit()
+                    results["tables_created"].append("permission_templates (seeded)")
+                else:
+                    results["skipped"].append("permission_templates (already seeded)")
+            except Exception as e:
+                results["errors"].append(f"permission_templates seeding: {str(e)[:100]}")
+                db.rollback()
+
+            logger.info(f"Fix 500 errors migration completed: {results}")
+
+            return {
+                "status": "success",
+                "message": "500 errors fix migration completed",
+                "results": results
+            }
+
+        finally:
+            db.close()
+
+    except Exception as e:
+        logger.error(f"Fix 500 errors migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
