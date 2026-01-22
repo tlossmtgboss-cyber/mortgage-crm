@@ -36798,7 +36798,7 @@ async def health_check(db: Session = Depends(get_db)):
         )
 
 
-@app.get("/admin/pool-status")
+@app.get("/api/v1/admin/pool-status")
 async def get_pool_status_endpoint():
     """
     Get database connection pool status WITHOUT using a db connection.
@@ -36816,7 +36816,7 @@ async def get_pool_status_endpoint():
         return {"status": "error", "error": str(e)}
 
 
-@app.post("/admin/pool-reset")
+@app.post("/api/v1/admin/pool-reset")
 async def reset_pool_endpoint(admin_key: str = Query(...)):
     """
     Dispose and recreate the database connection pool.
