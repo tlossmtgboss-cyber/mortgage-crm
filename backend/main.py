@@ -36798,6 +36798,62 @@ async def health_check(db: Session = Depends(get_db)):
         )
 
 
+@app.get("/admin/pool-status")
+async def get_pool_status_endpoint():
+    """
+    Get database connection pool status WITHOUT using a db connection.
+    Use this to diagnose connection exhaustion issues.
+    """
+    try:
+        from database import get_pool_status, engine
+        pool_status = get_pool_status()
+        return {
+            "status": "ok",
+            "pool": pool_status,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.post("/admin/pool-reset")
+async def reset_pool_endpoint(admin_key: str = Query(...)):
+    """
+    Dispose and recreate the database connection pool.
+    Use this when pool is exhausted and connections are stale.
+    Requires admin key for safety.
+    """
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        from database import engine, get_pool_status
+
+        # Get status before reset
+        before_status = get_pool_status()
+
+        # Dispose all connections in the pool
+        engine.dispose()
+        logger.warning("Database connection pool disposed - all connections closed")
+
+        # Get status after reset
+        after_status = get_pool_status()
+
+        return {
+            "status": "success",
+            "message": "Connection pool reset successfully",
+            "before": before_status,
+            "after": after_status,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Pool reset failed: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "error": str(e)}
+        )
+
+
 @app.get("/ping")
 async def ping(db: Session = Depends(get_db)):
     """Simple ping endpoint - also creates Salesforce tables if needed"""
