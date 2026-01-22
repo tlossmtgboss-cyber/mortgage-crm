@@ -48,9 +48,33 @@ def get_db():
 def get_current_user():
     """Get current user dependency."""
     if _get_current_user is None:
-        # Return dummy for routes that don't require auth
-        return None
+        raise RuntimeError("Authentication not configured for Document Visibility routes")
     return _get_current_user
+
+
+# Allowed roles for document visibility management
+DOCUMENT_VISIBILITY_ROLES = [
+    'admin', 'site_admin', 'management', 'leadership',
+    'loan_officer', 'processor', 'underwriter', 'closer'
+]
+
+ADMIN_ONLY_ROLES = ['admin', 'site_admin']
+
+
+def check_document_visibility_permission(current_user) -> bool:
+    """Check if user has permission to manage document visibility."""
+    if current_user is None:
+        return False
+    role = getattr(current_user, 'permission_role', None) or getattr(current_user, 'role', None)
+    return role in DOCUMENT_VISIBILITY_ROLES
+
+
+def check_admin_permission(current_user) -> bool:
+    """Check if user has admin permission."""
+    if current_user is None:
+        return False
+    role = getattr(current_user, 'permission_role', None) or getattr(current_user, 'role', None)
+    return role in ADMIN_ONLY_ROLES
 
 
 # =============================================================================
@@ -142,7 +166,8 @@ async def update_document_visibility(
     document_id: int,
     loan_id: int = Query(..., description="Loan ID for context"),
     request: VisibilityUpdateRequest = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """
     Update visibility settings for a document.
@@ -157,10 +182,8 @@ async def update_document_visibility(
     - hidden_reason: Explanation for hiding
     - visibility_locked: Prevent auto-release from changing
     """
-    # TODO: Add permission check
-    # current_user = Depends(get_current_user())
-    # if not check_admin_permission(current_user):
-    #     raise HTTPException(status_code=403, detail="Not authorized")
+    if not check_document_visibility_permission(current_user):
+        raise HTTPException(status_code=403, detail="Permission denied: insufficient role for document visibility management")
 
     service = DocumentVisibilityService(db)
 
@@ -177,7 +200,7 @@ async def update_document_visibility(
             release_at=request.release_at if request else None,
             hidden_reason=request.hidden_reason if request else None,
             visibility_locked=request.visibility_locked if request else None,
-            changed_by_user_id=None,  # TODO: Get from current_user
+            changed_by_user_id=current_user.id,
             change_source=ChangeSource.MANUAL.value,
             change_reason=request.hidden_reason if request else None
         )
@@ -227,7 +250,8 @@ async def get_visibility_history(
 async def bulk_update_visibility(
     loan_id: int,
     request: BulkVisibilityRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """
     Bulk update visibility for multiple documents.
@@ -235,7 +259,8 @@ async def bulk_update_visibility(
     Useful for hiding/showing all documents of a certain type,
     or batch operations on selected documents.
     """
-    # TODO: Add permission check
+    if not check_document_visibility_permission(current_user):
+        raise HTTPException(status_code=403, detail="Permission denied: insufficient role for document visibility management")
 
     service = DocumentVisibilityService(db)
 
@@ -245,7 +270,7 @@ async def bulk_update_visibility(
             document_ids=request.documents,
             visible_to_borrower=request.visible_to_borrower,
             visible_to_partner=request.visible_to_partner,
-            changed_by_user_id=None,  # TODO: Get from current_user
+            changed_by_user_id=current_user.id,
             change_reason=request.reason
         )
         db.commit()
@@ -265,7 +290,8 @@ async def release_document(
     document_table: str,
     document_id: int,
     loan_id: int = Query(..., description="Loan ID for context"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """
     Immediately release a hidden document.
@@ -273,7 +299,8 @@ async def release_document(
     Makes the document visible to borrowers and partners.
     Equivalent to setting visible_to_borrower=True and visible_to_partner=True.
     """
-    # TODO: Add permission check
+    if not check_document_visibility_permission(current_user):
+        raise HTTPException(status_code=403, detail="Permission denied: insufficient role for document visibility management")
 
     service = DocumentVisibilityService(db)
 
@@ -284,7 +311,7 @@ async def release_document(
             loan_id=loan_id,
             visible_to_borrower=True,
             visible_to_partner=True,
-            changed_by_user_id=None,  # TODO: Get from current_user
+            changed_by_user_id=current_user.id,
             change_source=ChangeSource.MANUAL.value,
             change_reason="Manual release"
         )
@@ -345,7 +372,8 @@ async def get_hidden_documents(
 async def process_milestone_release(
     loan_id: int,
     milestone: str = Query(..., description="Milestone name, e.g., 'funded'"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """
     Process auto-release for a milestone (admin/system use).
@@ -353,7 +381,8 @@ async def process_milestone_release(
     Called when loan reaches a milestone to release scheduled documents.
     Normally triggered automatically by lifecycle service.
     """
-    # TODO: Add admin-only permission check
+    if not check_admin_permission(current_user):
+        raise HTTPException(status_code=403, detail="Permission denied: admin access required for milestone processing")
 
     service = DocumentVisibilityService(db)
 
@@ -363,6 +392,8 @@ async def process_milestone_release(
             milestone=milestone
         )
         db.commit()
+
+        logger.info(f"Milestone '{milestone}' processed for loan {loan_id} by user {current_user.id}: {len(released)} documents released")
 
         return {
             "success": True,
