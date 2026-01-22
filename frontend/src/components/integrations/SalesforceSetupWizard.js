@@ -42,6 +42,7 @@ function SalesforceSetupWizard({ onComplete }) {
   const [importingClosedLoans, setImportingClosedLoans] = useState(false);
   const [importResults, setImportResults] = useState(null);
   const [connectionError, setConnectionError] = useState(false); // Track if Salesforce connection is broken
+  const [includeAllFields, setIncludeAllFields] = useState(true); // Include all fields by default
 
   const token = localStorage.getItem('token');
 
@@ -167,16 +168,19 @@ function SalesforceSetupWizard({ onComplete }) {
     setLoading(false);
   };
 
-  const loadSuggestions = async (objectName) => {
+  const loadSuggestions = async (objectName, includeAll = includeAllFields) => {
     setSelectedObject(objectName);
     try {
-      const res = await fetch(
-        `${API_URL}/api/integrations/salesforce/schema/objects/${objectName}/suggestions`,
-        { headers: { 'Authorization': `Bearer ${token}` } }
-      );
+      const url = new URL(`${API_URL}/api/integrations/salesforce/schema/objects/${objectName}/suggestions`);
+      url.searchParams.set('include_all', includeAll.toString());
+
+      const res = await fetch(url.toString(), {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       if (res.ok) {
         const data = await res.json();
         setSuggestions(data.suggestions || []);
+        console.log(`Loaded ${data.total_fields || 0} field suggestions (include_all=${includeAll})`);
       }
     } catch (err) {
       console.error('Failed to load suggestions:', err);

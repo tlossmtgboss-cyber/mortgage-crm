@@ -324,6 +324,10 @@ async def salesforce_callback(
             WHERE user_id = :user_id AND provider = 'salesforce'
         """), {"user_id": int(user_id)}).fetchone()
 
+        # Encrypt tokens before storage
+        encrypted_access = encrypt_token(token_data.get("access_token", ""))
+        encrypted_refresh = encrypt_token(token_data.get("refresh_token", "")) if token_data.get("refresh_token") else None
+
         if existing:
             # Update existing
             db.execute(text("""
@@ -339,8 +343,8 @@ async def salesforce_callback(
                 WHERE user_id = :user_id AND provider = 'salesforce'
             """), {
                 "user_id": int(user_id),
-                "access_token": token_data.get("access_token"),
-                "refresh_token": token_data.get("refresh_token"),
+                "access_token": encrypted_access,
+                "refresh_token": encrypted_refresh,
                 "scopes": token_data.get("scope", ""),
                 "instance_url": token_data.get("instance_url", ""),
                 "email": user_info.get("email") if user_info else None,
@@ -354,8 +358,8 @@ async def salesforce_callback(
                 VALUES (:user_id, 'salesforce', :access_token, :refresh_token, :scopes, :instance_url, :email, :provider_user_id)
             """), {
                 "user_id": int(user_id),
-                "access_token": token_data.get("access_token"),
-                "refresh_token": token_data.get("refresh_token"),
+                "access_token": encrypted_access,
+                "refresh_token": encrypted_refresh,
                 "scopes": token_data.get("scope", ""),
                 "instance_url": token_data.get("instance_url", ""),
                 "email": user_info.get("email") if user_info else None,
@@ -447,7 +451,7 @@ async def salesforce_disconnect(
 
         # Try to revoke token
         if integration[0]:
-            salesforce_client.revoke_token(integration[0])
+            salesforce_client.revoke_token(decrypt_token(integration[0]))
 
         # Delete from database
         db.execute(text("""
@@ -579,8 +583,8 @@ async def salesforce_full_sync(
             detail="Salesforce not connected. Please connect first."
         )
 
-    access_token = integration[0]
-    refresh_token = integration[1]
+    access_token = decrypt_token(integration[0])
+    refresh_token = decrypt_token(integration[1]) if integration[1] else None
 
     # Parse instance_url from scopes
     instance_url = None
@@ -770,7 +774,7 @@ async def test_salesforce_connection(
     if not integration or not integration[0]:
         return {"connected": False, "error": "Not connected to Salesforce"}
 
-    access_token = integration[0]
+    access_token = decrypt_token(integration[0])
     instance_url = None
     if integration[1] and "instance_url:" in integration[1]:
         instance_url = integration[1].split("instance_url:")[1].split(",")[0]
@@ -821,7 +825,7 @@ async def explore_salesforce_objects(
     if not integration or not integration[0]:
         raise HTTPException(status_code=400, detail="Not connected to Salesforce")
 
-    access_token = integration[0]
+    access_token = decrypt_token(integration[0])
     instance_url = None
     if integration[1] and "instance_url:" in integration[1]:
         instance_url = integration[1].split("instance_url:")[1].split(",")[0]
@@ -897,7 +901,7 @@ async def explore_salesforce_object_fields(
     if not integration or not integration[0]:
         raise HTTPException(status_code=400, detail="Not connected to Salesforce")
 
-    access_token = integration[0]
+    access_token = decrypt_token(integration[0])
     instance_url = None
     if integration[1] and "instance_url:" in integration[1]:
         instance_url = integration[1].split("instance_url:")[1].split(",")[0]
@@ -970,7 +974,7 @@ async def explore_salesforce_query(
     if not integration or not integration[0]:
         raise HTTPException(status_code=400, detail="Not connected to Salesforce")
 
-    access_token = integration[0]
+    access_token = decrypt_token(integration[0])
     instance_url = None
     if integration[1] and "instance_url:" in integration[1]:
         instance_url = integration[1].split("instance_url:")[1].split(",")[0]
@@ -1050,7 +1054,7 @@ async def import_closed_loans(
     if not integration or not integration[0]:
         raise HTTPException(status_code=400, detail="Not connected to Salesforce")
 
-    access_token = integration[0]
+    access_token = decrypt_token(integration[0])
     instance_url = None
     if integration[1] and "instance_url:" in integration[1]:
         instance_url = integration[1].split("instance_url:")[1].split(",")[0]

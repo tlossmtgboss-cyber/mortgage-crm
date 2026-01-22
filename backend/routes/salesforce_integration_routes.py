@@ -402,6 +402,59 @@ async def trigger_discovery_for_profile(
         }
 
 
+@router.get("/loans-status-debug")
+async def get_loans_status_debug(
+    db: Session = Depends(get_db)
+):
+    """
+    Get status of loans table - no auth required for debugging.
+    """
+    try:
+        db.rollback()
+    except:
+        pass
+
+    try:
+        # Get loan counts
+        total_loans = db.execute(text("SELECT COUNT(*) FROM loans")).scalar()
+        funded_loans = db.execute(text("""
+            SELECT COUNT(*) FROM loans
+            WHERE funded_date IS NOT NULL OR stage::text ILIKE '%funded%'
+        """)).scalar()
+        mum_clients_count = db.execute(text("SELECT COUNT(*) FROM mum_clients")).scalar()
+
+        # Sample some loans
+        sample_loans = db.execute(text("""
+            SELECT id, loan_number, borrower_name, stage::text, funded_date
+            FROM loans
+            ORDER BY id DESC
+            LIMIT 10
+        """)).fetchall()
+
+        return {
+            "total_loans": total_loans,
+            "funded_loans": funded_loans,
+            "mum_clients_count": mum_clients_count,
+            "sample_loans": [
+                {
+                    "id": loan[0],
+                    "loan_number": loan[1],
+                    "borrower_name": loan[2],
+                    "stage": loan[3],
+                    "funded_date": str(loan[4]) if loan[4] else None
+                }
+                for loan in sample_loans
+            ]
+        }
+    except Exception as e:
+        import traceback
+        return {
+            "status": "error",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+
 @router.post("/import-to-mum-debug")
 async def import_funded_loans_to_mum_debug(
     db: Session = Depends(get_db)
@@ -1051,18 +1104,30 @@ async def get_object_schema(
 async def get_mapping_suggestions(
     object_name: str,
     request: Request,
+    include_all: bool = Query(False, description="Include all fields, not just matched ones"),
     db: Session = Depends(get_db)
 ):
-    """Get AI-suggested field mappings for an object."""
+    """Get AI-suggested field mappings for an object.
+
+    Args:
+        include_all: If True, returns ALL fields with suggested mappings for each.
+                    If False (default), only returns fields that match canonical mappings.
+    """
     user_id = require_user(request, db)
     profile = get_integration_profile(db, user_id)
 
     if not profile:
         raise HTTPException(status_code=400, detail="Salesforce not connected")
 
-    suggestions = salesforce_schema.suggest_mappings(db, profile.id, object_name)
+    suggestions = salesforce_schema.suggest_mappings(
+        db, profile.id, object_name, include_all=include_all
+    )
 
-    return {"suggestions": suggestions}
+    return {
+        "suggestions": suggestions,
+        "total_fields": len(suggestions),
+        "include_all": include_all
+    }
 
 
 # ============ Field Mapping Endpoints ============
