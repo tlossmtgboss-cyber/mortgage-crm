@@ -934,7 +934,7 @@ def get_current_user_id(request: Request, db: Session) -> Optional[int]:
         auth_header = request.headers.get("Authorization", "")
         if auth_header.startswith("Bearer "):
             token = auth_header[7:]
-            secret_key = os.getenv("SECRET_KEY", "dev-secret-key")
+            secret_key = os.getenv("SECRET_KEY", "dev-only-09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7")
             payload = jwt.decode(token, secret_key, algorithms=["HS256"])
             email = payload.get("sub")
             if email:
@@ -1018,7 +1018,7 @@ async def connect_salesforce(
     if not user_id and token:
         try:
             import jwt
-            secret_key = os.getenv("SECRET_KEY", "dev-secret-key")
+            secret_key = os.getenv("SECRET_KEY", "dev-only-09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7")
             payload = jwt.decode(token, secret_key, algorithms=["HS256"])
             email = payload.get("sub")
             logger.info(f"Salesforce connect: decoded token for email {email}")
