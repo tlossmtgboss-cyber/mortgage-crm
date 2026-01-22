@@ -469,7 +469,7 @@ class PermissionService:
             if cached:
                 return cached.decode() == 'true'
         except Exception as e:
-            print(f"Redis cache error: {e}")
+            logger.error(f"Redis cache error: {e}")
 
         return None
 
@@ -492,7 +492,7 @@ class PermissionService:
                 'true' if granted else 'false'
             )
         except Exception as e:
-            print(f"Redis cache error: {e}")
+            logger.error(f"Redis cache error: {e}")
 
     def _get_from_cache(self, key: str) -> Optional[str]:
         """Get value from Redis cache"""
@@ -504,7 +504,7 @@ class PermissionService:
             cached = self.redis_client.get(key)
             return cached.decode() if cached else None
         except Exception as e:
-            print(f"Redis cache error: {e}")
+            logger.error(f"Redis cache error: {e}")
             return None
 
     def _set_in_cache(self, key: str, value: str):
@@ -516,7 +516,7 @@ class PermissionService:
         try:
             self.redis_client.setex(key, self.cache_ttl, value)
         except Exception as e:
-            print(f"Redis cache error: {e}")
+            logger.error(f"Redis cache error: {e}")
 
     def invalidate_employee_cache(self, employee_id: int):
         """Invalidate all cached data for an employee"""
@@ -534,7 +534,7 @@ class PermissionService:
             self.redis_client.delete(f"employee_info:{employee_id}")
             self.redis_client.delete(f"employee_permissions:{employee_id}")
         except Exception as e:
-            print(f"Redis cache invalidation error: {e}")
+            logger.error(f"Redis cache invalidation error: {e}")
 
     # ============================================================================
     # AUDIT LOGGING

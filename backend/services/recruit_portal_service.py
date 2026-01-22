@@ -18,12 +18,15 @@ from sqlalchemy import text
 # Use shared engine from database.py to avoid connection pool exhaustion
 from database import SessionLocal
 
+import logging
 from models.recruit_portal_models import (
     PortalData,
     CalculatorInput,
     CalculatorResult,
     AvailabilitySlot,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class RecruitPortalService:
@@ -512,7 +515,7 @@ Candidate's current status: {candidate.status}
                 )
                 email_sent = True
             except Exception as e:
-                print(f"Failed to send confirmation email: {e}")
+                logger.error(f"Failed to send confirmation email: {e}")
 
         return {
             "appointment_id": appointment_id,

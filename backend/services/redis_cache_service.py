@@ -26,6 +26,9 @@ import os
 from datetime import datetime, timedelta
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class RedisCacheService:
@@ -86,7 +89,7 @@ class RedisCacheService:
         self.employee_info_ttl = 300  # 5 minutes for employee info
         self.template_ttl = 3600  # 1 hour for templates (rarely change)
 
-        print(f"✅ Redis cache initialized ({'cluster' if self.cluster_mode else 'standalone'} mode)")
+        logger.info(f"✅ Redis cache initialized ({'cluster' if self.cluster_mode else 'standalone'} mode)")
 
     def _init_standalone_client(self) -> redis.Redis:
         """Initialize standalone Redis client with connection pooling"""
@@ -156,7 +159,7 @@ class RedisCacheService:
             )
             return True
         except Exception as e:
-            print(f"❌ Redis cache error: {e}")
+            logger.error(f"❌ Redis cache error: {e}")
             return False
 
     def get_cached_permission(
@@ -182,7 +185,7 @@ class RedisCacheService:
                 return None
             return value.decode() == '1'
         except Exception as e:
-            print(f"❌ Redis cache error: {e}")
+            logger.error(f"❌ Redis cache error: {e}")
             return None
 
     def cache_employee_permissions(
@@ -210,7 +213,7 @@ class RedisCacheService:
             )
             return True
         except Exception as e:
-            print(f"❌ Redis cache error: {e}")
+            logger.error(f"❌ Redis cache error: {e}")
             return False
 
     def get_cached_employee_permissions(
@@ -234,7 +237,7 @@ class RedisCacheService:
                 return None
             return json.loads(value.decode())
         except Exception as e:
-            print(f"❌ Redis cache error: {e}")
+            logger.error(f"❌ Redis cache error: {e}")
             return None
 
     # ============================================================================
@@ -266,7 +269,7 @@ class RedisCacheService:
             )
             return True
         except Exception as e:
-            print(f"❌ Redis cache error: {e}")
+            logger.error(f"❌ Redis cache error: {e}")
             return False
 
     def get_cached_employee_info(
@@ -290,7 +293,7 @@ class RedisCacheService:
                 return None
             return json.loads(value.decode())
         except Exception as e:
-            print(f"❌ Redis cache error: {e}")
+            logger.error(f"❌ Redis cache error: {e}")
             return None
 
     # ============================================================================
@@ -322,7 +325,7 @@ class RedisCacheService:
             )
             return True
         except Exception as e:
-            print(f"❌ Redis cache error: {e}")
+            logger.error(f"❌ Redis cache error: {e}")
             return False
 
     def get_cached_template(
@@ -346,7 +349,7 @@ class RedisCacheService:
                 return None
             return json.loads(value.decode())
         except Exception as e:
-            print(f"❌ Redis cache error: {e}")
+            logger.error(f"❌ Redis cache error: {e}")
             return None
 
     # ============================================================================
@@ -381,10 +384,10 @@ class RedisCacheService:
             if self.client.delete(f"employee_info:{employee_id}"):
                 deleted_count += 1
 
-            print(f"✅ Invalidated {deleted_count} cache keys for employee {employee_id}")
+            logger.info(f"✅ Invalidated {deleted_count} cache keys for employee {employee_id}")
 
         except Exception as e:
-            print(f"❌ Redis cache invalidation error: {e}")
+            logger.error(f"❌ Redis cache invalidation error: {e}")
 
         return deleted_count
 
@@ -402,10 +405,10 @@ class RedisCacheService:
         try:
             deleted = self.client.delete(f"template:{template_id}")
             if deleted:
-                print(f"✅ Invalidated template {template_id} cache")
+                logger.info(f"✅ Invalidated template {template_id} cache")
             return bool(deleted)
         except Exception as e:
-            print(f"❌ Redis cache error: {e}")
+            logger.error(f"❌ Redis cache error: {e}")
             return False
 
     def invalidate_all_permissions(self) -> int:
@@ -425,10 +428,10 @@ class RedisCacheService:
                     self.client.delete(key)
                     deleted_count += 1
 
-            print(f"✅ Invalidated {deleted_count} permission cache keys")
+            logger.info(f"✅ Invalidated {deleted_count} permission cache keys")
 
         except Exception as e:
-            print(f"❌ Redis cache invalidation error: {e}")
+            logger.error(f"❌ Redis cache invalidation error: {e}")
 
         return deleted_count
 
@@ -442,10 +445,10 @@ class RedisCacheService:
 
         try:
             self.client.flushdb()
-            print("⚠️  Flushed entire Redis cache")
+            logger.warning("⚠️  Flushed entire Redis cache")
             return True
         except Exception as e:
-            print(f"❌ Redis flush error: {e}")
+            logger.error(f"❌ Redis flush error: {e}")
             return False
 
     # ============================================================================
@@ -462,10 +465,10 @@ class RedisCacheService:
 
         try:
             self.client.set('permissions_dirty', '1')
-            print("✅ Marked permissions as dirty")
+            logger.info("✅ Marked permissions as dirty")
             return True
         except Exception as e:
-            print(f"❌ Redis error: {e}")
+            logger.error(f"❌ Redis error: {e}")
             return False
 
     def is_permissions_dirty(self) -> bool:
@@ -480,7 +483,7 @@ class RedisCacheService:
             value = self.client.get('permissions_dirty')
             return value is not None and value.decode() == '1'
         except Exception as e:
-            print(f"❌ Redis error: {e}")
+            logger.error(f"❌ Redis error: {e}")
             return False
 
     def clear_permissions_dirty(self) -> bool:
@@ -493,10 +496,10 @@ class RedisCacheService:
 
         try:
             self.client.delete('permissions_dirty')
-            print("✅ Cleared permissions dirty flag")
+            logger.info("✅ Cleared permissions dirty flag")
             return True
         except Exception as e:
-            print(f"❌ Redis error: {e}")
+            logger.error(f"❌ Redis error: {e}")
             return False
 
     # ============================================================================
@@ -531,7 +534,7 @@ class RedisCacheService:
                 'used_memory_human': info.get('used_memory_human', 'N/A'),
             }
         except Exception as e:
-            print(f"❌ Redis stats error: {e}")
+            logger.error(f"❌ Redis stats error: {e}")
             return {}
 
     def _calculate_hit_rate(self, hits: int, misses: int) -> float:
@@ -551,7 +554,7 @@ class RedisCacheService:
                 count += 1
             return count
         except Exception as e:
-            print(f"❌ Redis error: {e}")
+            logger.error(f"❌ Redis error: {e}")
             return 0
 
     # ============================================================================
@@ -622,7 +625,7 @@ class MaterializedViewRefresher:
         if not self.redis_service.is_permissions_dirty():
             return False
 
-        print("🔄 Refreshing materialized views...")
+        logger.info("🔄 Refreshing materialized views...")
 
         try:
             # Refresh permission cache view
@@ -643,11 +646,11 @@ class MaterializedViewRefresher:
             # Invalidate all permission caches
             self.redis_service.invalidate_all_permissions()
 
-            print("✅ Materialized views refreshed successfully")
+            logger.info("✅ Materialized views refreshed successfully")
             return True
 
         except Exception as e:
-            print(f"❌ Materialized view refresh error: {e}")
+            logger.error(f"❌ Materialized view refresh error: {e}")
             self.db.rollback()
             return False
 
@@ -676,18 +679,18 @@ if __name__ == '__main__':
 
     # Health check
     health = redis_cache.health_check()
-    print(f"Redis Health: {health}")
+    logger.info(f"Redis Health: {health}")
 
     # Cache a permission
     redis_cache.cache_permission(123, 'leads.view_all', True)
 
     # Get cached permission
     granted = redis_cache.get_cached_permission(123, 'leads.view_all')
-    print(f"Permission cached: {granted}")
+    logger.info(f"Permission cached: {granted}")
 
     # Get cache stats
     stats = redis_cache.get_cache_stats()
-    print(f"Cache Stats: {stats}")
+    logger.info(f"Cache Stats: {stats}")
 
     # Invalidate employee cache
     redis_cache.invalidate_employee_cache(123)

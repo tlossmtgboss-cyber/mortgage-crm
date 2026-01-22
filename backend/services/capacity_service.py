@@ -12,6 +12,8 @@ from enum import Enum
 
 from database import get_db
 
+logger = logging.getLogger(__name__)
+
 
 class CapacityStatus(str, Enum):
     AVAILABLE = "available"
@@ -210,7 +212,7 @@ class CapacityService:
                 await self._update_capacity_record(metrics, organization_id)
                 count += 1
             except Exception as e:
-                print(f"Error calculating capacity for user {user_row.id}: {e}")
+                logger.error(f"Error calculating capacity for user {user_row.id}: {e}")
 
         return count
 

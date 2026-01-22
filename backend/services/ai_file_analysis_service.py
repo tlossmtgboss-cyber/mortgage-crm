@@ -18,6 +18,9 @@ from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 import anthropic
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Document requirement templates by loan type
 REQUIRED_DOCUMENTS = {
@@ -298,7 +301,7 @@ class AIFileAnalysisService:
                 return dict(row._mapping)
             return None
         except Exception as e:
-            print(f"Error getting loan data: {e}")
+            logger.error(f"Error getting loan data: {e}")
             return None
 
     def _get_loan_documents(self, loan_id: int) -> List[Dict]:
@@ -560,7 +563,7 @@ Provide your analysis as JSON."""
 
             return json.loads(response_text)
         except Exception as e:
-            print(f"AI analysis error: {e}")
+            logger.error(f"AI analysis error: {e}")
             return {
                 "summary": "Unable to complete AI analysis. Review file manually.",
                 "red_flags": [],
