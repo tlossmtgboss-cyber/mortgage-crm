@@ -417,13 +417,10 @@ async def import_funded_loans_to_mum_debug(
     try:
         results = {'imported': 0, 'skipped': 0, 'errors': []}
 
-        # Get funded loans not already in mum_clients
+        # Get funded loans not already in mum_clients - use only columns that exist
         funded_loans = db.execute(text("""
-            SELECT l.id, l.loan_number, l.borrower_name, l.borrower_first_name, l.borrower_last_name,
-                   l.borrower_email, l.borrower_phone, l.amount, l.interest_rate,
-                   l.funded_date, l.closing_date, l.property_address,
-                   l.property_city, l.property_state, l.property_zip,
-                   l.loan_type, l.stage, l.status
+            SELECT l.id, l.loan_number, l.borrower_name, l.amount, l.interest_rate,
+                   l.funded_date, l.closing_date, l.stage, l.status
             FROM loans l
             WHERE (l.stage IN ('FUNDED', 'Funded', 'funded')
                    OR l.status IN ('funded', 'FUNDED', 'Funded', 'closed', 'CLOSED')
@@ -440,15 +437,11 @@ async def import_funded_loans_to_mum_debug(
 
         for loan in funded_loans:
             try:
-                # Build client name
-                client_name = loan[2]  # borrower_name
-                if not client_name and (loan[3] or loan[4]):  # first/last name
-                    client_name = f"{loan[3] or ''} {loan[4] or ''}".strip()
-                if not client_name:
-                    client_name = f"Client - {loan[1]}"  # loan_number
+                # Build client name from borrower_name or fallback to loan number
+                client_name = loan[2] if loan[2] else f"Client - {loan[1]}"
 
-                # Get closing date
-                close_date = loan[9] or loan[10]  # funded_date or closing_date
+                # Get closing date (funded_date or closing_date)
+                close_date = loan[5] or loan[6]
 
                 # Insert into mum_clients
                 db.execute(text("""
@@ -465,15 +458,15 @@ async def import_funded_loans_to_mum_debug(
                     'name': client_name,
                     'loan_number': loan[1],
                     'close_date': close_date,
-                    'rate': loan[8],  # interest_rate
-                    'balance': loan[7],  # amount
+                    'rate': loan[4],  # interest_rate
+                    'balance': loan[3],  # amount
                 })
 
                 results['imported'] += 1
                 imported_clients.append({
                     'name': client_name,
                     'loan_number': loan[1],
-                    'amount': float(loan[7]) if loan[7] else None
+                    'amount': float(loan[3]) if loan[3] else None
                 })
 
             except Exception as e:
