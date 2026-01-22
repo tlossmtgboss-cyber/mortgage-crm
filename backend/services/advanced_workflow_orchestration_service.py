@@ -821,18 +821,80 @@ class AdvancedWorkflowOrchestrationService:
         return current
 
     def _evaluate_condition(self, condition: str, context: Dict) -> Any:
-        """Safely evaluate a condition expression."""
-        # Simple expression evaluator (production would use safer parser)
+        """Safely evaluate a condition expression without using eval()."""
+        import ast
+        import operator
+
         try:
-            # Replace variable references
+            # Replace variable references with actual values
             for key, value in context.items():
                 if isinstance(value, (str, int, float, bool)):
                     condition = condition.replace(f"${{{key}}}", repr(value))
 
-            # Basic evaluation (restricted)
-            allowed_names = {"True": True, "False": False, "None": None}
-            return eval(condition, {"__builtins__": {}}, allowed_names)
-        except:
+            # Safe expression evaluator using AST
+            # Only supports: comparisons, boolean ops, literals
+            SAFE_OPERATORS = {
+                ast.Eq: operator.eq,
+                ast.NotEq: operator.ne,
+                ast.Lt: operator.lt,
+                ast.LtE: operator.le,
+                ast.Gt: operator.gt,
+                ast.GtE: operator.ge,
+                ast.And: lambda a, b: a and b,
+                ast.Or: lambda a, b: a or b,
+                ast.Not: operator.not_,
+                ast.Add: operator.add,
+                ast.Sub: operator.sub,
+                ast.In: lambda a, b: a in b,
+                ast.NotIn: lambda a, b: a not in b,
+            }
+
+            def _safe_eval(node):
+                if isinstance(node, ast.Expression):
+                    return _safe_eval(node.body)
+                elif isinstance(node, ast.Constant):
+                    return node.value
+                elif isinstance(node, ast.Name):
+                    # Only allow True, False, None
+                    if node.id in ('True', 'False', 'None'):
+                        return {'True': True, 'False': False, 'None': None}[node.id]
+                    raise ValueError(f"Unknown name: {node.id}")
+                elif isinstance(node, ast.Compare):
+                    left = _safe_eval(node.left)
+                    for op, comparator in zip(node.ops, node.comparators):
+                        op_func = SAFE_OPERATORS.get(type(op))
+                        if not op_func:
+                            raise ValueError(f"Unsupported operator: {type(op)}")
+                        right = _safe_eval(comparator)
+                        if not op_func(left, right):
+                            return False
+                        left = right
+                    return True
+                elif isinstance(node, ast.BoolOp):
+                    op_func = SAFE_OPERATORS.get(type(node.op))
+                    if not op_func:
+                        raise ValueError(f"Unsupported bool operator: {type(node.op)}")
+                    values = [_safe_eval(v) for v in node.values]
+                    result = values[0]
+                    for v in values[1:]:
+                        result = op_func(result, v)
+                    return result
+                elif isinstance(node, ast.UnaryOp):
+                    if isinstance(node.op, ast.Not):
+                        return not _safe_eval(node.operand)
+                    raise ValueError(f"Unsupported unary operator: {type(node.op)}")
+                elif isinstance(node, ast.BinOp):
+                    op_func = SAFE_OPERATORS.get(type(node.op))
+                    if not op_func:
+                        raise ValueError(f"Unsupported binary operator: {type(node.op)}")
+                    return op_func(_safe_eval(node.left), _safe_eval(node.right))
+                else:
+                    raise ValueError(f"Unsupported expression type: {type(node)}")
+
+            tree = ast.parse(condition, mode='eval')
+            return _safe_eval(tree)
+        except Exception as e:
+            logger.warning(f"Condition evaluation failed for '{condition}': {e}")
             return condition
 
     # =========================================================================

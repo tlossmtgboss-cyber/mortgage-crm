@@ -223,6 +223,8 @@ class WorkflowSLAValidator:
 
     def check_service_imports(self) -> bool:
         """Verify all services can be imported."""
+        import importlib
+
         services = [
             ("services.workflow_sla_service", "WorkflowSLAService"),
             ("services.workflow_task_generator", "TaskGeneratorService"),
@@ -235,11 +237,13 @@ class WorkflowSLAValidator:
         ]
 
         failed = []
-        for module, cls in services:
+        for module_name, cls_name in services:
             try:
-                exec(f"from {module} import {cls}")
-            except ImportError as e:
-                failed.append(f"{module}.{cls}: {e}")
+                # Safe dynamic import using importlib instead of exec()
+                module = importlib.import_module(module_name)
+                getattr(module, cls_name)  # Verify class exists
+            except (ImportError, AttributeError) as e:
+                failed.append(f"{module_name}.{cls_name}: {e}")
 
         if failed:
             self.log_result(
