@@ -1081,8 +1081,9 @@ async def make_outbound_ai_call(
         twilio_client = TwilioClient(account_sid, auth_token)
 
         # Determine the TwiML URL for AI handling
-        # This should connect to VAPI or our AI receptionist
+        # Use the outbound-script endpoint which handles AI conversations
         api_base = os.getenv("API_URL", "https://api.perenniaai.com")
+        twiml_url = f"{api_base}/api/v1/voice/outbound-script?test=false"
 
         # Build context for the AI
         ai_context = f"""
@@ -1160,8 +1161,8 @@ Instructions:
                     # Fall back to direct Twilio call
 
         # Fallback: Direct Twilio call with TwiML
-        # This plays a message since we don't have VAPI
-        twiml_url = request.callback_url or f"{api_base}/api/v1/webhooks/twilio/ai-receptionist"
+        # Use the outbound-script endpoint for AI conversation
+        callback_twiml_url = request.callback_url or twiml_url
 
         call = twilio_client.calls.create(
             to=to_number,
