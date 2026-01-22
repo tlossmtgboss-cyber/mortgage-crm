@@ -253,12 +253,14 @@ function Dashboard() {
     }
 
     if (containerId === 'production-tracker') {
-      // PHASE 4: Show for users with production.view permission or sales/management roles
-      // Always show for demo user
+      // PHASE 4: Show for users with production.view permission or roles that should see production
+      // Always show for demo user or if container is in the allowed list for this role
+      const productionRoles = ['admin', 'site_admin', 'loan_officer', 'manager', 'executive', 'sales', 'management'];
       const canViewProduction = hasPermission('production.view') ||
-                                userRole === 'sales' ||
-                                userRole === 'management' ||
-                                isDemoUser();
+                                productionRoles.includes(userRole) ||
+                                productionRoles.includes(effectiveRole) ||
+                                isDemoUser() ||
+                                allowedContainers.includes('production-tracker');
       if (!canViewProduction) {
         return null;
       }
@@ -804,12 +806,14 @@ function Dashboard() {
     }
 
     if (containerId === 'referrals') {
-      // PHASE 4: Show for users with referrals.view permission or sales/management roles
-      // Always show for demo user
+      // PHASE 4: Show for users with referrals.view permission or roles that should see referrals
+      // Always show for demo user or if container is in the allowed list for this role
+      const referralRoles = ['admin', 'site_admin', 'loan_officer', 'manager', 'sales', 'management'];
       const canViewReferrals = hasPermission('referrals.view') ||
-                               userRole === 'sales' ||
-                               userRole === 'management' ||
-                               isDemoUser();
+                               referralRoles.includes(userRole) ||
+                               referralRoles.includes(effectiveRole) ||
+                               isDemoUser() ||
+                               allowedContainers.includes('referrals');
       if (!canViewReferrals) {
         return null;
       }
@@ -880,11 +884,14 @@ function Dashboard() {
 
     if (containerId === 'team' && teamStats.has_team) {
       // PHASE 4: Show for users with team.view_all/team.view_team permission or management roles
-      // Always show for demo user
+      // Always show for demo user or if container is in the allowed list for this role
+      const teamRoles = ['admin', 'site_admin', 'manager', 'executive', 'management'];
       const canViewTeam = hasPermission('team.view_all') ||
                           hasPermission('team.view_team') ||
-                          userRole === 'management' ||
-                          isDemoUser();
+                          teamRoles.includes(userRole) ||
+                          teamRoles.includes(effectiveRole) ||
+                          isDemoUser() ||
+                          allowedContainers.includes('team');
       if (!canViewTeam) {
         return null;
       }
