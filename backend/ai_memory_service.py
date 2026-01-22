@@ -31,6 +31,14 @@ except ImportError:
     LLMCacheService = None
     LLM_CACHE_AVAILABLE = False
 
+# Import A/B testing service
+try:
+    from ab_testing.experiment_service import ExperimentService
+    AB_TESTING_AVAILABLE = True
+except ImportError:
+    ExperimentService = None
+    AB_TESTING_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -71,6 +79,21 @@ class ContextAwareAI:
         Returns:
             Dict with response, context_used, and metadata
         """
+        # A/B Testing: Check for active experiment
+        experiment_variant = None
+        if AB_TESTING_AVAILABLE:
+            try:
+                experiment_service = ExperimentService(db)
+                experiment_variant = experiment_service.get_variant_for_user(
+                    experiment_name="ai_response_prompt_v2",
+                    user_id=user_id
+                )
+                if experiment_variant:
+                    logger.info(f"A/B Test: User {user_id} assigned to variant '{experiment_variant.get('variant_name')}'")
+            except Exception as ab_error:
+                logger.warning(f"A/B testing error (continuing without): {ab_error}")
+                experiment_variant = None
+
         try:
             # 1. Retrieve relevant past context if enabled
             relevant_history = []
@@ -114,16 +137,30 @@ class ContextAwareAI:
             sla_bottleneck_context = await self._get_sla_bottleneck_context(db, user_id)
 
             # 3. Build enhanced system prompt with context
-            system_prompt = self._build_system_prompt(
-                relevant_history,
-                lead_context,
-                loan_context,
-                coaching_context,
-                roi_context,
-                rate_lock_context,
-                team_performance_context,
-                sla_bottleneck_context
-            )
+            # A/B Testing: Use variant config if in experiment
+            if experiment_variant and experiment_variant.get('config', {}).get('system_prompt'):
+                # Use experimental prompt from variant
+                variant_config = experiment_variant.get('config', {})
+                system_prompt = self._build_experimental_prompt(
+                    variant_config=variant_config,
+                    relevant_history=relevant_history,
+                    lead_context=lead_context,
+                    loan_context=loan_context,
+                    coaching_context=coaching_context,
+                    roi_context=roi_context
+                )
+            else:
+                # Use default system prompt
+                system_prompt = self._build_system_prompt(
+                    relevant_history,
+                    lead_context,
+                    loan_context,
+                    coaching_context,
+                    roi_context,
+                    rate_lock_context,
+                    team_performance_context,
+                    sla_bottleneck_context
+                )
 
             # 4. Generate response with Claude
             response = self.client.messages.create(
@@ -173,12 +210,47 @@ class ContextAwareAI:
                 db.add(memory_record)
                 db.commit()
 
+            # A/B Testing: Record experiment results
+            if experiment_variant and AB_TESTING_AVAILABLE:
+                try:
+                    # Calculate response quality metrics
+                    response_quality = self._assess_response_quality(ai_response)
+                    sentiment_score = {"positive": 1.0, "neutral": 0.5, "negative": 0.0}.get(
+                        conversation_metadata.get("sentiment", "neutral"), 0.5
+                    )
+                    resolution_rate = 1.0 if conversation_metadata.get("intent", "unknown") != "unknown" else 0.0
+
+                    # Record metrics
+                    experiment_service = ExperimentService(db)
+                    experiment_service.record_result(
+                        experiment_name="ai_response_prompt_v2",
+                        metric_name="response_quality",
+                        metric_value=response_quality,
+                        user_id=user_id
+                    )
+                    experiment_service.record_result(
+                        experiment_name="ai_response_prompt_v2",
+                        metric_name="sentiment_score",
+                        metric_value=sentiment_score,
+                        user_id=user_id
+                    )
+                    experiment_service.record_result(
+                        experiment_name="ai_response_prompt_v2",
+                        metric_name="resolution_rate",
+                        metric_value=resolution_rate,
+                        user_id=user_id
+                    )
+                    logger.debug(f"A/B Test: Recorded results for user {user_id} - quality={response_quality}")
+                except Exception as ab_error:
+                    logger.warning(f"Failed to record A/B test results: {ab_error}")
+
             return {
                 "response": ai_response,
                 "context_used": len(relevant_history) > 0,
                 "context_count": len(relevant_history),
                 "metadata": conversation_metadata,
-                "has_memory": self.vector_memory.enabled
+                "has_memory": self.vector_memory.enabled,
+                "experiment_variant": experiment_variant.get("variant_name") if experiment_variant else None
             }
 
         except Exception as e:
@@ -287,6 +359,100 @@ You also have access to the mortgage CRM system and can help with lead managemen
 """)
 
         return base_prompt + "\n".join(context_sections)
+
+    def _build_experimental_prompt(
+        self,
+        variant_config: Dict,
+        relevant_history: List[Dict],
+        lead_context: str,
+        loan_context: str,
+        coaching_context: Optional[str] = None,
+        roi_context: Optional[str] = None
+    ) -> str:
+        """Build system prompt using A/B test variant configuration"""
+        # Get base prompt from variant config
+        base_prompt = variant_config.get(
+            "system_prompt",
+            "You are an intelligent AI assistant for a mortgage CRM system."
+        )
+
+        # Add few-shot examples if configured
+        if variant_config.get("include_examples", False):
+            examples = variant_config.get("examples", [])
+            if examples:
+                base_prompt += "\n\n## EXAMPLES:\n"
+                for idx, example in enumerate(examples, 1):
+                    base_prompt += f"\n{idx}. {example}\n"
+
+        # Add context sections (same as default)
+        context_sections = []
+
+        if relevant_history:
+            context_sections.append("\n## PAST CONVERSATION CONTEXT:")
+            for idx, conv in enumerate(relevant_history[:3], 1):
+                timestamp = conv.get("timestamp", "Unknown")
+                text = conv.get("text", "")[:200]
+                context_sections.append(f"[{idx}] {timestamp}: {text}")
+
+        if lead_context:
+            context_sections.append("\n## CURRENT LEAD:")
+            context_sections.append(lead_context)
+
+        if loan_context:
+            context_sections.append("\n## CURRENT LOAN:")
+            context_sections.append(loan_context)
+
+        if coaching_context:
+            context_sections.append("\n## YOUR PERFORMANCE:")
+            context_sections.append(coaching_context)
+
+        if roi_context:
+            context_sections.append("\n## BUSINESS METRICS:")
+            context_sections.append(roi_context)
+
+        # Add response guidelines from variant or default
+        guidelines = variant_config.get("response_guidelines", """
+## RESPONSE GUIDELINES:
+1. Be concise but informative
+2. Reference context naturally when relevant
+3. Maintain professional tone
+4. Include specific next steps when applicable
+""")
+        context_sections.append(guidelines)
+
+        return base_prompt + "\n".join(context_sections)
+
+    def _assess_response_quality(self, response: str) -> float:
+        """
+        Assess AI response quality using heuristics.
+        Returns a score from 0.0 to 1.0.
+        """
+        if not response:
+            return 0.0
+
+        quality = 0.5  # Base score
+
+        # Length check (not too short, not too long)
+        length = len(response)
+        if 50 <= length <= 500:
+            quality += 0.15
+        elif length > 500:
+            quality += 0.10
+
+        # Has actionable items
+        actionable_words = ["should", "recommend", "suggest", "next step", "try", "consider"]
+        if any(word in response.lower() for word in actionable_words):
+            quality += 0.15
+
+        # Multiple sentences (structured response)
+        if response.count(".") >= 2:
+            quality += 0.10
+
+        # Uses formatting (bullets, numbers)
+        if any(marker in response for marker in ["- ", "* ", "1.", "•"]):
+            quality += 0.10
+
+        return min(quality, 1.0)
 
     async def _get_lead_context(self, db: Session, lead_id: int) -> str:
         """Get formatted context about a lead"""

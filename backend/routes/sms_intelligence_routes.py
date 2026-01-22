@@ -1705,3 +1705,375 @@ async def process_incoming_sms(sms_id: int, db: Session):
     except Exception as e:
         logger.error(f"Error processing incoming SMS {sms_id}: {e}")
         db.rollback()
+
+
+# ================================================================
+# SMS SENDING ENDPOINTS
+# ================================================================
+
+@router.post("/send")
+async def send_sms(
+    request: SMSSendRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """
+    Send an SMS message to a phone number.
+
+    Checks opt-out status before sending.
+    Logs the message to conversation history.
+    Supports template-based sending.
+    """
+    try:
+        from integrations.twilio_service import sms_client
+
+        if not sms_client.enabled:
+            raise HTTPException(
+                status_code=503,
+                detail="SMS service not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER."
+            )
+
+        normalized_phone = normalize_phone(request.to_phone)
+
+        # Check opt-out status
+        opt_out_check = db.execute(text("""
+            SELECT phone_number FROM sms_opt_outs
+            WHERE phone_number = :phone
+            LIMIT 1
+        """), {"phone": normalized_phone}).fetchone()
+
+        if opt_out_check:
+            return {
+                "success": False,
+                "error": "recipient_opted_out",
+                "message": f"Cannot send SMS to {normalized_phone} - recipient has opted out"
+            }
+
+        # Get message from template if template_id provided
+        message = request.message
+        template_name = None
+
+        if request.template_id:
+            template = db.execute(text("""
+                SELECT name, template_body, variables_used
+                FROM sms_templates
+                WHERE id = :template_id AND is_active = true
+            """), {"template_id": request.template_id}).fetchone()
+
+            if template:
+                template_name = template[0]
+                message = template[1]
+
+                # Update template usage
+                db.execute(text("""
+                    UPDATE sms_templates
+                    SET times_used = times_used + 1, last_used_at = CURRENT_TIMESTAMP
+                    WHERE id = :template_id
+                """), {"template_id": request.template_id})
+
+        # Get recipient info for personalization
+        recipient_name = None
+        if request.loan_id:
+            loan = db.execute(text("""
+                SELECT borrower_name, loan_number FROM loans WHERE id = :loan_id
+            """), {"loan_id": request.loan_id}).fetchone()
+            if loan:
+                recipient_name = loan[0]
+                message = message.replace("{borrower_name}", loan[0] or "")
+                message = message.replace("{loan_number}", loan[1] or "")
+
+        if request.lead_id:
+            lead = db.execute(text("""
+                SELECT name FROM leads WHERE id = :lead_id
+            """), {"lead_id": request.lead_id}).fetchone()
+            if lead:
+                recipient_name = lead[0]
+                message = message.replace("{name}", lead[0] or "")
+                message = message.replace("{borrower_name}", lead[0] or "")
+
+        # Send the SMS
+        message_sid = await sms_client.send_sms(normalized_phone, message)
+
+        if not message_sid:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to send SMS. Check Twilio configuration."
+            )
+
+        # Log to queue as outbound
+        result = db.execute(text("""
+            INSERT INTO sms_intelligence_queue (
+                sms_provider, provider_message_id, from_phone, to_phone,
+                direction, message_body, sent_at, status,
+                matched_loan_id, matched_lead_id, matched_borrower_id,
+                disposition
+            ) VALUES (
+                'twilio', :message_sid, :from_phone, :to_phone,
+                'outbound', :message, CURRENT_TIMESTAMP, 'sent',
+                :loan_id, :lead_id, :contact_id,
+                'processed'
+            )
+            RETURNING id
+        """), {
+            "message_sid": message_sid,
+            "from_phone": sms_client.from_number,
+            "to_phone": normalized_phone,
+            "message": message,
+            "loan_id": request.loan_id,
+            "lead_id": request.lead_id,
+            "contact_id": request.contact_id
+        })
+
+        sms_queue_id = result.fetchone()[0]
+
+        # Log to conversation
+        db.execute(text("""
+            INSERT INTO sms_conversation_log (
+                borrower_id, loan_id, lead_id, sms_queue_id,
+                phone_number, direction, message_body, message_date,
+                summary, intent, created_by
+            ) VALUES (
+                :contact_id, :loan_id, :lead_id, :sms_queue_id,
+                :phone, 'outbound', :message, CURRENT_TIMESTAMP,
+                :summary, 'outreach', 'user'
+            )
+        """), {
+            "contact_id": request.contact_id,
+            "loan_id": request.loan_id,
+            "lead_id": request.lead_id,
+            "sms_queue_id": sms_queue_id,
+            "phone": normalized_phone,
+            "message": message,
+            "summary": f"Outbound SMS" + (f" using template '{template_name}'" if template_name else "")
+        })
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message_sid": message_sid,
+            "sms_queue_id": sms_queue_id,
+            "to_phone": normalized_phone,
+            "message_length": len(message),
+            "template_used": template_name
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error sending SMS: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/send/loan/{loan_id}")
+async def send_sms_to_loan_borrower(
+    loan_id: int,
+    message: str,
+    template_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Send SMS to a loan's borrower using their phone number"""
+    try:
+        # Get borrower phone from loan
+        loan = db.execute(text("""
+            SELECT borrower_name, borrower_phone, loan_number
+            FROM loans
+            WHERE id = :loan_id
+        """), {"loan_id": loan_id}).fetchone()
+
+        if not loan:
+            raise HTTPException(status_code=404, detail=f"Loan {loan_id} not found")
+
+        if not loan[1]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Loan {loan_id} does not have a borrower phone number"
+            )
+
+        # Use the main send endpoint
+        request = SMSSendRequest(
+            to_phone=loan[1],
+            message=message,
+            template_id=template_id,
+            loan_id=loan_id
+        )
+
+        from fastapi import BackgroundTasks
+        return await send_sms(request, BackgroundTasks(), db)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error sending SMS to loan borrower: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/send/lead/{lead_id}")
+async def send_sms_to_lead(
+    lead_id: int,
+    message: str,
+    template_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Send SMS to a lead using their phone number"""
+    try:
+        # Get lead phone
+        lead = db.execute(text("""
+            SELECT name, phone
+            FROM leads
+            WHERE id = :lead_id
+        """), {"lead_id": lead_id}).fetchone()
+
+        if not lead:
+            raise HTTPException(status_code=404, detail=f"Lead {lead_id} not found")
+
+        if not lead[1]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Lead {lead_id} does not have a phone number"
+            )
+
+        # Use the main send endpoint
+        request = SMSSendRequest(
+            to_phone=lead[1],
+            message=message,
+            template_id=template_id,
+            lead_id=lead_id
+        )
+
+        from fastapi import BackgroundTasks
+        return await send_sms(request, BackgroundTasks(), db)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error sending SMS to lead: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/send/bulk")
+async def send_bulk_sms(
+    recipients: List[Dict[str, Any]],
+    message: str,
+    template_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Send SMS to multiple recipients.
+
+    Recipients should be a list of dicts with 'phone' and optionally 'name', 'loan_id', 'lead_id'.
+    Respects opt-out status for each recipient.
+    """
+    try:
+        from integrations.twilio_service import sms_client
+
+        if not sms_client.enabled:
+            raise HTTPException(
+                status_code=503,
+                detail="SMS service not configured"
+            )
+
+        # Get template if provided
+        template_body = message
+        template_name = None
+        if template_id:
+            template = db.execute(text("""
+                SELECT name, template_body FROM sms_templates
+                WHERE id = :template_id AND is_active = true
+            """), {"template_id": template_id}).fetchone()
+            if template:
+                template_name = template[0]
+                template_body = template[1]
+
+        # Get all opted-out phones
+        opt_outs = db.execute(text("""
+            SELECT phone_number FROM sms_opt_outs
+        """)).fetchall()
+        opted_out_phones = {normalize_phone(row[0]) for row in opt_outs}
+
+        results = {
+            "sent": 0,
+            "skipped_opt_out": 0,
+            "failed": 0,
+            "details": []
+        }
+
+        for recipient in recipients:
+            phone = recipient.get("phone")
+            if not phone:
+                continue
+
+            normalized = normalize_phone(phone)
+
+            # Check opt-out
+            if normalized in opted_out_phones:
+                results["skipped_opt_out"] += 1
+                results["details"].append({
+                    "phone": normalized,
+                    "status": "skipped",
+                    "reason": "opted_out"
+                })
+                continue
+
+            # Personalize message
+            personalized = template_body
+            if recipient.get("name"):
+                personalized = personalized.replace("{name}", recipient["name"])
+                personalized = personalized.replace("{borrower_name}", recipient["name"])
+
+            # Send
+            try:
+                sid = await sms_client.send_sms(normalized, personalized)
+                if sid:
+                    results["sent"] += 1
+                    results["details"].append({
+                        "phone": normalized,
+                        "status": "sent",
+                        "message_sid": sid
+                    })
+
+                    # Log to queue
+                    db.execute(text("""
+                        INSERT INTO sms_intelligence_queue (
+                            sms_provider, provider_message_id, from_phone, to_phone,
+                            direction, message_body, sent_at, status, disposition
+                        ) VALUES (
+                            'twilio', :sid, :from_phone, :to_phone,
+                            'outbound', :message, CURRENT_TIMESTAMP, 'sent', 'processed'
+                        )
+                    """), {
+                        "sid": sid,
+                        "from_phone": sms_client.from_number,
+                        "to_phone": normalized,
+                        "message": personalized
+                    })
+                else:
+                    results["failed"] += 1
+                    results["details"].append({
+                        "phone": normalized,
+                        "status": "failed",
+                        "reason": "send_failed"
+                    })
+            except Exception as send_error:
+                results["failed"] += 1
+                results["details"].append({
+                    "phone": normalized,
+                    "status": "failed",
+                    "reason": str(send_error)
+                })
+
+        db.commit()
+
+        return {
+            "success": True,
+            "template_used": template_name,
+            "results": results
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error sending bulk SMS: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))

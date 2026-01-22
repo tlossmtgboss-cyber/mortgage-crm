@@ -5394,6 +5394,14 @@ app.add_middleware(
     max_age=3600,
 )
 
+# Performance Monitoring middleware - tracks endpoint response times and slow requests
+try:
+    from monitoring.performance_service import PerformanceMiddleware
+    app.add_middleware(PerformanceMiddleware)
+    logger.info("✅ Performance monitoring middleware enabled")
+except Exception as e:
+    logger.warning(f"⚠️ Performance monitoring middleware not loaded: {e}")
+
 logger.info(f"✅ Security middleware enabled (ENVIRONMENT={os.getenv('ENVIRONMENT', 'development')}): "
             "CORS (outermost), IP access control, rate limiting, IP blocking, security headers, request validation, and logging")
 
@@ -21044,6 +21052,14 @@ try:
     logger.info("✅ Monitoring routes loaded")
 except Exception as e:
     logger.warning(f"⚠️ Monitoring routes not loaded: {e}")
+
+# Performance Monitoring routes (slow queries, endpoint stats, alerts config)
+try:
+    from routes.performance_routes import router as performance_router
+    app.include_router(performance_router, tags=["Performance Monitoring"])
+    logger.info("✅ Performance Monitoring routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Performance Monitoring routes not loaded: {e}")
 
 # OAuth routes (Microsoft, Google integrations)
 try:
