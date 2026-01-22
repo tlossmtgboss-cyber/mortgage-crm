@@ -1011,76 +1011,99 @@ async def connect_salesforce(
     1. Authorization header (for API calls)
     2. Query parameter (for browser redirects)
     """
-    # Try getting user from header first, then from query param token
-    user_id = get_current_user_id(request, db)
-
-    # If no user from header, try the token query parameter
-    if not user_id and token:
-        try:
-            import jwt
-            secret_key = os.getenv("SECRET_KEY", "dev-only-09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7")
-            payload = jwt.decode(token, secret_key, algorithms=["HS256"])
-            email = payload.get("sub")
-            logger.info(f"Salesforce connect: decoded token for email {email}")
-            if email:
-                # Ensure clean transaction state before query
-                try:
-                    db.rollback()
-                except:
-                    pass
-                result = db.execute(
-                    text("SELECT id FROM users WHERE email = :email"),
-                    {"email": email}
-                ).fetchone()
-                if result:
-                    user_id = result[0]
-                    logger.info(f"Salesforce connect: found user_id {user_id} for email {email}")
-                else:
-                    logger.warning(f"Salesforce connect: no user found for email {email}")
-        except jwt.ExpiredSignatureError:
-            logger.warning("Salesforce connect: token expired")
-        except jwt.InvalidTokenError as e:
-            logger.warning(f"Salesforce connect: invalid token: {e}")
-        except Exception as e:
-            logger.warning(f"Failed to decode token from query param: {e}")
-
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    if not os.getenv("SALESFORCE_CLIENT_ID"):
-        raise HTTPException(
-            status_code=503,
-            detail="Salesforce integration not configured"
-        )
-
-    # Ensure oauth_states table exists with correct schema before generating auth URL
     try:
-        db.execute(text("""
-            CREATE TABLE IF NOT EXISTS oauth_states (
-                id SERIAL PRIMARY KEY,
-                state_token VARCHAR(255) UNIQUE NOT NULL,
-                user_id INTEGER NOT NULL,
-                provider VARCHAR(50) NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                expires_at TIMESTAMP NOT NULL,
-                used BOOLEAN DEFAULT FALSE,
-                return_url TEXT,
-                state_metadata JSONB
+        # Try getting user from header first, then from query param token
+        user_id = get_current_user_id(request, db)
+
+        # If no user from header, try the token query parameter
+        if not user_id and token:
+            try:
+                import jwt
+                secret_key = os.getenv("SECRET_KEY", "dev-secret-key")
+                payload = jwt.decode(token, secret_key, algorithms=["HS256"])
+                email = payload.get("sub")
+                logger.info(f"Salesforce connect: decoded token for email {email}")
+                if email:
+                    # Ensure clean transaction state before query
+                    try:
+                        db.rollback()
+                    except:
+                        pass
+                    result = db.execute(
+                        text("SELECT id FROM users WHERE email = :email"),
+                        {"email": email}
+                    ).fetchone()
+                    if result:
+                        user_id = result[0]
+                        logger.info(f"Salesforce connect: found user_id {user_id} for email {email}")
+                    else:
+                        logger.warning(f"Salesforce connect: no user found for email {email}")
+            except jwt.ExpiredSignatureError:
+                logger.warning("Salesforce connect: token expired")
+            except jwt.InvalidTokenError as e:
+                logger.warning(f"Salesforce connect: invalid token: {e}")
+            except Exception as e:
+                logger.warning(f"Failed to decode token from query param: {e}")
+
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        if not os.getenv("SALESFORCE_CLIENT_ID"):
+            raise HTTPException(
+                status_code=503,
+                detail="Salesforce integration not configured"
             )
-        """))
-        db.commit()
-        logger.info("oauth_states table verified/created")
-    except Exception as table_err:
-        logger.warning(f"oauth_states table check: {table_err}")
+
+        # Ensure clean session state
         try:
             db.rollback()
         except:
             pass
 
-    logger.info(f"Generating Salesforce auth URL for user {user_id}, return_url: {return_url}")
-    auth_url = salesforce_oauth.generate_auth_url(db, user_id, return_url)
-    logger.info(f"Generated auth URL, redirect_uri will be: {salesforce_oauth.config.redirect_uri}")
-    return RedirectResponse(url=auth_url)
+        logger.info(f"Generating Salesforce auth URL for user {user_id}, return_url: {return_url}")
+        try:
+            auth_url = salesforce_oauth.generate_auth_url(db, user_id, return_url)
+            logger.info(f"Generated auth URL, redirect_uri will be: {salesforce_oauth.config.redirect_uri}")
+            return RedirectResponse(url=auth_url)
+        except Exception as e:
+            logger.error(f"Failed to generate Salesforce auth URL: {type(e).__name__}: {e}")
+            # Try to create the oauth_states table if it doesn't exist
+            try:
+                db.rollback()
+                db.execute(text("""
+                    CREATE TABLE IF NOT EXISTS oauth_states (
+                        id SERIAL PRIMARY KEY,
+                        state_token VARCHAR(255) UNIQUE NOT NULL,
+                        user_id INTEGER NOT NULL,
+                        provider VARCHAR(50) NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        expires_at TIMESTAMP NOT NULL,
+                        used BOOLEAN DEFAULT FALSE,
+                        return_url TEXT,
+                        state_metadata JSONB
+                    )
+                """))
+                db.commit()
+                logger.info("Created oauth_states table, retrying auth URL generation")
+                # Retry
+                auth_url = salesforce_oauth.generate_auth_url(db, user_id, return_url)
+                return RedirectResponse(url=auth_url)
+            except Exception as retry_err:
+                logger.error(f"Retry failed: {type(retry_err).__name__}: {retry_err}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to initialize Salesforce OAuth: {type(e).__name__}: {str(e)}"
+                )
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions as-is
+    except Exception as outer_err:
+        logger.error(f"Unexpected error in Salesforce connect: {type(outer_err).__name__}: {outer_err}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Salesforce connect error: {type(outer_err).__name__}: {str(outer_err)}"
+        )
 
 
 @router.get("/callback")

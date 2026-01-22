@@ -149,9 +149,13 @@ class SalesforceOAuthService:
             db.commit()
             logger.info(f"Successfully stored OAuth state in database for user {user_id}")
         except Exception as e:
-            logger.error(f"Failed to store OAuth state in database: {e}")
-            db.rollback()
-            raise ValueError(f"Failed to store OAuth state: {e}")
+            logger.error(f"Failed to store OAuth state in database: {type(e).__name__}: {e}")
+            try:
+                db.rollback()
+            except:
+                pass
+            # Re-raise with more detail
+            raise Exception(f"OAuth state storage failed ({type(e).__name__}): {e}")
 
         # Build authorization URL with PKCE
         params = {
