@@ -2266,6 +2266,903 @@
   }
 }
 
+/* ============================================
+   MARKETING TAB STYLES - Borrower Story
+   ============================================ */
+
+.marketing-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.marketing-tab-empty {
+  padding: 48px 20px;
+}
+
+.marketing-tab .empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.marketing-tab .empty-state .empty-icon {
+  width: 64px;
+  height: 64px;
+  background: linear-gradient(135deg, #fdf2f8, #fce7f3);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.marketing-tab .empty-state .empty-icon svg {
+  width: 32px;
+  height: 32px;
+  color: #ec4899;
+}
+
+.marketing-tab .empty-state h3 {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+  color: #374151;
+}
+
+.marketing-tab .empty-state p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #6b7280;
+  max-width: 350px;
+}
+
+/* Story Header */
+.story-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background: linear-gradient(135deg, #fdf2f8, #ede9fe);
+  border-radius: 12px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.story-theme-badge {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.story-theme-badge .theme-icon {
+  width: 44px;
+  height: 44px;
+  background: white;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.story-theme-badge .theme-icon svg {
+  width: 24px;
+  height: 24px;
+  color: #ec4899;
+}
+
+.story-theme-badge .theme-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.story-theme-badge .theme-label {
+  font-size: 0.75rem;
+  color: #6b7280;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.story-theme-badge .theme-value {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+/* Story Arc Progress */
+.story-arc {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.story-arc .arc-label {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.story-arc .arc-progress {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.story-arc .arc-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #e5e7eb;
+  transition: all 0.3s;
+}
+
+.story-arc .arc-dot.active {
+  background: #ec4899;
+  box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.2);
+}
+
+.story-arc .arc-line {
+  width: 24px;
+  height: 2px;
+  background: #e5e7eb;
+}
+
+/* Why Buying Card */
+.why-buying-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.why-buying-card h4 {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.why-buying-card > p {
+  margin: 0 0 12px;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: #4b5563;
+}
+
+.why-buying-card .family-situation,
+.why-buying-card .dreams {
+  display: flex;
+  gap: 8px;
+  font-size: 0.85rem;
+  margin-top: 8px;
+}
+
+.why-buying-card .label {
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+.why-buying-card .value {
+  color: #4b5563;
+}
+
+/* Marketing Sections */
+.marketing-section {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.marketing-section h4 {
+  margin: 0 0 12px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Milestones */
+.milestones-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.milestone-card {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: #f0fdf4;
+  border-radius: 8px;
+  border-left: 3px solid #22c55e;
+}
+
+.milestone-card .milestone-icon {
+  flex-shrink: 0;
+  color: #22c55e;
+}
+
+.milestone-card .milestone-content {
+  flex: 1;
+}
+
+.milestone-card .milestone-type {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #166534;
+  margin-bottom: 4px;
+}
+
+.milestone-card .milestone-significance {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #374151;
+}
+
+.milestone-card .celebration-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+/* Quotable Moments */
+.quotes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.quote-card {
+  position: relative;
+  padding: 16px 16px 16px 40px;
+  background: #fffbeb;
+  border-radius: 8px;
+  border-left: 3px solid #f59e0b;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.quote-card:hover {
+  background: #fef3c7;
+}
+
+.quote-card .quote-icon {
+  position: absolute;
+  left: 12px;
+  top: 10px;
+  font-size: 2rem;
+  color: #f59e0b;
+  line-height: 1;
+  font-family: Georgia, serif;
+}
+
+.quote-card blockquote {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #374151;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+.quote-card .quote-context {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #fde68a;
+  font-size: 0.8rem;
+}
+
+.quote-card .quote-context .context-label {
+  color: #92400e;
+  font-weight: 500;
+  margin-right: 4px;
+}
+
+.quote-card .quote-context .context-value {
+  color: #78350f;
+}
+
+/* Story Notes */
+.story-notes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.story-note-card {
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+
+.story-note-card .note-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.story-note-card .emotion-badge {
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: white;
+  text-transform: capitalize;
+}
+
+.story-note-card .note-content {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #374151;
+  line-height: 1.5;
+}
+
+.story-note-card .note-context {
+  display: block;
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+/* Content Ideas */
+.content-ideas-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.content-idea-card {
+  padding: 14px;
+  background: #eff6ff;
+  border-radius: 8px;
+  border: 1px solid #bfdbfe;
+}
+
+.content-idea-card .idea-type {
+  margin-bottom: 8px;
+}
+
+.content-idea-card .type-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  background: #3b82f6;
+  color: white;
+}
+
+.content-idea-card .type-badge.type-testimonial {
+  background: #ec4899;
+}
+
+.content-idea-card .type-badge.type-social_post {
+  background: #8b5cf6;
+}
+
+.content-idea-card .type-badge.type-video_script {
+  background: #ef4444;
+}
+
+.content-idea-card .type-badge.type-closing_celebration {
+  background: #22c55e;
+}
+
+.content-idea-card h5 {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1e40af;
+}
+
+.content-idea-card > p {
+  margin: 0 0 10px;
+  font-size: 0.875rem;
+  color: #3b82f6;
+  line-height: 1.5;
+}
+
+.content-idea-card .key-elements {
+  margin-bottom: 8px;
+}
+
+.content-idea-card .elements-label {
+  display: block;
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.content-idea-card .key-elements ul {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 0.8rem;
+  color: #374151;
+}
+
+.content-idea-card .key-elements li {
+  margin-bottom: 2px;
+}
+
+.content-idea-card .timing {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+/* Challenges List */
+.challenges-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.challenges-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+  color: #374151;
+}
+
+.challenges-list li svg {
+  color: #22c55e;
+  flex-shrink: 0;
+}
+
+/* Badge helpers */
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.badge-green {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.badge-yellow {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+/* ============================================
+   SCHEDULING TAB STYLES - Calendar & Appointments
+   ============================================ */
+
+.scheduling-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.scheduling-tab-empty {
+  padding: 48px 20px;
+}
+
+.scheduling-tab .empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.scheduling-tab .empty-state .empty-icon {
+  width: 64px;
+  height: 64px;
+  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.scheduling-tab .empty-state .empty-icon svg {
+  width: 32px;
+  height: 32px;
+  color: #3b82f6;
+}
+
+.scheduling-tab .empty-state h3 {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+  color: #374151;
+}
+
+.scheduling-tab .empty-state p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #6b7280;
+  max-width: 350px;
+}
+
+/* Scheduling Summary */
+.scheduling-summary {
+  padding: 16px;
+  background: #f0f9ff;
+  border-radius: 10px;
+  border-left: 3px solid #0ea5e9;
+}
+
+.scheduling-summary h4 {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #0369a1;
+}
+
+.scheduling-summary p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #0c4a6e;
+  line-height: 1.5;
+}
+
+/* Scheduling Sections */
+.scheduling-section {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.scheduling-section h4 {
+  margin: 0 0 12px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Appointments List */
+.appointments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.appointment-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: all 0.2s;
+}
+
+.appointment-card:hover {
+  border-color: #d1d5db;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.appointment-card.expanded {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.appointment-card .appointment-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #f9fafb;
+  cursor: pointer;
+}
+
+.appointment-card .apt-icon {
+  flex-shrink: 0;
+  color: #6b7280;
+}
+
+.appointment-card .apt-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.appointment-card .apt-title {
+  font-weight: 500;
+  font-size: 0.9rem;
+  color: #111827;
+}
+
+.appointment-card .apt-type {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.appointment-card .apt-status {
+  flex-shrink: 0;
+}
+
+.appointment-card .apt-expand {
+  flex-shrink: 0;
+  color: #9ca3af;
+}
+
+/* Status Badges */
+.status-badge {
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-badge.status-confirmed {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status-badge.status-tentative {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-badge.status-needs-confirmation {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.status-badge.status-pending {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+/* Appointment Details */
+.appointment-details {
+  padding: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.appointment-details .detail-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 0.875rem;
+}
+
+.appointment-details .detail-row:last-of-type {
+  border-bottom: none;
+}
+
+.appointment-details .detail-label {
+  width: 100px;
+  flex-shrink: 0;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.appointment-details .detail-value {
+  flex: 1;
+  color: #374151;
+}
+
+.appointment-details .detail-value.meeting-type {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: capitalize;
+}
+
+.appointment-details .detail-row.description,
+.appointment-details .detail-row.notes {
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Participants */
+.appointment-details .participants-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.appointment-details .participant {
+  padding: 3px 10px;
+  background: #f3f4f6;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  color: #374151;
+}
+
+.appointment-details .participant.required {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.appointment-details .participant .required-mark {
+  color: #dc2626;
+  margin-left: 2px;
+}
+
+/* Appointment Actions */
+.appointment-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.appointment-actions .btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.appointment-actions .btn-primary {
+  background: #3b82f6;
+  border: none;
+  color: white;
+}
+
+.appointment-actions .btn-primary:hover {
+  background: #2563eb;
+}
+
+.appointment-actions .btn-secondary {
+  background: white;
+  border: 1px solid #e5e7eb;
+  color: #6b7280;
+}
+
+.appointment-actions .btn-secondary:hover {
+  background: #f9fafb;
+  color: #374151;
+}
+
+.approved-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #dcfce7;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: #166534;
+  font-weight: 500;
+}
+
+/* Follow-Up Calls */
+.followup-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.followup-card {
+  display: flex;
+  gap: 12px;
+  padding: 14px;
+  background: #fffbeb;
+  border-radius: 8px;
+  border-left: 3px solid #f59e0b;
+}
+
+.followup-card .followup-icon {
+  flex-shrink: 0;
+  color: #f59e0b;
+}
+
+.followup-card .followup-content {
+  flex: 1;
+}
+
+.followup-card h5 {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #78350f;
+}
+
+.followup-card .trigger,
+.followup-card .action,
+.followup-card .timing,
+.followup-card .participants {
+  display: flex;
+  gap: 6px;
+  font-size: 0.8rem;
+  margin-bottom: 4px;
+}
+
+.followup-card .label {
+  color: #92400e;
+  font-weight: 500;
+}
+
+.followup-card .value {
+  color: #78350f;
+}
+
+/* Priority Badges */
+.priority-badge {
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.priority-badge.priority-high {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.priority-badge.priority-medium {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+/* Calendar Actions List */
+.calendar-actions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.calendar-action-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+
+.calendar-action-card .action-type-badge {
+  padding: 4px 10px;
+  background: #6366f1;
+  color: white;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.calendar-action-card .action-details {
+  flex: 1;
+}
+
+.calendar-action-card .action-details p {
+  margin: 0 0 6px;
+  font-size: 0.875rem;
+  color: #374151;
+}
+
+.calendar-action-card .assigned-to {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
 /* Responsive adjustments for new components */
 @media (max-width: 768px) {
   .five-c-grid {
@@ -2291,5 +3188,23 @@
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
+  }
+
+  .story-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .appointment-card .appointment-header {
+    flex-wrap: wrap;
+  }
+
+  .appointment-details .detail-row {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .appointment-details .detail-label {
+    width: auto;
   }
 }

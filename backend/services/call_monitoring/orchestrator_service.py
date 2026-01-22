@@ -49,16 +49,32 @@ class MergedArtifacts:
     uw_notes: List[Dict[str, Any]] = field(default_factory=list)
     follow_up_drafts: List[Dict[str, Any]] = field(default_factory=list)
     calculator_results: List[Dict[str, Any]] = field(default_factory=list)
+    # Marketing Agent artifacts
+    story_notes: List[Dict[str, Any]] = field(default_factory=list)
+    story_themes: List[Dict[str, Any]] = field(default_factory=list)
+    borrower_quotes: List[Dict[str, Any]] = field(default_factory=list)
+    content_ideas: List[Dict[str, Any]] = field(default_factory=list)
+    marketing_milestones: List[Dict[str, Any]] = field(default_factory=list)
+    # Receptionist Agent artifacts
+    scheduled_appointments: List[Dict[str, Any]] = field(default_factory=list)
+    follow_up_calls: List[Dict[str, Any]] = field(default_factory=list)
+    calendar_actions: List[Dict[str, Any]] = field(default_factory=list)
+    meeting_summaries: List[Dict[str, Any]] = field(default_factory=list)
+    # Stacked notes (from any agent)
+    stacked_notes: List[Dict[str, Any]] = field(default_factory=list)
 
 
 class CallMonitoringOrchestrator:
     """
     Central orchestrator for the call monitoring AI system.
 
-    Coordinates three parallel AI agents:
+    Coordinates six parallel AI agents:
     - Scribe: Summary, action items, follow-up drafts
-    - Junior LO: Pricing scenarios, doc requests, intake fields
+    - Junior LO: Pricing scenarios, doc requests, intake fields, 5 C's analysis
     - Underwriter: Risk flags, conditions, compliance checks
+    - Calculator: Mortgage calculations from conversation data
+    - Marketing: Borrower story capture for testimonials and content
+    - Receptionist: Calendar scheduling and appointment coordination
     """
 
     def __init__(self, db: Session):
@@ -72,12 +88,16 @@ class CallMonitoringOrchestrator:
         from .agents.junior_lo_agent import JuniorLOAgent
         from .agents.underwriter_agent import UnderwriterAgent
         from .agents.calculator_agent import CalculatorAgent
+        from .agents.marketing_agent import MarketingAgent
+        from .agents.receptionist_agent import ReceptionistAgent
 
         self._agents = {
             'scribe': ScribeAgent(self.db),
             'junior_lo': JuniorLOAgent(self.db),
             'underwriter': UnderwriterAgent(self.db),
             'calculator': CalculatorAgent(self.db),
+            'marketing': MarketingAgent(self.db),
+            'receptionist': ReceptionistAgent(self.db),
         }
 
     # =========================================================================
@@ -322,13 +342,16 @@ class CallMonitoringOrchestrator:
         """), {"id": session_id})
         self.db.commit()
 
+        # Determine which agents to run (all 6 by default)
+        agents_to_run = agent_types or [
+            'scribe', 'junior_lo', 'underwriter', 'calculator',
+            'marketing', 'receptionist'
+        ]
+
         self._log_event(session_id, 'processing_started', {
             'trigger': trigger,
-            'agents': agent_types or ['scribe', 'junior_lo', 'underwriter'],
+            'agents': agents_to_run,
         })
-
-        # Determine which agents to run
-        agents_to_run = agent_types or ['scribe', 'junior_lo', 'underwriter', 'calculator']
 
         # Build context for agents
         context = {
@@ -519,7 +542,7 @@ class CallMonitoringOrchestrator:
             )
 
     async def _enrich_context(self, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Enrich context with loan/lead data."""
+        """Enrich context with loan/lead data and transaction team."""
         if context.get('loan_id'):
             loan_data = self.db.execute(text("""
                 SELECT id, loan_number, borrower_name, loan_amount, loan_type,
@@ -557,7 +580,223 @@ class CallMonitoringOrchestrator:
                     "source": lead_data[6],
                 }
 
+        # Build transaction team context for Marketing and Receptionist agents
+        context['transaction_team'] = await self._build_transaction_team_context(context)
+
+        # Get prior story notes for Marketing agent continuity
+        if context.get('loan_id') or context.get('lead_id'):
+            context['prior_story_notes'] = await self._get_prior_story_notes(context)
+
         return context
+
+    async def _build_transaction_team_context(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Build transaction team context so agents know who is involved.
+
+        This enables Marketing and Receptionist agents to understand references
+        like "my assistant", "the realtor", "your agent", etc.
+        """
+        team = {}
+        user_id = context.get('metadata', {}).get('user_id') or context.get('session', {}).get('user_id')
+        loan_id = context.get('loan_id')
+        lead_id = context.get('lead_id')
+
+        # Get Loan Officer (current user or assigned LO)
+        if user_id:
+            lo_data = self.db.execute(text("""
+                SELECT id, name, email, phone, calendar_link
+                FROM users
+                WHERE id = :id
+            """), {"id": user_id}).fetchone()
+
+            if lo_data:
+                team['loan_officer'] = {
+                    "id": str(lo_data[0]),
+                    "name": lo_data[1],
+                    "email": lo_data[2],
+                    "phone": lo_data[3],
+                    "calendar_link": lo_data[4],
+                }
+
+                # Get Production Assistant (PA) assigned to this LO
+                pa_data = self.db.execute(text("""
+                    SELECT u.id, u.name, u.email, u.phone
+                    FROM users u
+                    JOIN user_assignments ua ON ua.assistant_id = u.id
+                    WHERE ua.loan_officer_id = :lo_id AND ua.role = 'production_assistant'
+                    LIMIT 1
+                """), {"lo_id": user_id}).fetchone()
+
+                if pa_data:
+                    team['production_assistant'] = {
+                        "id": str(pa_data[0]),
+                        "name": pa_data[1],
+                        "email": pa_data[2],
+                        "phone": pa_data[3],
+                    }
+
+        # Get Borrower(s) from loan or lead
+        borrowers = []
+        if loan_id:
+            # Get primary borrower from loan
+            borrower_data = self.db.execute(text("""
+                SELECT c.id, c.first_name, c.last_name, c.email, c.phone,
+                       c.preferred_contact_time
+                FROM contacts c
+                JOIN loans l ON l.borrower_id = c.id OR l.co_borrower_id = c.id
+                WHERE l.id = :loan_id
+            """), {"loan_id": loan_id}).fetchall()
+
+            for i, bd in enumerate(borrower_data):
+                borrowers.append({
+                    "id": str(bd[0]),
+                    "name": f"{bd[1]} {bd[2]}".strip(),
+                    "email": bd[3],
+                    "phone": bd[4],
+                    "preferred_contact_time": bd[5],
+                    "is_primary": i == 0,
+                })
+
+        elif lead_id:
+            # Get lead contact info
+            lead_data = self.db.execute(text("""
+                SELECT id, first_name, last_name, email, phone, preferred_contact_time
+                FROM leads
+                WHERE id = :lead_id
+            """), {"lead_id": lead_id}).fetchone()
+
+            if lead_data:
+                borrowers.append({
+                    "id": str(lead_data[0]),
+                    "name": f"{lead_data[1]} {lead_data[2]}".strip(),
+                    "email": lead_data[3],
+                    "phone": lead_data[4],
+                    "preferred_contact_time": lead_data[5],
+                    "is_primary": True,
+                })
+
+        if borrowers:
+            team['borrowers'] = borrowers
+
+        # Get Real Estate Agents (if loan exists)
+        if loan_id:
+            # Buyer's agent
+            buyer_agent = self.db.execute(text("""
+                SELECT ra.id, ra.name, ra.email, ra.phone, ra.brokerage
+                FROM realtor_assignments ra
+                WHERE ra.loan_id = :loan_id AND ra.role = 'buyer_agent'
+                LIMIT 1
+            """), {"loan_id": loan_id}).fetchone()
+
+            if buyer_agent:
+                team['buyer_agent'] = {
+                    "id": str(buyer_agent[0]),
+                    "name": buyer_agent[1],
+                    "email": buyer_agent[2],
+                    "phone": buyer_agent[3],
+                    "brokerage": buyer_agent[4],
+                }
+
+            # Listing agent
+            listing_agent = self.db.execute(text("""
+                SELECT ra.id, ra.name, ra.email, ra.phone, ra.brokerage
+                FROM realtor_assignments ra
+                WHERE ra.loan_id = :loan_id AND ra.role = 'listing_agent'
+                LIMIT 1
+            """), {"loan_id": loan_id}).fetchone()
+
+            if listing_agent:
+                team['listing_agent'] = {
+                    "id": str(listing_agent[0]),
+                    "name": listing_agent[1],
+                    "email": listing_agent[2],
+                    "phone": listing_agent[3],
+                    "brokerage": listing_agent[4],
+                }
+
+            # Processor
+            processor = self.db.execute(text("""
+                SELECT u.id, u.name, u.email
+                FROM users u
+                JOIN loans l ON l.processor_id = u.id
+                WHERE l.id = :loan_id
+            """), {"loan_id": loan_id}).fetchone()
+
+            if processor:
+                team['processor'] = {
+                    "id": str(processor[0]),
+                    "name": processor[1],
+                    "email": processor[2],
+                }
+
+            # Title Company
+            title_co = self.db.execute(text("""
+                SELECT tc.id, tc.name, tc.contact_name, tc.email, tc.phone
+                FROM title_companies tc
+                JOIN loans l ON l.title_company_id = tc.id
+                WHERE l.id = :loan_id
+            """), {"loan_id": loan_id}).fetchone()
+
+            if title_co:
+                team['title_company'] = {
+                    "id": str(title_co[0]),
+                    "name": title_co[1],
+                    "contact_name": title_co[2],
+                    "email": title_co[3],
+                    "phone": title_co[4],
+                }
+
+            # Insurance Agent
+            insurance = self.db.execute(text("""
+                SELECT ia.id, ia.name, ia.email, ia.phone, ia.company
+                FROM insurance_agents ia
+                JOIN loans l ON l.insurance_agent_id = ia.id
+                WHERE l.id = :loan_id
+            """), {"loan_id": loan_id}).fetchone()
+
+            if insurance:
+                team['insurance_agent'] = {
+                    "id": str(insurance[0]),
+                    "name": insurance[1],
+                    "email": insurance[2],
+                    "phone": insurance[3],
+                    "company": insurance[4],
+                }
+
+        return team
+
+    async def _get_prior_story_notes(self, context: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Get prior story notes from previous calls for Marketing agent continuity."""
+        loan_id = context.get('loan_id')
+        lead_id = context.get('lead_id')
+
+        if not loan_id and not lead_id:
+            return []
+
+        # Get prior story notes from call_artifacts
+        if loan_id:
+            filter_clause = "cs.loan_id = :entity_id"
+        else:
+            filter_clause = "cs.lead_id = :entity_id"
+
+        prior_notes = self.db.execute(text(f"""
+            SELECT ca.content, ca.structured_data, ca.created_at
+            FROM call_artifacts ca
+            JOIN call_sessions cs ON cs.id = ca.session_id
+            WHERE {filter_clause}
+              AND ca.artifact_type IN ('borrower_story_note', 'story_theme', 'borrower_quote')
+            ORDER BY ca.created_at DESC
+            LIMIT 10
+        """), {"entity_id": loan_id or lead_id}).fetchall()
+
+        return [
+            {
+                "content": note[0],
+                "structured_data": note[1] if note[1] else {},
+                "created_at": note[2].isoformat() if note[2] else None,
+            }
+            for note in prior_notes
+        ]
 
     # =========================================================================
     # ARTIFACT MANAGEMENT
@@ -594,6 +833,29 @@ class CallMonitoringOrchestrator:
                     merged.follow_up_drafts.append(artifact)
                 elif artifact_type in ('calculator_result', 'calculator_recommendation'):
                     merged.calculator_results.append(artifact)
+                # Marketing Agent artifacts
+                elif artifact_type == 'borrower_story_note':
+                    merged.story_notes.append(artifact)
+                elif artifact_type == 'story_theme':
+                    merged.story_themes.append(artifact)
+                elif artifact_type == 'borrower_quote':
+                    merged.borrower_quotes.append(artifact)
+                elif artifact_type == 'content_idea':
+                    merged.content_ideas.append(artifact)
+                elif artifact_type == 'marketing_milestone':
+                    merged.marketing_milestones.append(artifact)
+                # Receptionist Agent artifacts
+                elif artifact_type == 'scheduled_appointment':
+                    merged.scheduled_appointments.append(artifact)
+                elif artifact_type == 'follow_up_call':
+                    merged.follow_up_calls.append(artifact)
+                elif artifact_type == 'calendar_action':
+                    merged.calendar_actions.append(artifact)
+                elif artifact_type == 'meeting_summary':
+                    merged.meeting_summaries.append(artifact)
+                # Stacked notes (from any agent)
+                elif artifact_type == 'stacked_note':
+                    merged.stacked_notes.append(artifact)
 
         # Deduplicate similar items
         merged = self._deduplicate_artifacts(merged)
@@ -651,6 +913,19 @@ class CallMonitoringOrchestrator:
             ('uw_note', merged.uw_notes),
             ('follow_up_draft', merged.follow_up_drafts),
             ('calculator_result', merged.calculator_results),
+            # Marketing Agent artifacts
+            ('borrower_story_note', merged.story_notes),
+            ('story_theme', merged.story_themes),
+            ('borrower_quote', merged.borrower_quotes),
+            ('content_idea', merged.content_ideas),
+            ('marketing_milestone', merged.marketing_milestones),
+            # Receptionist Agent artifacts
+            ('scheduled_appointment', merged.scheduled_appointments),
+            ('follow_up_call', merged.follow_up_calls),
+            ('calendar_action', merged.calendar_actions),
+            ('meeting_summary', merged.meeting_summaries),
+            # Stacked notes
+            ('stacked_note', merged.stacked_notes),
         ]
 
         for artifact_type, items in all_artifacts:
@@ -710,18 +985,36 @@ class CallMonitoringOrchestrator:
 
     def _requires_approval(self, artifact_type: str, item: Dict) -> bool:
         """Determine if an artifact requires human approval."""
-        # Auto-approve rules
-        auto_approve_types = {'summary', 'uw_note', 'calculator_result'}
+        # Auto-approve rules - content capture and informational artifacts
+        auto_approve_types = {
+            'summary', 'uw_note', 'calculator_result',
+            # Marketing artifacts are informational/content capture - auto-approve
+            'borrower_story_note', 'story_theme', 'borrower_quote',
+            'content_idea', 'marketing_milestone',
+            # Meeting summaries are informational
+            'meeting_summary',
+            # Stacked notes are for historical record
+            'stacked_note',
+        }
 
         if artifact_type in auto_approve_types:
             confidence = item.get('confidence', 0)
-            if confidence and confidence >= 0.9:
+            if confidence and confidence >= 0.75:
                 return False
 
-        # Always require approval for
-        always_approve_types = {'task', 'document_request', 'intake_field', 'risk_flag'}
+        # Always require approval for actions that modify data or create entities
+        always_approve_types = {
+            'task', 'document_request', 'intake_field', 'risk_flag',
+            # Scheduling artifacts that create calendar events need approval
+            'scheduled_appointment', 'calendar_action',
+        }
         if artifact_type in always_approve_types:
             return True
+
+        # Follow-up calls may need approval depending on confidence
+        if artifact_type == 'follow_up_call':
+            confidence = item.get('confidence', 0)
+            return confidence < 0.85
 
         # Risk flags with high severity always need approval
         if artifact_type == 'risk_flag':
@@ -1029,9 +1322,167 @@ class CallMonitoringOrchestrator:
             return await self._apply_intake_field(artifact_id, structured_data, session, user_id)
         elif artifact_type == 'risk_flag':
             return await self._create_loan_condition(artifact_id, structured_data, session, user_id)
+        elif artifact_type == 'scheduled_appointment':
+            return await self._create_calendar_event(title, content, structured_data, session, user_id)
+        elif artifact_type == 'calendar_action':
+            return await self._execute_calendar_action(title, content, structured_data, session, user_id)
+        elif artifact_type == 'follow_up_call':
+            return await self._create_follow_up_reminder(title, content, structured_data, session, user_id)
         else:
-            # Non-actionable artifacts (summary, uw_note, etc.)
+            # Non-actionable artifacts (summary, uw_note, marketing content, etc.)
             return None
+
+    async def _create_calendar_event(
+        self,
+        title: str,
+        content: str,
+        structured_data: Dict,
+        session: Dict,
+        user_id: str,
+    ) -> str:
+        """Create a calendar event from a scheduled_appointment artifact."""
+        event_id = str(uuid.uuid4())
+
+        # Parse appointment details
+        appointment_type = structured_data.get('appointment_type', 'general_meeting')
+        proposed_datetime = structured_data.get('proposed_datetime')
+        duration_minutes = structured_data.get('duration_minutes', 30)
+        participants = structured_data.get('participants', [])
+        meeting_type = structured_data.get('meeting_type', 'phone')
+
+        self.db.execute(text("""
+            INSERT INTO calendar_events (
+                id, title, description, event_type, start_time, duration_minutes,
+                meeting_type, participants, loan_id, lead_id,
+                created_by, source, source_id, status
+            ) VALUES (
+                :id, :title, :description, :event_type, :start_time, :duration_minutes,
+                :meeting_type, :participants, :loan_id, :lead_id,
+                :created_by, 'call_monitoring', :source_id, 'scheduled'
+            )
+        """), {
+            "id": event_id,
+            "title": title,
+            "description": content,
+            "event_type": appointment_type,
+            "start_time": proposed_datetime,
+            "duration_minutes": duration_minutes,
+            "meeting_type": meeting_type,
+            "participants": json.dumps(participants),
+            "loan_id": session.get('loan_id'),
+            "lead_id": session.get('lead_id'),
+            "created_by": user_id,
+            "source_id": session.get('id'),
+        })
+
+        return event_id
+
+    async def _execute_calendar_action(
+        self,
+        title: str,
+        content: str,
+        structured_data: Dict,
+        session: Dict,
+        user_id: str,
+    ) -> Optional[str]:
+        """Execute a calendar action (send invite, block time, etc.)."""
+        action_type = structured_data.get('action_type')
+        assign_to = structured_data.get('assign_to', 'PA')
+
+        # If assigned to PA, create a task for them
+        if assign_to == 'PA':
+            return await self._create_pa_task(
+                title=f"Calendar: {title}",
+                content=content,
+                session=session,
+                user_id=user_id,
+            )
+
+        # For auto actions, log and return
+        # (In a real implementation, this would integrate with calendar APIs)
+        return None
+
+    async def _create_follow_up_reminder(
+        self,
+        title: str,
+        content: str,
+        structured_data: Dict,
+        session: Dict,
+        user_id: str,
+    ) -> str:
+        """Create a follow-up reminder/task."""
+        reminder_id = str(uuid.uuid4())
+
+        trigger = structured_data.get('trigger', '')
+        action = structured_data.get('action', '')
+        suggested_timing = structured_data.get('suggested_timing', '')
+
+        self.db.execute(text("""
+            INSERT INTO tasks (
+                id, title, description, loan_id, lead_id, assigned_to,
+                created_by, status, priority, task_type, source, source_id
+            ) VALUES (
+                :id, :title, :description, :loan_id, :lead_id, :assigned_to,
+                :created_by, 'open', 'medium', 'follow_up', 'call_monitoring', :source_id
+            )
+        """), {
+            "id": reminder_id,
+            "title": title,
+            "description": f"Trigger: {trigger}\n\nAction: {action}\n\nTiming: {suggested_timing}\n\n{content}",
+            "loan_id": session.get('loan_id'),
+            "lead_id": session.get('lead_id'),
+            "assigned_to": session.get('user_id'),
+            "created_by": user_id,
+            "source_id": session.get('id'),
+        })
+
+        return reminder_id
+
+    async def _create_pa_task(
+        self,
+        title: str,
+        content: str,
+        session: Dict,
+        user_id: str,
+    ) -> Optional[str]:
+        """Create a task assigned to the Production Assistant."""
+        # Find PA for this LO
+        lo_id = session.get('user_id')
+        if not lo_id:
+            return None
+
+        pa_data = self.db.execute(text("""
+            SELECT u.id
+            FROM users u
+            JOIN user_assignments ua ON ua.assistant_id = u.id
+            WHERE ua.loan_officer_id = :lo_id AND ua.role = 'production_assistant'
+            LIMIT 1
+        """), {"lo_id": lo_id}).fetchone()
+
+        pa_id = str(pa_data[0]) if pa_data else lo_id  # Fallback to LO if no PA
+
+        task_id = str(uuid.uuid4())
+
+        self.db.execute(text("""
+            INSERT INTO tasks (
+                id, title, description, loan_id, lead_id, assigned_to,
+                created_by, status, priority, task_type, source, source_id
+            ) VALUES (
+                :id, :title, :description, :loan_id, :lead_id, :assigned_to,
+                :created_by, 'open', 'high', 'scheduling', 'call_monitoring', :source_id
+            )
+        """), {
+            "id": task_id,
+            "title": title,
+            "description": content,
+            "loan_id": session.get('loan_id'),
+            "lead_id": session.get('lead_id'),
+            "assigned_to": pa_id,
+            "created_by": user_id,
+            "source_id": session.get('id'),
+        })
+
+        return task_id
 
     async def _create_task(
         self,

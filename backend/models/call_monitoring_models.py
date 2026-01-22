@@ -72,6 +72,8 @@ class AgentType(str, Enum):
     JUNIOR_LO = "junior_lo"
     UNDERWRITER = "underwriter"
     CALCULATOR = "calculator"
+    MARKETING = "marketing"  # Creates borrower story content and marketing materials
+    RECEPTIONIST = "receptionist"  # Schedules calls and sends calendar appointments
 
 
 class AgentRunStatus(str, Enum):
@@ -104,6 +106,17 @@ class ArtifactType(str, Enum):
     FIVE_C_CASH = "five_c_cash"  # Reserves/assets analysis
     UW_REVIEW_ITEM = "uw_review_item"  # Individual UW bullet point to address
     STACKED_NOTE = "stacked_note"  # Chronological note for stacking across calls
+    # Marketing Agent - Borrower Story & Content
+    BORROWER_STORY_NOTE = "borrower_story_note"  # Story elements captured from call
+    MARKETING_MILESTONE = "marketing_milestone"  # Key moments in the journey
+    CONTENT_IDEA = "content_idea"  # Ideas for testimonials, social posts
+    BORROWER_QUOTE = "borrower_quote"  # Heartfelt quotes from the borrower
+    STORY_THEME = "story_theme"  # Identified themes (first-time buyer, growing family, etc.)
+    # Receptionist Agent - Scheduling & Calendar
+    SCHEDULED_APPOINTMENT = "scheduled_appointment"  # Calendar appointment to create
+    FOLLOW_UP_CALL = "follow_up_call"  # Follow-up call to schedule
+    CALENDAR_ACTION = "calendar_action"  # Calendar-related action item
+    MEETING_SUMMARY = "meeting_summary"  # Summary of agreed meeting details
 
 
 class ApprovalStatus(str, Enum):

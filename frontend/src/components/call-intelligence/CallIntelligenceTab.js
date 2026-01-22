@@ -23,6 +23,8 @@ import TasksGenerated from './sections/TasksGenerated';
 import DocumentRequests from './sections/DocumentRequests';
 import UnderwriterNotes from './sections/UnderwriterNotes';
 import CalculatorResults from './sections/CalculatorResults';
+import MarketingTab from './sections/MarketingTab';
+import SchedulingTab from './sections/SchedulingTab';
 import StackedNotes from './sections/StackedNotes';
 import ReviewApproveModal from './ReviewApproveModal';
 import ShareCalculatorModal from './ShareCalculatorModal';
@@ -221,6 +223,19 @@ const CallIntelligenceTab = ({ clientId, loanId, leadId }) => {
   // Get UW review items
   const uwReviewItems = groupedArtifacts.uw_review_item || [];
 
+  // Get Marketing Agent artifacts
+  const storyNotes = groupedArtifacts.borrower_story_note || [];
+  const storyThemes = groupedArtifacts.story_theme || [];
+  const borrowerQuotes = groupedArtifacts.borrower_quote || [];
+  const contentIdeas = groupedArtifacts.content_idea || [];
+  const marketingMilestones = groupedArtifacts.marketing_milestone || [];
+
+  // Get Receptionist Agent artifacts (scheduling)
+  const scheduledAppointments = groupedArtifacts.scheduled_appointment || [];
+  const followUpCalls = groupedArtifacts.follow_up_call || [];
+  const calendarActions = groupedArtifacts.calendar_action || [];
+  const meetingSummaries = groupedArtifacts.meeting_summary || [];
+
   // Count pending approvals
   const pendingCount = reviewData?.artifacts?.filter(a => a.approval_status === 'pending').length || 0;
 
@@ -230,6 +245,9 @@ const CallIntelligenceTab = ({ clientId, loanId, leadId }) => {
   const calcCount = (groupedArtifacts.calculator_result?.length || 0);
   const uwItemCount = uwReviewItems.length;
   const fiveCCount = fiveCAnalysis.length;
+  const marketingCount = storyNotes.length + storyThemes.length + borrowerQuotes.length +
+    contentIdeas.length + marketingMilestones.length;
+  const schedulingCount = scheduledAppointments.length + followUpCalls.length + calendarActions.length;
 
   if (loading && calls.length === 0) {
     return (
@@ -319,6 +337,18 @@ const CallIntelligenceTab = ({ clientId, loanId, leadId }) => {
                   Calcs {calcCount > 0 && `(${calcCount})`}
                 </button>
                 <button
+                  className={activeSection === 'marketing' ? 'active' : ''}
+                  onClick={() => setActiveSection('marketing')}
+                >
+                  Story {marketingCount > 0 && `(${marketingCount})`}
+                </button>
+                <button
+                  className={activeSection === 'scheduling' ? 'active' : ''}
+                  onClick={() => setActiveSection('scheduling')}
+                >
+                  Schedule {schedulingCount > 0 && `(${schedulingCount})`}
+                </button>
+                <button
                   className={activeSection === 'transcript' ? 'active' : ''}
                   onClick={() => setActiveSection('transcript')}
                 >
@@ -380,6 +410,28 @@ const CallIntelligenceTab = ({ clientId, loanId, leadId }) => {
                     onShare={handleShareCalculator}
                     onApprove={handleApproveArtifacts}
                     onReject={handleRejectArtifacts}
+                  />
+                )}
+
+                {activeSection === 'marketing' && (
+                  <MarketingTab
+                    storyNotes={storyNotes}
+                    storyThemes={storyThemes}
+                    borrowerQuotes={borrowerQuotes}
+                    contentIdeas={contentIdeas}
+                    milestones={marketingMilestones}
+                    borrowerName={reviewData?.session?.borrower_name || ''}
+                  />
+                )}
+
+                {activeSection === 'scheduling' && (
+                  <SchedulingTab
+                    appointments={scheduledAppointments}
+                    followUpCalls={followUpCalls}
+                    calendarActions={calendarActions}
+                    meetingSummaries={meetingSummaries}
+                    onApproveAppointment={handleApproveArtifacts}
+                    onRejectAppointment={handleRejectArtifacts}
                   />
                 )}
 

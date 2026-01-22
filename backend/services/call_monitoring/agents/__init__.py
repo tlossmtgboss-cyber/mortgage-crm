@@ -1,11 +1,13 @@
 """
 Call Monitoring AI Agents
 
-Four specialized agents for processing call transcripts:
+Six specialized agents for processing call transcripts:
 - ScribeAgent: Summary, action items, follow-up drafts
-- JuniorLOAgent: Pricing scenarios, document requests, intake fields
+- JuniorLOAgent: Pricing scenarios, document requests, intake fields, 5 C's analysis
 - UnderwriterAgent: Risk flags, conditions, compliance checks
 - CalculatorAgent: Mortgage calculations from conversation data
+- MarketingAgent: Borrower story capture for testimonials and content
+- ReceptionistAgent: Calendar scheduling and appointment coordination
 """
 
 from .base_agent import BaseCallAgent, AgentResult, AGENT_MODEL
@@ -13,6 +15,8 @@ from .scribe_agent import ScribeAgent
 from .junior_lo_agent import JuniorLOAgent
 from .underwriter_agent import UnderwriterAgent
 from .calculator_agent import CalculatorAgent
+from .marketing_agent import MarketingAgent
+from .receptionist_agent import ReceptionistAgent
 
 __all__ = [
     'BaseCallAgent',
@@ -22,4 +26,6 @@ __all__ = [
     'JuniorLOAgent',
     'UnderwriterAgent',
     'CalculatorAgent',
+    'MarketingAgent',
+    'ReceptionistAgent',
 ]
