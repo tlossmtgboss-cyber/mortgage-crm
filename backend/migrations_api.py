@@ -2810,6 +2810,7 @@ async def fix_500_errors(
             # 2. Create user_permissions table
             # ================================================================
             try:
+                # First try to create the table
                 db.execute(text("""
                     CREATE TABLE IF NOT EXISTS user_permissions (
                         id SERIAL PRIMARY KEY,
@@ -2824,19 +2825,28 @@ async def fix_500_errors(
                     )
                 """))
                 db.commit()
-
-                # Create indexes
-                db.execute(text("""
-                    CREATE INDEX IF NOT EXISTS idx_user_permissions_user ON user_permissions(user_id);
-                    CREATE INDEX IF NOT EXISTS idx_user_permissions_composite ON user_permissions(user_id, permission_key, granted);
-                """))
-                db.commit()
                 results["tables_created"].append("user_permissions")
             except Exception as e:
-                if "already exists" in str(e).lower():
-                    results["skipped"].append("user_permissions table")
-                else:
-                    results["errors"].append(f"user_permissions: {str(e)[:100]}")
+                db.rollback()
+                results["skipped"].append("user_permissions table (exists)")
+
+            # Add missing columns to existing user_permissions table
+            try:
+                db.execute(text("ALTER TABLE user_permissions ADD COLUMN IF NOT EXISTS granted BOOLEAN DEFAULT TRUE"))
+                db.execute(text("ALTER TABLE user_permissions ADD COLUMN IF NOT EXISTS granted_by INTEGER"))
+                db.execute(text("ALTER TABLE user_permissions ADD COLUMN IF NOT EXISTS granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"))
+                db.execute(text("ALTER TABLE user_permissions ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP"))
+                db.execute(text("ALTER TABLE user_permissions ADD COLUMN IF NOT EXISTS inherited_from VARCHAR(50) DEFAULT 'template'"))
+                db.commit()
+                results["columns_added"].append("user_permissions columns")
+            except Exception as e:
+                db.rollback()
+
+            # Create indexes (ignore if they exist)
+            try:
+                db.execute(text("CREATE INDEX IF NOT EXISTS idx_user_permissions_user ON user_permissions(user_id)"))
+                db.commit()
+            except:
                 db.rollback()
 
             # ================================================================
@@ -2911,19 +2921,41 @@ async def fix_500_errors(
                 """))
                 db.commit()
 
-                # Create indexes
-                db.execute(text("""
-                    CREATE INDEX IF NOT EXISTS idx_ai_tasks_assigned ON ai_tasks(assigned_to_id);
-                    CREATE INDEX IF NOT EXISTS idx_ai_tasks_status ON ai_tasks(status);
-                    CREATE INDEX IF NOT EXISTS idx_ai_tasks_created ON ai_tasks(created_at DESC);
-                """))
                 db.commit()
                 results["tables_created"].append("ai_tasks")
             except Exception as e:
-                if "already exists" in str(e).lower():
-                    results["skipped"].append("ai_tasks table")
-                else:
-                    results["errors"].append(f"ai_tasks: {str(e)[:100]}")
+                db.rollback()
+                results["skipped"].append("ai_tasks table (exists)")
+
+            # Add missing columns to ai_tasks table
+            try:
+                db.execute(text("ALTER TABLE ai_tasks ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'pending'"))
+                db.execute(text("ALTER TABLE ai_tasks ADD COLUMN IF NOT EXISTS ai_confidence FLOAT"))
+                db.execute(text("ALTER TABLE ai_tasks ADD COLUMN IF NOT EXISTS ai_reasoning TEXT"))
+                db.execute(text("ALTER TABLE ai_tasks ADD COLUMN IF NOT EXISTS suggested_action TEXT"))
+                db.execute(text("ALTER TABLE ai_tasks ADD COLUMN IF NOT EXISTS entity_type VARCHAR(50)"))
+                db.execute(text("ALTER TABLE ai_tasks ADD COLUMN IF NOT EXISTS entity_id INTEGER"))
+                db.execute(text("ALTER TABLE ai_tasks ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP"))
+                db.commit()
+                results["columns_added"].append("ai_tasks columns")
+            except Exception as e:
+                db.rollback()
+
+            # Create indexes (ignore if they exist or column doesn't exist)
+            try:
+                db.execute(text("CREATE INDEX IF NOT EXISTS idx_ai_tasks_assigned ON ai_tasks(assigned_to_id)"))
+                db.commit()
+            except:
+                db.rollback()
+            try:
+                db.execute(text("CREATE INDEX IF NOT EXISTS idx_ai_tasks_status ON ai_tasks(status)"))
+                db.commit()
+            except:
+                db.rollback()
+            try:
+                db.execute(text("CREATE INDEX IF NOT EXISTS idx_ai_tasks_created ON ai_tasks(created_at DESC)"))
+                db.commit()
+            except:
                 db.rollback()
 
             # ================================================================
