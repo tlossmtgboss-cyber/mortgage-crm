@@ -324,8 +324,25 @@ class AgentRegistry:
         context: AgentContext
     ) -> Optional[SpecializedAgent]:
         """Get the most appropriate agent for a given intent"""
-        # Intent to agent mapping for all 20 agents
+        # Intent to agent mapping for all agents
+        # Note: More specific phrases should come before generic ones
         intent_mapping = {
+            # Content Marketing Agent (specific phrases first to avoid matching generic terms)
+            "content calendar": "ContentMarketingAgent",
+            "brand voice": "ContentMarketingAgent",
+            "social media": "ContentMarketingAgent",
+            "social post": "ContentMarketingAgent",
+            "just closed": "ContentMarketingAgent",
+            "facebook post": "ContentMarketingAgent",
+            "marketing content": "ContentMarketingAgent",
+            "carousel": "ContentMarketingAgent",
+            "seo": "ContentMarketingAgent",
+            "linkedin": "ContentMarketingAgent",
+            "instagram": "ContentMarketingAgent",
+            "publish": "ContentMarketingAgent",
+            "brief": "ContentMarketingAgent",
+            "personalization": "ContentMarketingAgent",
+
             # Core CRM Agents
             "lead": "LeadManagementAgent",
             "leads": "LeadManagementAgent",
@@ -375,6 +392,12 @@ class AgentRegistry:
             "training": "OnboardingAgent",
             "welcome": "OnboardingAgent",
             "new user": "OnboardingAgent",
+
+            # Content Marketing Agent - generic terms (specific phrases are at top)
+            "content": "ContentMarketingAgent",
+            "keyword": "ContentMarketingAgent",
+            "blog": "ContentMarketingAgent",
+
             "voice": "VoiceAgent",
             "speech": "VoiceAgent",
             "transcribe": "VoiceAgent",
