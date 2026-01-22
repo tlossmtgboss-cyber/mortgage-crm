@@ -90,6 +90,12 @@ export const NAVIGATION_ITEMS = {
     label: 'Scorecard',
     module: 'base'
   },
+  goalTracker: {
+    path: '/goal-tracker',
+    label: 'Goal Tracker',
+    matchPaths: ['/goal-tracker'],
+    module: 'base'
+  },
   partners: {
     path: '/referral-partners',
     label: 'Partners',
@@ -336,6 +342,7 @@ export const ROLE_NAVIGATION = {
     'marketing',            // Marketing page (includes Voice & Call Center, Video OS)
     'calendar',
     'scorecard',            // Scorecard
+    'goalTracker',          // Goal Tracker for production goals
     'partners',
     'aiUnderwriter',
     'market',
@@ -365,6 +372,7 @@ export const ROLE_NAVIGATION = {
     'marketing',            // Marketing page (includes Voice & Call Center, Video OS)
     'calendar',
     'scorecard',
+    'goalTracker',          // Goal Tracker for production goals
     'partners',
     'aiUnderwriter',
     'market',
@@ -388,6 +396,8 @@ export const ROLE_NAVIGATION = {
     'smartDocs',
     'marketing',            // Marketing page includes Voice & Call Center tools
     'calendar',
+    'scorecard',            // Scorecard for performance tracking
+    'goalTracker',          // Goal Tracker for production goals
     'partners',
     'aiUnderwriter',
     'market',
@@ -465,6 +475,8 @@ export const ROLE_NAVIGATION = {
     'smartDocs',
     'marketing',
     'calendar',
+    'scorecard',        // Scorecard for performance tracking
+    'goalTracker',      // Goal Tracker for production goals
     'aiUnderwriter',
     'market',
     'accounting',       // Accounting System
