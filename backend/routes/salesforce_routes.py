@@ -17,13 +17,20 @@ import logging
 from datetime import datetime
 from typing import Optional, Dict, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Query, Body
+from fastapi import APIRouter, Depends, HTTPException, Request, Query, Body, Response
 from fastapi.responses import RedirectResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
+import warnings
 
 logger = logging.getLogger(__name__)
+
+# Import Salesforce API version constant for consistency
+try:
+    from integrations.salesforce_service import SALESFORCE_API_VERSION
+except ImportError:
+    SALESFORCE_API_VERSION = "v58.0"  # Fallback
 
 # Import encryption functions for secure token storage
 try:
@@ -37,6 +44,25 @@ except ImportError:
         return token
 
 router = APIRouter()
+
+# Deprecation configuration
+DEPRECATION_DATE = "2025-06-01"  # Date when these endpoints will be removed
+SUNSET_LINK = "/api/integrations/salesforce"  # New endpoint location
+
+
+def add_deprecation_headers(response: Response, endpoint_name: str) -> None:
+    """
+    Add deprecation headers to response per RFC 8594.
+    https://datatracker.ietf.org/doc/html/rfc8594
+    """
+    response.headers["Deprecation"] = f"@{DEPRECATION_DATE}"
+    response.headers["Sunset"] = DEPRECATION_DATE
+    response.headers["Link"] = f'<{SUNSET_LINK}>; rel="successor-version"'
+    logger.warning(
+        f"Deprecated endpoint accessed: {endpoint_name}. "
+        f"Please migrate to {SUNSET_LINK} before {DEPRECATION_DATE}"
+    )
+
 
 # Whitelist of allowed column names for loans table to prevent SQL injection
 ALLOWED_LOAN_COLUMNS = frozenset([
@@ -97,6 +123,111 @@ def build_safe_insert_sql(loan_data: dict, table: str = "loans") -> tuple:
     placeholders = ", ".join([f":{k}" for k in safe_data.keys()])
     sql = f"INSERT INTO {table} ({columns}, created_at, updated_at) VALUES ({placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
     return sql, safe_data
+
+
+def build_safe_upsert_sql(loan_data: dict, conflict_column: str = "salesforce_id", table: str = "loans") -> tuple:
+    """
+    Build a safe UPSERT (INSERT ... ON CONFLICT DO UPDATE) SQL statement.
+    This prevents race conditions by using atomic upsert.
+    Returns (sql_string, filtered_data_dict, is_insert_only)
+
+    Note: Requires a unique constraint on conflict_column.
+    """
+    safe_data = sanitize_loan_data(loan_data)
+    if not safe_data:
+        raise ValueError("No valid columns to upsert")
+
+    if conflict_column not in safe_data:
+        raise ValueError(f"Conflict column '{conflict_column}' must be in data")
+
+    columns = ", ".join(safe_data.keys())
+    placeholders = ", ".join([f":{k}" for k in safe_data.keys()])
+
+    # Build update clause excluding the conflict column
+    update_cols = [k for k in safe_data.keys() if k != conflict_column]
+    if not update_cols:
+        # No columns to update, just try insert (might fail on conflict)
+        sql = f"INSERT INTO {table} ({columns}, created_at, updated_at) VALUES ({placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) ON CONFLICT ({conflict_column}) DO NOTHING"
+        return sql, safe_data, True
+
+    update_clause = ", ".join([f"{k} = EXCLUDED.{k}" for k in update_cols])
+
+    sql = f"""
+        INSERT INTO {table} ({columns}, created_at, updated_at)
+        VALUES ({placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ON CONFLICT ({conflict_column}) DO UPDATE SET
+            {update_clause},
+            updated_at = CURRENT_TIMESTAMP
+    """
+    return sql, safe_data, False
+
+
+def refresh_and_retry_on_401(
+    db: Session,
+    user_id: int,
+    api_call_func,
+    access_token: str,
+    refresh_token: Optional[str],
+    *args,
+    **kwargs
+):
+    """
+    Execute an API call with automatic token refresh on 401 errors.
+
+    Args:
+        db: Database session for updating tokens
+        user_id: User ID for token storage
+        api_call_func: Function that makes the API call (should return response)
+        access_token: Current access token
+        refresh_token: Refresh token for obtaining new access token
+        *args, **kwargs: Additional arguments passed to api_call_func
+
+    Returns:
+        Tuple of (result, new_access_token) where new_access_token is set if token was refreshed
+    """
+    import requests as req_lib
+
+    try:
+        # First attempt with current token
+        result = api_call_func(access_token, *args, **kwargs)
+        return result, None  # No token refresh needed
+
+    except req_lib.exceptions.HTTPError as e:
+        if e.response is not None and e.response.status_code == 401 and refresh_token:
+            logger.info(f"Got 401, attempting token refresh for user {user_id}")
+
+            # Try to refresh the token
+            from integrations.salesforce_service import salesforce_client
+            new_tokens = salesforce_client.refresh_access_token(decrypt_token(refresh_token))
+
+            if new_tokens and new_tokens.get("access_token"):
+                new_access_token = new_tokens["access_token"]
+
+                # Update token in database
+                try:
+                    encrypted_access = encrypt_token(new_access_token)
+                    db.execute(text("""
+                        UPDATE user_integrations
+                        SET access_token = :access_token, updated_at = CURRENT_TIMESTAMP
+                        WHERE user_id = :user_id AND provider = 'salesforce'
+                    """), {
+                        "access_token": encrypted_access,
+                        "user_id": user_id
+                    })
+                    db.commit()
+                    logger.info(f"Successfully refreshed and stored new token for user {user_id}")
+                except Exception as db_error:
+                    logger.error(f"Failed to update refreshed token in database: {db_error}")
+                    db.rollback()
+
+                # Retry with new token
+                result = api_call_func(new_access_token, *args, **kwargs)
+                return result, new_access_token
+
+            logger.warning(f"Token refresh failed for user {user_id}")
+
+        # Re-raise if not a 401 or refresh failed
+        raise
 
 
 # Request/Response Models
@@ -163,6 +294,41 @@ def get_current_user_id(request: Request, db: Session = None) -> Optional[int]:
     except Exception as e:
         logger.warning(f"Failed to extract user ID: {e}")
     return None
+
+
+def require_admin_role(user_id: int, db: Session) -> None:
+    """
+    Check if user has admin privileges.
+    Raises HTTPException 403 if not admin.
+
+    Admin check looks for:
+    - role = 'admin'
+    - permission_role in ('admin', 'management')
+    - is_admin = true
+    """
+    result = db.execute(text("""
+        SELECT role, permission_role, is_admin
+        FROM users WHERE id = :user_id
+    """), {"user_id": user_id}).fetchone()
+
+    if not result:
+        raise HTTPException(status_code=403, detail="User not found")
+
+    role, permission_role, is_admin = result
+
+    # Check various admin indicators
+    admin_roles = ['admin', 'management', 'site_administrator', 'company_admin']
+    if is_admin:
+        return  # User has is_admin flag
+    if role and role.lower() in admin_roles:
+        return  # Legacy admin role
+    if permission_role and permission_role.lower() in admin_roles:
+        return  # Phase 2 permission role
+
+    raise HTTPException(
+        status_code=403,
+        detail="Admin access required. Schema exploration endpoints are restricted to admin users."
+    )
 
 
 # ============ OAuth Endpoints ============
@@ -318,53 +484,34 @@ async def salesforce_callback(
         """))
         db.commit()
 
-        # Check if integration already exists
-        existing = db.execute(text("""
-            SELECT id FROM user_integrations
-            WHERE user_id = :user_id AND provider = 'salesforce'
-        """), {"user_id": int(user_id)}).fetchone()
-
         # Encrypt tokens before storage
         encrypted_access = encrypt_token(token_data.get("access_token", ""))
         encrypted_refresh = encrypt_token(token_data.get("refresh_token", "")) if token_data.get("refresh_token") else None
 
-        if existing:
-            # Update existing
-            db.execute(text("""
-                UPDATE user_integrations
-                SET access_token = :access_token,
-                    refresh_token = :refresh_token,
-                    expires_at = NULL,
-                    scopes = :scopes,
-                    instance_url = :instance_url,
-                    email = :email,
-                    provider_user_id = :provider_user_id,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE user_id = :user_id AND provider = 'salesforce'
-            """), {
-                "user_id": int(user_id),
-                "access_token": encrypted_access,
-                "refresh_token": encrypted_refresh,
-                "scopes": token_data.get("scope", ""),
-                "instance_url": token_data.get("instance_url", ""),
-                "email": user_info.get("email") if user_info else None,
-                "provider_user_id": user_info.get("user_id") if user_info else None,
-            })
-        else:
-            # Create new
-            db.execute(text("""
-                INSERT INTO user_integrations
-                (user_id, provider, access_token, refresh_token, scopes, instance_url, email, provider_user_id)
-                VALUES (:user_id, 'salesforce', :access_token, :refresh_token, :scopes, :instance_url, :email, :provider_user_id)
-            """), {
-                "user_id": int(user_id),
-                "access_token": encrypted_access,
-                "refresh_token": encrypted_refresh,
-                "scopes": token_data.get("scope", ""),
-                "instance_url": token_data.get("instance_url", ""),
-                "email": user_info.get("email") if user_info else None,
-                "provider_user_id": user_info.get("user_id") if user_info else None,
-            })
+        # Use atomic UPSERT to avoid race conditions
+        # PostgreSQL: INSERT ... ON CONFLICT DO UPDATE
+        db.execute(text("""
+            INSERT INTO user_integrations
+            (user_id, provider, access_token, refresh_token, scopes, instance_url, email, provider_user_id, created_at, updated_at)
+            VALUES (:user_id, 'salesforce', :access_token, :refresh_token, :scopes, :instance_url, :email, :provider_user_id, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ON CONFLICT (user_id, provider) DO UPDATE SET
+                access_token = EXCLUDED.access_token,
+                refresh_token = EXCLUDED.refresh_token,
+                expires_at = NULL,
+                scopes = EXCLUDED.scopes,
+                instance_url = EXCLUDED.instance_url,
+                email = EXCLUDED.email,
+                provider_user_id = EXCLUDED.provider_user_id,
+                updated_at = CURRENT_TIMESTAMP
+        """), {
+            "user_id": int(user_id),
+            "access_token": encrypted_access,
+            "refresh_token": encrypted_refresh,
+            "scopes": token_data.get("scope", ""),
+            "instance_url": token_data.get("instance_url", ""),
+            "email": user_info.get("email") if user_info else None,
+            "provider_user_id": user_info.get("user_id") if user_info else None,
+        })
 
         db.commit()
         logger.info(f"Stored Salesforce tokens for user {user_id}")
@@ -558,15 +705,20 @@ def parse_outbound_message(xml_body: bytes) -> Dict[str, Any]:
 
 # ============ Sync Endpoints ============
 
-@router.post("/sync/full", response_model=SyncResponse)
+@router.post("/sync/full", response_model=SyncResponse, deprecated=True)
 async def salesforce_full_sync(
     request: Request,
+    response: Response,
     db: Session = Depends(get_db)
 ):
     """
     Perform a full sync from Salesforce.
     Fetches all MtgPlanner_CRM__Transaction_Property__c records.
+
+    DEPRECATED: Use /api/integrations/salesforce/sync instead.
     """
+    add_deprecation_headers(response, "POST /sync/full")
+
     user_id = get_current_user_id(request, db)
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
@@ -812,10 +964,13 @@ async def explore_salesforce_objects(
     request: Request,
     db: Session = Depends(get_db)
 ):
-    """List all available Salesforce objects."""
+    """List all available Salesforce objects. Admin access required."""
     user_id = get_current_user_id(request, db)
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
+
+    # Require admin access for schema exploration
+    require_admin_role(user_id, db)
 
     integration = db.execute(text("""
         SELECT access_token, scopes FROM user_integrations
@@ -843,7 +998,7 @@ async def explore_salesforce_objects(
         }
 
         response = requests.get(
-            f"{instance_url}/services/data/v58.0/sobjects/",
+            f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/sobjects/",
             headers=headers
         )
         response.raise_for_status()
@@ -888,10 +1043,13 @@ async def explore_salesforce_object_fields(
     request: Request,
     db: Session = Depends(get_db)
 ):
-    """Get fields for a specific Salesforce object."""
+    """Get fields for a specific Salesforce object. Admin access required."""
     user_id = get_current_user_id(request, db)
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
+
+    # Require admin access for schema exploration
+    require_admin_role(user_id, db)
 
     integration = db.execute(text("""
         SELECT access_token, scopes FROM user_integrations
@@ -919,7 +1077,7 @@ async def explore_salesforce_object_fields(
 
         # Get object describe (field details)
         response = requests.get(
-            f"{instance_url}/services/data/v58.0/sobjects/{object_name}/describe/",
+            f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/sobjects/{object_name}/describe/",
             headers=headers
         )
         response.raise_for_status()
@@ -961,10 +1119,13 @@ async def explore_salesforce_query(
     limit: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db)
 ):
-    """Query sample records from a Salesforce object."""
+    """Query sample records from a Salesforce object. Admin access required."""
     user_id = get_current_user_id(request, db)
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
+
+    # Require admin access for schema exploration
+    require_admin_role(user_id, db)
 
     integration = db.execute(text("""
         SELECT access_token, scopes FROM user_integrations
@@ -994,7 +1155,7 @@ async def explore_salesforce_query(
     try:
         # Get object describe to find queryable fields
         describe_response = requests.get(
-            f"{instance_url}/services/data/v58.0/sobjects/{object_name}/describe/",
+            f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/sobjects/{object_name}/describe/",
             headers=headers
         )
         describe_response.raise_for_status()
@@ -1036,12 +1197,19 @@ async def explore_salesforce_query(
 
 # ============ Import Loans Endpoint ============
 
-@router.post("/import/closed-loans")
+@router.post("/import/closed-loans", deprecated=True)
 async def import_closed_loans(
     request: Request,
+    response: Response,
     db: Session = Depends(get_db)
 ):
-    """Import closed loans/opportunities from Salesforce."""
+    """
+    Import closed loans/opportunities from Salesforce.
+
+    DEPRECATED: Use /api/integrations/salesforce/import instead.
+    """
+    add_deprecation_headers(response, "POST /import/closed-loans")
+
     user_id = get_current_user_id(request, db)
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
@@ -1079,7 +1247,7 @@ async def import_closed_loans(
 
     try:
         # First, discover what objects are available
-        sobjects_response = requests.get(f"{instance_url}/services/data/v58.0/sobjects/", headers=headers)
+        sobjects_response = requests.get(f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/sobjects/", headers=headers)
         sobjects_response.raise_for_status()
         available_objects = {obj['name']: obj for obj in sobjects_response.json().get('sobjects', [])}
 
@@ -1113,7 +1281,7 @@ async def import_closed_loans(
 
         # Get object fields
         describe_response = requests.get(
-            f"{instance_url}/services/data/v58.0/sobjects/{found_object}/describe/",
+            f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/sobjects/{found_object}/describe/",
             headers=headers
         )
         describe_response.raise_for_status()
@@ -1140,7 +1308,7 @@ async def import_closed_loans(
         logger.info(f"Executing SOQL: {soql[:200]}...")
 
         query_response = requests.get(
-            f"{instance_url}/services/data/v58.0/query/",
+            f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/query/",
             headers=headers,
             params={"q": soql}
         )
@@ -1180,11 +1348,6 @@ async def import_closed_loans(
             try:
                 sf_id = record.get('Id')
 
-                # Check if already imported
-                existing = db.execute(text(
-                    "SELECT id FROM loans WHERE salesforce_id = :sf_id"
-                ), {"sf_id": sf_id}).fetchone()
-
                 # Map fields
                 loan_data = {
                     'salesforce_id': sf_id,
@@ -1219,32 +1382,28 @@ async def import_closed_loans(
                 if 'loan_number' not in loan_data or not loan_data.get('loan_number'):
                     loan_data['loan_number'] = f"SF-{sf_id[-8:]}"
 
-                if existing:
-                    # Update existing loan - use safe SQL builder to prevent injection
-                    try:
-                        update_sql, safe_data = build_safe_update_sql(loan_data)
-                        db.execute(text(update_sql), safe_data)
-                        results['updated'] += 1
-                    except ValueError as ve:
-                        logger.warning(f"No valid columns to update for {sf_id}: {ve}")
+                # Use atomic UPSERT to avoid race conditions
+                try:
+                    upsert_sql, safe_data, is_insert_only = build_safe_upsert_sql(loan_data, conflict_column='salesforce_id')
+                    result = db.execute(text(upsert_sql), safe_data)
+
+                    # Check if insert or update based on rowcount
+                    # Note: For PostgreSQL, we can use RETURNING to be more precise
+                    if result.rowcount > 0:
+                        results['imported'] += 1  # Could be insert or update
+                    else:
                         results['skipped'] += 1
-                        continue
-                else:
-                    # Insert new loan - use safe SQL builder to prevent injection
-                    try:
-                        insert_sql, safe_data = build_safe_insert_sql(loan_data)
-                        db.execute(text(insert_sql), safe_data)
-                        results['imported'] += 1
-                    except ValueError as ve:
-                        logger.warning(f"No valid columns to insert for {sf_id}: {ve}")
-                        results['skipped'] += 1
-                        continue
+
+                except ValueError as ve:
+                    logger.warning(f"No valid columns for upsert on {sf_id}: {ve}")
+                    results['skipped'] += 1
+                    continue
 
                 results['loans'].append({
                     'salesforce_id': sf_id,
                     'name': loan_data.get('borrower_name') or loan_data.get('loan_number'),
                     'amount': loan_data.get('loan_amount'),
-                    'action': 'updated' if existing else 'imported'
+                    'action': 'upserted'
                 })
 
             except Exception as e:
@@ -1318,7 +1477,7 @@ async def push_loan_to_salesforce(
             detail="Salesforce not connected. Please connect first."
         )
 
-    access_token = integration[0]
+    access_token = decrypt_token(integration[0])
 
     # Parse instance_url from scopes
     instance_url = None
@@ -1388,7 +1547,7 @@ async def push_loans_batch_to_salesforce(
             detail="Salesforce not connected. Please connect first."
         )
 
-    access_token = integration[0]
+    access_token = decrypt_token(integration[0])
 
     # Parse instance_url from scopes
     instance_url = None
@@ -1526,7 +1685,7 @@ async def pull_loan_from_salesforce(
             detail="Salesforce not connected. Please connect first."
         )
 
-    access_token = integration[0]
+    access_token = decrypt_token(integration[0])
 
     # Parse instance_url from scopes
     instance_url = None
@@ -1714,7 +1873,7 @@ async def admin_pull_recent_loans(
 
         # Get object fields first
         describe_response = requests.get(
-            f"{instance_url}/services/data/v58.0/sobjects/{sf_object}/describe/",
+            f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/sobjects/{sf_object}/describe/",
             headers=headers,
             timeout=30
         )
@@ -1740,7 +1899,7 @@ async def admin_pull_recent_loans(
         logger.info(f"Executing SOQL: {soql[:200]}...")
 
         query_response = requests.get(
-            f"{instance_url}/services/data/v58.0/query/",
+            f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/query/",
             headers=headers,
             params={"q": soql},
             timeout=30
@@ -2072,7 +2231,7 @@ async def sync_salesforce_and_import_mum(
                 sf_object = "MtgPlanner_CRM__Transaction_Property__c"
 
                 # Get fields
-                describe_url = f"{instance_url}/services/data/v58.0/sobjects/{sf_object}/describe/"
+                describe_url = f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/sobjects/{sf_object}/describe/"
                 describe_resp = requests.get(describe_url, headers=headers, timeout=30)
 
                 if describe_resp.status_code == 200:
@@ -2091,7 +2250,7 @@ async def sync_salesforce_and_import_mum(
                         LIMIT 200
                     """
 
-                    query_url = f"{instance_url}/services/data/v58.0/query/"
+                    query_url = f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/query/"
                     query_resp = requests.get(query_url, headers=headers, params={"q": soql}, timeout=60)
 
                     if query_resp.status_code == 200:

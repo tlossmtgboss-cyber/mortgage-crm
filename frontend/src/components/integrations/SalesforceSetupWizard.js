@@ -551,13 +551,26 @@ function SalesforceSetupWizard({ onComplete }) {
         {/* Object selector sidebar */}
         <div className="object-sidebar">
           <h4>Salesforce Objects</h4>
+          <label className="include-all-toggle" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px', marginBottom: '12px', fontSize: '13px', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={includeAllFields}
+              onChange={(e) => {
+                setIncludeAllFields(e.target.checked);
+                if (selectedObject) {
+                  loadSuggestions(selectedObject, e.target.checked);
+                }
+              }}
+            />
+            <span>Include all fields</span>
+          </label>
           {schemas.map(obj => (
             <button
               key={obj.name}
               className={`object-btn ${selectedObject === obj.name ? 'active' : ''}`}
               onClick={() => loadSuggestions(obj.name)}
             >
-              {obj.label}
+              {obj.label} ({obj.field_count || '?'} fields)
             </button>
           ))}
         </div>
@@ -879,6 +892,14 @@ function SuggestionsList({ suggestions, onAccept }) {
     setSelected(prev => ({ ...prev, [sourceField]: !prev[sourceField] }));
   };
 
+  const selectAll = () => {
+    setSelected(suggestions.reduce((acc, s) => ({ ...acc, [s.sourceField]: true }), {}));
+  };
+
+  const selectNone = () => {
+    setSelected(suggestions.reduce((acc, s) => ({ ...acc, [s.sourceField]: false }), {}));
+  };
+
   const handleAccept = () => {
     const accepted = suggestions
       .filter(s => selected[s.sourceField])
@@ -894,10 +915,47 @@ function SuggestionsList({ suggestions, onAccept }) {
     return null;
   }
 
+  const selectedCount = Object.values(selected).filter(Boolean).length;
+
   return (
     <div className="suggestions-panel">
-      <h4>Suggested Mappings</h4>
-      <p>Based on field names, we suggest these mappings:</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+        <h4 style={{ margin: 0 }}>Suggested Mappings ({suggestions.length} fields)</h4>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <button
+            onClick={selectAll}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: '#4CAF50',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: '500'
+            }}
+          >
+            ✓ Select All
+          </button>
+          <button
+            onClick={selectNone}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: '#f5f5f5',
+              color: '#333',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '13px'
+            }}
+          >
+            Clear All
+          </button>
+        </div>
+      </div>
+      <p style={{ margin: '0 0 12px 0', color: '#666' }}>
+        {selectedCount} of {suggestions.length} fields selected for import
+      </p>
 
       <div className="suggestions-list">
         {suggestions.map(s => (
@@ -926,9 +984,27 @@ function SuggestionsList({ suggestions, onAccept }) {
         ))}
       </div>
 
-      <button className="btn btn-primary" onClick={handleAccept}>
-        Accept Selected ({Object.values(selected).filter(Boolean).length})
-      </button>
+      <div style={{ marginTop: '16px', display: 'flex', gap: '12px', alignItems: 'center' }}>
+        <button
+          onClick={handleAccept}
+          disabled={selectedCount === 0}
+          style={{
+            padding: '10px 24px',
+            backgroundColor: selectedCount > 0 ? '#2196F3' : '#ccc',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: selectedCount > 0 ? 'pointer' : 'not-allowed',
+            fontSize: '14px',
+            fontWeight: '600'
+          }}
+        >
+          Import {selectedCount} Field Mappings
+        </button>
+        {selectedCount === 0 && (
+          <span style={{ color: '#999', fontSize: '13px' }}>Select at least one field to import</span>
+        )}
+      </div>
     </div>
   );
 }

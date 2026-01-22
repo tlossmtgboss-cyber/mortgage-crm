@@ -402,6 +402,62 @@ async def trigger_discovery_for_profile(
         }
 
 
+@router.post("/test-mapping-debug/{profile_id}")
+async def test_mapping_debug(
+    profile_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Test creating a mapping - no auth required for debugging.
+    """
+    try:
+        db.rollback()
+    except:
+        pass
+
+    try:
+        # Create a simple test mapping
+        mapping_data = {
+            'integration_profile_id': profile_id,
+            'source_object': 'TestObject',
+            'source_field': 'TestField',
+            'target_entity': 'loan',
+            'target_field': 'test_field',
+            'transform_type': 'direct',
+            'transform_config': {},
+            'data_type': 'string',
+            'required': False,
+            'default_value': None,
+            'sync_direction': 'bidirectional',
+            'enabled': True,
+            'validation_status': 'pending',
+            'validation_message': None
+        }
+
+        mapping = FieldMapping(**mapping_data)
+        db.add(mapping)
+        db.commit()
+        db.refresh(mapping)
+
+        # Delete the test mapping
+        db.delete(mapping)
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": "Test mapping created and deleted successfully",
+            "mapping_id": mapping.id
+        }
+    except Exception as e:
+        import traceback
+        db.rollback()
+        return {
+            "status": "error",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+
 @router.get("/loans-status-debug")
 async def get_loans_status_debug(
     db: Session = Depends(get_db)
@@ -1220,6 +1276,8 @@ async def create_mappings_bulk(
 
     try:
         suggestions = [s.dict() for s in bulk_request.suggestions]
+        logger.info(f"Creating {len(suggestions)} mappings for profile {profile.id}, object: {bulk_request.source_object}")
+        logger.info(f"Suggestions: {suggestions}")
         mappings = field_mapping.create_from_suggestions(
             db=db,
             integration_profile_id=profile.id,
@@ -1232,7 +1290,11 @@ async def create_mappings_bulk(
             "message": f"Created {len(mappings)} field mappings"
         }
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        import traceback
+        logger.error(f"Failed to create mappings: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Error creating mappings: {str(e)}")
 
 
 @router.put("/mappings/{mapping_id}")

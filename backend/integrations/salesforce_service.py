@@ -8,14 +8,110 @@ import secrets
 import hashlib
 import base64
 from typing import Optional, Dict, Any, Tuple
-from datetime import datetime
+from datetime import datetime, timedelta
 import requests
 from urllib.parse import urlencode
 
 logger = logging.getLogger(__name__)
 
-# In-memory store for PKCE code verifiers (use Redis in production)
-_pkce_store: Dict[str, str] = {}
+# Salesforce API version - centralized for easy updates
+# See https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/api_versions.htm
+SALESFORCE_API_VERSION = "v58.0"
+
+# Database-backed PKCE store with TTL
+# Falls back to in-memory if database not available
+_pkce_store_memory: Dict[str, Tuple[str, datetime]] = {}  # state -> (verifier, expires_at)
+PKCE_TTL_MINUTES = 10  # PKCE verifiers expire after 10 minutes
+
+
+def _get_db_session():
+    """Get database session for PKCE storage."""
+    try:
+        from database import get_db
+        return next(get_db())
+    except Exception as e:
+        logger.debug(f"Database not available for PKCE storage: {e}")
+        return None
+
+
+def _store_pkce_verifier(state: str, verifier: str) -> None:
+    """Store PKCE verifier with TTL, using database if available."""
+    expires_at = datetime.utcnow() + timedelta(minutes=PKCE_TTL_MINUTES)
+
+    db = _get_db_session()
+    if db:
+        try:
+            from sqlalchemy import text
+            # Clean up expired entries first (do this occasionally)
+            if secrets.randbelow(10) == 0:  # 10% chance to clean up
+                db.execute(text("""
+                    DELETE FROM oauth_pkce_store WHERE expires_at < :now
+                """), {"now": datetime.utcnow()})
+
+            # Store the verifier
+            db.execute(text("""
+                INSERT INTO oauth_pkce_store (state, code_verifier, expires_at, created_at)
+                VALUES (:state, :verifier, :expires_at, :created_at)
+                ON CONFLICT (state) DO UPDATE SET
+                    code_verifier = EXCLUDED.code_verifier,
+                    expires_at = EXCLUDED.expires_at
+            """), {
+                "state": state,
+                "verifier": verifier,
+                "expires_at": expires_at,
+                "created_at": datetime.utcnow()
+            })
+            db.commit()
+            logger.info(f"Stored PKCE verifier in database for state: {state[:20]}...")
+            return
+        except Exception as e:
+            logger.warning(f"Failed to store PKCE in database, using memory: {e}")
+            db.rollback()
+        finally:
+            db.close()
+
+    # Fallback to memory storage
+    _pkce_store_memory[state] = (verifier, expires_at)
+    logger.info(f"Stored PKCE verifier in memory for state: {state[:20]}...")
+
+
+def _get_pkce_verifier(state: str) -> Optional[str]:
+    """Retrieve and delete PKCE verifier."""
+    db = _get_db_session()
+    if db:
+        try:
+            from sqlalchemy import text
+            result = db.execute(text("""
+                DELETE FROM oauth_pkce_store
+                WHERE state = :state AND expires_at > :now
+                RETURNING code_verifier
+            """), {"state": state, "now": datetime.utcnow()}).fetchone()
+            db.commit()
+
+            if result:
+                logger.info(f"Retrieved PKCE verifier from database for state: {state[:20]}...")
+                return result[0]
+            else:
+                logger.warning(f"No valid PKCE verifier found in database for state: {state[:20]}...")
+                return None
+        except Exception as e:
+            logger.warning(f"Failed to retrieve PKCE from database, checking memory: {e}")
+            db.rollback()
+        finally:
+            db.close()
+
+    # Fallback to memory storage
+    stored = _pkce_store_memory.pop(state, None)
+    if stored:
+        verifier, expires_at = stored
+        if datetime.utcnow() < expires_at:
+            logger.info(f"Retrieved PKCE verifier from memory for state: {state[:20]}...")
+            return verifier
+        else:
+            logger.warning(f"PKCE verifier expired in memory for state: {state[:20]}...")
+    else:
+        logger.warning(f"No PKCE verifier found in memory for state: {state[:20]}...")
+    return None
 
 
 class SalesforceClient:
@@ -57,8 +153,7 @@ class SalesforceClient:
         # Store the code verifier for later use in token exchange
         # Use state as key (or generate a unique key if no state)
         pkce_key = state or secrets.token_urlsafe(16)
-        _pkce_store[pkce_key] = code_verifier
-        logger.info(f"Stored PKCE verifier for key: {pkce_key[:20]}...")
+        _store_pkce_verifier(pkce_key, code_verifier)
 
         # Request only scopes that are enabled in the Connected App
         # If no scope specified, Salesforce uses the scopes configured in the Connected App
@@ -78,12 +173,7 @@ class SalesforceClient:
 
     def get_code_verifier(self, state: str) -> Optional[str]:
         """Retrieve stored code verifier for token exchange"""
-        verifier = _pkce_store.pop(state, None)
-        if verifier:
-            logger.info(f"Retrieved and removed PKCE verifier for state: {state[:20]}...")
-        else:
-            logger.warning(f"No PKCE verifier found for state: {state[:20]}...")
-        return verifier
+        return _get_pkce_verifier(state)
 
     def exchange_code_for_token(self, code: str, code_verifier: str = None) -> Optional[Dict[str, Any]]:
         """Exchange authorization code for access token"""
@@ -190,21 +280,38 @@ class SalesforceClient:
             logger.error(f"Error getting user info: {e}")
             return None
 
-    def query(self, access_token: str, instance_url: str, soql_query: str) -> Optional[Dict[str, Any]]:
-        """Execute a SOQL query"""
+    def query(self, access_token: str, instance_url: str, soql_query: str, raise_for_401: bool = False) -> Optional[Dict[str, Any]]:
+        """
+        Execute a SOQL query.
+
+        Args:
+            access_token: Salesforce access token
+            instance_url: Salesforce instance URL
+            soql_query: SOQL query string
+            raise_for_401: If True, re-raises HTTPError for 401 responses (for auto-refresh)
+
+        Returns:
+            Query results or None on error
+        """
         try:
             headers = {
                 "Authorization": f"Bearer {access_token}",
                 "Content-Type": "application/json"
             }
 
-            url = f"{instance_url}/services/data/v58.0/query/"
+            url = f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/query/"
             params = {"q": soql_query}
 
             response = requests.get(url, headers=headers, params=params)
             response.raise_for_status()
 
             return response.json()
+
+        except requests.exceptions.HTTPError as e:
+            if raise_for_401 and e.response is not None and e.response.status_code == 401:
+                raise  # Re-raise for auto-refresh handling
+            logger.error(f"HTTP error executing SOQL query: {e}")
+            return None
 
         except Exception as e:
             logger.error(f"Error executing SOQL query: {e}")
@@ -215,21 +322,33 @@ class SalesforceClient:
         access_token: str,
         instance_url: str,
         sobject_type: str,
-        data: Dict[str, Any]
+        data: Dict[str, Any],
+        raise_for_401: bool = False
     ) -> Optional[Dict[str, Any]]:
-        """Create a new Salesforce record"""
+        """
+        Create a new Salesforce record.
+
+        Args:
+            raise_for_401: If True, re-raises HTTPError for 401 responses (for auto-refresh)
+        """
         try:
             headers = {
                 "Authorization": f"Bearer {access_token}",
                 "Content-Type": "application/json"
             }
 
-            url = f"{instance_url}/services/data/v58.0/sobjects/{sobject_type}/"
+            url = f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/sobjects/{sobject_type}/"
 
             response = requests.post(url, headers=headers, json=data)
             response.raise_for_status()
 
             return response.json()
+
+        except requests.exceptions.HTTPError as e:
+            if raise_for_401 and e.response is not None and e.response.status_code == 401:
+                raise
+            logger.error(f"HTTP error creating Salesforce record: {e}")
+            return None
 
         except Exception as e:
             logger.error(f"Error creating Salesforce record: {e}")
@@ -241,21 +360,33 @@ class SalesforceClient:
         instance_url: str,
         sobject_type: str,
         record_id: str,
-        data: Dict[str, Any]
+        data: Dict[str, Any],
+        raise_for_401: bool = False
     ) -> bool:
-        """Update an existing Salesforce record"""
+        """
+        Update an existing Salesforce record.
+
+        Args:
+            raise_for_401: If True, re-raises HTTPError for 401 responses (for auto-refresh)
+        """
         try:
             headers = {
                 "Authorization": f"Bearer {access_token}",
                 "Content-Type": "application/json"
             }
 
-            url = f"{instance_url}/services/data/v58.0/sobjects/{sobject_type}/{record_id}"
+            url = f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/sobjects/{sobject_type}/{record_id}"
 
             response = requests.patch(url, headers=headers, json=data)
             response.raise_for_status()
 
             return True
+
+        except requests.exceptions.HTTPError as e:
+            if raise_for_401 and e.response is not None and e.response.status_code == 401:
+                raise
+            logger.error(f"HTTP error updating Salesforce record: {e}")
+            return False
 
         except Exception as e:
             logger.error(f"Error updating Salesforce record: {e}")
@@ -275,7 +406,7 @@ class SalesforceClient:
                 "Content-Type": "application/json"
             }
 
-            url = f"{instance_url}/services/data/v58.0/sobjects/{sobject_type}/{record_id}"
+            url = f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/sobjects/{sobject_type}/{record_id}"
 
             response = requests.get(url, headers=headers)
             response.raise_for_status()

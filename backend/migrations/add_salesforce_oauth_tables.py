@@ -168,6 +168,18 @@ def get_postgres_migrations():
         ("oauth_states_index", """
             CREATE INDEX IF NOT EXISTS idx_oauth_states_token ON oauth_states(state_token);
         """),
+        ("oauth_pkce_store", """
+            CREATE TABLE IF NOT EXISTS oauth_pkce_store (
+                id SERIAL PRIMARY KEY,
+                state VARCHAR(255) UNIQUE NOT NULL,
+                code_verifier TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP NOT NULL
+            );
+        """),
+        ("oauth_pkce_store_index", """
+            CREATE INDEX IF NOT EXISTS idx_oauth_pkce_expires ON oauth_pkce_store(expires_at);
+        """),
         ("integration_record_tracking", """
             CREATE TABLE IF NOT EXISTS integration_record_tracking (
                 id SERIAL PRIMARY KEY,
@@ -320,6 +332,15 @@ def get_sqlite_migrations():
                 used BOOLEAN DEFAULT 0,
                 return_url TEXT,
                 state_metadata TEXT
+            );
+        """),
+        ("oauth_pkce_store", """
+            CREATE TABLE IF NOT EXISTS oauth_pkce_store (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                state VARCHAR(255) UNIQUE NOT NULL,
+                code_verifier TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP NOT NULL
             );
         """),
         ("integration_record_tracking", """
