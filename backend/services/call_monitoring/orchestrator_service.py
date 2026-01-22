@@ -48,6 +48,7 @@ class MergedArtifacts:
     intake_fields: List[Dict[str, Any]] = field(default_factory=list)
     uw_notes: List[Dict[str, Any]] = field(default_factory=list)
     follow_up_drafts: List[Dict[str, Any]] = field(default_factory=list)
+    calculator_results: List[Dict[str, Any]] = field(default_factory=list)
 
 
 class CallMonitoringOrchestrator:
@@ -70,11 +71,13 @@ class CallMonitoringOrchestrator:
         from .agents.scribe_agent import ScribeAgent
         from .agents.junior_lo_agent import JuniorLOAgent
         from .agents.underwriter_agent import UnderwriterAgent
+        from .agents.calculator_agent import CalculatorAgent
 
         self._agents = {
             'scribe': ScribeAgent(self.db),
             'junior_lo': JuniorLOAgent(self.db),
             'underwriter': UnderwriterAgent(self.db),
+            'calculator': CalculatorAgent(self.db),
         }
 
     # =========================================================================
@@ -325,7 +328,7 @@ class CallMonitoringOrchestrator:
         })
 
         # Determine which agents to run
-        agents_to_run = agent_types or ['scribe', 'junior_lo', 'underwriter']
+        agents_to_run = agent_types or ['scribe', 'junior_lo', 'underwriter', 'calculator']
 
         # Build context for agents
         context = {
@@ -589,6 +592,8 @@ class CallMonitoringOrchestrator:
                     merged.uw_notes.append(artifact)
                 elif artifact_type == 'follow_up_draft':
                     merged.follow_up_drafts.append(artifact)
+                elif artifact_type in ('calculator_result', 'calculator_recommendation'):
+                    merged.calculator_results.append(artifact)
 
         # Deduplicate similar items
         merged = self._deduplicate_artifacts(merged)
@@ -645,6 +650,7 @@ class CallMonitoringOrchestrator:
             ('intake_field', merged.intake_fields),
             ('uw_note', merged.uw_notes),
             ('follow_up_draft', merged.follow_up_drafts),
+            ('calculator_result', merged.calculator_results),
         ]
 
         for artifact_type, items in all_artifacts:
@@ -705,7 +711,7 @@ class CallMonitoringOrchestrator:
     def _requires_approval(self, artifact_type: str, item: Dict) -> bool:
         """Determine if an artifact requires human approval."""
         # Auto-approve rules
-        auto_approve_types = {'summary', 'uw_note'}
+        auto_approve_types = {'summary', 'uw_note', 'calculator_result'}
 
         if artifact_type in auto_approve_types:
             confidence = item.get('confidence', 0)

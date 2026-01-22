@@ -24,6 +24,8 @@ from enum import Enum
 
 from anthropic import Anthropic
 
+from .live_call_whisper_calculator import calculator_whisper_detector
+
 logger = logging.getLogger(__name__)
 
 
@@ -39,6 +41,7 @@ class WhisperType(str, Enum):
     CLOSING_TECHNIQUE = "closing_technique"
     RAPPORT_BUILDER = "rapport_builder"
     WARNING = "warning"
+    CALCULATOR_SUGGESTION = "calculator_suggestion"
 
 
 class WhisperPriority(str, Enum):
@@ -209,6 +212,11 @@ class LiveCallWhisperService:
             # Detect questions from caller
             question_whispers = await self._detect_questions(context, text)
             new_whispers.extend(question_whispers)
+
+            # Detect calculator opportunities
+            calculator_whisper = self._detect_calculator_opportunities(context, text)
+            if calculator_whisper:
+                new_whispers.append(calculator_whisper)
 
         # Check for opportunities and suggestions
         if speaker == "agent":
@@ -574,6 +582,14 @@ Provide a brief, actionable suggestion:"""
                     break
 
         return whispers
+
+    def _detect_calculator_opportunities(self, context: CallContext, text: str) -> Optional[Whisper]:
+        """Detect calculator opportunities and return pre-calculated whisper."""
+        try:
+            return calculator_whisper_detector.detect_calculator_opportunity(text, context)
+        except Exception as e:
+            logger.warning(f"Calculator whisper detection error: {e}")
+            return None
 
     async def _detect_opportunities(self, context: CallContext, text: str) -> List[Whisper]:
         """Detect opportunities the agent might be missing."""

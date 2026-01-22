@@ -71,6 +71,7 @@ class AgentType(str, Enum):
     SCRIBE = "scribe"
     JUNIOR_LO = "junior_lo"
     UNDERWRITER = "underwriter"
+    CALCULATOR = "calculator"
 
 
 class AgentRunStatus(str, Enum):
@@ -92,6 +93,8 @@ class ArtifactType(str, Enum):
     UW_NOTE = "uw_note"
     FOLLOW_UP_DRAFT = "follow_up_draft"
     PRICING_SCENARIO = "pricing_scenario"
+    CALCULATOR_RESULT = "calculator_result"
+    CALCULATOR_RECOMMENDATION = "calculator_recommendation"
 
 
 class ApprovalStatus(str, Enum):
