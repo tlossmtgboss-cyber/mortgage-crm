@@ -1,10 +1,12 @@
 """
 AMD-Enabled Outbound Call Routes
-Handles Twilio Answering Machine Detection for outbound AI calls.
+Handles Answering Machine Detection for outbound AI calls.
+
+Supports both Twilio and Telnyx providers based on TELEPHONY_PROVIDER environment variable.
 
 Flow:
 1. Initiate call with AMD enabled
-2. Twilio detects human vs machine
+2. Provider detects human vs machine
 3. AMD callback routes to appropriate handler:
    - Human: Connect to Sam (WebSocket stream)
    - Machine: Play voicemail message (ElevenLabs TTS)
@@ -27,6 +29,9 @@ from sqlalchemy import text
 from database import get_db
 
 logger = logging.getLogger(__name__)
+
+# Determine telephony provider
+TELEPHONY_PROVIDER = os.getenv("TELEPHONY_PROVIDER", "twilio").lower()
 
 router = APIRouter(prefix="/api/v1/voice/amd", tags=["AMD Outbound Calls"])
 
@@ -109,6 +114,55 @@ async def get_user_twilio_config(user_id: int, db: Session) -> Optional[Dict]:
         except:
             pass
         return None
+
+
+async def get_user_telnyx_config(user_id: int, db: Session) -> Optional[Dict]:
+    """Get stored Telnyx config for a user (or use system defaults)"""
+    # First try user-specific config
+    try:
+        result = db.execute(text("""
+            SELECT telnyx_api_key, telnyx_connection_id,
+                   telnyx_phone_number, telnyx_messaging_profile_id
+            FROM user_twilio_config
+            WHERE user_id = :user_id
+        """), {"user_id": user_id})
+        row = result.fetchone()
+        if row and row[0]:  # If user has Telnyx config
+            return {
+                "api_key": row[0],
+                "connection_id": row[1],
+                "phone_number": row[2],
+                "messaging_profile_id": row[3],
+            }
+    except Exception as e:
+        logger.debug(f"No user Telnyx config found: {e}")
+        try:
+            db.rollback()
+        except:
+            pass
+
+    # Fall back to system config from environment
+    api_key = os.getenv("TELNYX_API_KEY")
+    phone_number = os.getenv("TELNYX_PHONE_NUMBER")
+    connection_id = os.getenv("TELNYX_CONNECTION_ID")
+
+    if api_key and phone_number:
+        return {
+            "api_key": api_key,
+            "connection_id": connection_id,
+            "phone_number": phone_number,
+            "messaging_profile_id": os.getenv("TELNYX_MESSAGING_PROFILE_ID"),
+        }
+
+    return None
+
+
+async def get_user_telephony_config(user_id: int, db: Session) -> Optional[Dict]:
+    """Get telephony config for user based on current provider"""
+    if TELEPHONY_PROVIDER == "telnyx":
+        return await get_user_telnyx_config(user_id, db)
+    else:
+        return await get_user_twilio_config(user_id, db)
 
 
 def get_elevenlabs_config_sync() -> Optional[Dict]:
@@ -292,17 +346,26 @@ async def initiate_amd_outbound_call(
     # Ensure table exists
     ensure_amd_table_exists(db)
 
-    # Get user's Twilio config
-    twilio_config = await get_user_twilio_config(user_id, db)
-    if not twilio_config:
-        raise HTTPException(status_code=400, detail="Twilio not configured for this user")
+    # Get telephony config based on provider
+    telephony_config = await get_user_telephony_config(user_id, db)
+    if not telephony_config:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{TELEPHONY_PROVIDER.capitalize()} not configured for this user"
+        )
 
-    account_sid = twilio_config.get("account_sid")
-    auth_token = twilio_config.get("auth_token")
-    from_number = twilio_config.get("phone_number")
-
-    if not all([account_sid, auth_token, from_number]):
-        raise HTTPException(status_code=400, detail="Incomplete Twilio configuration")
+    if TELEPHONY_PROVIDER == "telnyx":
+        from_number = telephony_config.get("phone_number")
+        account_sid = None
+        auth_token = None
+        if not from_number:
+            raise HTTPException(status_code=400, detail="Incomplete Telnyx configuration")
+    else:
+        account_sid = telephony_config.get("account_sid")
+        auth_token = telephony_config.get("auth_token")
+        from_number = telephony_config.get("phone_number")
+        if not all([account_sid, auth_token, from_number]):
+            raise HTTPException(status_code=400, detail="Incomplete Twilio configuration")
 
     # Format phone number
     to_number = format_e164(request.to_number)
@@ -321,7 +384,7 @@ async def initiate_amd_outbound_call(
         request.client_name, lo_name, request.purpose
     )
 
-    # Store call tracking info
+    # Store call tracking info (with provider for multi-provider support)
     db.execute(text("""
         INSERT INTO amd_outbound_calls (
             id, user_id, to_number, from_number, client_name, purpose, lo_name,
@@ -344,6 +407,8 @@ async def initiate_amd_outbound_call(
     })
     db.commit()
 
+    logger.info(f"Call tracking record created: {tracking_id} (provider: {TELEPHONY_PROVIDER})")
+
     # Start voicemail audio generation in background
     elevenlabs_config = get_elevenlabs_config_sync()
     if elevenlabs_config:
@@ -354,44 +419,33 @@ async def initiate_amd_outbound_call(
             tracking_id,
         ))
 
-    # Create Twilio client and initiate call with AMD
+    # Create call with AMD based on provider
     try:
-        twilio_client = TwilioClient(account_sid, auth_token)
-
-        call = twilio_client.calls.create(
-            to=to_number,
-            from_=from_number,
-
-            # AMD Configuration
-            machine_detection="DetectMessageEnd",  # Wait for voicemail beep
-            machine_detection_timeout=30,  # 30 seconds max detection
-            async_amd=True,  # Don't block - use callback
-            async_amd_status_callback=f"{API_BASE_URL}/api/v1/voice/amd/status/{tracking_id}",
-            async_amd_status_callback_method="POST",
-
-            # Initial TwiML - pause while AMD runs
-            url=f"{API_BASE_URL}/api/v1/voice/amd/waiting/{tracking_id}",
-
-            # Status callbacks
-            status_callback=f"{API_BASE_URL}/api/v1/voice/amd/call-status/{tracking_id}",
-            status_callback_event=['initiated', 'ringing', 'answered', 'completed'],
-        )
+        if TELEPHONY_PROVIDER == "telnyx":
+            call_sid = await _initiate_telnyx_amd_call(
+                to_number, from_number, tracking_id, db
+            )
+        else:
+            call_sid = await _initiate_twilio_amd_call(
+                to_number, from_number, tracking_id, account_sid, auth_token
+            )
 
         # Update with call SID
         db.execute(text("""
             UPDATE amd_outbound_calls
             SET call_sid = :call_sid, status = 'amd_pending'
             WHERE id = :tracking_id
-        """), {"call_sid": call.sid, "tracking_id": tracking_id})
+        """), {"call_sid": call_sid, "tracking_id": tracking_id})
         db.commit()
 
-        logger.info(f"AMD call initiated: {tracking_id} -> {to_number} (SID: {call.sid})")
+        logger.info(f"AMD call initiated: {tracking_id} -> {to_number} (SID: {call_sid})")
 
         return {
             "success": True,
             "tracking_id": tracking_id,
-            "call_sid": call.sid,
+            "call_sid": call_sid,
             "status": "amd_pending",
+            "provider": TELEPHONY_PROVIDER,
             "message": f"AMD-enabled call initiated to {request.client_name} at {to_number}"
         }
 
@@ -406,6 +460,69 @@ async def initiate_amd_outbound_call(
         except Exception as db_error:
             logger.error(f"Failed to update call status: {db_error}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+async def _initiate_twilio_amd_call(
+    to_number: str,
+    from_number: str,
+    tracking_id: str,
+    account_sid: str,
+    auth_token: str,
+) -> str:
+    """Initiate AMD-enabled call via Twilio"""
+    from twilio.rest import Client as TwilioClient
+
+    twilio_client = TwilioClient(account_sid, auth_token)
+
+    call = twilio_client.calls.create(
+        to=to_number,
+        from_=from_number,
+
+        # AMD Configuration
+        machine_detection="DetectMessageEnd",  # Wait for voicemail beep
+        machine_detection_timeout=30,  # 30 seconds max detection
+        async_amd=True,  # Don't block - use callback
+        async_amd_status_callback=f"{API_BASE_URL}/api/v1/voice/amd/status/{tracking_id}",
+        async_amd_status_callback_method="POST",
+
+        # Initial TwiML - pause while AMD runs
+        url=f"{API_BASE_URL}/api/v1/voice/amd/waiting/{tracking_id}",
+
+        # Status callbacks
+        status_callback=f"{API_BASE_URL}/api/v1/voice/amd/call-status/{tracking_id}",
+        status_callback_event=['initiated', 'ringing', 'answered', 'completed'],
+    )
+
+    return call.sid
+
+
+async def _initiate_telnyx_amd_call(
+    to_number: str,
+    from_number: str,
+    tracking_id: str,
+    db: Session,
+) -> str:
+    """Initiate AMD-enabled call via Telnyx"""
+    from telephony import get_telephony_provider
+
+    provider = get_telephony_provider()
+
+    # Telnyx AMD configuration
+    result = provider.place_call(
+        to=to_number,
+        from_=from_number,
+        url=f"{API_BASE_URL}/api/v1/telnyx/texml/waiting/{tracking_id}",
+        status_callback=f"{API_BASE_URL}/api/v1/telnyx/webhook",
+        timeout=30,
+        record=True,
+        machine_detection="detect",
+        machine_detection_timeout=30,
+    )
+
+    if not result.success:
+        raise Exception(result.error_message or "Failed to place Telnyx call")
+
+    return result.call_sid
 
 
 # =============================================================================

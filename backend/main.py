@@ -20101,13 +20101,21 @@ app.include_router(ai_receptionist_dashboard_router, tags=["AI Receptionist Dash
 from voice_routes import router as voice_router
 app.include_router(voice_router, tags=["Voice AI"])
 
-# Include AMD Outbound Call routes (Twilio AMD for voicemail detection)
+# Include AMD Outbound Call routes (Twilio/Telnyx AMD for voicemail detection)
 try:
     from routes.amd_outbound_routes import router as amd_outbound_router
     app.include_router(amd_outbound_router, tags=["AMD Outbound Calls"])
     logger.info("✅ AMD Outbound Call routes loaded")
 except Exception as e:
     logger.warning(f"⚠️ Could not load AMD Outbound Call routes: {e}")
+
+# Include Telnyx Webhook routes (for Telnyx telephony provider)
+try:
+    from routes.telnyx_webhook_routes import router as telnyx_webhook_router
+    app.include_router(telnyx_webhook_router, tags=["Telnyx Webhooks"])
+    logger.info("✅ Telnyx Webhook routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load Telnyx Webhook routes: {e}")
 
 # Include Call Screening routes (blocklist/whitelist management, spam filtering)
 try:
