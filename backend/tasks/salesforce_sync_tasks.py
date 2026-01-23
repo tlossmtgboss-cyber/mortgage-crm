@@ -232,33 +232,56 @@ async def sync_all_users_salesforce(
         for profile in profiles:
             try:
                 results['users_processed'] += 1
+                had_errors = False
 
                 # ===== INBOUND: Pull from Salesforce → CRM =====
                 # Pass db session to avoid creating nested connections (connection pool exhaustion fix)
                 if sync_emails:
-                    email_result = await sync_emails_from_salesforce(
-                        integration_profile_id=profile.id,
-                        days_back=email_days_back,
-                        limit=200,
-                        db=db  # Reuse parent session
-                    )
-                    results['inbound']['emails_synced'] += email_result.get('emails_synced', 0)
-                    results['inbound']['emails_skipped'] += email_result.get('emails_skipped', 0)
-                    if email_result.get('errors'):
-                        results['errors'].extend(email_result['errors'][:3])
+                    try:
+                        email_result = await sync_emails_from_salesforce(
+                            integration_profile_id=profile.id,
+                            days_back=email_days_back,
+                            limit=200,
+                            db=db  # Reuse parent session
+                        )
+                        results['inbound']['emails_synced'] += email_result.get('emails_synced', 0)
+                        results['inbound']['emails_skipped'] += email_result.get('emails_skipped', 0)
+                        if email_result.get('errors'):
+                            results['errors'].extend(email_result['errors'][:3])
+                            had_errors = True
+                    except Exception as e:
+                        logger.error(f"Email sync failed for profile {profile.id}: {e}")
+                        results['errors'].append(f"Email sync: {str(e)[:100]}")
+                        had_errors = True
+                        # Rollback to recover from any transaction errors
+                        try:
+                            db.rollback()
+                        except Exception:
+                            pass
 
                 if sync_calendar:
-                    calendar_result = await sync_calendar_from_salesforce(
-                        integration_profile_id=profile.id,
-                        days_back=calendar_days_back,
-                        days_forward=calendar_days_forward,
-                        limit=200,
-                        db=db  # Reuse parent session
-                    )
-                    results['inbound']['events_synced'] += calendar_result.get('events_synced', 0)
-                    results['inbound']['tasks_synced'] += calendar_result.get('tasks_synced', 0)
-                    if calendar_result.get('errors'):
-                        results['errors'].extend(calendar_result['errors'][:3])
+                    try:
+                        calendar_result = await sync_calendar_from_salesforce(
+                            integration_profile_id=profile.id,
+                            days_back=calendar_days_back,
+                            days_forward=calendar_days_forward,
+                            limit=200,
+                            db=db  # Reuse parent session
+                        )
+                        results['inbound']['events_synced'] += calendar_result.get('events_synced', 0)
+                        results['inbound']['tasks_synced'] += calendar_result.get('tasks_synced', 0)
+                        if calendar_result.get('errors'):
+                            results['errors'].extend(calendar_result['errors'][:3])
+                            had_errors = True
+                    except Exception as e:
+                        logger.error(f"Calendar sync failed for profile {profile.id}: {e}")
+                        results['errors'].append(f"Calendar sync: {str(e)[:100]}")
+                        had_errors = True
+                        # Rollback to recover from any transaction errors
+                        try:
+                            db.rollback()
+                        except Exception:
+                            pass
 
                 # ===== OUTBOUND: Push CRM → Salesforce =====
                 if push_to_salesforce:
@@ -290,18 +313,41 @@ async def sync_all_users_salesforce(
                         for category in ['loans', 'leads', 'emails', 'calendar']:
                             if push_result[category].get('errors'):
                                 results['errors'].extend(push_result[category]['errors'][:2])
+                                had_errors = True
 
                     except Exception as e:
                         logger.error(f"Outbound sync failed for user {profile.user_id}: {e}")
-                        results['errors'].append(f"Outbound sync user {profile.user_id}: {str(e)}")
+                        results['errors'].append(f"Outbound sync user {profile.user_id}: {str(e)[:100]}")
+                        had_errors = True
+                        # Rollback to recover from any transaction errors
+                        try:
+                            db.rollback()
+                        except Exception:
+                            pass
 
-                # Update last sync time
-                profile.last_sync_at = datetime.utcnow()
-                db.commit()
+                # Update last sync time - use fresh transaction after any rollbacks
+                try:
+                    # Re-fetch profile to ensure we have a valid object in the current transaction
+                    from salesforce_integration_models import IntegrationProfile as IP
+                    fresh_profile = db.query(IP).filter(IP.id == profile.id).first()
+                    if fresh_profile:
+                        fresh_profile.last_sync_at = datetime.utcnow()
+                        db.commit()
+                except Exception as commit_err:
+                    logger.warning(f"Could not update last_sync_at for profile {profile.id}: {commit_err}")
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
 
             except Exception as e:
                 logger.error(f"Sync failed for user {profile.user_id}: {e}")
-                results['errors'].append(f"User {profile.user_id}: {str(e)}")
+                results['errors'].append(f"User {profile.user_id}: {str(e)[:100]}")
+                # Rollback to ensure clean state for next profile
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
 
         results['completed_at'] = datetime.utcnow().isoformat()
 
@@ -550,14 +596,30 @@ async def trigger_user_sync(
         # ===== INBOUND: Pull from Salesforce =====
         # Pass db session to avoid creating nested connections (connection pool exhaustion fix)
         if sync_emails:
-            results['inbound']['email_sync'] = await sync_emails_from_salesforce(
-                profile.id, days_back=30, limit=500, db=db
-            )
+            try:
+                results['inbound']['email_sync'] = await sync_emails_from_salesforce(
+                    profile.id, days_back=30, limit=500, db=db
+                )
+            except Exception as e:
+                logger.error(f"Email sync failed for user {user_id}: {e}")
+                results['inbound']['email_sync'] = {'success': False, 'error': str(e)}
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
 
         if sync_calendar:
-            results['inbound']['calendar_sync'] = await sync_calendar_from_salesforce(
-                profile.id, days_back=30, days_forward=90, limit=500, db=db
-            )
+            try:
+                results['inbound']['calendar_sync'] = await sync_calendar_from_salesforce(
+                    profile.id, days_back=30, days_forward=90, limit=500, db=db
+                )
+            except Exception as e:
+                logger.error(f"Calendar sync failed for user {user_id}: {e}")
+                results['inbound']['calendar_sync'] = {'success': False, 'error': str(e)}
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
 
         # ===== OUTBOUND: Push to Salesforce =====
         if push_to_salesforce or push_emails:
@@ -579,10 +641,24 @@ async def trigger_user_sync(
                 logger.error(f"Outbound sync failed for user {user_id}: {e}")
                 results['outbound']['error'] = str(e)
                 results['success'] = False
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
 
-        # Update last sync time
-        profile.last_sync_at = datetime.utcnow()
-        db.commit()
+        # Update last sync time - use fresh transaction after any rollbacks
+        try:
+            from salesforce_integration_models import IntegrationProfile as IP
+            fresh_profile = db.query(IP).filter(IP.id == profile.id).first()
+            if fresh_profile:
+                fresh_profile.last_sync_at = datetime.utcnow()
+                db.commit()
+        except Exception as commit_err:
+            logger.warning(f"Could not update last_sync_at for profile {profile.id}: {commit_err}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
 
         return results
 
