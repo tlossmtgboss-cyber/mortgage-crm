@@ -29,6 +29,7 @@
     "capacitor-native-biometric": "^4.2.2",
     "dompurify": "^3.3.0",
     "html2canvas": "^1.4.1",
+    "jszip": "^3.10.1",
     "react": "^18.2.0",
     "react-beautiful-dnd": "^13.1.1",
     "react-dom": "^18.2.0",
