@@ -320,6 +320,9 @@ class PURLAuditMiddleware:
                         user_agent=request.headers.get("user-agent")
                     )
                     db.commit()
+                except Exception:
+                    db.rollback()
+                    raise
                 finally:
                     db.close()
 

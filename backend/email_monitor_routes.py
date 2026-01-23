@@ -683,6 +683,7 @@ async def _poll_provider_emails(provider_id: int, provider_name: str):
         logger.info(f"Email poll completed for provider {provider_name}")
 
     except Exception as e:
+        db.rollback()
         logger.error(f"Email polling failed for provider {provider_id}: {e}")
     finally:
         db.close()

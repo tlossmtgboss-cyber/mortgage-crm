@@ -1546,8 +1546,8 @@ async def twilio_sms_webhook(
         db.commit()
 
         if new_id:
-            # Schedule background analysis
-            background_tasks.add_task(process_incoming_sms, new_id[0], db)
+            # Schedule background analysis - don't pass db, task creates its own
+            background_tasks.add_task(process_incoming_sms, new_id[0])
 
         return {"success": True, "message_id": new_id[0] if new_id else None}
 
@@ -1557,8 +1557,10 @@ async def twilio_sms_webhook(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-async def process_incoming_sms(sms_id: int, db: Session):
-    """Background task to process an incoming SMS"""
+async def process_incoming_sms(sms_id: int):
+    """Background task to process an incoming SMS - creates its own db session"""
+    from database import SessionLocal
+    db = SessionLocal()
     try:
         # Get the SMS
         result = db.execute(text("""
@@ -1706,6 +1708,11 @@ async def process_incoming_sms(sms_id: int, db: Session):
     except SQLAlchemyError as e:
         logger.error(f"Error processing incoming SMS {sms_id}: {e}")
         db.rollback()
+    except Exception as e:
+        logger.error(f"Unexpected error processing incoming SMS {sms_id}: {e}")
+        db.rollback()
+    finally:
+        db.close()
 
 
 # ================================================================

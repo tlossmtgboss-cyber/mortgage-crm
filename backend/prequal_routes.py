@@ -409,10 +409,9 @@ async def submit_prequal(
             appointment_id
         )
 
-        # Step 5: Trigger SLA timers (in background)
+        # Step 5: Trigger SLA timers (in background) - don't pass db
         background_tasks.add_task(
             create_sla_tasks,
-            db,
             lead_id,
             classification
         )
@@ -712,8 +711,10 @@ async def send_notifications(
         logger.error(f"Notification failed: {str(e)}")
 
 
-async def create_sla_tasks(db: Session, lead_id: int, classification: Dict):
-    """Create SLA tasks for lead follow-up"""
+async def create_sla_tasks(lead_id: int, classification: Dict):
+    """Create SLA tasks for lead follow-up - creates its own db session"""
+    from database import SessionLocal
+    db = SessionLocal()
     try:
         priority = classification.get("priority", "warm")
 
@@ -748,7 +749,10 @@ async def create_sla_tasks(db: Session, lead_id: int, classification: Dict):
         db.commit()
         logger.info(f"SLA task created for lead {lead_id}")
     except Exception as e:
+        db.rollback()
         logger.error(f"SLA task creation failed: {str(e)}")
+    finally:
+        db.close()
 
 
 @router.get("/health")

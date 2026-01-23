@@ -480,6 +480,22 @@ async def get_available_roles(
 # SCHEDULER ENDPOINTS
 # =============================================================================
 
+def run_scheduled_workflow_tasks_background():
+    """Wrapper that creates its own db session for background execution"""
+    from database import SessionLocal
+    db = SessionLocal()
+    try:
+        result = run_scheduled_workflow_tasks(db)
+        db.commit()
+        return result
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Background scheduler error: {e}")
+        raise
+    finally:
+        db.close()
+
+
 @router.post("/scheduler/run")
 async def run_scheduler(
     background_tasks: BackgroundTasks,
@@ -494,7 +510,7 @@ async def run_scheduler(
     and checks for workflow completions.
     """
     if run_async:
-        background_tasks.add_task(run_scheduled_workflow_tasks, db)
+        background_tasks.add_task(run_scheduled_workflow_tasks_background)
         return {"success": True, "message": "Scheduler started in background"}
 
     result = run_scheduled_workflow_tasks(db)

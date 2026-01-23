@@ -118,7 +118,8 @@ async def vapi_webhook(
         logger.info(f"Vapi webhook received: {payload.get('message', {}).get('type')}")
 
         # Process webhook in background to return 200 quickly
-        background_tasks.add_task(process_webhook_background, payload, db)
+        # Note: Don't pass db session to background task - it creates its own
+        background_tasks.add_task(process_webhook_background, payload)
 
         # Vapi expects 200 OK response quickly
         return JSONResponse(
@@ -135,14 +136,20 @@ async def vapi_webhook(
         )
 
 
-async def process_webhook_background(payload: Dict[str, Any], db: Session):
-    """Process webhook in background task"""
+async def process_webhook_background(payload: Dict[str, Any]):
+    """Process webhook in background task - creates its own db session"""
+    from database import SessionLocal
+    db = SessionLocal()
     try:
         integration = VapiCRMIntegration(db)
         await integration.process_call_webhook(payload)
+        db.commit()
         logger.info("Webhook processed successfully")
     except Exception as e:
+        db.rollback()
         logger.error(f"Background webhook processing error: {str(e)}")
+    finally:
+        db.close()
 
 
 @router.post("/webhook/assistant-request")
