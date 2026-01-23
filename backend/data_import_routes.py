@@ -15,18 +15,35 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/data-import", tags=["Data Import"])
 
-# Import dependencies from main app
-try:
-    from main import get_current_user, get_db_connection
-except ImportError:
-    # Fallback for standalone testing
-    async def get_current_user():
-        return {"email": "admin@perenniaai.com"}
+# Import dependencies with lazy loading to avoid circular imports
+_get_current_user = None
+_get_db_connection = None
 
-    def get_db_connection():
-        import psycopg2
-        import os
-        return psycopg2.connect(os.getenv("DATABASE_URL"))
+async def get_current_user(*args, **kwargs):
+    global _get_current_user
+    if _get_current_user is None:
+        try:
+            from main import get_current_user as _gcu
+            _get_current_user = _gcu
+        except Exception:
+            async def fallback():
+                return {"email": "admin@perenniaai.com"}
+            _get_current_user = fallback
+    return await _get_current_user(*args, **kwargs)
+
+def get_db_connection():
+    global _get_db_connection
+    if _get_db_connection is None:
+        try:
+            from main import get_db_connection as _gdbc
+            _get_db_connection = _gdbc
+        except Exception:
+            import psycopg2
+            import os
+            def fallback():
+                return psycopg2.connect(os.getenv("DATABASE_URL"))
+            _get_db_connection = fallback
+    return _get_db_connection()
 
 
 def detect_header_row(file_content: bytes, filename: str) -> int:

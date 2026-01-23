@@ -3,21 +3,43 @@ Escalation Routes
 API endpoints for escalating issues to team members
 """
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
+from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING, Any
 from datetime import datetime, timezone
 import logging
 import os
 import uuid
 
 from database import get_db
-from main import get_current_user, User, Lead, Task
+
+if TYPE_CHECKING:
+    from main import User, Lead, Task
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["escalations"])
+
+# OAuth2 scheme for token extraction (matches main.py)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
+
+
+async def get_current_user_lazy(
+    token: str = Depends(oauth2_scheme),
+    request: Request = None,
+    db: Session = Depends(get_db)
+):
+    """Lazy import wrapper to avoid circular imports"""
+    from main import get_current_user
+    return await get_current_user(token, request, db)
+
+
+def get_models():
+    """Lazy import models to avoid circular imports"""
+    from main import User, Lead, Task
+    return User, Lead, Task
 
 
 @router.get("/leads/search")
@@ -25,12 +47,13 @@ async def search_leads(
     q: str,
     limit: int = 10,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: Any = Depends(get_current_user_lazy)
 ):
     """
     Search for leads by name or loan number
     Used for borrower autocomplete in escalation panel
     """
+    User, Lead, Task = get_models()
     try:
         if not q or len(q) < 2:
             return {"leads": []}
@@ -80,11 +103,12 @@ async def create_escalation(
     priority: str = Form("high"),
     attachments: List[UploadFile] = File(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: Any = Depends(get_current_user_lazy)
 ):
     """
     Create an escalation task assigned to a team member
     """
+    User, Lead, Task = get_models()
     try:
         # Verify the assigned user exists
         assigned_user = db.query(User).filter(User.id == assigned_to_id).first()

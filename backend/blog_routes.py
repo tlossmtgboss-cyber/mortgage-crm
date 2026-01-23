@@ -21,7 +21,7 @@ from sqlalchemy import desc
 from pydantic import BaseModel, Field
 
 from database import get_db
-from main import get_current_user_flexible
+# Note: get_current_user_flexible removed - lazy import if needed later
 from models.ai_daily_blog import (
     BlogVoiceProfile, BlogComplianceProfile, BlogSourceDocument,
     BlogCampaign, BlogContentItem, BlogContentJob, BlogTopicQueue,

@@ -3,7 +3,7 @@ Intelligent Email Monitor - FastAPI Routes
 3-stage filtering with Claude AI
 """
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func, desc, case
 from pydantic import BaseModel, EmailStr
@@ -15,7 +15,12 @@ import json
 import os
 
 from database import get_db
-from main import get_current_user_flexible
+# Lazy import to avoid circular imports
+async def get_current_user_flexible(request: Request, db: Session = Depends(get_db)):
+    """Lazy import wrapper to avoid circular imports"""
+    from main import get_current_user_flexible as _get_current_user_flexible
+    return await _get_current_user_flexible(request, db)
+
 from models.email_monitor import (
     EmailMonitorCaptured,
     EmailCRMLink,

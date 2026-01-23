@@ -4,7 +4,8 @@ Real-time voice conversation for Perennia mobile app via WebSocket
 Uses Deepgram for streaming STT and ElevenLabs for streaming TTS
 """
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException, Request
+from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 import logging
@@ -22,6 +23,9 @@ if TYPE_CHECKING:
 # Database and auth imports
 from database import get_db
 from utils.websocket_auth import authenticate_websocket, get_user_id_from_websocket
+
+# OAuth2 scheme for token extraction (matches main.py)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
 logger = logging.getLogger(__name__)
 
@@ -787,15 +791,19 @@ async def list_available_voices():
 # User Voice Preference Endpoints
 # =============================================================================
 
-def get_current_user_dep():
-    """Get current user dependency - avoids circular import"""
+async def get_current_user_lazy(
+    token: str = Depends(oauth2_scheme),
+    request: Request = None,
+    db: Session = Depends(get_db)
+):
+    """Get current user with lazy import to avoid circular import issues"""
     from main import get_current_user
-    return get_current_user
+    return await get_current_user(token, request, db)
 
 
 @router.get("/user-voice-preference")
 async def get_user_voice_preference(
-    current_user: "User" = Depends(get_current_user_dep()),
+    current_user: "User" = Depends(get_current_user_lazy),
     db: Session = Depends(get_db)
 ):
     """Get user's saved voice preference for Aria conversations"""
@@ -829,7 +837,7 @@ async def get_user_voice_preference(
 @router.put("/user-voice-preference")
 async def save_user_voice_preference(
     request: dict,
-    current_user: "User" = Depends(get_current_user_dep()),
+    current_user: "User" = Depends(get_current_user_lazy),
     db: Session = Depends(get_db)
 ):
     """Save user's voice preference for Aria conversations"""

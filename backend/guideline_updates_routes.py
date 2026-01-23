@@ -2,7 +2,7 @@
 Guideline Updates - FastAPI Routes
 API endpoints for displaying recent guideline updates from all 5 sources
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
@@ -17,10 +17,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/guideline-updates", tags=["Guideline Updates"])
 
 
-def get_current_user_flexible():
-    """Lazy import auth dependency"""
+async def get_current_user_lazy(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Lazy import auth dependency to avoid circular imports"""
     from main import get_current_user_flexible as _get_current_user_flexible
-    return _get_current_user_flexible
+    return await _get_current_user_flexible(request, db)
 
 
 # Pydantic Models
@@ -66,7 +69,7 @@ async def get_sidebar_updates(
     user_id: int = Query(..., description="Current user ID"),
     limit_per_source: int = Query(5, description="Max updates per source"),
     db: Session = Depends(get_db),
-    current_user: Any = Depends(get_current_user_flexible())
+    current_user: Any = Depends(get_current_user_lazy)
 ):
     """
     Get recent guideline updates for sidebar display
@@ -119,7 +122,7 @@ async def get_sidebar_updates(
 async def check_for_new_updates(
     user_id: int = Query(..., description="Current user ID"),
     db: Session = Depends(get_db),
-    current_user: Any = Depends(get_current_user_flexible())
+    current_user: Any = Depends(get_current_user_lazy)
 ):
     """
     Check if there are any new unread updates
@@ -157,7 +160,7 @@ async def mark_update_viewed(
     update_id: int,
     user_id: int = Query(..., description="Current user ID"),
     db: Session = Depends(get_db),
-    current_user: Any = Depends(get_current_user_flexible())
+    current_user: Any = Depends(get_current_user_lazy)
 ):
     """
     Mark a specific update as viewed by the user
@@ -192,7 +195,7 @@ async def mark_all_viewed(
     user_id: int = Query(..., description="Current user ID"),
     source: Optional[str] = Query(None, description="Optional: mark only this source"),
     db: Session = Depends(get_db),
-    current_user: Any = Depends(get_current_user_flexible())
+    current_user: Any = Depends(get_current_user_lazy)
 ):
     """
     Mark all updates (or all from a specific source) as viewed
