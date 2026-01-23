@@ -252,7 +252,7 @@ class SalesforceEmailSyncService:
             ) VALUES (
                 :user_id, :lead_id, :loan_id, :to_email, :from_email, :subject,
                 :body, :html_body, :direction, :status, :has_attachments,
-                :meta_data::jsonb, :created_at, :received_at
+                CAST(:meta_data AS jsonb), :created_at, :received_at
             )
         """), {
             "user_id": user_id,
@@ -330,7 +330,7 @@ class SalesforceEmailSyncService:
                 body, direction, status, meta_data, created_at, received_at
             ) VALUES (
                 :user_id, :lead_id, :loan_id, :to_email, :from_email, :subject,
-                :body, :direction, :status, :meta_data::jsonb, :created_at, :received_at
+                :body, :direction, :status, CAST(:meta_data AS jsonb), :created_at, :received_at
             )
         """), {
             "user_id": user_id,

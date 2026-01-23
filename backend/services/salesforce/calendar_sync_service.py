@@ -270,7 +270,7 @@ class SalesforceCalendarSyncService:
             ) VALUES (
                 :user_id, :lead_id, :loan_id, :title, :description,
                 :event_type, :location, :start_time, :end_time,
-                :all_day, :status, :meta_data::jsonb, :created_at
+                :all_day, :status, CAST(:meta_data AS jsonb), :created_at
             )
         """), {
             "user_id": user_id,
@@ -356,7 +356,7 @@ class SalesforceCalendarSyncService:
                 due_date, status, priority, meta_data, created_at
             ) VALUES (
                 :user_id, :lead_id, :loan_id, :title, :description,
-                :due_date, :status, :priority, :meta_data::jsonb, :created_at
+                :due_date, :status, :priority, CAST(:meta_data AS jsonb), :created_at
             )
         """), {
             "user_id": user_id,
