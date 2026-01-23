@@ -440,6 +440,261 @@ async def create_project(
     }
 
 
+# =============================================================================
+# Static Routes (must be defined BEFORE /{project_id} to avoid path conflicts)
+# =============================================================================
+
+# Theme Routes
+@router.get("/themes", response_model=List[ThemeResponse])
+async def list_themes(
+    request: Request,
+    db: Session = Depends(get_db),
+    category: Optional[str] = Query(None),
+    include_system: bool = Query(True)
+):
+    """List available themes."""
+    user = await get_user_from_request(request, db)
+
+    query = db.query(CarouselTheme).filter(CarouselTheme.is_active == True)
+
+    if include_system:
+        query = query.filter(
+            or_(
+                CarouselTheme.is_system == True,
+                CarouselTheme.user_id == user.id
+            )
+        )
+    else:
+        query = query.filter(CarouselTheme.user_id == user.id)
+
+    if category:
+        query = query.filter(CarouselTheme.category == category)
+
+    themes = query.order_by(desc(CarouselTheme.is_system), CarouselTheme.name).all()
+
+    return [
+        {
+            "id": t.id,
+            "name": t.name,
+            "description": t.description,
+            "preview_url": t.preview_url,
+            "colors": t.colors or {},
+            "typography": t.typography or {},
+            "spacing": t.spacing or {},
+            "decorations": t.decorations or {},
+            "category": t.category,
+            "tags": t.tags or [],
+            "is_system": t.is_system,
+            "times_used": t.times_used or 0,
+            "created_at": t.created_at,
+        }
+        for t in themes
+    ]
+
+
+@router.post("/themes", response_model=ThemeResponse)
+async def create_theme(
+    request: Request,
+    theme_data: ThemeCreate,
+    db: Session = Depends(get_db)
+):
+    """Create a custom theme."""
+    user = await get_user_from_request(request, db)
+
+    theme = CarouselTheme(
+        id=generate_short_uuid(),
+        user_id=user.id,
+        organization_id=getattr(user, 'organization_id', 1),
+        name=theme_data.name,
+        description=theme_data.description,
+        colors=theme_data.colors,
+        typography=theme_data.typography,
+        spacing=theme_data.spacing,
+        decorations=theme_data.decorations,
+        category=theme_data.category,
+        tags=theme_data.tags,
+        is_system=False,
+        is_active=True,
+    )
+
+    db.add(theme)
+    db.commit()
+    db.refresh(theme)
+
+    return {
+        "id": theme.id,
+        "name": theme.name,
+        "description": theme.description,
+        "preview_url": theme.preview_url,
+        "colors": theme.colors or {},
+        "typography": theme.typography or {},
+        "spacing": theme.spacing or {},
+        "decorations": theme.decorations or {},
+        "category": theme.category,
+        "tags": theme.tags or [],
+        "is_system": theme.is_system,
+        "times_used": theme.times_used or 0,
+        "created_at": theme.created_at,
+    }
+
+
+# Template Routes
+@router.get("/templates", response_model=List[TemplateResponse])
+async def list_templates(
+    request: Request,
+    db: Session = Depends(get_db),
+    template_type: Optional[str] = Query(None),
+    platform: Optional[str] = Query(None),
+    category: Optional[str] = Query(None)
+):
+    """List available templates."""
+    user = await get_user_from_request(request, db)
+
+    query = db.query(CarouselTemplate).filter(CarouselTemplate.is_active == True)
+
+    if template_type:
+        query = query.filter(CarouselTemplate.template_type == template_type)
+    if platform:
+        query = query.filter(CarouselTemplate.platform == platform)
+    if category:
+        query = query.filter(CarouselTemplate.category == category)
+
+    templates = query.order_by(desc(CarouselTemplate.times_used)).all()
+
+    return [
+        {
+            "id": t.id,
+            "name": t.name,
+            "description": t.description,
+            "preview_url": t.preview_url,
+            "template_type": t.template_type.value if hasattr(t.template_type, 'value') else str(t.template_type),
+            "platform": t.platform.value if hasattr(t.platform, 'value') else str(t.platform),
+            "aspect_ratio": t.aspect_ratio.value if hasattr(t.aspect_ratio, 'value') else str(t.aspect_ratio),
+            "slide_count": len(t.slide_templates or []),
+            "required_data_bindings": t.required_data_bindings or [],
+            "category": t.category,
+            "tags": t.tags or [],
+            "times_used": t.times_used or 0,
+            "created_at": t.created_at,
+        }
+        for t in templates
+    ]
+
+
+@router.get("/templates/{template_id}", response_model=TemplateResponse)
+async def get_template(
+    request: Request,
+    template_id: str,
+    db: Session = Depends(get_db)
+):
+    """Get a template by ID."""
+    user = await get_user_from_request(request, db)
+
+    template = db.query(CarouselTemplate).filter(
+        CarouselTemplate.id == template_id
+    ).first()
+
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    return {
+        "id": template.id,
+        "name": template.name,
+        "description": template.description,
+        "preview_url": template.preview_url,
+        "template_type": template.template_type.value if hasattr(template.template_type, 'value') else str(template.template_type),
+        "platform": template.platform.value if hasattr(template.platform, 'value') else str(template.platform),
+        "aspect_ratio": template.aspect_ratio.value if hasattr(template.aspect_ratio, 'value') else str(template.aspect_ratio),
+        "slide_count": len(template.slide_templates or []),
+        "required_data_bindings": template.required_data_bindings or [],
+        "category": template.category,
+        "tags": template.tags or [],
+        "times_used": template.times_used or 0,
+        "created_at": template.created_at,
+    }
+
+
+# AI Routes
+@router.get("/ai/tokens")
+async def get_available_tokens(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Get list of available tokens for CRM data binding."""
+    await get_user_from_request(request, db)
+
+    tokens = carousel_content_service.get_available_tokens()
+
+    # Group tokens by category
+    grouped = {
+        "loan": {},
+        "property": {},
+        "borrower": {},
+        "lo": {},
+        "date": {},
+    }
+
+    for token, description in tokens.items():
+        # Extract category from token (e.g., {{loan.amount}} -> loan)
+        category = token.replace("{{", "").split(".")[0]
+        if category in grouped:
+            grouped[category][token] = description
+
+    return {
+        "tokens": tokens,
+        "grouped": grouped,
+        "usage_example": "Use {{borrower.first_name}} in slide content to insert the borrower's first name.",
+    }
+
+
+@router.get("/ai/project-types")
+async def get_project_types(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Get available project types with descriptions."""
+    await get_user_from_request(request, db)
+
+    return {
+        "project_types": [
+            {
+                "value": "just_closed",
+                "label": "Just Closed",
+                "description": "Celebrate a successful loan closing with your clients",
+                "suggested_crm_data": ["active_loan", "mum_client"],
+            },
+            {
+                "value": "rate_update",
+                "label": "Rate Update",
+                "description": "Share mortgage rate updates and market trends",
+                "suggested_crm_data": [],
+            },
+            {
+                "value": "educational",
+                "label": "Educational",
+                "description": "Teach homebuyers about mortgage concepts and tips",
+                "suggested_crm_data": [],
+            },
+            {
+                "value": "marketing",
+                "label": "Marketing",
+                "description": "Promote your services and value proposition",
+                "suggested_crm_data": [],
+            },
+            {
+                "value": "custom",
+                "label": "Custom",
+                "description": "Create custom content with your own prompt",
+                "suggested_crm_data": ["active_loan", "lead", "mum_client"],
+            },
+        ],
+    }
+
+
+# =============================================================================
+# Dynamic Project Routes (/{project_id}/...)
+# =============================================================================
+
 @router.get("/{project_id}", response_model=ProjectDetailResponse)
 async def get_project(
     request: Request,
@@ -912,182 +1167,6 @@ async def duplicate_slide(
 
 
 # =============================================================================
-# Theme Routes
-# =============================================================================
-
-@router.get("/themes", response_model=List[ThemeResponse])
-async def list_themes(
-    request: Request,
-    db: Session = Depends(get_db),
-    category: Optional[str] = Query(None),
-    include_system: bool = Query(True)
-):
-    """List available themes."""
-    user = await get_user_from_request(request, db)
-
-    query = db.query(CarouselTheme).filter(CarouselTheme.is_active == True)
-
-    if include_system:
-        query = query.filter(
-            or_(
-                CarouselTheme.is_system == True,
-                CarouselTheme.user_id == user.id
-            )
-        )
-    else:
-        query = query.filter(CarouselTheme.user_id == user.id)
-
-    if category:
-        query = query.filter(CarouselTheme.category == category)
-
-    themes = query.order_by(desc(CarouselTheme.is_system), CarouselTheme.name).all()
-
-    return [
-        {
-            "id": t.id,
-            "name": t.name,
-            "description": t.description,
-            "preview_url": t.preview_url,
-            "colors": t.colors or {},
-            "typography": t.typography or {},
-            "spacing": t.spacing or {},
-            "decorations": t.decorations or {},
-            "category": t.category,
-            "tags": t.tags or [],
-            "is_system": t.is_system,
-            "times_used": t.times_used or 0,
-            "created_at": t.created_at,
-        }
-        for t in themes
-    ]
-
-
-@router.post("/themes", response_model=ThemeResponse)
-async def create_theme(
-    request: Request,
-    theme_data: ThemeCreate,
-    db: Session = Depends(get_db)
-):
-    """Create a custom theme."""
-    user = await get_user_from_request(request, db)
-
-    theme = CarouselTheme(
-        id=generate_short_uuid(),
-        user_id=user.id,
-        organization_id=getattr(user, 'organization_id', 1),
-        name=theme_data.name,
-        description=theme_data.description,
-        colors=theme_data.colors,
-        typography=theme_data.typography,
-        spacing=theme_data.spacing,
-        decorations=theme_data.decorations,
-        category=theme_data.category,
-        tags=theme_data.tags,
-        is_system=False,
-        is_active=True,
-    )
-
-    db.add(theme)
-    db.commit()
-    db.refresh(theme)
-
-    return {
-        "id": theme.id,
-        "name": theme.name,
-        "description": theme.description,
-        "preview_url": theme.preview_url,
-        "colors": theme.colors or {},
-        "typography": theme.typography or {},
-        "spacing": theme.spacing or {},
-        "decorations": theme.decorations or {},
-        "category": theme.category,
-        "tags": theme.tags or [],
-        "is_system": theme.is_system,
-        "times_used": theme.times_used or 0,
-        "created_at": theme.created_at,
-    }
-
-
-# =============================================================================
-# Template Routes
-# =============================================================================
-
-@router.get("/templates", response_model=List[TemplateResponse])
-async def list_templates(
-    request: Request,
-    db: Session = Depends(get_db),
-    template_type: Optional[str] = Query(None),
-    platform: Optional[str] = Query(None),
-    category: Optional[str] = Query(None)
-):
-    """List available templates."""
-    user = await get_user_from_request(request, db)
-
-    query = db.query(CarouselTemplate).filter(CarouselTemplate.is_active == True)
-
-    if template_type:
-        query = query.filter(CarouselTemplate.template_type == template_type)
-    if platform:
-        query = query.filter(CarouselTemplate.platform == platform)
-    if category:
-        query = query.filter(CarouselTemplate.category == category)
-
-    templates = query.order_by(desc(CarouselTemplate.times_used)).all()
-
-    return [
-        {
-            "id": t.id,
-            "name": t.name,
-            "description": t.description,
-            "preview_url": t.preview_url,
-            "template_type": t.template_type.value if hasattr(t.template_type, 'value') else str(t.template_type),
-            "platform": t.platform.value if hasattr(t.platform, 'value') else str(t.platform),
-            "aspect_ratio": t.aspect_ratio.value if hasattr(t.aspect_ratio, 'value') else str(t.aspect_ratio),
-            "slide_count": len(t.slide_templates or []),
-            "required_data_bindings": t.required_data_bindings or [],
-            "category": t.category,
-            "tags": t.tags or [],
-            "times_used": t.times_used or 0,
-            "created_at": t.created_at,
-        }
-        for t in templates
-    ]
-
-
-@router.get("/templates/{template_id}", response_model=TemplateResponse)
-async def get_template(
-    request: Request,
-    template_id: str,
-    db: Session = Depends(get_db)
-):
-    """Get a template by ID."""
-    user = await get_user_from_request(request, db)
-
-    template = db.query(CarouselTemplate).filter(
-        CarouselTemplate.id == template_id
-    ).first()
-
-    if not template:
-        raise HTTPException(status_code=404, detail="Template not found")
-
-    return {
-        "id": template.id,
-        "name": template.name,
-        "description": template.description,
-        "preview_url": template.preview_url,
-        "template_type": template.template_type.value if hasattr(template.template_type, 'value') else str(template.template_type),
-        "platform": template.platform.value if hasattr(template.platform, 'value') else str(template.platform),
-        "aspect_ratio": template.aspect_ratio.value if hasattr(template.aspect_ratio, 'value') else str(template.aspect_ratio),
-        "slide_count": len(template.slide_templates or []),
-        "required_data_bindings": template.required_data_bindings or [],
-        "category": template.category,
-        "tags": template.tags or [],
-        "times_used": template.times_used or 0,
-        "created_at": template.created_at,
-    }
-
-
-# =============================================================================
 # Apply Template Route
 # =============================================================================
 
@@ -1457,38 +1536,6 @@ async def apply_generated_content(
     }
 
 
-@router.get("/ai/tokens")
-async def get_available_tokens(
-    request: Request,
-    db: Session = Depends(get_db)
-):
-    """Get list of available tokens for CRM data binding."""
-    await get_user_from_request(request, db)
-
-    tokens = carousel_content_service.get_available_tokens()
-
-    # Group tokens by category
-    grouped = {
-        "loan": {},
-        "property": {},
-        "borrower": {},
-        "lo": {},
-        "date": {},
-    }
-
-    for token, description in tokens.items():
-        # Extract category from token (e.g., {{loan.amount}} -> loan)
-        category = token.replace("{{", "").split(".")[0]
-        if category in grouped:
-            grouped[category][token] = description
-
-    return {
-        "tokens": tokens,
-        "grouped": grouped,
-        "usage_example": "Use {{borrower.first_name}} in slide content to insert the borrower's first name.",
-    }
-
-
 @router.get("/{project_id}/crm-data")
 async def get_project_crm_data(
     request: Request,
@@ -1564,50 +1611,6 @@ def get_data_source_type(project: CarouselProject) -> Optional[str]:
     if project.loan_id:
         return "mum_client"
     return None
-
-
-@router.get("/ai/project-types")
-async def get_project_types(
-    request: Request,
-    db: Session = Depends(get_db)
-):
-    """Get available project types with descriptions."""
-    await get_user_from_request(request, db)
-
-    return {
-        "project_types": [
-            {
-                "value": "just_closed",
-                "label": "Just Closed",
-                "description": "Celebrate a successful loan closing with your clients",
-                "suggested_crm_data": ["active_loan", "mum_client"],
-            },
-            {
-                "value": "rate_update",
-                "label": "Rate Update",
-                "description": "Share mortgage rate updates and market trends",
-                "suggested_crm_data": [],
-            },
-            {
-                "value": "educational",
-                "label": "Educational",
-                "description": "Teach homebuyers about mortgage concepts and tips",
-                "suggested_crm_data": [],
-            },
-            {
-                "value": "marketing",
-                "label": "Marketing",
-                "description": "Promote your services and value proposition",
-                "suggested_crm_data": [],
-            },
-            {
-                "value": "custom",
-                "label": "Custom",
-                "description": "Create custom content with your own prompt",
-                "suggested_crm_data": ["active_loan", "lead", "mum_client"],
-            },
-        ],
-    }
 
 
 # =============================================================================
