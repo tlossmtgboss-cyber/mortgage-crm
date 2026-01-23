@@ -607,13 +607,23 @@ def seed_templates(db):
     """Seed the database with templates."""
     print("Seeding templates...")
 
-    # Check if templates already exist
+    # Check if all templates exist
     existing = db.query(CarouselTemplate).filter(CarouselTemplate.is_active == True).count()
-    if existing > 0:
+    if existing >= len(TEMPLATES):
         print(f"  Found {existing} existing templates. Skipping.")
         return
 
+    # Get existing template names to avoid duplicates
+    existing_names = set(
+        name for (name,) in db.query(CarouselTemplate.name).all()
+    )
+
+    added = 0
     for template_data in TEMPLATES:
+        # Skip if template already exists
+        if template_data["name"] in existing_names:
+            continue
+
         template = CarouselTemplate(
             id=generate_id(),
             name=template_data["name"],
@@ -629,9 +639,13 @@ def seed_templates(db):
             times_used=0,
         )
         db.add(template)
+        added += 1
 
-    db.commit()
-    print(f"  Created {len(TEMPLATES)} templates.")
+    if added > 0:
+        db.commit()
+        print(f"  Added {added} new templates (total: {existing + added}).")
+    else:
+        print(f"  No new templates to add. ({existing} already exist)")
 
 
 def main():
