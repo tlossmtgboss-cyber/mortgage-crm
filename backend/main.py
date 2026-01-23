@@ -36867,6 +36867,229 @@ async def get_pool_status_endpoint():
         return {"status": "error", "error": str(e)}
 
 
+@app.get("/api/v1/admin/salesforce-sync-status")
+async def get_salesforce_sync_status():
+    """
+    Get Salesforce sync status including connected profiles, recent sync activity,
+    and health metrics. No authentication required for admin monitoring.
+    """
+    db = SessionLocal()
+    try:
+        result = {
+            "status": "ok",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "scheduler": {
+                "job_id": "salesforce_sync_all_users",
+                "interval_minutes": 15,
+                "enabled": True
+            },
+            "connected_profiles": {
+                "total": 0,
+                "active": 0,
+                "error": 0,
+                "sync_enabled": 0
+            },
+            "recent_syncs": [],
+            "health": {
+                "healthy": False,
+                "last_successful_sync": None,
+                "inbound_syncs_24h": 0,
+                "outbound_syncs_24h": 0,
+                "errors_24h": 0
+            },
+            "profiles": []
+        }
+
+        # Check if integration_profiles table exists
+        try:
+            profiles_exist = db.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'integration_profiles'
+                )
+            """)).scalar()
+        except Exception:
+            profiles_exist = False
+
+        if not profiles_exist:
+            result["status"] = "no_tables"
+            result["message"] = "Salesforce integration tables not created yet"
+            return result
+
+        # Get connected profiles count
+        try:
+            profile_counts = db.execute(text("""
+                SELECT
+                    COUNT(*) as total,
+                    COUNT(CASE WHEN status IN ('connected', 'active') THEN 1 END) as active,
+                    COUNT(CASE WHEN status = 'error' THEN 1 END) as error_count,
+                    COUNT(CASE WHEN sync_enabled = TRUE THEN 1 END) as sync_enabled
+                FROM integration_profiles
+                WHERE provider = 'salesforce'
+            """)).fetchone()
+
+            if profile_counts:
+                result["connected_profiles"] = {
+                    "total": profile_counts[0] or 0,
+                    "active": profile_counts[1] or 0,
+                    "error": profile_counts[2] or 0,
+                    "sync_enabled": profile_counts[3] or 0
+                }
+        except Exception as e:
+            result["connected_profiles"]["error_message"] = str(e)
+
+        # Get profile details
+        try:
+            profiles = db.execute(text("""
+                SELECT
+                    ip.id,
+                    ip.user_id,
+                    u.email as user_email,
+                    ip.status,
+                    ip.sf_username,
+                    ip.instance_url,
+                    ip.sync_enabled,
+                    ip.last_sync_at,
+                    ip.last_error,
+                    ip.connected_at
+                FROM integration_profiles ip
+                LEFT JOIN users u ON u.id = ip.user_id
+                WHERE ip.provider = 'salesforce'
+                ORDER BY ip.last_sync_at DESC NULLS LAST
+                LIMIT 20
+            """)).fetchall()
+
+            result["profiles"] = [
+                {
+                    "id": p[0],
+                    "user_id": p[1],
+                    "user_email": p[2],
+                    "status": p[3],
+                    "sf_username": p[4],
+                    "instance_url": p[5],
+                    "sync_enabled": p[6],
+                    "last_sync_at": p[7].isoformat() if p[7] else None,
+                    "last_error": p[8],
+                    "connected_at": p[9].isoformat() if p[9] else None
+                }
+                for p in profiles
+            ]
+        except Exception as e:
+            result["profiles_error"] = str(e)
+
+        # Check salesforce_sync_logs table
+        try:
+            logs_exist = db.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'salesforce_sync_logs'
+                )
+            """)).scalar()
+
+            if logs_exist:
+                # Get recent sync logs
+                recent_logs = db.execute(text("""
+                    SELECT
+                        id, sync_type, sync_direction, status,
+                        records_processed, records_created, records_updated, records_failed,
+                        started_at, completed_at, error_message
+                    FROM salesforce_sync_logs
+                    ORDER BY started_at DESC
+                    LIMIT 10
+                """)).fetchall()
+
+                result["recent_syncs"] = [
+                    {
+                        "id": log[0],
+                        "sync_type": log[1],
+                        "direction": log[2],
+                        "status": log[3],
+                        "records_processed": log[4],
+                        "records_created": log[5],
+                        "records_updated": log[6],
+                        "records_failed": log[7],
+                        "started_at": log[8].isoformat() if log[8] else None,
+                        "completed_at": log[9].isoformat() if log[9] else None,
+                        "error": log[10][:200] if log[10] else None
+                    }
+                    for log in recent_logs
+                ]
+
+                # Get health metrics
+                health_stats = db.execute(text("""
+                    SELECT
+                        MAX(CASE WHEN status = 'success' THEN completed_at END) as last_success,
+                        COUNT(CASE WHEN sync_direction = 'inbound' AND started_at >= NOW() - INTERVAL '24 hours' THEN 1 END) as inbound_24h,
+                        COUNT(CASE WHEN sync_direction = 'outbound' AND started_at >= NOW() - INTERVAL '24 hours' THEN 1 END) as outbound_24h,
+                        COUNT(CASE WHEN status = 'error' AND started_at >= NOW() - INTERVAL '24 hours' THEN 1 END) as errors_24h
+                    FROM salesforce_sync_logs
+                """)).fetchone()
+
+                if health_stats:
+                    result["health"] = {
+                        "healthy": result["connected_profiles"]["active"] > 0 and (health_stats[3] or 0) < 5,
+                        "last_successful_sync": health_stats[0].isoformat() if health_stats[0] else None,
+                        "inbound_syncs_24h": health_stats[1] or 0,
+                        "outbound_syncs_24h": health_stats[2] or 0,
+                        "errors_24h": health_stats[3] or 0
+                    }
+        except Exception as e:
+            result["sync_logs_error"] = str(e)
+
+        # Check integration_events table for additional metrics
+        try:
+            events_exist = db.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'integration_events'
+                )
+            """)).scalar()
+
+            if events_exist:
+                event_stats = db.execute(text("""
+                    SELECT
+                        COUNT(*) as total_events,
+                        COUNT(CASE WHEN status = 'success' THEN 1 END) as success,
+                        COUNT(CASE WHEN status = 'error' THEN 1 END) as errors,
+                        MAX(created_at) as last_event
+                    FROM integration_events
+                    WHERE created_at >= NOW() - INTERVAL '24 hours'
+                """)).fetchone()
+
+                if event_stats:
+                    result["integration_events_24h"] = {
+                        "total": event_stats[0] or 0,
+                        "success": event_stats[1] or 0,
+                        "errors": event_stats[2] or 0,
+                        "last_event": event_stats[3].isoformat() if event_stats[3] else None
+                    }
+        except Exception as e:
+            result["integration_events_error"] = str(e)
+
+        # Determine overall status
+        if result["connected_profiles"]["active"] == 0:
+            result["status"] = "no_connected_profiles"
+            result["message"] = "No users have connected Salesforce. Users need to complete OAuth at /api/integrations/salesforce/oauth/start"
+        elif result["connected_profiles"]["sync_enabled"] == 0:
+            result["status"] = "sync_disabled"
+            result["message"] = "Profiles exist but sync is disabled for all users"
+        else:
+            result["status"] = "ok"
+            result["message"] = f"{result['connected_profiles']['active']} active profile(s) with sync enabled"
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Salesforce sync status check failed: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    finally:
+        db.close()
+
+
 @app.post("/api/v1/admin/pool-reset")
 async def reset_pool_endpoint(admin_key: str = Query(...)):
     """
