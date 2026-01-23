@@ -6,6 +6,7 @@ Provides intelligent loan file analysis for loan officers:
 - Red flag identification
 - Guideline compliance checking
 - Pre-submission recommendations
+- Integration with AI Underwriting Engine for comprehensive analysis
 
 This service significantly reduces underwriting kickbacks by catching
 issues before submission.
@@ -22,6 +23,22 @@ import logging
 from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
+
+# Try to import underwriting engine components
+_underwriting_engine_available = False
+try:
+    from services.underwriting_engine import (
+        UnderwritingEngine,
+        IncomeCalculator,
+        AssetAnalyzer,
+        CreditAnalyzer,
+        EligibilityEngine,
+        ConditionGenerator,
+    )
+    _underwriting_engine_available = True
+    logger.info("Underwriting engine components loaded successfully")
+except ImportError as e:
+    logger.warning(f"Underwriting engine not available: {e}. Using basic analysis only.")
 
 # Document requirement templates by loan type
 REQUIRED_DOCUMENTS = {
@@ -101,13 +118,26 @@ class AIFileAnalysisService:
     """
     AI-powered loan file analysis service.
     Analyzes loan files to identify issues before underwriting submission.
+    Integrates with the AI Underwriting Engine when available for comprehensive analysis.
     """
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, use_underwriting_engine: bool = True):
         self.db = db
         self.client = anthropic.Anthropic(
             api_key=os.getenv("ANTHROPIC_API_KEY")
         )
+        self.use_underwriting_engine = use_underwriting_engine and _underwriting_engine_available
+
+        # Initialize underwriting engine components if available
+        if self.use_underwriting_engine:
+            try:
+                self.underwriting_engine = UnderwritingEngine()
+                self.eligibility_engine = EligibilityEngine()
+                self.condition_generator = ConditionGenerator()
+                logger.info("Underwriting engine initialized for file analysis")
+            except Exception as e:
+                logger.warning(f"Failed to initialize underwriting engine: {e}")
+                self.use_underwriting_engine = False
 
     def analyze_loan_file(self, loan_id: int) -> Dict[str, Any]:
         """
@@ -120,6 +150,7 @@ class AIFileAnalysisService:
             - compliance_issues: Guideline compliance concerns
             - recommendations: Actionable recommendations
             - readiness_score: 0-100 score indicating file readiness
+            - underwriting_analysis: Detailed underwriting engine results (if available)
         """
         # Gather all loan data
         loan_data = self._get_loan_data(loan_id)
@@ -144,6 +175,43 @@ class AIFileAnalysisService:
             borrower_data
         )
 
+        # Run underwriting engine analysis if available
+        underwriting_result = None
+        engine_conditions = []
+        eligibility_result = None
+
+        if self.use_underwriting_engine:
+            try:
+                underwriting_result = self._run_underwriting_engine_analysis(
+                    loan_data, borrower_data, documents
+                )
+                # Extract additional issues from underwriting engine
+                if underwriting_result:
+                    # Add eligibility issues to compliance
+                    if underwriting_result.get("eligibility_results"):
+                        eligibility_result = underwriting_result["eligibility_results"]
+                        for program in eligibility_result.get("programs", []):
+                            if not program.get("eligible"):
+                                for reason in program.get("ineligibility_reasons", []):
+                                    compliance_issues.append({
+                                        "type": f"{program.get('agency', 'unknown')}_eligibility",
+                                        "severity": "high",
+                                        "message": reason,
+                                    })
+
+                    # Get generated conditions
+                    engine_conditions = underwriting_result.get("conditions", [])
+
+                    # Add critical issues as red flags
+                    for issue in underwriting_result.get("critical_issues", []):
+                        compliance_issues.append({
+                            "type": "underwriting_critical",
+                            "severity": "critical",
+                            "message": issue,
+                        })
+            except Exception as e:
+                logger.warning(f"Underwriting engine analysis failed: {e}")
+
         # Build context for AI analysis
         context = self._build_analysis_context(
             loan_data,
@@ -154,6 +222,17 @@ class AIFileAnalysisService:
             compliance_issues
         )
 
+        # Add underwriting engine context if available
+        if underwriting_result:
+            context["underwriting_engine"] = {
+                "decision": underwriting_result.get("decision"),
+                "risk_level": underwriting_result.get("risk_level"),
+                "confidence_score": underwriting_result.get("confidence_score"),
+                "qualifying_income": underwriting_result.get("qualifying_income"),
+                "calculated_dti": underwriting_result.get("calculated_dti"),
+                "calculated_ltv": underwriting_result.get("calculated_ltv"),
+            }
+
         # Get AI-powered analysis
         ai_analysis = self._get_ai_analysis(context)
 
@@ -161,11 +240,11 @@ class AIFileAnalysisService:
         readiness_score = self._calculate_readiness_score(
             missing_docs,
             compliance_issues,
-            conditions,
+            conditions + engine_conditions,  # Include engine-generated conditions
             ai_analysis.get("red_flags", [])
         )
 
-        return {
+        result = {
             "loan_id": loan_id,
             "loan_number": loan_data.get("loan_number"),
             "loan_type": loan_data.get("loan_type"),
@@ -182,10 +261,161 @@ class AIFileAnalysisService:
             "next_steps": ai_analysis.get("next_steps", []),
         }
 
+        # Add underwriting engine results if available
+        if underwriting_result:
+            result["underwriting_analysis"] = {
+                "decision": underwriting_result.get("decision"),
+                "risk_level": underwriting_result.get("risk_level"),
+                "confidence_score": underwriting_result.get("confidence_score"),
+                "qualifying_income": underwriting_result.get("qualifying_income"),
+                "calculated_dti": underwriting_result.get("calculated_dti"),
+                "calculated_ltv": underwriting_result.get("calculated_ltv"),
+                "reserves_months": underwriting_result.get("reserves_months"),
+                "approved_program": underwriting_result.get("approved_program"),
+                "denial_reasons": underwriting_result.get("denial_reasons", []),
+                "refer_reasons": underwriting_result.get("refer_reasons", []),
+            }
+            if eligibility_result:
+                result["eligibility"] = eligibility_result
+
+        return result
+
+    def _run_underwriting_engine_analysis(
+        self,
+        loan_data: Dict,
+        borrower_data: Optional[Dict],
+        documents: List[Dict]
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Run the underwriting engine analysis on the loan file.
+
+        Converts loan data to the format expected by the underwriting engine
+        and runs comprehensive analysis including income, assets, credit, and eligibility.
+        """
+        if not self.use_underwriting_engine:
+            return None
+
+        try:
+            # Build loan data for underwriting engine
+            engine_loan_data = {
+                "loan_amount": float(loan_data.get("amount") or 0),
+                "property_value": float(loan_data.get("purchase_price") or loan_data.get("amount") or 0),
+                "loan_purpose": self._map_loan_purpose(loan_data.get("stage")),
+                "property_type": self._map_property_type(loan_data.get("property_type") or borrower_data.get("property_type") if borrower_data else None),
+                "occupancy": "primary",  # Default, could be enhanced
+                "loan_type": (loan_data.get("loan_type") or "conventional").lower(),
+                "property_state": self._extract_state(loan_data.get("property_address")),
+                "credit_score": borrower_data.get("credit_score") if borrower_data else None,
+                "dti_ratio": float(borrower_data.get("dti") or 0) if borrower_data else None,
+                "ltv": float(loan_data.get("ltv") or 0),
+            }
+
+            # Build income data if available
+            income_data = None
+            if borrower_data:
+                income_data = {
+                    "sources": [{
+                        "type": "w2",
+                        "annual_amount": float(borrower_data.get("annual_income") or 0) or float(borrower_data.get("loan_amount") or 0) * 0.25,  # Estimate
+                    }]
+                }
+
+            # Build credit data if available
+            credit_data = None
+            if borrower_data and borrower_data.get("credit_score"):
+                credit_data = {
+                    "credit_score": borrower_data.get("credit_score"),
+                    "tradelines": [],
+                }
+
+            # Run underwriting analysis
+            result = self.underwriting_engine.analyze_loan(
+                loan_data=engine_loan_data,
+                income_data=income_data,
+                asset_data=None,  # Could be enhanced with document extraction
+                credit_data=credit_data,
+            )
+
+            # Convert result to dict format
+            return {
+                "decision": result.decision.value if hasattr(result.decision, 'value') else str(result.decision),
+                "risk_level": result.risk_level.value if hasattr(result.risk_level, 'value') else str(result.risk_level),
+                "confidence_score": result.confidence_score,
+                "qualifying_income": result.qualifying_income,
+                "calculated_dti": result.calculated_dti,
+                "calculated_ltv": result.calculated_ltv,
+                "reserves_months": result.reserves_months,
+                "approved_loan_amount": result.approved_loan_amount,
+                "approved_program": result.approved_program,
+                "denial_reasons": result.denial_reasons,
+                "refer_reasons": result.refer_reasons,
+                "critical_issues": result.critical_issues,
+                "conditions": result.conditions if hasattr(result, 'conditions') else [],
+                "eligibility_results": result.eligibility_result,
+            }
+
+        except Exception as e:
+            logger.error(f"Underwriting engine analysis failed: {e}")
+            return None
+
+    def _map_loan_purpose(self, stage: Optional[str]) -> str:
+        """Map loan stage to loan purpose."""
+        if not stage:
+            return "purchase"
+        stage_lower = stage.lower()
+        if "refi" in stage_lower or "refinance" in stage_lower:
+            if "cash" in stage_lower:
+                return "cash_out"
+            return "rate_term"
+        return "purchase"
+
+    def _map_property_type(self, prop_type: Optional[str]) -> str:
+        """Map property type to engine format."""
+        if not prop_type:
+            return "single_family"
+        prop_lower = prop_type.lower()
+        mapping = {
+            "sfr": "single_family",
+            "single": "single_family",
+            "condo": "condo",
+            "townhouse": "townhouse",
+            "town": "townhouse",
+            "multi": "multi_family",
+            "duplex": "multi_family",
+            "triplex": "multi_family",
+            "fourplex": "multi_family",
+            "manufactured": "manufactured",
+            "mobile": "manufactured",
+        }
+        for key, value in mapping.items():
+            if key in prop_lower:
+                return value
+        return "single_family"
+
+    def _extract_state(self, address: Optional[str]) -> str:
+        """Extract state code from address."""
+        if not address:
+            return "CA"  # Default
+        # Simple extraction - look for 2-letter state code
+        import re
+        state_pattern = r'\b([A-Z]{2})\b'
+        matches = re.findall(state_pattern, address.upper())
+        us_states = {
+            'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
+            'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
+            'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
+            'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
+            'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY', 'DC'
+        }
+        for match in matches:
+            if match in us_states:
+                return match
+        return "CA"
+
     def quick_file_check(self, loan_id: int) -> Dict[str, Any]:
         """
         Quick file readiness check without full AI analysis.
-        Faster, rule-based only.
+        Uses rule-based checking plus optional underwriting engine eligibility check.
         """
         loan_data = self._get_loan_data(loan_id)
         if not loan_data:
@@ -205,6 +435,22 @@ class AIFileAnalysisService:
             borrower_data
         )
 
+        # Quick eligibility check with underwriting engine
+        eligibility_status = None
+        if self.use_underwriting_engine:
+            try:
+                eligibility_status = self._quick_eligibility_check(loan_data, borrower_data)
+                # Add eligibility issues to compliance
+                if eligibility_status and not eligibility_status.get("is_eligible"):
+                    for reason in eligibility_status.get("ineligibility_reasons", []):
+                        compliance_issues.append({
+                            "type": "eligibility",
+                            "severity": "high",
+                            "message": reason,
+                        })
+            except Exception as e:
+                logger.debug(f"Quick eligibility check failed: {e}")
+
         open_conditions = [c for c in conditions if c.get("status") == "open"]
 
         readiness_score = self._calculate_readiness_score(
@@ -214,7 +460,7 @@ class AIFileAnalysisService:
             []
         )
 
-        return {
+        result = {
             "loan_id": loan_id,
             "loan_number": loan_data.get("loan_number"),
             "readiness_score": readiness_score,
@@ -225,6 +471,69 @@ class AIFileAnalysisService:
             "open_conditions_count": len(open_conditions),
             "quick_issues": self._get_quick_issues(missing_docs, compliance_issues, open_conditions),
         }
+
+        if eligibility_status:
+            result["eligibility_status"] = eligibility_status
+
+        return result
+
+    def _quick_eligibility_check(
+        self,
+        loan_data: Dict,
+        borrower_data: Optional[Dict]
+    ) -> Optional[Dict[str, Any]]:
+        """Run a quick eligibility check using the underwriting engine."""
+        if not self.use_underwriting_engine:
+            return None
+
+        try:
+            loan_type = (loan_data.get("loan_type") or "conventional").lower()
+            credit_score = borrower_data.get("credit_score") if borrower_data else None
+            ltv = float(loan_data.get("ltv") or 0)
+            dti = float(borrower_data.get("dti") or 0) if borrower_data else None
+
+            # Create loan scenario for eligibility check
+            from services.underwriting_engine import LoanScenario, LoanPurpose, PropertyType, OccupancyType, Agency
+
+            scenario = LoanScenario(
+                loan_amount=float(loan_data.get("amount") or 0),
+                property_value=float(loan_data.get("purchase_price") or loan_data.get("amount") or 0),
+                loan_purpose=LoanPurpose.PURCHASE,
+                property_type=PropertyType.SINGLE_FAMILY,
+                occupancy=OccupancyType.PRIMARY,
+                credit_score=credit_score or 720,
+                ltv=ltv,
+                dti=dti or 43.0,
+                property_state=self._extract_state(loan_data.get("property_address")),
+            )
+
+            # Check eligibility for the specified loan type
+            agency_map = {
+                "conventional": Agency.FANNIE_MAE,
+                "fha": Agency.FHA,
+                "va": Agency.VA,
+            }
+            agency = agency_map.get(loan_type, Agency.FANNIE_MAE)
+
+            result = self.eligibility_engine.check_eligibility(scenario, [agency])
+
+            # Find the relevant program result
+            for program in result.programs:
+                if program.agency == agency:
+                    return {
+                        "is_eligible": program.eligible,
+                        "program": program.agency.value if hasattr(program.agency, 'value') else str(program.agency),
+                        "max_ltv": program.max_ltv,
+                        "max_dti": program.max_dti,
+                        "min_credit_score": program.min_credit_score,
+                        "ineligibility_reasons": program.ineligibility_reasons,
+                    }
+
+            return None
+
+        except Exception as e:
+            logger.debug(f"Quick eligibility check error: {e}")
+            return None
 
     def analyze_document(self, document_id: int) -> Dict[str, Any]:
         """

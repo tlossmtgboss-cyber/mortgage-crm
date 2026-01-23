@@ -20097,6 +20097,14 @@ app.include_router(ai_receptionist_dashboard_router, tags=["AI Receptionist Dash
 from voice_routes import router as voice_router
 app.include_router(voice_router, tags=["Voice AI"])
 
+# Include AMD Outbound Call routes (Twilio AMD for voicemail detection)
+try:
+    from routes.amd_outbound_routes import router as amd_outbound_router
+    app.include_router(amd_outbound_router, tags=["AMD Outbound Calls"])
+    logger.info("✅ AMD Outbound Call routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load AMD Outbound Call routes: {e}")
+
 # Include Call Screening routes (blocklist/whitelist management, spam filtering)
 try:
     from routes.call_screening_routes import router as call_screening_router
@@ -20219,6 +20227,15 @@ try:
     logger.info("✅ AI Smart File Analysis routes loaded")
 except Exception as e:
     logger.warning(f"⚠️ Could not load AI Smart File Analysis routes: {e}")
+
+# Include AI Underwriter chat routes for guideline Q&A
+try:
+    from routes.ai_underwriter_routes import router as ai_underwriter_router, set_dependencies as set_ai_uw_deps
+    set_ai_uw_deps(get_db, get_current_user)
+    app.include_router(ai_underwriter_router, tags=["AI Underwriter"])
+    logger.info("✅ AI Underwriter routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load AI Underwriter routes: {e}")
 
 # Include Subscription routes for Perennia AI
 from subscription_routes import router as subscription_router
