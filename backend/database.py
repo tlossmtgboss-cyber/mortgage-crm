@@ -3,15 +3,17 @@ Database configuration and session management
 Shared by main.py and other modules to avoid circular imports
 
 Production settings (Railway PostgreSQL):
-- Connection pooling: 3 permanent + 5 overflow (max 8 total)
+- PgBouncer support: Use DATABASE_POOLED_URL for connection pooling
+- Direct connection fallback: 3 permanent + 5 overflow (max 8 total)
 - Pool recycling: Refresh connections every 15 min
 - Pool pre-ping: Verify connections before use
 - TCP keepalives: Detect dead connections quickly
-- Statement timeout: 30 seconds (PostgreSQL only)
+- Statement timeout: 30 seconds (PostgreSQL only, direct connections)
 - Slow query logging: Configurable threshold
 
 Connection exhaustion prevention:
-- Conservative pool size stays under Railway's ~20 connection limit
+- Prefer PgBouncer (Railway's pooled URL) for unlimited virtual connections
+- Conservative pool size for direct connections
 - TCP keepalives detect network issues before they cause pool exhaustion
 - Pool events logged for debugging connection issues
 """
@@ -21,11 +23,18 @@ import logging
 from sqlalchemy import create_engine, event
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import NullPool
 
 logger = logging.getLogger(__name__)
 
 # Database URL from environment
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./mortgage_crm.db")
+# Prefer pooled URL (PgBouncer) if available - handles connection pooling externally
+DATABASE_POOLED_URL = os.getenv("DATABASE_POOLED_URL") or os.getenv("DATABASE_PUBLIC_URL")
+DATABASE_URL = DATABASE_POOLED_URL or os.getenv("DATABASE_URL", "sqlite:///./mortgage_crm.db")
+
+# Detect if using PgBouncer (pooled connection)
+USE_PGBOUNCER = DATABASE_POOLED_URL is not None or "pooler" in DATABASE_URL
+
 # Fix postgres:// to postgresql:// for SQLAlchemy
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
@@ -43,18 +52,35 @@ if DATABASE_URL.startswith("sqlite"):
         DATABASE_URL,
         connect_args={"check_same_thread": False}
     )
+elif USE_PGBOUNCER:
+    # PgBouncer mode: Let PgBouncer handle connection pooling
+    # Use NullPool - each request gets a fresh connection from PgBouncer
+    # This prevents "too many clients" errors by using PgBouncer's pool
+    logger.info("Using PgBouncer connection pooling (NullPool)")
+    engine = create_engine(
+        DATABASE_URL,
+        poolclass=NullPool,           # No SQLAlchemy pooling - PgBouncer handles it
+        echo=False,
+        connect_args={
+            # Note: statement_timeout not supported in PgBouncer transaction mode
+            "keepalives": 1,
+            "keepalives_idle": 30,
+            "keepalives_interval": 10,
+            "keepalives_count": 5
+        }
+    )
 else:
-    # PostgreSQL production settings
-    # Railway has ~20 connections max; conservative pool to prevent exhaustion
+    # Direct PostgreSQL connection with SQLAlchemy pooling
+    # Railway has 97 connections max; conservative pool to prevent exhaustion
     # Key: pool_size + max_overflow should not exceed ~50% of Railway's limit
-    # This leaves room for migrations, admin tools, and connection spikes
+    logger.info("Using direct PostgreSQL connection with SQLAlchemy pooling")
     engine = create_engine(
         DATABASE_URL,
         pool_pre_ping=True,           # CRITICAL: Verify connections before use (catches stale/dead connections)
         pool_size=3,                  # Permanent connections (reduced to stay under Railway limits)
         max_overflow=5,               # Additional connections under load (total max: 8)
         pool_recycle=900,             # Recycle connections every 15 min (was 30 - faster recycling prevents stale connections)
-        pool_timeout=20,              # Wait max 20s for a connection (fail fast if pool exhausted)
+        pool_timeout=20,              # Wait max 20s for a connection (fail fast if pool exhaustion)
         echo=False,                   # Set True for SQL debugging
         connect_args={
             "options": f"-c statement_timeout={STATEMENT_TIMEOUT_MS}",
@@ -66,30 +92,41 @@ else:
     )
 
 # Connection pool event logging (for debugging connection exhaustion)
+# Note: These events work differently with NullPool vs QueuePool
+
 @event.listens_for(engine, "checkout")
 def on_checkout(dbapi_conn, connection_record, connection_proxy):
     """Log when a connection is checked out from the pool."""
-    pool = engine.pool
-    logger.debug(
-        f"DB connection checkout - Pool status: "
-        f"size={pool.size()}, checkedin={pool.checkedin()}, "
-        f"checkedout={pool.checkedout()}, overflow={pool.overflow()}"
-    )
+    if USE_PGBOUNCER:
+        logger.debug("DB connection acquired from PgBouncer")
+    else:
+        pool = engine.pool
+        logger.debug(
+            f"DB connection checkout - Pool status: "
+            f"size={pool.size()}, checkedin={pool.checkedin()}, "
+            f"checkedout={pool.checkedout()}, overflow={pool.overflow()}"
+        )
 
 @event.listens_for(engine, "checkin")
 def on_checkin(dbapi_conn, connection_record):
     """Log when a connection is returned to the pool."""
-    pool = engine.pool
-    logger.debug(
-        f"DB connection checkin - Pool status: "
-        f"size={pool.size()}, checkedin={pool.checkedin()}, "
-        f"checkedout={pool.checkedout()}, overflow={pool.overflow()}"
-    )
+    if USE_PGBOUNCER:
+        logger.debug("DB connection returned to PgBouncer")
+    else:
+        pool = engine.pool
+        logger.debug(
+            f"DB connection checkin - Pool status: "
+            f"size={pool.size()}, checkedin={pool.checkedin()}, "
+            f"checkedout={pool.checkedout()}, overflow={pool.overflow()}"
+        )
 
 @event.listens_for(engine, "connect")
 def on_connect(dbapi_conn, connection_record):
     """Log when a new connection is created."""
-    logger.info("New database connection established")
+    if USE_PGBOUNCER:
+        logger.debug("New PgBouncer connection established")
+    else:
+        logger.info("New database connection established")
 
 @event.listens_for(engine, "invalidate")
 def on_invalidate(dbapi_conn, connection_record, exception):
@@ -145,7 +182,17 @@ def get_pool_status():
     """
     try:
         pool = engine.pool
+
+        # NullPool (PgBouncer mode) doesn't track connections
+        if isinstance(pool, NullPool):
+            return {
+                "pool_type": "NullPool (PgBouncer)",
+                "status": "healthy",
+                "note": "Connection pooling handled by PgBouncer"
+            }
+
         return {
+            "pool_type": "QueuePool (SQLAlchemy)",
             "pool_size": pool.size(),
             "checked_in": pool.checkedin(),
             "checked_out": pool.checkedout(),
