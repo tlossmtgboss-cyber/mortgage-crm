@@ -106,29 +106,11 @@ async def get_user_twilio_config(user_id: int, db: Session) -> Optional[Dict]:
         return None
 
 
-async def get_user_elevenlabs_config(user_id: int, db: Session) -> Optional[Dict]:
-    """Get stored ElevenLabs config for a user"""
-    try:
-        result = db.execute(text("""
-            SELECT api_key, voice_id
-            FROM user_elevenlabs_config
-            WHERE user_id = :user_id
-        """), {"user_id": user_id})
-        row = result.fetchone()
-        if row and row[0]:
-            return {
-                "api_key": row[0],
-                "voice_id": row[1] or ELEVENLABS_VOICE_ID,
-            }
-    except Exception as e:
-        logger.warning(f"Could not fetch ElevenLabs config from DB (table may not exist): {e}")
-        # Rollback to clear failed transaction
-        try:
-            db.rollback()
-        except:
-            pass
-
-    # Fall back to system key
+def get_elevenlabs_config_sync() -> Optional[Dict]:
+    """
+    Get ElevenLabs config from environment variables.
+    This avoids database queries to non-existent tables.
+    """
     system_key = os.getenv("ELEVENLABS_API_KEY")
     if system_key:
         return {
@@ -143,13 +125,15 @@ async def generate_voicemail_audio(
     api_key: str,
     voice_id: str,
     tracking_id: str,
-    db: Session
 ) -> Optional[str]:
     """
     Generate voicemail audio using ElevenLabs TTS.
     Stores the audio and returns a URL to play it.
+    Creates its own database session to avoid transaction issues.
     """
     import httpx
+    import base64
+    from database import SessionLocal
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -174,15 +158,20 @@ async def generate_voicemail_audio(
 
             if response.status_code == 200:
                 # Save audio to database (base64 encoded)
-                import base64
                 audio_base64 = base64.b64encode(response.content).decode('utf-8')
 
-                db.execute(text("""
-                    UPDATE amd_outbound_calls
-                    SET voicemail_audio = :audio
-                    WHERE id = :tracking_id
-                """), {"audio": audio_base64, "tracking_id": tracking_id})
-                db.commit()
+                # Create a new session for the background task
+                db_session = SessionLocal()
+                try:
+                    db_session.execute(text("""
+                        UPDATE amd_outbound_calls
+                        SET voicemail_audio = :audio
+                        WHERE id = :tracking_id
+                    """), {"audio": audio_base64, "tracking_id": tracking_id})
+                    db_session.commit()
+                    logger.info(f"Voicemail audio generated and saved for {tracking_id}")
+                finally:
+                    db_session.close()
 
                 # Return URL to serve the audio
                 return f"{API_BASE_URL}/api/v1/voice/amd/audio/{tracking_id}"
@@ -344,14 +333,13 @@ async def initiate_amd_outbound_call(
     db.commit()
 
     # Start voicemail audio generation in background
-    elevenlabs_config = await get_user_elevenlabs_config(user_id, db)
+    elevenlabs_config = get_elevenlabs_config_sync()
     if elevenlabs_config:
         asyncio.create_task(generate_voicemail_audio(
             voicemail_message,
             elevenlabs_config["api_key"],
             elevenlabs_config["voice_id"],
             tracking_id,
-            db
         ))
 
     # Create Twilio client and initiate call with AMD
@@ -377,11 +365,7 @@ async def initiate_amd_outbound_call(
             status_callback_event=['initiated', 'ringing', 'answered', 'completed'],
         )
 
-        # Update with call SID (ensure clean transaction state first)
-        try:
-            db.rollback()  # Clear any pending transaction state
-        except:
-            pass
+        # Update with call SID
         db.execute(text("""
             UPDATE amd_outbound_calls
             SET call_sid = :call_sid, status = 'amd_pending'
@@ -401,8 +385,8 @@ async def initiate_amd_outbound_call(
 
     except Exception as e:
         logger.error(f"Failed to initiate AMD call: {e}")
+        db.rollback()
         try:
-            db.rollback()  # Clear any failed transaction state
             db.execute(text("""
                 UPDATE amd_outbound_calls SET status = 'failed' WHERE id = :tracking_id
             """), {"tracking_id": tracking_id})
