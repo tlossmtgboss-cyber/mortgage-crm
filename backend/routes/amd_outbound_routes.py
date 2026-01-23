@@ -1,0 +1,777 @@
+"""
+AMD-Enabled Outbound Call Routes
+Handles Twilio Answering Machine Detection for outbound AI calls.
+
+Flow:
+1. Initiate call with AMD enabled
+2. Twilio detects human vs machine
+3. AMD callback routes to appropriate handler:
+   - Human: Connect to Sam (WebSocket stream)
+   - Machine: Play voicemail message (ElevenLabs TTS)
+"""
+
+import os
+import uuid
+import logging
+import asyncio
+from datetime import datetime, timezone
+from typing import Optional, Dict, Any
+
+from fastapi import APIRouter, Request, Depends, HTTPException
+from fastapi.responses import Response
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+
+# Import from database to avoid circular dependency
+from database import get_db
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/v1/voice/amd", tags=["AMD Outbound Calls"])
+
+# API base URL for callbacks
+API_BASE_URL = os.getenv("API_URL") or os.getenv("PRODUCTION_DOMAIN") or os.getenv("RAILWAY_PUBLIC_DOMAIN")
+if API_BASE_URL and not API_BASE_URL.startswith("http"):
+    API_BASE_URL = f"https://{API_BASE_URL}"
+
+# Default to production domain
+if not API_BASE_URL:
+    API_BASE_URL = "https://api.perenniaai.com"
+
+# ElevenLabs configuration
+ELEVENLABS_API_URL = "https://api.elevenlabs.io/v1"
+ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "EXAVITQu4vr4xnSDxMaL")  # Sam's voice ID
+
+
+# =============================================================================
+# Pydantic Models
+# =============================================================================
+
+class AMDOutboundCallRequest(BaseModel):
+    """Request to initiate an AMD-enabled outbound call"""
+    to_number: str = Field(..., description="Phone number to call (E.164 format preferred)")
+    client_name: str = Field(..., description="Name of person being called")
+    purpose: str = Field(..., description="Purpose of the call")
+    lo_name: Optional[str] = Field(None, description="Loan officer name")
+    agent_id: Optional[str] = Field(None, description="ElevenLabs agent ID for AI connection")
+    phone_number_id: Optional[str] = Field(None, description="ElevenLabs phone number ID")
+    voicemail_message: Optional[str] = Field(None, description="Custom voicemail message")
+    first_message: Optional[str] = Field(None, description="Custom first message for human")
+
+
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
+def format_e164(phone: str) -> str:
+    """Format phone number to E.164 format"""
+    # Remove all non-digit characters except leading +
+    if phone.startswith('+'):
+        digits = '+' + ''.join(filter(str.isdigit, phone[1:]))
+    else:
+        digits = ''.join(filter(str.isdigit, phone))
+
+    # Add +1 for US numbers if not present
+    if not digits.startswith('+'):
+        if len(digits) == 10:
+            digits = f"+1{digits}"
+        elif len(digits) == 11 and digits.startswith('1'):
+            digits = f"+{digits}"
+
+    return digits
+
+
+async def get_user_twilio_config(user_id: int, db: Session) -> Optional[Dict]:
+    """Get stored Twilio config for a user"""
+    try:
+        result = db.execute(text("""
+            SELECT subaccount_sid, account_sid, auth_token,
+                   phone_number, phone_number_sid
+            FROM user_twilio_config
+            WHERE user_id = :user_id
+        """), {"user_id": user_id})
+        row = result.fetchone()
+        if row:
+            return {
+                "subaccount_sid": row[0],
+                "account_sid": row[1] or row[0],  # Use account_sid or subaccount_sid
+                "auth_token": row[2],
+                "phone_number": row[3],
+                "phone_number_sid": row[4],
+            }
+        return None
+    except Exception as e:
+        logger.error(f"Error fetching Twilio config: {e}")
+        return None
+
+
+async def get_user_elevenlabs_config(user_id: int, db: Session) -> Optional[Dict]:
+    """Get stored ElevenLabs config for a user"""
+    try:
+        result = db.execute(text("""
+            SELECT api_key, voice_id
+            FROM user_elevenlabs_config
+            WHERE user_id = :user_id
+        """), {"user_id": user_id})
+        row = result.fetchone()
+        if row and row[0]:
+            return {
+                "api_key": row[0],
+                "voice_id": row[1] or ELEVENLABS_VOICE_ID,
+            }
+        # Fall back to system key
+        system_key = os.getenv("ELEVENLABS_API_KEY")
+        if system_key:
+            return {
+                "api_key": system_key,
+                "voice_id": os.getenv("ELEVENLABS_VOICE_ID", ELEVENLABS_VOICE_ID),
+            }
+        return None
+    except Exception as e:
+        logger.error(f"Error fetching ElevenLabs config: {e}")
+        return None
+
+
+async def generate_voicemail_audio(
+    text: str,
+    api_key: str,
+    voice_id: str,
+    tracking_id: str,
+    db: Session
+) -> Optional[str]:
+    """
+    Generate voicemail audio using ElevenLabs TTS.
+    Stores the audio and returns a URL to play it.
+    """
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{ELEVENLABS_API_URL}/text-to-speech/{voice_id}",
+                headers={
+                    "xi-api-key": api_key,
+                    "Content-Type": "application/json",
+                    "Accept": "audio/mpeg"
+                },
+                json={
+                    "text": text,
+                    "model_id": "eleven_turbo_v2",
+                    "voice_settings": {
+                        "stability": 0.5,
+                        "similarity_boost": 0.75,
+                        "style": 0.0,
+                        "use_speaker_boost": True
+                    }
+                }
+            )
+
+            if response.status_code == 200:
+                # Save audio to database (base64 encoded)
+                import base64
+                audio_base64 = base64.b64encode(response.content).decode('utf-8')
+
+                db.execute(text("""
+                    UPDATE amd_outbound_calls
+                    SET voicemail_audio = :audio
+                    WHERE id = :tracking_id
+                """), {"audio": audio_base64, "tracking_id": tracking_id})
+                db.commit()
+
+                # Return URL to serve the audio
+                return f"{API_BASE_URL}/api/v1/voice/amd/audio/{tracking_id}"
+            else:
+                logger.error(f"ElevenLabs TTS failed: {response.status_code} - {response.text}")
+                return None
+
+    except Exception as e:
+        logger.error(f"Error generating voicemail audio: {e}")
+        return None
+
+
+def build_default_voicemail_message(client_name: str, lo_name: str, purpose: str) -> str:
+    """Build default voicemail message"""
+    first_name = client_name.split()[0] if client_name else ""
+    greeting = f"Hi {first_name}" if first_name else "Hi"
+
+    return (
+        f"{greeting}, this is Sam calling on behalf of {lo_name or 'your loan officer'} "
+        f"at CMG Home Loans regarding {purpose}. "
+        f"Please give us a call back at your earliest convenience. "
+        f"Thank you and have a great day!"
+    )
+
+
+# =============================================================================
+# Database Functions
+# =============================================================================
+
+def ensure_amd_table_exists(db: Session):
+    """Ensure the AMD tracking table exists"""
+    db.execute(text("""
+        CREATE TABLE IF NOT EXISTS amd_outbound_calls (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id INTEGER,
+            call_sid VARCHAR(34) UNIQUE,
+            to_number VARCHAR(20),
+            from_number VARCHAR(20),
+            client_name VARCHAR(255),
+            purpose VARCHAR(500),
+            lo_name VARCHAR(255),
+
+            -- AMD Results
+            amd_status VARCHAR(50),
+            answered_by VARCHAR(50),
+            machine_detection_duration INTEGER,
+
+            -- Call handling
+            handling_method VARCHAR(50),
+            elevenlabs_conversation_id VARCHAR(100),
+
+            -- Agent config
+            agent_id VARCHAR(100),
+            phone_number_id VARCHAR(100),
+
+            -- Voicemail
+            voicemail_message TEXT,
+            voicemail_audio TEXT,
+            voicemail_audio_url VARCHAR(500),
+            voicemail_duration INTEGER,
+
+            -- Timestamps
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            amd_completed_at TIMESTAMP WITH TIME ZONE,
+            call_ended_at TIMESTAMP WITH TIME ZONE,
+
+            -- Status
+            status VARCHAR(50) DEFAULT 'initiated'
+        )
+    """))
+    db.commit()
+
+
+# =============================================================================
+# ENDPOINT 1: Initiate AMD-Enabled Outbound Call
+# =============================================================================
+
+@router.post("/outbound-call")
+async def initiate_amd_outbound_call(
+    request: AMDOutboundCallRequest,
+    admin_key: str = None,
+    user_email: str = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Initiate outbound call with Twilio AMD detection.
+
+    Flow:
+    1. Create Twilio call with MachineDetection enabled
+    2. Pre-generate voicemail audio (async)
+    3. Twilio detects human vs machine
+    4. AMD callback routes to appropriate handler
+    """
+    from twilio.rest import Client as TwilioClient
+
+    # Determine user
+    user_id = None
+    if admin_key == "perennia-admin-2024" and user_email:
+        user_result = db.execute(text("SELECT id FROM users WHERE email = :email"), {"email": user_email}).fetchone()
+        if not user_result:
+            raise HTTPException(status_code=404, detail=f"User {user_email} not found")
+        user_id = user_result[0]
+    else:
+        raise HTTPException(status_code=401, detail="Admin key and user_email required")
+
+    # Ensure table exists
+    ensure_amd_table_exists(db)
+
+    # Get user's Twilio config
+    twilio_config = await get_user_twilio_config(user_id, db)
+    if not twilio_config:
+        raise HTTPException(status_code=400, detail="Twilio not configured for this user")
+
+    account_sid = twilio_config.get("account_sid")
+    auth_token = twilio_config.get("auth_token")
+    from_number = twilio_config.get("phone_number")
+
+    if not all([account_sid, auth_token, from_number]):
+        raise HTTPException(status_code=400, detail="Incomplete Twilio configuration")
+
+    # Format phone number
+    to_number = format_e164(request.to_number)
+
+    # Get LO name if not provided
+    lo_name = request.lo_name
+    if not lo_name:
+        user_info = db.execute(text("SELECT name FROM users WHERE id = :user_id"), {"user_id": user_id}).fetchone()
+        lo_name = user_info[0] if user_info else "your loan officer"
+
+    # Generate tracking ID
+    tracking_id = str(uuid.uuid4())
+
+    # Build voicemail message
+    voicemail_message = request.voicemail_message or build_default_voicemail_message(
+        request.client_name, lo_name, request.purpose
+    )
+
+    # Store call tracking info
+    db.execute(text("""
+        INSERT INTO amd_outbound_calls (
+            id, user_id, to_number, from_number, client_name, purpose, lo_name,
+            agent_id, phone_number_id, voicemail_message, status
+        ) VALUES (
+            :id, :user_id, :to_number, :from_number, :client_name, :purpose, :lo_name,
+            :agent_id, :phone_number_id, :voicemail_message, 'initiated'
+        )
+    """), {
+        "id": tracking_id,
+        "user_id": user_id,
+        "to_number": to_number,
+        "from_number": from_number,
+        "client_name": request.client_name,
+        "purpose": request.purpose,
+        "lo_name": lo_name,
+        "agent_id": request.agent_id,
+        "phone_number_id": request.phone_number_id,
+        "voicemail_message": voicemail_message,
+    })
+    db.commit()
+
+    # Start voicemail audio generation in background
+    elevenlabs_config = await get_user_elevenlabs_config(user_id, db)
+    if elevenlabs_config:
+        asyncio.create_task(generate_voicemail_audio(
+            voicemail_message,
+            elevenlabs_config["api_key"],
+            elevenlabs_config["voice_id"],
+            tracking_id,
+            db
+        ))
+
+    # Create Twilio client and initiate call with AMD
+    try:
+        twilio_client = TwilioClient(account_sid, auth_token)
+
+        call = twilio_client.calls.create(
+            to=to_number,
+            from_=from_number,
+
+            # AMD Configuration
+            machine_detection="DetectMessageEnd",  # Wait for voicemail beep
+            machine_detection_timeout=30,  # 30 seconds max detection
+            async_amd=True,  # Don't block - use callback
+            async_amd_status_callback=f"{API_BASE_URL}/api/v1/voice/amd/status/{tracking_id}",
+            async_amd_status_callback_method="POST",
+
+            # Initial TwiML - pause while AMD runs
+            url=f"{API_BASE_URL}/api/v1/voice/amd/waiting/{tracking_id}",
+
+            # Status callbacks
+            status_callback=f"{API_BASE_URL}/api/v1/voice/amd/call-status/{tracking_id}",
+            status_callback_event=['initiated', 'ringing', 'answered', 'completed'],
+        )
+
+        # Update with call SID
+        db.execute(text("""
+            UPDATE amd_outbound_calls
+            SET call_sid = :call_sid, status = 'amd_pending'
+            WHERE id = :tracking_id
+        """), {"call_sid": call.sid, "tracking_id": tracking_id})
+        db.commit()
+
+        logger.info(f"AMD call initiated: {tracking_id} -> {to_number} (SID: {call.sid})")
+
+        return {
+            "success": True,
+            "tracking_id": tracking_id,
+            "call_sid": call.sid,
+            "status": "amd_pending",
+            "message": f"AMD-enabled call initiated to {request.client_name} at {to_number}"
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to initiate AMD call: {e}")
+        db.execute(text("""
+            UPDATE amd_outbound_calls SET status = 'failed' WHERE id = :tracking_id
+        """), {"tracking_id": tracking_id})
+        db.commit()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# ENDPOINT 2: AMD Status Callback (Twilio calls this with AMD result)
+# =============================================================================
+
+@router.post("/status/{tracking_id}")
+async def handle_amd_status(
+    tracking_id: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Handle Twilio AMD callback.
+
+    AnsweredBy values:
+    - "human": Human answered
+    - "machine_start": Machine detected, didn't wait for beep
+    - "machine_end_beep": Machine detected, waited for beep
+    - "machine_end_silence": Machine detected via silence
+    - "machine_end_other": Machine detected by other means
+    - "fax": Fax machine detected
+    - "unknown": Could not determine
+    """
+    from twilio.rest import Client as TwilioClient
+
+    form_data = await request.form()
+
+    call_sid = form_data.get("CallSid")
+    answered_by = form_data.get("AnsweredBy", "unknown")
+    machine_detection_duration = form_data.get("MachineDetectionDuration")
+
+    logger.info(f"AMD Result for {tracking_id}: AnsweredBy={answered_by}, Duration={machine_detection_duration}ms")
+
+    # Get call tracking record
+    result = db.execute(text("""
+        SELECT user_id, call_sid, client_name, purpose, lo_name
+        FROM amd_outbound_calls
+        WHERE id = :tracking_id
+    """), {"tracking_id": tracking_id}).fetchone()
+
+    if not result:
+        logger.error(f"AMD call tracking not found: {tracking_id}")
+        return {"error": "Call not found"}
+
+    user_id = result[0]
+
+    # Determine answered_by category
+    if answered_by == "human":
+        answered_category = "human"
+    elif answered_by.startswith("machine"):
+        answered_category = "machine"
+    elif answered_by == "fax":
+        answered_category = "fax"
+    else:
+        answered_category = "unknown"
+
+    # Update AMD results
+    db.execute(text("""
+        UPDATE amd_outbound_calls
+        SET amd_status = :amd_status,
+            answered_by = :answered_by,
+            machine_detection_duration = :duration,
+            amd_completed_at = NOW()
+        WHERE id = :tracking_id
+    """), {
+        "amd_status": answered_by,
+        "answered_by": answered_category,
+        "duration": int(machine_detection_duration) if machine_detection_duration else None,
+        "tracking_id": tracking_id,
+    })
+    db.commit()
+
+    # Get user's Twilio config
+    twilio_config = await get_user_twilio_config(user_id, db)
+    if not twilio_config:
+        logger.error(f"No Twilio config for user {user_id}")
+        return {"error": "Twilio config not found"}
+
+    twilio_client = TwilioClient(twilio_config["account_sid"], twilio_config["auth_token"])
+
+    # Route based on AMD result
+    if answered_category == "human" or answered_category == "unknown":
+        # Human or unknown - connect to AI
+        logger.info(f"Connecting to AI for {tracking_id} (answered_by: {answered_by})")
+        redirect_url = f"{API_BASE_URL}/api/v1/voice/amd/connect-ai/{tracking_id}"
+
+    elif answered_category == "machine":
+        # Voicemail - play message
+        logger.info(f"Playing voicemail for {tracking_id} (answered_by: {answered_by})")
+        redirect_url = f"{API_BASE_URL}/api/v1/voice/amd/voicemail/{tracking_id}"
+
+    elif answered_category == "fax":
+        # Fax - hangup
+        logger.info(f"Fax detected for {tracking_id} - hanging up")
+        redirect_url = f"{API_BASE_URL}/api/v1/voice/amd/hangup/{tracking_id}"
+
+    # Update the call to redirect to appropriate handler
+    try:
+        twilio_client.calls(call_sid).update(url=redirect_url)
+        logger.info(f"Redirected call {call_sid} to {redirect_url}")
+    except Exception as e:
+        logger.error(f"Failed to redirect call: {e}")
+
+    return {"status": "processed", "answered_by": answered_by, "action": redirect_url}
+
+
+# =============================================================================
+# ENDPOINT 3: Initial Waiting TwiML (while AMD runs)
+# =============================================================================
+
+@router.post("/waiting/{tracking_id}")
+@router.get("/waiting/{tracking_id}")
+async def amd_waiting_twiml(tracking_id: str):
+    """
+    TwiML response while AMD is running.
+    Plays brief silence to give AMD time to work.
+    """
+    twiml = """<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Pause length="3"/>
+</Response>"""
+    return Response(content=twiml, media_type="application/xml")
+
+
+# =============================================================================
+# ENDPOINT 4: Connect to AI (Human Answered)
+# =============================================================================
+
+@router.post("/connect-ai/{tracking_id}")
+@router.get("/connect-ai/{tracking_id}")
+async def connect_to_ai(
+    tracking_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    TwiML to connect call to AI via WebSocket stream.
+    Uses the existing voice-stream endpoint that powers Sam.
+    """
+    # Get call info
+    result = db.execute(text("""
+        SELECT client_name, to_number, purpose, lo_name
+        FROM amd_outbound_calls
+        WHERE id = :tracking_id
+    """), {"tracking_id": tracking_id}).fetchone()
+
+    if not result:
+        return Response(content="<Response><Hangup/></Response>", media_type="application/xml")
+
+    client_name, to_number, purpose, lo_name = result
+
+    # Update status
+    db.execute(text("""
+        UPDATE amd_outbound_calls
+        SET status = 'connected', handling_method = 'ai_stream'
+        WHERE id = :tracking_id
+    """), {"tracking_id": tracking_id})
+    db.commit()
+
+    # Get domain for WebSocket
+    domain = os.getenv('PRODUCTION_DOMAIN') or os.getenv('RAILWAY_PUBLIC_DOMAIN') or 'api.perenniaai.com'
+
+    # Build TwiML to connect to voice stream
+    # Escape XML special characters
+    client_name_safe = (client_name or '').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+    purpose_safe = (purpose or '').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+    lo_name_safe = (lo_name or '').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+
+    twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Connect>
+        <Stream url="wss://{domain}/api/v1/voice/ws/voice-stream">
+            <Parameter name="caller_name" value="{client_name_safe}"/>
+            <Parameter name="caller_phone" value="{to_number or ''}"/>
+            <Parameter name="call_direction" value="outbound"/>
+            <Parameter name="call_purpose" value="{purpose_safe}"/>
+            <Parameter name="lo_name" value="{lo_name_safe}"/>
+            <Parameter name="tracking_id" value="{tracking_id}"/>
+        </Stream>
+    </Connect>
+</Response>"""
+
+    logger.info(f"Connecting call {tracking_id} to AI stream")
+    return Response(content=twiml, media_type="application/xml")
+
+
+# =============================================================================
+# ENDPOINT 5: Play Voicemail Message (Machine Answered)
+# =============================================================================
+
+@router.post("/voicemail/{tracking_id}")
+@router.get("/voicemail/{tracking_id}")
+async def play_voicemail_message(
+    tracking_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    TwiML to play voicemail message after machine detection.
+    Uses ElevenLabs-generated audio if available, falls back to Polly TTS.
+    """
+    # Get call info
+    result = db.execute(text("""
+        SELECT voicemail_message, voicemail_audio, client_name, lo_name, purpose
+        FROM amd_outbound_calls
+        WHERE id = :tracking_id
+    """), {"tracking_id": tracking_id}).fetchone()
+
+    if not result:
+        return Response(content="<Response><Hangup/></Response>", media_type="application/xml")
+
+    voicemail_message, voicemail_audio, client_name, lo_name, purpose = result
+
+    # Update status
+    db.execute(text("""
+        UPDATE amd_outbound_calls
+        SET status = 'voicemail_left', handling_method = 'voicemail_tts'
+        WHERE id = :tracking_id
+    """), {"tracking_id": tracking_id})
+    db.commit()
+
+    # Check if ElevenLabs audio is available
+    if voicemail_audio:
+        # Use pre-generated audio
+        audio_url = f"{API_BASE_URL}/api/v1/voice/amd/audio/{tracking_id}"
+        twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Pause length="1"/>
+    <Play>{audio_url}</Play>
+    <Pause length="1"/>
+    <Hangup/>
+</Response>"""
+    else:
+        # Fall back to Polly TTS
+        message = voicemail_message or build_default_voicemail_message(client_name, lo_name, purpose)
+        # Escape XML special characters
+        message_safe = message.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+        twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Pause length="1"/>
+    <Say voice="Polly.Joanna">{message_safe}</Say>
+    <Pause length="1"/>
+    <Hangup/>
+</Response>"""
+
+    logger.info(f"Playing voicemail for {tracking_id}")
+    return Response(content=twiml, media_type="application/xml")
+
+
+# =============================================================================
+# ENDPOINT 6: Serve Voicemail Audio
+# =============================================================================
+
+@router.get("/audio/{tracking_id}")
+async def serve_voicemail_audio(
+    tracking_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Serve the pre-generated ElevenLabs voicemail audio.
+    """
+    import base64
+
+    result = db.execute(text("""
+        SELECT voicemail_audio FROM amd_outbound_calls WHERE id = :tracking_id
+    """), {"tracking_id": tracking_id}).fetchone()
+
+    if not result or not result[0]:
+        raise HTTPException(status_code=404, detail="Audio not found")
+
+    # Decode base64 audio
+    audio_data = base64.b64decode(result[0])
+
+    return Response(
+        content=audio_data,
+        media_type="audio/mpeg",
+        headers={"Content-Disposition": f"inline; filename=voicemail_{tracking_id}.mp3"}
+    )
+
+
+# =============================================================================
+# ENDPOINT 7: Hangup (Fax detected)
+# =============================================================================
+
+@router.post("/hangup/{tracking_id}")
+@router.get("/hangup/{tracking_id}")
+async def hangup_call(
+    tracking_id: str,
+    db: Session = Depends(get_db)
+):
+    """TwiML to hangup the call (used for fax detection)"""
+    db.execute(text("""
+        UPDATE amd_outbound_calls
+        SET status = 'hangup_fax', handling_method = 'fax_detected'
+        WHERE id = :tracking_id
+    """), {"tracking_id": tracking_id})
+    db.commit()
+
+    return Response(
+        content='<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>',
+        media_type="application/xml"
+    )
+
+
+# =============================================================================
+# ENDPOINT 8: Call Status Callback
+# =============================================================================
+
+@router.post("/call-status/{tracking_id}")
+async def handle_call_status(
+    tracking_id: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Handle call status updates from Twilio"""
+    form_data = await request.form()
+
+    call_status = form_data.get("CallStatus")
+    call_duration = form_data.get("CallDuration", "0")
+
+    logger.info(f"Call status for {tracking_id}: {call_status}, duration: {call_duration}s")
+
+    if call_status == "completed":
+        db.execute(text("""
+            UPDATE amd_outbound_calls
+            SET call_ended_at = NOW(),
+                voicemail_duration = CASE WHEN answered_by = 'machine' THEN :duration ELSE NULL END,
+                status = CASE WHEN status != 'failed' THEN 'completed' ELSE status END
+            WHERE id = :tracking_id
+        """), {"duration": int(call_duration), "tracking_id": tracking_id})
+        db.commit()
+
+    elif call_status in ["busy", "no-answer", "failed", "canceled"]:
+        db.execute(text("""
+            UPDATE amd_outbound_calls
+            SET call_ended_at = NOW(), status = :status
+            WHERE id = :tracking_id
+        """), {"status": call_status, "tracking_id": tracking_id})
+        db.commit()
+
+    return {"status": "ok"}
+
+
+# =============================================================================
+# ENDPOINT 9: Get Call Status
+# =============================================================================
+
+@router.get("/call/{tracking_id}")
+async def get_call_status(
+    tracking_id: str,
+    db: Session = Depends(get_db)
+):
+    """Get the status of an AMD-enabled call"""
+    result = db.execute(text("""
+        SELECT id, call_sid, to_number, client_name, purpose,
+               amd_status, answered_by, handling_method, status,
+               created_at, amd_completed_at, call_ended_at
+        FROM amd_outbound_calls
+        WHERE id = :tracking_id
+    """), {"tracking_id": tracking_id}).fetchone()
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Call not found")
+
+    return {
+        "tracking_id": result[0],
+        "call_sid": result[1],
+        "to_number": result[2],
+        "client_name": result[3],
+        "purpose": result[4],
+        "amd_status": result[5],
+        "answered_by": result[6],
+        "handling_method": result[7],
+        "status": result[8],
+        "created_at": result[9].isoformat() if result[9] else None,
+        "amd_completed_at": result[10].isoformat() if result[10] else None,
+        "call_ended_at": result[11].isoformat() if result[11] else None,
+    }

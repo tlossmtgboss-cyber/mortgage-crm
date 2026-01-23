@@ -457,6 +457,8 @@ class OutboundCallRequest(BaseModel):
     purpose: str = Field(..., description="Purpose of the call")
     lo_name: Optional[str] = Field(None, description="Loan officer name")
     first_message: Optional[str] = Field(None, description="Custom first message")
+    use_amd: bool = Field(False, description="Enable Twilio AMD to detect voicemail vs human")
+    voicemail_message: Optional[str] = Field(None, description="Custom voicemail message if AMD detects machine")
 
 
 class AgentConfig(BaseModel):
@@ -632,7 +634,33 @@ async def make_outbound_call(
     - ElevenLabs API key configured
     - An agent_id (create one via /agents endpoint)
     - A phone_number_id (import Twilio number via /phone-numbers/import-twilio)
+
+    Optional:
+    - use_amd=true: Enable Twilio AMD to detect voicemail vs human
+      - Human answers: Connects to AI conversation
+      - Voicemail detected: Plays TTS message using Sam's voice
     """
+    # If AMD is enabled, redirect to AMD flow
+    if request.use_amd:
+        from routes.amd_outbound_routes import initiate_amd_outbound_call, AMDOutboundCallRequest
+
+        amd_request = AMDOutboundCallRequest(
+            to_number=request.to_number,
+            client_name=request.client_name,
+            purpose=request.purpose,
+            lo_name=request.lo_name,
+            agent_id=agent_id,
+            phone_number_id=phone_number_id,
+            voicemail_message=request.voicemail_message,
+            first_message=request.first_message
+        )
+        return await initiate_amd_outbound_call(
+            request=amd_request,
+            admin_key=admin_key,
+            user_email=user_email,
+            db=db
+        )
+
     api_key = await _get_elevenlabs_api_key(admin_key, user_email, current_user, db)
 
     # Format phone number
