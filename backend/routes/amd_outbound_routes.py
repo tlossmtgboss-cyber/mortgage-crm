@@ -120,17 +120,22 @@ async def get_user_elevenlabs_config(user_id: int, db: Session) -> Optional[Dict
                 "api_key": row[0],
                 "voice_id": row[1] or ELEVENLABS_VOICE_ID,
             }
-        # Fall back to system key
-        system_key = os.getenv("ELEVENLABS_API_KEY")
-        if system_key:
-            return {
-                "api_key": system_key,
-                "voice_id": os.getenv("ELEVENLABS_VOICE_ID", ELEVENLABS_VOICE_ID),
-            }
-        return None
     except Exception as e:
-        logger.error(f"Error fetching ElevenLabs config: {e}")
-        return None
+        logger.warning(f"Could not fetch ElevenLabs config from DB (table may not exist): {e}")
+        # Rollback to clear failed transaction
+        try:
+            db.rollback()
+        except:
+            pass
+
+    # Fall back to system key
+    system_key = os.getenv("ELEVENLABS_API_KEY")
+    if system_key:
+        return {
+            "api_key": system_key,
+            "voice_id": os.getenv("ELEVENLABS_VOICE_ID", ELEVENLABS_VOICE_ID),
+        }
+    return None
 
 
 async def generate_voicemail_audio(
@@ -372,7 +377,11 @@ async def initiate_amd_outbound_call(
             status_callback_event=['initiated', 'ringing', 'answered', 'completed'],
         )
 
-        # Update with call SID
+        # Update with call SID (ensure clean transaction state first)
+        try:
+            db.rollback()  # Clear any pending transaction state
+        except:
+            pass
         db.execute(text("""
             UPDATE amd_outbound_calls
             SET call_sid = :call_sid, status = 'amd_pending'
@@ -392,10 +401,14 @@ async def initiate_amd_outbound_call(
 
     except Exception as e:
         logger.error(f"Failed to initiate AMD call: {e}")
-        db.execute(text("""
-            UPDATE amd_outbound_calls SET status = 'failed' WHERE id = :tracking_id
-        """), {"tracking_id": tracking_id})
-        db.commit()
+        try:
+            db.rollback()  # Clear any failed transaction state
+            db.execute(text("""
+                UPDATE amd_outbound_calls SET status = 'failed' WHERE id = :tracking_id
+            """), {"tracking_id": tracking_id})
+            db.commit()
+        except Exception as db_error:
+            logger.error(f"Failed to update call status: {db_error}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
