@@ -415,6 +415,11 @@ class SalesforceEmailSyncService:
             event = IntegrationEvent(
                 integration_profile_id=integration_profile_id,
                 event_type='email_sync_completed' if result['success'] else 'email_sync_failed',
+                status='success' if result['success'] else 'error',
+                direction='inbound',
+                records_processed=result['emails_synced'] + result['emails_skipped'],
+                records_succeeded=result['emails_synced'],
+                records_failed=len(result.get('errors', [])),
                 event_data={
                     'emails_synced': result['emails_synced'],
                     'emails_skipped': result['emails_skipped'],

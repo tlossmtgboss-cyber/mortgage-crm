@@ -153,7 +153,7 @@ class IntegrationEvent(Base):
     records_failed = Column(Integer)
 
     # Error Tracking
-    status = Column(String(50), nullable=False)  # success, warning, error
+    status = Column(String(50), nullable=False, default='pending')  # success, warning, error, pending
     error_message = Column(Text)
     error_details = Column(JSON)
 

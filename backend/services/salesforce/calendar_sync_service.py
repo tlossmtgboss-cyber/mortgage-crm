@@ -417,9 +417,16 @@ class SalesforceCalendarSyncService:
     ):
         """Log the sync event"""
         try:
+            total_synced = result['events_synced'] + result['tasks_synced']
+            total_skipped = result['events_skipped'] + result['tasks_skipped']
             event = IntegrationEvent(
                 integration_profile_id=integration_profile_id,
                 event_type='calendar_sync_completed' if result['success'] else 'calendar_sync_failed',
+                status='success' if result['success'] else 'error',
+                direction='inbound',
+                records_processed=total_synced + total_skipped,
+                records_succeeded=total_synced,
+                records_failed=len(result.get('errors', [])),
                 event_data={
                     'events_synced': result['events_synced'],
                     'events_skipped': result['events_skipped'],

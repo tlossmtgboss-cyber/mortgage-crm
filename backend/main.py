@@ -769,7 +769,11 @@ class Lead(Base):
     present_monthly_payment = Column(Float)
     proposed_monthly_payment = Column(Float)
 
-    # Metadata
+    # Salesforce Integration
+    salesforce_id = Column(String)  # Salesforce Lead/Contact ID
+    meta_data = Column(JSON)  # General metadata including salesforce_synced_at
+
+    # Metadata (legacy - use meta_data for new fields)
     user_metadata = Column(JSON)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
@@ -37178,6 +37182,92 @@ async def trigger_salesforce_sync_admin():
             "error": str(e),
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
+
+
+@app.post("/api/v1/admin/salesforce-migrate-schema")
+async def migrate_salesforce_schema():
+    """
+    Run database migrations to add missing columns for Salesforce sync.
+    Safe to run multiple times - uses IF NOT EXISTS.
+    """
+    db = SessionLocal()
+    migrations_run = []
+    errors = []
+
+    try:
+        # 1. Add salesforce_id to leads table
+        try:
+            db.execute(text("""
+                ALTER TABLE leads ADD COLUMN IF NOT EXISTS salesforce_id VARCHAR
+            """))
+            db.commit()
+            migrations_run.append("leads.salesforce_id")
+        except Exception as e:
+            db.rollback()
+            errors.append(f"leads.salesforce_id: {str(e)[:100]}")
+
+        # 2. Add meta_data to leads table
+        try:
+            db.execute(text("""
+                ALTER TABLE leads ADD COLUMN IF NOT EXISTS meta_data JSONB
+            """))
+            db.commit()
+            migrations_run.append("leads.meta_data")
+        except Exception as e:
+            db.rollback()
+            errors.append(f"leads.meta_data: {str(e)[:100]}")
+
+        # 3. Add meta_data to calendar_events table
+        try:
+            db.execute(text("""
+                ALTER TABLE calendar_events ADD COLUMN IF NOT EXISTS meta_data JSONB
+            """))
+            db.commit()
+            migrations_run.append("calendar_events.meta_data")
+        except Exception as e:
+            db.rollback()
+            errors.append(f"calendar_events.meta_data: {str(e)[:100]}")
+
+        # 4. Set default for integration_events.status if column exists but has NULL values
+        try:
+            db.execute(text("""
+                ALTER TABLE integration_events
+                ALTER COLUMN status SET DEFAULT 'pending'
+            """))
+            db.execute(text("""
+                UPDATE integration_events SET status = 'pending' WHERE status IS NULL
+            """))
+            db.commit()
+            migrations_run.append("integration_events.status default")
+        except Exception as e:
+            db.rollback()
+            errors.append(f"integration_events.status: {str(e)[:100]}")
+
+        # 5. Add updated_at to calendar_events if missing
+        try:
+            db.execute(text("""
+                ALTER TABLE calendar_events ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            """))
+            db.commit()
+            migrations_run.append("calendar_events.updated_at")
+        except Exception as e:
+            db.rollback()
+            errors.append(f"calendar_events.updated_at: {str(e)[:100]}")
+
+        return {
+            "status": "success" if not errors else "partial",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "migrations_run": migrations_run,
+            "errors": errors
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    finally:
+        db.close()
 
 
 @app.post("/api/v1/admin/pool-reset")
