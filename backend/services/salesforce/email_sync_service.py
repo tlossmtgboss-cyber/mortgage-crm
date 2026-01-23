@@ -2,6 +2,7 @@
 Salesforce Email Sync Service
 Syncs EmailMessage and Email Activity records from Salesforce to CRM client profiles
 """
+import json
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
@@ -251,7 +252,7 @@ class SalesforceEmailSyncService:
             ) VALUES (
                 :user_id, :lead_id, :loan_id, :to_email, :from_email, :subject,
                 :body, :html_body, :direction, :status, :has_attachments,
-                :meta_data, :created_at, :received_at
+                :meta_data::jsonb, :created_at, :received_at
             )
         """), {
             "user_id": user_id,
@@ -265,14 +266,14 @@ class SalesforceEmailSyncService:
             "direction": direction,
             "status": 'synced_from_salesforce',
             "has_attachments": sf_email.get('HasAttachment', False),
-            "meta_data": {
+            "meta_data": json.dumps({
                 "salesforce_id": sf_id,
                 "salesforce_parent_id": sf_email.get('ParentId'),
                 "salesforce_activity_id": sf_email.get('ActivityId'),
                 "cc_address": sf_email.get('CcAddress'),
                 "bcc_address": sf_email.get('BccAddress'),
                 "source": "salesforce_sync"
-            },
+            }),
             "created_at": datetime.now(timezone.utc),
             "received_at": received_at
         })
@@ -329,7 +330,7 @@ class SalesforceEmailSyncService:
                 body, direction, status, meta_data, created_at, received_at
             ) VALUES (
                 :user_id, :lead_id, :loan_id, :to_email, :from_email, :subject,
-                :body, :direction, :status, :meta_data, :created_at, :received_at
+                :body, :direction, :status, :meta_data::jsonb, :created_at, :received_at
             )
         """), {
             "user_id": user_id,
@@ -341,13 +342,13 @@ class SalesforceEmailSyncService:
             "body": sf_task.get('Description', ''),
             "direction": "outbound",  # Tasks are usually logged outbound emails
             "status": 'synced_from_salesforce',
-            "meta_data": {
+            "meta_data": json.dumps({
                 "salesforce_task_id": sf_id,
                 "salesforce_who_id": who_id,
                 "salesforce_what_id": what_id,
                 "activity_date": sf_task.get('ActivityDate'),
                 "source": "salesforce_task_sync"
-            },
+            }),
             "created_at": datetime.now(timezone.utc),
             "received_at": received_at
         })

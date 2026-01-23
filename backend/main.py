@@ -37287,6 +37287,17 @@ async def migrate_salesforce_schema():
             db.rollback()
             errors.append(f"loans.meta_data: {str(e)[:100]}")
 
+        # 9. Add meta_data to email_messages table
+        try:
+            db.execute(text("""
+                ALTER TABLE email_messages ADD COLUMN IF NOT EXISTS meta_data JSONB
+            """))
+            db.commit()
+            migrations_run.append("email_messages.meta_data")
+        except Exception as e:
+            db.rollback()
+            errors.append(f"email_messages.meta_data: {str(e)[:100]}")
+
         return {
             "status": "success" if not errors else "partial",
             "timestamp": datetime.now(timezone.utc).isoformat(),

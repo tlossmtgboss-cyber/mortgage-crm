@@ -2,6 +2,7 @@
 Salesforce Calendar/Event Sync Service
 Syncs Event and Task records from Salesforce to CRM calendar
 """
+import json
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
@@ -269,7 +270,7 @@ class SalesforceCalendarSyncService:
             ) VALUES (
                 :user_id, :lead_id, :loan_id, :title, :description,
                 :event_type, :location, :start_time, :end_time,
-                :all_day, :status, :meta_data, :created_at
+                :all_day, :status, :meta_data::jsonb, :created_at
             )
         """), {
             "user_id": user_id,
@@ -283,14 +284,14 @@ class SalesforceCalendarSyncService:
             "end_time": end_dt,
             "all_day": sf_event.get('IsAllDayEvent', False),
             "status": 'confirmed',
-            "meta_data": {
+            "meta_data": json.dumps({
                 "salesforce_id": sf_id,
                 "salesforce_who_id": sf_event.get('WhoId'),
                 "salesforce_what_id": sf_event.get('WhatId'),
                 "salesforce_type": sf_event.get('Type'),
                 "show_as": sf_event.get('ShowAs'),
                 "source": "salesforce_sync"
-            },
+            }),
             "created_at": datetime.now(timezone.utc)
         })
 
@@ -355,7 +356,7 @@ class SalesforceCalendarSyncService:
                 due_date, status, priority, meta_data, created_at
             ) VALUES (
                 :user_id, :lead_id, :loan_id, :title, :description,
-                :due_date, :status, :priority, :meta_data, :created_at
+                :due_date, :status, :priority, :meta_data::jsonb, :created_at
             )
         """), {
             "user_id": user_id,
@@ -366,13 +367,13 @@ class SalesforceCalendarSyncService:
             "due_date": due_date,
             "status": status,
             "priority": priority,
-            "meta_data": {
+            "meta_data": json.dumps({
                 "salesforce_task_id": sf_id,
                 "salesforce_who_id": sf_task.get('WhoId'),
                 "salesforce_what_id": sf_task.get('WhatId'),
                 "task_subtype": sf_task.get('TaskSubtype'),
                 "source": "salesforce_sync"
-            },
+            }),
             "created_at": datetime.now(timezone.utc)
         })
 
