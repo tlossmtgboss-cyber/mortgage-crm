@@ -9,6 +9,7 @@ import './AIUnderwriter.css';
 const VIEW_MODES = [
   { id: 'chat', label: 'AI Chat', icon: '💬' },
   { id: 'file-analysis', label: 'Smart File Analysis', icon: '📁' },
+  { id: 'applicants', label: 'Applicants', icon: '👥' },
 ];
 
 // Guideline categories
@@ -35,6 +36,14 @@ function AIUnderwriter() {
   const [isSearching, setIsSearching] = useState(false);
   const [pipelineReadiness, setPipelineReadiness] = useState(null);
   const [isLoadingPipeline, setIsLoadingPipeline] = useState(false);
+
+  // Applicants tab state
+  const [applicants, setApplicants] = useState([]);
+  const [selectedApplicant, setSelectedApplicant] = useState(null);
+  const [isLoadingApplicants, setIsLoadingApplicants] = useState(false);
+  const [applicantDetails, setApplicantDetails] = useState(null);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+  const [applicantSearchQuery, setApplicantSearchQuery] = useState('');
 
   // Chat state
   const [messages, setMessages] = useState([
@@ -131,12 +140,75 @@ function AIUnderwriter() {
     }
   }, []);
 
+  // Applicants Functions
+  const loadApplicants = useCallback(async () => {
+    setIsLoadingApplicants(true);
+    try {
+      const response = await fetch('/api/v1/loans?limit=50&include_borrower=true', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setApplicants(data.loans || data || []);
+      }
+    } catch (error) {
+      console.error('Error loading applicants:', error);
+    } finally {
+      setIsLoadingApplicants(false);
+    }
+  }, []);
+
+  const loadApplicantDetails = useCallback(async (loanId) => {
+    setIsLoadingDetails(true);
+    setApplicantDetails(null);
+    try {
+      // Fetch loan details with all related data
+      const response = await fetch(`/api/v1/loans/${loanId}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setApplicantDetails(data);
+      }
+    } catch (error) {
+      console.error('Error loading applicant details:', error);
+      setApplicantDetails({ error: 'Failed to load applicant details' });
+    } finally {
+      setIsLoadingDetails(false);
+    }
+  }, []);
+
+  const handleApplicantSelect = (applicant) => {
+    setSelectedApplicant(applicant);
+    loadApplicantDetails(applicant.id);
+  };
+
+  const filteredApplicants = applicants.filter(applicant => {
+    if (!applicantSearchQuery.trim()) return true;
+    const query = applicantSearchQuery.toLowerCase();
+    const name = (applicant.borrower_name || '').toLowerCase();
+    const loanNumber = (applicant.loan_number || '').toLowerCase();
+    const address = (applicant.property_address || '').toLowerCase();
+    return name.includes(query) || loanNumber.includes(query) || address.includes(query);
+  });
+
   // Load pipeline readiness when switching to file analysis mode
   useEffect(() => {
     if (viewMode === 'file-analysis' && !pipelineReadiness) {
       loadPipelineReadiness();
     }
   }, [viewMode, pipelineReadiness, loadPipelineReadiness]);
+
+  // Load applicants when switching to applicants mode
+  useEffect(() => {
+    if (viewMode === 'applicants' && applicants.length === 0) {
+      loadApplicants();
+    }
+  }, [viewMode, applicants.length, loadApplicants]);
 
   const handleLoanSelect = (loan) => {
     setSelectedLoan(loan);
@@ -231,26 +303,33 @@ function AIUnderwriter() {
   const loadCurrentUser = () => {
     try {
       const token = localStorage.getItem('token');
-      if (token) {
+      if (token && token.split('.').length === 3) {
         // Decode JWT to get user ID
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        setCurrentUserId(payload.user_id || payload.sub || 1); // Fallback to 1 if not found
+        const base64Payload = token.split('.')[1];
+        // Handle base64url encoding
+        const base64 = base64Payload.replace(/-/g, '+').replace(/_/g, '/');
+        const payload = JSON.parse(atob(base64));
+        const userId = payload.user_id || payload.sub || payload.id;
+        setCurrentUserId(userId || 1);
       } else {
-        // No token, default to user ID 1
+        // No valid token, default to user ID 1
         setCurrentUserId(1);
       }
     } catch (error) {
-      console.error('Failed to load user ID:', error);
+      console.error('Failed to decode JWT token:', error);
       setCurrentUserId(1); // Fallback to user ID 1
     }
   };
 
   const loadMemoryStats = async () => {
     try {
-      const stats = await aiAPI.getMemoryStats();
-      setMemoryStats(stats);
+      if (aiAPI && typeof aiAPI.getMemoryStats === 'function') {
+        const stats = await aiAPI.getMemoryStats();
+        setMemoryStats(stats);
+      }
     } catch (error) {
-      console.error('Failed to load memory stats:', error);
+      // Memory stats are optional, fail silently
+      console.debug('Memory stats not available:', error.message);
     }
   };
 
@@ -602,6 +681,14 @@ function AIUnderwriter() {
                   <span className="calc-label">Calculated LTV:</span>
                   <span className="calc-value">{calculateLTV()}%</span>
                 </div>
+                {scenario.dti && (
+                  <div className="calc-item">
+                    <span className="calc-label">DTI:</span>
+                    <span className={`calc-value ${parseFloat(scenario.dti) > 50 ? 'warning' : ''}`}>
+                      {scenario.dti}%
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="scenario-actions">
@@ -724,6 +811,8 @@ function AIUnderwriter() {
               onClick={toggleListening}
               disabled={isLoading}
               title={isListening ? 'Stop listening' : 'Speak your question'}
+              aria-label={isListening ? 'Stop voice input' : 'Start voice input'}
+              aria-pressed={isListening}
             >
               {isListening ? '🔴' : '🎤'}
             </button>
@@ -860,7 +949,7 @@ function AIUnderwriter() {
                 </div>
                 <div className="reference-item">
                   <span className="ref-label">Conforming Limit</span>
-                  <span className="ref-value">$766,550</span>
+                  <span className="ref-value">$806,500</span>
                 </div>
               </div>
             </div>
@@ -1072,6 +1161,23 @@ function AIUnderwriter() {
               {isLoadingPipeline ? 'Loading...' : 'Refresh'}
             </button>
 
+            {isLoadingPipeline && !pipelineReadiness && (
+              <div className="pipeline-loading">
+                <div className="pipeline-summary">
+                  <div className="skeleton skeleton-stat"></div>
+                  <div className="skeleton skeleton-stat"></div>
+                  <div className="skeleton skeleton-stat"></div>
+                  <div className="skeleton skeleton-stat"></div>
+                </div>
+                <div className="pipeline-loans">
+                  <div className="skeleton skeleton-text short"></div>
+                  <div className="skeleton skeleton-loan-item"></div>
+                  <div className="skeleton skeleton-loan-item"></div>
+                  <div className="skeleton skeleton-loan-item"></div>
+                </div>
+              </div>
+            )}
+
             {pipelineReadiness && (
               <>
                 <div className="pipeline-summary">
@@ -1121,6 +1227,253 @@ function AIUnderwriter() {
                   ))}
                 </div>
               </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Applicants View */}
+      {viewMode === 'applicants' && (
+        <div className="applicants-container">
+          {/* Applicants List Panel */}
+          <div className="applicants-list-panel">
+            <div className="applicants-list-header">
+              <h3>All Applicants</h3>
+              <button
+                onClick={loadApplicants}
+                disabled={isLoadingApplicants}
+                className="refresh-applicants-btn"
+              >
+                {isLoadingApplicants ? 'Loading...' : '🔄 Refresh'}
+              </button>
+            </div>
+
+            <div className="applicants-search">
+              <input
+                type="text"
+                placeholder="Search by name, loan number, or address..."
+                value={applicantSearchQuery}
+                onChange={(e) => setApplicantSearchQuery(e.target.value)}
+                className="applicants-search-input"
+              />
+            </div>
+
+            {isLoadingApplicants && (
+              <div className="applicants-loading">
+                <div className="loading-spinner"></div>
+                <p>Loading applicants...</p>
+                <div className="skeleton-list" style={{ width: '100%', padding: '16px' }}>
+                  <div className="skeleton skeleton-loan-item"></div>
+                  <div className="skeleton skeleton-loan-item"></div>
+                  <div className="skeleton skeleton-loan-item"></div>
+                </div>
+              </div>
+            )}
+
+            {!isLoadingApplicants && filteredApplicants.length === 0 && (
+              <div className="no-applicants">
+                <p>No applicants found</p>
+              </div>
+            )}
+
+            <div className="applicants-list">
+              {filteredApplicants.map((applicant) => (
+                <div
+                  key={applicant.id}
+                  className={`applicant-card ${selectedApplicant?.id === applicant.id ? 'selected' : ''}`}
+                  onClick={() => handleApplicantSelect(applicant)}
+                >
+                  <div className="applicant-card-header">
+                    <span className="applicant-name">{applicant.borrower_name || 'Unknown Borrower'}</span>
+                    <span className={`applicant-status status-${(applicant.status || applicant.stage || 'unknown').toLowerCase().replace(/\s+/g, '-')}`}>
+                      {applicant.status || applicant.stage || 'Unknown'}
+                    </span>
+                  </div>
+                  <div className="applicant-card-body">
+                    <div className="applicant-info-row">
+                      <span className="info-label">Loan #:</span>
+                      <span className="info-value">{applicant.loan_number || `#${applicant.id}`}</span>
+                    </div>
+                    <div className="applicant-info-row">
+                      <span className="info-label">Amount:</span>
+                      <span className="info-value">${(applicant.loan_amount || applicant.amount || 0).toLocaleString()}</span>
+                    </div>
+                    {applicant.property_address && (
+                      <div className="applicant-info-row">
+                        <span className="info-label">Property:</span>
+                        <span className="info-value address">{applicant.property_address}</span>
+                      </div>
+                    )}
+                    {applicant.loan_type && (
+                      <div className="applicant-info-row">
+                        <span className="info-label">Type:</span>
+                        <span className="info-value loan-type">{applicant.loan_type.toUpperCase()}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Applicant Details Panel */}
+          <div className="applicant-details-panel">
+            {!selectedApplicant && (
+              <div className="no-selection">
+                <div className="no-selection-icon">👥</div>
+                <h3>Select an Applicant</h3>
+                <p>Click on an applicant from the list to view their details</p>
+              </div>
+            )}
+
+            {selectedApplicant && isLoadingDetails && (
+              <div className="details-loading">
+                <div className="loading-spinner"></div>
+                <p>Loading applicant details...</p>
+              </div>
+            )}
+
+            {selectedApplicant && applicantDetails && !applicantDetails.error && (
+              <div className="applicant-details">
+                <div className="details-header">
+                  <h2>{applicantDetails.borrower_name || selectedApplicant.borrower_name || 'Applicant Details'}</h2>
+                  <span className={`details-status status-${(applicantDetails.status || applicantDetails.stage || 'unknown').toLowerCase().replace(/\s+/g, '-')}`}>
+                    {applicantDetails.status || applicantDetails.stage || 'Unknown Status'}
+                  </span>
+                </div>
+
+                {/* Loan Overview Section */}
+                <div className="details-section">
+                  <h3>📋 Loan Overview</h3>
+                  <div className="details-grid">
+                    <div className="detail-item">
+                      <span className="detail-label">Loan Number</span>
+                      <span className="detail-value">{applicantDetails.loan_number || `#${applicantDetails.id}`}</span>
+                    </div>
+                    <div className="detail-item">
+                      <span className="detail-label">Loan Amount</span>
+                      <span className="detail-value">${(applicantDetails.loan_amount || applicantDetails.amount || 0).toLocaleString()}</span>
+                    </div>
+                    <div className="detail-item">
+                      <span className="detail-label">Loan Type</span>
+                      <span className="detail-value">{(applicantDetails.loan_type || 'N/A').toUpperCase()}</span>
+                    </div>
+                    <div className="detail-item">
+                      <span className="detail-label">Loan Purpose</span>
+                      <span className="detail-value">{applicantDetails.loan_purpose || applicantDetails.purpose || 'N/A'}</span>
+                    </div>
+                    <div className="detail-item">
+                      <span className="detail-label">Interest Rate</span>
+                      <span className="detail-value">{applicantDetails.rate || applicantDetails.interest_rate ? `${applicantDetails.rate || applicantDetails.interest_rate}%` : 'N/A'}</span>
+                    </div>
+                    <div className="detail-item">
+                      <span className="detail-label">LTV</span>
+                      <span className="detail-value">{applicantDetails.ltv ? `${applicantDetails.ltv}%` : 'N/A'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Borrower Information Section */}
+                <div className="details-section">
+                  <h3>👤 Borrower Information</h3>
+                  <div className="details-grid">
+                    <div className="detail-item">
+                      <span className="detail-label">Name</span>
+                      <span className="detail-value">{applicantDetails.borrower_name || 'N/A'}</span>
+                    </div>
+                    <div className="detail-item">
+                      <span className="detail-label">Email</span>
+                      <span className="detail-value">{applicantDetails.borrower_email || applicantDetails.email || 'N/A'}</span>
+                    </div>
+                    <div className="detail-item">
+                      <span className="detail-label">Phone</span>
+                      <span className="detail-value">{applicantDetails.borrower_phone || applicantDetails.phone || 'N/A'}</span>
+                    </div>
+                    <div className="detail-item">
+                      <span className="detail-label">Credit Score</span>
+                      <span className="detail-value">{applicantDetails.credit_score || 'N/A'}</span>
+                    </div>
+                    <div className="detail-item">
+                      <span className="detail-label">DTI</span>
+                      <span className="detail-value">{applicantDetails.dti ? `${applicantDetails.dti}%` : 'N/A'}</span>
+                    </div>
+                    <div className="detail-item">
+                      <span className="detail-label">Monthly Income</span>
+                      <span className="detail-value">{applicantDetails.monthly_income ? `$${applicantDetails.monthly_income.toLocaleString()}` : 'N/A'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Property Information Section */}
+                <div className="details-section">
+                  <h3>🏠 Property Information</h3>
+                  <div className="details-grid">
+                    <div className="detail-item full-width">
+                      <span className="detail-label">Address</span>
+                      <span className="detail-value">{applicantDetails.property_address || 'N/A'}</span>
+                    </div>
+                    <div className="detail-item">
+                      <span className="detail-label">Property Type</span>
+                      <span className="detail-value">{applicantDetails.property_type || 'N/A'}</span>
+                    </div>
+                    <div className="detail-item">
+                      <span className="detail-label">Occupancy</span>
+                      <span className="detail-value">{applicantDetails.occupancy_type || applicantDetails.occupancy || 'N/A'}</span>
+                    </div>
+                    <div className="detail-item">
+                      <span className="detail-label">Property Value</span>
+                      <span className="detail-value">{applicantDetails.appraisal_value || applicantDetails.property_value ? `$${(applicantDetails.appraisal_value || applicantDetails.property_value).toLocaleString()}` : 'N/A'}</span>
+                    </div>
+                    <div className="detail-item">
+                      <span className="detail-label">County</span>
+                      <span className="detail-value">{applicantDetails.county || 'N/A'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Dates Section */}
+                <div className="details-section">
+                  <h3>📅 Important Dates</h3>
+                  <div className="details-grid">
+                    <div className="detail-item">
+                      <span className="detail-label">Application Date</span>
+                      <span className="detail-value">{applicantDetails.application_date ? new Date(applicantDetails.application_date).toLocaleDateString() : 'N/A'}</span>
+                    </div>
+                    <div className="detail-item">
+                      <span className="detail-label">Expected Close</span>
+                      <span className="detail-value">{applicantDetails.expected_close_date ? new Date(applicantDetails.expected_close_date).toLocaleDateString() : 'N/A'}</span>
+                    </div>
+                    <div className="detail-item">
+                      <span className="detail-label">Lock Expiration</span>
+                      <span className="detail-value">{applicantDetails.lock_expiration_date ? new Date(applicantDetails.lock_expiration_date).toLocaleDateString() : 'N/A'}</span>
+                    </div>
+                    <div className="detail-item">
+                      <span className="detail-label">Last Updated</span>
+                      <span className="detail-value">{applicantDetails.updated_at ? new Date(applicantDetails.updated_at).toLocaleDateString() : 'N/A'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="details-actions">
+                  <button
+                    className="action-btn primary"
+                    onClick={() => {
+                      setViewMode('file-analysis');
+                      setSelectedLoan({ id: applicantDetails.id, loan_number: applicantDetails.loan_number });
+                      analyzeFile(applicantDetails.id);
+                    }}
+                  >
+                    📊 Run AI File Analysis
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {selectedApplicant && applicantDetails?.error && (
+              <div className="details-error">
+                <p>{applicantDetails.error}</p>
+              </div>
             )}
           </div>
         </div>
