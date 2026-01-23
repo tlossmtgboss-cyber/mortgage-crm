@@ -36901,7 +36901,7 @@ async def get_salesforce_sync_status():
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "scheduler": {
                 "job_id": "salesforce_sync_all_users",
-                "interval_minutes": 15,
+                "interval_minutes": 5,
                 "enabled": True
             },
             "connected_profiles": {
