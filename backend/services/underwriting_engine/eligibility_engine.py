@@ -130,11 +130,11 @@ class LoanScenario:
     va_funding_fee_exempt: bool = False
 
 
-# 2024/2025 Conforming Loan Limits
+# 2025 Conforming Loan Limits
 CONFORMING_LIMITS = {
-    "standard": Decimal("766550"),
-    "high_cost": Decimal("1149825"),
-    "super_conforming": Decimal("1149825"),
+    "standard": Decimal("806500"),
+    "high_cost": Decimal("1209750"),
+    "super_conforming": Decimal("1209750"),
     # High-cost areas (subset for reference)
     "high_cost_areas": {
         "CA": ["Los Angeles", "San Francisco", "Orange", "Santa Clara", "San Mateo", "Marin", "Alameda"],

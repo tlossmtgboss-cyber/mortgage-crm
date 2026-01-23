@@ -303,33 +303,26 @@ function AIUnderwriter() {
   const loadCurrentUser = () => {
     try {
       const token = localStorage.getItem('token');
-      if (token && token.split('.').length === 3) {
+      if (token) {
         // Decode JWT to get user ID
-        const base64Payload = token.split('.')[1];
-        // Handle base64url encoding
-        const base64 = base64Payload.replace(/-/g, '+').replace(/_/g, '/');
-        const payload = JSON.parse(atob(base64));
-        const userId = payload.user_id || payload.sub || payload.id;
-        setCurrentUserId(userId || 1);
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        setCurrentUserId(payload.user_id || payload.sub || 1); // Fallback to 1 if not found
       } else {
-        // No valid token, default to user ID 1
+        // No token, default to user ID 1
         setCurrentUserId(1);
       }
     } catch (error) {
-      console.error('Failed to decode JWT token:', error);
+      console.error('Failed to load user ID:', error);
       setCurrentUserId(1); // Fallback to user ID 1
     }
   };
 
   const loadMemoryStats = async () => {
     try {
-      if (aiAPI && typeof aiAPI.getMemoryStats === 'function') {
-        const stats = await aiAPI.getMemoryStats();
-        setMemoryStats(stats);
-      }
+      const stats = await aiAPI.getMemoryStats();
+      setMemoryStats(stats);
     } catch (error) {
-      // Memory stats are optional, fail silently
-      console.debug('Memory stats not available:', error.message);
+      console.error('Failed to load memory stats:', error);
     }
   };
 
@@ -811,8 +804,6 @@ function AIUnderwriter() {
               onClick={toggleListening}
               disabled={isLoading}
               title={isListening ? 'Stop listening' : 'Speak your question'}
-              aria-label={isListening ? 'Stop voice input' : 'Start voice input'}
-              aria-pressed={isListening}
             >
               {isListening ? '🔴' : '🎤'}
             </button>
@@ -1161,23 +1152,6 @@ function AIUnderwriter() {
               {isLoadingPipeline ? 'Loading...' : 'Refresh'}
             </button>
 
-            {isLoadingPipeline && !pipelineReadiness && (
-              <div className="pipeline-loading">
-                <div className="pipeline-summary">
-                  <div className="skeleton skeleton-stat"></div>
-                  <div className="skeleton skeleton-stat"></div>
-                  <div className="skeleton skeleton-stat"></div>
-                  <div className="skeleton skeleton-stat"></div>
-                </div>
-                <div className="pipeline-loans">
-                  <div className="skeleton skeleton-text short"></div>
-                  <div className="skeleton skeleton-loan-item"></div>
-                  <div className="skeleton skeleton-loan-item"></div>
-                  <div className="skeleton skeleton-loan-item"></div>
-                </div>
-              </div>
-            )}
-
             {pipelineReadiness && (
               <>
                 <div className="pipeline-summary">
@@ -1262,11 +1236,6 @@ function AIUnderwriter() {
               <div className="applicants-loading">
                 <div className="loading-spinner"></div>
                 <p>Loading applicants...</p>
-                <div className="skeleton-list" style={{ width: '100%', padding: '16px' }}>
-                  <div className="skeleton skeleton-loan-item"></div>
-                  <div className="skeleton skeleton-loan-item"></div>
-                  <div className="skeleton skeleton-loan-item"></div>
-                </div>
               </div>
             )}
 

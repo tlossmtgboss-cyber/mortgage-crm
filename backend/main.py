@@ -19488,8 +19488,8 @@ async def get_underwriting_guidelines(
     return {
         "loan_type": loan_type,
         "guidelines": guideline,
-        "conforming_limit_2024": 766550,
-        "high_cost_limit_2024": 1149825
+        "conforming_limit_2025": 806500,
+        "high_cost_limit_2025": 1209750
     }
 
 
