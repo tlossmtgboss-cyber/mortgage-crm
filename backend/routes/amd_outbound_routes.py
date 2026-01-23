@@ -103,6 +103,11 @@ async def get_user_twilio_config(user_id: int, db: Session) -> Optional[Dict]:
         return None
     except Exception as e:
         logger.error(f"Error fetching Twilio config: {e}")
+        # Rollback to clear the failed transaction state
+        try:
+            db.rollback()
+        except:
+            pass
         return None
 
 
@@ -203,46 +208,53 @@ def build_default_voicemail_message(client_name: str, lo_name: str, purpose: str
 
 def ensure_amd_table_exists(db: Session):
     """Ensure the AMD tracking table exists"""
-    db.execute(text("""
-        CREATE TABLE IF NOT EXISTS amd_outbound_calls (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            user_id INTEGER,
-            call_sid VARCHAR(34) UNIQUE,
-            to_number VARCHAR(20),
-            from_number VARCHAR(20),
-            client_name VARCHAR(255),
-            purpose VARCHAR(500),
-            lo_name VARCHAR(255),
+    try:
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS amd_outbound_calls (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_id INTEGER,
+                call_sid VARCHAR(34) UNIQUE,
+                to_number VARCHAR(20),
+                from_number VARCHAR(20),
+                client_name VARCHAR(255),
+                purpose VARCHAR(500),
+                lo_name VARCHAR(255),
 
-            -- AMD Results
-            amd_status VARCHAR(50),
-            answered_by VARCHAR(50),
-            machine_detection_duration INTEGER,
+                -- AMD Results
+                amd_status VARCHAR(50),
+                answered_by VARCHAR(50),
+                machine_detection_duration INTEGER,
 
-            -- Call handling
-            handling_method VARCHAR(50),
-            elevenlabs_conversation_id VARCHAR(100),
+                -- Call handling
+                handling_method VARCHAR(50),
+                elevenlabs_conversation_id VARCHAR(100),
 
-            -- Agent config
-            agent_id VARCHAR(100),
-            phone_number_id VARCHAR(100),
+                -- Agent config
+                agent_id VARCHAR(100),
+                phone_number_id VARCHAR(100),
 
-            -- Voicemail
-            voicemail_message TEXT,
-            voicemail_audio TEXT,
-            voicemail_audio_url VARCHAR(500),
-            voicemail_duration INTEGER,
+                -- Voicemail
+                voicemail_message TEXT,
+                voicemail_audio TEXT,
+                voicemail_audio_url VARCHAR(500),
+                voicemail_duration INTEGER,
 
-            -- Timestamps
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-            amd_completed_at TIMESTAMP WITH TIME ZONE,
-            call_ended_at TIMESTAMP WITH TIME ZONE,
+                -- Timestamps
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                amd_completed_at TIMESTAMP WITH TIME ZONE,
+                call_ended_at TIMESTAMP WITH TIME ZONE,
 
-            -- Status
-            status VARCHAR(50) DEFAULT 'initiated'
-        )
-    """))
-    db.commit()
+                -- Status
+                status VARCHAR(50) DEFAULT 'initiated'
+            )
+        """))
+        db.commit()
+    except Exception as e:
+        logger.warning(f"Could not ensure AMD table exists (may already exist): {e}")
+        try:
+            db.rollback()
+        except:
+            pass
 
 
 # =============================================================================
