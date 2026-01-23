@@ -36987,43 +36987,99 @@ async def get_salesforce_sync_status():
             """)).scalar()
 
             if logs_exist:
-                # Get recent sync logs
-                recent_logs = db.execute(text("""
-                    SELECT
-                        id, sync_type, sync_direction, status,
-                        records_processed, records_created, records_updated, records_failed,
-                        started_at, completed_at, error_message
-                    FROM salesforce_sync_logs
-                    ORDER BY started_at DESC
-                    LIMIT 10
-                """)).fetchall()
+                # Check if sync_direction column exists, add it if not
+                has_sync_direction = db.execute(text("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns
+                        WHERE table_name = 'salesforce_sync_logs' AND column_name = 'sync_direction'
+                    )
+                """)).scalar()
 
-                result["recent_syncs"] = [
-                    {
-                        "id": log[0],
-                        "sync_type": log[1],
-                        "direction": log[2],
-                        "status": log[3],
-                        "records_processed": log[4],
-                        "records_created": log[5],
-                        "records_updated": log[6],
-                        "records_failed": log[7],
-                        "started_at": log[8].isoformat() if log[8] else None,
-                        "completed_at": log[9].isoformat() if log[9] else None,
-                        "error": log[10][:200] if log[10] else None
-                    }
-                    for log in recent_logs
-                ]
+                if not has_sync_direction:
+                    try:
+                        db.execute(text("ALTER TABLE salesforce_sync_logs ADD COLUMN sync_direction VARCHAR(20) DEFAULT 'inbound'"))
+                        db.commit()
+                        result["migration_applied"] = "Added sync_direction column to salesforce_sync_logs"
+                        has_sync_direction = True
+                    except Exception as col_err:
+                        result["column_migration_error"] = str(col_err)[:100]
 
-                # Get health metrics
-                health_stats = db.execute(text("""
-                    SELECT
-                        MAX(CASE WHEN status = 'success' THEN completed_at END) as last_success,
-                        COUNT(CASE WHEN sync_direction = 'inbound' AND started_at >= NOW() - INTERVAL '24 hours' THEN 1 END) as inbound_24h,
-                        COUNT(CASE WHEN sync_direction = 'outbound' AND started_at >= NOW() - INTERVAL '24 hours' THEN 1 END) as outbound_24h,
-                        COUNT(CASE WHEN status = 'error' AND started_at >= NOW() - INTERVAL '24 hours' THEN 1 END) as errors_24h
-                    FROM salesforce_sync_logs
-                """)).fetchone()
+                # Get recent sync logs (with or without sync_direction)
+                if has_sync_direction:
+                    recent_logs = db.execute(text("""
+                        SELECT
+                            id, sync_type, sync_direction, status,
+                            records_processed, records_created, records_updated, records_failed,
+                            started_at, completed_at, error_message
+                        FROM salesforce_sync_logs
+                        ORDER BY started_at DESC NULLS LAST
+                        LIMIT 10
+                    """)).fetchall()
+
+                    result["recent_syncs"] = [
+                        {
+                            "id": log[0],
+                            "sync_type": log[1],
+                            "direction": log[2],
+                            "status": log[3],
+                            "records_processed": log[4],
+                            "records_created": log[5],
+                            "records_updated": log[6],
+                            "records_failed": log[7],
+                            "started_at": log[8].isoformat() if log[8] else None,
+                            "completed_at": log[9].isoformat() if log[9] else None,
+                            "error": log[10][:200] if log[10] else None
+                        }
+                        for log in recent_logs
+                    ]
+
+                    # Get health metrics
+                    health_stats = db.execute(text("""
+                        SELECT
+                            MAX(CASE WHEN status = 'success' THEN completed_at END) as last_success,
+                            COUNT(CASE WHEN sync_direction = 'inbound' AND started_at >= NOW() - INTERVAL '24 hours' THEN 1 END) as inbound_24h,
+                            COUNT(CASE WHEN sync_direction = 'outbound' AND started_at >= NOW() - INTERVAL '24 hours' THEN 1 END) as outbound_24h,
+                            COUNT(CASE WHEN status = 'error' AND started_at >= NOW() - INTERVAL '24 hours' THEN 1 END) as errors_24h
+                        FROM salesforce_sync_logs
+                    """)).fetchone()
+                else:
+                    # Fallback query without sync_direction
+                    recent_logs = db.execute(text("""
+                        SELECT
+                            id, sync_type, status,
+                            records_processed, records_created, records_updated, records_failed,
+                            started_at, completed_at, error_message
+                        FROM salesforce_sync_logs
+                        ORDER BY started_at DESC NULLS LAST
+                        LIMIT 10
+                    """)).fetchall()
+
+                    result["recent_syncs"] = [
+                        {
+                            "id": log[0],
+                            "sync_type": log[1],
+                            "direction": "unknown",
+                            "status": log[2],
+                            "records_processed": log[3],
+                            "records_created": log[4],
+                            "records_updated": log[5],
+                            "records_failed": log[6],
+                            "started_at": log[7].isoformat() if log[7] else None,
+                            "completed_at": log[8].isoformat() if log[8] else None,
+                            "error": log[9][:200] if log[9] else None
+                        }
+                        for log in recent_logs
+                    ]
+
+                    # Simplified health stats without sync_direction
+                    health_stats = db.execute(text("""
+                        SELECT
+                            MAX(CASE WHEN status = 'success' THEN completed_at END) as last_success,
+                            COUNT(CASE WHEN started_at >= NOW() - INTERVAL '24 hours' THEN 1 END) as total_24h,
+                            0 as outbound_24h,
+                            COUNT(CASE WHEN status = 'error' AND started_at >= NOW() - INTERVAL '24 hours' THEN 1 END) as errors_24h
+                        FROM salesforce_sync_logs
+                    """)).fetchone()
 
                 if health_stats:
                     result["health"] = {
@@ -37034,6 +37090,7 @@ async def get_salesforce_sync_status():
                         "errors_24h": health_stats[3] or 0
                     }
         except Exception as e:
+            db.rollback()
             result["sync_logs_error"] = str(e)
 
         # Check integration_events table for additional metrics
