@@ -1,5 +1,5 @@
 """
-Underwriter Agent - Enhanced Version
+Underwriter Agent - Enhanced Version with AI Underwriting Engine
 
 Expert-level AI agent for mortgage risk analysis and compliance review.
 Includes:
@@ -9,10 +9,19 @@ Includes:
 - Few-shot examples for consistent risk assessment
 - Confidence calibration based on evidence quality
 - Integration with uploaded underwriting guidelines database
+- NEW: Integration with AI Underwriting Engine for:
+  - Automated income calculation per agency guidelines
+  - Asset analysis with large deposit detection
+  - Credit/DTI analysis and program eligibility
+  - Condition generation and clearing logic
+  - Fraud indicator detection
+  - Loan file data validation
 """
 
 import logging
 from typing import Dict, List, Any, Optional
+from decimal import Decimal
+from datetime import datetime
 import json
 import asyncio
 
@@ -23,6 +32,24 @@ from .mortgage_knowledge import (
     STANDARD_CONDITIONS,
     FEW_SHOT_EXAMPLES,
 )
+
+# Import the new AI Underwriting Engine components
+try:
+    from services.underwriting_engine import (
+        UnderwritingEngine,
+        IncomeCalculator,
+        AssetAnalyzer,
+        CreditAnalyzer,
+        EligibilityEngine,
+        ConditionGenerator,
+        LoanDataValidator,
+        underwrite_loan,
+        check_loan_eligibility,
+        validate_loan_file,
+    )
+    UNDERWRITING_ENGINE_AVAILABLE = True
+except ImportError:
+    UNDERWRITING_ENGINE_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -48,12 +75,476 @@ class UnderwriterAgent(BaseCallAgent):
     - Proper condition categorization (PTD/PTC/PTF)
     - Few-shot examples for consistent risk assessment
     - Confidence calibration
+
+    NEW - AI Underwriting Engine Integration:
+    - Automated income calculation (W-2, self-employed, variable, rental)
+    - Asset analysis with large deposit detection and sourcing
+    - Credit/DTI analysis with program-specific limits
+    - Condition generation with clearing logic
+    - Fraud indicator detection
+    - Multi-program eligibility (Conventional, FHA, VA)
     """
 
     def __init__(self, db):
         super().__init__(db)
         self._uploaded_guidelines: Optional[str] = None
         self._guidelines_loaded = False
+
+        # Initialize AI Underwriting Engine if available
+        self._engine_available = UNDERWRITING_ENGINE_AVAILABLE
+        if self._engine_available:
+            try:
+                self._underwriting_engine = UnderwritingEngine()
+                self._income_calculator = IncomeCalculator()
+                self._asset_analyzer = AssetAnalyzer()
+                self._credit_analyzer = CreditAnalyzer()
+                self._eligibility_engine = EligibilityEngine()
+                self._condition_generator = ConditionGenerator()
+                self._data_validator = LoanDataValidator()
+                logger.info("AI Underwriting Engine initialized successfully")
+            except Exception as e:
+                logger.warning(f"Could not initialize AI Underwriting Engine: {e}")
+                self._engine_available = False
+
+    # =========================================================================
+    # AI UNDERWRITING ENGINE METHODS
+    # =========================================================================
+
+    def run_automated_underwriting(
+        self,
+        loan_data: Dict[str, Any],
+        income_data: Optional[Dict[str, Any]] = None,
+        asset_data: Optional[Dict[str, Any]] = None,
+        credit_data: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Run full automated underwriting analysis using the AI Underwriting Engine.
+
+        This is the main entry point for automated loan underwriting. It performs:
+        1. Data validation and fraud detection
+        2. Income calculation per agency guidelines
+        3. Asset analysis with large deposit review
+        4. Credit/DTI analysis
+        5. Program eligibility determination
+        6. Condition generation
+        7. Risk assessment and decision
+
+        Args:
+            loan_data: Core loan information (amount, LTV, property, borrower info)
+            income_data: Income documentation (paystubs, W-2s, tax returns)
+            asset_data: Asset documentation (bank statements, retirement accounts)
+            credit_data: Credit report data (score, tradelines, derogatories)
+
+        Returns:
+            Complete underwriting result with decision, conditions, and analysis
+        """
+        if not self._engine_available:
+            logger.warning("AI Underwriting Engine not available, using basic analysis")
+            return self._basic_underwriting_analysis(loan_data)
+
+        try:
+            result = self._underwriting_engine.analyze_loan(
+                loan_data=loan_data,
+                income_data=income_data,
+                asset_data=asset_data,
+                credit_data=credit_data,
+            )
+            return result.to_dict()
+        except Exception as e:
+            logger.exception(f"Automated underwriting failed: {e}")
+            return {
+                "error": str(e),
+                "decision": "refer",
+                "refer_reasons": [f"Automated analysis failed: {str(e)}"],
+                "fallback_analysis": self._basic_underwriting_analysis(loan_data),
+            }
+
+    def calculate_qualifying_income(
+        self,
+        income_sources: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """
+        Calculate qualifying income per agency guidelines.
+
+        Supports:
+        - W-2 salary/hourly income
+        - Overtime, bonus, commission (variable income)
+        - Self-employment (Schedule C, S-Corp, Partnership)
+        - Rental income (Schedule E)
+        - Social Security/Pension
+        - Military income
+
+        Args:
+            income_sources: List of income source dictionaries with documentation data
+
+        Returns:
+            Income calculation result with qualifying amounts and issues
+        """
+        if not self._engine_available:
+            return {"error": "Income calculator not available"}
+
+        try:
+            total_qualifying = Decimal("0")
+            results = []
+
+            for source in income_sources:
+                source_type = source.get("type", "w2_salary")
+
+                if source_type in ["w2_salary", "salary", "hourly"]:
+                    calc = self._income_calculator.calculate_w2_income(
+                        base_salary=source.get("base_salary", 0),
+                        ytd_earnings=source.get("ytd_earnings"),
+                        pay_frequency=source.get("pay_frequency", "monthly"),
+                        current_paystub_date=source.get("paystub_date"),
+                        prior_year_w2=source.get("prior_year_w2", 0),
+                        two_years_ago_w2=source.get("two_years_ago_w2"),
+                    )
+                elif source_type == "self_employed":
+                    calc = self._income_calculator.calculate_self_employment_income(
+                        schedule_c_current=source.get("schedule_c_current", {}),
+                        schedule_c_prior=source.get("schedule_c_prior", {}),
+                        business_type=source.get("business_type", "sole_proprietor"),
+                        ownership_percentage=source.get("ownership_pct", 100),
+                    )
+                elif source_type == "rental":
+                    calc = self._income_calculator.calculate_rental_income(
+                        properties=source.get("properties", []),
+                        use_schedule_e=source.get("use_schedule_e", True),
+                    )
+                else:
+                    continue
+
+                total_qualifying += Decimal(str(calc.qualifying_monthly_income))
+                results.append({
+                    "type": source_type,
+                    "qualifying_monthly": float(calc.qualifying_monthly_income),
+                    "is_usable": calc.is_usable,
+                    "issues": [{"type": i.issue_type, "message": i.message} for i in calc.issues],
+                    "documentation_status": calc.documentation_status,
+                })
+
+            return {
+                "total_qualifying_monthly": float(total_qualifying),
+                "total_qualifying_annual": float(total_qualifying * 12),
+                "source_count": len(results),
+                "sources": results,
+            }
+        except Exception as e:
+            logger.exception(f"Income calculation failed: {e}")
+            return {"error": str(e)}
+
+    def analyze_assets(
+        self,
+        bank_accounts: List[Dict[str, Any]],
+        loan_amount: float,
+        property_value: float,
+        closing_costs: float = 0,
+        monthly_piti: float = 0,
+        required_reserves_months: int = 2,
+    ) -> Dict[str, Any]:
+        """
+        Analyze borrower assets for mortgage qualification.
+
+        Performs:
+        - Large deposit detection (50% of qualifying income threshold)
+        - Asset seasoning verification
+        - Funds-to-close calculation
+        - Reserve requirement verification
+        - Gift fund documentation review
+
+        Args:
+            bank_accounts: List of bank account statements
+            loan_amount: Requested loan amount
+            property_value: Property purchase price or appraised value
+            closing_costs: Estimated closing costs
+            monthly_piti: Proposed monthly PITI payment
+            required_reserves_months: Number of months reserves required
+
+        Returns:
+            Asset analysis result with verification status and issues
+        """
+        if not self._engine_available:
+            return {"error": "Asset analyzer not available"}
+
+        try:
+            result = self._asset_analyzer.analyze_assets(
+                bank_accounts=bank_accounts,
+                retirement_accounts=[],
+                loan_amount=Decimal(str(loan_amount)),
+                property_value=Decimal(str(property_value)),
+                closing_costs=Decimal(str(closing_costs)),
+                prepaid_items=Decimal("0"),
+                monthly_piti=Decimal(str(monthly_piti)),
+                required_reserves_months=required_reserves_months,
+            )
+
+            return {
+                "total_verified": float(result.total_verified_assets),
+                "total_liquid": float(result.total_liquid_assets),
+                "funds_to_close_required": float(result.funds_to_close_required),
+                "funds_to_close_met": result.funds_to_close_met,
+                "reserves_required": float(result.reserves_required),
+                "reserves_available": float(result.reserves_available),
+                "reserves_months": result.reserves_months,
+                "reserves_met": result.reserves_met,
+                "shortfall_amount": float(result.shortfall_amount),
+                "large_deposits": [
+                    {
+                        "amount": float(d.amount),
+                        "date": d.date.isoformat() if d.date else None,
+                        "description": d.description,
+                        "is_documented": d.is_documented,
+                        "source": d.source,
+                    }
+                    for d in result.large_deposits
+                ],
+                "issues": [{"type": i.issue_type, "message": i.message} for i in result.issues],
+            }
+        except Exception as e:
+            logger.exception(f"Asset analysis failed: {e}")
+            return {"error": str(e)}
+
+    def analyze_credit(
+        self,
+        credit_score: int,
+        tradelines: List[Dict[str, Any]],
+        proposed_payment: float,
+        monthly_income: float,
+        loan_type: str = "conventional",
+    ) -> Dict[str, Any]:
+        """
+        Analyze credit history and calculate DTI ratios.
+
+        Performs:
+        - Credit score eligibility by program
+        - Tradeline evaluation
+        - Derogatory event identification (BK, FC, SS waiting periods)
+        - DTI calculation with proper debt inclusion
+        - Credit history pattern detection
+
+        Args:
+            credit_score: Representative credit score
+            tradelines: List of credit tradelines from credit report
+            proposed_payment: Proposed monthly housing payment (PITI)
+            monthly_income: Qualifying monthly income
+            loan_type: Loan program (conventional, fha, va)
+
+        Returns:
+            Credit analysis result with DTI and eligibility status
+        """
+        if not self._engine_available:
+            return {"error": "Credit analyzer not available"}
+
+        try:
+            result = self._credit_analyzer.analyze_credit(
+                credit_score=credit_score,
+                tradelines=tradelines,
+                proposed_housing_payment=Decimal(str(proposed_payment)),
+                monthly_income=Decimal(str(monthly_income)),
+                loan_type=loan_type,
+            )
+
+            return {
+                "credit_score": result.credit_score,
+                "credit_grade": result.credit_grade,
+                "dti_front_end": result.dti_front_end,
+                "dti_back_end": result.dti_back_end,
+                "total_monthly_debt": float(result.total_monthly_debt),
+                "open_accounts": result.open_accounts,
+                "derogatory_count": result.derogatory_count,
+                "program_eligible": result.program_eligible,
+                "waiting_period_issues": [
+                    {"event": w.event_type, "message": w.message}
+                    for w in result.waiting_period_issues
+                ],
+                "issues": [{"type": i.issue_type, "message": i.message} for i in result.issues],
+            }
+        except Exception as e:
+            logger.exception(f"Credit analysis failed: {e}")
+            return {"error": str(e)}
+
+    def check_eligibility(
+        self,
+        loan_amount: float,
+        property_value: float,
+        credit_score: int,
+        dti_ratio: float,
+        loan_purpose: str = "purchase",
+        property_type: str = "sfr",
+        occupancy: str = "primary",
+        property_state: str = "CA",
+        is_veteran: bool = False,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """
+        Check loan eligibility across all programs (Conventional, FHA, VA).
+
+        Returns program-by-program eligibility with:
+        - Maximum LTV/CLTV limits
+        - Credit score requirements
+        - DTI limits
+        - MI requirements
+        - Specific ineligibility reasons
+
+        Args:
+            loan_amount: Requested loan amount
+            property_value: Property value
+            credit_score: Borrower credit score
+            dti_ratio: Debt-to-income ratio
+            loan_purpose: purchase, rate_term, cash_out
+            property_type: sfr, condo, townhouse, etc.
+            occupancy: primary, second_home, investment
+            property_state: Two-letter state code
+            is_veteran: Whether borrower is a veteran
+
+        Returns:
+            Program comparison with eligibility status and recommendation
+        """
+        if not self._engine_available:
+            return {"error": "Eligibility engine not available"}
+
+        try:
+            return check_loan_eligibility(
+                loan_amount=loan_amount,
+                property_value=property_value,
+                credit_score=credit_score,
+                dti_ratio=dti_ratio,
+                loan_purpose=loan_purpose,
+                property_type=property_type,
+                occupancy=occupancy,
+                property_state=property_state,
+                is_veteran=is_veteran,
+                **kwargs
+            )
+        except Exception as e:
+            logger.exception(f"Eligibility check failed: {e}")
+            return {"error": str(e)}
+
+    def generate_conditions(
+        self,
+        loan_data: Dict[str, Any],
+        income_issues: Optional[List[Dict]] = None,
+        asset_issues: Optional[List[Dict]] = None,
+        credit_issues: Optional[List[Dict]] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Generate underwriting conditions based on loan characteristics and issues.
+
+        Generates:
+        - Prior to Document (PTD) conditions
+        - Prior to Funding (PTF) conditions
+        - Income/employment conditions
+        - Asset documentation conditions
+        - Credit explanation conditions
+        - Property/title/insurance conditions
+
+        Args:
+            loan_data: Core loan information
+            income_issues: Issues from income analysis
+            asset_issues: Issues from asset analysis
+            credit_issues: Issues from credit analysis
+
+        Returns:
+            List of conditions with clearing instructions
+        """
+        if not self._engine_available:
+            return []
+
+        try:
+            from services.underwriting_engine.condition_generator import generate_loan_conditions
+
+            conditions = generate_loan_conditions(
+                loan_data=loan_data,
+                income_result={"issues": income_issues} if income_issues else None,
+                asset_result={"issues": asset_issues} if asset_issues else None,
+                credit_result={"issues": credit_issues} if credit_issues else None,
+            )
+
+            return [
+                {
+                    "id": c.id,
+                    "type": c.condition_type.value,
+                    "category": c.category.value,
+                    "priority": c.priority.value,
+                    "title": c.title,
+                    "description": c.description,
+                    "clearing_instructions": c.clearing_instructions,
+                    "acceptable_documents": c.acceptable_documents,
+                    "status": c.status.value,
+                }
+                for c in conditions
+            ]
+        except Exception as e:
+            logger.exception(f"Condition generation failed: {e}")
+            return []
+
+    def validate_loan_file(
+        self,
+        loan_data: Dict[str, Any],
+        loan_status: str = "application",
+        include_fraud_check: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        Validate loan file data for completeness, consistency, and fraud indicators.
+
+        Performs:
+        - Required field completeness check
+        - Field format and range validation
+        - Cross-field consistency checks
+        - Data quality assessment
+        - Fraud indicator detection
+
+        Args:
+            loan_data: Loan file data
+            loan_status: Current loan status (affects required fields)
+            include_fraud_check: Whether to run fraud detection
+
+        Returns:
+            Validation result with scores and findings
+        """
+        if not self._engine_available:
+            return {"error": "Data validator not available"}
+
+        try:
+            return validate_loan_file(loan_data, loan_status, include_fraud_check)
+        except Exception as e:
+            logger.exception(f"Loan validation failed: {e}")
+            return {"error": str(e)}
+
+    def _basic_underwriting_analysis(self, loan_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Fallback basic analysis when engine is not available."""
+        loan_amount = loan_data.get("loan_amount", 0)
+        property_value = loan_data.get("property_value", 0)
+        credit_score = loan_data.get("credit_score", 0)
+        dti = loan_data.get("dti_ratio", 0) or loan_data.get("dti", 0)
+
+        # Calculate LTV
+        ltv = (loan_amount / property_value * 100) if property_value > 0 else 0
+
+        # Basic risk assessment
+        risk_factors = []
+        if credit_score < 620:
+            risk_factors.append("Credit score below minimum (620)")
+        if dti > 50:
+            risk_factors.append("DTI exceeds maximum (50%)")
+        if ltv > 97:
+            risk_factors.append("LTV exceeds maximum (97%)")
+
+        decision = "approve" if not risk_factors else "refer"
+
+        return {
+            "decision": decision,
+            "risk_level": "high" if len(risk_factors) >= 2 else "moderate" if risk_factors else "low",
+            "ltv": ltv,
+            "dti": dti,
+            "credit_score": credit_score,
+            "risk_factors": risk_factors,
+            "note": "Basic analysis - AI Underwriting Engine not available",
+        }
+
+    # =========================================================================
+    # END AI UNDERWRITING ENGINE METHODS
+    # =========================================================================
 
     @property
     def agent_type(self) -> str:

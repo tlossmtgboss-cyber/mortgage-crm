@@ -20300,6 +20300,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Could not load Underwriting Guidelines routes: {e}")
 
+# Include AI Underwriting Engine routes (automated underwriting analysis)
+try:
+    from routes.underwriting_engine_routes import router as underwriting_engine_router
+    app.include_router(underwriting_engine_router, tags=["AI Underwriting Engine"])
+    logger.info("✅ AI Underwriting Engine routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load AI Underwriting Engine routes: {e}")
+
 # Include Production Predictor routes (AI-powered production forecasting)
 try:
     from routes.production_predictor_routes import router as production_predictor_router
