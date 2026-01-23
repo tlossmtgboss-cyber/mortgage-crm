@@ -1,7 +1,7 @@
 FROM python:3.11-slim
 
 # Build cache buster - change this value to force full rebuild
-ARG CACHE_DATE=2026-01-20-salesforce-schema-tables
+ARG CACHE_DATE=2026-01-23-amd-transaction-fix
 RUN echo "Build timestamp: ${CACHE_DATE}"
 
 WORKDIR /app
