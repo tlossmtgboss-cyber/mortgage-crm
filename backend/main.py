@@ -21435,6 +21435,15 @@ try:
 except Exception as e:
     logger.warning(f"Twilio Setup routes not loaded: {e}")
 
+# Retell AI Voice Platform routes (replaces ElevenLabs + Twilio)
+try:
+    from routes.retell_routes import router as retell_router, set_dependencies as set_retell_deps
+    set_retell_deps(User, get_current_user, get_db)
+    app.include_router(retell_router, tags=["Retell AI"])
+    logger.info("Retell AI routes loaded")
+except Exception as e:
+    logger.warning(f"Retell AI routes not loaded: {e}")
+
 # API Keys Settings routes (Comprehensive error handling pattern)
 try:
     from routes.api_keys_settings_routes import router as api_keys_settings_router, set_dependencies as set_api_keys_deps
