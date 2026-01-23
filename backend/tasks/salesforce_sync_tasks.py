@@ -75,6 +75,11 @@ async def sync_emails_from_salesforce(
 
     except Exception as e:
         logger.error(f"Email sync failed for profile {integration_profile_id}: {e}")
+        # Rollback to recover from any transaction errors
+        try:
+            db.rollback()
+        except Exception:
+            pass
         return {
             'success': False,
             'emails_synced': 0,
@@ -143,6 +148,11 @@ async def sync_calendar_from_salesforce(
 
     except Exception as e:
         logger.error(f"Calendar sync failed for profile {integration_profile_id}: {e}")
+        # Rollback to recover from any transaction errors
+        try:
+            db.rollback()
+        except Exception:
+            pass
         return {
             'success': False,
             'events_synced': 0,
@@ -327,12 +337,20 @@ async def sync_all_users_salesforce(
 
                 # Update last sync time - use fresh transaction after any rollbacks
                 try:
+                    # CRITICAL: Ensure clean transaction state before updating
+                    # This handles cases where previous operations left the transaction in a bad state
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
+
                     # Re-fetch profile to ensure we have a valid object in the current transaction
                     from salesforce_integration_models import IntegrationProfile as IP
                     fresh_profile = db.query(IP).filter(IP.id == profile.id).first()
                     if fresh_profile:
                         fresh_profile.last_sync_at = datetime.utcnow()
                         db.commit()
+                        logger.info(f"Updated last_sync_at for profile {profile.id}")
                 except Exception as commit_err:
                     logger.warning(f"Could not update last_sync_at for profile {profile.id}: {commit_err}")
                     try:
@@ -648,11 +666,18 @@ async def trigger_user_sync(
 
         # Update last sync time - use fresh transaction after any rollbacks
         try:
+            # CRITICAL: Ensure clean transaction state before updating
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
             from salesforce_integration_models import IntegrationProfile as IP
             fresh_profile = db.query(IP).filter(IP.id == profile.id).first()
             if fresh_profile:
                 fresh_profile.last_sync_at = datetime.utcnow()
                 db.commit()
+                logger.info(f"Updated last_sync_at for profile {profile.id}")
         except Exception as commit_err:
             logger.warning(f"Could not update last_sync_at for profile {profile.id}: {commit_err}")
             try:

@@ -91,6 +91,11 @@ class SalesforceCalendarSyncService:
                 except Exception as e:
                     logger.error(f"Error processing Event {sf_event.get('Id')}: {e}")
                     result['errors'].append(f"Event {sf_event.get('Id')}: {str(e)[:100]}")
+                    # Rollback to recover from any transaction errors (e.g., constraint violations)
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
 
             # Process Task records
             for sf_task in tasks:
@@ -103,6 +108,11 @@ class SalesforceCalendarSyncService:
                 except Exception as e:
                     logger.error(f"Error processing Task {sf_task.get('Id')}: {e}")
                     result['errors'].append(f"Task {sf_task.get('Id')}: {str(e)[:100]}")
+                    # Rollback to recover from any transaction errors
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
 
             # Log sync event
             self._log_sync_event(db, integration_profile_id, result)

@@ -1291,6 +1291,11 @@ class SalesforceSyncService:
                 except Exception as e:
                     results['loans']['failed'] += 1
                     results['loans']['errors'].append(str(e)[:100])
+                    # Rollback to recover from any transaction errors
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
 
         # Sync Leads
         if sync_leads:
@@ -1315,6 +1320,11 @@ class SalesforceSyncService:
                 except Exception as e:
                     results['leads']['failed'] += 1
                     results['leads']['errors'].append(str(e)[:100])
+                    # Rollback to recover from any transaction errors
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
 
         # Sync Emails
         if sync_emails:
@@ -1339,6 +1349,11 @@ class SalesforceSyncService:
                 except Exception as e:
                     results['emails']['failed'] += 1
                     results['emails']['errors'].append(str(e)[:100])
+                    # Rollback to recover from any transaction errors
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
 
         # Sync Calendar Events
         if sync_calendar:
@@ -1362,6 +1377,11 @@ class SalesforceSyncService:
                 except Exception as e:
                     results['calendar']['failed'] += 1
                     results['calendar']['errors'].append(str(e)[:100])
+                    # Rollback to recover from any transaction errors
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
 
         # Check overall success
         total_failed = sum([

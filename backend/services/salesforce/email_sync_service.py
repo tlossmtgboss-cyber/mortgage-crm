@@ -87,6 +87,11 @@ class SalesforceEmailSyncService:
                 except Exception as e:
                     logger.error(f"Error processing EmailMessage {sf_email.get('Id')}: {e}")
                     result['errors'].append(f"EmailMessage {sf_email.get('Id')}: {str(e)[:100]}")
+                    # Rollback to recover from any transaction errors (e.g., constraint violations)
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
 
             # Process Email Tasks
             for sf_task in email_tasks:
@@ -99,6 +104,11 @@ class SalesforceEmailSyncService:
                 except Exception as e:
                     logger.error(f"Error processing Email Task {sf_task.get('Id')}: {e}")
                     result['errors'].append(f"Task {sf_task.get('Id')}: {str(e)[:100]}")
+                    # Rollback to recover from any transaction errors
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
 
             # Log sync event
             self._log_sync_event(db, integration_profile_id, result)
