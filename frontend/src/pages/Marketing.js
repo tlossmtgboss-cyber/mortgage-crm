@@ -28,6 +28,12 @@ const VoiceConversation = lazy(() => import('../components/voice/VoiceConversati
 // Video OS component
 const VideoOS = lazy(() => import('./VideoOS'));
 
+// Carousel Builder component
+const CarouselBuilder = lazy(() => import('./CarouselBuilder/CarouselBuilderPage'));
+
+// Content Marketing component
+const ContentMarketing = lazy(() => import('./ContentMarketing'));
+
 // Marketing settings components
 const LandingPagesSettings = lazy(() => import('./marketing/LandingPagesSettings'));
 const EmailMarketingSettings = lazy(() => import('./marketing/EmailMarketingSettings'));
@@ -85,6 +91,8 @@ const MARKETING_CATEGORIES = {
       { id: 'video-os', name: 'Video OS', description: 'Record and manage personalized video messages' },
       { id: 'avatar-studio', name: 'Avatar Studio', description: 'AI video avatar creation' },
       { id: 'ai-blog', name: 'AI Blog', description: 'AI-generated blog content' },
+      { id: 'carousel-builder', name: 'Carousel Builder', description: 'Create engaging social media carousels' },
+      { id: 'content-marketing', name: 'Content Marketing', description: 'Brand voice, calendars, briefs, and SEO keywords' },
     ]
   },
   'lead-generation': {
@@ -221,6 +229,10 @@ function Marketing() {
         return <AvatarStudio />;
       case 'ai-blog':
         return <AIDailyBlog />;
+      case 'carousel-builder':
+        return <CarouselBuilder embedded={true} />;
+      case 'content-marketing':
+        return <ContentMarketing embedded={true} />;
 
       // Lead Generation
       case 'acquisition':

@@ -150,7 +150,7 @@ function NewProjectModal({ open, onClose, onCreate }) {
 // Project List View
 // =============================================================================
 
-function ProjectList() {
+function ProjectList({ embedded = false }) {
   const {
     projects,
     loading,
@@ -182,12 +182,14 @@ function ProjectList() {
   };
 
   return (
-    <div className="carousel-project-list">
+    <div className={`carousel-project-list ${embedded ? 'embedded' : ''}`}>
       <div className="carousel-list-header">
-        <div>
-          <h1>Carousel Builder</h1>
-          <p>Create engaging social media carousels for your marketing</p>
-        </div>
+        {!embedded && (
+          <div>
+            <h1>Carousel Builder</h1>
+            <p>Create engaging social media carousels for your marketing</p>
+          </div>
+        )}
         <button className="btn-primary" onClick={() => setShowNewModal(true)}>
           + New Carousel
         </button>
@@ -292,7 +294,7 @@ function ProjectList() {
 // Main Page Content
 // =============================================================================
 
-function CarouselBuilderContent() {
+function CarouselBuilderContent({ embedded = false }) {
   const { currentProject, loading } = useCarouselBuilder();
 
   if (loading) {
@@ -308,18 +310,18 @@ function CarouselBuilderContent() {
     return <EditorLayout />;
   }
 
-  return <ProjectList />;
+  return <ProjectList embedded={embedded} />;
 }
 
 // =============================================================================
 // Page Export
 // =============================================================================
 
-export default function CarouselBuilderPage() {
+export default function CarouselBuilderPage({ embedded = false }) {
   return (
     <CarouselBuilderProvider>
-      <div className="carousel-builder-page">
-        <CarouselBuilderContent />
+      <div className={`carousel-builder-page ${embedded ? 'embedded' : ''}`}>
+        <CarouselBuilderContent embedded={embedded} />
       </div>
     </CarouselBuilderProvider>
   );
