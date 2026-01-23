@@ -21443,6 +21443,15 @@ try:
 except Exception as e:
     logger.warning(f"Twilio Setup routes not loaded: {e}")
 
+# Telnyx Self-Service Setup routes
+try:
+    from routes.telnyx_setup_routes import router as telnyx_setup_router, set_dependencies as set_telnyx_setup_deps
+    set_telnyx_setup_deps(User, get_current_user, get_db)
+    app.include_router(telnyx_setup_router, tags=["Telnyx Setup"])
+    logger.info("✅ Telnyx Setup routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Telnyx Setup routes not loaded: {e}")
+
 # Retell AI Voice Platform routes (replaces ElevenLabs + Twilio)
 try:
     from routes.retell_routes import router as retell_router, set_dependencies as set_retell_deps
