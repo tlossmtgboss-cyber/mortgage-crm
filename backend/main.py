@@ -37147,6 +37147,39 @@ async def get_salesforce_sync_status():
         db.close()
 
 
+@app.post("/api/v1/admin/salesforce-trigger-sync")
+async def trigger_salesforce_sync_admin():
+    """
+    Admin endpoint to manually trigger Salesforce sync for all connected profiles.
+    No authentication required for admin monitoring/testing.
+    """
+    try:
+        from tasks.salesforce_sync_tasks import sync_all_users_salesforce
+
+        result = await sync_all_users_salesforce(
+            sync_emails=True,
+            sync_calendar=True,
+            push_to_salesforce=True,
+            email_days_back=7,
+            calendar_days_back=7,
+            calendar_days_forward=30,
+            push_since_hours=24
+        )
+
+        return {
+            "status": "success",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "sync_result": result
+        }
+    except Exception as e:
+        logger.error(f"Manual Salesforce sync trigger failed: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+
+
 @app.post("/api/v1/admin/pool-reset")
 async def reset_pool_endpoint(admin_key: str = Query(...)):
     """
