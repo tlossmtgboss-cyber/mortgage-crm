@@ -37254,6 +37254,39 @@ async def migrate_salesforce_schema():
             db.rollback()
             errors.append(f"calendar_events.updated_at: {str(e)[:100]}")
 
+        # 6. Add meta_data to tasks table
+        try:
+            db.execute(text("""
+                ALTER TABLE tasks ADD COLUMN IF NOT EXISTS meta_data JSONB
+            """))
+            db.commit()
+            migrations_run.append("tasks.meta_data")
+        except Exception as e:
+            db.rollback()
+            errors.append(f"tasks.meta_data: {str(e)[:100]}")
+
+        # 7. Add salesforce_id to loans table
+        try:
+            db.execute(text("""
+                ALTER TABLE loans ADD COLUMN IF NOT EXISTS salesforce_id VARCHAR
+            """))
+            db.commit()
+            migrations_run.append("loans.salesforce_id")
+        except Exception as e:
+            db.rollback()
+            errors.append(f"loans.salesforce_id: {str(e)[:100]}")
+
+        # 8. Add meta_data to loans table
+        try:
+            db.execute(text("""
+                ALTER TABLE loans ADD COLUMN IF NOT EXISTS meta_data JSONB
+            """))
+            db.commit()
+            migrations_run.append("loans.meta_data")
+        except Exception as e:
+            db.rollback()
+            errors.append(f"loans.meta_data: {str(e)[:100]}")
+
         return {
             "status": "success" if not errors else "partial",
             "timestamp": datetime.now(timezone.utc).isoformat(),
