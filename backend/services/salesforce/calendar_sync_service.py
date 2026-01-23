@@ -349,17 +349,17 @@ class SalesforceCalendarSyncService:
         else:
             priority = 'normal'
 
-        # Create task record
+        # Create task record (tasks table uses owner_id, not user_id)
         db.execute(text("""
             INSERT INTO tasks (
-                user_id, lead_id, loan_id, title, description,
+                owner_id, lead_id, loan_id, title, description,
                 due_date, status, priority, meta_data, created_at
             ) VALUES (
-                :user_id, :lead_id, :loan_id, :title, :description,
+                :owner_id, :lead_id, :loan_id, :title, :description,
                 :due_date, :status, :priority, CAST(:meta_data AS jsonb), :created_at
             )
         """), {
-            "user_id": user_id,
+            "owner_id": user_id,
             "lead_id": lead_id,
             "loan_id": loan_id,
             "title": sf_task.get('Subject', 'Salesforce Task'),
