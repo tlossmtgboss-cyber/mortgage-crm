@@ -208,35 +208,42 @@ async def sync_all_users_salesforce(
     Returns:
         Summary of all sync operations
     """
+    results = {
+        'users_processed': 0,
+        'sync_direction': 'inbound',  # ONE WAY: Salesforce → CRM
+        'inbound': {
+            'emails_synced': 0,
+            'emails_skipped': 0,
+            'events_synced': 0,
+            'tasks_synced': 0,
+            'leads_matched': 0,
+            'leads_updated': 0,
+            'loans_matched': 0,
+            'loans_updated': 0,
+        },
+        'errors': [],
+        'started_at': datetime.utcnow().isoformat(),
+        'completed_at': None
+    }
+
     db = SessionLocal()
 
     try:
         from salesforce_integration_models import IntegrationProfile
 
-        results = {
-            'users_processed': 0,
-            'sync_direction': 'inbound',  # ONE WAY: Salesforce → CRM
-            'inbound': {
-                'emails_synced': 0,
-                'emails_skipped': 0,
-                'events_synced': 0,
-                'tasks_synced': 0,
-                'leads_matched': 0,
-                'leads_updated': 0,
-                'loans_matched': 0,
-                'loans_updated': 0,
-            },
-            'errors': [],
-            'started_at': datetime.utcnow().isoformat(),
-            'completed_at': None
-        }
-
-        # Get all connected Salesforce profiles
-        profiles = db.query(IntegrationProfile).filter(
-            IntegrationProfile.provider == 'salesforce',
-            IntegrationProfile.status.in_(['connected', 'active']),
-            IntegrationProfile.sync_enabled == True
-        ).all()
+        # Get all connected Salesforce profiles - wrapped in try/except for missing table
+        try:
+            profiles = db.query(IntegrationProfile).filter(
+                IntegrationProfile.provider == 'salesforce',
+                IntegrationProfile.status.in_(['connected', 'active']),
+                IntegrationProfile.sync_enabled == True
+            ).all()
+        except Exception as e:
+            # Table might not exist or other DB error
+            logger.warning(f"Could not query integration profiles: {e}")
+            results['errors'].append(f"Could not query profiles: {str(e)[:100]}")
+            results['completed_at'] = datetime.utcnow().isoformat()
+            return results
 
         logger.info(f"Starting INBOUND Salesforce sync for {len(profiles)} users (Salesforce → CRM only)")
 
@@ -474,17 +481,19 @@ def register_salesforce_sync_jobs(scheduler):
     Args:
         scheduler: APScheduler instance
     """
-    # INBOUND sync every 5 minutes (Salesforce → CRM only)
+    # INBOUND sync every 10 minutes (Salesforce → CRM only)
+    # Increased interval to reduce database connection pressure
     scheduler.add_job(
         sync_all_users_salesforce_sync,
         'interval',
-        minutes=5,
+        minutes=10,
         id='salesforce_sync_all_users',
-        name='Inbound Salesforce sync: pull from Salesforce to CRM every 5 minutes',
+        name='Inbound Salesforce sync: pull from Salesforce to CRM every 10 minutes',
         replace_existing=True,
         kwargs={
             'sync_emails': True,
             'sync_calendar': True,
+            'sync_client_fields': False,  # Disabled for now - enable after testing
             'push_to_salesforce': False,  # DISABLED - inbound only
             'email_days_back': 1,
             'calendar_days_back': 1,
@@ -502,7 +511,7 @@ def register_salesforce_sync_jobs(scheduler):
         replace_existing=True
     )
 
-    logger.info("Salesforce sync jobs registered (INBOUND ONLY): Salesforce → CRM every 5 minutes")
+    logger.info("Salesforce sync jobs registered (INBOUND ONLY): Salesforce → CRM every 10 minutes")
 
 
 # ============================================================================
