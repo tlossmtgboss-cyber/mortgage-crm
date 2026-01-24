@@ -48,7 +48,12 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:api": "playwright test tests/api.spec.js",
-    "test:e2e:report": "playwright show-report"
+    "test:e2e:report": "playwright show-report",
+    "ios:dev": "./scripts/ios-run-dev.sh",
+    "ios:open": "./scripts/ios-run-dev.sh --open",
+    "ios:build": "./scripts/ios-build.sh release",
+    "ios:build:testflight": "./scripts/ios-build.sh testflight",
+    "ios:upload": "./scripts/ios-upload-testflight.sh"
   },
   "eslintConfig": {
     "extends": [

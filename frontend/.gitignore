@@ -20,3 +20,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .vercel
+
+# iOS build artifacts
+ios-build/
+*.ipa
+*.xcarchive
+capacitor.config.dev.ts.bak

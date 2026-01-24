@@ -1,0 +1,190 @@
+name: iOS Build and Deploy
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags (v1.0.0, v1.0.1, etc.)
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'testflight'
+        type: choice
+        options:
+          - testflight
+          - appstore
+      skip_upload:
+        description: 'Skip TestFlight upload'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  build-ios:
+    name: Build iOS App
+    runs-on: macos-14  # macOS Sonoma with Xcode 15
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Select Xcode version
+        run: sudo xcode-select -s /Applications/Xcode_15.2.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install xcpretty
+        run: gem install xcpretty
+
+      - name: Extract version from tag or package.json
+        id: version
+        working-directory: frontend
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          else
+            VERSION=$(node -p "require('./package.json').version")
+          fi
+          BUILD_NUMBER=${{ github.run_number }}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION, Build: $BUILD_NUMBER"
+
+      - name: Setup App Store Connect API Key
+        env:
+          APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo "$APP_STORE_CONNECT_API_KEY_BASE64" | base64 --decode > ~/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8
+
+      - name: Build production web assets
+        working-directory: frontend
+        run: |
+          # Use production capacitor config
+          if [ -f "capacitor.config.production.ts" ]; then
+            cp capacitor.config.ts capacitor.config.dev.bak
+            cp capacitor.config.production.ts capacitor.config.ts
+          fi
+          npm run build
+        env:
+          CI: false  # Allows build warnings
+          REACT_APP_API_URL: https://api.perenniaai.com
+          REACT_APP_ENVIRONMENT: production
+
+      - name: Sync Capacitor
+        working-directory: frontend
+        run: npx cap sync ios
+
+      - name: Update version numbers
+        working-directory: frontend/ios/App
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          BUILD="${{ steps.version.outputs.build_number }}"
+
+          # Update Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" App/Info.plist || \
+            /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $VERSION" App/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" App/Info.plist || \
+            /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $BUILD" App/Info.plist
+
+          # Update pbxproj
+          sed -i '' "s/MARKETING_VERSION = [^;]*/MARKETING_VERSION = $VERSION/" App.xcodeproj/project.pbxproj
+          sed -i '' "s/CURRENT_PROJECT_VERSION = [^;]*/CURRENT_PROJECT_VERSION = $BUILD/" App.xcodeproj/project.pbxproj
+
+      - name: Configure production entitlements
+        working-directory: frontend/ios/App
+        run: |
+          if [ -f "App/App.entitlements.release" ]; then
+            cp App/App.entitlements.release App/App.entitlements
+          fi
+
+      - name: Build and Archive
+        working-directory: frontend/ios/App
+        run: |
+          xcodebuild clean archive \
+            -project App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -archivePath ${{ runner.temp }}/PerenniaAI.xcarchive \
+            -destination "generic/platform=iOS" \
+            CODE_SIGN_STYLE=Automatic \
+            DEVELOPMENT_TEAM=V5ZA5FZ2J8 \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}.p8 \
+            -authenticationKeyID ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }} \
+            -authenticationKeyIssuerID ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }} \
+            | xcpretty
+
+      - name: Export IPA
+        working-directory: frontend
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath ${{ runner.temp }}/PerenniaAI.xcarchive \
+            -exportOptionsPlist ios/ExportOptions-appstore.plist \
+            -exportPath ${{ runner.temp }}/ipa \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}.p8 \
+            -authenticationKeyID ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }} \
+            -authenticationKeyIssuerID ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }} \
+            | xcpretty
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PerenniaAI-${{ steps.version.outputs.version }}-${{ steps.version.outputs.build_number }}
+          path: ${{ runner.temp }}/ipa/*.ipa
+          retention-days: 30
+
+      - name: Upload dSYM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PerenniaAI-dSYM-${{ steps.version.outputs.version }}-${{ steps.version.outputs.build_number }}
+          path: ${{ runner.temp }}/PerenniaAI.xcarchive/dSYMs
+          retention-days: 90
+
+      - name: Upload to TestFlight
+        if: ${{ github.event.inputs.skip_upload != 'true' }}
+        run: |
+          IPA_FILE=$(find ${{ runner.temp }}/ipa -name "*.ipa" -print -quit)
+          if [ -n "$IPA_FILE" ]; then
+            xcrun altool --upload-app \
+              --type ios \
+              --file "$IPA_FILE" \
+              --apiKey ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }} \
+              --apiIssuer ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          else
+            echo "No IPA file found!"
+            exit 1
+          fi
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ runner.temp }}/ipa/*.ipa
+          body: |
+            ## iOS Build ${{ steps.version.outputs.version }} (${{ steps.version.outputs.build_number }})
+
+            - Uploaded to TestFlight
+            - Check App Store Connect for processing status
+
+            ### Changes
+            See commit history for details.

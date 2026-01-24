@@ -1,0 +1,28 @@
+// Release configuration for production builds
+// Perennia AI iOS App
+
+// Capacitor flag
+CAPACITOR_DEBUG = false
+
+// Code signing - use automatic signing with team ID
+CODE_SIGN_STYLE = Automatic
+DEVELOPMENT_TEAM = V5ZA5FZ2J8
+
+// Optimization settings
+SWIFT_OPTIMIZATION_LEVEL = -O
+GCC_OPTIMIZATION_LEVEL = s
+ENABLE_NS_ASSERTIONS = NO
+DEBUG_INFORMATION_FORMAT = dwarf-with-dsym
+
+// Strip debug symbols in release
+STRIP_INSTALLED_PRODUCT = YES
+COPY_PHASE_STRIP = YES
+
+// Enable bitcode (optional, set to NO if causing issues)
+ENABLE_BITCODE = NO
+
+// Validate product for App Store
+VALIDATE_PRODUCT = YES
+
+// Swift settings
+SWIFT_COMPILATION_MODE = wholemodule
