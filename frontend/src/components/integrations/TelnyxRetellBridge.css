@@ -1,0 +1,340 @@
+.telnyx-retell-bridge {
+  padding: 20px;
+}
+
+.telnyx-retell-bridge .loading {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+}
+
+.telnyx-retell-bridge .setup-required {
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.telnyx-retell-bridge .setup-required h3 {
+  margin: 0 0 10px 0;
+  color: #856404;
+}
+
+.telnyx-retell-bridge .setup-required ul {
+  list-style: none;
+  padding: 0;
+  margin: 15px 0;
+}
+
+.telnyx-retell-bridge .setup-required li {
+  padding: 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.telnyx-retell-bridge .setup-required .check {
+  color: #28a745;
+  font-weight: bold;
+}
+
+.telnyx-retell-bridge .setup-required .missing {
+  color: #dc3545;
+}
+
+.telnyx-retell-bridge .bridge-header {
+  margin-bottom: 20px;
+}
+
+.telnyx-retell-bridge .bridge-header h3 {
+  margin: 0 0 5px 0;
+  font-size: 18px;
+}
+
+.telnyx-retell-bridge .bridge-header p {
+  margin: 0;
+  color: #666;
+}
+
+.telnyx-retell-bridge .error-message {
+  background: #f8d7da;
+  border: 1px solid #f5c6cb;
+  color: #721c24;
+  padding: 12px 16px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+}
+
+.telnyx-retell-bridge .success-message {
+  background: #d4edda;
+  border: 1px solid #c3e6cb;
+  color: #155724;
+  padding: 12px 16px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+}
+
+.telnyx-retell-bridge .bridge-stats {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.telnyx-retell-bridge .stat {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 16px 24px;
+  text-align: center;
+  min-width: 100px;
+}
+
+.telnyx-retell-bridge .stat-value {
+  display: block;
+  font-size: 28px;
+  font-weight: 600;
+  color: #333;
+}
+
+.telnyx-retell-bridge .stat-label {
+  display: block;
+  font-size: 12px;
+  color: #666;
+  margin-top: 4px;
+}
+
+.telnyx-retell-bridge .numbers-section {
+  margin-bottom: 24px;
+}
+
+.telnyx-retell-bridge .numbers-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+}
+
+.telnyx-retell-bridge .no-data {
+  color: #666;
+  font-style: italic;
+}
+
+.telnyx-retell-bridge .numbers-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.telnyx-retell-bridge .numbers-table th,
+.telnyx-retell-bridge .numbers-table td {
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+}
+
+.telnyx-retell-bridge .numbers-table th {
+  background: #f8f9fa;
+  font-weight: 600;
+  font-size: 13px;
+  color: #666;
+}
+
+.telnyx-retell-bridge .phone-number {
+  font-family: monospace;
+  font-size: 14px;
+}
+
+.telnyx-retell-bridge .status-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.telnyx-retell-bridge .status-badge.connected {
+  background: #d4edda;
+  color: #155724;
+}
+
+.telnyx-retell-bridge .status-badge.disconnected {
+  background: #f8f9fa;
+  color: #666;
+}
+
+.telnyx-retell-bridge .agent-name {
+  color: #333;
+  font-weight: 500;
+}
+
+.telnyx-retell-bridge select {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  min-width: 180px;
+}
+
+.telnyx-retell-bridge .btn-connect,
+.telnyx-retell-bridge .btn-disconnect {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.telnyx-retell-bridge .btn-connect {
+  background: #007bff;
+  color: white;
+}
+
+.telnyx-retell-bridge .btn-connect:hover:not(:disabled) {
+  background: #0056b3;
+}
+
+.telnyx-retell-bridge .btn-connect:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.telnyx-retell-bridge .btn-disconnect {
+  background: #dc3545;
+  color: white;
+}
+
+.telnyx-retell-bridge .btn-disconnect:hover:not(:disabled) {
+  background: #c82333;
+}
+
+.telnyx-retell-bridge .webhook-section {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.telnyx-retell-bridge .webhook-section h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+}
+
+.telnyx-retell-bridge .webhook-url {
+  display: block;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 12px;
+  font-size: 13px;
+  margin: 12px 0;
+  word-break: break-all;
+}
+
+.telnyx-retell-bridge .webhook-note {
+  font-size: 13px;
+  color: #666;
+  margin: 0;
+}
+
+.telnyx-retell-bridge .texml-section {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.telnyx-retell-bridge .texml-section h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+}
+
+.telnyx-retell-bridge .agent-texml-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.telnyx-retell-bridge .agent-texml-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #fff;
+  padding: 10px 14px;
+  border-radius: 6px;
+  border: 1px solid #eee;
+}
+
+.telnyx-retell-bridge .btn-texml {
+  background: #6c757d;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.telnyx-retell-bridge .btn-texml:hover {
+  background: #5a6268;
+}
+
+.telnyx-retell-bridge .texml-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.telnyx-retell-bridge .texml-modal-content {
+  background: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  overflow: auto;
+}
+
+.telnyx-retell-bridge .texml-modal-content h5 {
+  margin: 0 0 16px 0;
+}
+
+.telnyx-retell-bridge .texml-modal-content pre {
+  background: #f8f9fa;
+  padding: 16px;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-size: 13px;
+}
+
+.telnyx-retell-bridge .texml-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+  justify-content: flex-end;
+}
+
+.telnyx-retell-bridge .texml-actions button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.telnyx-retell-bridge .texml-actions button:first-child {
+  background: #007bff;
+  color: white;
+}
+
+.telnyx-retell-bridge .texml-actions button:last-child {
+  background: #f8f9fa;
+  color: #333;
+}

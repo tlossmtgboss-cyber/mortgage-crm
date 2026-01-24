@@ -7,6 +7,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import './RetellSettings.css';
+import TelnyxRetellBridge from './TelnyxRetellBridge';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
@@ -743,6 +744,12 @@ const RetellSettings = () => {
             >
               Voices
             </button>
+            <button
+              className={`retell-tab ${activeTab === 'telnyx' ? 'active' : ''}`}
+              onClick={() => setActiveTab('telnyx')}
+            >
+              Telnyx Bridge
+            </button>
           </div>
 
           {/* Tab Content */}
@@ -751,6 +758,7 @@ const RetellSettings = () => {
             {activeTab === 'agents' && renderAgents()}
             {activeTab === 'phones' && renderPhoneNumbers()}
             {activeTab === 'voices' && renderVoices()}
+            {activeTab === 'telnyx' && <TelnyxRetellBridge />}
           </div>
         </>
       )}

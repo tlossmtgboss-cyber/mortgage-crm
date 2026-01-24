@@ -21461,6 +21461,14 @@ try:
 except Exception as e:
     logger.warning(f"Retell AI routes not loaded: {e}")
 
+# Telnyx-Retell Bridge routes (connect Telnyx numbers to Retell AI)
+try:
+    from routes.telnyx_retell_routes import router as telnyx_retell_router
+    app.include_router(telnyx_retell_router, tags=["Telnyx-Retell Bridge"])
+    logger.info("Telnyx-Retell Bridge routes loaded")
+except Exception as e:
+    logger.warning(f"Telnyx-Retell Bridge routes not loaded: {e}")
+
 # API Keys Settings routes (Comprehensive error handling pattern)
 try:
     from routes.api_keys_settings_routes import router as api_keys_settings_router, set_dependencies as set_api_keys_deps
