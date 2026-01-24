@@ -61858,6 +61858,15 @@ async def startup_event():
             except Exception as org_e:
                 logger.warning(f"⚠️ Organization migration skipped: {org_e}")
 
+            # Run full multi-tenant migration (add organization_id to all core tables)
+            try:
+                from migrations.add_multi_tenant_organization_id import run_migration as run_multitenant_migration
+                logger.info("🏢 Running full multi-tenant migration for all core tables...")
+                run_multitenant_migration()
+                logger.info("✅ Full multi-tenant migration complete")
+            except Exception as mt_e:
+                logger.warning(f"⚠️ Multi-tenant migration skipped: {mt_e}")
+
             # Add missing slug column to users table (microsite URL identifier)
             try:
                 db_temp = SessionLocal()
