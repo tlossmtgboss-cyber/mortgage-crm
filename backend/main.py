@@ -627,8 +627,11 @@ class Lead(Base):
         Index('ix_leads_created_at', 'created_at'),
         Index('ix_leads_referral_partner_id', 'referral_partner_id'),
         Index('ix_leads_owner_stage', 'owner_id', 'stage'),
+        Index('ix_leads_organization_id', 'organization_id'),
+        Index('ix_leads_org_stage', 'organization_id', 'stage'),
     )
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
     name = Column(String, nullable=False, index=True)
     first_name = Column(String)  # For imports with separate first/last name
     last_name = Column(String)   # For imports with separate first/last name
@@ -777,6 +780,7 @@ class Lead(Base):
     user_metadata = Column(JSON)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    organization = relationship("Organization", backref="leads")
     owner = relationship("User", back_populates="leads")
     referral_partner = relationship("ReferralPartner", back_populates="leads")
     activities = relationship("Activity", back_populates="lead")
@@ -795,8 +799,11 @@ class Loan(Base):
         Index('ix_loans_funded_date', 'funded_date'),
         Index('ix_loans_created_at', 'created_at'),
         Index('ix_loans_officer_stage', 'loan_officer_id', 'stage'),
+        Index('ix_loans_organization_id', 'organization_id'),
+        Index('ix_loans_org_stage', 'organization_id', 'stage'),
     )
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
     loan_number = Column(String, unique=True, index=True, nullable=False)
     borrower_name = Column(String, nullable=False)
     borrower_email = Column(String)
@@ -981,6 +988,7 @@ class Loan(Base):
     present_monthly_payment = Column(Float)
     proposed_monthly_payment = Column(Float)
 
+    organization = relationship("Organization", backref="loans")
     loan_officer = relationship("User", back_populates="loans")
     tasks = relationship("AITask", back_populates="loan")
     activities = relationship("Activity", back_populates="loan")
@@ -995,8 +1003,10 @@ class AITask(Base):
         Index('ix_ai_tasks_lead_id', 'lead_id'),
         Index('ix_ai_tasks_loan_id', 'loan_id'),
         Index('ix_ai_tasks_due_date', 'due_date'),
+        Index('ix_ai_tasks_organization_id', 'organization_id'),
     )
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
     title = Column(String, nullable=False)
     description = Column(Text)
     type = Column(SQLEnum(TaskType), default=TaskType.IN_PROGRESS)
@@ -1028,8 +1038,11 @@ class Task(Base):
         Index('ix_tasks_lead_id', 'lead_id'),
         Index('ix_tasks_loan_id', 'loan_id'),
         Index('ix_tasks_owner_status', 'owner_id', 'status'),
+        Index('ix_tasks_organization_id', 'organization_id'),
+        Index('ix_tasks_org_status', 'organization_id', 'status'),
     )
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
     title = Column(String, nullable=False)
     description = Column(Text)
     status = Column(String, default="pending")  # pending, in_progress, completed
@@ -1170,9 +1183,11 @@ class Document(Base):
         Index('ix_documents_borrower_id', 'borrower_id'),
         Index('ix_documents_loan_id', 'loan_id'),
         Index('ix_documents_doc_type', 'doc_type'),
+        Index('ix_documents_organization_id', 'organization_id'),
     )
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
     borrower_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
     loan_id = Column(Integer, ForeignKey("loans.id"), nullable=True)
 
@@ -1213,6 +1228,7 @@ class Document(Base):
 class ReferralPartner(Base):
     __tablename__ = "referral_partners"
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
     name = Column(String, nullable=False, index=True)
     business_name = Column(String, nullable=False, default="")  # Required by DB schema
     contact_name = Column(String, nullable=False, default="")  # Required by DB schema
@@ -1266,6 +1282,7 @@ class LoanTeamMember(Base):
 class MUMClient(Base):
     __tablename__ = "mum_clients"
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
     # Map 'name' property to 'client_name' column in the database
     client_name = Column("client_name", String, nullable=False)
     email = Column(String)
@@ -1324,8 +1341,11 @@ class Activity(Base):
         Index('ix_activities_user_id', 'user_id'),
         Index('ix_activities_created_at', 'created_at'),
         Index('ix_activities_lead_created', 'lead_id', 'created_at'),
+        Index('ix_activities_organization_id', 'organization_id'),
+        Index('ix_activities_org_created', 'organization_id', 'created_at'),
     )
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
     type = Column(SQLEnum(ActivityType), nullable=False)
     content = Column(Text)
     lead_id = Column(Integer, ForeignKey("leads.id"))
@@ -1348,8 +1368,10 @@ class StageHistory(Base):
         Index('ix_stage_history_loan_id', 'loan_id'),
         Index('ix_stage_history_changed_at', 'changed_at'),
         Index('ix_stage_history_entity', 'entity_type', 'entity_id'),
+        Index('ix_stage_history_organization_id', 'organization_id'),
     )
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
     entity_type = Column(String, nullable=False)  # 'lead' or 'loan'
     entity_id = Column(Integer, nullable=False)  # The lead_id or loan_id
     lead_id = Column(Integer, ForeignKey("leads.id"))
@@ -1431,6 +1453,7 @@ class AIFeedbackLog(Base):
 class Conversation(Base):
     __tablename__ = "conversations"
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
     user_id = Column(Integer, ForeignKey("users.id"))
     lead_id = Column(Integer, ForeignKey("leads.id"))
     loan_id = Column(Integer, ForeignKey("loans.id"))
@@ -1445,6 +1468,7 @@ class VoicemailDrop(Base):
     __tablename__ = "voicemail_drops"
     __table_args__ = {'extend_existing': True}
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
     lead_id = Column(Integer, ForeignKey("leads.id"), index=True)
     loan_id = Column(Integer, ForeignKey("loans.id"), index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
@@ -56485,31 +56509,54 @@ def get_user_permissions(user_id: int, db: Session) -> Dict[str, bool]:
 
 def filter_leads_by_permissions(query, user: User, db: Session):
     """
-    Filter leads query based on user's permissions
+    Filter leads query based on user's permissions WITH ORGANIZATION ISOLATION.
+
+    CRITICAL: Organization filter is ALWAYS applied first to ensure multi-tenant isolation.
+    Permission filters then apply WITHIN the user's organization only.
 
     Returns filtered query based on:
-    - Master user (id=1): See all leads
-    - leads.view_all: See all leads
-    - leads.view_team: See team's leads
+    - Platform admin (permission_role='admin'): See all leads across all orgs
+    - Master user (id=1): See all leads in their organization
+    - leads.view_all: See all leads in their organization
+    - leads.view_team: See team's leads in their organization
     - leads.view_assigned: See only assigned leads
     """
     try:
-        # Master user can see all leads (check both ID and email)
+        # CRITICAL: Always start with organization filter for multi-tenant isolation
+        # Platform admins can see all organizations
+        is_platform_admin = getattr(user, 'permission_role', '') == 'admin'
+        org_id = getattr(user, 'organization_id', None)
+
+        if is_platform_admin:
+            # Platform admin can see everything
+            pass
+        elif org_id:
+            # Apply organization filter FIRST - this is the tenant boundary
+            query = query.filter(Lead.organization_id == org_id)
+        else:
+            # User has no organization - can only see their own leads
+            logger.warning(f"User {user.id} has no organization_id - filtering to owned leads only")
+            return query.filter(Lead.owner_id == user.id)
+
+        # Now apply permission-based filters WITHIN the organization
+
+        # Master user can see all leads in their org (check both ID and email)
         if user.id == 1 or user.email == 'admin@perenniaai.com':
             return query
 
         if has_permission(user.id, 'leads.view_all', db):
-            # Management: See all leads
+            # Management: See all leads in their organization
             return query
 
         if has_permission(user.id, 'leads.view_team', db):
-            # Team Lead: See team's leads
+            # Team Lead: See team's leads within their organization
             team_id = getattr(user, 'team_id', None)
             if team_id:
-                # Get all team member IDs
+                # Get all team member IDs in the same organization
                 team_member_ids = db.execute(text("""
-                    SELECT id FROM users WHERE team_id = :team_id
-                """), {"team_id": team_id}).fetchall()
+                    SELECT id FROM users
+                    WHERE team_id = :team_id AND organization_id = :org_id
+                """), {"team_id": team_id, "org_id": org_id}).fetchall()
                 team_ids = [m[0] for m in team_member_ids]
                 if team_ids:
                     return query.filter(Lead.owner_id.in_(team_ids))
@@ -56530,16 +56577,37 @@ def filter_leads_by_permissions(query, user: User, db: Session):
 
 def filter_clients_by_permissions(query, user: User, db: Session):
     """
-    Filter clients query based on user's permissions
+    Filter clients query based on user's permissions WITH ORGANIZATION ISOLATION.
+
+    CRITICAL: Organization filter is ALWAYS applied first to ensure multi-tenant isolation.
 
     Returns filtered query based on:
-    - clients.view_all: See all clients
-    - clients.view_team: See team's clients
+    - Platform admin: See all clients across all orgs
+    - clients.view_all: See all clients in their organization
+    - clients.view_team: See team's clients in their organization
     - clients.view_assigned: See only assigned clients
     """
     try:
+        # CRITICAL: Always start with organization filter for multi-tenant isolation
+        is_platform_admin = getattr(user, 'permission_role', '') == 'admin'
+        org_id = getattr(user, 'organization_id', None)
+
+        entity = query.column_descriptions[0]['entity'] if query.column_descriptions else None
+
+        if is_platform_admin:
+            # Platform admin can see everything
+            pass
+        elif org_id and entity and hasattr(entity, 'organization_id'):
+            # Apply organization filter FIRST
+            query = query.filter(entity.organization_id == org_id)
+        elif org_id and entity and hasattr(entity, 'user_id'):
+            # For MUMClient which uses user_id, filter by users in this org
+            query = query.filter(entity.user_id.in_(
+                db.query(User.id).filter(User.organization_id == org_id)
+            ))
+
         if has_permission(user.id, 'clients.view_all', db):
-            # Management/Operations: See all clients
+            # Management/Operations: See all clients in their organization
             return query
 
         if has_permission(user.id, 'clients.view_team', db):
@@ -56547,20 +56615,22 @@ def filter_clients_by_permissions(query, user: User, db: Session):
             team_id = getattr(user, 'team_id', None)
             if team_id:
                 team_member_ids = db.execute(text("""
-                    SELECT id FROM users WHERE team_id = :team_id
-                """), {"team_id": team_id}).fetchall()
+                    SELECT id FROM users WHERE team_id = :team_id AND organization_id = :org_id
+                """), {"team_id": team_id, "org_id": org_id}).fetchall()
                 team_ids = [m[0] for m in team_member_ids]
-                if team_ids and hasattr(query.column_descriptions[0]['entity'], 'owner_id'):
-                    return query.filter(query.column_descriptions[0]['entity'].owner_id.in_(team_ids))
+                if team_ids and entity and hasattr(entity, 'owner_id'):
+                    return query.filter(entity.owner_id.in_(team_ids))
             return query  # Fall back to all if no team filtering possible
 
         if has_permission(user.id, 'clients.view_assigned', db):
             # See only assigned clients
-            if hasattr(query.column_descriptions[0]['entity'], 'owner_id'):
-                return query.filter(query.column_descriptions[0]['entity'].owner_id == user.id)
-            return query  # Fall back if no owner_id column
+            if entity and hasattr(entity, 'owner_id'):
+                return query.filter(entity.owner_id == user.id)
+            elif entity and hasattr(entity, 'user_id'):
+                return query.filter(entity.user_id == user.id)
+            return query  # Fall back if no owner_id/user_id column
 
-        # Default: Return all clients (backwards compatibility)
+        # Default: Return all clients in organization (backwards compatibility)
         return query
     except Exception as e:
         logger.error(f"Client permission filter error: {e}")
@@ -56569,42 +56639,60 @@ def filter_clients_by_permissions(query, user: User, db: Session):
 
 def filter_loans_by_permissions(query, user: User, db: Session):
     """
-    Filter loans query based on user's permissions
+    Filter loans query based on user's permissions WITH ORGANIZATION ISOLATION.
+
+    CRITICAL: Organization filter is ALWAYS applied first to ensure multi-tenant isolation.
 
     Returns filtered query based on:
-    - loans.view_all: See all loans
-    - loans.view_team: See team's loans
+    - Platform admin: See all loans across all orgs
+    - loans.view_all: See all loans in their organization
+    - loans.view_team: See team's loans in their organization
     - loans.view_assigned: See only assigned loans (where user is loan_officer)
 
-    Default behavior (no permissions set): Show assigned loans + unassigned loans
+    Default behavior (no permissions set): Show assigned loans + unassigned loans in org
     """
     try:
+        # CRITICAL: Always start with organization filter for multi-tenant isolation
+        is_platform_admin = getattr(user, 'permission_role', '') == 'admin'
+        org_id = getattr(user, 'organization_id', None)
+
+        if is_platform_admin:
+            # Platform admin can see everything
+            pass
+        elif org_id:
+            # Apply organization filter FIRST - this is the tenant boundary
+            query = query.filter(Loan.organization_id == org_id)
+        else:
+            # User has no organization - can only see their own loans
+            logger.warning(f"User {user.id} has no organization_id - filtering to assigned loans only")
+            return query.filter(Loan.loan_officer_id == user.id)
+
         if has_permission(user.id, 'loans.view_all', db):
-            # Management/Operations: See all loans
+            # Management/Operations: See all loans in their organization
             return query
 
         if has_permission(user.id, 'loans.view_team', db):
-            # Team Lead: See team's loans + unassigned loans
+            # Team Lead: See team's loans + unassigned loans within organization
             team_id = getattr(user, 'team_id', None)
             if team_id:
                 team_member_ids = db.execute(text("""
-                    SELECT id FROM users WHERE team_id = :team_id
-                """), {"team_id": team_id}).fetchall()
+                    SELECT id FROM users WHERE team_id = :team_id AND organization_id = :org_id
+                """), {"team_id": team_id, "org_id": org_id}).fetchall()
                 team_ids = [m[0] for m in team_member_ids]
                 if team_ids:
                     return query.filter(or_(
                         Loan.loan_officer_id.in_(team_ids),
-                        Loan.loan_officer_id.is_(None)  # Include unassigned loans
+                        Loan.loan_officer_id.is_(None)  # Include unassigned loans in org
                     ))
             return query.filter(or_(
                 Loan.loan_officer_id == user.id,
-                Loan.loan_officer_id.is_(None)  # Include unassigned loans
+                Loan.loan_officer_id.is_(None)  # Include unassigned loans in org
             ))
 
-        # Default: Show loans where user is the loan officer OR unassigned
+        # Default: Show loans where user is the loan officer OR unassigned (in their org)
         return query.filter(or_(
             Loan.loan_officer_id == user.id,
-            Loan.loan_officer_id.is_(None)  # Include unassigned loans
+            Loan.loan_officer_id.is_(None)  # Include unassigned loans in org
         ))
     except Exception as e:
         logger.error(f"Loan permission filter error: {e}")
@@ -56616,18 +56704,36 @@ def filter_loans_by_permissions(query, user: User, db: Session):
 
 def filter_mum_clients_by_permissions(query, user: User, db: Session):
     """
-    PHASE 3: Filter MUM clients query based on user's permissions.
+    PHASE 3: Filter MUM clients query based on user's permissions WITH ORGANIZATION ISOLATION.
 
     MUM Clients use 'user_id' field for ownership (not 'owner_id').
 
+    CRITICAL: Organization filter is ALWAYS applied first to ensure multi-tenant isolation.
+
     Returns filtered query based on:
-    - Master user (id=1): See all clients
-    - clients.view_all: See all clients
-    - clients.view_team: See team's clients
+    - Platform admin: See all clients across all orgs
+    - Master user (id=1): See all clients in their organization
+    - clients.view_all: See all clients in their organization
+    - clients.view_team: See team's clients in their organization
     - Default: See only own clients (user_id == current user)
     """
     try:
-        # Master user can see all
+        # CRITICAL: Always start with organization filter for multi-tenant isolation
+        is_platform_admin = getattr(user, 'permission_role', '') == 'admin'
+        org_id = getattr(user, 'organization_id', None)
+
+        if is_platform_admin:
+            # Platform admin can see everything
+            pass
+        elif org_id:
+            # Apply organization filter FIRST - this is the tenant boundary
+            query = query.filter(MUMClient.organization_id == org_id)
+        else:
+            # User has no organization - can only see their own clients
+            logger.warning(f"User {user.id} has no organization_id - filtering to owned clients only")
+            return query.filter(MUMClient.user_id == user.id)
+
+        # Master user can see all in their org
         if user.id == 1:
             return query
 
@@ -56638,8 +56744,8 @@ def filter_mum_clients_by_permissions(query, user: User, db: Session):
             team_id = getattr(user, 'team_id', None)
             if team_id:
                 team_member_ids = db.execute(text("""
-                    SELECT id FROM users WHERE team_id = :team_id
-                """), {"team_id": team_id}).fetchall()
+                    SELECT id FROM users WHERE team_id = :team_id AND organization_id = :org_id
+                """), {"team_id": team_id, "org_id": org_id}).fetchall()
                 team_ids = [m[0] for m in team_member_ids]
                 if team_ids:
                     return query.filter(MUMClient.user_id.in_(team_ids))
