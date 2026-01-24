@@ -37210,6 +37210,113 @@ async def trigger_salesforce_sync_admin():
         }
 
 
+@app.post("/api/v1/admin/salesforce-test-email-match")
+async def test_salesforce_email_match(email: str = None, lead_id: int = None):
+    """
+    Test the Salesforce email matching functionality.
+
+    Either provide an email to search for in Salesforce, or a lead_id to push.
+    """
+    db = SessionLocal()
+    try:
+        from services.salesforce.sync_service import salesforce_sync
+        from services.salesforce.oauth_service import salesforce_oauth
+        from salesforce_integration_models import IntegrationProfile
+
+        # Get the first active integration profile
+        profile = db.query(IntegrationProfile).filter(
+            IntegrationProfile.status == 'active'
+        ).first()
+
+        if not profile:
+            return {"status": "error", "error": "No active Salesforce integration profile found"}
+
+        # Get access token
+        access_token, instance_url = await salesforce_oauth.get_access_token(db, profile.id)
+
+        if not access_token:
+            return {"status": "error", "error": "Failed to get Salesforce access token"}
+
+        result = {
+            "status": "success",
+            "profile_id": profile.id,
+            "instance_url": instance_url,
+            "tests": []
+        }
+
+        # Test 1: Email search in Salesforce
+        if email:
+            match_result = await salesforce_sync._find_salesforce_record_by_email(
+                access_token, instance_url, email
+            )
+            result["tests"].append({
+                "test": "email_search",
+                "email": email,
+                "found": match_result.get("found", False),
+                "salesforce_type": match_result.get("type"),
+                "salesforce_id": match_result.get("id"),
+                "record": match_result.get("record")
+            })
+
+        # Test 2: Push a specific lead
+        if lead_id:
+            # Get the lead
+            lead = db.execute(text("SELECT * FROM leads WHERE id = :id"), {"id": lead_id}).fetchone()
+            if lead:
+                push_result = await salesforce_sync.push_lead_to_salesforce(
+                    db, profile.id, lead_id
+                )
+                result["tests"].append({
+                    "test": "push_lead",
+                    "lead_id": lead_id,
+                    "lead_email": lead.email if hasattr(lead, 'email') else None,
+                    "result": push_result
+                })
+            else:
+                result["tests"].append({
+                    "test": "push_lead",
+                    "lead_id": lead_id,
+                    "error": "Lead not found"
+                })
+
+        # If no specific test, get a sample lead to show
+        if not email and not lead_id:
+            sample_lead = db.execute(text("""
+                SELECT id, first_name, last_name, email, salesforce_id
+                FROM leads
+                WHERE email IS NOT NULL
+                ORDER BY updated_at DESC
+                LIMIT 5
+            """)).fetchall()
+
+            result["sample_leads"] = [
+                {
+                    "id": l.id,
+                    "name": f"{l.first_name} {l.last_name}",
+                    "email": l.email,
+                    "salesforce_id": l.salesforce_id
+                }
+                for l in sample_lead
+            ]
+            result["usage"] = {
+                "test_email": "/api/v1/admin/salesforce-test-email-match?email=test@example.com",
+                "push_lead": "/api/v1/admin/salesforce-test-email-match?lead_id=123"
+            }
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Salesforce email match test failed: {e}")
+        import traceback
+        return {
+            "status": "error",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+    finally:
+        db.close()
+
+
 @app.post("/api/v1/admin/salesforce-migrate-schema")
 async def migrate_salesforce_schema():
     """
