@@ -61849,6 +61849,18 @@ async def startup_event():
     except Exception as cache_e:
         logger.warning(f"⚠️ CRM Context cache initialization skipped: {cache_e}")
 
+    # Run multi-tenant migration FIRST (doesn't depend on init_db_with_retry)
+    # This migration handles its own database connection
+    try:
+        from migrations.add_multi_tenant_organization_id import run_migration as run_multitenant_migration
+        logger.info("🏢 Running full multi-tenant migration for all core tables...")
+        if run_multitenant_migration():
+            logger.info("✅ Full multi-tenant migration complete")
+        else:
+            logger.warning("⚠️ Multi-tenant migration completed with warnings")
+    except Exception as mt_e:
+        logger.warning(f"⚠️ Multi-tenant migration skipped: {mt_e}")
+
     try:
         # Initialize database with retry logic
         if init_db_with_retry():
@@ -61857,15 +61869,6 @@ async def startup_event():
                 run_organization_migration()
             except Exception as org_e:
                 logger.warning(f"⚠️ Organization migration skipped: {org_e}")
-
-            # Run full multi-tenant migration (add organization_id to all core tables)
-            try:
-                from migrations.add_multi_tenant_organization_id import run_migration as run_multitenant_migration
-                logger.info("🏢 Running full multi-tenant migration for all core tables...")
-                run_multitenant_migration()
-                logger.info("✅ Full multi-tenant migration complete")
-            except Exception as mt_e:
-                logger.warning(f"⚠️ Multi-tenant migration skipped: {mt_e}")
 
             # Add missing slug column to users table (microsite URL identifier)
             try:
