@@ -37223,13 +37223,13 @@ async def test_salesforce_email_match(email: str = None, lead_id: int = None):
         from services.salesforce.oauth_service import salesforce_oauth
         from salesforce_integration_models import IntegrationProfile
 
-        # Get the first active integration profile
+        # Get the first connected integration profile
         profile = db.query(IntegrationProfile).filter(
-            IntegrationProfile.status == 'active'
+            IntegrationProfile.status.in_(['active', 'connected'])
         ).first()
 
         if not profile:
-            return {"status": "error", "error": "No active Salesforce integration profile found"}
+            return {"status": "error", "error": "No connected Salesforce integration profile found"}
 
         # Get access token
         access_token, instance_url = await salesforce_oauth.get_access_token(db, profile.id)
