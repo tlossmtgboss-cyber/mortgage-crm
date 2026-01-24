@@ -178,6 +178,7 @@ def sync_calendar_from_salesforce_sync(integration_profile_id: int, **kwargs) ->
 async def sync_all_users_salesforce(
     sync_emails: bool = True,
     sync_calendar: bool = True,
+    sync_client_fields: bool = True,  # Match by email and pull ALL fields
     push_to_salesforce: bool = False,  # DISABLED - inbound only
     email_days_back: int = 7,
     calendar_days_back: int = 7,
@@ -188,6 +189,8 @@ async def sync_all_users_salesforce(
     Run INBOUND Salesforce sync for all connected users.
 
     Data flows ONE WAY: Salesforce → CRM
+    - Matches CRM clients to Salesforce by EMAIL
+    - Pulls ALL fields (text, number, date) from matched Salesforce records
     - Pulls emails from Salesforce EmailMessage and Task objects
     - Pulls calendar events from Salesforce Event and Task objects
     - NO data is pushed from CRM to Salesforce
@@ -195,6 +198,7 @@ async def sync_all_users_salesforce(
     Args:
         sync_emails: Whether to pull emails from Salesforce
         sync_calendar: Whether to pull calendar from Salesforce
+        sync_client_fields: Whether to match by email and pull all fields
         push_to_salesforce: IGNORED - outbound sync is disabled
         email_days_back: Days back to sync for emails
         calendar_days_back: Days back to sync for calendar
@@ -217,6 +221,10 @@ async def sync_all_users_salesforce(
                 'emails_skipped': 0,
                 'events_synced': 0,
                 'tasks_synced': 0,
+                'leads_matched': 0,
+                'leads_updated': 0,
+                'loans_matched': 0,
+                'loans_updated': 0,
             },
             'errors': [],
             'started_at': datetime.utcnow().isoformat(),
@@ -236,8 +244,32 @@ async def sync_all_users_salesforce(
             try:
                 results['users_processed'] += 1
 
-                # ===== INBOUND ONLY: Pull from Salesforce → CRM =====
-                # Pass db session to avoid creating nested connections (connection pool exhaustion fix)
+                # ===== EMAIL-BASED MATCHING: Match CRM clients to Salesforce =====
+                # This is the primary sync - matches by email and pulls ALL fields
+                if sync_client_fields:
+                    try:
+                        from services.salesforce.sync_service import salesforce_sync
+
+                        client_result = await salesforce_sync.sync_crm_clients_from_salesforce(
+                            db=db,
+                            integration_profile_id=profile.id,
+                            limit=100
+                        )
+                        results['inbound']['leads_matched'] += client_result.get('leads_matched', 0)
+                        results['inbound']['leads_updated'] += client_result.get('leads_updated', 0)
+                        results['inbound']['loans_matched'] += client_result.get('loans_matched', 0)
+                        results['inbound']['loans_updated'] += client_result.get('loans_updated', 0)
+                        if client_result.get('errors'):
+                            results['errors'].extend(client_result['errors'][:3])
+                    except Exception as e:
+                        logger.error(f"Client field sync failed for profile {profile.id}: {e}")
+                        results['errors'].append(f"Client sync: {str(e)[:100]}")
+                        try:
+                            db.rollback()
+                        except Exception:
+                            pass
+
+                # ===== INBOUND: Pull emails from Salesforce =====
                 if sync_emails:
                     try:
                         email_result = await sync_emails_from_salesforce(
@@ -259,6 +291,7 @@ async def sync_all_users_salesforce(
                         except Exception:
                             pass
 
+                # ===== INBOUND: Pull calendar from Salesforce =====
                 if sync_calendar:
                     try:
                         calendar_result = await sync_calendar_from_salesforce(
@@ -318,8 +351,9 @@ async def sync_all_users_salesforce(
 
         logger.info(
             f"Salesforce INBOUND sync complete: {results['users_processed']} users | "
-            f"emails={results['inbound']['emails_synced']}, events={results['inbound']['events_synced']}, "
-            f"tasks={results['inbound']['tasks_synced']}"
+            f"leads matched={results['inbound']['leads_matched']}, updated={results['inbound']['leads_updated']} | "
+            f"loans matched={results['inbound']['loans_matched']}, updated={results['inbound']['loans_updated']} | "
+            f"emails={results['inbound']['emails_synced']}, events={results['inbound']['events_synced']}"
         )
 
         return results

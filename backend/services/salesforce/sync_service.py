@@ -2,13 +2,13 @@
 Salesforce Sync Engine
 Handles INBOUND data synchronization: Salesforce → CRM
 
-Data flows ONE WAY:
-- Inbound: Salesforce → CRM (pull emails, calendar, loans, leads)
-- NO outbound sync (CRM does NOT push to Salesforce)
+Data flows ONE WAY: Salesforce → CRM
+- Matches CRM clients to Salesforce records by EMAIL
+- When matched, pulls ALL fields (text, number, date) from Salesforce to CRM
+- Syncs emails, calendar events, tasks from Salesforce
+- NO data is pushed from CRM to Salesforce
 
 Sync runs automatically every 5 minutes via APScheduler.
-
-Note: Outbound sync functions are retained but disabled.
 """
 import hashlib
 import json
@@ -717,7 +717,500 @@ class SalesforceSyncService:
 
 
     # =========================================================================
-    # OUTBOUND SYNC - Push CRM data TO Salesforce
+    # EMAIL-BASED MATCHING SYNC - Match CRM clients to Salesforce by email
+    # Pull ALL fields from Salesforce to CRM
+    # =========================================================================
+
+    async def sync_crm_clients_from_salesforce(
+        self,
+        db: Session,
+        integration_profile_id: int,
+        limit: int = 100
+    ) -> Dict[str, Any]:
+        """
+        Match CRM clients to Salesforce records by EMAIL and pull ALL fields.
+
+        This is the primary sync mechanism:
+        1. Get CRM leads/loans with email addresses
+        2. Search Salesforce for matching Lead/Contact by email
+        3. When matched, pull ALL fields (text, number, date) from Salesforce
+        4. Update the CRM record with all Salesforce data
+
+        Args:
+            db: Database session
+            integration_profile_id: User's Salesforce integration profile
+            limit: Max records to process per sync
+
+        Returns:
+            Sync result with counts
+        """
+        from sqlalchemy import text
+
+        result = {
+            'success': False,
+            'leads_matched': 0,
+            'leads_updated': 0,
+            'leads_not_found': 0,
+            'loans_matched': 0,
+            'loans_updated': 0,
+            'errors': []
+        }
+
+        try:
+            # Get access token
+            access_token, instance_url = await salesforce_oauth.get_access_token(
+                db, integration_profile_id
+            )
+
+            if not access_token:
+                result['errors'].append("Failed to get Salesforce access token")
+                return result
+
+            # Get the integration profile for user_id
+            profile = db.query(IntegrationProfile).filter(
+                IntegrationProfile.id == integration_profile_id
+            ).first()
+
+            if not profile:
+                result['errors'].append("Integration profile not found")
+                return result
+
+            user_id = profile.user_id
+
+            # ===== SYNC LEADS =====
+            # Get CRM leads with email addresses
+            crm_leads = db.execute(text("""
+                SELECT id, email, first_name, last_name, salesforce_id
+                FROM leads
+                WHERE owner_id = :user_id
+                  AND email IS NOT NULL
+                  AND email != ''
+                ORDER BY updated_at DESC
+                LIMIT :limit
+            """), {"user_id": user_id, "limit": limit}).fetchall()
+
+            logger.info(f"Processing {len(crm_leads)} CRM leads for Salesforce matching")
+
+            for lead in crm_leads:
+                try:
+                    # Search Salesforce for matching record by email
+                    sf_record = await self._fetch_salesforce_record_by_email(
+                        access_token, instance_url, lead.email
+                    )
+
+                    if sf_record.get('found'):
+                        result['leads_matched'] += 1
+
+                        # Update CRM lead with ALL Salesforce fields
+                        updated = await self._update_lead_from_salesforce(
+                            db, lead.id, sf_record['record'], sf_record['type'], sf_record['id']
+                        )
+
+                        if updated:
+                            result['leads_updated'] += 1
+                    else:
+                        result['leads_not_found'] += 1
+
+                except Exception as e:
+                    logger.error(f"Error syncing lead {lead.id}: {e}")
+                    result['errors'].append(f"Lead {lead.id}: {str(e)[:100]}")
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
+
+            # ===== SYNC LOANS =====
+            # Get CRM loans with borrower email addresses
+            crm_loans = db.execute(text("""
+                SELECT id, borrower_email, borrower_name, salesforce_id
+                FROM loans
+                WHERE loan_officer_id = :user_id
+                  AND borrower_email IS NOT NULL
+                  AND borrower_email != ''
+                ORDER BY updated_at DESC
+                LIMIT :limit
+            """), {"user_id": user_id, "limit": limit}).fetchall()
+
+            logger.info(f"Processing {len(crm_loans)} CRM loans for Salesforce matching")
+
+            for loan in crm_loans:
+                try:
+                    # Search Salesforce for matching Opportunity by related Contact email
+                    sf_record = await self._fetch_salesforce_opportunity_by_email(
+                        access_token, instance_url, loan.borrower_email
+                    )
+
+                    if sf_record.get('found'):
+                        result['loans_matched'] += 1
+
+                        # Update CRM loan with ALL Salesforce fields
+                        updated = await self._update_loan_from_salesforce(
+                            db, loan.id, sf_record['record'], sf_record['id']
+                        )
+
+                        if updated:
+                            result['loans_updated'] += 1
+
+                except Exception as e:
+                    logger.error(f"Error syncing loan {loan.id}: {e}")
+                    result['errors'].append(f"Loan {loan.id}: {str(e)[:100]}")
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
+
+            result['success'] = True
+            db.commit()
+
+            logger.info(
+                f"Email-based sync complete: "
+                f"leads matched={result['leads_matched']}, updated={result['leads_updated']} | "
+                f"loans matched={result['loans_matched']}, updated={result['loans_updated']}"
+            )
+
+        except Exception as e:
+            logger.error(f"Email-based sync failed: {e}")
+            result['errors'].append(str(e))
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
+        return result
+
+    async def _fetch_salesforce_record_by_email(
+        self,
+        access_token: str,
+        instance_url: str,
+        email: str
+    ) -> Dict[str, Any]:
+        """
+        Fetch ALL fields from a Salesforce Lead or Contact by email.
+
+        Returns comprehensive record data including all text, number, and date fields.
+        """
+        if not email:
+            return {"found": False}
+
+        async with httpx.AsyncClient() as client:
+            # Query Lead with ALL fields
+            lead_query = f"""
+                SELECT Id, FirstName, LastName, Email, Phone, MobilePhone, Company,
+                       Title, Industry, Street, City, State, PostalCode, Country,
+                       LeadSource, Status, Rating, AnnualRevenue, NumberOfEmployees,
+                       Description, Website, Fax,
+                       CreatedDate, LastModifiedDate
+                FROM Lead
+                WHERE Email = '{email}'
+                LIMIT 1
+            """
+
+            response = await client.get(
+                f"{instance_url}/services/data/v59.0/query",
+                params={"q": lead_query},
+                headers={"Authorization": f"Bearer {access_token}"},
+                timeout=30.0
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('totalSize', 0) > 0:
+                    record = data['records'][0]
+                    logger.info(f"Found Salesforce Lead {record['Id']} for email {email}")
+                    return {
+                        "found": True,
+                        "type": "Lead",
+                        "id": record['Id'],
+                        "record": record
+                    }
+
+            # If no Lead, query Contact with ALL fields
+            contact_query = f"""
+                SELECT Id, FirstName, LastName, Email, Phone, MobilePhone, HomePhone,
+                       Title, Department, MailingStreet, MailingCity, MailingState,
+                       MailingPostalCode, MailingCountry, Birthdate, AccountId,
+                       Description, Fax, LeadSource,
+                       CreatedDate, LastModifiedDate
+                FROM Contact
+                WHERE Email = '{email}'
+                LIMIT 1
+            """
+
+            response = await client.get(
+                f"{instance_url}/services/data/v59.0/query",
+                params={"q": contact_query},
+                headers={"Authorization": f"Bearer {access_token}"},
+                timeout=30.0
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('totalSize', 0) > 0:
+                    record = data['records'][0]
+                    logger.info(f"Found Salesforce Contact {record['Id']} for email {email}")
+                    return {
+                        "found": True,
+                        "type": "Contact",
+                        "id": record['Id'],
+                        "record": record
+                    }
+
+        return {"found": False}
+
+    async def _fetch_salesforce_opportunity_by_email(
+        self,
+        access_token: str,
+        instance_url: str,
+        email: str
+    ) -> Dict[str, Any]:
+        """
+        Fetch Salesforce Opportunity by related Contact email.
+
+        Returns comprehensive Opportunity data with all fields.
+        """
+        if not email:
+            return {"found": False}
+
+        async with httpx.AsyncClient() as client:
+            # First find the Contact by email
+            contact_query = f"SELECT Id, AccountId FROM Contact WHERE Email = '{email}' LIMIT 1"
+
+            response = await client.get(
+                f"{instance_url}/services/data/v59.0/query",
+                params={"q": contact_query},
+                headers={"Authorization": f"Bearer {access_token}"},
+                timeout=30.0
+            )
+
+            if response.status_code != 200:
+                return {"found": False}
+
+            data = response.json()
+            if data.get('totalSize', 0) == 0:
+                return {"found": False}
+
+            contact = data['records'][0]
+            account_id = contact.get('AccountId')
+
+            if not account_id:
+                return {"found": False}
+
+            # Query Opportunity by AccountId with ALL fields
+            opp_query = f"""
+                SELECT Id, Name, Amount, StageName, CloseDate, Probability,
+                       Type, LeadSource, NextStep, Description,
+                       ExpectedRevenue, TotalOpportunityQuantity,
+                       CreatedDate, LastModifiedDate, IsClosed, IsWon
+                FROM Opportunity
+                WHERE AccountId = '{account_id}'
+                ORDER BY LastModifiedDate DESC
+                LIMIT 1
+            """
+
+            response = await client.get(
+                f"{instance_url}/services/data/v59.0/query",
+                params={"q": opp_query},
+                headers={"Authorization": f"Bearer {access_token}"},
+                timeout=30.0
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('totalSize', 0) > 0:
+                    record = data['records'][0]
+                    logger.info(f"Found Salesforce Opportunity {record['Id']} for email {email}")
+                    return {
+                        "found": True,
+                        "type": "Opportunity",
+                        "id": record['Id'],
+                        "record": record
+                    }
+
+        return {"found": False}
+
+    async def _update_lead_from_salesforce(
+        self,
+        db: Session,
+        lead_id: int,
+        sf_record: Dict[str, Any],
+        sf_type: str,
+        sf_id: str
+    ) -> bool:
+        """
+        Update a CRM lead with ALL fields from Salesforce Lead/Contact.
+
+        Maps all text, number, and date fields from Salesforce to CRM.
+        """
+        from sqlalchemy import text
+
+        # Build update data from Salesforce record
+        update_fields = {}
+
+        # Text fields
+        if sf_record.get('FirstName'):
+            update_fields['first_name'] = sf_record['FirstName']
+        if sf_record.get('LastName'):
+            update_fields['last_name'] = sf_record['LastName']
+        if sf_record.get('Email'):
+            update_fields['email'] = sf_record['Email']
+        if sf_record.get('Phone'):
+            update_fields['phone'] = sf_record['Phone']
+        if sf_record.get('MobilePhone'):
+            update_fields['mobile_phone'] = sf_record['MobilePhone']
+        if sf_record.get('Company'):
+            update_fields['company'] = sf_record['Company']
+        if sf_record.get('Title'):
+            update_fields['title'] = sf_record['Title']
+        if sf_record.get('Industry'):
+            update_fields['industry'] = sf_record['Industry']
+
+        # Address fields
+        street = sf_record.get('Street') or sf_record.get('MailingStreet')
+        city = sf_record.get('City') or sf_record.get('MailingCity')
+        state = sf_record.get('State') or sf_record.get('MailingState')
+        postal = sf_record.get('PostalCode') or sf_record.get('MailingPostalCode')
+
+        if street:
+            update_fields['address'] = street
+        if city:
+            update_fields['city'] = city
+        if state:
+            update_fields['state'] = state
+        if postal:
+            update_fields['zip_code'] = postal
+
+        # Source and status
+        if sf_record.get('LeadSource'):
+            update_fields['source'] = sf_record['LeadSource']
+        if sf_record.get('Status'):
+            update_fields['stage'] = self._map_sf_lead_status_to_crm(sf_record['Status'])
+        if sf_record.get('Description'):
+            update_fields['notes'] = sf_record['Description']
+
+        # Number fields
+        if sf_record.get('AnnualRevenue'):
+            update_fields['annual_income'] = float(sf_record['AnnualRevenue'])
+
+        # Always update salesforce_id and sync timestamp
+        update_fields['salesforce_id'] = sf_id
+
+        if not update_fields:
+            return False
+
+        # Build dynamic UPDATE query
+        set_clauses = ", ".join([f"{k} = :{k}" for k in update_fields.keys()])
+        update_fields['lead_id'] = lead_id
+        update_fields['sf_type'] = sf_type
+
+        db.execute(text(f"""
+            UPDATE leads SET {set_clauses},
+                meta_data = COALESCE(meta_data, '{{}}'::jsonb) ||
+                    jsonb_build_object(
+                        'salesforce_type', :sf_type,
+                        'salesforce_synced_at', CURRENT_TIMESTAMP
+                    ),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = :lead_id
+        """), update_fields)
+
+        logger.info(f"Updated lead {lead_id} with {len(update_fields)} fields from Salesforce {sf_type} {sf_id}")
+        return True
+
+    async def _update_loan_from_salesforce(
+        self,
+        db: Session,
+        loan_id: int,
+        sf_record: Dict[str, Any],
+        sf_id: str
+    ) -> bool:
+        """
+        Update a CRM loan with ALL fields from Salesforce Opportunity.
+
+        Maps all text, number, and date fields from Salesforce to CRM.
+        """
+        from sqlalchemy import text
+
+        # Build update data from Salesforce Opportunity
+        update_fields = {}
+
+        # Text fields
+        if sf_record.get('Name'):
+            update_fields['borrower_name'] = sf_record['Name']
+        if sf_record.get('Description'):
+            update_fields['notes'] = sf_record['Description']
+        if sf_record.get('NextStep'):
+            update_fields['next_steps'] = sf_record['NextStep']
+        if sf_record.get('Type'):
+            update_fields['loan_type'] = sf_record['Type']
+        if sf_record.get('LeadSource'):
+            update_fields['lead_source'] = sf_record['LeadSource']
+
+        # Number fields
+        if sf_record.get('Amount'):
+            update_fields['amount'] = float(sf_record['Amount'])
+        if sf_record.get('Probability'):
+            update_fields['probability'] = float(sf_record['Probability'])
+        if sf_record.get('ExpectedRevenue'):
+            update_fields['expected_revenue'] = float(sf_record['ExpectedRevenue'])
+
+        # Date fields
+        if sf_record.get('CloseDate'):
+            update_fields['closing_date'] = sf_record['CloseDate']
+
+        # Stage mapping
+        if sf_record.get('StageName'):
+            update_fields['stage'] = self._map_salesforce_stage(sf_record['StageName'])
+
+        # Status flags
+        if sf_record.get('IsClosed') is not None:
+            update_fields['is_closed'] = sf_record['IsClosed']
+        if sf_record.get('IsWon') is not None:
+            update_fields['is_won'] = sf_record['IsWon']
+
+        # Always update salesforce_id
+        update_fields['salesforce_id'] = sf_id
+
+        if not update_fields:
+            return False
+
+        # Build dynamic UPDATE query - handle special fields
+        set_parts = []
+        for k in update_fields.keys():
+            if k in ['amount', 'probability', 'expected_revenue']:
+                set_parts.append(f"{k} = :{k}")
+            elif k in ['is_closed', 'is_won']:
+                set_parts.append(f"{k} = :{k}")
+            else:
+                set_parts.append(f"{k} = :{k}")
+
+        set_clauses = ", ".join(set_parts)
+        update_fields['loan_id'] = loan_id
+
+        db.execute(text(f"""
+            UPDATE loans SET {set_clauses},
+                salesforce_last_synced_at = CURRENT_TIMESTAMP,
+                salesforce_sync_status = 'synced',
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = :loan_id
+        """), update_fields)
+
+        logger.info(f"Updated loan {loan_id} with {len(update_fields)} fields from Salesforce Opportunity {sf_id}")
+        return True
+
+    def _map_sf_lead_status_to_crm(self, sf_status: str) -> str:
+        """Map Salesforce Lead status to CRM stage"""
+        status_mapping = {
+            'Open - Not Contacted': 'new',
+            'Working - Contacted': 'contacted',
+            'Closed - Converted': 'converted',
+            'Closed - Not Converted': 'closed',
+        }
+        return status_mapping.get(sf_status, 'new')
+
+
+    # =========================================================================
+    # OUTBOUND SYNC - DISABLED (Push CRM data TO Salesforce)
+    # These functions are retained but not used - data flows Salesforce → CRM only
     # =========================================================================
 
     async def push_loan_to_salesforce(
