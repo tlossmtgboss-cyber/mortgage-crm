@@ -1,12 +1,14 @@
 """
 Salesforce Sync Engine
-Handles BIDIRECTIONAL data synchronization: Salesforce ↔ CRM
+Handles INBOUND data synchronization: Salesforce → CRM
 
-Data flows BOTH WAYS:
+Data flows ONE WAY:
 - Inbound: Salesforce → CRM (pull emails, calendar, loans, leads)
-- Outbound: CRM → Salesforce (push updated loans, leads, activities)
+- NO outbound sync (CRM does NOT push to Salesforce)
 
 Sync runs automatically every 5 minutes via APScheduler.
+
+Note: Outbound sync functions are retained but disabled.
 """
 import hashlib
 import json
