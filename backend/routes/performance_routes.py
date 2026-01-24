@@ -229,6 +229,294 @@ async def check_database_health(db: Session = Depends(get_db)):
 
 
 # ============================================================================
+# ENHANCED DATABASE MONITORING DASHBOARD
+# ============================================================================
+
+@router.get("/database/dashboard")
+async def get_database_dashboard(db: Session = Depends(get_db)):
+    """
+    Comprehensive database monitoring dashboard.
+
+    Returns:
+    - Connection pool status
+    - Active query count
+    - Database statistics
+    - Background job status
+    - Recommendations for issues
+    """
+    import time
+    from sqlalchemy import text
+    from datetime import datetime
+
+    dashboard = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "pool": get_pool_status(),
+        "connectivity": {},
+        "statistics": {},
+        "active_queries": {},
+        "background_jobs": {},
+        "recommendations": []
+    }
+
+    # Test connectivity
+    start = time.time()
+    try:
+        db.execute(text("SELECT 1")).fetchone()
+        dashboard["connectivity"] = {
+            "status": "connected",
+            "latency_ms": round((time.time() - start) * 1000, 2)
+        }
+    except Exception as e:
+        dashboard["connectivity"] = {
+            "status": "error",
+            "error": str(e)
+        }
+        dashboard["recommendations"].append("DATABASE UNREACHABLE - Check connection settings")
+        return dashboard
+
+    # Get database statistics (PostgreSQL specific)
+    try:
+        stats = db.execute(text("""
+            SELECT
+                numbackends as active_connections,
+                xact_commit as transactions_committed,
+                xact_rollback as transactions_rolled_back,
+                blks_read as disk_blocks_read,
+                blks_hit as cache_hits,
+                tup_returned as rows_returned,
+                tup_fetched as rows_fetched,
+                tup_inserted as rows_inserted,
+                tup_updated as rows_updated,
+                tup_deleted as rows_deleted,
+                deadlocks
+            FROM pg_stat_database
+            WHERE datname = current_database()
+        """)).fetchone()
+
+        if stats:
+            total_blocks = (stats.disk_blocks_read or 0) + (stats.cache_hits or 0)
+            cache_hit_ratio = round((stats.cache_hits or 0) / total_blocks * 100, 2) if total_blocks > 0 else 0
+
+            dashboard["statistics"] = {
+                "active_connections": stats.active_connections,
+                "transactions_committed": stats.transactions_committed,
+                "transactions_rolled_back": stats.transactions_rolled_back,
+                "cache_hit_ratio_percent": cache_hit_ratio,
+                "rows_returned": stats.rows_returned,
+                "deadlocks": stats.deadlocks
+            }
+
+            # Connection warnings
+            if stats.active_connections > 80:
+                dashboard["recommendations"].append(
+                    f"HIGH CONNECTION COUNT: {stats.active_connections} active connections (>80 threshold)"
+                )
+
+            if cache_hit_ratio < 95:
+                dashboard["recommendations"].append(
+                    f"LOW CACHE HIT RATIO: {cache_hit_ratio}% (should be >95%)"
+                )
+
+            if stats.deadlocks > 0:
+                dashboard["recommendations"].append(
+                    f"DEADLOCKS DETECTED: {stats.deadlocks} deadlocks in database history"
+                )
+
+    except Exception as e:
+        dashboard["statistics"] = {"error": str(e)}
+
+    # Get active/long-running queries
+    try:
+        active = db.execute(text("""
+            SELECT
+                pid,
+                usename as username,
+                application_name,
+                client_addr,
+                state,
+                EXTRACT(EPOCH FROM (now() - query_start))::int as duration_seconds,
+                LEFT(query, 200) as query_preview,
+                wait_event_type,
+                wait_event
+            FROM pg_stat_activity
+            WHERE state != 'idle'
+                AND pid != pg_backend_pid()
+                AND query NOT LIKE '%pg_stat_activity%'
+            ORDER BY query_start ASC
+            LIMIT 20
+        """)).fetchall()
+
+        long_running = [
+            {
+                "pid": q.pid,
+                "username": q.username,
+                "application": q.application_name,
+                "state": q.state,
+                "duration_seconds": q.duration_seconds,
+                "query_preview": q.query_preview,
+                "waiting_on": f"{q.wait_event_type}: {q.wait_event}" if q.wait_event_type else None
+            }
+            for q in active if q.duration_seconds and q.duration_seconds > 5
+        ]
+
+        dashboard["active_queries"] = {
+            "total_active": len(active),
+            "long_running_count": len(long_running),
+            "long_running": long_running
+        }
+
+        if len(long_running) > 3:
+            dashboard["recommendations"].append(
+                f"LONG-RUNNING QUERIES: {len(long_running)} queries running >5 seconds"
+            )
+
+    except Exception as e:
+        dashboard["active_queries"] = {"error": str(e)}
+
+    # Get background job status
+    try:
+        from services.scheduler_service import scheduler_service
+        jobs = scheduler_service.get_job_status()
+        dashboard["background_jobs"] = {
+            "total_jobs": len(jobs),
+            "jobs": jobs[:10]  # Limit to first 10
+        }
+    except Exception as e:
+        dashboard["background_jobs"] = {"error": str(e)}
+
+    # Overall health status
+    pool_status = dashboard["pool"].get("status", "unknown")
+    conn_status = dashboard["connectivity"].get("status", "unknown")
+
+    if pool_status == "healthy" and conn_status == "connected" and len(dashboard["recommendations"]) == 0:
+        dashboard["overall_status"] = "healthy"
+    elif len(dashboard["recommendations"]) > 2:
+        dashboard["overall_status"] = "critical"
+    else:
+        dashboard["overall_status"] = "warning" if dashboard["recommendations"] else "healthy"
+
+    return dashboard
+
+
+@router.get("/database/connections")
+async def get_connection_details(db: Session = Depends(get_db)):
+    """
+    Get detailed breakdown of all database connections.
+
+    Shows:
+    - Connections by state
+    - Connections by application
+    - Idle connection age
+    """
+    from sqlalchemy import text
+
+    try:
+        # Connections by state
+        by_state = db.execute(text("""
+            SELECT
+                state,
+                COUNT(*) as count
+            FROM pg_stat_activity
+            WHERE datname = current_database()
+            GROUP BY state
+            ORDER BY count DESC
+        """)).fetchall()
+
+        # Connections by application
+        by_app = db.execute(text("""
+            SELECT
+                COALESCE(application_name, 'unknown') as application,
+                COUNT(*) as count,
+                COUNT(CASE WHEN state = 'idle' THEN 1 END) as idle_count,
+                COUNT(CASE WHEN state = 'active' THEN 1 END) as active_count
+            FROM pg_stat_activity
+            WHERE datname = current_database()
+            GROUP BY application_name
+            ORDER BY count DESC
+            LIMIT 20
+        """)).fetchall()
+
+        # Oldest idle connections
+        old_idle = db.execute(text("""
+            SELECT
+                pid,
+                application_name,
+                state,
+                EXTRACT(EPOCH FROM (now() - state_change))::int as idle_seconds
+            FROM pg_stat_activity
+            WHERE datname = current_database()
+                AND state = 'idle'
+                AND state_change < now() - interval '5 minutes'
+            ORDER BY state_change ASC
+            LIMIT 10
+        """)).fetchall()
+
+        return {
+            "by_state": [{"state": r.state or "null", "count": r.count} for r in by_state],
+            "by_application": [
+                {
+                    "application": r.application,
+                    "total": r.count,
+                    "idle": r.idle_count,
+                    "active": r.active_count
+                }
+                for r in by_app
+            ],
+            "stale_idle_connections": [
+                {
+                    "pid": r.pid,
+                    "application": r.application_name,
+                    "idle_minutes": round(r.idle_seconds / 60, 1)
+                }
+                for r in old_idle
+            ],
+            "total_connections": sum(r.count for r in by_state)
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to get connection details: {e}")
+        return {"error": str(e)}
+
+
+@router.post("/database/terminate-idle")
+async def terminate_idle_connections(
+    older_than_minutes: int = Query(30, ge=5, le=120, description="Terminate idle connections older than X minutes"),
+    db: Session = Depends(get_db)
+):
+    """
+    Terminate idle database connections older than specified time.
+
+    Use with caution - this will forcibly close idle connections.
+    """
+    from sqlalchemy import text
+
+    try:
+        # Find and terminate old idle connections
+        result = db.execute(text("""
+            SELECT pg_terminate_backend(pid), pid, application_name
+            FROM pg_stat_activity
+            WHERE datname = current_database()
+                AND state = 'idle'
+                AND state_change < now() - interval ':minutes minutes'
+                AND pid != pg_backend_pid()
+        """), {"minutes": older_than_minutes})
+
+        terminated = result.fetchall()
+        db.commit()
+
+        return {
+            "success": True,
+            "terminated_count": len(terminated),
+            "terminated_pids": [r.pid for r in terminated],
+            "threshold_minutes": older_than_minutes
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to terminate idle connections: {e}")
+        return {"success": False, "error": str(e)}
+
+
+# ============================================================================
 # ALERTS CONFIGURATION
 # ============================================================================
 

@@ -15,6 +15,7 @@ from salesforce_integration_models import (
     IntegrationEvent
 )
 from .oauth_service import salesforce_oauth
+from .http_client import get_sf_client, SF_TIMEOUT
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +130,7 @@ class SalesforceSchemaService:
         instance_url: str
     ) -> List[str]:
         """Discover custom objects (especially mortgage-related)"""
-        async with httpx.AsyncClient() as client:
+        async with get_sf_client() as client:
             response = await client.get(
                 f"{instance_url}/services/data/v60.0/sobjects",
                 headers={
@@ -172,7 +173,7 @@ class SalesforceSchemaService:
     ) -> Optional[Dict[str, Any]]:
         """Discover schema for a specific object"""
         try:
-            async with httpx.AsyncClient() as client:
+            async with get_sf_client() as client:
                 response = await client.get(
                     f"{instance_url}/services/data/v60.0/sobjects/{object_name}/describe",
                     headers={

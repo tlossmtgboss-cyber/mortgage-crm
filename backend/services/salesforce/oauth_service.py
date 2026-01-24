@@ -21,6 +21,7 @@ from salesforce_integration_models import (
     IntegrationEvent
 )
 from models.calendar_sync_models import CalendarSyncSettings
+from .http_client import get_sf_client, SF_TIMEOUT
 
 logger = logging.getLogger(__name__)
 
@@ -245,7 +246,7 @@ class SalesforceOAuthService:
         if code_verifier:
             data['code_verifier'] = code_verifier
 
-        async with httpx.AsyncClient() as client:
+        async with get_sf_client() as client:
             response = await client.post(
                 f"{self.config.base_url}/services/oauth2/token",
                 data=data,
@@ -260,7 +261,7 @@ class SalesforceOAuthService:
 
     async def _get_user_identity(self, access_token: str, identity_url: str) -> Dict[str, Any]:
         """Get Salesforce user identity"""
-        async with httpx.AsyncClient() as client:
+        async with get_sf_client() as client:
             response = await client.get(
                 identity_url,
                 headers={'Authorization': f'Bearer {access_token}'}
@@ -381,7 +382,7 @@ class SalesforceOAuthService:
 
         refresh_token = decrypt_value(profile.refresh_token_encrypted)
 
-        async with httpx.AsyncClient() as client:
+        async with get_sf_client() as client:
             response = await client.post(
                 f"{self.config.base_url}/services/oauth2/token",
                 data={

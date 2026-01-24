@@ -29,6 +29,7 @@ from salesforce_integration_models import (
 )
 from .oauth_service import salesforce_oauth
 from .field_mapping_service import field_mapping
+from .http_client import get_sf_client, SF_TIMEOUT
 
 logger = logging.getLogger(__name__)
 
@@ -255,7 +256,7 @@ class SalesforceSyncService:
         soql: str
     ) -> List[Dict[str, Any]]:
         """Query records from Salesforce"""
-        async with httpx.AsyncClient() as client:
+        async with get_sf_client() as client:
             response = await client.get(
                 f"{instance_url}/services/data/v60.0/query",
                 params={'q': soql},
@@ -892,7 +893,7 @@ class SalesforceSyncService:
         if not email:
             return {"found": False}
 
-        async with httpx.AsyncClient() as client:
+        async with get_sf_client() as client:
             # Query Lead with ALL fields
             lead_query = f"""
                 SELECT Id, FirstName, LastName, Email, Phone, MobilePhone, Company,
@@ -971,7 +972,7 @@ class SalesforceSyncService:
         if not email:
             return {"found": False}
 
-        async with httpx.AsyncClient() as client:
+        async with get_sf_client() as client:
             # First find the Contact by email
             contact_query = f"SELECT Id, AccountId FROM Contact WHERE Email = '{email}' LIMIT 1"
 
@@ -1277,7 +1278,7 @@ class SalesforceSyncService:
         # Check if loan already has a Salesforce ID (update) or needs to be created
         salesforce_id = loan.salesforce_id
 
-        async with httpx.AsyncClient() as client:
+        async with get_sf_client() as client:
             if salesforce_id:
                 # UPDATE existing Opportunity
                 response = await client.patch(
@@ -1381,7 +1382,7 @@ class SalesforceSyncService:
         if not email:
             return {"found": False}
 
-        async with httpx.AsyncClient() as client:
+        async with get_sf_client() as client:
             # First, search for Lead by email
             lead_query = f"SELECT Id, FirstName, LastName, Email, Phone FROM Lead WHERE Email = '{email}' LIMIT 1"
             response = await client.get(
@@ -1623,7 +1624,7 @@ class SalesforceSyncService:
         if hasattr(lead, 'co_applicant_phone') and lead.co_applicant_phone:
             custom_fields["Co_Applicant_Phone__c"] = lead.co_applicant_phone
 
-        async with httpx.AsyncClient() as client:
+        async with get_sf_client() as client:
             if salesforce_id:
                 # UPDATE existing Lead or Contact
                 # First try to update with all fields including custom
@@ -1800,7 +1801,7 @@ class SalesforceSyncService:
         if email.loan_sf_id:
             task_data["WhatId"] = email.loan_sf_id
 
-        async with httpx.AsyncClient() as client:
+        async with get_sf_client() as client:
             response = await client.post(
                 f"{instance_url}/services/data/v59.0/sobjects/Task",
                 headers={
@@ -1905,7 +1906,7 @@ class SalesforceSyncService:
         if hasattr(event, 'meta_data') and event.meta_data:
             salesforce_id = event.meta_data.get('salesforce_event_id')
 
-        async with httpx.AsyncClient() as client:
+        async with get_sf_client() as client:
             if salesforce_id:
                 # UPDATE existing Event
                 response = await client.patch(

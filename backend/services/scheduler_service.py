@@ -74,88 +74,100 @@ class SchedulerService:
             logger.info("Scheduler stopped")
 
     def _register_jobs(self):
-        """Register all scheduled jobs."""
+        """
+        Register all scheduled jobs with STAGGERED timing.
 
-        # Application reminder job - runs every hour
+        Jobs are spread across different minute offsets to prevent
+        database connection spikes from multiple jobs running simultaneously.
+
+        Schedule strategy:
+        - Hourly jobs: :07 and :37 (offset from :00)
+        - 30-min jobs: :12 and :42
+        - 15-min jobs: :05, :20, :35, :50 and :09, :24, :39, :54
+        - 10-min jobs: :03, :13, :23, :33, :43, :53
+        - Daily jobs: staggered minutes (not :00)
+        """
+
+        # Application reminder job - runs every hour at :07
         self.scheduler.add_job(
             func=self.send_application_reminders,
-            trigger=IntervalTrigger(hours=1),
+            trigger=CronTrigger(minute=7),  # Every hour at :07
             id="application_reminders",
             name="Send Application Reminders",
             replace_existing=True,
         )
 
-        # Document expiration check - runs daily at 9 AM
+        # Document expiration check - runs daily at 9:15 AM (staggered from :00)
         self.scheduler.add_job(
             func=self.check_document_expirations,
-            trigger=CronTrigger(hour=9, minute=0),
+            trigger=CronTrigger(hour=9, minute=15),
             id="document_expiration_check",
             name="Check Document Expirations",
             replace_existing=True,
         )
 
-        # Appointment reminders - runs every 15 minutes
+        # Appointment reminders - runs every 15 minutes at :05, :20, :35, :50
         self.scheduler.add_job(
             func=self.send_appointment_reminders,
-            trigger=IntervalTrigger(minutes=15),
+            trigger=CronTrigger(minute="5,20,35,50"),
             id="appointment_reminders",
             name="Send Appointment Reminders",
             replace_existing=True,
         )
 
-        # Stale application cleanup - runs daily at midnight
+        # Stale application cleanup - runs daily at 00:30 (staggered from midnight)
         self.scheduler.add_job(
             func=self.cleanup_stale_applications,
-            trigger=CronTrigger(hour=0, minute=0),
+            trigger=CronTrigger(hour=0, minute=30),
             id="stale_cleanup",
             name="Cleanup Stale Applications",
             replace_existing=True,
         )
 
         # =================================================================
-        # WORKFLOW SLA SYSTEM JOBS
+        # WORKFLOW SLA SYSTEM JOBS (staggered to prevent connection spikes)
         # =================================================================
 
-        # Workflow task generation - runs every 15 minutes (reduced from 5 to prevent connection exhaustion)
+        # Workflow task generation - runs every 15 minutes at :09, :24, :39, :54
         self.scheduler.add_job(
             func=self.run_workflow_task_generation,
-            trigger=IntervalTrigger(minutes=15),
+            trigger=CronTrigger(minute="9,24,39,54"),
             id="workflow_task_generation",
             name="Generate Workflow Tasks",
             replace_existing=True,
         )
 
-        # Workflow status processing - runs every 10 minutes
+        # Workflow status processing - runs every 10 minutes at :03, :13, :23, :33, :43, :53
         self.scheduler.add_job(
             func=self.run_workflow_status_processing,
-            trigger=IntervalTrigger(minutes=10),
+            trigger=CronTrigger(minute="3,13,23,33,43,53"),
             id="workflow_status_processing",
             name="Process Workflow Status Changes",
             replace_existing=True,
         )
 
-        # Workflow escalation check - runs every hour
+        # Workflow escalation check - runs every hour at :37
         self.scheduler.add_job(
             func=self.run_workflow_escalation,
-            trigger=IntervalTrigger(hours=1),
+            trigger=CronTrigger(minute=37),  # Every hour at :37
             id="workflow_escalation",
             name="Escalate Overdue Workflow Tasks",
             replace_existing=True,
         )
 
-        # Workflow completion check - runs every 30 minutes
+        # Workflow completion check - runs every 30 minutes at :12 and :42
         self.scheduler.add_job(
             func=self.run_workflow_completion_check,
-            trigger=IntervalTrigger(minutes=30),
+            trigger=CronTrigger(minute="12,42"),
             id="workflow_completion_check",
             name="Check Workflow Completions",
             replace_existing=True,
         )
 
-        # AI autonomous execution - runs every 15 minutes
+        # AI autonomous execution - runs every 15 minutes at :01, :16, :31, :46
         self.scheduler.add_job(
             func=self.run_ai_autonomous_execution,
-            trigger=IntervalTrigger(minutes=15),
+            trigger=CronTrigger(minute="1,16,31,46"),
             id="ai_autonomous_execution",
             name="Run AI Autonomous Task Execution",
             replace_existing=True,
@@ -165,10 +177,10 @@ class SchedulerService:
         # LISTING AGENT PORTAL JOBS
         # =================================================================
 
-        # Listing agent weekly updates - runs every Monday at 9 AM
+        # Listing agent weekly updates - runs every Monday at 9:25 AM (staggered)
         self.scheduler.add_job(
             func=self.run_listing_weekly_updates,
-            trigger=CronTrigger(day_of_week="mon", hour=9, minute=0),
+            trigger=CronTrigger(day_of_week="mon", hour=9, minute=25),
             id="listing_weekly_updates",
             name="Send Listing Agent Weekly Updates",
             replace_existing=True,

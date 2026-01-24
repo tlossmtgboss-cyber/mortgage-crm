@@ -16,6 +16,7 @@ from salesforce_integration_models import (
     IntegrationEvent
 )
 from .oauth_service import salesforce_oauth
+from .http_client import get_sf_client, SF_TIMEOUT
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +144,7 @@ class SalesforceEmailSyncService:
         """
 
         try:
-            async with httpx.AsyncClient() as client:
+            async with get_sf_client() as client:
                 response = await client.get(
                     f"{instance_url}/services/data/v59.0/query",
                     params={"q": soql},
@@ -179,7 +180,7 @@ class SalesforceEmailSyncService:
         """
 
         try:
-            async with httpx.AsyncClient() as client:
+            async with get_sf_client() as client:
                 response = await client.get(
                     f"{instance_url}/services/data/v59.0/query",
                     params={"q": soql},

@@ -474,19 +474,24 @@ def register_salesforce_sync_jobs(scheduler):
     """
     Register Salesforce sync jobs with APScheduler.
 
-    Sync is INBOUND ONLY every 5 minutes:
+    Sync is INBOUND ONLY every 10 minutes:
     - Salesforce → CRM (pull emails, calendar, tasks)
     - NO outbound sync (CRM does NOT push to Salesforce)
+
+    Jobs are STAGGERED to prevent database connection spikes:
+    - Sync runs at :08, :18, :28, :38, :48, :58
+    - Health check runs at :02, :12, :22, :32, :42, :52
 
     Args:
         scheduler: APScheduler instance
     """
-    # INBOUND sync every 10 minutes (Salesforce → CRM only)
-    # Increased interval to reduce database connection pressure
+    from apscheduler.triggers.cron import CronTrigger
+
+    # INBOUND sync every 10 minutes at :08, :18, :28, :38, :48, :58
+    # Staggered to avoid collision with other jobs
     scheduler.add_job(
         sync_all_users_salesforce_sync,
-        'interval',
-        minutes=10,
+        CronTrigger(minute="8,18,28,38,48,58"),
         id='salesforce_sync_all_users',
         name='Inbound Salesforce sync: pull from Salesforce to CRM every 10 minutes',
         replace_existing=True,
@@ -501,17 +506,17 @@ def register_salesforce_sync_jobs(scheduler):
         }
     )
 
-    # Health check every 5 minutes (aligned with sync interval)
+    # Health check every 10 minutes at :02, :12, :22, :32, :42, :52
+    # Reduced frequency from 5 min to 10 min, staggered timing
     scheduler.add_job(
         check_salesforce_sync_health_sync,
-        'interval',
-        minutes=5,
+        CronTrigger(minute="2,12,22,32,42,52"),
         id='salesforce_sync_health',
         name='Salesforce sync health check',
         replace_existing=True
     )
 
-    logger.info("Salesforce sync jobs registered (INBOUND ONLY): Salesforce → CRM every 10 minutes")
+    logger.info("Salesforce sync jobs registered (STAGGERED): Salesforce → CRM at :08/:18/:28/:38/:48/:58")
 
 
 # ============================================================================
