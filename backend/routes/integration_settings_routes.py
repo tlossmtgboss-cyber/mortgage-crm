@@ -434,6 +434,15 @@ INTEGRATIONS = {
         "icon": "elevenlabs",
         "features": ["text_to_speech", "voice_cloning", "custom_voices", "ai_receptionist"]
     },
+    "retell": {
+        "id": "retell",
+        "name": "Retell AI",
+        "category": "ai",
+        "auth_type": "api_key",
+        "description": "Conversational AI voice agents for inbound and outbound calls",
+        "icon": "retell",
+        "features": ["voice_agents", "inbound_calls", "outbound_calls", "call_analytics", "phone_numbers", "transcripts"]
+    },
     # Document
     "docusign": {
         "id": "docusign",
@@ -470,6 +479,17 @@ async def get_all_integrations(
                     SELECT provider FROM user_integrations WHERE user_id = :user_id
                 """), {"user_id": int(user_id)}).fetchall()
                 connected_providers = {row[0] for row in result}
+
+                # Check for Retell AI connection
+                try:
+                    retell_result = db.execute(text("""
+                        SELECT 1 FROM user_retell_config WHERE user_id = :user_id
+                    """), {"user_id": int(user_id)}).fetchone()
+                    if retell_result:
+                        connected_providers.add("retell")
+                except Exception:
+                    pass  # Table may not exist yet
+
             except SQLAlchemyError as e:
                 logger.warning(f"Could not fetch connected integrations: {e}")
 

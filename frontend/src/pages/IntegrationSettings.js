@@ -6,6 +6,7 @@ import SalesforceFieldMapping from '../components/integrations/SalesforceFieldMa
 import SalesforceSetupWizard from '../components/integrations/SalesforceSetupWizard';
 import FollowUpBossSettings from '../components/integrations/FollowUpBossSettings';
 import ElevenLabsSettings from '../components/integrations/ElevenLabsSettings';
+import RetellSettings from '../components/integrations/RetellSettings';
 import { API_BASE_URL } from '../services/api';
 import './IntegrationSettings.css';
 
@@ -344,7 +345,8 @@ const IntegrationSettings = () => {
       synthflow: 'synthflow.ai',
       recallai: 'recall.ai',
       docusign: 'docusign.com',
-      elevenlabs: 'elevenlabs.io'
+      elevenlabs: 'elevenlabs.io',
+      retell: 'retellai.com'
     };
     const domain = domains[integrationId];
     if (!domain) return null;
@@ -690,6 +692,13 @@ const IntegrationSettings = () => {
             {selectedIntegration.id === 'elevenlabs' && (
               <div className="detail-section elevenlabs-integration">
                 <ElevenLabsSettings />
+              </div>
+            )}
+
+            {/* Retell AI Integration - Voice Agent settings panel */}
+            {selectedIntegration.id === 'retell' && (
+              <div className="detail-section retell-integration">
+                <RetellSettings />
               </div>
             )}
 

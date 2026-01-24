@@ -147,10 +147,10 @@ class UpdatePhoneNumberRequest(BaseModel):
 def get_user_retell_key(db: Session, user_id: int) -> Optional[str]:
     """Get user's Retell API key from database."""
     result = db.execute(
-        """
+        text("""
         SELECT retell_api_key FROM user_retell_config
         WHERE user_id = :user_id
-        """,
+        """),
         {"user_id": user_id}
     ).fetchone()
 
@@ -188,13 +188,13 @@ async def connect_retell(
 
         # Save configuration
         db.execute(
-            """
+            text("""
             INSERT INTO user_retell_config (user_id, retell_api_key, created_at, updated_at)
             VALUES (:user_id, :api_key, :now, :now)
             ON CONFLICT (user_id) DO UPDATE SET
                 retell_api_key = :api_key,
                 updated_at = :now
-            """,
+            """),
             {
                 "user_id": current_user["id"],
                 "api_key": request.api_key,
@@ -302,7 +302,7 @@ async def create_agent(
 
         # Store agent reference in local database
         db.execute(
-            """
+            text("""
             INSERT INTO retell_agents (
                 user_id, retell_agent_id, agent_name, agent_type,
                 voice_id, created_at
@@ -310,7 +310,7 @@ async def create_agent(
                 :user_id, :agent_id, :agent_name, :agent_type,
                 :voice_id, :created_at
             )
-            """,
+            """),
             {
                 "user_id": current_user["id"],
                 "agent_id": agent.get("agent_id"),
@@ -374,7 +374,7 @@ async def delete_agent(
 
         # Remove from local database
         db.execute(
-            "DELETE FROM retell_agents WHERE retell_agent_id = :agent_id",
+            text("DELETE FROM retell_agents WHERE retell_agent_id = :agent_id"),
             {"agent_id": agent_id}
         )
         db.commit()
@@ -435,13 +435,13 @@ async def create_phone_number(
 
         # Store phone number reference
         db.execute(
-            """
+            text("""
             INSERT INTO retell_phone_numbers (
                 user_id, phone_number, retell_agent_id, created_at
             ) VALUES (
                 :user_id, :phone_number, :agent_id, :created_at
             )
-            """,
+            """),
             {
                 "user_id": current_user["id"],
                 "phone_number": result.get("phone_number"),
@@ -474,13 +474,13 @@ async def import_phone_number(
 
         # Store phone number reference
         db.execute(
-            """
+            text("""
             INSERT INTO retell_phone_numbers (
                 user_id, phone_number, retell_agent_id, imported, created_at
             ) VALUES (
                 :user_id, :phone_number, :agent_id, TRUE, :created_at
             )
-            """,
+            """),
             {
                 "user_id": current_user["id"],
                 "phone_number": request.phone_number,
@@ -530,7 +530,7 @@ async def delete_phone_number(
 
         # Remove from local database
         db.execute(
-            "DELETE FROM retell_phone_numbers WHERE phone_number = :phone_number",
+            text("DELETE FROM retell_phone_numbers WHERE phone_number = :phone_number"),
             {"phone_number": phone_number}
         )
         db.commit()
@@ -589,7 +589,7 @@ async def create_call(
 
         # Store call record
         db.execute(
-            """
+            text("""
             INSERT INTO retell_calls (
                 user_id, retell_call_id, retell_agent_id,
                 to_number, from_number, direction,
@@ -601,7 +601,7 @@ async def create_call(
                 :lead_id, :loan_id, :campaign_id,
                 'initiated', :created_at
             )
-            """,
+            """),
             {
                 "user_id": current_user["id"],
                 "call_id": result.get("call_id"),
@@ -675,11 +675,11 @@ async def end_call(
 
         # Update local record
         db.execute(
-            """
+            text("""
             UPDATE retell_calls
             SET status = 'ended', ended_at = :now
             WHERE retell_call_id = :call_id
-            """,
+            """),
             {"call_id": call_id, "now": datetime.utcnow()}
         )
         db.commit()
@@ -744,25 +744,25 @@ async def handle_call_webhook(
         if event_type == "call_started":
             # Update call status
             db.execute(
-                """
+                text("""
                 UPDATE retell_calls
                 SET status = 'in_progress', started_at = :now
                 WHERE retell_call_id = :call_id
-                """,
+                """),
                 {"call_id": call_id, "now": datetime.utcnow()}
             )
 
         elif event_type == "call_ended":
             # Update call with end data
             db.execute(
-                """
+                text("""
                 UPDATE retell_calls
                 SET status = 'completed',
                     ended_at = :now,
                     duration_seconds = :duration,
                     disconnection_reason = :reason
                 WHERE retell_call_id = :call_id
-                """,
+                """),
                 {
                     "call_id": call_id,
                     "now": datetime.utcnow(),
@@ -777,7 +777,7 @@ async def handle_call_webhook(
             transcript = call_data.get("transcript", "")
 
             db.execute(
-                """
+                text("""
                 UPDATE retell_calls
                 SET transcript = :transcript,
                     call_summary = :summary,
@@ -785,7 +785,7 @@ async def handle_call_webhook(
                     call_successful = :successful,
                     custom_analysis = :custom
                 WHERE retell_call_id = :call_id
-                """,
+                """),
                 {
                     "call_id": call_id,
                     "transcript": transcript,
@@ -826,10 +826,10 @@ async def process_call_completion(
     try:
         # Get local call record with metadata
         call_record = db.execute(
-            """
+            text("""
             SELECT lead_id, loan_id, campaign_id, user_id
             FROM retell_calls WHERE retell_call_id = :call_id
-            """,
+            """),
             {"call_id": call_id}
         ).fetchone()
 
@@ -839,18 +839,18 @@ async def process_call_completion(
         # Update lead last contact if applicable
         if call_record.lead_id:
             db.execute(
-                """
+                text("""
                 UPDATE leads
                 SET last_contact_at = :now, last_contact_method = 'phone'
                 WHERE id = :lead_id
-                """,
+                """),
                 {"lead_id": call_record.lead_id, "now": datetime.utcnow()}
             )
 
         # Log activity
         analysis = call_data.get("call_analysis", {})
         db.execute(
-            """
+            text("""
             INSERT INTO activities (
                 user_id, activity_type, subject, description,
                 lead_id, loan_id, created_at
@@ -858,7 +858,7 @@ async def process_call_completion(
                 :user_id, 'ai_call', 'AI Voice Call',
                 :description, :lead_id, :loan_id, :created_at
             )
-            """,
+            """),
             {
                 "user_id": call_record.user_id,
                 "description": analysis.get("call_summary", "AI voice call completed"),
@@ -896,7 +896,7 @@ async def get_call_analytics(
 
     # Get summary stats
     stats = db.execute(
-        f"""
+        text(f"""
         SELECT
             COUNT(*) as total_calls,
             COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_calls,
@@ -904,13 +904,13 @@ async def get_call_analytics(
             COUNT(CASE WHEN call_successful = TRUE THEN 1 END) as successful_calls
         FROM retell_calls
         WHERE {where_clause}
-        """,
+        """),
         params
     ).fetchone()
 
     # Get calls by day
     daily = db.execute(
-        f"""
+        text(f"""
         SELECT
             DATE(created_at) as date,
             COUNT(*) as count
@@ -919,7 +919,7 @@ async def get_call_analytics(
         GROUP BY DATE(created_at)
         ORDER BY date DESC
         LIMIT 30
-        """,
+        """),
         params
     ).fetchall()
 
