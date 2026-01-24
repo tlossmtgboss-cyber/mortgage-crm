@@ -5,9 +5,11 @@ Endpoints for monitoring application performance:
 - Slow query analysis
 - Endpoint performance stats
 - Database pool status
+- Database scaling for 1000+ users
 - Overall performance summary
 """
 
+import json
 import logging
 from typing import Optional
 from datetime import datetime, timedelta
@@ -22,6 +24,20 @@ from sqlalchemy.exc import SQLAlchemyError
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/performance", tags=["Performance Monitoring"])
+
+# Initialize scaling service on first request
+_scaling_initialized = False
+
+async def _ensure_scaling_service():
+    """Initialize database scaling service."""
+    global _scaling_initialized
+    if not _scaling_initialized:
+        try:
+            from services.database_scaling_service import db_scaling
+            await db_scaling.initialize()
+            _scaling_initialized = True
+        except Exception as e:
+            logger.warning(f"Could not initialize scaling service: {e}")
 
 
 # ============================================================================
@@ -513,6 +529,115 @@ async def terminate_idle_connections(
 
     except Exception as e:
         logger.error(f"Failed to terminate idle connections: {e}")
+        return {"success": False, "error": str(e)}
+
+
+# ============================================================================
+# DATABASE SCALING (1000+ USERS)
+# ============================================================================
+
+@router.get("/scaling/status")
+async def get_scaling_status(db: Session = Depends(get_db)):
+    """
+    Get database scaling status for 1000+ user readiness.
+
+    Returns:
+    - Connection usage and capacity
+    - Cache status
+    - Scaling recommendations
+    - Estimated user capacity
+    """
+    await _ensure_scaling_service()
+
+    try:
+        from services.database_scaling_service import db_scaling
+        return await db_scaling.get_health_status(db)
+    except Exception as e:
+        logger.error(f"Scaling status check failed: {e}")
+        return {"error": str(e), "status": "unknown"}
+
+
+@router.get("/scaling/report")
+async def get_scaling_report(db: Session = Depends(get_db)):
+    """
+    Generate comprehensive scaling report for 1000+ users.
+
+    Analyzes current infrastructure and identifies:
+    - Gaps that need to be addressed
+    - Action items with priorities
+    - Readiness assessment
+    """
+    await _ensure_scaling_service()
+
+    try:
+        from services.database_scaling_service import db_scaling
+        return await db_scaling.get_scaling_report(db)
+    except Exception as e:
+        logger.error(f"Scaling report generation failed: {e}")
+        return {"error": str(e)}
+
+
+@router.get("/scaling/alerts")
+async def get_scaling_alerts():
+    """
+    Get recent database scaling alerts.
+
+    Returns alerts triggered when connection usage exceeds thresholds.
+    """
+    await _ensure_scaling_service()
+
+    try:
+        from services.database_scaling_service import db_scaling
+
+        if not db_scaling._enabled:
+            return {"alerts": [], "note": "Redis not connected, no alert history"}
+
+        alerts_raw = await db_scaling.redis.lrange("db_scaling:alerts", 0, 49)
+        alerts = []
+        for alert_str in alerts_raw:
+            try:
+                alerts.append(json.loads(alert_str))
+            except Exception:
+                continue
+
+        return {
+            "alerts": alerts,
+            "count": len(alerts)
+        }
+    except Exception as e:
+        logger.error(f"Failed to get scaling alerts: {e}")
+        return {"error": str(e)}
+
+
+@router.post("/scaling/cache/invalidate")
+async def invalidate_scaling_cache(
+    user_id: Optional[str] = Query(None, description="User ID to invalidate cache for"),
+    query_type: Optional[str] = Query(None, description="Query type to invalidate")
+):
+    """
+    Invalidate database scaling cache.
+
+    Use when data has changed and cache needs refreshing.
+    """
+    await _ensure_scaling_service()
+
+    try:
+        from services.database_scaling_service import db_scaling
+
+        if not db_scaling._enabled:
+            return {"success": False, "reason": "Redis not connected"}
+
+        if user_id:
+            count = await db_scaling.invalidate_user_cache(user_id)
+            return {"success": True, "invalidated": count, "scope": f"user:{user_id}"}
+        elif query_type:
+            await db_scaling.invalidate_cache(query_type)
+            return {"success": True, "scope": f"query_type:{query_type}"}
+        else:
+            return {"success": False, "reason": "Specify user_id or query_type"}
+
+    except Exception as e:
+        logger.error(f"Cache invalidation failed: {e}")
         return {"success": False, "error": str(e)}
 
 
