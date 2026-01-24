@@ -14,13 +14,38 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from database import get_db
-from auth import get_current_user
 from integrations.telnyx_retell_bridge import TelnyxRetellBridge, get_bridge_for_user
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/telnyx-retell", tags=["Telnyx-Retell Bridge"])
+
+# Dependency injection placeholders
+User = None
+_get_current_user = None
+_get_db = None
+
+
+def set_dependencies(user_model, current_user_func, db_func):
+    """Set dependencies for this router."""
+    global User, _get_current_user, _get_db
+    User = user_model
+    _get_current_user = current_user_func
+    _get_db = db_func
+
+
+def get_db():
+    """Get database session."""
+    if _get_db is None:
+        raise HTTPException(status_code=500, detail="Database dependency not configured")
+    return _get_db()
+
+
+def get_current_user():
+    """Get current user."""
+    if _get_current_user is None:
+        raise HTTPException(status_code=500, detail="Auth dependency not configured")
+    return _get_current_user()
 
 
 # ==================== Request/Response Models ====================

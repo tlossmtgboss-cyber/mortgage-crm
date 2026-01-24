@@ -21463,7 +21463,8 @@ except Exception as e:
 
 # Telnyx-Retell Bridge routes (connect Telnyx numbers to Retell AI)
 try:
-    from routes.telnyx_retell_routes import router as telnyx_retell_router
+    from routes.telnyx_retell_routes import router as telnyx_retell_router, set_dependencies as set_telnyx_retell_deps
+    set_telnyx_retell_deps(User, get_current_user, get_db)
     app.include_router(telnyx_retell_router, tags=["Telnyx-Retell Bridge"])
     logger.info("Telnyx-Retell Bridge routes loaded")
 except Exception as e:
