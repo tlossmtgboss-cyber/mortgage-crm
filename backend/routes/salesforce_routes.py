@@ -2866,6 +2866,93 @@ async def debug_salesforce_connection(
         }
 
 
+@router.get("/debug/token-refresh")
+async def debug_token_refresh(
+    db: Session = Depends(get_db)
+):
+    """
+    Debug endpoint to explicitly test token refresh.
+    Shows detailed info about why refresh might fail.
+    """
+    try:
+        # Get integration with refresh_token
+        integration = db.execute(text("""
+            SELECT access_token, refresh_token, scopes, user_id
+            FROM user_integrations
+            WHERE provider = 'salesforce' AND access_token IS NOT NULL
+            ORDER BY updated_at DESC
+            LIMIT 1
+        """)).fetchone()
+
+        if not integration:
+            return {"status": "error", "message": "No Salesforce integration found"}
+
+        access_token = integration[0]
+        refresh_token = integration[1]
+        integration_user_id = integration[3]
+
+        result = {
+            "has_access_token": bool(access_token),
+            "access_token_length": len(access_token) if access_token else 0,
+            "has_refresh_token": bool(refresh_token),
+            "refresh_token_length": len(refresh_token) if refresh_token else 0,
+            "user_id": integration_user_id,
+        }
+
+        if not refresh_token:
+            result["status"] = "error"
+            result["message"] = "No refresh_token stored - cannot refresh"
+            return result
+
+        # Try to refresh
+        try:
+            from integrations.salesforce_service import salesforce_client
+            result["salesforce_client_enabled"] = salesforce_client.enabled
+
+            if not salesforce_client.enabled:
+                result["status"] = "error"
+                result["message"] = "Salesforce client not enabled"
+                return result
+
+            # Try refresh
+            new_tokens = salesforce_client.refresh_access_token(refresh_token)
+
+            if new_tokens and new_tokens.get("access_token"):
+                new_access_token = new_tokens["access_token"]
+                result["refresh_success"] = True
+                result["new_token_length"] = len(new_access_token)
+
+                # Update in database
+                db.execute(text("""
+                    UPDATE user_integrations
+                    SET access_token = :access_token, updated_at = CURRENT_TIMESTAMP
+                    WHERE user_id = :user_id AND provider = 'salesforce'
+                """), {
+                    "access_token": new_access_token,
+                    "user_id": integration_user_id
+                })
+                db.commit()
+                result["status"] = "success"
+                result["message"] = "Token refreshed and saved"
+            else:
+                result["refresh_success"] = False
+                result["status"] = "error"
+                result["message"] = "refresh_access_token returned None or no access_token"
+
+        except Exception as refresh_error:
+            result["status"] = "error"
+            result["refresh_error"] = str(refresh_error)
+            result["message"] = f"Refresh failed: {str(refresh_error)}"
+
+        return result
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
+
 @router.get("/debug/test-query")
 async def debug_test_salesforce_query(
     db: Session = Depends(get_db)
