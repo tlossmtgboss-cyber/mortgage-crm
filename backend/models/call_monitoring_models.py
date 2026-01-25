@@ -44,6 +44,7 @@ class CaptureMode(str, Enum):
     CRM_WEB_CALL = "crm_web_call"
     AMBIENT_MIC = "ambient_mic"
     VIDEO_CALL = "video_call"
+    CALL_INTELLIGENCE = "call_intelligence"  # One-button automatic mode
 
 
 class CallSessionStatus(str, Enum):

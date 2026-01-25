@@ -178,6 +178,370 @@ class ReviewDataResponse(BaseModel):
 
 
 # =============================================================================
+# CALLER IDENTIFICATION ENDPOINTS
+# =============================================================================
+
+class CallerLookupResponse(BaseModel):
+    """Response from caller lookup."""
+    found: bool
+    client: Optional[Dict[str, Any]] = None
+    source: Optional[str] = None  # lead, contact, loan_borrower
+
+
+class CreateClientRequest(BaseModel):
+    """Request to create a new client from a call."""
+    phone: str
+    name: str
+    email: Optional[str] = None
+    source: str = "inbound_call"
+    metadata: Optional[Dict[str, Any]] = None
+
+
+@router.get("/lookup-caller", response_model=CallerLookupResponse)
+async def lookup_caller(
+    phone: str = Query(..., description="Phone number to look up"),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Look up a caller by phone number.
+
+    Searches leads, contacts, and loan borrowers to find existing client records.
+    Returns the most relevant match with their profile information.
+    """
+    try:
+        # Normalize phone number - remove all non-digits
+        normalized_phone = ''.join(filter(str.isdigit, phone))
+
+        # Remove leading 1 if present (US country code)
+        if len(normalized_phone) == 11 and normalized_phone.startswith('1'):
+            normalized_phone = normalized_phone[1:]
+
+        if len(normalized_phone) < 10:
+            raise HTTPException(status_code=400, detail="Invalid phone number")
+
+        # Create phone search patterns for different formats
+        phone_patterns = [
+            normalized_phone,
+            f"+1{normalized_phone}",
+            f"1{normalized_phone}",
+            f"({normalized_phone[:3]}) {normalized_phone[3:6]}-{normalized_phone[6:]}",
+            f"{normalized_phone[:3]}-{normalized_phone[3:6]}-{normalized_phone[6:]}",
+        ]
+
+        # Search in leads table first (most common for new calls)
+        lead_query = text("""
+            SELECT id, first_name, last_name, email, phone, status,
+                   loan_amount, property_address, created_at
+            FROM leads
+            WHERE REGEXP_REPLACE(phone, '[^0-9]', '', 'g') LIKE :phone_pattern
+            ORDER BY created_at DESC
+            LIMIT 1
+        """)
+
+        lead = db.execute(lead_query, {"phone_pattern": f"%{normalized_phone[-10:]}"}).fetchone()
+
+        if lead:
+            return CallerLookupResponse(
+                found=True,
+                source="lead",
+                client={
+                    "id": str(lead.id),
+                    "lead_id": str(lead.id),
+                    "name": f"{lead.first_name or ''} {lead.last_name or ''}".strip() or "Unknown",
+                    "first_name": lead.first_name,
+                    "last_name": lead.last_name,
+                    "email": lead.email,
+                    "phone": lead.phone,
+                    "loan_status": lead.status,
+                    "loan_amount": float(lead.loan_amount) if lead.loan_amount else None,
+                    "property_address": lead.property_address,
+                    "type": "lead",
+                }
+            )
+
+        # Search in contacts table
+        contact_query = text("""
+            SELECT id, first_name, last_name, email, phone, contact_type,
+                   company, created_at
+            FROM contacts
+            WHERE REGEXP_REPLACE(phone, '[^0-9]', '', 'g') LIKE :phone_pattern
+            ORDER BY created_at DESC
+            LIMIT 1
+        """)
+
+        contact = db.execute(contact_query, {"phone_pattern": f"%{normalized_phone[-10:]}"}).fetchone()
+
+        if contact:
+            return CallerLookupResponse(
+                found=True,
+                source="contact",
+                client={
+                    "id": str(contact.id),
+                    "contact_id": str(contact.id),
+                    "name": f"{contact.first_name or ''} {contact.last_name or ''}".strip() or "Unknown",
+                    "first_name": contact.first_name,
+                    "last_name": contact.last_name,
+                    "email": contact.email,
+                    "phone": contact.phone,
+                    "contact_type": contact.contact_type,
+                    "company": contact.company,
+                    "type": "contact",
+                }
+            )
+
+        # Search in loans table (borrower info)
+        loan_query = text("""
+            SELECT id, borrower_first_name, borrower_last_name, borrower_email,
+                   borrower_phone, status, loan_amount, property_address
+            FROM loans
+            WHERE REGEXP_REPLACE(borrower_phone, '[^0-9]', '', 'g') LIKE :phone_pattern
+            ORDER BY created_at DESC
+            LIMIT 1
+        """)
+
+        loan = db.execute(loan_query, {"phone_pattern": f"%{normalized_phone[-10:]}"}).fetchone()
+
+        if loan:
+            return CallerLookupResponse(
+                found=True,
+                source="loan_borrower",
+                client={
+                    "id": str(loan.id),
+                    "loan_id": str(loan.id),
+                    "name": f"{loan.borrower_first_name or ''} {loan.borrower_last_name or ''}".strip() or "Unknown",
+                    "first_name": loan.borrower_first_name,
+                    "last_name": loan.borrower_last_name,
+                    "email": loan.borrower_email,
+                    "phone": loan.borrower_phone,
+                    "loan_status": loan.status,
+                    "loan_amount": float(loan.loan_amount) if loan.loan_amount else None,
+                    "property_address": loan.property_address,
+                    "type": "loan_borrower",
+                }
+            )
+
+        # Not found
+        return CallerLookupResponse(found=False, client=None, source=None)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Caller lookup failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Lookup failed: {str(e)}")
+
+
+@router.post("/create-client", response_model=Dict[str, Any])
+async def create_client_from_call(
+    request: CreateClientRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Create a new lead/client from an inbound call.
+
+    Creates a lead record for a new caller that wasn't found in the database.
+    """
+    try:
+        # Normalize phone
+        normalized_phone = ''.join(filter(str.isdigit, request.phone))
+        if len(normalized_phone) == 10:
+            formatted_phone = f"({normalized_phone[:3]}) {normalized_phone[3:6]}-{normalized_phone[6:]}"
+        else:
+            formatted_phone = request.phone
+
+        # Parse name into first/last
+        name_parts = request.name.strip().split(' ', 1)
+        first_name = name_parts[0] if name_parts else "Unknown"
+        last_name = name_parts[1] if len(name_parts) > 1 else ""
+
+        # Get current user ID for assignment
+        user_id = current_user.get("id", 1)
+
+        # Insert new lead
+        insert_query = text("""
+            INSERT INTO leads (
+                first_name, last_name, email, phone,
+                source, status, assigned_to, created_at, updated_at
+            ) VALUES (
+                :first_name, :last_name, :email, :phone,
+                :source, 'new', :assigned_to, NOW(), NOW()
+            )
+            RETURNING id, first_name, last_name, email, phone, source, status, created_at
+        """)
+
+        result = db.execute(insert_query, {
+            "first_name": first_name,
+            "last_name": last_name,
+            "email": request.email,
+            "phone": formatted_phone,
+            "source": request.source,
+            "assigned_to": user_id,
+        }).fetchone()
+
+        db.commit()
+
+        return {
+            "success": True,
+            "id": str(result.id),
+            "lead_id": str(result.id),
+            "client": {
+                "id": str(result.id),
+                "lead_id": str(result.id),
+                "name": f"{result.first_name} {result.last_name}".strip(),
+                "first_name": result.first_name,
+                "last_name": result.last_name,
+                "email": result.email,
+                "phone": result.phone,
+                "source": result.source,
+                "loan_status": result.status,
+                "type": "lead",
+                "is_new": True,
+            }
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to create client: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create client: {str(e)}")
+
+
+@router.get("/search-clients", response_model=Dict[str, Any])
+async def search_clients(
+    name: Optional[str] = Query(None, description="Client name to search for"),
+    email: Optional[str] = Query(None, description="Email to search for"),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Search for clients by name or email.
+
+    Used by automatic client detection during calls when phone number
+    doesn't match but a name is mentioned in the conversation.
+    """
+    try:
+        if not name and not email:
+            return {"found": False, "clients": []}
+
+        clients = []
+
+        # Search leads by name
+        if name:
+            name_parts = name.strip().split()
+            if len(name_parts) >= 2:
+                # Full name search
+                lead_query = text("""
+                    SELECT id, first_name, last_name, email, phone, status, created_at
+                    FROM leads
+                    WHERE LOWER(first_name) LIKE LOWER(:first_pattern)
+                      AND LOWER(last_name) LIKE LOWER(:last_pattern)
+                    ORDER BY created_at DESC
+                    LIMIT 5
+                """)
+                results = db.execute(lead_query, {
+                    "first_pattern": f"{name_parts[0]}%",
+                    "last_pattern": f"{name_parts[1]}%",
+                }).fetchall()
+            else:
+                # Single name search (first or last)
+                lead_query = text("""
+                    SELECT id, first_name, last_name, email, phone, status, created_at
+                    FROM leads
+                    WHERE LOWER(first_name) LIKE LOWER(:pattern)
+                       OR LOWER(last_name) LIKE LOWER(:pattern)
+                    ORDER BY created_at DESC
+                    LIMIT 5
+                """)
+                results = db.execute(lead_query, {
+                    "pattern": f"{name}%",
+                }).fetchall()
+
+            for r in results:
+                clients.append({
+                    "id": str(r.id),
+                    "lead_id": str(r.id),
+                    "name": f"{r.first_name} {r.last_name}".strip(),
+                    "first_name": r.first_name,
+                    "last_name": r.last_name,
+                    "email": r.email,
+                    "phone": r.phone,
+                    "loan_status": r.status,
+                    "type": "lead",
+                })
+
+        # Search contacts by name
+        if name and len(clients) < 5:
+            name_parts = name.strip().split()
+            if len(name_parts) >= 2:
+                contact_query = text("""
+                    SELECT id, first_name, last_name, email, phone, created_at
+                    FROM contacts
+                    WHERE LOWER(first_name) LIKE LOWER(:first_pattern)
+                      AND LOWER(last_name) LIKE LOWER(:last_pattern)
+                    ORDER BY created_at DESC
+                    LIMIT 5
+                """)
+                results = db.execute(contact_query, {
+                    "first_pattern": f"{name_parts[0]}%",
+                    "last_pattern": f"{name_parts[1]}%",
+                }).fetchall()
+            else:
+                contact_query = text("""
+                    SELECT id, first_name, last_name, email, phone, created_at
+                    FROM contacts
+                    WHERE LOWER(first_name) LIKE LOWER(:pattern)
+                       OR LOWER(last_name) LIKE LOWER(:pattern)
+                    ORDER BY created_at DESC
+                    LIMIT 5
+                """)
+                results = db.execute(contact_query, {
+                    "pattern": f"{name}%",
+                }).fetchall()
+
+            for r in results:
+                clients.append({
+                    "id": str(r.id),
+                    "contact_id": str(r.id),
+                    "name": f"{r.first_name} {r.last_name}".strip(),
+                    "first_name": r.first_name,
+                    "last_name": r.last_name,
+                    "email": r.email,
+                    "phone": r.phone,
+                    "type": "contact",
+                })
+
+        # Search by email if provided
+        if email:
+            email_query = text("""
+                SELECT id, first_name, last_name, email, phone, status
+                FROM leads
+                WHERE LOWER(email) = LOWER(:email)
+                LIMIT 1
+            """)
+            result = db.execute(email_query, {"email": email}).fetchone()
+            if result:
+                clients.insert(0, {
+                    "id": str(result.id),
+                    "lead_id": str(result.id),
+                    "name": f"{result.first_name} {result.last_name}".strip(),
+                    "email": result.email,
+                    "phone": result.phone,
+                    "loan_status": result.status,
+                    "type": "lead",
+                })
+
+        return {
+            "found": len(clients) > 0,
+            "clients": clients,
+            "count": len(clients),
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to search clients: {e}")
+        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+
+
+# =============================================================================
 # SESSION MANAGEMENT ENDPOINTS
 # =============================================================================
 

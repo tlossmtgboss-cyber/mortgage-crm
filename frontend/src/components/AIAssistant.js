@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { aiAPI, conversationsAPI } from '../services/api';
+import CallIntelligencePanel from './CallIntelligencePanel';
 import './AIAssistant.css';
 
 function AIAssistant({ isOpen, onClose, context = {} }) {
@@ -7,7 +8,7 @@ function AIAssistant({ isOpen, onClose, context = {} }) {
     {
       id: 1,
       role: 'assistant',
-      content: 'Hello! I\'m your Smart AI assistant with memory. I remember our past conversations and learn from them. I can help you with lead management, task automation, scheduling, and more. How can I assist you today?',
+      content: 'Hey! I\'m Aria, your mortgage assistant. I can help you manage your pipeline, follow up with leads, schedule appointments, or just answer questions. What\'s on your mind?',
       timestamp: new Date().toISOString(),
     },
   ]);
@@ -15,6 +16,7 @@ function AIAssistant({ isOpen, onClose, context = {} }) {
   const [loading, setLoading] = useState(false);
   const [memoryStats, setMemoryStats] = useState(null);
   const [isListening, setIsListening] = useState(false);
+  const [showCallIntelligence, setShowCallIntelligence] = useState(false);
   const recognitionRef = useRef(null);
 
   useEffect(() => {
@@ -168,28 +170,56 @@ function AIAssistant({ isOpen, onClose, context = {} }) {
 
   if (!isOpen) return null;
 
+  // Handle artifact generated from Call Intelligence
+  const handleArtifactGenerated = (artifact) => {
+    // Add a message about the artifact
+    const artifactMessage = {
+      id: Date.now(),
+      role: 'assistant',
+      content: `I've captured a ${artifact.artifact_type.replace(/_/g, ' ')} from your call. Would you like me to take action on it?`,
+      timestamp: new Date().toISOString(),
+      artifact: artifact,
+    };
+    setMessages(prev => [...prev, artifactMessage]);
+  };
+
   return (
     <div className="ai-assistant">
       <div className="ai-assistant-header">
         <div className="header-content">
-          <h3>
-            <img
-              src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=40&h=40&fit=crop&crop=face"
-              alt="AI Assistant"
-              className="ai-avatar"
-            />
-            Smart AI Assistant
-          </h3>
-          {memoryStats && (
-            <span className="memory-badge" title="Conversations remembered">
-              🧠 {memoryStats.total_memories} memories
-            </span>
-          )}
+          <div className="header-title-row">
+            <div className="ai-avatar-container">
+              <span className="ai-avatar-letter">A</span>
+              <span className="ai-status-dot"></span>
+            </div>
+            <div className="header-titles">
+              <h3>Aria</h3>
+              <span className="header-subtitle">Your Mortgage AI</span>
+            </div>
+          </div>
         </div>
-        <button className="close-button" onClick={onClose}>
-          ×
-        </button>
+        <div className="header-actions">
+          <button
+            className={`rec-button ${showCallIntelligence ? 'active' : ''}`}
+            onClick={() => setShowCallIntelligence(!showCallIntelligence)}
+            title="Call Intelligence - Record and analyze calls"
+          >
+            <span className="rec-dot"></span>
+            <span>REC</span>
+          </button>
+          <button className="settings-button" title="Settings">
+            ⚙️
+          </button>
+        </div>
       </div>
+
+      {/* Call Intelligence Panel */}
+      <CallIntelligencePanel
+        isOpen={showCallIntelligence}
+        onClose={() => setShowCallIntelligence(false)}
+        initialContext={context}
+        onArtifactGenerated={handleArtifactGenerated}
+      />
 
       <div className="ai-assistant-messages">
         {messages.map((message) => (
@@ -209,19 +239,6 @@ function AIAssistant({ isOpen, onClose, context = {} }) {
       </div>
 
       <form className="ai-assistant-input" onSubmit={handleSend}>
-        <textarea
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          placeholder={isListening ? '🎤 Listening... Speak now!' : 'Ask me anything...'}
-          rows={3}
-          disabled={loading}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              handleSend(e);
-            }
-          }}
-        />
         <div className="input-actions">
           <button
             type="button"
@@ -230,10 +247,29 @@ function AIAssistant({ isOpen, onClose, context = {} }) {
             disabled={loading}
             title={isListening ? 'Stop listening' : 'Click to speak'}
           >
-            {isListening ? '🔴' : '🎤'}
+            🎤
           </button>
+          <button type="button" className="add-button" title="Add attachment">
+            +
+          </button>
+          <div className="chat-input-wrapper">
+            <input
+              type="text"
+              className="chat-input"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              placeholder={isListening ? 'Listening...' : 'Ask Aria anything...'}
+              disabled={loading}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend(e);
+                }
+              }}
+            />
+          </div>
           <button type="submit" className="send-button" disabled={!inputValue.trim() || loading}>
-            {loading ? 'Thinking...' : 'Send'}
+            ➤
           </button>
         </div>
       </form>

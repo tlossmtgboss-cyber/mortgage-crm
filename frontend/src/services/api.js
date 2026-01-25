@@ -2802,6 +2802,26 @@ export const rateSheetAPI = {
 
 // Call Monitoring API (AI Call Intelligence)
 export const callMonitoringAPI = {
+  // Caller Identification - Look up phone number in database
+  lookupCaller: async (phoneNumber) => {
+    const response = await api.get('/api/v1/call-monitoring/lookup-caller', {
+      params: { phone: phoneNumber }
+    });
+    return response.data;
+  },
+
+  // Create new client profile from call
+  createClientFromCall: async (data) => {
+    const response = await api.post('/api/v1/call-monitoring/create-client', data);
+    return response.data;
+  },
+
+  // Search for clients by name or other criteria
+  searchClients: async (params) => {
+    const response = await api.get('/api/v1/call-monitoring/search-clients', { params });
+    return response.data;
+  },
+
   // Session Management
   createSession: async (data) => {
     const response = await api.post('/api/v1/call-monitoring/sessions', data);
@@ -2818,10 +2838,12 @@ export const callMonitoringAPI = {
     return response.data;
   },
 
-  endSession: async (sessionId, runAgents = true) => {
-    const response = await api.post(`/api/v1/call-monitoring/sessions/${sessionId}/end`, null, {
-      params: { run_agents: runAgents }
-    });
+  endSession: async (sessionId, options = {}) => {
+    // Support both legacy boolean and new object format
+    const data = typeof options === 'boolean'
+      ? { run_agents: options }
+      : options;
+    const response = await api.post(`/api/v1/call-monitoring/sessions/${sessionId}/end`, data);
     return response.data;
   },
 
