@@ -2914,8 +2914,19 @@ async def debug_token_refresh(
                 result["message"] = "Salesforce client not enabled"
                 return result
 
-            # Try refresh
-            new_tokens = salesforce_client.refresh_access_token(refresh_token)
+            # Try to decrypt refresh token (it might be encrypted)
+            token_to_use = refresh_token
+            try:
+                decrypted = decrypt_token(refresh_token)
+                if decrypted and decrypted != refresh_token:
+                    token_to_use = decrypted
+                    result["token_was_encrypted"] = True
+            except Exception as decrypt_err:
+                result["decrypt_error"] = str(decrypt_err)
+                result["token_was_encrypted"] = False
+
+            # Try refresh with potentially decrypted token
+            new_tokens = salesforce_client.refresh_access_token(token_to_use)
 
             if new_tokens and new_tokens.get("access_token"):
                 new_access_token = new_tokens["access_token"]
