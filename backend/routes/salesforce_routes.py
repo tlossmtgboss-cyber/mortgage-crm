@@ -2497,34 +2497,55 @@ async def sync_all_loans_from_salesforce(
     }
 
     # Get Salesforce connection - try user's first, then any org connection
-    integration = db.execute(text("""
-        SELECT access_token, refresh_token, scopes, user_id
-        FROM user_integrations
-        WHERE provider = 'salesforce' AND access_token IS NOT NULL
-        ORDER BY
-            CASE WHEN user_id = :user_id THEN 0 ELSE 1 END,
-            updated_at DESC
-        LIMIT 1
-    """), {"user_id": user_id}).fetchone()
+    try:
+        integration = db.execute(text("""
+            SELECT access_token, refresh_token, scopes, user_id
+            FROM user_integrations
+            WHERE provider = 'salesforce' AND access_token IS NOT NULL
+            ORDER BY
+                CASE WHEN user_id = :user_id THEN 0 ELSE 1 END,
+                updated_at DESC
+            LIMIT 1
+        """), {"user_id": user_id}).fetchone()
+    except Exception as e:
+        logger.error(f"Database error querying Salesforce integration: {e}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
     if not integration or not integration[0]:
+        # Check if table exists and has any rows
+        try:
+            count = db.execute(text("SELECT COUNT(*) FROM user_integrations WHERE provider = 'salesforce'")).fetchone()
+            logger.info(f"Found {count[0] if count else 0} Salesforce integrations in database")
+        except Exception as e:
+            logger.error(f"Error checking integrations: {e}")
         raise HTTPException(
             status_code=400,
             detail="Salesforce not connected. Please connect first at Settings > Integrations."
         )
 
-    access_token = decrypt_token(integration[0])
+    try:
+        access_token = decrypt_token(integration[0])
+    except Exception as e:
+        logger.error(f"Error decrypting token: {e}")
+        raise HTTPException(status_code=500, detail=f"Token decryption failed: {str(e)}")
+
     logger.info(f"Using Salesforce connection from user {integration[3]}")
 
     # Parse instance_url from scopes
     instance_url = None
-    if integration[2] and "instance_url:" in integration[2]:
-        instance_url = integration[2].split("instance_url:")[1].split(",")[0]
+    scopes_str = integration[2] or ""
+    logger.info(f"Scopes string: {scopes_str[:100]}...")
+
+    if "instance_url:" in scopes_str:
+        instance_url = scopes_str.split("instance_url:")[1].split(",")[0].strip()
+        logger.info(f"Parsed instance URL: {instance_url}")
 
     if not instance_url:
+        # Try to get from a different location - check if stored separately
+        logger.warning("Instance URL not found in scopes, checking alternatives...")
         raise HTTPException(
             status_code=400,
-            detail="Salesforce instance URL not found. Please reconnect."
+            detail=f"Salesforce instance URL not found in scopes. Scopes: {scopes_str[:200]}. Please reconnect."
         )
 
     # Get user's organization
