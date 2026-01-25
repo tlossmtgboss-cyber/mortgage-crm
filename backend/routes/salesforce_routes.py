@@ -33,6 +33,7 @@ except ImportError:
     SALESFORCE_API_VERSION = "v58.0"  # Fallback
 
 from sqlalchemy.exc import SQLAlchemyError
+import requests
 from requests.exceptions import RequestException
 
 # Import encryption functions for secure token storage
