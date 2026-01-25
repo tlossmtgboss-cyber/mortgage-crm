@@ -2767,3 +2767,53 @@ async def sync_all_loans_from_salesforce(
     except requests.RequestException as e:
         logger.error(f"Salesforce request error: {e}")
         raise HTTPException(status_code=500, detail=f"Salesforce connection error: {str(e)}")
+
+
+@router.get("/debug/connection")
+async def debug_salesforce_connection(
+    db: Session = Depends(get_db)
+):
+    """
+    Debug endpoint to check Salesforce connection status.
+    No auth required for debugging.
+    """
+    try:
+        # Check for any Salesforce integration
+        integration = db.execute(text("""
+            SELECT user_id,
+                   CASE WHEN access_token IS NOT NULL THEN 'has_token' ELSE 'no_token' END as token_status,
+                   scopes,
+                   updated_at
+            FROM user_integrations
+            WHERE provider = 'salesforce'
+            ORDER BY updated_at DESC
+            LIMIT 1
+        """)).fetchone()
+
+        if not integration:
+            return {
+                "status": "no_integration",
+                "message": "No Salesforce integration found in database"
+            }
+
+        # Parse instance_url
+        scopes = integration[2] or ""
+        instance_url = None
+        if "instance_url:" in scopes:
+            instance_url = scopes.split("instance_url:")[1].split(",")[0].strip()
+
+        return {
+            "status": "found",
+            "user_id": integration[0],
+            "token_status": integration[1],
+            "has_instance_url": instance_url is not None,
+            "instance_url_preview": instance_url[:50] if instance_url else None,
+            "scopes_preview": scopes[:100] if scopes else None,
+            "updated_at": str(integration[3]) if integration[3] else None
+        }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e)
+        }
