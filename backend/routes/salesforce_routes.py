@@ -2625,10 +2625,10 @@ async def sync_all_loans_from_salesforce(
                     }
                     response = requests.get(query_url, headers=headers, params={"q": soql}, timeout=60)
                 else:
-                    logger.error("Token refresh failed - no new token returned")
+                    logger.error("Token refresh failed - refresh token has expired")
                     raise HTTPException(
                         status_code=401,
-                        detail="Salesforce session expired and token refresh failed. Please reconnect Salesforce."
+                        detail="Your Salesforce connection has fully expired (both access and refresh tokens). Please go to Settings > Integrations and click 'Reconnect' next to Salesforce to re-authorize the connection."
                     )
             except ImportError:
                 logger.error("Could not import salesforce_client for token refresh")
@@ -2963,7 +2963,7 @@ async def debug_token_refresh(
             else:
                 result["refresh_success"] = False
                 result["status"] = "error"
-                result["message"] = "refresh_access_token returned None or no access_token"
+                result["message"] = "Refresh token has expired. User must reconnect Salesforce at Settings > Integrations."
 
         except Exception as refresh_error:
             result["status"] = "error"
