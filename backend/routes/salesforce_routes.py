@@ -2817,3 +2817,67 @@ async def debug_salesforce_connection(
             "status": "error",
             "error": str(e)
         }
+
+
+@router.get("/debug/test-query")
+async def debug_test_salesforce_query(
+    db: Session = Depends(get_db)
+):
+    """
+    Debug endpoint to test an actual Salesforce query.
+    No auth required for debugging.
+    """
+    try:
+        # Get Salesforce integration
+        integration = db.execute(text("""
+            SELECT access_token, scopes
+            FROM user_integrations
+            WHERE provider = 'salesforce' AND access_token IS NOT NULL
+            ORDER BY updated_at DESC
+            LIMIT 1
+        """)).fetchone()
+
+        if not integration:
+            return {"status": "error", "message": "No Salesforce integration found"}
+
+        access_token = integration[0]
+        scopes = integration[1] or ""
+
+        # Parse instance_url
+        if "instance_url:" not in scopes:
+            return {"status": "error", "message": "No instance URL in scopes"}
+
+        instance_url = scopes.split("instance_url:")[1].split(",")[0].strip()
+
+        # Try a simple query
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+
+        # Simple query - just get 1 record
+        soql = "SELECT Id, Name FROM MtgPlanner_CRM__Transaction_Property__c LIMIT 1"
+        query_url = f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/query/"
+
+        response = requests.get(query_url, headers=headers, params={"q": soql}, timeout=30)
+
+        if response.status_code == 200:
+            data = response.json()
+            return {
+                "status": "success",
+                "message": "Salesforce query successful",
+                "total_size": data.get("totalSize", 0),
+                "records": data.get("records", [])[:3]
+            }
+        else:
+            return {
+                "status": "error",
+                "http_status": response.status_code,
+                "response": response.text[:500]
+            }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e)
+        }
