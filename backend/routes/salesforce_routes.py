@@ -2496,11 +2496,15 @@ async def sync_all_loans_from_salesforce(
         'details': []
     }
 
-    # Get Salesforce connection
+    # Get Salesforce connection - try user's first, then any org connection
     integration = db.execute(text("""
-        SELECT access_token, refresh_token, scopes
+        SELECT access_token, refresh_token, scopes, user_id
         FROM user_integrations
-        WHERE user_id = :user_id AND provider = 'salesforce'
+        WHERE provider = 'salesforce' AND access_token IS NOT NULL
+        ORDER BY
+            CASE WHEN user_id = :user_id THEN 0 ELSE 1 END,
+            updated_at DESC
+        LIMIT 1
     """), {"user_id": user_id}).fetchone()
 
     if not integration or not integration[0]:
@@ -2510,6 +2514,7 @@ async def sync_all_loans_from_salesforce(
         )
 
     access_token = decrypt_token(integration[0])
+    logger.info(f"Using Salesforce connection from user {integration[3]}")
 
     # Parse instance_url from scopes
     instance_url = None
