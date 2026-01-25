@@ -2526,8 +2526,10 @@ async def sync_all_loans_from_salesforce(
 
     # Use token directly (matching other working endpoints)
     access_token = integration[0]
+    refresh_token = integration[1]  # For token refresh on 401
+    integration_user_id = integration[3]
 
-    logger.info(f"Using Salesforce connection from user {integration[3]}")
+    logger.info(f"Using Salesforce connection from user {integration_user_id}")
 
     # Parse instance_url from scopes
     instance_url = None
@@ -2589,6 +2591,51 @@ async def sync_all_loans_from_salesforce(
         # Use params instead of URL encoding (matches working endpoints)
         query_url = f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/query/"
         response = requests.get(query_url, headers=headers, params={"q": soql}, timeout=60)
+
+        # Handle token expiration with refresh
+        if response.status_code == 401 and refresh_token:
+            logger.info(f"Got 401, attempting token refresh for sync-all-loans")
+            try:
+                from integrations.salesforce_service import salesforce_client
+                new_tokens = salesforce_client.refresh_access_token(refresh_token)
+
+                if new_tokens and new_tokens.get("access_token"):
+                    access_token = new_tokens["access_token"]
+
+                    # Update token in database
+                    try:
+                        db.execute(text("""
+                            UPDATE user_integrations
+                            SET access_token = :access_token, updated_at = CURRENT_TIMESTAMP
+                            WHERE user_id = :user_id AND provider = 'salesforce'
+                        """), {
+                            "access_token": access_token,
+                            "user_id": integration_user_id
+                        })
+                        db.commit()
+                        logger.info(f"Successfully refreshed token for user {integration_user_id}")
+                    except Exception as db_error:
+                        logger.error(f"Failed to update refreshed token: {db_error}")
+                        db.rollback()
+
+                    # Retry with new token
+                    headers = {
+                        "Authorization": f"Bearer {access_token}",
+                        "Content-Type": "application/json"
+                    }
+                    response = requests.get(query_url, headers=headers, params={"q": soql}, timeout=60)
+                else:
+                    logger.error("Token refresh failed - no new token returned")
+                    raise HTTPException(
+                        status_code=401,
+                        detail="Salesforce session expired and token refresh failed. Please reconnect Salesforce."
+                    )
+            except ImportError:
+                logger.error("Could not import salesforce_client for token refresh")
+                raise HTTPException(
+                    status_code=401,
+                    detail="Salesforce session expired. Please reconnect Salesforce at Settings > Integrations."
+                )
 
         if response.status_code != 200:
             error_text = response.text
@@ -2825,12 +2872,13 @@ async def debug_test_salesforce_query(
 ):
     """
     Debug endpoint to test an actual Salesforce query.
+    Includes automatic token refresh on 401 errors.
     No auth required for debugging.
     """
     try:
-        # Get Salesforce integration
+        # Get Salesforce integration with refresh_token
         integration = db.execute(text("""
-            SELECT access_token, scopes
+            SELECT access_token, refresh_token, scopes, user_id
             FROM user_integrations
             WHERE provider = 'salesforce' AND access_token IS NOT NULL
             ORDER BY updated_at DESC
@@ -2841,7 +2889,9 @@ async def debug_test_salesforce_query(
             return {"status": "error", "message": "No Salesforce integration found"}
 
         access_token = integration[0]
-        scopes = integration[1] or ""
+        refresh_token = integration[1]
+        scopes = integration[2] or ""
+        integration_user_id = integration[3]
 
         # Parse instance_url
         if "instance_url:" not in scopes:
@@ -2861,11 +2911,44 @@ async def debug_test_salesforce_query(
 
         response = requests.get(query_url, headers=headers, params={"q": soql}, timeout=30)
 
+        # Handle 401 with token refresh
+        token_refreshed = False
+        if response.status_code == 401 and refresh_token:
+            try:
+                from integrations.salesforce_service import salesforce_client
+                new_tokens = salesforce_client.refresh_access_token(refresh_token)
+
+                if new_tokens and new_tokens.get("access_token"):
+                    access_token = new_tokens["access_token"]
+                    token_refreshed = True
+
+                    # Update token in database
+                    db.execute(text("""
+                        UPDATE user_integrations
+                        SET access_token = :access_token, updated_at = CURRENT_TIMESTAMP
+                        WHERE user_id = :user_id AND provider = 'salesforce'
+                    """), {
+                        "access_token": access_token,
+                        "user_id": integration_user_id
+                    })
+                    db.commit()
+
+                    # Retry with new token
+                    headers["Authorization"] = f"Bearer {access_token}"
+                    response = requests.get(query_url, headers=headers, params={"q": soql}, timeout=30)
+            except Exception as refresh_error:
+                return {
+                    "status": "error",
+                    "message": "Token expired and refresh failed",
+                    "refresh_error": str(refresh_error)
+                }
+
         if response.status_code == 200:
             data = response.json()
             return {
                 "status": "success",
                 "message": "Salesforce query successful",
+                "token_refreshed": token_refreshed,
                 "total_size": data.get("totalSize", 0),
                 "records": data.get("records", [])[:3]
             }
@@ -2873,7 +2956,8 @@ async def debug_test_salesforce_query(
             return {
                 "status": "error",
                 "http_status": response.status_code,
-                "response": response.text[:500]
+                "response": response.text[:500],
+                "token_refreshed": token_refreshed
             }
 
     except Exception as e:
