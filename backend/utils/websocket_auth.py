@@ -19,13 +19,21 @@ class AuthenticatedUser:
     """Represents an authenticated user from WebSocket auth."""
     id: int
     email: str
-    name: str
+    first_name: str
+    last_name: str
     role: Optional[str] = None
     organization_id: Optional[int] = None
 
     @property
     def is_authenticated(self) -> bool:
         return self.id is not None and self.id > 0
+
+    @property
+    def name(self) -> str:
+        """Full name for backwards compatibility."""
+        if self.first_name and self.last_name:
+            return f"{self.first_name} {self.last_name}"
+        return self.first_name or self.last_name or ""
 
 
 def extract_token_from_websocket(websocket: WebSocket) -> Optional[str]:
@@ -110,7 +118,7 @@ def lookup_user_by_email(db: Session, email: str) -> Optional[AuthenticatedUser]
     try:
         result = db.execute(
             text("""
-                SELECT id, email, full_name, role, organization_id
+                SELECT id, email, first_name, last_name, role, organization_id
                 FROM users
                 WHERE email = :email
                 LIMIT 1
@@ -123,9 +131,10 @@ def lookup_user_by_email(db: Session, email: str) -> Optional[AuthenticatedUser]
             return AuthenticatedUser(
                 id=row[0],
                 email=row[1],
-                name=row[2] or email.split("@")[0],
-                role=row[3],
-                organization_id=row[4]
+                first_name=row[2] or email.split("@")[0],
+                last_name=row[3] or "",
+                role=row[4],
+                organization_id=row[5]
             )
 
         logger.warning(f"[WebSocketAuth] User not found for email: {email}")
@@ -146,7 +155,7 @@ def lookup_user_by_id(db: Session, user_id: int) -> Optional[AuthenticatedUser]:
     try:
         result = db.execute(
             text("""
-                SELECT id, email, full_name, role, organization_id
+                SELECT id, email, first_name, last_name, role, organization_id
                 FROM users
                 WHERE id = :user_id
                 LIMIT 1
@@ -159,9 +168,10 @@ def lookup_user_by_id(db: Session, user_id: int) -> Optional[AuthenticatedUser]:
             return AuthenticatedUser(
                 id=row[0],
                 email=row[1],
-                name=row[2] or row[1].split("@")[0],
-                role=row[3],
-                organization_id=row[4]
+                first_name=row[2] or row[1].split("@")[0],
+                last_name=row[3] or "",
+                role=row[4],
+                organization_id=row[5]
             )
 
         logger.warning(f"[WebSocketAuth] User not found for ID: {user_id}")
@@ -255,16 +265,17 @@ def _get_default_user(db: Session) -> Optional[AuthenticatedUser]:
 
     # Last resort: return first user in system
     try:
-        result = db.execute(text("SELECT id, email, full_name, role, organization_id FROM users LIMIT 1"))
+        result = db.execute(text("SELECT id, email, first_name, last_name, role, organization_id FROM users LIMIT 1"))
         row = result.fetchone()
         if row:
             logger.warning(f"[WebSocketAuth] Using fallback user: {row[1]}")
             return AuthenticatedUser(
                 id=row[0],
                 email=row[1],
-                name=row[2] or "System",
-                role=row[3],
-                organization_id=row[4]
+                first_name=row[2] or "System",
+                last_name=row[3] or "",
+                role=row[4],
+                organization_id=row[5]
             )
     except Exception as e:
         logger.error(f"[WebSocketAuth] Could not get fallback user: {e}")

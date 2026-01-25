@@ -443,8 +443,16 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
-    full_name = Column(String)
+    first_name = Column(String)
+    last_name = Column(String)
     role = Column(String, default="loan_officer")  # Legacy role field
+
+    @property
+    def full_name(self) -> str:
+        """Computed property for backwards compatibility."""
+        if self.first_name and self.last_name:
+            return f"{self.first_name} {self.last_name}"
+        return self.first_name or self.last_name or ""
     permission_role = Column(String, default="sales")  # Phase 2: 'admin' (platform), 'site_admin' (licensee), 'leadership', 'management', 'sales', 'processing', or 'operations'
     branch_id = Column(Integer, ForeignKey("branches.id"))
     organization_id = Column(Integer, ForeignKey("organizations.id"))  # Multi-tenant: user's organization

@@ -194,7 +194,7 @@ def get_loans_by_status(
                 l.stage_changed_at,
                 l.closing_date,
                 l.loan_officer_id,
-                lo.full_name as loan_officer_name,
+                (COALESCE(lo.first_name, '') || ' ' || COALESCE(lo.last_name, '')) as loan_officer_name,
                 {days_in_stage_expr} as days_in_stage
             FROM loans l
             LEFT JOIN users lo ON l.loan_officer_id = lo.id
@@ -283,7 +283,7 @@ def get_loan_aging_report(
                 l.stage_changed_at,
                 l.created_at,
                 l.closing_date,
-                lo.full_name as loan_officer_name,
+                (COALESCE(lo.first_name, '') || ' ' || COALESCE(lo.last_name, '')) as loan_officer_name,
                 {days_in_stage_expr} as days_in_stage,
                 {total_days_open_expr} as total_days_open
             FROM loans l
@@ -890,7 +890,7 @@ def get_lo_pipeline_breakdown(
         query = f"""
             SELECT
                 lo.id as lo_id,
-                lo.full_name as lo_name,
+                (COALESCE(lo.first_name, '') || ' ' || COALESCE(lo.last_name, '')) as lo_name,
                 lo.email as lo_email,
                 COUNT(l.id) as total_loans,
                 SUM(l.amount) as total_volume,
@@ -902,7 +902,7 @@ def get_lo_pipeline_breakdown(
             LEFT JOIN loans l ON lo.id = l.loan_officer_id
                 AND l.stage NOT IN ('Funded')
             WHERE lo.role = 'loan_officer' OR EXISTS (SELECT 1 FROM loans WHERE loan_officer_id = lo.id)
-            GROUP BY lo.id, lo.full_name, lo.email
+            GROUP BY lo.id, lo.first_name, lo.last_name, lo.email
             ORDER BY total_volume DESC NULLS LAST
         """
 

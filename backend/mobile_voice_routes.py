@@ -320,24 +320,32 @@ class AriaVoiceAgent:
 
             # Look up actual user from database
             user_result = db.execute(
-                text("SELECT id, email, role, full_name FROM users WHERE email = :email"),
+                text("SELECT id, email, role, first_name, last_name FROM users WHERE email = :email"),
                 {"email": self.user_id}
             ).fetchone()
 
             if user_result:
                 # Create a mock user object with required attributes
                 class MockUser:
-                    def __init__(self, id, email, role, full_name):
+                    def __init__(self, id, email, role, first_name, last_name):
                         self.id = id
                         self.email = email
                         self.role = role or "loan_officer"
-                        self.name = full_name
+                        self.first_name = first_name
+                        self.last_name = last_name
+
+                    @property
+                    def name(self):
+                        if self.first_name and self.last_name:
+                            return f"{self.first_name} {self.last_name}"
+                        return self.first_name or self.last_name or ""
 
                 current_user = MockUser(
                     id=user_result[0],
                     email=user_result[1],
                     role=user_result[2],
-                    full_name=user_result[3]
+                    first_name=user_result[3] or "",
+                    last_name=user_result[4] or ""
                 )
             else:
                 # Fallback user object if not found
@@ -346,7 +354,12 @@ class AriaVoiceAgent:
                         self.id = 1
                         self.email = self.user_id
                         self.role = "loan_officer"
-                        self.name = "User"
+                        self.first_name = "User"
+                        self.last_name = ""
+
+                    @property
+                    def name(self):
+                        return self.first_name
                 current_user = MockUser()
 
             # Initialize the AI service with database and user context
