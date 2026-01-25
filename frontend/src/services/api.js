@@ -2592,6 +2592,12 @@ export const salesforceAPI = {
     return response.data;
   },
 
+  // Sync ALL loans from Salesforce (links unlinked loans and pulls all data)
+  syncAllLoans: async () => {
+    const response = await api.post('/api/v1/salesforce/sync-all-loans');
+    return response.data;
+  },
+
   // Get sync history
   getSyncHistory: async (limit = 20) => {
     const response = await api.get('/api/v1/salesforce/sync/history', { params: { limit } });

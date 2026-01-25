@@ -672,3 +672,62 @@
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
 }
+
+/* Salesforce Sync Button */
+.btn-salesforce {
+  padding: var(--space-sm) var(--space-md);
+  background: linear-gradient(135deg, #00a1e0 0%, #0176d3 100%);
+  border: none;
+  border-radius: var(--radius-base);
+  color: white;
+  font-size: var(--font-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: all 150ms ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-salesforce:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0176d3 0%, #014486 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 161, 224, 0.3);
+}
+
+.btn-salesforce:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* Sync Result Message */
+.sync-result {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-base);
+  font-size: var(--font-sm);
+  margin-top: var(--space-sm);
+  animation: slideIn 0.3s ease;
+}
+
+.sync-result.success {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
+}
+
+.sync-result.error {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

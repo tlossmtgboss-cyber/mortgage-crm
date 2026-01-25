@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { loansAPI } from '../services/api';
+import { loansAPI, salesforceAPI } from '../services/api';
 import CalendarSidebar from '../components/CalendarSidebar';
 import PermissionGate from '../components/PermissionGate';
 import { usePermissions } from '../contexts/PermissionContext';
@@ -39,6 +39,8 @@ function Loans() {
   const [duplicateMap, setDuplicateMap] = useState({});
   const [duplicateTasksCreated, setDuplicateTasksCreated] = useState(false);
   const [selectedLoans, setSelectedLoans] = useState([]);
+  const [syncingFromSalesforce, setSyncingFromSalesforce] = useState(false);
+  const [syncResult, setSyncResult] = useState(null);
 
   // Borrowers array - each borrower has their own contact info
   const [borrowers, setBorrowers] = useState([
@@ -144,6 +146,33 @@ function Loans() {
       setLoans([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Sync all loans from Salesforce
+  const handleSalesforceSync = async () => {
+    setSyncingFromSalesforce(true);
+    setSyncResult(null);
+    try {
+      const result = await salesforceAPI.syncAllLoans();
+      setSyncResult({
+        success: true,
+        message: result.message || `Synced: ${result.linked || 0} linked, ${result.created || 0} created, ${result.updated || 0} updated`,
+        details: result
+      });
+      // Reload loans after sync
+      await loadLoans();
+    } catch (err) {
+      console.error('Salesforce sync failed:', err);
+      const errorMsg = err.response?.data?.detail || err.message || 'Sync failed';
+      setSyncResult({
+        success: false,
+        message: typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg)
+      });
+    } finally {
+      setSyncingFromSalesforce(false);
+      // Clear result after 10 seconds
+      setTimeout(() => setSyncResult(null), 10000);
     }
   };
 
@@ -577,6 +606,14 @@ function Loans() {
               </button>
             </PermissionGate>
           )}
+          <button
+            className="btn-salesforce"
+            onClick={handleSalesforceSync}
+            disabled={syncingFromSalesforce}
+            title="Pull all loan data from Salesforce/Jungo"
+          >
+            {syncingFromSalesforce ? '⟳ Syncing...' : '☁ Sync from Salesforce'}
+          </button>
           <button className="btn-secondary" onClick={handleExport}>
             Export
           </button>
@@ -586,6 +623,11 @@ function Loans() {
             </button>
           </PermissionGate>
         </div>
+        {syncResult && (
+          <div className={`sync-result ${syncResult.success ? 'success' : 'error'}`}>
+            {syncResult.message}
+          </div>
+        )}
       </div>
 
       <div className="filter-tabs">
