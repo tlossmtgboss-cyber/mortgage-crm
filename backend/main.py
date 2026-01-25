@@ -242,21 +242,21 @@ class LeadStage(str, enum.Enum):
     DISCLOSED = "Disclosed"  # Lead converted to Active Loan
 
 class LoanStage(str, enum.Enum):
-    # Pre-disclosure stages
-    APPLICATION = "Application"  # Loan application started
-    DISCLOSED = "Disclosed"
-    PROCESSING = "Processing"
-    SUBMITTED = "Submitted"  # PRD: UW Submitted but not yet received
-    UNDERWRITING = "Underwriting"  # In underwriting review
-    UW_RECEIVED = "UW Received"
-    CONDITIONAL_APPROVAL = "Conditional Approval"  # Approved with conditions
-    APPROVED = "Approved"
-    SUSPENDED = "Suspended"
+    # Pre-disclosure stages - values must match database enum exactly (uppercase)
+    APPLICATION = "APPLICATION"  # Loan application started
+    DISCLOSED = "DISCLOSED"
+    PROCESSING = "PROCESSING"
+    SUBMITTED = "SUBMITTED"  # PRD: UW Submitted but not yet received
+    UNDERWRITING = "UNDERWRITING"  # In underwriting review
+    UW_RECEIVED = "UW_RECEIVED"
+    CONDITIONAL_APPROVAL = "CONDITIONAL_APPROVAL"  # Approved with conditions
+    APPROVED = "APPROVED"
+    SUSPENDED = "SUSPENDED"
     CTC = "CTC"
-    CLEAR_TO_CLOSE = "Clear to Close"  # Alias for CTC
-    CLOSING = "Closing"  # In closing process
-    DOCS = "Docs Out"  # Closing documents sent out
-    FUNDED = "Funded"
+    CLEAR_TO_CLOSE = "CLEAR_TO_CLOSE"  # Alias for CTC
+    CLOSING = "CLOSING"  # In closing process
+    DOCS = "DOCS"  # Closing documents sent out
+    FUNDED = "FUNDED"
 
 
 # ============================================================================
