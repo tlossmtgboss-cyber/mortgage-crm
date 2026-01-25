@@ -319,6 +319,26 @@ def get_request_id(request: Request) -> str:
 # GLOBAL EXCEPTION HANDLER
 # ============================================================================
 
+def _get_cors_headers(request: Request) -> dict:
+    """Get CORS headers for the request origin."""
+    origin = request.headers.get("origin", "")
+    headers = {}
+
+    # Add CORS headers if origin is from allowed domains
+    if origin and (
+        origin.endswith("perenniaai.com") or
+        "localhost" in origin or
+        origin.endswith(".railway.app") or
+        origin.endswith(".vercel.app")
+    ):
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+        headers["Access-Control-Allow-Methods"] = "*"
+        headers["Access-Control-Allow-Headers"] = "*"
+
+    return headers
+
+
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Handle all unhandled exceptions with proper logging and response"""
     request_id = get_request_id(request)
@@ -332,6 +352,9 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
         path=request.url.path
     )
 
+    # Get CORS headers for cross-origin error responses
+    cors_headers = _get_cors_headers(request)
+
     # Determine error response based on environment
     if ENVIRONMENT == "production":
         # Don't expose internal errors in production
@@ -341,7 +364,8 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
                 "error": "Internal server error",
                 "request_id": request_id,
                 "message": "An unexpected error occurred. Please try again later."
-            }
+            },
+            headers=cors_headers
         )
     else:
         # Include details in development
@@ -352,12 +376,13 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
                 "request_id": request_id,
                 "message": str(exc),
                 "traceback": traceback.format_exc()
-            }
+            },
+            headers=cors_headers
         )
 
 
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
-    """Handle HTTP exceptions with request ID"""
+    """Handle HTTP exceptions with request ID and CORS headers"""
     request_id = get_request_id(request)
 
     # Log 4xx and 5xx errors
@@ -371,13 +396,17 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
             path=request.url.path
         )
 
+    # Get CORS headers for cross-origin error responses
+    cors_headers = _get_cors_headers(request)
+
     return JSONResponse(
         status_code=exc.status_code,
         content={
             "error": exc.detail,
             "request_id": request_id,
             "status_code": exc.status_code
-        }
+        },
+        headers=cors_headers
     )
 
 
