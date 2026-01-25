@@ -2464,3 +2464,284 @@ async def sync_salesforce_and_import_mum(
         "salesforce_sync": results['salesforce_sync'],
         "mum_import": results['mum_import']
     }
+
+
+@router.post("/sync-all-loans")
+async def sync_all_loans_from_salesforce(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Full sync: Link and pull ALL loans from Salesforce to CRM.
+
+    1. Queries all Transaction_Property records from Salesforce
+    2. Matches to CRM loans by loan_number (or creates new loans)
+    3. Updates all fields from Salesforce
+
+    This resolves the "Not in Salesforce" issue for existing CRM loans.
+    """
+    import requests
+    import re
+
+    user_id = get_current_user_id(request, db)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    results = {
+        'linked': 0,
+        'created': 0,
+        'updated': 0,
+        'skipped': 0,
+        'errors': [],
+        'details': []
+    }
+
+    # Get Salesforce connection
+    integration = db.execute(text("""
+        SELECT access_token, refresh_token, scopes
+        FROM user_integrations
+        WHERE user_id = :user_id AND provider = 'salesforce'
+    """), {"user_id": user_id}).fetchone()
+
+    if not integration or not integration[0]:
+        raise HTTPException(
+            status_code=400,
+            detail="Salesforce not connected. Please connect first at Settings > Integrations."
+        )
+
+    access_token = decrypt_token(integration[0])
+
+    # Parse instance_url from scopes
+    instance_url = None
+    if integration[2] and "instance_url:" in integration[2]:
+        instance_url = integration[2].split("instance_url:")[1].split(",")[0]
+
+    if not instance_url:
+        raise HTTPException(
+            status_code=400,
+            detail="Salesforce instance URL not found. Please reconnect."
+        )
+
+    # Get user's organization
+    user_org = db.execute(text("SELECT organization_id FROM users WHERE id = :user_id"), {"user_id": user_id}).fetchone()
+    org_id = user_org[0] if user_org and user_org[0] else 1
+
+    try:
+        # Query ALL loans from Salesforce (Jungo Transaction_Property)
+        # Include all the fields we need
+        soql = """
+            SELECT Id, Name,
+                   MtgPlanner_CRM__Loan_Amount__c, MtgPlanner_CRM__Loan_Type__c, MtgPlanner_CRM__Loan_Program__c,
+                   MtgPlanner_CRM__Interest_Rate__c, MtgPlanner_CRM__Note_Rate__c,
+                   MtgPlanner_CRM__Property_Address__c, MtgPlanner_CRM__Property_City__c,
+                   MtgPlanner_CRM__Property_State__c, MtgPlanner_CRM__Property_Zip__c,
+                   MtgPlanner_CRM__Purchase_Price__c, MtgPlanner_CRM__Down_Payment__c,
+                   MtgPlanner_CRM__Borrower_Name__c, MtgPlanner_CRM__Borrower_Email__c,
+                   MtgPlanner_CRM__Borrower_Phone__c, MtgPlanner_CRM__CoBorrower_Name__c,
+                   MtgPlanner_CRM__Status__c, MtgPlanner_CRM__Stage__c,
+                   MtgPlanner_CRM__Closing_Date__c, MtgPlanner_CRM__Application_Date__c,
+                   MtgPlanner_CRM__Lock_Date__c, MtgPlanner_CRM__Lock_Expiration__c,
+                   MtgPlanner_CRM__Funded_Date__c, MtgPlanner_CRM__Clear_To_Close_Date__c,
+                   MtgPlanner_CRM__UW_Received_Date__c, MtgPlanner_CRM__Loan_Approved_Date__c,
+                   MtgPlanner_CRM__Appraisal_Ordered_Date__c, MtgPlanner_CRM__Appraisal_Received_Date__c,
+                   MtgPlanner_CRM__CD_Sent_To_Borrower_Date__c, MtgPlanner_CRM__Scheduled_Closing_Date__c,
+                   MtgPlanner_CRM__First_Payment_Date__c, MtgPlanner_CRM__Loan_Purpose__c,
+                   MtgPlanner_CRM__LTV__c, MtgPlanner_CRM__CLTV__c,
+                   MtgPlanner_CRM__Property_Type__c, MtgPlanner_CRM__Occupancy_Type__c,
+                   MtgPlanner_CRM__Mortgage_Ins_1st_TD__c, MtgPlanner_CRM__Property_Tax_1st_TD__c,
+                   MtgPlanner_CRM__Hazard_Ins_1st_TD__c, MtgPlanner_CRM__HOA_1st_TD__c,
+                   MtgPlanner_CRM__Monthly_Payment_1st_TD__c,
+                   CreatedDate, LastModifiedDate
+            FROM MtgPlanner_CRM__Transaction_Property__c
+            ORDER BY LastModifiedDate DESC
+            LIMIT 500
+        """
+
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+
+        import urllib.parse
+        encoded_soql = urllib.parse.quote(soql)
+        url = f"{instance_url}/services/data/v59.0/query/?q={encoded_soql}"
+
+        response = requests.get(url, headers=headers, timeout=60)
+
+        if response.status_code != 200:
+            error_text = response.text
+            logger.error(f"Salesforce query failed: {error_text}")
+            raise HTTPException(status_code=500, detail=f"Salesforce query failed: {error_text[:200]}")
+
+        sf_data = response.json()
+        sf_records = sf_data.get("records", [])
+
+        logger.info(f"Found {len(sf_records)} loans in Salesforce")
+
+        # Stage mapping from Salesforce to CRM
+        stage_mapping = {
+            "New": "APPLICATION",
+            "Application": "APPLICATION",
+            "Submitted": "PROCESSING",
+            "Processing": "PROCESSING",
+            "In Processing": "PROCESSING",
+            "Loan in Process": "PROCESSING",
+            "Underwriting": "UNDERWRITING",
+            "In Underwriting": "UNDERWRITING",
+            "Conditionally Approved": "APPROVED",
+            "Approved": "APPROVED",
+            "Clear to Close": "CLEAR_TO_CLOSE",
+            "CTC": "CLEAR_TO_CLOSE",
+            "Docs": "DOCS",
+            "Docs Out": "DOCS",
+            "File Complete": "FUNDED",
+            "Funded": "FUNDED",
+            "Closed": "FUNDED",
+        }
+
+        # Process each Salesforce record
+        for sf_record in sf_records:
+            try:
+                sf_id = sf_record.get("Id")
+                sf_name = sf_record.get("Name", "")  # e.g., "Joseph Riley - Loan # RCA0000010075"
+
+                # Extract loan number from Name field (format: "Borrower Name - Loan # XXXXXX")
+                loan_number = None
+                if "Loan #" in sf_name:
+                    match = re.search(r'Loan #\s*(\S+)', sf_name)
+                    if match:
+                        loan_number = match.group(1)
+                elif "RCA" in sf_name:
+                    match = re.search(r'(RCA\d+)', sf_name)
+                    if match:
+                        loan_number = match.group(1)
+                else:
+                    # Use the full Name if no loan number pattern found
+                    loan_number = sf_name
+
+                # Try to find existing CRM loan by salesforce_id first, then by loan_number
+                existing_loan = db.execute(text("""
+                    SELECT id, loan_number, salesforce_id FROM loans
+                    WHERE salesforce_id = :sf_id
+                       OR (loan_number = :loan_number AND loan_number IS NOT NULL)
+                    LIMIT 1
+                """), {"sf_id": sf_id, "loan_number": loan_number}).fetchone()
+
+                # Map Salesforce fields to CRM fields
+                sf_status = sf_record.get("MtgPlanner_CRM__Status__c") or sf_record.get("MtgPlanner_CRM__Stage__c") or "Processing"
+                crm_stage = stage_mapping.get(sf_status, "PROCESSING")
+
+                # Parse dates
+                def parse_date(date_str):
+                    if date_str:
+                        try:
+                            return date_str[:10]  # YYYY-MM-DD
+                        except:
+                            return None
+                    return None
+
+                # Build loan data
+                loan_data = {
+                    "salesforce_id": sf_id,
+                    "loan_number": loan_number,
+                    "borrower_name": sf_record.get("MtgPlanner_CRM__Borrower_Name__c"),
+                    "borrower_email": sf_record.get("MtgPlanner_CRM__Borrower_Email__c"),
+                    "borrower_phone": sf_record.get("MtgPlanner_CRM__Borrower_Phone__c"),
+                    "coborrower_name": sf_record.get("MtgPlanner_CRM__CoBorrower_Name__c"),
+                    "amount": sf_record.get("MtgPlanner_CRM__Loan_Amount__c"),
+                    "loan_type": sf_record.get("MtgPlanner_CRM__Loan_Type__c"),
+                    "program": sf_record.get("MtgPlanner_CRM__Loan_Program__c"),
+                    "interest_rate": sf_record.get("MtgPlanner_CRM__Note_Rate__c") or sf_record.get("MtgPlanner_CRM__Interest_Rate__c"),
+                    "property_address": sf_record.get("MtgPlanner_CRM__Property_Address__c"),
+                    "property_city": sf_record.get("MtgPlanner_CRM__Property_City__c"),
+                    "property_state": sf_record.get("MtgPlanner_CRM__Property_State__c"),
+                    "property_zip": sf_record.get("MtgPlanner_CRM__Property_Zip__c"),
+                    "purchase_price": sf_record.get("MtgPlanner_CRM__Purchase_Price__c"),
+                    "down_payment": sf_record.get("MtgPlanner_CRM__Down_Payment__c"),
+                    "stage": crm_stage,
+                    "loan_purpose": sf_record.get("MtgPlanner_CRM__Loan_Purpose__c"),
+                    "ltv": sf_record.get("MtgPlanner_CRM__LTV__c"),
+                    "cltv": sf_record.get("MtgPlanner_CRM__CLTV__c"),
+                    "property_type": sf_record.get("MtgPlanner_CRM__Property_Type__c"),
+                    "occupancy_type": sf_record.get("MtgPlanner_CRM__Occupancy_Type__c"),
+                    "mortgage_insurance": sf_record.get("MtgPlanner_CRM__Mortgage_Ins_1st_TD__c"),
+                    "property_tax": sf_record.get("MtgPlanner_CRM__Property_Tax_1st_TD__c"),
+                    "hazard_insurance": sf_record.get("MtgPlanner_CRM__Hazard_Ins_1st_TD__c"),
+                    "hoa_amount": sf_record.get("MtgPlanner_CRM__HOA_1st_TD__c"),
+                    "monthly_payment": sf_record.get("MtgPlanner_CRM__Monthly_Payment_1st_TD__c"),
+                    "closing_date": parse_date(sf_record.get("MtgPlanner_CRM__Closing_Date__c")),
+                    "application_date": parse_date(sf_record.get("MtgPlanner_CRM__Application_Date__c")),
+                    "lock_date": parse_date(sf_record.get("MtgPlanner_CRM__Lock_Date__c")),
+                    "lock_expiration_date": parse_date(sf_record.get("MtgPlanner_CRM__Lock_Expiration__c")),
+                    "funded_date": parse_date(sf_record.get("MtgPlanner_CRM__Funded_Date__c")),
+                    "clear_to_close_date": parse_date(sf_record.get("MtgPlanner_CRM__Clear_To_Close_Date__c")),
+                    "uw_received_date": parse_date(sf_record.get("MtgPlanner_CRM__UW_Received_Date__c")),
+                    "loan_approved_date": parse_date(sf_record.get("MtgPlanner_CRM__Loan_Approved_Date__c")),
+                    "appraisal_ordered_date": parse_date(sf_record.get("MtgPlanner_CRM__Appraisal_Ordered_Date__c")),
+                    "appraisal_received_date": parse_date(sf_record.get("MtgPlanner_CRM__Appraisal_Received_Date__c")),
+                    "cd_sent_to_borrower_date": parse_date(sf_record.get("MtgPlanner_CRM__CD_Sent_To_Borrower_Date__c")),
+                    "scheduled_closing_date": parse_date(sf_record.get("MtgPlanner_CRM__Scheduled_Closing_Date__c")),
+                    "first_payment_date": parse_date(sf_record.get("MtgPlanner_CRM__First_Payment_Date__c")),
+                    "salesforce_last_synced_at": datetime.utcnow(),
+                    "salesforce_sync_status": "synced",
+                }
+
+                # Remove None values to avoid overwriting with nulls
+                loan_data = {k: v for k, v in loan_data.items() if v is not None}
+
+                if existing_loan:
+                    # Update existing loan
+                    loan_id = existing_loan[0]
+                    was_linked = existing_loan[2] is not None
+
+                    # Build UPDATE statement
+                    update_parts = [f"{k} = :{k}" for k in loan_data.keys()]
+                    update_sql = f"UPDATE loans SET {', '.join(update_parts)}, updated_at = CURRENT_TIMESTAMP WHERE id = :loan_id"
+                    loan_data["loan_id"] = loan_id
+
+                    db.execute(text(update_sql), loan_data)
+
+                    if was_linked:
+                        results['updated'] += 1
+                    else:
+                        results['linked'] += 1
+                        results['details'].append(f"Linked: {loan_number} -> {sf_id}")
+                else:
+                    # Create new loan
+                    loan_data["organization_id"] = org_id
+                    loan_data["loan_officer_id"] = user_id
+
+                    if not loan_data.get("amount"):
+                        loan_data["amount"] = 0  # Required field
+
+                    fields = list(loan_data.keys())
+                    placeholders = [f":{f}" for f in fields]
+
+                    db.execute(text(f"""
+                        INSERT INTO loans ({', '.join(fields)})
+                        VALUES ({', '.join(placeholders)})
+                    """), loan_data)
+
+                    results['created'] += 1
+                    results['details'].append(f"Created: {loan_number}")
+
+            except Exception as e:
+                results['errors'].append(f"Error processing {sf_record.get('Name', 'unknown')}: {str(e)}")
+                logger.error(f"Error syncing loan: {e}")
+
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": f"Synced {len(sf_records)} loans from Salesforce. Linked: {results['linked']}, Created: {results['created']}, Updated: {results['updated']}",
+            "total_salesforce_records": len(sf_records),
+            "linked": results['linked'],
+            "created": results['created'],
+            "updated": results['updated'],
+            "errors": results['errors'][:10],  # Limit error details
+            "details": results['details'][:20]  # Limit details
+        }
+
+    except requests.RequestException as e:
+        logger.error(f"Salesforce request error: {e}")
+        raise HTTPException(status_code=500, detail=f"Salesforce connection error: {str(e)}")
