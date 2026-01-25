@@ -111,6 +111,89 @@ def execute_single(query: str, params: Optional[Dict] = None) -> Optional[Dict]:
 
 
 # =============================================================================
+# Database-Agnostic SQL Helpers
+# =============================================================================
+
+def is_sqlite() -> bool:
+    """Check if the current database is SQLite."""
+    db_url = os.getenv("DATABASE_URL", "sqlite:///")
+    return db_url.startswith("sqlite")
+
+
+def sql_days_since(column: str) -> str:
+    """
+    Return SQL expression for days since a timestamp column.
+
+    Args:
+        column: The timestamp column name (e.g., 'l.stage_changed_at')
+
+    Returns:
+        SQL expression that calculates days since the column value
+
+    Examples:
+        PostgreSQL: EXTRACT(EPOCH FROM (NOW() - l.stage_changed_at)) / 86400
+        SQLite: julianday('now') - julianday(l.stage_changed_at)
+    """
+    if is_sqlite():
+        return f"(julianday('now') - julianday({column}))"
+    else:
+        return f"EXTRACT(EPOCH FROM (NOW() - {column})) / 86400"
+
+
+def sql_now() -> str:
+    """
+    Return SQL expression for current timestamp.
+
+    Returns:
+        'NOW()' for PostgreSQL, "datetime('now')" for SQLite
+    """
+    if is_sqlite():
+        return "datetime('now')"
+    else:
+        return "NOW()"
+
+
+def sql_interval(days: int) -> str:
+    """
+    Return SQL expression for a time interval.
+
+    Args:
+        days: Number of days for the interval
+
+    Returns:
+        SQL expression for the interval
+
+    Examples:
+        PostgreSQL: INTERVAL '30 days'
+        SQLite: '-30 days'
+    """
+    if is_sqlite():
+        return f"'{-days} days'"
+    else:
+        return f"INTERVAL '{days} days'"
+
+
+def sql_date_subtract(days: int) -> str:
+    """
+    Return SQL expression for current date minus N days.
+
+    Args:
+        days: Number of days to subtract
+
+    Returns:
+        SQL expression for date calculation
+
+    Examples:
+        PostgreSQL: NOW() - INTERVAL '30 days'
+        SQLite: datetime('now', '-30 days')
+    """
+    if is_sqlite():
+        return f"datetime('now', '-{days} days')"
+    else:
+        return f"NOW() - INTERVAL '{days} days'"
+
+
+# =============================================================================
 # Enums and Constants
 # =============================================================================
 

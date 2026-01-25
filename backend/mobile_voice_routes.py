@@ -294,54 +294,116 @@ class AriaVoiceAgent:
         self.session_id = str(uuid.uuid4())
 
     async def process_user_message(self, transcript: str, db: Session) -> str:
-        """Process user message and generate AI response"""
+        """Process user message and generate AI response using AI orchestrator with full tool access"""
         # Add to conversation history
         self.conversation_history.append({
             "role": "user",
             "content": transcript
         })
 
-        # Import LangGraph chat handler
         import traceback
         try:
-            from ai_command_routes import langgraph_chat_handler
+            # Use the AIAgentService which connects to the full LangGraph orchestrator
+            # This gives Aria access to all 160+ tools including:
+            # - Pipeline analysis (bottlenecks, metrics, aging)
+            # - Lead management (scoring, follow-ups, outreach)
+            # - Document tracking
+            # - Email/SMS sending
+            # - Calendar scheduling
+            # - Pre-approval letter generation
+            # - And much more
+            from agents.service import AIAgentService
+            from main import User
+            from sqlalchemy import text
 
-            logger.info(f"[AriaVoiceAgent] Processing: '{transcript}' for user {self.user_id}")
+            logger.info(f"[AriaVoiceAgent] Processing via orchestrator: '{transcript}' for user {self.user_id}")
 
-            # Call the existing LangGraph handler
-            result = await langgraph_chat_handler(
-                message=transcript,
-                user_email=self.user_id,
-                db=db
+            # Look up actual user from database
+            user_result = db.execute(
+                text("SELECT id, email, role, name FROM users WHERE email = :email"),
+                {"email": self.user_id}
+            ).fetchone()
+
+            if user_result:
+                # Create a mock user object with required attributes
+                class MockUser:
+                    def __init__(self, id, email, role, name):
+                        self.id = id
+                        self.email = email
+                        self.role = role or "loan_officer"
+                        self.name = name
+
+                current_user = MockUser(
+                    id=user_result[0],
+                    email=user_result[1],
+                    role=user_result[2],
+                    name=user_result[3]
+                )
+            else:
+                # Fallback user object if not found
+                class MockUser:
+                    def __init__(self):
+                        self.id = 1
+                        self.email = self.user_id
+                        self.role = "loan_officer"
+                        self.name = "User"
+                current_user = MockUser()
+
+            # Initialize the AI service with database and user context
+            service = AIAgentService(
+                db=db,
+                current_user=current_user,
+                autonomous_mode=True  # Allow auto-execution of low-risk actions
             )
 
-            logger.info(f"[AriaVoiceAgent] LangGraph result: {result}")
-            response = result.get("response", "I'm having trouble processing that. Could you try again?")
+            # Process through the full orchestrator (intent classification -> tool execution -> response)
+            result = await service.process_message(
+                message=transcript,
+                conversation_history=self.conversation_history[-10:],  # Keep last 5 exchanges for context
+                return_structured=False
+            )
+
+            logger.info(f"[AriaVoiceAgent] Orchestrator result keys: {result.keys() if isinstance(result, dict) else 'not a dict'}")
+
+            # Extract response from result
+            if isinstance(result, dict):
+                response = result.get("response") or result.get("message") or result.get("text", "")
+                if not response:
+                    # Try to extract from nested structure
+                    response = str(result)
+            else:
+                response = str(result)
+
+            if not response:
+                response = "I processed your request but couldn't generate a response. Could you try rephrasing?"
+
+            logger.info(f"[AriaVoiceAgent] Orchestrator response: {response[:200]}...")
 
         except Exception as e:
-            logger.error(f"[AriaVoiceAgent] Error calling LangGraph: {e}")
+            logger.error(f"[AriaVoiceAgent] Error calling orchestrator: {e}")
             logger.error(f"[AriaVoiceAgent] Traceback: {traceback.format_exc()}")
-            # Fallback to simple Anthropic call for voice
+
+            # Fallback to simple Anthropic call for voice (without tools)
             try:
                 from anthropic import Anthropic
                 client = Anthropic()
 
                 # Simple direct response for voice
-                voice_messages = [{"role": "user", "content": transcript}]
-                if self.conversation_history:
-                    voice_messages = self.conversation_history[-6:] + voice_messages  # Keep last 3 exchanges
+                voice_messages = self.conversation_history[-6:]  # Keep last 3 exchanges
 
                 ai_response = client.messages.create(
                     model="claude-sonnet-4-20250514",
-                    max_tokens=150,
-                    system="""You are Aria, a helpful mortgage assistant. Keep responses brief (under 50 words) and conversational for voice. Be warm and professional.""",
+                    max_tokens=200,
+                    system="""You are Aria, a helpful mortgage assistant. Keep responses brief (under 50 words) and conversational for voice. Be warm and professional.
+
+Note: I'm currently unable to access the CRM system. Please let the user know that database features are temporarily unavailable and suggest they try again shortly.""",
                     messages=voice_messages
                 )
                 response = ai_response.content[0].text
                 logger.info(f"[AriaVoiceAgent] Fallback response: {response}")
             except Exception as fallback_error:
                 logger.error(f"[AriaVoiceAgent] Fallback also failed: {fallback_error}")
-                response = "Sorry, I'm having trouble right now. Try again in a moment."
+                response = "Sorry, I'm having trouble connecting to the system right now. Please try again in a moment."
 
         # Add assistant response to history
         self.conversation_history.append({

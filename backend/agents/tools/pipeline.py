@@ -13,6 +13,8 @@ from .base import (
     format_currency, format_percentage, format_date, days_between,
     LoanStatus, SLA_TARGETS, get_loan_stage_order, is_loan_active,
     add_business_days,
+    # Database-agnostic SQL helpers
+    is_sqlite, sql_days_since, sql_now, sql_interval, sql_date_subtract,
 )
 
 
@@ -35,6 +37,10 @@ def get_pipeline_metrics(
     try:
         lo_filter = "AND l.loan_officer_id = :lo_id" if lo_id else ""
 
+        # Database-agnostic date calculations
+        days_in_stage_expr = sql_days_since('l.stage_changed_at')
+        date_threshold = sql_date_subtract(days_back)
+
         # Get pipeline summary by stage
         # Note: Stage values must match LoanStage enum in main.py exactly
         pipeline_query = f"""
@@ -43,7 +49,7 @@ def get_pipeline_metrics(
                 COUNT(*) as count,
                 SUM(l.amount) as total_volume,
                 AVG(l.amount) as avg_loan_size,
-                AVG(EXTRACT(EPOCH FROM (NOW() - l.stage_entered_at)) / 86400) as avg_days_in_stage
+                AVG({days_in_stage_expr}) as avg_days_in_stage
             FROM loans l
             WHERE l.stage NOT IN ('Funded')
             {lo_filter}
@@ -72,15 +78,17 @@ def get_pipeline_metrics(
         total_count = sum(row["count"] for row in pipeline_data)
         total_volume = sum(row["total_volume"] or 0 for row in pipeline_data)
 
-        # Get velocity metrics (closings in last 30 days)
+        # Get velocity metrics (closings in last N days)
+        # Use database-agnostic date calculation for cycle time
+        cycle_time_expr = sql_days_since('l.created_at') if is_sqlite() else "EXTRACT(EPOCH FROM (funded_date - created_at)) / 86400"
         velocity_query = f"""
             SELECT
                 COUNT(*) as closed_count,
                 SUM(amount) as closed_volume,
-                AVG(EXTRACT(EPOCH FROM (funded_at - created_at)) / 86400) as avg_cycle_time
+                AVG({cycle_time_expr}) as avg_cycle_time
             FROM loans l
             WHERE l.stage = 'Funded'
-            AND l.funded_at >= NOW() - INTERVAL '{days_back} days'
+            AND l.funded_date >= {date_threshold}
             {lo_filter}
         """
         velocity_data = execute_single(velocity_query, params)
@@ -91,7 +99,7 @@ def get_pipeline_metrics(
             SELECT COUNT(*) as at_risk_count
             FROM loans l
             WHERE l.stage NOT IN ('Funded')
-            AND EXTRACT(EPOCH FROM (NOW() - l.stage_entered_at)) / 86400 >
+            AND {days_in_stage_expr} >
                 CASE l.stage
                     WHEN 'Disclosed' THEN 3
                     WHEN 'Processing' THEN 5
@@ -167,9 +175,12 @@ def get_loans_by_status(
         lo_filter = "AND l.loan_officer_id = :lo_id" if lo_id else ""
         at_risk_filter = ""
 
+        # Database-agnostic date calculation
+        days_in_stage_expr = sql_days_since('l.stage_changed_at')
+
         if include_at_risk_only:
             sla = SLA_TARGETS.get(status.lower(), 5)
-            at_risk_filter = f"AND EXTRACT(EPOCH FROM (NOW() - l.stage_entered_at)) / 86400 > {sla}"
+            at_risk_filter = f"AND {days_in_stage_expr} > {sla}"
 
         query = f"""
             SELECT
@@ -180,17 +191,17 @@ def get_loans_by_status(
                 l.stage,
                 l.program,
                 l.rate,
-                l.stage_entered_at,
-                l.target_close_date,
+                l.stage_changed_at,
+                l.closing_date,
                 l.loan_officer_id,
-                lo.name as loan_officer_name,
-                EXTRACT(EPOCH FROM (NOW() - l.stage_entered_at)) / 86400 as days_in_stage
+                lo.full_name as loan_officer_name,
+                {days_in_stage_expr} as days_in_stage
             FROM loans l
-            LEFT JOIN loan_officers lo ON l.loan_officer_id = lo.id
+            LEFT JOIN users lo ON l.loan_officer_id = lo.id
             WHERE LOWER(l.stage) = LOWER(:status)
             {lo_filter}
             {at_risk_filter}
-            ORDER BY l.stage_entered_at ASC
+            ORDER BY l.stage_changed_at ASC
             LIMIT :limit
         """
 
@@ -221,7 +232,7 @@ def get_loans_by_status(
                 "days_in_stage": round(days_in_stage, 1),
                 "sla_target": sla_target,
                 "is_at_risk": is_at_risk,
-                "target_close_date": format_date(loan["target_close_date"]),
+                "closing_date": format_date(loan["closing_date"]),
                 "loan_officer": loan["loan_officer_name"],
             })
 
@@ -257,6 +268,10 @@ def get_loan_aging_report(
     try:
         lo_filter = "AND l.loan_officer_id = :lo_id" if lo_id else ""
 
+        # Database-agnostic date calculations
+        days_in_stage_expr = sql_days_since('l.stage_changed_at')
+        total_days_open_expr = sql_days_since('l.created_at')
+
         query = f"""
             SELECT
                 l.id,
@@ -265,16 +280,16 @@ def get_loan_aging_report(
                 l.amount,
                 l.stage,
                 l.program,
-                l.stage_entered_at,
+                l.stage_changed_at,
                 l.created_at,
-                l.target_close_date,
-                lo.name as loan_officer_name,
-                EXTRACT(EPOCH FROM (NOW() - l.stage_entered_at)) / 86400 as days_in_stage,
-                EXTRACT(EPOCH FROM (NOW() - l.created_at)) / 86400 as total_days_open
+                l.closing_date,
+                lo.full_name as loan_officer_name,
+                {days_in_stage_expr} as days_in_stage,
+                {total_days_open_expr} as total_days_open
             FROM loans l
-            LEFT JOIN loan_officers lo ON l.loan_officer_id = lo.id
+            LEFT JOIN users lo ON l.loan_officer_id = lo.id
             WHERE l.stage NOT IN ('Funded')
-            AND EXTRACT(EPOCH FROM (NOW() - l.stage_entered_at)) / 86400 >= :min_days
+            AND {days_in_stage_expr} >= :min_days
             {lo_filter}
             ORDER BY days_in_stage DESC
         """
@@ -309,7 +324,7 @@ def get_loan_aging_report(
                 "sla_target": sla_target,
                 "sla_variance": round(days_in_stage - sla_target, 1),
                 "total_days_open": round(loan["total_days_open"] or 0, 1),
-                "target_close_date": format_date(loan["target_close_date"]),
+                "closing_date": format_date(loan["closing_date"]),
                 "loan_officer": loan["loan_officer_name"],
             }
 
@@ -355,13 +370,16 @@ def calculate_conversion_rates(
     try:
         lo_filter = "AND loan_officer_id = :lo_id" if lo_id else ""
 
+        # Database-agnostic date calculation
+        date_threshold = sql_date_subtract(days_back)
+
         # Get counts for each outcome
         query = f"""
             SELECT
                 stage,
                 COUNT(*) as count
             FROM loans
-            WHERE created_at >= NOW() - INTERVAL '{days_back} days'
+            WHERE created_at >= {date_threshold}
             {lo_filter}
             GROUP BY stage
         """
@@ -446,17 +464,24 @@ def predict_closing_timeline(
     """Predict closing timeline for loans."""
     try:
         # Get historical average times per stage
-        avg_times_query = """
-            SELECT
-                stage,
-                AVG(EXTRACT(EPOCH FROM (stage_exited_at - stage_entered_at)) / 86400) as avg_days
-            FROM loan_stage_history
-            WHERE stage_exited_at IS NOT NULL
-            AND EXTRACT(EPOCH FROM (stage_exited_at - stage_entered_at)) / 86400 < 30
-            GROUP BY stage
-        """
-        avg_times_result = execute_query(avg_times_query)
-        avg_times = {row["stage"]: row["avg_days"] or SLA_TARGETS.get(row["stage"], 3) for row in avg_times_result}
+        # Note: loan_stage_history table may not exist, so we use SLA_TARGETS as default
+        avg_times = {}
+        try:
+            # Database-agnostic date calculation
+            days_since_change_expr = sql_days_since('changed_at')
+            avg_times_query = f"""
+                SELECT
+                    to_stage as stage,
+                    AVG({days_since_change_expr}) as avg_days
+                FROM stage_history
+                WHERE entity_type = 'loan'
+                GROUP BY to_stage
+            """
+            avg_times_result = execute_query(avg_times_query)
+            avg_times = {row["stage"]: row["avg_days"] or SLA_TARGETS.get(row["stage"], 3) for row in avg_times_result}
+        except Exception:
+            # Table may not exist, use defaults
+            pass
 
         # Fill in defaults for missing stages
         for stage_name, sla in SLA_TARGETS.items():
@@ -468,7 +493,7 @@ def predict_closing_timeline(
             loan_query = """
                 SELECT
                     l.id, l.loan_number, l.borrower_name, l.stage,
-                    l.stage_entered_at, l.target_close_date, l.amount
+                    l.stage_changed_at, l.closing_date, l.amount
                 FROM loans l
                 WHERE l.id = :loan_id
             """
@@ -494,7 +519,7 @@ def predict_closing_timeline(
                 remaining_stages = stages[current_idx:funded_idx]
             except ValueError:
                 remaining_stages = []
-            days_in_current = days_between(loan["stage_entered_at"])
+            days_in_current = days_between(loan["stage_changed_at"])
             remaining_in_current = max(0, avg_times.get(current_stage, 3) - days_in_current)
 
             remaining_days = remaining_in_current + sum(avg_times.get(s, 3) for s in remaining_stages[1:])
@@ -509,8 +534,8 @@ def predict_closing_timeline(
                 "remaining_stages": remaining_stages,
                 "predicted_days_to_close": round(remaining_days, 1),
                 "predicted_close_date": format_date(predicted_close),
-                "target_close_date": format_date(loan["target_close_date"]),
-                "on_track": predicted_close <= loan["target_close_date"] if loan["target_close_date"] else True,
+                "closing_date": format_date(loan["closing_date"]),
+                "on_track": predicted_close <= loan["closing_date"] if loan["closing_date"] else True,
             })
 
         elif stage:
@@ -518,7 +543,7 @@ def predict_closing_timeline(
             loans_query = """
                 SELECT
                     l.id, l.loan_number, l.borrower_name, l.stage,
-                    l.stage_entered_at, l.target_close_date, l.amount
+                    l.stage_changed_at, l.closing_date, l.amount
                 FROM loans l
                 WHERE LOWER(l.stage) = LOWER(:stage)
             """
@@ -541,7 +566,7 @@ def predict_closing_timeline(
                     remaining_stages = stages[current_idx:funded_idx]
                 except ValueError:
                     continue
-                days_in_current = days_between(loan["stage_entered_at"])
+                days_in_current = days_between(loan["stage_changed_at"])
                 remaining_in_current = max(0, avg_times.get(current_stage, 3) - days_in_current)
                 remaining_days = remaining_in_current + sum(avg_times.get(s, 3) for s in remaining_stages[1:])
                 predicted_close = add_business_days(datetime.now().date(), int(remaining_days))
@@ -552,7 +577,7 @@ def predict_closing_timeline(
                     "borrower_name": loan["borrower_name"],
                     "predicted_close_date": format_date(predicted_close),
                     "predicted_days": round(remaining_days, 1),
-                    "on_track": predicted_close <= loan["target_close_date"] if loan["target_close_date"] else True,
+                    "on_track": predicted_close <= loan["closing_date"] if loan["closing_date"] else True,
                 })
 
             return ToolResult.success({
@@ -588,6 +613,9 @@ def get_bottleneck_analysis(
     try:
         lo_filter = "AND l.loan_officer_id = :lo_id" if lo_id else ""
 
+        # Database-agnostic date calculation
+        days_in_stage_expr = sql_days_since('l.stage_changed_at')
+
         # Get average time in each stage vs SLA
         # Note: Stage values must match LoanStage enum in main.py exactly
         stage_analysis_query = f"""
@@ -595,9 +623,9 @@ def get_bottleneck_analysis(
                 l.stage,
                 COUNT(*) as loan_count,
                 SUM(l.amount) as total_volume,
-                AVG(EXTRACT(EPOCH FROM (NOW() - l.stage_entered_at)) / 86400) as avg_days_in_stage,
-                MAX(EXTRACT(EPOCH FROM (NOW() - l.stage_entered_at)) / 86400) as max_days_in_stage,
-                COUNT(CASE WHEN EXTRACT(EPOCH FROM (NOW() - l.stage_entered_at)) / 86400 >
+                AVG({days_in_stage_expr}) as avg_days_in_stage,
+                MAX({days_in_stage_expr}) as max_days_in_stage,
+                COUNT(CASE WHEN {days_in_stage_expr} >
                     CASE l.stage
                         WHEN 'Disclosed' THEN 3
                         WHEN 'Processing' THEN 5
@@ -731,32 +759,50 @@ def compare_to_benchmark(
         lo_filter = "AND loan_officer_id = :lo_id" if lo_id else ""
         params = {"lo_id": lo_id} if lo_id else {}
 
+        # Database-agnostic date calculations
+        date_threshold = sql_date_subtract(days_back)
+
+        # For cycle time, we need to calculate days between two columns
+        if is_sqlite():
+            cycle_time_expr = "(julianday(funded_date) - julianday(created_at))"
+            cast_float = ""  # SQLite doesn't need explicit cast
+        else:
+            cycle_time_expr = "EXTRACT(EPOCH FROM (funded_date - created_at)) / 86400"
+            cast_float = "::float"
+
         # Get our metrics
         # Note: Stage values must match LoanStage enum in main.py exactly
         metrics_query = f"""
             SELECT
-                AVG(EXTRACT(EPOCH FROM (funded_at - created_at)) / 86400) as avg_cycle_time,
-                COUNT(CASE WHEN stage = 'Funded' THEN 1 END)::float /
+                AVG({cycle_time_expr}) as avg_cycle_time,
+                CAST(COUNT(CASE WHEN stage = 'Funded' THEN 1 END) AS REAL) /
                     NULLIF(COUNT(*), 0) * 100 as pull_through_rate,
-                0::float as fallout_rate
+                0.0 as fallout_rate
             FROM loans
-            WHERE created_at >= NOW() - INTERVAL '{days_back} days'
+            WHERE created_at >= {date_threshold}
             {lo_filter}
         """
         metrics = execute_single(metrics_query, params)
 
         # Get stage-specific times
-        stage_times_query = f"""
-            SELECT
-                stage,
-                AVG(EXTRACT(EPOCH FROM (stage_exited_at - stage_entered_at)) / 86400) as avg_days
-            FROM loan_stage_history
-            WHERE stage_entered_at >= NOW() - INTERVAL '{days_back} days'
-            AND stage_exited_at IS NOT NULL
-            GROUP BY stage
-        """
-        stage_times = execute_query(stage_times_query, params)
-        stage_time_dict = {row["stage"]: row["avg_days"] for row in stage_times}
+        # Note: Using stage_history table with graceful fallback
+        stage_time_dict = {}
+        try:
+            days_since_change_expr = sql_days_since('changed_at')
+            stage_times_query = f"""
+                SELECT
+                    to_stage as stage,
+                    AVG({days_since_change_expr}) as avg_days
+                FROM stage_history
+                WHERE entity_type = 'loan'
+                AND changed_at >= {date_threshold}
+                GROUP BY to_stage
+            """
+            stage_times = execute_query(stage_times_query, params)
+            stage_time_dict = {row["stage"]: row["avg_days"] for row in stage_times}
+        except Exception:
+            # Table may not exist, use empty dict (will fall back to defaults below)
+            pass
 
         comparisons = []
 
@@ -837,22 +883,26 @@ def get_lo_pipeline_breakdown(
 ) -> ToolResult:
     """Get pipeline breakdown by loan officer."""
     try:
+        # Database-agnostic date calculation
+        days_in_stage_expr = sql_days_since('l.stage_changed_at')
+
         # Note: Stage values must match LoanStage enum in main.py exactly
-        query = """
+        query = f"""
             SELECT
                 lo.id as lo_id,
-                lo.name as lo_name,
+                lo.full_name as lo_name,
                 lo.email as lo_email,
                 COUNT(l.id) as total_loans,
                 SUM(l.amount) as total_volume,
                 COUNT(CASE WHEN l.stage IN ('Disclosed', 'Processing') THEN 1 END) as early_stage,
                 COUNT(CASE WHEN l.stage IN ('Submitted', 'UW Received', 'Approved', 'Suspended') THEN 1 END) as mid_stage,
                 COUNT(CASE WHEN l.stage IN ('CTC', 'Docs Out') THEN 1 END) as late_stage,
-                AVG(EXTRACT(EPOCH FROM (NOW() - l.stage_entered_at)) / 86400) as avg_days_in_stage
-            FROM loan_officers lo
+                AVG({days_in_stage_expr}) as avg_days_in_stage
+            FROM users lo
             LEFT JOIN loans l ON lo.id = l.loan_officer_id
                 AND l.stage NOT IN ('Funded')
-            GROUP BY lo.id, lo.name, lo.email
+            WHERE lo.role = 'loan_officer' OR EXISTS (SELECT 1 FROM loans WHERE loan_officer_id = lo.id)
+            GROUP BY lo.id, lo.full_name, lo.email
             ORDER BY total_volume DESC NULLS LAST
         """
 
@@ -860,6 +910,13 @@ def get_lo_pipeline_breakdown(
 
         if not lo_data:
             return ToolResult.no_data("No loan officer data found")
+
+        # Database-agnostic expressions for metrics
+        date_30_days_ago = sql_date_subtract(30)
+        if is_sqlite():
+            cycle_time_expr = "(julianday(funded_date) - julianday(created_at))"
+        else:
+            cycle_time_expr = "EXTRACT(EPOCH FROM (funded_date - created_at)) / 86400"
 
         results = []
         for row in lo_data:
@@ -881,10 +938,10 @@ def get_lo_pipeline_breakdown(
             if include_metrics and row["total_loans"]:
                 # Get additional metrics for this LO
                 # Note: Stage values must match LoanStage enum in main.py exactly
-                metrics_query = """
+                metrics_query = f"""
                     SELECT
-                        COUNT(CASE WHEN stage = 'Funded' AND funded_at >= NOW() - INTERVAL '30 days' THEN 1 END) as closed_30d,
-                        AVG(CASE WHEN stage = 'Funded' THEN EXTRACT(EPOCH FROM (funded_at - created_at)) / 86400 END) as avg_cycle_time
+                        COUNT(CASE WHEN stage = 'Funded' AND funded_date >= {date_30_days_ago} THEN 1 END) as closed_30d,
+                        AVG(CASE WHEN stage = 'Funded' THEN {cycle_time_expr} END) as avg_cycle_time
                     FROM loans
                     WHERE loan_officer_id = :lo_id
                 """
