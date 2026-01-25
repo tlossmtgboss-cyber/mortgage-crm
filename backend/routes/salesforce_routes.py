@@ -2523,11 +2523,8 @@ async def sync_all_loans_from_salesforce(
             detail="Salesforce not connected. Please connect first at Settings > Integrations."
         )
 
-    try:
-        access_token = decrypt_token(integration[0])
-    except Exception as e:
-        logger.error(f"Error decrypting token: {e}")
-        raise HTTPException(status_code=500, detail=f"Token decryption failed: {str(e)}")
+    # Use token directly (matching other working endpoints)
+    access_token = integration[0]
 
     logger.info(f"Using Salesforce connection from user {integration[3]}")
 
@@ -2588,11 +2585,9 @@ async def sync_all_loans_from_salesforce(
             "Content-Type": "application/json"
         }
 
-        import urllib.parse
-        encoded_soql = urllib.parse.quote(soql)
-        url = f"{instance_url}/services/data/v59.0/query/?q={encoded_soql}"
-
-        response = requests.get(url, headers=headers, timeout=60)
+        # Use params instead of URL encoding (matches working endpoints)
+        query_url = f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/query/"
+        response = requests.get(query_url, headers=headers, params={"q": soql}, timeout=60)
 
         if response.status_code != 200:
             error_text = response.text
