@@ -320,24 +320,24 @@ class AriaVoiceAgent:
 
             # Look up actual user from database
             user_result = db.execute(
-                text("SELECT id, email, role, name FROM users WHERE email = :email"),
+                text("SELECT id, email, role, full_name FROM users WHERE email = :email"),
                 {"email": self.user_id}
             ).fetchone()
 
             if user_result:
                 # Create a mock user object with required attributes
                 class MockUser:
-                    def __init__(self, id, email, role, name):
+                    def __init__(self, id, email, role, full_name):
                         self.id = id
                         self.email = email
                         self.role = role or "loan_officer"
-                        self.name = name
+                        self.name = full_name
 
                 current_user = MockUser(
                     id=user_result[0],
                     email=user_result[1],
                     role=user_result[2],
-                    name=user_result[3]
+                    full_name=user_result[3]
                 )
             else:
                 # Fallback user object if not found
