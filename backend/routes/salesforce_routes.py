@@ -2926,6 +2926,21 @@ async def debug_token_refresh(
                 result["token_was_encrypted"] = False
 
             # Try refresh with potentially decrypted token
+            # First, try a direct request to see the actual error response
+            import requests as req
+            direct_response = req.post(
+                "https://login.salesforce.com/services/oauth2/token",
+                data={
+                    "grant_type": "refresh_token",
+                    "refresh_token": token_to_use,
+                    "client_id": salesforce_client.client_id,
+                    "client_secret": salesforce_client.client_secret
+                },
+                timeout=30
+            )
+            result["direct_refresh_status"] = direct_response.status_code
+            result["direct_refresh_response"] = direct_response.text[:500]
+
             new_tokens = salesforce_client.refresh_access_token(token_to_use)
 
             if new_tokens and new_tokens.get("access_token"):
