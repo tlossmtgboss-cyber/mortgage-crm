@@ -2626,14 +2626,16 @@ async def sync_all_loans_from_salesforce(
                     response = requests.get(query_url, headers=headers, params={"q": soql}, timeout=60)
                 else:
                     logger.error("Token refresh failed - refresh token has expired")
+                    # Use 424 (Failed Dependency) instead of 401 to avoid triggering CRM logout
+                    # 401 is for CRM auth issues, 424 indicates the Salesforce dependency failed
                     raise HTTPException(
-                        status_code=401,
-                        detail="Your Salesforce connection has fully expired (both access and refresh tokens). Please go to Settings > Integrations and click 'Reconnect' next to Salesforce to re-authorize the connection."
+                        status_code=424,
+                        detail="Your Salesforce connection has expired. Please go to Settings > Integrations and click 'Reconnect' next to Salesforce to re-authorize the connection."
                     )
             except ImportError:
                 logger.error("Could not import salesforce_client for token refresh")
                 raise HTTPException(
-                    status_code=401,
+                    status_code=424,
                     detail="Salesforce session expired. Please reconnect Salesforce at Settings > Integrations."
                 )
 
