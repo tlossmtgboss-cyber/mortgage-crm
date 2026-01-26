@@ -71,7 +71,20 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       // Don't redirect if already on login page or during logout
       const isLoginPage = window.location.pathname === '/login';
-      if (!isLoginPage) {
+
+      // Don't logout for third-party integration token errors (Salesforce, HubSpot, etc.)
+      // These 401s mean the integration token expired, not the user's CRM session
+      const requestUrl = error.config?.url || '';
+      const isIntegrationEndpoint =
+        requestUrl.includes('/salesforce/') ||
+        requestUrl.includes('/hubspot/') ||
+        requestUrl.includes('/google-calendar/') ||
+        requestUrl.includes('/microsoft/') ||
+        requestUrl.includes('/zoom/') ||
+        requestUrl.includes('/docusign/') ||
+        requestUrl.includes('/calendly/');
+
+      if (!isLoginPage && !isIntegrationEndpoint) {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         window.location.href = '/login';
