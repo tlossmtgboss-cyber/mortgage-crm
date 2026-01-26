@@ -66,6 +66,7 @@ Extract all financial data mentioned in the call that can be used for mortgage c
 - Credit score (if mentioned)
 - Monthly debt payments (car loans, credit cards, student loans, etc.)
 - Current rent/housing payment
+- Monthly savings or extra cash available
 
 ### Property Data:
 - Property value / Purchase price
@@ -73,13 +74,23 @@ Extract all financial data mentioned in the call that can be used for mortgage c
 - Homeowner's insurance estimate
 - HOA fees
 - Property state (for tax/cost estimates)
+- Property county (for local rates)
 - Property type (primary, investment, second home)
+- Is property in a rural area (for USDA)
 
 ### Special Factors:
 - First-time homebuyer status
 - VA eligibility (first use or subsequent)
 - VA exemption status (disability)
 - Self-employed status
+- Timeline/urgency (buying now vs waiting)
+- Investment preferences (conservative vs aggressive)
+
+### Market Assumptions (if discussed):
+- Expected home appreciation rate
+- Expected interest rate changes
+- Expected rent increases
+- Expected investment returns
 
 ## CALCULATOR TYPES TO CONSIDER:
 
@@ -110,6 +121,26 @@ Extract all financial data mentioned in the call that can be used for mortgage c
 8. **amortization**: Payment schedule
    - Requires: loan_amount, interest_rate, term_years
 
+9. **cost_of_waiting**: What waiting to buy costs
+   - Requires: property_value, interest_rate, down_payment_percent, current_rent
+   - Optional: wait_months, home_appreciation_rate, rate_increase_per_year, rent_increase_rate
+   - Use when: borrower is uncertain about timing, asking "should I wait?"
+
+10. **prepay_vs_invest**: Compare prepaying mortgage vs investing
+    - Requires: loan_amount, interest_rate, term_years, extra_monthly_cash
+    - Optional: expected_market_return, projection_years
+    - Use when: borrower asks about extra payments, paying off early, or investing vs mortgage
+
+11. **rent_vs_buy**: Comprehensive rent vs buy analysis
+    - Requires: property_value, down_payment_percent, interest_rate, current_rent
+    - Optional: home_appreciation, rent_increase, investment_return, projection_years
+    - Use when: borrower is comparing renting to buying, asking "should I buy or rent?"
+
+12. **program_comparison**: Evaluate loan programs
+    - Requires: property_value, down_payment_available, annual_income, credit_score, monthly_debts
+    - Optional: is_first_time_buyer, is_veteran, is_va_disabled, is_rural
+    - Use when: borrower asks about loan options, FHA vs conventional, VA eligibility
+
 ## OUTPUT FORMAT:
 
 Respond with a JSON object containing all extracted data and recommended calculations:
@@ -132,8 +163,20 @@ Respond with a JSON object containing all extracted data and recommended calcula
         "annual_insurance": null,
         "hoa_monthly": 0,
         "state": null,
+        "county": null,
         "is_first_va_use": true,
-        "is_va_exempt": false
+        "is_va_exempt": false,
+        "is_first_time_buyer": null,
+        "is_veteran": false,
+        "is_rural": false,
+        "current_rent": null,
+        "extra_monthly_cash": null,
+        "home_appreciation_rate": 4.0,
+        "rate_increase_per_year": 0.5,
+        "rent_increase_rate": 3.0,
+        "expected_market_return": 7.0,
+        "wait_months": null,
+        "projection_years": 10
     },
     "calculations_to_run": [
         {
@@ -325,8 +368,21 @@ IMPORTANT: Only extract data explicitly stated. Flag when you make assumptions."
             'annual_insurance': extracted.get('annual_insurance'),
             'hoa_monthly': extracted.get('hoa_monthly') or 0,
             'state': extracted.get('state') or loan.get('property_state', 'CA'),
+            'county': extracted.get('county') or loan.get('property_county'),
             'is_first_va_use': extracted.get('is_first_va_use', True),
             'is_va_exempt': extracted.get('is_va_exempt', False),
+            # New fields for advanced calculators
+            'is_first_time_buyer': extracted.get('is_first_time_buyer'),
+            'is_veteran': extracted.get('is_veteran', False),
+            'is_rural': extracted.get('is_rural', False),
+            'current_rent': extracted.get('current_rent'),
+            'extra_monthly_cash': extracted.get('extra_monthly_cash'),
+            'home_appreciation_rate': extracted.get('home_appreciation_rate', 4.0),
+            'rate_increase_per_year': extracted.get('rate_increase_per_year', 0.5),
+            'rent_increase_rate': extracted.get('rent_increase_rate', 3.0),
+            'expected_market_return': extracted.get('expected_market_return', 7.0),
+            'wait_months': extracted.get('wait_months', 12),
+            'projection_years': extracted.get('projection_years', 10),
         }
 
         # Calculate derived values
@@ -338,6 +394,13 @@ IMPORTANT: Only extract data explicitly stated. Flag when you make assumptions."
 
         if merged['annual_income'] and not merged['monthly_income']:
             merged['monthly_income'] = merged['annual_income'] / 12
+
+        if merged['monthly_income'] and not merged['annual_income']:
+            merged['annual_income'] = merged['monthly_income'] * 12
+
+        # Calculate down payment percent if we have the values
+        if merged['property_value'] and merged['down_payment'] and not merged['down_payment_percent']:
+            merged['down_payment_percent'] = (merged['down_payment'] / merged['property_value']) * 100
 
         return merged
 
@@ -456,6 +519,65 @@ IMPORTANT: Only extract data explicitly stated. Flag when you make assumptions."
                     },
                 }
 
+            elif calc_type == 'cost_of_waiting':
+                if not data.get('property_value') or not data.get('interest_rate'):
+                    return None
+                return calculator_service.calculate_cost_of_waiting(
+                    home_price=data['property_value'],
+                    current_rate=data['interest_rate'],
+                    down_payment_percent=data.get('down_payment_percent', 5.0),
+                    current_rent=data.get('current_rent', 1800),
+                    wait_months=data.get('wait_months', 12),
+                    home_appreciation_rate=data.get('home_appreciation_rate', 4.0),
+                    rate_increase_per_year=data.get('rate_increase_per_year', 0.5),
+                    rent_increase_rate=data.get('rent_increase_rate', 3.0),
+                    term_years=data.get('term_years', 30),
+                )
+
+            elif calc_type == 'prepay_vs_invest':
+                if not data.get('loan_amount') or not data.get('interest_rate'):
+                    return None
+                return calculator_service.calculate_prepay_vs_invest(
+                    loan_balance=data['loan_amount'],
+                    interest_rate=data['interest_rate'],
+                    remaining_years=data.get('term_years', 30),
+                    extra_monthly=data.get('extra_monthly_cash', 500),
+                    expected_return=data.get('expected_market_return', 7.0),
+                    projection_years=data.get('projection_years', 10),
+                )
+
+            elif calc_type == 'rent_vs_buy':
+                if not data.get('property_value') or not data.get('interest_rate'):
+                    return None
+                return calculator_service.calculate_rent_vs_buy(
+                    home_price=data['property_value'],
+                    down_payment_percent=data.get('down_payment_percent', 5.0),
+                    interest_rate=data['interest_rate'],
+                    monthly_rent=data.get('current_rent', 1800),
+                    term_years=data.get('term_years', 30),
+                    home_appreciation=data.get('home_appreciation_rate', 3.0),
+                    rent_increase=data.get('rent_increase_rate', 3.0),
+                    investment_return=data.get('expected_market_return', 7.0),
+                    projection_years=data.get('projection_years', 10),
+                )
+
+            elif calc_type == 'program_comparison':
+                if not data.get('property_value') or not data.get('annual_income'):
+                    return None
+                return calculator_service.evaluate_loan_programs(
+                    home_price=data['property_value'],
+                    down_payment_available=data.get('down_payment', 0),
+                    annual_income=data['annual_income'],
+                    credit_score=data.get('credit_score', 720),
+                    monthly_debts=data.get('monthly_debts', 0),
+                    is_first_time_buyer=data.get('is_first_time_buyer', True),
+                    is_veteran=data.get('is_veteran', False),
+                    is_va_disabled=data.get('is_va_exempt', False),
+                    property_state=data.get('state', 'CA'),
+                    property_county=data.get('county'),
+                    is_rural=data.get('is_rural', False),
+                )
+
             return None
 
         except Exception as e:
@@ -482,6 +604,10 @@ IMPORTANT: Only extract data explicitly stated. Flag when you make assumptions."
             'affordability': ['annual_income', 'interest_rate'],
             'closing_costs': ['loan_amount', 'property_value'],
             'amortization': ['loan_amount', 'interest_rate'],
+            'cost_of_waiting': ['property_value', 'interest_rate', 'current_rent'],
+            'prepay_vs_invest': ['loan_amount', 'interest_rate', 'extra_monthly_cash'],
+            'rent_vs_buy': ['property_value', 'interest_rate', 'current_rent'],
+            'program_comparison': ['property_value', 'annual_income', 'credit_score'],
         }
 
         required = critical_fields.get(calc_type, [])
@@ -508,6 +634,10 @@ IMPORTANT: Only extract data explicitly stated. Flag when you make assumptions."
             'affordability': f"Max Purchase Price: ${result.get('max_purchase_price', 0):,.0f}",
             'closing_costs': f"Estimated Closing Costs: ${result.get('total_closing_costs', 0):,.0f}",
             'amortization': "Amortization Schedule (First 12 Months)",
+            'cost_of_waiting': f"Cost of Waiting: ${result.get('total_cost_of_waiting', 0):,.0f}",
+            'prepay_vs_invest': f"Prepay vs Invest: {result.get('recommendation', 'prepay').title()} Wins",
+            'rent_vs_buy': f"Rent vs Buy: {result.get('recommendation', 'buy').title()} Recommended",
+            'program_comparison': f"Loan Programs: {len(result.get('eligible_programs', []))} Options Available",
         }
         return titles.get(calc_type, f"{calc_type.replace('_', ' ').title()} Calculation")
 
@@ -598,6 +728,87 @@ IMPORTANT: Only extract data explicitly stated. Flag when you make assumptions."
                         f"(P: ${pmt['principal']:,.2f}, I: ${pmt['interest']:,.2f})"
                     )
 
+        elif calc_type == 'cost_of_waiting':
+            costs = result.get('costs', {})
+            buy_now = result.get('buy_now', {})
+            buy_later = result.get('buy_later', {})
+            lines.extend([
+                f"Wait Period: {result.get('wait_months', 0)} months",
+                "",
+                "If You Buy Now:",
+                f"  Home Price: ${buy_now.get('home_price', 0):,.0f}",
+                f"  Monthly Payment: ${buy_now.get('monthly_payment', 0):,.2f}",
+                "",
+                "If You Wait:",
+                f"  Home Price: ${buy_later.get('home_price', 0):,.0f} (+${costs.get('price_increase', 0):,.0f})",
+                f"  Monthly Payment: ${buy_later.get('monthly_payment', 0):,.2f}",
+                "",
+                "Cost Breakdown:",
+                f"  Price Increase: ${costs.get('price_increase', 0):,.0f}",
+                f"  Extra Interest: ${costs.get('total_interest_increase', 0):,.0f}",
+                f"  Rent Paid: ${costs.get('rent_paid_while_waiting', 0):,.0f}",
+                "",
+                f"TOTAL COST OF WAITING: ${result.get('total_cost_of_waiting', 0):,.0f}",
+            ])
+
+        elif calc_type == 'prepay_vs_invest':
+            prepay = result.get('prepay_scenario', {})
+            invest = result.get('invest_scenario', {})
+            comparison = result.get('comparison', {})
+            lines.extend([
+                f"Extra Monthly Cash: ${prepay.get('monthly_extra', 0):,.0f}",
+                "",
+                "PREPAY MORTGAGE:",
+                f"  Years Saved: {prepay.get('years_saved', 0):.1f}",
+                f"  Interest Saved: ${prepay.get('interest_saved', 0):,.0f}",
+                f"  Guaranteed Return: {prepay.get('effective_return', 0):.2f}%",
+                "",
+                "INVEST IN MARKET:",
+                f"  Portfolio Value: ${invest.get('portfolio_value', 0):,.0f}",
+                f"  Expected Return: {invest.get('expected_return', 0):.1f}%",
+                f"  Net Gain: ${invest.get('net_gain', 0):,.0f}",
+                "",
+                f"WINNER: {comparison.get('winner', 'prepay').upper()}",
+                f"Advantage: ${comparison.get('advantage_amount', 0):,.0f}",
+            ])
+
+        elif calc_type == 'rent_vs_buy':
+            summary = result.get('summary', {})
+            initial = result.get('initial_comparison', {})
+            lines.extend([
+                f"Initial Monthly Comparison:",
+                f"  Buy: ${initial.get('buy_monthly', 0):,.0f}/mo",
+                f"  Rent: ${initial.get('rent_monthly', 0):,.0f}/mo",
+                f"  Difference: ${initial.get('difference', 0):,.0f}/mo",
+                "",
+                f"After {result.get('inputs', {}).get('projection_years', 10)} Years:",
+                f"  Home Equity: ${summary.get('buy_equity_at_end', 0):,.0f}",
+                f"  Renter Wealth: ${summary.get('rent_wealth_at_end', 0):,.0f}",
+                "",
+                f"RECOMMENDATION: {summary.get('winner', 'buy').upper()}",
+                f"Advantage: ${summary.get('advantage', 0):,.0f}",
+                f"Breakeven Year: {summary.get('breakeven_year', 'N/A')}",
+            ])
+
+        elif calc_type == 'program_comparison':
+            eligible = result.get('eligible_programs', [])
+            recommended = result.get('recommended_program', {})
+            lines.extend([
+                f"Eligible Programs: {len(eligible)}",
+                "",
+            ])
+            if recommended:
+                lines.extend([
+                    f"RECOMMENDED: {recommended.get('name', 'N/A')}",
+                    f"  Down Payment: ${recommended.get('down_payment_required', 0):,.0f} ({recommended.get('down_payment_percent', 0)}%)",
+                    f"  Monthly Payment: ${recommended.get('monthly_payment', 0):,.2f}",
+                    f"  DTI: {recommended.get('back_end_dti', 0):.1f}%",
+                    "",
+                ])
+            lines.append("All Eligible Options:")
+            for prog in eligible[:4]:  # Show top 4
+                lines.append(f"  - {prog.get('name')}: ${prog.get('monthly_payment', 0):,.0f}/mo")
+
         return "\n".join(lines)
 
     def _extract_outputs(self, calc_type: str, result: Dict) -> Dict:
@@ -652,6 +863,35 @@ IMPORTANT: Only extract data explicitly stated. Flag when you make assumptions."
             return {
                 'first_payment': result.get('schedule', [{}])[0] if result.get('schedule') else None,
             }
+        elif calc_type == 'cost_of_waiting':
+            return {
+                'total_cost_of_waiting': result.get('total_cost_of_waiting'),
+                'price_increase': result.get('costs', {}).get('price_increase'),
+                'rent_paid': result.get('costs', {}).get('rent_paid_while_waiting'),
+                'recommendation': result.get('recommendation'),
+            }
+        elif calc_type == 'prepay_vs_invest':
+            return {
+                'winner': result.get('recommendation'),
+                'advantage': result.get('comparison', {}).get('advantage_amount'),
+                'interest_saved': result.get('prepay_scenario', {}).get('interest_saved'),
+                'portfolio_value': result.get('invest_scenario', {}).get('portfolio_value'),
+            }
+        elif calc_type == 'rent_vs_buy':
+            return {
+                'winner': result.get('recommendation'),
+                'advantage': result.get('summary', {}).get('advantage'),
+                'breakeven_year': result.get('summary', {}).get('breakeven_year'),
+                'buy_equity': result.get('summary', {}).get('buy_equity_at_end'),
+                'rent_wealth': result.get('summary', {}).get('rent_wealth_at_end'),
+            }
+        elif calc_type == 'program_comparison':
+            return {
+                'eligible_count': len(result.get('eligible_programs', [])),
+                'recommended': result.get('recommended'),
+                'recommended_payment': result.get('recommended_program', {}).get('monthly_payment'),
+                'programs': [p.get('id') for p in result.get('eligible_programs', [])],
+            }
         return result
 
     def _has_sufficient_data(self, data: Dict) -> bool:
@@ -680,7 +920,23 @@ IMPORTANT: Only extract data explicitly stated. Flag when you make assumptions."
             else:
                 suggested.append('pmi')
 
-        return suggested[:3]  # Limit suggestions
+        # Suggest rent vs buy if we have rent data
+        if data.get('current_rent') and data.get('property_value') and data.get('interest_rate'):
+            suggested.append('rent_vs_buy')
+
+        # Suggest program comparison if we have income and property value
+        if data.get('annual_income') and data.get('property_value') and data.get('credit_score'):
+            suggested.append('program_comparison')
+
+        # Suggest cost of waiting if rent is mentioned
+        if data.get('current_rent') and data.get('property_value'):
+            suggested.append('cost_of_waiting')
+
+        # Suggest prepay vs invest if extra cash mentioned
+        if data.get('extra_monthly_cash') and data.get('loan_amount'):
+            suggested.append('prepay_vs_invest')
+
+        return suggested[:4]  # Limit suggestions
 
     def _truncate_transcript(self, transcript: str, max_words: int = 5000) -> str:
         """Truncate transcript while preserving financial discussion context."""

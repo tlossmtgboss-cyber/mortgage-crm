@@ -416,6 +416,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = str(request.url.path)
 
+        # Skip rate limiting in development mode
+        if ENVIRONMENT == "development":
+            return await call_next(request)
+
         # Skip rate limiting for WebSocket connections
         if is_websocket_request(request):
             logger.debug(f"Bypassing rate limit for WebSocket: {path}")

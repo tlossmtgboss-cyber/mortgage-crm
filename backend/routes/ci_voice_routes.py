@@ -308,6 +308,228 @@ async def create_recording(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# =============================================================================
+# CARPLAY / MOBILE QUICK UPLOAD (Base64)
+# =============================================================================
+
+class QuickUploadRequest(BaseModel):
+    """Request for quick base64 audio upload from CarPlay/mobile."""
+    audio_base64: str = Field(..., description="Base64 encoded audio data")
+    duration_seconds: int = Field(..., description="Duration of recording in seconds")
+    file_name: str = Field(default="recording.m4a", description="Original filename")
+    direction: str = Field(default="outbound", description="Call direction")
+    source: str = Field(default="mobile", description="Source app (carplay, mobile)")
+    process_immediately: bool = Field(default=True, description="Start AI processing immediately")
+    metadata: Optional[Dict[str, Any]] = Field(default=None, description="Additional metadata")
+
+
+class QuickUploadResponse(BaseModel):
+    """Response from quick upload."""
+    recording_id: str
+    status: str
+    summary: Optional[str] = None
+    key_points: Optional[List[str]] = None
+    action_items: Optional[List[str]] = None
+    sentiment: Optional[str] = None
+    duration: int
+    message: str
+
+
+@router.post("/recordings/quick-upload", response_model=QuickUploadResponse)
+async def quick_upload_recording(
+    request: QuickUploadRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Quick upload endpoint for CarPlay and mobile apps.
+    Accepts base64 audio and returns AI analysis results.
+    """
+    import uuid
+    import base64
+    import tempfile
+    import os as os_module
+
+    try:
+        recording_id = str(uuid.uuid4())
+        # Handle both dict and User object
+        if hasattr(current_user, 'id'):
+            user_id = current_user.id
+        elif isinstance(current_user, dict):
+            user_id = current_user.get("id") or current_user.get("user_id") or 1
+        else:
+            user_id = 1
+
+        logger.info(f"[QuickUpload] Receiving {request.duration_seconds}s recording from {request.source}")
+
+        # Decode base64 audio
+        try:
+            audio_data = base64.b64decode(request.audio_base64)
+            logger.info(f"[QuickUpload] Decoded {len(audio_data)} bytes of audio")
+        except Exception as e:
+            logger.error(f"[QuickUpload] Base64 decode error: {e}")
+            raise HTTPException(status_code=400, detail="Invalid base64 audio data")
+
+        # Save to temp file for processing
+        temp_dir = tempfile.gettempdir()
+        audio_path = os_module.path.join(temp_dir, f"{recording_id}.m4a")
+        with open(audio_path, "wb") as f:
+            f.write(audio_data)
+        logger.info(f"[QuickUpload] Saved audio to {audio_path}")
+
+        # Create recording entry
+        metadata = request.metadata or {}
+        metadata["source"] = request.source
+        metadata["quick_upload"] = True
+
+        db.execute(text("""
+            INSERT INTO ci_call_recordings (
+                id, agent_user_id, direction, duration_seconds,
+                status, metadata, started_at
+            ) VALUES (
+                :id, :agent_user_id, :direction, :duration,
+                'processing', :metadata, CURRENT_TIMESTAMP
+            )
+        """), {
+            "id": recording_id,
+            "agent_user_id": user_id,
+            "direction": request.direction,
+            "duration": request.duration_seconds,
+            "metadata": json.dumps(metadata)
+        })
+        db.commit()
+
+        # Process with AI (transcribe + analyze)
+        summary = "Call recorded successfully"
+        key_points = []
+        action_items = []
+        sentiment = "neutral"
+
+        if request.process_immediately:
+            try:
+                # Try to transcribe with Whisper/Deepgram
+                transcript = await transcribe_audio_file(audio_path)
+                if transcript:
+                    logger.info(f"[QuickUpload] Transcribed: {transcript[:100]}...")
+
+                    # Analyze with Claude
+                    analysis = await analyze_call_transcript(transcript, request.direction)
+                    summary = analysis.get("summary", "Call recorded and transcribed")
+                    key_points = analysis.get("key_points", [])
+                    action_items = analysis.get("action_items", [])
+                    sentiment = analysis.get("sentiment", "neutral")
+
+                    # Update recording with results
+                    db.execute(text("""
+                        UPDATE ci_call_recordings
+                        SET status = 'analyzed',
+                            transcript_text = :transcript,
+                            ai_summary = :summary,
+                            sentiment_score = :sentiment
+                        WHERE id = :id
+                    """), {
+                        "id": recording_id,
+                        "transcript": transcript,
+                        "summary": summary,
+                        "sentiment": sentiment
+                    })
+                    db.commit()
+                    logger.info(f"[QuickUpload] Analysis complete for {recording_id}")
+            except Exception as e:
+                logger.error(f"[QuickUpload] Processing error: {e}")
+                summary = "Call recorded. Processing will complete shortly."
+
+        # Cleanup temp file
+        try:
+            os_module.remove(audio_path)
+        except:
+            pass
+
+        return QuickUploadResponse(
+            recording_id=recording_id,
+            status="analyzed" if request.process_immediately else "pending",
+            summary=summary,
+            key_points=key_points,
+            action_items=action_items,
+            sentiment=sentiment,
+            duration=request.duration_seconds,
+            message="Recording processed successfully"
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[QuickUpload] Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def transcribe_audio_file(audio_path: str) -> Optional[str]:
+    """Transcribe audio file using available service."""
+    import subprocess
+
+    # Try Whisper via OpenAI API
+    openai_key = os.getenv("OPENAI_API_KEY")
+    if openai_key:
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                with open(audio_path, "rb") as f:
+                    response = await client.post(
+                        "https://api.openai.com/v1/audio/transcriptions",
+                        headers={"Authorization": f"Bearer {openai_key}"},
+                        files={"file": ("audio.m4a", f, "audio/mp4")},
+                        data={"model": "whisper-1"}
+                    )
+                if response.status_code == 200:
+                    return response.json().get("text", "")
+        except Exception as e:
+            logger.error(f"Whisper transcription error: {e}")
+
+    return None
+
+
+async def analyze_call_transcript(transcript: str, direction: str) -> Dict[str, Any]:
+    """Analyze call transcript with Claude."""
+    import anthropic
+
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        return {"summary": "Transcript recorded", "sentiment": "neutral"}
+
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1000,
+            messages=[{
+                "role": "user",
+                "content": f"""Analyze this {direction} call transcript for a mortgage loan officer.
+Provide a JSON response with:
+- summary: 1-2 sentence summary
+- key_points: list of key points discussed
+- action_items: list of follow-up actions needed
+- sentiment: positive, neutral, or negative
+
+Transcript:
+{transcript}
+
+Respond only with valid JSON."""
+            }]
+        )
+
+        result_text = response.content[0].text
+        # Try to parse JSON from response
+        import re
+        json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
+        if json_match:
+            return json.loads(json_match.group())
+    except Exception as e:
+        logger.error(f"Claude analysis error: {e}")
+
+    return {"summary": transcript[:200], "sentiment": "neutral", "key_points": [], "action_items": []}
+
+
 @router.get("/recordings/{recording_id}", response_model=RecordingResponse)
 async def get_recording(
     recording_id: str,

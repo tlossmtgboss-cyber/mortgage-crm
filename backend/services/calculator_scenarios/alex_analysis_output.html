@@ -1,0 +1,369 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>First-Time Homebuyer Analysis - Alex</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        h2 {
+            color: #1a365d;
+            margin-bottom: 16px;
+            font-size: 1.5em;
+        }
+        h3 {
+            color: #4a5568;
+            margin: 16px 0 8px;
+            font-size: 1.1em;
+        }
+        .big-number {
+            font-size: 3em;
+            font-weight: 700;
+            color: #2563eb;
+            margin: 10px 0;
+        }
+        .label {
+            color: #6b7280;
+            font-size: 0.9em;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin: 16px 0;
+        }
+        .stat {
+            background: #f8fafc;
+            padding: 16px;
+            border-radius: 12px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: 600;
+            color: #1e40af;
+        }
+        .stat-label {
+            color: #64748b;
+            font-size: 0.85em;
+            margin-top: 4px;
+        }
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+        }
+        .comparison-table th,
+        .comparison-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .comparison-table th {
+            background: #f1f5f9;
+            font-weight: 600;
+            color: #334155;
+        }
+        .comparison-table tr:hover {
+            background: #f8fafc;
+        }
+        .gauge {
+            height: 24px;
+            background: #e5e7eb;
+            border-radius: 12px;
+            overflow: hidden;
+            margin: 8px 0;
+        }
+        .gauge-fill {
+            height: 100%;
+            border-radius: 12px;
+            transition: width 0.5s ease;
+        }
+        .green { background: #22c55e; }
+        .yellow { background: #eab308; }
+        .red { background: #ef4444; }
+        .blue { background: #3b82f6; }
+        .recommendation {
+            background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+            border: 2px solid #10b981;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 16px 0;
+        }
+        .recommendation h3 {
+            color: #059669;
+            margin-top: 0;
+        }
+        .warning {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 12px 16px;
+            margin: 12px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .cta {
+            background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+            color: white;
+            text-align: center;
+            padding: 24px;
+            border-radius: 12px;
+            margin-top: 20px;
+        }
+        .cta h3 {
+            color: white;
+            font-size: 1.3em;
+            margin-bottom: 12px;
+        }
+        .cta-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background: white;
+            color: #2563eb;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: transform 0.2s;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        .footer {
+            text-align: center;
+            color: white;
+            opacity: 0.8;
+            margin-top: 30px;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Your Home Buying Analysis</h1>
+            <p>Personalized calculations for your first home purchase</p>
+        </div>
+
+        <!-- Profile Summary -->
+        <div class="card">
+            <h2>Your Financial Profile</h2>
+            <div class="grid">
+                <div class="stat">
+                    <div class="stat-value">$92,000</div>
+                    <div class="stat-label">Annual Income</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">$28,000</div>
+                    <div class="stat-label">Current Savings</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">$670</div>
+                    <div class="stat-label">Monthly Debts</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">~710</div>
+                    <div class="stat-label">Credit Score</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Comfort Zone -->
+        <div class="card">
+            <h2>Your Comfort Zone</h2>
+            <p class="label">What you can afford WITHOUT being house-poor</p>
+            <div class="big-number">$270,000 - $300,000</div>
+            <p class="label">Recommended Home Price Range</p>
+
+            <div class="grid">
+                <div class="stat">
+                    <div class="stat-value">$1,900 - $2,150</div>
+                    <div class="stat-label">Monthly Payment (PITI)</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">25-28%</div>
+                    <div class="stat-label">Of Your Income</div>
+                </div>
+            </div>
+
+            <div class="recommendation">
+                <h3>Why This Range?</h3>
+                <p>Keeping your housing payment under 28% of income means you have room for:</p>
+                <ul style="margin: 12px 0 0 20px;">
+                    <li>Emergency savings</li>
+                    <li>Retirement contributions</li>
+                    <li>Life's unexpected expenses</li>
+                    <li>Actually enjoying your new home!</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Down Payment Strategy -->
+        <div class="card">
+            <h2>Down Payment Options</h2>
+            <p class="label">For a $285,000 home</p>
+
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Strategy</th>
+                        <th>Down Payment</th>
+                        <th>Monthly Payment</th>
+                        <th>Cash Remaining</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>3% Down</strong></td>
+                        <td>$8,550</td>
+                        <td>$2,195</td>
+                        <td>$11,450</td>
+                    </tr>
+                    <tr style="background: #ecfdf5;">
+                        <td><strong>5% Down</strong> ✓ Recommended</td>
+                        <td>$14,250</td>
+                        <td>$2,095</td>
+                        <td>$6,000</td>
+                    </tr>
+                    <tr>
+                        <td><strong>10% Down</strong></td>
+                        <td>$28,500</td>
+                        <td>$1,945</td>
+                        <td>-$8,500 ⚠️</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="warning">
+                <strong>Why we recommend 5% down:</strong> You'll keep ~$6,000 in reserve for emergencies.
+                Yes, you'll pay PMI (~$133/mo), but it drops off once you have 20% equity.
+            </div>
+        </div>
+
+        <!-- DTI Analysis -->
+        <div class="card">
+            <h2>Your Total Debt Picture</h2>
+
+            <h3>Housing Ratio (Front-End DTI)</h3>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="flex: 1;">
+                    <div class="gauge">
+                        <div class="gauge-fill green" style="width: 26.7%;"></div>
+                    </div>
+                </div>
+                <div style="font-weight: 600; color: #22c55e;">26.7%</div>
+            </div>
+            <p class="label">Target: Under 28%</p>
+
+            <h3>Total Debt Ratio (Back-End DTI)</h3>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="flex: 1;">
+                    <div class="gauge">
+                        <div class="gauge-fill green" style="width: 35.4%;"></div>
+                    </div>
+                </div>
+                <div style="font-weight: 600; color: #22c55e;">35.4%</div>
+            </div>
+            <p class="label">Limit: 43%</p>
+
+            <div class="recommendation">
+                <h3>What This Means</h3>
+                <p>Your DTI ratios are in the <strong>healthy range</strong>. After all debt payments, you'd have approximately <strong>$4,947/month</strong> for living expenses, savings, and fun.</p>
+            </div>
+        </div>
+
+        <!-- Rent vs Buy -->
+        <div class="card">
+            <h2>Rent vs. Buy Analysis</h2>
+
+            <div class="grid">
+                <div class="stat">
+                    <div class="stat-value">$1,800</div>
+                    <div class="stat-label">Current Rent</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">$2,095</div>
+                    <div class="stat-label">Mortgage Payment</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">+$295</div>
+                    <div class="stat-label">Monthly Difference</div>
+                </div>
+            </div>
+
+            <h3>5-Year Projection</h3>
+            <div class="grid">
+                <div class="stat">
+                    <div class="stat-value">$117,000</div>
+                    <div class="stat-label">Total Rent Paid (5 years)</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">$55,000+</div>
+                    <div class="stat-label">Equity Built (5 years)</div>
+                </div>
+            </div>
+
+            <div class="recommendation">
+                <h3>The Verdict: Buying Makes Sense</h3>
+                <ul style="margin: 12px 0 0 20px;">
+                    <li>Extra $295/mo goes toward equity (your money)</li>
+                    <li>Your payment stays fixed while rent keeps rising</li>
+                    <li>In 5 years, you'd have $55,000+ in home equity</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Next Steps CTA -->
+        <div class="card">
+            <div class="cta">
+                <h3>Ready to Take the Next Step?</h3>
+                <p style="margin-bottom: 16px; opacity: 0.9;">These numbers say you're ready. Let's make it happen.</p>
+                <div class="cta-buttons">
+                    <a href="/apply" class="btn">Get Pre-Approved</a>
+                    <a href="/schedule" class="btn">Schedule a Call</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Analysis generated by Perennia AI | Calculations are estimates and may vary</p>
+            <p>Interest rates and market conditions subject to change</p>
+        </div>
+    </div>
+</body>
+</html>

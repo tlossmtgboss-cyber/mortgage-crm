@@ -103,6 +103,7 @@ const UsageIntelligenceDashboard = lazy(() => import('./pages/UsageIntelligenceD
 const ScenarioModeling = lazy(() => import('./pages/ScenarioModeling'));
 const DecisionLab = lazy(() => import('./pages/DecisionLab'));
 const MortgageCalculator = lazy(() => import('./pages/MortgageCalculator'));
+const AllInOneLoan = lazy(() => import('./pages/AllInOneLoan'));
 const PipelineProbability = lazy(() => import('./pages/PipelineProbability'));
 const SLASettings = lazy(() => import('./pages/SLASettings'));
 const EmployeeOnboardingAdmin = lazy(() => import('./pages/EmployeeOnboardingAdmin'));
@@ -145,6 +146,7 @@ const BorrowerOAuthCallback = lazy(() => import('./pages/BorrowerOAuthCallback')
 const ApplicationAnalytics = lazy(() => import('./pages/ApplicationAnalytics'));
 const BorrowerPortal = lazy(() => import('./pages/BorrowerPortal'));
 const SharedCalculator = lazy(() => import('./pages/SharedCalculator'));
+const CalculatorDashboard = lazy(() => import('./pages/CalculatorDashboard'));
 const PortalTest = lazy(() => import('./pages/PortalTest'));
 const ThemeRenderer = lazy(() => import('./pages/microsites/ThemeRenderer'));
 const ThemePreview = lazy(() => import('./pages/microsites/ThemePreview'));
@@ -546,6 +548,11 @@ function App() {
 
           {/* Shared Calculator Result (public - token-based access) */}
           <Route path="/shared/calculator/:shareToken" element={<LazyPage><SharedCalculator /></LazyPage>} />
+
+          {/* Calculator Dashboard - All calculators on one page with sidebar navigation */}
+          <Route path="/calculators" element={<LazyPage><CalculatorDashboard /></LazyPage>} />
+          <Route path="/calculator-dashboard" element={<LazyPage><CalculatorDashboard /></LazyPage>} />
+          <Route path="/all-in-one-loan" element={<LazyPage><AllInOneLoan /></LazyPage>} />
 
           {/* Active Loan Portal - Real-time borrower dashboard with WebSocket updates */}
           <Route path="/portal/loan/:loanId" element={<LazyPage><ActiveLoanPortalComplete /></LazyPage>} />

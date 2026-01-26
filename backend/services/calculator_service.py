@@ -972,5 +972,659 @@ class MortgageCalculatorService:
         return schedule
 
 
+    def calculate_cost_of_waiting(
+        self,
+        home_price: float,
+        current_rate: float,
+        down_payment_percent: float,
+        current_rent: float,
+        wait_months: int = 12,
+        home_appreciation_rate: float = 4.0,
+        rate_increase_per_year: float = 0.5,
+        rent_increase_rate: float = 3.0,
+        term_years: int = 30,
+    ) -> Dict[str, Any]:
+        """
+        Calculate the cost of waiting to buy a home.
+
+        Args:
+            home_price: Current home price
+            current_rate: Current mortgage interest rate (percentage)
+            down_payment_percent: Down payment as percentage
+            current_rent: Current monthly rent
+            wait_months: Months to wait before buying
+            home_appreciation_rate: Annual home appreciation rate (percentage)
+            rate_increase_per_year: Expected rate increase per year (percentage points)
+            rent_increase_rate: Annual rent increase rate (percentage)
+            term_years: Loan term in years
+
+        Returns:
+            Dict with cost breakdown and comparison
+        """
+        wait_years = wait_months / 12
+
+        # Calculate future home price
+        future_price = home_price * math.pow(1 + (home_appreciation_rate / 100), wait_years)
+        price_increase = future_price - home_price
+
+        # Calculate future rate
+        future_rate = current_rate + (rate_increase_per_year * wait_years)
+
+        # Calculate down payments
+        current_down = home_price * (down_payment_percent / 100)
+        future_down = future_price * (down_payment_percent / 100)
+        additional_down_needed = future_down - current_down
+
+        # Calculate loan amounts
+        current_loan = home_price - current_down
+        future_loan = future_price - future_down
+
+        # Calculate monthly payments
+        current_pi = self.calculate_monthly_pi(current_loan, current_rate, term_years)
+        future_pi = self.calculate_monthly_pi(future_loan, future_rate, term_years)
+
+        monthly_payment_increase = future_pi["monthly_payment"] - current_pi["monthly_payment"]
+        total_interest_increase = future_pi["total_interest"] - current_pi["total_interest"]
+
+        # Calculate rent paid while waiting
+        total_rent = 0
+        monthly_rent = current_rent
+        for month in range(wait_months):
+            if month > 0 and month % 12 == 0:
+                monthly_rent *= (1 + rent_increase_rate / 100)
+            total_rent += monthly_rent
+
+        # Calculate equity lost (appreciation + principal paydown)
+        # Simplified: just appreciation since no ownership
+        equity_missed = price_increase
+
+        # Total cost of waiting
+        total_cost = price_increase + total_interest_increase + total_rent
+
+        return {
+            "wait_months": wait_months,
+            "buy_now": {
+                "home_price": round(home_price, 2),
+                "down_payment": round(current_down, 2),
+                "loan_amount": round(current_loan, 2),
+                "interest_rate": current_rate,
+                "monthly_payment": current_pi["monthly_payment"],
+                "total_interest": current_pi["total_interest"],
+            },
+            "buy_later": {
+                "home_price": round(future_price, 2),
+                "down_payment": round(future_down, 2),
+                "loan_amount": round(future_loan, 2),
+                "interest_rate": round(future_rate, 3),
+                "monthly_payment": future_pi["monthly_payment"],
+                "total_interest": future_pi["total_interest"],
+            },
+            "costs": {
+                "price_increase": round(price_increase, 2),
+                "additional_down_payment": round(additional_down_needed, 2),
+                "monthly_payment_increase": round(monthly_payment_increase, 2),
+                "total_interest_increase": round(total_interest_increase, 2),
+                "rent_paid_while_waiting": round(total_rent, 2),
+                "equity_missed": round(equity_missed, 2),
+            },
+            "total_cost_of_waiting": round(total_cost, 2),
+            "assumptions": {
+                "home_appreciation_rate": home_appreciation_rate,
+                "rate_increase_per_year": rate_increase_per_year,
+                "rent_increase_rate": rent_increase_rate,
+            },
+            "recommendation": "buy_now" if total_cost > 0 else "wait",
+            "notes": f"Waiting {wait_months} months could cost ${total_cost:,.0f} in higher prices, "
+                     f"increased interest, and rent paid.",
+        }
+
+    def calculate_prepay_vs_invest(
+        self,
+        loan_balance: float,
+        interest_rate: float,
+        remaining_years: int,
+        extra_monthly: float,
+        expected_return: float = 7.0,
+        projection_years: int = 10,
+    ) -> Dict[str, Any]:
+        """
+        Compare mortgage prepayment vs investing extra cash.
+
+        Args:
+            loan_balance: Current loan balance
+            interest_rate: Mortgage interest rate (percentage)
+            remaining_years: Remaining loan term in years
+            extra_monthly: Extra monthly cash available
+            expected_return: Expected annual investment return (percentage)
+            projection_years: Years to project forward
+
+        Returns:
+            Dict with prepay and invest scenarios compared
+        """
+        monthly_rate = (interest_rate / 100) / 12
+        total_payments = remaining_years * 12
+
+        # Calculate base monthly payment
+        if monthly_rate == 0:
+            base_payment = loan_balance / total_payments
+        else:
+            base_payment = (
+                loan_balance * monthly_rate * math.pow(1 + monthly_rate, total_payments)
+            ) / (math.pow(1 + monthly_rate, total_payments) - 1)
+
+        # Scenario 1: Prepay mortgage
+        prepay_balance = loan_balance
+        prepay_months = 0
+        prepay_total_interest = 0
+        prepay_total_paid = 0
+
+        while prepay_balance > 0 and prepay_months < total_payments:
+            interest_portion = prepay_balance * monthly_rate
+            principal_portion = base_payment - interest_portion + extra_monthly
+
+            if principal_portion > prepay_balance:
+                principal_portion = prepay_balance + interest_portion
+                prepay_total_paid += prepay_balance + interest_portion
+                prepay_total_interest += interest_portion
+                prepay_balance = 0
+            else:
+                prepay_balance -= (base_payment + extra_monthly - interest_portion)
+                prepay_total_interest += interest_portion
+                prepay_total_paid += base_payment + extra_monthly
+
+            prepay_months += 1
+
+        years_saved = (total_payments - prepay_months) / 12
+
+        # Calculate interest saved vs normal payoff
+        normal_total_interest = (base_payment * total_payments) - loan_balance
+        interest_saved = normal_total_interest - prepay_total_interest
+
+        # Scenario 2: Invest the extra cash
+        invest_monthly_return = (expected_return / 100) / 12
+        invest_portfolio = 0
+        invest_months = 0
+        invest_balance = loan_balance
+        invest_total_interest = 0
+
+        # Track year-by-year for comparison
+        yearly_comparison = []
+
+        for year in range(1, projection_years + 1):
+            year_start_portfolio = invest_portfolio
+            year_start_prepay_balance = prepay_balance if prepay_months > (year - 1) * 12 else 0
+
+            for month in range((year - 1) * 12, min(year * 12, total_payments)):
+                # Investment grows
+                invest_portfolio = invest_portfolio * (1 + invest_monthly_return) + extra_monthly
+
+                # Normal mortgage continues
+                if invest_balance > 0:
+                    interest_portion = invest_balance * monthly_rate
+                    principal_portion = base_payment - interest_portion
+                    invest_balance -= principal_portion
+                    invest_total_interest += interest_portion
+
+            # Calculate prepay balance at this point
+            temp_balance = loan_balance
+            for m in range(min(year * 12, prepay_months)):
+                interest_p = temp_balance * monthly_rate
+                principal_p = base_payment + extra_monthly - interest_p
+                temp_balance = max(0, temp_balance - principal_p)
+
+            yearly_comparison.append({
+                "year": year,
+                "prepay_remaining_balance": round(max(0, temp_balance), 2),
+                "prepay_equity_gained": round(loan_balance - max(0, temp_balance), 2),
+                "invest_portfolio_value": round(invest_portfolio, 2),
+                "invest_remaining_balance": round(max(0, invest_balance), 2),
+                "invest_net_worth_gain": round(invest_portfolio + (loan_balance - max(0, invest_balance)), 2),
+            })
+
+        # Final comparison at projection end
+        final_prepay_equity = loan_balance - max(0, temp_balance)
+        final_invest_value = invest_portfolio + (loan_balance - max(0, invest_balance))
+
+        winner = "invest" if invest_portfolio > interest_saved else "prepay"
+        advantage = abs(invest_portfolio - interest_saved)
+
+        # Calculate breakeven return rate
+        # At what return rate would investing equal prepay benefit?
+        breakeven_rate = interest_rate  # Simplified approximation
+
+        return {
+            "prepay_scenario": {
+                "strategy": "Extra payments toward mortgage",
+                "monthly_extra": round(extra_monthly, 2),
+                "payoff_months": prepay_months,
+                "years_saved": round(years_saved, 1),
+                "total_interest_paid": round(prepay_total_interest, 2),
+                "interest_saved": round(interest_saved, 2),
+                "effective_return": round(interest_rate, 2),  # Guaranteed return
+            },
+            "invest_scenario": {
+                "strategy": "Invest in market",
+                "monthly_investment": round(extra_monthly, 2),
+                "portfolio_value": round(invest_portfolio, 2),
+                "expected_return": expected_return,
+                "total_interest_paid": round(invest_total_interest, 2),
+                "net_gain": round(invest_portfolio - (extra_monthly * projection_years * 12), 2),
+            },
+            "comparison": {
+                "winner": winner,
+                "advantage_amount": round(advantage, 2),
+                "breakeven_return": round(breakeven_rate, 2),
+                "yearly_breakdown": yearly_comparison,
+            },
+            "inputs": {
+                "loan_balance": loan_balance,
+                "interest_rate": interest_rate,
+                "remaining_years": remaining_years,
+                "extra_monthly": extra_monthly,
+                "expected_return": expected_return,
+                "projection_years": projection_years,
+            },
+            "recommendation": winner,
+            "notes": f"{'Investing' if winner == 'invest' else 'Prepaying'} wins by ${advantage:,.0f} "
+                     f"over {projection_years} years. "
+                     f"Prepaying offers guaranteed {interest_rate}% return; "
+                     f"investing assumes {expected_return}% return with market risk.",
+        }
+
+    def calculate_rent_vs_buy(
+        self,
+        home_price: float,
+        down_payment_percent: float,
+        interest_rate: float,
+        monthly_rent: float,
+        term_years: int = 30,
+        home_appreciation: float = 3.0,
+        rent_increase: float = 3.0,
+        investment_return: float = 7.0,
+        property_tax_rate: float = 1.07,
+        insurance_rate: float = 0.35,
+        maintenance_rate: float = 1.0,
+        projection_years: int = 10,
+    ) -> Dict[str, Any]:
+        """
+        Comprehensive rent vs buy analysis with net worth projection.
+
+        Args:
+            home_price: Purchase price
+            down_payment_percent: Down payment as percentage
+            interest_rate: Mortgage rate (percentage)
+            monthly_rent: Current monthly rent
+            term_years: Loan term
+            home_appreciation: Annual home value increase (percentage)
+            rent_increase: Annual rent increase (percentage)
+            investment_return: Return on invested down payment if renting (percentage)
+            property_tax_rate: Annual property tax as percentage of value
+            insurance_rate: Annual insurance as percentage of value
+            maintenance_rate: Annual maintenance as percentage of value
+            projection_years: Years to project
+
+        Returns:
+            Dict with comprehensive comparison
+        """
+        down_payment = home_price * (down_payment_percent / 100)
+        loan_amount = home_price - down_payment
+
+        # Monthly costs for buying
+        pi_result = self.calculate_monthly_pi(loan_amount, interest_rate, term_years)
+        monthly_pi = pi_result["monthly_payment"]
+        monthly_tax = (home_price * (property_tax_rate / 100)) / 12
+        monthly_insurance = (home_price * (insurance_rate / 100)) / 12
+        monthly_maintenance = (home_price * (maintenance_rate / 100)) / 12
+
+        # Calculate PMI if applicable
+        ltv = (loan_amount / home_price) * 100
+        monthly_pmi = 0
+        if ltv > 80:
+            pmi_result = self.calculate_pmi(loan_amount, home_price)
+            monthly_pmi = pmi_result.get("monthly_premium", 0)
+
+        initial_buy_monthly = monthly_pi + monthly_tax + monthly_insurance + monthly_maintenance + monthly_pmi
+
+        # Year by year projection
+        yearly_projection = []
+        buy_total_cost = down_payment  # Initial investment
+        rent_total_cost = 0
+        rent_investment_value = down_payment  # What renter invests instead
+
+        home_value = home_price
+        loan_balance = loan_amount
+        current_rent = monthly_rent
+
+        monthly_invest_return = (investment_return / 100) / 12
+        monthly_mortgage_rate = (interest_rate / 100) / 12
+
+        for year in range(1, projection_years + 1):
+            # Update values for the year
+            year_buy_cost = 0
+            year_rent_cost = 0
+
+            for month in range(12):
+                # Buying costs
+                interest_payment = loan_balance * monthly_mortgage_rate
+                principal_payment = monthly_pi - interest_payment
+                loan_balance -= principal_payment
+
+                # Update PMI - drops when LTV reaches 80%
+                current_ltv = (loan_balance / home_value) * 100
+                current_pmi = monthly_pmi if current_ltv > 80 else 0
+
+                year_buy_cost += monthly_pi + monthly_tax + monthly_insurance + monthly_maintenance + current_pmi
+
+                # Renting costs
+                year_rent_cost += current_rent
+
+                # Renter's investment grows
+                rent_investment_value = rent_investment_value * (1 + monthly_invest_return)
+                # Add monthly savings difference (if any) to investment
+                monthly_savings = (monthly_pi + monthly_tax + monthly_insurance + monthly_maintenance + current_pmi) - current_rent
+                if monthly_savings > 0:
+                    rent_investment_value += monthly_savings
+
+            # Annual appreciation
+            home_value *= (1 + home_appreciation / 100)
+
+            # Annual rent increase
+            current_rent *= (1 + rent_increase / 100)
+
+            # Update yearly costs
+            buy_total_cost += year_buy_cost
+            rent_total_cost += year_rent_cost
+
+            # Calculate equity
+            home_equity = home_value - loan_balance
+
+            yearly_projection.append({
+                "year": year,
+                "buy": {
+                    "home_value": round(home_value, 2),
+                    "loan_balance": round(loan_balance, 2),
+                    "equity": round(home_equity, 2),
+                    "year_cost": round(year_buy_cost, 2),
+                    "total_cost": round(buy_total_cost, 2),
+                    "net_worth_gain": round(home_equity - down_payment, 2),
+                },
+                "rent": {
+                    "monthly_rent": round(current_rent, 2),
+                    "year_cost": round(year_rent_cost, 2),
+                    "total_cost": round(rent_total_cost, 2),
+                    "investment_value": round(rent_investment_value, 2),
+                    "net_worth_gain": round(rent_investment_value - down_payment, 2),
+                },
+            })
+
+        # Final comparison
+        final_buy_equity = home_value - loan_balance
+        final_rent_wealth = rent_investment_value
+
+        winner = "buy" if final_buy_equity > final_rent_wealth else "rent"
+        advantage = abs(final_buy_equity - final_rent_wealth)
+
+        # Calculate breakeven year
+        breakeven_year = None
+        for proj in yearly_projection:
+            if proj["buy"]["equity"] > proj["rent"]["investment_value"]:
+                breakeven_year = proj["year"]
+                break
+
+        return {
+            "summary": {
+                "winner": winner,
+                "advantage": round(advantage, 2),
+                "breakeven_year": breakeven_year,
+                "buy_equity_at_end": round(final_buy_equity, 2),
+                "rent_wealth_at_end": round(final_rent_wealth, 2),
+            },
+            "initial_comparison": {
+                "buy_monthly": round(initial_buy_monthly, 2),
+                "rent_monthly": round(monthly_rent, 2),
+                "difference": round(initial_buy_monthly - monthly_rent, 2),
+            },
+            "yearly_projection": yearly_projection,
+            "inputs": {
+                "home_price": home_price,
+                "down_payment_percent": down_payment_percent,
+                "interest_rate": interest_rate,
+                "monthly_rent": monthly_rent,
+                "home_appreciation": home_appreciation,
+                "rent_increase": rent_increase,
+                "investment_return": investment_return,
+                "projection_years": projection_years,
+            },
+            "recommendation": winner,
+            "notes": f"Over {projection_years} years, {'buying' if winner == 'buy' else 'renting'} "
+                     f"builds ${advantage:,.0f} more wealth. "
+                     + (f"Buying breaks even at year {breakeven_year}." if breakeven_year else ""),
+        }
+
+    def evaluate_loan_programs(
+        self,
+        home_price: float,
+        down_payment_available: float,
+        annual_income: float,
+        credit_score: int,
+        monthly_debts: float,
+        is_first_time_buyer: bool = True,
+        is_veteran: bool = False,
+        is_va_disabled: bool = False,
+        property_state: str = "CA",
+        property_county: str = None,
+        is_rural: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Evaluate eligibility and compare loan programs.
+
+        Args:
+            home_price: Purchase price
+            down_payment_available: Cash available for down payment
+            annual_income: Gross annual income
+            credit_score: Credit score
+            monthly_debts: Monthly debt payments
+            is_first_time_buyer: First time homebuyer status
+            is_veteran: VA eligibility
+            is_va_disabled: VA disability exemption
+            property_state: Property state code
+            property_county: Property county
+            is_rural: USDA rural area eligibility
+
+        Returns:
+            Dict with program comparisons and recommendations
+        """
+        programs = []
+        monthly_income = annual_income / 12
+
+        # Define program requirements
+        program_defs = {
+            "conventional_20": {
+                "name": "Conventional 20% Down",
+                "min_down_pct": 20.0,
+                "min_credit": 620,
+                "max_dti": 45,
+                "has_pmi": False,
+            },
+            "conventional_10": {
+                "name": "Conventional 10% Down",
+                "min_down_pct": 10.0,
+                "min_credit": 620,
+                "max_dti": 45,
+                "has_pmi": True,
+            },
+            "conventional_5": {
+                "name": "Conventional 5% Down",
+                "min_down_pct": 5.0,
+                "min_credit": 620,
+                "max_dti": 45,
+                "has_pmi": True,
+            },
+            "conventional_3": {
+                "name": "Conventional 3% Down",
+                "min_down_pct": 3.0,
+                "min_credit": 620,
+                "max_dti": 45,
+                "has_pmi": True,
+                "first_time_only": True,
+            },
+            "fha": {
+                "name": "FHA Loan",
+                "min_down_pct": 3.5,
+                "min_credit": 580,
+                "min_credit_10_down": 500,
+                "max_dti": 50,
+                "has_mip": True,
+            },
+            "va": {
+                "name": "VA Loan",
+                "min_down_pct": 0.0,
+                "min_credit": 620,
+                "max_dti": 41,
+                "veteran_required": True,
+                "has_funding_fee": True,
+            },
+            "usda": {
+                "name": "USDA Loan",
+                "min_down_pct": 0.0,
+                "min_credit": 640,
+                "max_dti": 41,
+                "rural_required": True,
+                "income_limit": True,
+                "has_guarantee_fee": True,
+            },
+        }
+
+        # Evaluate each program
+        for prog_id, prog in program_defs.items():
+            eligible = True
+            issues = []
+            advantages = []
+            disadvantages = []
+
+            min_down = home_price * (prog["min_down_pct"] / 100)
+
+            # Check down payment
+            if down_payment_available < min_down:
+                eligible = False
+                issues.append(f"Need ${min_down:,.0f} down payment (have ${down_payment_available:,.0f})")
+
+            # Check credit score
+            min_credit = prog.get("min_credit", 620)
+            if prog_id == "fha" and down_payment_available >= home_price * 0.10:
+                min_credit = prog.get("min_credit_10_down", 500)
+
+            if credit_score < min_credit:
+                eligible = False
+                issues.append(f"Minimum credit score is {min_credit} (have {credit_score})")
+
+            # Check first-time buyer requirement
+            if prog.get("first_time_only") and not is_first_time_buyer:
+                eligible = False
+                issues.append("First-time homebuyer required")
+
+            # Check veteran requirement
+            if prog.get("veteran_required") and not is_veteran:
+                eligible = False
+                issues.append("VA eligibility required")
+
+            # Check rural requirement
+            if prog.get("rural_required") and not is_rural:
+                eligible = False
+                issues.append("Property must be in USDA-eligible rural area")
+
+            # Calculate payment and DTI if eligible
+            if eligible:
+                down = max(min_down, down_payment_available) if prog["min_down_pct"] > 0 else 0
+                loan_amount = home_price - down
+
+                # Use average rate (simplified)
+                rate = 6.5  # Would come from rate service in production
+
+                piti = self.calculate_piti(
+                    loan_amount=loan_amount,
+                    interest_rate=rate,
+                    term_years=30,
+                    property_value=home_price,
+                    credit_score=credit_score,
+                    loan_type=prog_id.split("_")[0],
+                )
+
+                # Check DTI
+                front_dti = (piti["total_piti"] / monthly_income) * 100
+                back_dti = ((piti["total_piti"] + monthly_debts) / monthly_income) * 100
+
+                if back_dti > prog["max_dti"]:
+                    eligible = False
+                    issues.append(f"DTI {back_dti:.1f}% exceeds {prog['max_dti']}% limit")
+
+                # Add program details
+                program_data = {
+                    "id": prog_id,
+                    "name": prog["name"],
+                    "eligible": eligible,
+                    "issues": issues,
+                    "down_payment_required": round(min_down, 2),
+                    "down_payment_percent": prog["min_down_pct"],
+                }
+
+                if eligible:
+                    program_data.update({
+                        "loan_amount": round(loan_amount, 2),
+                        "monthly_payment": piti["total_piti"],
+                        "principal_interest": piti["principal_interest"],
+                        "monthly_pmi_mip": piti["pmi_monthly"],
+                        "front_end_dti": round(front_dti, 1),
+                        "back_end_dti": round(back_dti, 1),
+                    })
+
+                    # Add advantages/disadvantages
+                    if prog["min_down_pct"] == 0:
+                        advantages.append("No down payment required")
+                    if prog["min_down_pct"] <= 3.5:
+                        advantages.append("Low down payment option")
+                    if not prog.get("has_pmi") and not prog.get("has_mip"):
+                        advantages.append("No ongoing mortgage insurance")
+                    if prog_id == "va":
+                        advantages.append("No monthly MI, just one-time funding fee")
+                        if is_va_disabled:
+                            advantages.append("VA funding fee waived due to disability")
+                    if prog.get("has_pmi"):
+                        disadvantages.append("PMI required until 20% equity")
+                    if prog.get("has_mip"):
+                        disadvantages.append("FHA MIP may be for life of loan")
+
+                    program_data["advantages"] = advantages
+                    program_data["disadvantages"] = disadvantages
+
+                programs.append(program_data)
+
+        # Sort by eligibility and monthly payment
+        eligible_programs = [p for p in programs if p["eligible"]]
+        ineligible_programs = [p for p in programs if not p["eligible"]]
+
+        eligible_programs.sort(key=lambda x: x.get("monthly_payment", float("inf")))
+
+        recommended = eligible_programs[0] if eligible_programs else None
+
+        return {
+            "eligible_programs": eligible_programs,
+            "ineligible_programs": ineligible_programs,
+            "recommended": recommended["id"] if recommended else None,
+            "recommended_program": recommended,
+            "borrower_profile": {
+                "home_price": home_price,
+                "down_payment_available": down_payment_available,
+                "credit_score": credit_score,
+                "annual_income": annual_income,
+                "monthly_debts": monthly_debts,
+                "is_first_time_buyer": is_first_time_buyer,
+                "is_veteran": is_veteran,
+            },
+            "notes": f"Found {len(eligible_programs)} eligible programs. "
+                     + (f"Recommended: {recommended['name']}" if recommended else "No eligible programs found."),
+        }
+
+
 # Singleton instance for easy import
 calculator_service = MortgageCalculatorService()
