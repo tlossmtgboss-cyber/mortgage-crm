@@ -40048,6 +40048,47 @@ async def admin_reset_link(email: str):
     reset_url = f"{frontend_url}/reset-password?token={reset_token}"
     return {"reset_url": reset_url}
 
+@app.post("/api/v1/admin/kill-idle-connections")
+async def kill_idle_connections():
+    """Emergency endpoint to kill idle database connections. Temporary - remove after use."""
+    from sqlalchemy import create_engine as _ce
+    from sqlalchemy.pool import NullPool
+    try:
+        db_url = os.getenv("DATABASE_URL", "").replace("postgres://", "postgresql://", 1)
+        temp_engine = _ce(db_url, poolclass=NullPool, connect_args={"connect_timeout": 5})
+        with temp_engine.connect() as conn:
+            stats = conn.execute(text(
+                "SELECT count(*) as total, "
+                "count(*) FILTER (WHERE state = 'idle') as idle, "
+                "count(*) FILTER (WHERE state = 'active') as active, "
+                "count(*) FILTER (WHERE state = 'idle in transaction') as idle_in_tx "
+                "FROM pg_stat_activity WHERE datname = current_database()"
+            )).fetchone()
+            total, idle, active, idle_in_tx = stats
+
+            # Kill idle connections
+            killed = conn.execute(text(
+                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                "WHERE datname = current_database() AND state = 'idle' AND pid != pg_backend_pid()"
+            )).fetchall()
+
+            # Also kill idle in transaction
+            killed_tx = conn.execute(text(
+                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                "WHERE datname = current_database() AND state = 'idle in transaction' AND pid != pg_backend_pid()"
+            )).fetchall()
+            conn.commit()
+
+        temp_engine.dispose()
+        return {
+            "status": "success",
+            "before": {"total": total, "idle": idle, "active": active, "idle_in_tx": idle_in_tx},
+            "killed_idle": len(killed),
+            "killed_idle_in_tx": len(killed_tx)
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
 @app.post("/api/v1/auth/reset-password")
 async def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
     """
