@@ -7,6 +7,57 @@ import { usePermissions } from '../contexts/PermissionContext';
 import { formatPhoneNumber } from '../utils/phoneUtils';
 import './Loans.css';
 
+// Map display names to API enum values (backend uses uppercase)
+const stageDisplayToApi = {
+  'Disclosed': 'DISCLOSED',
+  'In Processing': 'PROCESSING',
+  'Processing': 'PROCESSING',
+  'Submitted': 'SUBMITTED',
+  'In Underwriting': 'UNDERWRITING',
+  'Underwriting': 'UNDERWRITING',
+  'UW Received': 'UW_RECEIVED',
+  'Conditional Approval': 'CONDITIONAL_APPROVAL',
+  'Approved': 'APPROVED',
+  'Suspended': 'SUSPENDED',
+  'CTC': 'CTC',
+  'Clear to Close': 'CLEAR_TO_CLOSE',
+  'Closing': 'CLOSING',
+  'Docs': 'DOCS',
+  'Docs Out': 'DOCS',
+  'Funded': 'FUNDED',
+  'Application': 'APPLICATION',
+  'Nurture': 'NURTURE',
+  'Withdrawn': 'WITHDRAWN',
+  'Does Not Qualify': 'DOES_NOT_QUALIFY',
+};
+
+// Map API enum values to display names
+const stageApiToDisplay = {
+  'DISCLOSED': 'Disclosed',
+  'PROCESSING': 'Processing',
+  'SUBMITTED': 'Submitted',
+  'UNDERWRITING': 'Underwriting',
+  'UW_RECEIVED': 'UW Received',
+  'CONDITIONAL_APPROVAL': 'Conditional Approval',
+  'APPROVED': 'Approved',
+  'SUSPENDED': 'Suspended',
+  'CTC': 'CTC',
+  'CLEAR_TO_CLOSE': 'Clear to Close',
+  'CLOSING': 'Closing',
+  'DOCS': 'Docs',
+  'FUNDED': 'Funded',
+  'APPLICATION': 'Application',
+  'NURTURE': 'Nurture',
+  'WITHDRAWN': 'Withdrawn',
+  'DOES_NOT_QUALIFY': 'Does Not Qualify',
+};
+
+// Get display name for a stage value (handles both title case and uppercase)
+const getStageDisplay = (stage) => {
+  if (!stage) return '';
+  return stageApiToDisplay[stage] || stageApiToDisplay[stage.toUpperCase()] || stage;
+};
+
 // Map pipeline stage IDs to filter names
 const stageIdToFilter = {
   'new': 'New Leads',
@@ -109,15 +160,15 @@ function Loans() {
     'Does Not Qualify',
   ];
 
-  // Map filter display names to actual API stage values
+  // Map filter display names to actual API stage values (supports both legacy title case and new uppercase)
   const filterToStage = {
-    'Disclosed': ['Disclosed'],
-    'In Processing': ['Processing', 'Submitted'],
-    'In Underwriting': ['UW Received', 'Underwriting'],
-    'Approved': ['Approved'],
-    'Clear to Close': ['CTC', 'Clear to Close', 'Docs Out'],
-    'Suspended': ['Suspended'],
-    'Funded': ['Funded'],
+    'Disclosed': ['Disclosed', 'DISCLOSED'],
+    'In Processing': ['Processing', 'Submitted', 'PROCESSING', 'SUBMITTED'],
+    'In Underwriting': ['UW Received', 'Underwriting', 'UW_RECEIVED', 'UNDERWRITING'],
+    'Approved': ['Approved', 'APPROVED', 'Conditional Approval', 'CONDITIONAL_APPROVAL'],
+    'Clear to Close': ['CTC', 'Clear to Close', 'Docs Out', 'CLEAR_TO_CLOSE', 'DOCS', 'CLOSING'],
+    'Suspended': ['Suspended', 'SUSPENDED'],
+    'Funded': ['Funded', 'FUNDED'],
   };
 
   useEffect(() => {
@@ -324,7 +375,7 @@ function Loans() {
           `⚠️ Duplicate Borrower Detected\n\n` +
           `A loan for "${existingLoan.borrower_name}" already exists:\n` +
           `• Loan #: ${existingLoan.loan_number}\n` +
-          `• Status: ${existingLoan.stage}\n` +
+          `• Status: ${getStageDisplay(existingLoan.stage)}\n` +
           `• Amount: $${existingLoan.amount?.toLocaleString()}\n\n` +
           `Do you want to create a new loan anyway?`
         );
@@ -441,15 +492,19 @@ function Loans() {
     const loanId = statusDropdown.loanId;
     setStatusDropdown({ show: false, loanId: null, position: { top: 0, left: 0 } });
 
+    // Convert display name to API enum value
+    const apiStage = stageDisplayToApi[newStatus] || newStatus.toUpperCase().replace(/ /g, '_');
+
     try {
-      await loansAPI.update(loanId, { stage: newStatus });
-      // Update local state
+      await loansAPI.update(loanId, { stage: apiStage });
+      // Update local state with the API value (will be displayed via getStageDisplay)
       setLoans(loans.map(loan =>
-        loan.id === loanId ? { ...loan, stage: newStatus } : loan
+        loan.id === loanId ? { ...loan, stage: apiStage } : loan
       ));
     } catch (err) {
       console.error('Failed to update loan status:', err);
-      alert('Failed to update loan status');
+      const errorMsg = err.response?.data?.detail || err.response?.data?.error || err.message || 'Failed to update loan status';
+      alert(errorMsg);
     }
   };
 
@@ -746,7 +801,7 @@ function Loans() {
                     onClick={(e) => handleStatusClick(e, loan.id)}
                     title="Click to change status"
                   >
-                    {loan.stage}
+                    {getStageDisplay(loan.stage)}
                   </span>
                 </td>
                 <td>{loan.days_in_process || calculateDays(loan.created_at)}</td>
@@ -775,7 +830,7 @@ function Loans() {
                 <span className="loan-number">{loan.loan_number}</span>
               </div>
               <span className={`status-badge status-${loan.sla_status}`}>
-                {loan.stage}
+                {getStageDisplay(loan.stage)}
               </span>
             </div>
 
@@ -1240,19 +1295,42 @@ function Loans() {
 }
 
 function getStatusClass(status) {
+  if (!status) return 'default';
   const statusMap = {
     'Contract Received': 'received',
     'Disclosed': 'disclosed',
+    'DISCLOSED': 'disclosed',
     'In Processing': 'processing',
+    'Processing': 'processing',
+    'PROCESSING': 'processing',
+    'Submitted': 'processing',
+    'SUBMITTED': 'processing',
     'In Underwriting': 'underwriting',
+    'Underwriting': 'underwriting',
+    'UNDERWRITING': 'underwriting',
+    'UW_RECEIVED': 'underwriting',
+    'UW Received': 'underwriting',
+    'CONDITIONAL_APPROVAL': 'approved',
     'Approved': 'approved',
+    'APPROVED': 'approved',
     'Clear to Close': 'ctc',
+    'CLEAR_TO_CLOSE': 'ctc',
+    'CTC': 'ctc',
+    'CLOSING': 'ctc',
+    'DOCS': 'ctc',
     'Suspended': 'suspended',
+    'SUSPENDED': 'suspended',
     'Funded': 'funded',
+    'FUNDED': 'funded',
     'Nurture': 'nurture',
+    'NURTURE': 'nurture',
     'Denied': 'denied',
+    'DENIED': 'denied',
     'Withdrawn': 'withdrawn',
+    'WITHDRAWN': 'withdrawn',
     'Does Not Qualify': 'not-qualified',
+    'DOES_NOT_QUALIFY': 'not-qualified',
+    'APPLICATION': 'received',
   };
   return statusMap[status] || 'default';
 }

@@ -43,8 +43,8 @@ except ImportError:
     SSE_AVAILABLE = False
 from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, DateTime, Date, Text, ForeignKey, JSON, Enum as SQLEnum, func, text, or_, UniqueConstraint, Numeric, Index
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session, relationship, selectinload, joinedload
-from pydantic import BaseModel, EmailStr
+from sqlalchemy.orm import sessionmaker, Session, relationship, selectinload, joinedload, validates
+from pydantic import BaseModel, EmailStr, field_validator
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from datetime import datetime, date, timedelta, timezone
@@ -242,21 +242,27 @@ class LeadStage(str, enum.Enum):
     DISCLOSED = "Disclosed"  # Lead converted to Active Loan
 
 class LoanStage(str, enum.Enum):
-    # Pre-disclosure stages - values must match database enum exactly (uppercase)
-    APPLICATION = "APPLICATION"  # Loan application started
+    APPLICATION = "APPLICATION"
     DISCLOSED = "DISCLOSED"
     PROCESSING = "PROCESSING"
-    SUBMITTED = "SUBMITTED"  # PRD: UW Submitted but not yet received
-    UNDERWRITING = "UNDERWRITING"  # In underwriting review
+    SUBMITTED = "SUBMITTED"
+    UNDERWRITING = "UNDERWRITING"
     UW_RECEIVED = "UW_RECEIVED"
-    CONDITIONAL_APPROVAL = "CONDITIONAL_APPROVAL"  # Approved with conditions
+    CONDITIONAL_APPROVAL = "CONDITIONAL_APPROVAL"
     APPROVED = "APPROVED"
     SUSPENDED = "SUSPENDED"
     CTC = "CTC"
-    CLEAR_TO_CLOSE = "CLEAR_TO_CLOSE"  # Alias for CTC
-    CLOSING = "CLOSING"  # In closing process
-    DOCS = "DOCS"  # Closing documents sent out
+    CLEAR_TO_CLOSE = "CLEAR_TO_CLOSE"
+    CLOSING = "CLOSING"
+    DOCS = "DOCS"
+    DOCS_OUT = "DOCS_OUT"
     FUNDED = "FUNDED"
+    CANCELLED = "CANCELLED"
+    DENIED = "DENIED"
+    DEAD = "DEAD"
+    NURTURE = "NURTURE"
+    WITHDRAWN = "WITHDRAWN"
+    DOES_NOT_QUALIFY = "DOES_NOT_QUALIFY"
 
 
 # ============================================================================
@@ -819,7 +825,7 @@ class Loan(Base):
     preferred_communication = Column(String)  # email, phone, text, voicemail
     coborrower_name = Column(String)
     co_borrower_email = Column(String)
-    stage = Column(SQLEnum(LoanStage), default=LoanStage.DISCLOSED)
+    stage = Column(String, default="DISCLOSED")
     program = Column(String)
     loan_type = Column(String)
     amount = Column(Float, nullable=False)
@@ -995,6 +1001,15 @@ class Loan(Base):
     proposed_housing_expense = Column(Float)
     present_monthly_payment = Column(Float)
     proposed_monthly_payment = Column(Float)
+
+    @validates('stage')
+    def validate_stage(self, key, value):
+        """Convert enum values to plain strings for the String column."""
+        if value is None:
+            return value
+        if hasattr(value, 'value'):
+            return value.value
+        return str(value)
 
     organization = relationship("Organization", backref="loans")
     loan_officer = relationship("User", back_populates="loans")
@@ -4137,6 +4152,41 @@ class LoanCreate(BaseModel):
 class LoanUpdate(BaseModel):
     stage: Optional[LoanStage] = None
     rate: Optional[float] = None
+
+    @field_validator('stage', mode='before')
+    @classmethod
+    def normalize_stage(cls, v):
+        if v is None:
+            return v
+        v_str = str(v).strip()
+        # Map display names to enum values
+        display_to_enum = {
+            'disclosed': 'DISCLOSED',
+            'processing': 'PROCESSING',
+            'in processing': 'PROCESSING',
+            'submitted': 'SUBMITTED',
+            'underwriting': 'UNDERWRITING',
+            'in underwriting': 'UNDERWRITING',
+            'uw received': 'UW_RECEIVED',
+            'uw_received': 'UW_RECEIVED',
+            'conditional approval': 'CONDITIONAL_APPROVAL',
+            'conditional_approval': 'CONDITIONAL_APPROVAL',
+            'approved': 'APPROVED',
+            'suspended': 'SUSPENDED',
+            'ctc': 'CTC',
+            'clear to close': 'CLEAR_TO_CLOSE',
+            'clear_to_close': 'CLEAR_TO_CLOSE',
+            'closing': 'CLOSING',
+            'docs': 'DOCS',
+            'docs out': 'DOCS',
+            'funded': 'FUNDED',
+            'application': 'APPLICATION',
+        }
+        normalized = display_to_enum.get(v_str.lower())
+        if normalized:
+            return normalized
+        # Try uppercase as-is (already correct format)
+        return v_str.upper().replace(' ', '_')
     closing_date: Optional[datetime] = None
     processor: Optional[str] = None
     borrower_name: Optional[str] = None
@@ -4221,11 +4271,11 @@ class LoanResponse(BaseModel):
     borrower_phone: Optional[str] = None
     coborrower_name: Optional[str] = None
     co_borrower_email: Optional[str] = None
-    stage: LoanStage
-    program: Optional[str]
+    stage: Optional[str] = None
+    program: Optional[str] = None
     amount: float
-    rate: Optional[float]
-    closing_date: Optional[datetime]
+    rate: Optional[float] = None
+    closing_date: Optional[datetime] = None
     days_in_stage: Optional[int] = 0
     sla_status: Optional[str] = "on-track"
     created_at: Optional[datetime] = None
@@ -40089,6 +40139,46 @@ async def kill_idle_connections():
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
+@app.post("/api/v1/admin/normalize-loan-stages")
+async def normalize_loan_stages(db: Session = Depends(get_db)):
+    """Normalize all loan stage values to uppercase. Fixes mixed-case data from legacy imports."""
+    try:
+        stage_map = {
+            'Disclosed': 'DISCLOSED',
+            'Processing': 'PROCESSING',
+            'Submitted': 'SUBMITTED',
+            'Underwriting': 'UNDERWRITING',
+            'UW Received': 'UW_RECEIVED',
+            'Conditional Approval': 'CONDITIONAL_APPROVAL',
+            'Approved': 'APPROVED',
+            'Suspended': 'SUSPENDED',
+            'Clear to Close': 'CLEAR_TO_CLOSE',
+            'Closing': 'CLOSING',
+            'Docs': 'DOCS',
+            'Docs Out': 'DOCS_OUT',
+            'Funded': 'FUNDED',
+            'Application': 'APPLICATION',
+            'Nurture': 'NURTURE',
+            'Withdrawn': 'WITHDRAWN',
+            'Does Not Qualify': 'DOES_NOT_QUALIFY',
+        }
+        total_updated = 0
+        for old_val, new_val in stage_map.items():
+            result = db.execute(
+                text("UPDATE loans SET stage = :new_val WHERE stage = :old_val"),
+                {"old_val": old_val, "new_val": new_val}
+            )
+            count = result.rowcount
+            if count > 0:
+                total_updated += count
+                logger.info(f"Normalized {count} loans: '{old_val}' → '{new_val}'")
+        db.commit()
+        return {"status": "success", "total_updated": total_updated, "message": f"Normalized {total_updated} loan stage values to uppercase"}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to normalize stages: {e}")
+        return {"status": "error", "error": str(e)}
+
 @app.post("/api/v1/auth/reset-password")
 async def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
     """
@@ -46608,11 +46698,11 @@ async def update_loan(loan_id: int, loan_update: LoanUpdate, db: Session = Depen
             loan.loan_officer_id = current_user.id
             logger.info(f"Auto-assigned loan {loan.loan_number} to user {current_user.id}")
 
-        # Track if stage is changing
+        # Track if stage is changing (normalize to uppercase for consistent comparison)
         old_stage = loan.stage
-        old_stage_str = old_stage.value if hasattr(old_stage, 'value') else str(old_stage) if old_stage else None
+        old_stage_str = (old_stage.value if hasattr(old_stage, 'value') else str(old_stage).upper() if old_stage else None)
         new_stage = loan_update.stage if loan_update.stage else old_stage
-        new_stage_str = new_stage.value if hasattr(new_stage, 'value') else str(new_stage) if new_stage else None
+        new_stage_str = (new_stage.value if hasattr(new_stage, 'value') else str(new_stage).upper() if new_stage else None)
 
         # Track old values of SLA-triggering fields before update
         sla_trigger_fields = {
@@ -46623,6 +46713,9 @@ async def update_loan(loan_id: int, loan_update: LoanUpdate, db: Session = Depen
         old_sla_values = {field: getattr(loan, field, None) for field in sla_trigger_fields}
 
         for key, value in loan_update.dict(exclude_unset=True).items():
+            # Convert enum values to their string value for String columns
+            if hasattr(value, 'value'):
+                value = value.value
             setattr(loan, key, value)
 
         # Determine which SLA fields changed
@@ -46664,7 +46757,7 @@ async def update_loan(loan_id: int, loan_update: LoanUpdate, db: Session = Depen
                 logger.warning(f"Could not record stage history: {history_error}")
 
         # If stage changed to FUNDED, set funded_date and copy to MUM portfolio
-        if new_stage == LoanStage.FUNDED and old_stage != LoanStage.FUNDED:
+        if new_stage_str == "FUNDED" and old_stage_str != "FUNDED":
             if not loan.funded_date:
                 loan.funded_date = datetime.now(timezone.utc)
             logger.info(f"🎉 Loan {loan.loan_number} is now FUNDED! Creating MUM client...")
