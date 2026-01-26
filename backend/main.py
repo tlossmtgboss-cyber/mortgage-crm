@@ -40041,11 +40041,8 @@ async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(
         }
 
 @app.get("/api/v1/auth/admin-reset-link")
-async def admin_reset_link(email: str, db: Session = Depends(get_db)):
+async def admin_reset_link(email: str):
     """Temporary endpoint to generate password reset link directly. Remove after use."""
-    user = db.query(User).filter(User.email == email).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
     reset_token = create_password_reset_token(email)
     frontend_url = os.getenv("FRONTEND_URL", "https://perenniaai.com")
     reset_url = f"{frontend_url}/reset-password?token={reset_token}"
