@@ -164,7 +164,7 @@ function Loans() {
       await loadLoans();
     } catch (err) {
       console.error('Salesforce sync failed:', err);
-      const errorMsg = err.response?.data?.detail || err.message || 'Sync failed';
+      const errorMsg = err.response?.data?.detail || err.response?.data?.error || err.message || 'Sync failed';
       setSyncResult({
         success: false,
         message: typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg)

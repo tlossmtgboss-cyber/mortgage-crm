@@ -107,7 +107,7 @@ function Login() {
       haptics.success();
     } catch (err) {
       console.error('Login error:', err);
-      const errorMessage = err.response?.data?.detail || err.message || 'Login failed. Please check your credentials and try again.';
+      const errorMessage = err.response?.data?.detail || err.response?.data?.error || err.message || 'Login failed. Please check your credentials and try again.';
       setError(errorMessage);
       haptics.error();
     } finally {
