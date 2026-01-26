@@ -297,9 +297,9 @@ def map_to_existing_columns(row_data: dict, destination: str) -> dict:
 
 
 def normalize_stage(stage_value: str, destination: str) -> str:
-    """Normalize stage values to match database enums"""
+    """Normalize stage values to match database enums (uppercase for loans)"""
     if not stage_value:
-        return 'NEW' if destination == 'leads' else 'Processing'
+        return 'NEW' if destination == 'leads' else 'PROCESSING'
 
     stage_lower = str(stage_value).lower().strip()
 
@@ -329,53 +329,62 @@ def normalize_stage(stage_value: str, destination: str) -> str:
         return lead_stage_map.get(stage_lower, 'NEW')
 
     elif destination == 'loans':
-        # LoanStage enum mappings - comprehensive list of variants
+        # LoanStage enum mappings - all values UPPERCASE to match LoanStage enum
         loan_stage_map = {
             # Application/Pre-disclosure
-            'application': 'Application',
-            'app': 'Application',
-            'new application': 'Application',
-            'disclosed': 'Disclosed',
-            'le sent': 'Disclosed',
-            'processing': 'Processing',
-            'in processing': 'Processing',
-            'proc': 'Processing',
+            'application': 'APPLICATION',
+            'app': 'APPLICATION',
+            'new application': 'APPLICATION',
+            'disclosed': 'DISCLOSED',
+            'le sent': 'DISCLOSED',
+            'processing': 'PROCESSING',
+            'in processing': 'PROCESSING',
+            'proc': 'PROCESSING',
             # Submission
-            'submitted': 'Submitted',
-            'uw submitted': 'Submitted',
-            'submit': 'Submitted',
+            'submitted': 'SUBMITTED',
+            'uw submitted': 'SUBMITTED',
+            'submit': 'SUBMITTED',
             # Underwriting
-            'underwriting': 'Underwriting',
-            'uw received': 'UW Received',
-            'uw': 'UW Received',
-            'in uw': 'UW Received',
-            'in underwriting': 'UW Received',
-            'conditional approval': 'Conditional Approval',
-            'conditional': 'Conditional Approval',
-            'cond approval': 'Conditional Approval',
-            'approved': 'Approved',
-            'approved with conditions': 'Conditional Approval',
-            'suspended': 'Suspended',
-            'susp': 'Suspended',
-            # Clear to Close - normalize all variants to 'CTC' (the established DB enum value)
+            'underwriting': 'UNDERWRITING',
+            'uw received': 'UW_RECEIVED',
+            'uw': 'UW_RECEIVED',
+            'in uw': 'UW_RECEIVED',
+            'in underwriting': 'UW_RECEIVED',
+            'conditional approval': 'CONDITIONAL_APPROVAL',
+            'conditional': 'CONDITIONAL_APPROVAL',
+            'cond approval': 'CONDITIONAL_APPROVAL',
+            'approved': 'APPROVED',
+            'approved with conditions': 'CONDITIONAL_APPROVAL',
+            'suspended': 'SUSPENDED',
+            'susp': 'SUSPENDED',
+            # Clear to Close
             'ctc': 'CTC',
-            'clear to close': 'CTC',
-            'clearto close': 'CTC',
-            'cleartoclose': 'CTC',
-            'clear-to-close': 'CTC',
+            'clear to close': 'CLEAR_TO_CLOSE',
+            'clearto close': 'CLEAR_TO_CLOSE',
+            'cleartoclose': 'CLEAR_TO_CLOSE',
+            'clear-to-close': 'CLEAR_TO_CLOSE',
             'c.t.c.': 'CTC',
             'c.t.c': 'CTC',
             # Closing & funding
-            'closing': 'Closing',
-            'docs out': 'Docs Out',
-            'docs': 'Docs Out',
-            'documents out': 'Docs Out',
-            'funded': 'Funded',
-            'closed': 'Funded',
-            'complete': 'Funded',
-            'settled': 'Funded',
+            'closing': 'CLOSING',
+            'docs out': 'DOCS_OUT',
+            'docs': 'DOCS',
+            'documents out': 'DOCS_OUT',
+            'funded': 'FUNDED',
+            'closed': 'FUNDED',
+            'complete': 'FUNDED',
+            'settled': 'FUNDED',
+            # Inactive
+            'cancelled': 'CANCELLED',
+            'canceled': 'CANCELLED',
+            'denied': 'DENIED',
+            'dead': 'DEAD',
+            'nurture': 'NURTURE',
+            'withdrawn': 'WITHDRAWN',
+            'does not qualify': 'DOES_NOT_QUALIFY',
+            'dnq': 'DOES_NOT_QUALIFY',
         }
-        return loan_stage_map.get(stage_lower, 'Processing')
+        return loan_stage_map.get(stage_lower, 'PROCESSING')
 
     return stage_value
 
@@ -537,7 +546,7 @@ async def auto_import(
                         if 'created_at' not in row_data:
                             row_data['created_at'] = datetime.utcnow()
                         if 'stage' not in row_data:
-                            row_data['stage'] = 'Processing'
+                            row_data['stage'] = 'PROCESSING'
                         if 'amount' not in row_data:
                             row_data['amount'] = 0  # Required field
 

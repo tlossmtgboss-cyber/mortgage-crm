@@ -884,7 +884,7 @@ async def handle_get_pipeline_metrics(args: Dict[str, Any], request: Request) ->
             ]
 
             # Sort by pipeline order
-            stage_order = ["Disclosed", "Processing", "Submitted", "UW Received", "Approved", "Suspended", "CTC", "Docs Out", "Funded"]
+            stage_order = ["APPLICATION", "DISCLOSED", "PROCESSING", "SUBMITTED", "UW_RECEIVED", "UNDERWRITING", "CONDITIONAL_APPROVAL", "APPROVED", "SUSPENDED", "CTC", "CLEAR_TO_CLOSE", "CLOSING", "DOCS", "DOCS_OUT", "FUNDED"]
             stages_list.sort(key=lambda x: stage_order.index(x["stage"]) if x["stage"] in stage_order else 99)
 
             return {

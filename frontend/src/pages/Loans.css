@@ -131,6 +131,11 @@
   color: var(--color-success);
 }
 
+.status-application {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+
 .status-suspended {
   background: rgba(168, 75, 47, 0.1);
   color: var(--color-warning);
@@ -139,6 +144,11 @@
 .status-denied, .status-withdrawn {
   background: rgba(192, 21, 47, 0.1);
   color: var(--color-error);
+}
+
+.status-cancelled, .status-dead {
+  background: #f3f4f6;
+  color: #6b7280;
 }
 
 .empty-state {
@@ -512,6 +522,31 @@
   color: #dc2626;
 }
 
+.status-dropdown-option.status-application:hover {
+  background: rgba(67, 56, 202, 0.1);
+  color: #4338ca;
+}
+
+.status-dropdown-option.status-closing:hover {
+  background: rgba(29, 78, 216, 0.1);
+  color: #1d4ed8;
+}
+
+.status-dropdown-option.status-cancelled:hover {
+  background: rgba(107, 114, 128, 0.1);
+  color: #6b7280;
+}
+
+.status-dropdown-option.status-dead:hover {
+  background: rgba(156, 163, 175, 0.1);
+  color: #9ca3af;
+}
+
+.status-dropdown-option.status-denied:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+
 /* Additional status badge colors */
 .status-badge.status-underwriting {
   background: #e0f2fe;
@@ -536,6 +571,36 @@
 .status-badge.status-not-qualified {
   background: #fee2e2;
   color: #dc2626;
+}
+
+.status-badge.status-application {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+
+.status-badge.status-closing {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.status-badge.status-cancelled {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.status-badge.status-dead {
+  background: #f3f4f6;
+  color: #9ca3af;
+}
+
+.status-badge.status-denied {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.status-badge.status-withdrawn {
+  background: #fef3c7;
+  color: #92400e;
 }
 
 /* Duplicate Detection Styles */

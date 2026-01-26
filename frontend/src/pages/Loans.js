@@ -9,12 +9,13 @@ import './Loans.css';
 
 // Map display names to API enum values (backend uses uppercase)
 const stageDisplayToApi = {
+  'Application': 'APPLICATION',
   'Disclosed': 'DISCLOSED',
-  'In Processing': 'PROCESSING',
   'Processing': 'PROCESSING',
+  'In Processing': 'PROCESSING',
   'Submitted': 'SUBMITTED',
-  'In Underwriting': 'UNDERWRITING',
   'Underwriting': 'UNDERWRITING',
+  'In Underwriting': 'UNDERWRITING',
   'UW Received': 'UW_RECEIVED',
   'Conditional Approval': 'CONDITIONAL_APPROVAL',
   'Approved': 'APPROVED',
@@ -23,9 +24,11 @@ const stageDisplayToApi = {
   'Clear to Close': 'CLEAR_TO_CLOSE',
   'Closing': 'CLOSING',
   'Docs': 'DOCS',
-  'Docs Out': 'DOCS',
+  'Docs Out': 'DOCS_OUT',
   'Funded': 'FUNDED',
-  'Application': 'APPLICATION',
+  'Cancelled': 'CANCELLED',
+  'Denied': 'DENIED',
+  'Dead': 'DEAD',
   'Nurture': 'NURTURE',
   'Withdrawn': 'WITHDRAWN',
   'Does Not Qualify': 'DOES_NOT_QUALIFY',
@@ -33,6 +36,7 @@ const stageDisplayToApi = {
 
 // Map API enum values to display names
 const stageApiToDisplay = {
+  'APPLICATION': 'Application',
   'DISCLOSED': 'Disclosed',
   'PROCESSING': 'Processing',
   'SUBMITTED': 'Submitted',
@@ -45,8 +49,11 @@ const stageApiToDisplay = {
   'CLEAR_TO_CLOSE': 'Clear to Close',
   'CLOSING': 'Closing',
   'DOCS': 'Docs',
+  'DOCS_OUT': 'Docs Out',
   'FUNDED': 'Funded',
-  'APPLICATION': 'Application',
+  'CANCELLED': 'Cancelled',
+  'DENIED': 'Denied',
+  'DEAD': 'Dead',
   'NURTURE': 'Nurture',
   'WITHDRAWN': 'Withdrawn',
   'DOES_NOT_QUALIFY': 'Does Not Qualify',
@@ -62,11 +69,16 @@ const getStageDisplay = (stage) => {
 const stageIdToFilter = {
   'new': 'New Leads',
   'preapproved': 'Pre-Approved',
+  'application': 'Application',
   'disclosed': 'Disclosed',
   'processing': 'In Processing',
   'underwriting': 'In Underwriting',
+  'approved': 'Approved',
   'ctc': 'Clear to Close',
-  'funded': 'Funded This Month'
+  'closing': 'Closing',
+  'suspended': 'Suspended',
+  'funded': 'Funded',
+  'inactive': 'Inactive',
 };
 
 function Loans() {
@@ -137,24 +149,38 @@ function Loans() {
 
   const filters = [
     'All',
+    'Application',
     'Disclosed',
     'In Processing',
     'In Underwriting',
     'Approved',
     'Clear to Close',
+    'Closing',
     'Suspended',
     'Funded',
+    'Inactive',
   ];
 
-  // Loan status options for the dropdown
+  // Loan status options for the dropdown - every stage a loan can be set to
   const loanStatusOptions = [
+    'Application',
     'Disclosed',
-    'In Processing',
-    'In Underwriting',
+    'Processing',
+    'Submitted',
+    'Underwriting',
+    'UW Received',
+    'Conditional Approval',
     'Approved',
-    'Clear to Close',
     'Suspended',
+    'CTC',
+    'Clear to Close',
+    'Closing',
+    'Docs',
+    'Docs Out',
     'Funded',
+    'Cancelled',
+    'Denied',
+    'Dead',
     'Nurture',
     'Withdrawn',
     'Does Not Qualify',
@@ -162,13 +188,16 @@ function Loans() {
 
   // Map filter display names to actual API stage values (supports both legacy title case and new uppercase)
   const filterToStage = {
+    'Application': ['Application', 'APPLICATION'],
     'Disclosed': ['Disclosed', 'DISCLOSED'],
     'In Processing': ['Processing', 'Submitted', 'PROCESSING', 'SUBMITTED'],
     'In Underwriting': ['UW Received', 'Underwriting', 'UW_RECEIVED', 'UNDERWRITING'],
     'Approved': ['Approved', 'APPROVED', 'Conditional Approval', 'CONDITIONAL_APPROVAL'],
-    'Clear to Close': ['CTC', 'Clear to Close', 'Docs Out', 'CLEAR_TO_CLOSE', 'DOCS', 'CLOSING'],
+    'Clear to Close': ['CTC', 'Clear to Close', 'CLEAR_TO_CLOSE', 'CTC'],
+    'Closing': ['Closing', 'CLOSING', 'Docs', 'DOCS', 'Docs Out', 'DOCS_OUT'],
     'Suspended': ['Suspended', 'SUSPENDED'],
     'Funded': ['Funded', 'FUNDED'],
+    'Inactive': ['Cancelled', 'CANCELLED', 'Denied', 'DENIED', 'Dead', 'DEAD', 'Nurture', 'NURTURE', 'Withdrawn', 'WITHDRAWN', 'Does Not Qualify', 'DOES_NOT_QUALIFY'],
   };
 
   useEffect(() => {
@@ -594,20 +623,23 @@ function Loans() {
 
   // Filter by stage - exclude funded loans from "All" since they belong in Portfolio
   // Include all variations of "Funded" status
-  const isFundedLoan = (loan) => {
-    const stage = (loan.stage || '').toLowerCase();
-    const status = (loan.status || '').toLowerCase();
-    return stage.includes('funded') || status.includes('funded');
+  // Inactive stages that don't appear in the "All" active pipeline view
+  const inactiveStages = ['FUNDED', 'Funded', 'CANCELLED', 'Cancelled', 'DENIED', 'Denied', 'DEAD', 'Dead', 'NURTURE', 'Nurture', 'WITHDRAWN', 'Withdrawn', 'DOES_NOT_QUALIFY', 'Does Not Qualify'];
+
+  const isInactiveLoan = (loan) => {
+    const stage = loan.stage || '';
+    return inactiveStages.includes(stage) || stage.toLowerCase().includes('funded');
   };
 
   let filteredLoans;
 
   if (activeFilter === 'All') {
-    // Show only active (non-funded) loans - funded loans go to Portfolio
-    filteredLoans = safeLoans.filter(loan => !isFundedLoan(loan));
+    // Show only active (non-funded/inactive) loans
+    filteredLoans = safeLoans.filter(loan => !isInactiveLoan(loan));
   } else if (activeFilter === 'Funded') {
-    // Show all funded loans
-    filteredLoans = safeLoans.filter(loan => isFundedLoan(loan));
+    // Show funded loans
+    const fundedValues = filterToStage['Funded'] || ['Funded', 'FUNDED'];
+    filteredLoans = safeLoans.filter(loan => fundedValues.includes(loan.stage) || (loan.stage || '').toLowerCase().includes('funded'));
   } else {
     // Use the mapping to match filter name to actual API stage values
     const stageValues = filterToStage[activeFilter] || [activeFilter];
@@ -1297,40 +1329,60 @@ function Loans() {
 function getStatusClass(status) {
   if (!status) return 'default';
   const statusMap = {
-    'Contract Received': 'received',
+    // Application
+    'Application': 'application',
+    'APPLICATION': 'application',
+    'Contract Received': 'application',
+    // Disclosed
     'Disclosed': 'disclosed',
     'DISCLOSED': 'disclosed',
-    'In Processing': 'processing',
+    // Processing
     'Processing': 'processing',
     'PROCESSING': 'processing',
+    'In Processing': 'processing',
     'Submitted': 'processing',
     'SUBMITTED': 'processing',
-    'In Underwriting': 'underwriting',
+    // Underwriting
     'Underwriting': 'underwriting',
     'UNDERWRITING': 'underwriting',
-    'UW_RECEIVED': 'underwriting',
+    'In Underwriting': 'underwriting',
     'UW Received': 'underwriting',
+    'UW_RECEIVED': 'underwriting',
+    // Approved
+    'Conditional Approval': 'approved',
     'CONDITIONAL_APPROVAL': 'approved',
     'Approved': 'approved',
     'APPROVED': 'approved',
+    // Clear to Close
+    'CTC': 'ctc',
     'Clear to Close': 'ctc',
     'CLEAR_TO_CLOSE': 'ctc',
-    'CTC': 'ctc',
-    'CLOSING': 'ctc',
-    'DOCS': 'ctc',
+    // Closing / Docs
+    'Closing': 'closing',
+    'CLOSING': 'closing',
+    'Docs': 'closing',
+    'DOCS': 'closing',
+    'Docs Out': 'closing',
+    'DOCS_OUT': 'closing',
+    // Suspended
     'Suspended': 'suspended',
     'SUSPENDED': 'suspended',
+    // Funded
     'Funded': 'funded',
     'FUNDED': 'funded',
-    'Nurture': 'nurture',
-    'NURTURE': 'nurture',
+    // Inactive statuses
+    'Cancelled': 'cancelled',
+    'CANCELLED': 'cancelled',
     'Denied': 'denied',
     'DENIED': 'denied',
+    'Dead': 'dead',
+    'DEAD': 'dead',
+    'Nurture': 'nurture',
+    'NURTURE': 'nurture',
     'Withdrawn': 'withdrawn',
     'WITHDRAWN': 'withdrawn',
     'Does Not Qualify': 'not-qualified',
     'DOES_NOT_QUALIFY': 'not-qualified',
-    'APPLICATION': 'received',
   };
   return statusMap[status] || 'default';
 }

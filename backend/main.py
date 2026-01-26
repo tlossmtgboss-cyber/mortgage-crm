@@ -4161,6 +4161,7 @@ class LoanUpdate(BaseModel):
         v_str = str(v).strip()
         # Map display names to enum values
         display_to_enum = {
+            'application': 'APPLICATION',
             'disclosed': 'DISCLOSED',
             'processing': 'PROCESSING',
             'in processing': 'PROCESSING',
@@ -4178,9 +4179,16 @@ class LoanUpdate(BaseModel):
             'clear_to_close': 'CLEAR_TO_CLOSE',
             'closing': 'CLOSING',
             'docs': 'DOCS',
-            'docs out': 'DOCS',
+            'docs out': 'DOCS_OUT',
+            'docs_out': 'DOCS_OUT',
             'funded': 'FUNDED',
-            'application': 'APPLICATION',
+            'cancelled': 'CANCELLED',
+            'denied': 'DENIED',
+            'dead': 'DEAD',
+            'nurture': 'NURTURE',
+            'withdrawn': 'WITHDRAWN',
+            'does not qualify': 'DOES_NOT_QUALIFY',
+            'does_not_qualify': 'DOES_NOT_QUALIFY',
         }
         normalized = display_to_enum.get(v_str.lower())
         if normalized:
@@ -5986,7 +5994,7 @@ async def _get_coaching_context(db: Session, user_id: int) -> str:
         context_parts.append(f"\nStalled deals:")
         for loan in stuck_loans:
             days_stuck = (now - loan.updated_at).days if loan.updated_at else 0
-            context_parts.append(f"  - {loan.borrower_name}: {loan.stage.value} ({days_stuck} days)")
+            context_parts.append(f"  - {loan.borrower_name}: {str(loan.stage)} ({days_stuck} days)")
 
     # Get tasks stats with database COUNT queries
     total_tasks = db.query(func.count(Task.id)).filter(Task.owner_id == user_id).scalar() or 0
@@ -6143,7 +6151,7 @@ async def get_loan_context_for_ai(
         "loan_number": loan.loan_number,
         "borrower_name": loan.borrower_name,
         "property_address": loan.property_address,
-        "current_stage": loan.stage.value if loan.stage else None,
+        "current_stage": str(loan.stage) if loan.stage else None,
         "loan_type": loan.loan_type,
         "loan_amount": loan.amount,
         "interest_rate": loan.rate,
@@ -6179,7 +6187,7 @@ async def get_loan_context_for_ai(
             for a in alerts
         ],
         "days_in_stage": loan.days_in_stage or 0,
-        "timeline_summary": f"Loan {loan.loan_number} for {loan.borrower_name} at {loan.property_address}, currently in {loan.stage.value if loan.stage else 'Unknown'} stage"
+        "timeline_summary": f"Loan {loan.loan_number} for {loan.borrower_name} at {loan.property_address}, currently in {str(loan.stage) if loan.stage else 'Unknown'} stage"
     }
 
 
@@ -6376,7 +6384,7 @@ async def get_task_context_for_ai(
                 "id": loan.id,
                 "loan_number": loan.loan_number,
                 "borrower_name": loan.borrower_name,
-                "stage": loan.stage.value if loan.stage else None,
+                "stage": str(loan.stage) if loan.stage else None,
                 "amount": loan.amount
             }
 
@@ -28416,8 +28424,8 @@ async def pre_approval_check(
             loan = db.query(Loan).filter(Loan.id == current_entity_id).first()
             if loan:
                 result["entity_name"] = loan.borrower_name
-                current_stage = loan.stage.value if loan.stage else "Processing"
-                result["current_status"] = loan.stage.name if loan.stage else "PROCESSING"
+                current_stage = str(loan.stage) if loan.stage else "PROCESSING"
+                result["current_status"] = current_stage
                 result["current_status_label"] = current_stage
 
                 # Check for status mismatches in loans
@@ -28820,7 +28828,7 @@ async def approve_reconciliation(
             elif extracted.match_entity_type == "loan":
                 loan = db.query(Loan).filter(Loan.id == extracted.match_entity_id).first()
                 if loan:
-                    old_status = loan.stage.name if loan.stage else "PROCESSING"
+                    old_status = str(loan.stage) if loan.stage else "PROCESSING"
                     loan_stage_map = {
                         "DISCLOSED": LoanStage.DISCLOSED,
                         "PROCESSING": LoanStage.PROCESSING,
@@ -40144,20 +40152,26 @@ async def normalize_loan_stages(db: Session = Depends(get_db)):
     """Normalize all loan stage values to uppercase. Fixes mixed-case data from legacy imports."""
     try:
         stage_map = {
+            'Application': 'APPLICATION',
             'Disclosed': 'DISCLOSED',
             'Processing': 'PROCESSING',
+            'In Processing': 'PROCESSING',
             'Submitted': 'SUBMITTED',
             'Underwriting': 'UNDERWRITING',
+            'In Underwriting': 'UNDERWRITING',
             'UW Received': 'UW_RECEIVED',
             'Conditional Approval': 'CONDITIONAL_APPROVAL',
             'Approved': 'APPROVED',
             'Suspended': 'SUSPENDED',
+            'CTC': 'CTC',
             'Clear to Close': 'CLEAR_TO_CLOSE',
             'Closing': 'CLOSING',
             'Docs': 'DOCS',
             'Docs Out': 'DOCS_OUT',
             'Funded': 'FUNDED',
-            'Application': 'APPLICATION',
+            'Cancelled': 'CANCELLED',
+            'Denied': 'DENIED',
+            'Dead': 'DEAD',
             'Nurture': 'NURTURE',
             'Withdrawn': 'WITHDRAWN',
             'Does Not Qualify': 'DOES_NOT_QUALIFY',
@@ -48584,7 +48598,7 @@ async def trigger_post_closing_workflow(loan_id: int, db: Session = Depends(get_
     trigger = WorkflowTrigger(
         loan_id=loan.id,
         lead_id=lead.id,
-        loan_status=str(loan.stage.value) if loan.stage else "Unknown",
+        loan_status=str(loan.stage) if loan.stage else "Unknown",
         closed_date=loan.funded_date or datetime.now(timezone.utc),
         loan_officer_id=loan.loan_officer_id or current_user.id
     )
@@ -49324,7 +49338,7 @@ async def get_unified_tasks(
             if task.loan_id and task.loan_id in loans_map:
                 loan = loans_map[task.loan_id]
                 entity_name = loan.borrower_name
-                loan_stage = loan.stage.value if loan.stage else None
+                loan_stage = str(loan.stage) if loan.stage else None
             elif task.lead_id and task.lead_id in leads_map:
                 lead = leads_map[task.lead_id]
                 entity_name = lead.name
@@ -49396,7 +49410,7 @@ async def get_unified_tasks(
             if task.loan_id and task.loan_id in loans_map:
                 loan = loans_map[task.loan_id]
                 entity_name = loan.borrower_name
-                loan_stage = loan.stage.value if loan.stage else None
+                loan_stage = str(loan.stage) if loan.stage else None
             elif task.lead_id and task.lead_id in leads_map:
                 lead = leads_map[task.lead_id]
                 entity_name = lead.name
@@ -49499,7 +49513,7 @@ async def get_unified_tasks(
             loan_stage = None
             if item.match_entity_type == "loan" and item.match_entity_id in loans_map:
                 loan = loans_map[item.match_entity_id]
-                loan_stage = loan.stage.value if loan.stage else None
+                loan_stage = str(loan.stage) if loan.stage else None
 
             unified_tasks.append({
                 "id": item.id,
@@ -52579,7 +52593,7 @@ async def ai_chat(
     if conversation.loan_id:
         context_loan = db.query(Loan).filter(Loan.id == conversation.loan_id).first()
         if context_loan:
-            context_info = f"Loan: {context_loan.loan_number}, Borrower: {context_loan.borrower_name}, Stage: {context_loan.stage.value}, Amount: ${context_loan.amount:,.0f}"
+            context_info = f"Loan: {context_loan.loan_number}, Borrower: {context_loan.borrower_name}, Stage: {str(context_loan.stage)}, Amount: ${context_loan.amount:,.0f}"
 
     # Define available functions for AI to call
     tools = [
@@ -53035,7 +53049,7 @@ async def ai_complete_task(
         if task.loan_id:
             loan = db.query(Loan).filter(Loan.id == task.loan_id).first()
             if loan:
-                context += f"\nLoan: {loan.loan_number}, Stage: {loan.stage.value}"
+                context += f"\nLoan: {loan.loan_number}, Stage: {str(loan.stage)}"
 
         # Ask AI for completion suggestion
         response = openai_client.chat.completions.create(
@@ -60825,7 +60839,7 @@ def build_coach_context(user: User, db: Session) -> Dict[str, Any]:
 
     loans_by_stage = {}
     for loan in loans:
-        stage = loan.stage.value
+        stage = str(loan.stage)
         loans_by_stage[stage] = loans_by_stage.get(stage, 0) + 1
 
     # Identify bottlenecks (loans/leads stuck in same stage > 7 days)
@@ -60842,7 +60856,7 @@ def build_coach_context(user: User, db: Session) -> Dict[str, Any]:
         if loan.updated_at:
             days_in_stage = (datetime.now(timezone.utc) - loan.updated_at).days
             if days_in_stage > 7:
-                bottlenecks.append({"type": "Loan", "name": loan.loan_number, "stage": loan.stage.value, "days": days_in_stage})
+                bottlenecks.append({"type": "Loan", "name": loan.loan_number, "stage": str(loan.stage), "days": days_in_stage})
 
     return {
         "user": {
