@@ -758,21 +758,30 @@ def create_test_account(db):
     logger.info(f"  Created organization: {TEST_COMPANY} (ID: {org_id})")
 
     # Create user
+    # Use first_name and last_name (the actual columns in the User model).
+    # full_name is a computed @property, not a database column.
+    name_parts = TEST_FULL_NAME.split(" ", 1)
+    first_name = name_parts[0]
+    last_name = name_parts[1] if len(name_parts) > 1 else ""
+
     hashed_pw = pwd_context.hash(TEST_PASSWORD)
     db.execute(text("""
         INSERT INTO users (
-            email, hashed_password, full_name, role, permission_role,
-            organization_id, is_active, account_status, onboarding_completed,
+            email, hashed_password, first_name, last_name,
+            role, permission_role,
+            organization_id, is_active, onboarding_completed,
             created_at
         ) VALUES (
-            :email, :password, :name, 'site_admin', 'site_admin',
-            :org_id, true, 'active', true,
+            :email, :password, :first_name, :last_name,
+            'site_admin', 'site_admin',
+            :org_id, true, true,
             CURRENT_TIMESTAMP
         )
     """), {
         "email": TEST_EMAIL,
         "password": hashed_pw,
-        "name": TEST_FULL_NAME,
+        "first_name": first_name,
+        "last_name": last_name,
         "org_id": org_id,
     })
     db.flush()
@@ -932,9 +941,12 @@ def create_test_mum_clients(db, owner_id, org_id):
     logger.info("Creating test MUM clients...")
     created = 0
 
-    # Get the test user's full name for loan_officer_name field
-    user_row = db.execute(text("SELECT full_name FROM users WHERE id = :uid"), {"uid": owner_id}).fetchone()
-    lo_name = user_row.full_name if user_row else TEST_FULL_NAME
+    # Get the test user's name for loan_officer_name field
+    user_row = db.execute(text("SELECT first_name, last_name FROM users WHERE id = :uid"), {"uid": owner_id}).fetchone()
+    if user_row:
+        lo_name = f"{user_row.first_name or ''} {user_row.last_name or ''}".strip() or TEST_FULL_NAME
+    else:
+        lo_name = TEST_FULL_NAME
 
     for client in DUMMY_MUM_CLIENTS:
         existing = db.execute(text("SELECT id FROM mum_clients WHERE email = :email"), {"email": client["email"]}).fetchone()
