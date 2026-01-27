@@ -27,32 +27,32 @@ def test_password_verification():
     valid_hash = pwd_context.hash(test_password)
     result = verify_password(test_password, valid_hash)
     print(f"   ✅ Valid password check: {result}")
-    assert result == True, "Valid password should return True"
+    assert result is True, "Valid password should return True"
     
     # Test 2: Invalid password
     print("\n2. Testing invalid password...")
     result = verify_password("WrongPassword", valid_hash)
     print(f"   ✅ Invalid password check: {result}")
-    assert result == False, "Invalid password should return False"
+    assert result is False, "Invalid password should return False"
     
     # Test 3: Malformed hash - should NOT crash
     print("\n3. Testing malformed hash (should NOT crash)...")
     result = verify_password(test_password, "not_a_valid_bcrypt_hash")
     print(f"   ✅ Malformed hash handled gracefully: {result}")
-    assert result == False, "Malformed hash should return False, not crash"
+    assert result is False, "Malformed hash should return False, not crash"
     
     # Test 4: Empty hash
     print("\n4. Testing empty hash...")
     result = verify_password(test_password, "")
     print(f"   ✅ Empty hash handled: {result}")
-    assert result == False, "Empty hash should return False"
+    assert result is False, "Empty hash should return False"
     
     # Test 5: None hash (edge case)
     print("\n5. Testing None hash...")
     try:
         result = verify_password(test_password, None)
         print(f"   ✅ None hash handled: {result}")
-        assert result == False, "None hash should return False"
+        assert result is False, "None hash should return False"
     except Exception as e:
         print(f"   ⚠️  None hash caused exception (expected): {e}")
     
