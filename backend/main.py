@@ -39973,11 +39973,10 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Login error for {form_data.username}: {str(e)}")
+        logger.error(f"Login error for {form_data.username}: {type(e).__name__}: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Login service temporarily unavailable. Please try again.",
         )
 
 # Password Reset Token Configuration
@@ -62746,20 +62745,19 @@ async def startup_event():
                         "permission_role": "admin"
                     })
                     db_admin.commit()
-                    logger.info("✅ Created admin user: admin@perenniaai.com")
+                    logger.info("✅ Created admin user: admin@perenniaai.com (password: demo123)")
                 else:
-                    # Update existing admin user with correct role and password
+                    # Only ensure role/permissions are correct - do NOT overwrite password
                     db_admin.execute(text("""
                         UPDATE users SET
-                            hashed_password = :password,
                             role = 'admin',
                             permission_role = 'admin',
                             is_active = true,
                             email_verified = true
                         WHERE email = 'admin@perenniaai.com'
-                    """), {"password": admin_password_hash})
+                    """))
                     db_admin.commit()
-                    logger.info("✅ Updated admin user: admin@perenniaai.com with admin role and new password")
+                    logger.info("✅ Verified admin user: admin@perenniaai.com (existing password preserved)")
                 db_admin.close()
             except Exception as admin_e:
                 logger.warning(f"⚠️ Admin user setup skipped: {admin_e}")
