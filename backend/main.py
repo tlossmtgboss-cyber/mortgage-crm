@@ -5589,7 +5589,11 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    try:
+        return pwd_context.verify(plain, hashed)
+    except Exception as e:
+        logger.warning(f"Password verification failed: {e}")
+        return False
 
 def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
