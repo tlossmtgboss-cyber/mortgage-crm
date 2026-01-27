@@ -9,15 +9,18 @@ API endpoints for the AI call monitoring system:
 - Artifact execution
 """
 
+import asyncio
+import base64
 import json
 import logging
+import os
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 from uuid import UUID
 
 from fastapi import (
     APIRouter, Depends, HTTPException, BackgroundTasks,
-    Query, Request, status
+    Query, Request, status, WebSocket, WebSocketDisconnect
 )
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
@@ -2306,6 +2309,149 @@ async def create_review_task(
         logger.error(f"Error creating review task for session {session_id}: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# MOBILE AUDIO STREAMING WEBSOCKET
+# =============================================================================
+
+@router.websocket("/sessions/{session_id}/audio-stream")
+async def stream_audio_to_transcript(websocket: WebSocket, session_id: str):
+    """
+    WebSocket endpoint for mobile call intelligence.
+
+    Accepts PCM16 audio chunks from the mobile app, streams them to Deepgram
+    for real-time transcription, and feeds transcript text into the existing
+    call monitoring session pipeline (6 AI agents).
+
+    Client sends:  {"type": "audio", "data": "<base64-pcm16-audio>"}
+    Server sends:  {"type": "transcript", "text": "...", "is_final": true/false}
+                   {"type": "error", "message": "..."}
+                   {"type": "connected", "session_id": "..."}
+    """
+    from database import SessionLocal
+    from utils.websocket_auth import authenticate_websocket
+
+    await websocket.accept()
+
+    deepgram_ws = None
+    db = None
+    deepgram_api_key = os.getenv("DEEPGRAM_API_KEY", "")
+
+    try:
+        # Authenticate
+        db = SessionLocal()
+        user, auth_error = authenticate_websocket(websocket, db, require_auth=False)
+
+        if not user:
+            await websocket.send_json({"type": "error", "message": auth_error or "Auth failed"})
+            await websocket.close()
+            return
+
+        await websocket.send_json({"type": "connected", "session_id": session_id})
+        logger.info(f"[AudioStream] Mobile audio stream connected for session {session_id}")
+
+        if not deepgram_api_key:
+            await websocket.send_json({"type": "error", "message": "Transcription service not configured"})
+            await websocket.close()
+            return
+
+        # Connect to Deepgram streaming API
+        import websockets
+
+        dg_url = (
+            "wss://api.deepgram.com/v1/listen?"
+            "encoding=linear16&sample_rate=16000&channels=1&model=nova-2"
+            "&language=en-US&smart_format=true&punctuate=true"
+            "&interim_results=true&endpointing=300&vad_events=true"
+        )
+        dg_headers = {"Authorization": f"Token {deepgram_api_key}"}
+        deepgram_ws = await websockets.connect(dg_url, extra_headers=dg_headers)
+        logger.info(f"[AudioStream] Deepgram connected for session {session_id}")
+
+        # Task to listen for Deepgram responses and forward to client + backend
+        async def listen_deepgram():
+            try:
+                async for message in deepgram_ws:
+                    data = json.loads(message)
+                    if data.get("type") == "Results":
+                        alternatives = data.get("channel", {}).get("alternatives", [])
+                        if alternatives:
+                            text = alternatives[0].get("transcript", "")
+                            confidence = alternatives[0].get("confidence", 0)
+                            is_final = data.get("is_final", False)
+
+                            if text:
+                                # Send transcript to mobile client
+                                await websocket.send_json({
+                                    "type": "transcript",
+                                    "text": text,
+                                    "is_final": is_final,
+                                    "confidence": confidence,
+                                })
+
+                                # Feed final transcripts into the session pipeline
+                                if is_final:
+                                    try:
+                                        orchestrator = CallMonitoringOrchestrator(db)
+                                        await orchestrator.process_transcript_chunk(
+                                            session_id=session_id,
+                                            chunk=text,
+                                            speaker=None,
+                                            timestamp_ms=None,
+                                        )
+                                    except Exception as e:
+                                        logger.error(f"[AudioStream] Error processing chunk: {e}")
+
+            except websockets.exceptions.ConnectionClosed:
+                logger.info(f"[AudioStream] Deepgram connection closed for session {session_id}")
+            except Exception as e:
+                logger.error(f"[AudioStream] Deepgram listener error: {e}")
+
+        # Start Deepgram listener in background
+        dg_task = asyncio.create_task(listen_deepgram())
+
+        # Main loop: receive audio from mobile client, forward to Deepgram
+        try:
+            while True:
+                raw = await websocket.receive_text()
+                msg = json.loads(raw)
+
+                if msg.get("type") == "audio" and msg.get("data"):
+                    audio_bytes = base64.b64decode(msg["data"])
+                    await deepgram_ws.send(audio_bytes)
+
+                elif msg.get("type") == "stop":
+                    logger.info(f"[AudioStream] Client requested stop for session {session_id}")
+                    break
+
+        except WebSocketDisconnect:
+            logger.info(f"[AudioStream] Mobile client disconnected for session {session_id}")
+        finally:
+            dg_task.cancel()
+
+    except Exception as e:
+        logger.error(f"[AudioStream] Error: {e}")
+        try:
+            await websocket.send_json({"type": "error", "message": str(e)})
+        except Exception:
+            pass
+    finally:
+        if deepgram_ws:
+            try:
+                await deepgram_ws.close()
+            except Exception:
+                pass
+        if db:
+            try:
+                db.close()
+            except Exception:
+                pass
+        try:
+            await websocket.close()
+        except Exception:
+            pass
+        logger.info(f"[AudioStream] Session {session_id} audio stream closed")
 
 
 # =============================================================================

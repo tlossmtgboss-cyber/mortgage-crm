@@ -3029,6 +3029,13 @@ export const callMonitoringAPI = {
     const response = await api.post(`/api/v1/call-monitoring/sessions/${sessionId}/create-review-task`, taskData);
     return response.data;
   },
+
+  // Mobile Audio Stream WebSocket URL
+  getAudioStreamUrl: (sessionId) => {
+    const wsBase = API_BASE_URL.replace('https://', 'wss://').replace('http://', 'ws://');
+    const token = localStorage.getItem('token');
+    return `${wsBase}/api/v1/call-monitoring/sessions/${sessionId}/audio-stream?token=${token}`;
+  },
 };
 
 export default api;

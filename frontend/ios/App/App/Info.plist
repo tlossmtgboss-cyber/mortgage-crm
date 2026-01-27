@@ -55,10 +55,13 @@
 	<string>Perennia AI needs to save photos to your library.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Perennia AI uses Face ID for secure, quick login to your account.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Perennia AI uses the microphone to record and transcribe calls for AI-powered analysis, generating summaries, action items, and compliance checks.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>
 		<string>remote-notification</string>
+		<string>audio</string>
 	</array>
 	<key>NSAppTransportSecurity</key>
 	<dict>

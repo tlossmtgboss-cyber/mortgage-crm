@@ -92,6 +92,7 @@ const VoiceHoldMusicDashboard = lazy(() => import('./components/voice/HoldMusicD
 const VoiceTalkToAgentPage = lazy(() => import('./components/voice/TalkToAgentPage'));
 const VoiceCallAnalyticsDashboard = lazy(() => import('./components/voice/CallAnalyticsDashboard'));
 const CallIntelligencePage = lazy(() => import('./pages/CallIntelligencePage'));
+const MobileCallIntelligencePage = lazy(() => import('./pages/MobileCallIntelligencePage'));
 const AILandingPage = lazy(() => import('./pages/AILandingPage'));
 const WorkflowDashboard = lazy(() => import('./pages/WorkflowDashboard'));
 const WorkflowStagePage = lazy(() => import('./pages/WorkflowStagePage'));
@@ -3174,6 +3175,14 @@ function App() {
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/mobile/call-intelligence"
+            element={
+              <PrivateRoute>
+                <LazyPage><MobileCallIntelligencePage /></LazyPage>
               </PrivateRoute>
             }
           />

@@ -379,6 +379,47 @@ export const haptics = {
 };
 
 // ============================================================================
+// MICROPHONE
+// ============================================================================
+
+export const microphone = {
+  /**
+   * Check if microphone permission is granted
+   * Uses the Permissions API where available, otherwise attempts getUserMedia
+   */
+  async checkPermission() {
+    try {
+      if (navigator.permissions) {
+        const result = await navigator.permissions.query({ name: 'microphone' });
+        return result.state; // 'granted', 'denied', 'prompt'
+      }
+      // Fallback: try getUserMedia briefly
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(track => track.stop());
+      return 'granted';
+    } catch (error) {
+      if (error.name === 'NotAllowedError') return 'denied';
+      return 'prompt';
+    }
+  },
+
+  /**
+   * Request microphone permission by triggering getUserMedia
+   * On iOS, this will show the system permission dialog
+   */
+  async requestPermission() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(track => track.stop());
+      return true;
+    } catch (error) {
+      console.error('Microphone permission denied:', error);
+      return false;
+    }
+  },
+};
+
+// ============================================================================
 // EXPORT ALL
 // ============================================================================
 
@@ -388,5 +429,6 @@ export default {
   pushNotifications,
   biometrics,
   camera,
-  haptics
+  haptics,
+  microphone,
 };
