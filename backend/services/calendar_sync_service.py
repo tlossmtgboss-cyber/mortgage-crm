@@ -701,6 +701,18 @@ class CalendarSyncService:
 
             logger.info(f"Fetched {len(sf_events)} events from Salesforce for user {user_id}")
 
+            # Batch-fetch EventRelation attendee data for all events
+            event_ids = [e.get("Id") for e in sf_events if e.get("Id")]
+            event_relations_map = await self._fetch_event_relations(
+                access_token, instance_url, event_ids
+            )
+
+            # Enrich each event with its EventRelation attendees
+            for sf_event in sf_events:
+                sf_id = sf_event.get("Id")
+                if sf_id and sf_id in event_relations_map:
+                    sf_event["_event_relations"] = event_relations_map[sf_id]
+
             for sf_event in sf_events:
                 try:
                     pull_result = await self._process_inbound_event(
@@ -772,6 +784,13 @@ class CalendarSyncService:
             if not sf_event:
                 result.error = f"Event not found in Salesforce: {salesforce_event_id}"
                 return result
+
+            # Fetch EventRelation attendees for this event
+            event_relations_map = await self._fetch_event_relations(
+                access_token, instance_url, [salesforce_event_id]
+            )
+            if salesforce_event_id in event_relations_map:
+                sf_event["_event_relations"] = event_relations_map[salesforce_event_id]
 
             # Process the event
             settings = self.get_settings(user_id)
@@ -969,6 +988,143 @@ class CalendarSyncService:
         # Default to last_write_wins if policy not recognized
         return {"action": "skipped_conflict", "resolution": "unknown_policy", "crm_event_id": crm_event.id}
 
+    async def _fetch_event_relations(
+        self,
+        access_token: str,
+        instance_url: str,
+        event_ids: List[str]
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Fetch EventRelation records for a batch of Salesforce events.
+        EventRelation stores the full attendee list for each event.
+
+        Args:
+            access_token: OAuth access token
+            instance_url: Salesforce instance URL
+            event_ids: List of Salesforce Event IDs
+
+        Returns:
+            Dict mapping event_id -> list of attendee dicts
+        """
+        if not event_ids:
+            return {}
+
+        # Build SOQL to fetch EventRelation records in bulk
+        ids_str = "','".join(event_ids)
+        query = (
+            f"SELECT EventId, RelationId, Relation.Name, Relation.Email, Status "
+            f"FROM EventRelation "
+            f"WHERE EventId IN ('{ids_str}') AND IsInvitee = true"
+        )
+
+        attendees_by_event: Dict[str, List[Dict[str, Any]]] = {eid: [] for eid in event_ids}
+
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{instance_url}/services/data/v60.0/query",
+                    params={"q": query},
+                    headers={"Authorization": f"Bearer {access_token}"},
+                    timeout=30.0
+                )
+
+                if response.status_code == 200:
+                    records = response.json().get("records", [])
+                    for record in records:
+                        event_id = record.get("EventId")
+                        if event_id in attendees_by_event:
+                            relation = record.get("Relation") or {}
+                            status_map = {
+                                "Accepted": "accepted",
+                                "Declined": "declined",
+                                "Uninvited": "declined",
+                                "New": "pending",
+                                "Maybe": "tentative",
+                            }
+                            sf_status = record.get("Status", "New")
+                            attendees_by_event[event_id].append({
+                                "name": relation.get("Name", ""),
+                                "email": relation.get("Email", ""),
+                                "status": status_map.get(sf_status, "pending"),
+                                "sf_relation_id": record.get("RelationId"),
+                            })
+                    logger.info(
+                        f"Fetched EventRelation records for {len(event_ids)} events, "
+                        f"found {sum(len(v) for v in attendees_by_event.values())} attendees"
+                    )
+                elif response.status_code == 400 and "INVALID_TYPE" in response.text:
+                    # EventRelation may not be available in all orgs
+                    logger.warning("EventRelation not available in this Salesforce org, using WhoId/WhatId only")
+                else:
+                    logger.warning(f"Failed to fetch EventRelation: {response.status_code} {response.text}")
+
+        except Exception as e:
+            logger.warning(f"Error fetching EventRelation records: {e}")
+
+        return attendees_by_event
+
+    def _parse_sf_attendees(
+        self,
+        sf_event: Dict[str, Any],
+        event_relations: Optional[List[Dict[str, Any]]] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Parse attendees from Salesforce event data.
+
+        Combines WhoId/WhatId fields with EventRelation records (if available)
+        into a unified attendee list.
+
+        Args:
+            sf_event: Salesforce event dict (includes WhoId, Who.Name, WhatId, What.Name)
+            event_relations: Optional list of EventRelation-derived attendee dicts
+
+        Returns:
+            List of attendee dicts: [{"email": "...", "name": "...", "status": "..."}]
+        """
+        attendees = []
+        seen_ids = set()
+
+        # If we have EventRelation data, use it as the primary source
+        if event_relations:
+            for rel in event_relations:
+                sf_id = rel.get("sf_relation_id")
+                if sf_id:
+                    seen_ids.add(sf_id)
+                attendees.append({
+                    "name": rel.get("name", ""),
+                    "email": rel.get("email", ""),
+                    "status": rel.get("status", "pending"),
+                })
+
+        # Add WhoId contact/lead if not already in EventRelation list
+        who_id = sf_event.get("WhoId")
+        if who_id and who_id not in seen_ids:
+            # Who is a polymorphic lookup to Contact or Lead
+            who_data = sf_event.get("Who") or {}
+            who_name = who_data.get("Name", "") if isinstance(who_data, dict) else ""
+            attendees.append({
+                "name": who_name,
+                "email": "",  # Email not reliably available from Who relationship
+                "status": "accepted",
+                "sf_who_id": who_id,
+            })
+
+        # Add WhatId related record as context (Account, Opportunity, etc.)
+        what_id = sf_event.get("WhatId")
+        if what_id:
+            what_data = sf_event.get("What") or {}
+            what_name = what_data.get("Name", "") if isinstance(what_data, dict) else ""
+            if what_name:
+                attendees.append({
+                    "name": what_name,
+                    "email": "",
+                    "status": "accepted",
+                    "sf_what_id": what_id,
+                    "type": "related_record",
+                })
+
+        return attendees
+
     def _create_crm_event_from_salesforce(
         self,
         user_id: int,
@@ -1013,7 +1169,7 @@ class CalendarSyncService:
             location=sf_event.get("Location"),
             notes=sf_event.get("Description"),
             owner_user_id=user_id,
-            attendees=[],  # TODO: Parse attendees from WhoId/WhatId
+            attendees=self._parse_sf_attendees(sf_event, sf_event.get("_event_relations")),
             status=status,
             source_system=SourceSystem.SALESFORCE.value,
             last_modified_by_system=SourceSystem.SALESFORCE.value,
@@ -1063,6 +1219,7 @@ class CalendarSyncService:
         crm_event.all_day = all_day
         crm_event.location = sf_event.get("Location")
         crm_event.notes = sf_event.get("Description")
+        crm_event.attendees = self._parse_sf_attendees(sf_event, sf_event.get("_event_relations"))
         crm_event.last_modified_at = datetime.utcnow()
         crm_event.last_modified_by_system = SourceSystem.SALESFORCE.value
         crm_event.sync_status = SyncStatus.SYNCED.value
@@ -1090,6 +1247,7 @@ class CalendarSyncService:
             "Id", "Subject", "StartDateTime", "EndDateTime",
             "IsAllDayEvent", "ActivityDate", "Location", "Description",
             "OwnerId", "LastModifiedDate", "CreatedDate",
+            "WhoId", "Who.Name", "WhatId", "What.Name",
             "CRM_Event_ID__c", "CRM_Fingerprint__c",
             "CRM_Last_Pushed_At__c", "CRM_Source__c"
         ]
@@ -1167,6 +1325,7 @@ class CalendarSyncService:
             "Id", "Subject", "StartDateTime", "EndDateTime",
             "IsAllDayEvent", "ActivityDate", "Location", "Description",
             "OwnerId", "LastModifiedDate", "CreatedDate",
+            "WhoId", "WhatId",
             "CRM_Event_ID__c", "CRM_Fingerprint__c",
             "CRM_Last_Pushed_At__c", "CRM_Source__c"
         ]
@@ -1263,6 +1422,13 @@ class CalendarSyncService:
                             access_token, instance_url, record_id
                         )
                         if sf_event:
+                            # Enrich with EventRelation attendees
+                            event_relations_map = await self._fetch_event_relations(
+                                access_token, instance_url, [record_id]
+                            )
+                            if record_id in event_relations_map:
+                                sf_event["_event_relations"] = event_relations_map[record_id]
+
                             process_result = await self._process_inbound_event(
                                 user_id, sf_event, settings
                             )

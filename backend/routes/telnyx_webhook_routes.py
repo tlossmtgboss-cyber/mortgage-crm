@@ -9,14 +9,17 @@ Handles all Telnyx webhook callbacks including:
 """
 
 import os
+import json
+import asyncio
 import logging
+import re
 from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Request, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text as sa_text
 
 from database import get_db
 from telephony.providers.telnyx.webhooks import (
@@ -160,7 +163,7 @@ async def handle_amd_event(event: TelnyxAMDEvent, db: Session):
     call_control_id = event.call_control_id
 
     # Look up tracking ID by call_control_id
-    result = db.execute(text("""
+    result = db.execute(sa_text("""
         SELECT id FROM amd_outbound_calls
         WHERE call_sid = :call_id
     """), {"call_id": call_control_id}).fetchone()
@@ -195,7 +198,7 @@ async def process_amd_result(tracking_id: str, event: TelnyxAMDEvent, db: Sessio
         answered_category = "unknown"
 
     # Update AMD results in database
-    db.execute(text("""
+    db.execute(sa_text("""
         UPDATE amd_outbound_calls
         SET amd_status = :amd_status,
             answered_by = :answered_by,
@@ -251,7 +254,7 @@ async def handle_call_answered(event: TelnyxCallEvent, db: Session):
     logger.info(f"Call answered: {call_control_id}")
 
     # Update call status
-    db.execute(text("""
+    db.execute(sa_text("""
         UPDATE amd_outbound_calls
         SET status = 'answered'
         WHERE call_sid = :call_id
@@ -269,7 +272,7 @@ async def handle_call_hangup(event: TelnyxCallEvent, db: Session):
     logger.info(f"Call hangup: {call_control_id}, cause: {hangup_cause}")
 
     # Update call status
-    db.execute(text("""
+    db.execute(sa_text("""
         UPDATE amd_outbound_calls
         SET status = 'completed',
             call_ended_at = NOW()
@@ -293,7 +296,7 @@ async def handle_sms_status(event: TelnyxSMSEvent, db: Session):
 
     # Update SMS status in database if we're tracking it
     try:
-        db.execute(text("""
+        db.execute(sa_text("""
             UPDATE sms_messages
             SET delivery_status = :status,
                 updated_at = NOW()
@@ -306,17 +309,31 @@ async def handle_sms_status(event: TelnyxSMSEvent, db: Session):
     return {"status": "acknowledged", "message_id": message_id}
 
 
+def _normalize_phone(phone: str) -> str:
+    """Normalize phone number to E.164 format for matching."""
+    digits = re.sub(r'\D', '', phone)
+    if len(digits) == 10:
+        return f"+1{digits}"
+    elif len(digits) == 11 and digits.startswith('1'):
+        return f"+{digits}"
+    elif not digits.startswith('+'):
+        return f"+{digits}"
+    return phone
+
+
 async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
-    """Handle inbound SMS message"""
+    """Handle inbound SMS message with full workflow triggers."""
     from_number = event.from_number
     to_number = event.to_number
-    text = event.text
+    message_body = event.text
+    normalized_from = _normalize_phone(from_number)
+    normalized_to = _normalize_phone(to_number)
 
-    logger.info(f"Inbound SMS from {from_number}: {text[:50]}...")
+    logger.info(f"Inbound SMS from {from_number}: {message_body[:50]}...")
 
-    # Store inbound SMS
+    # Store inbound SMS in sms_messages table
     try:
-        db.execute(text("""
+        db.execute(sa_text("""
             INSERT INTO sms_messages (
                 direction, from_number, to_number, body,
                 provider, provider_message_id, status, created_at
@@ -327,16 +344,108 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
         """), {
             "from_number": from_number,
             "to_number": to_number,
-            "body": text,
+            "body": message_body,
             "message_id": event.message_id,
         })
         db.commit()
     except Exception as e:
         logger.error(f"Failed to store inbound SMS: {e}")
 
-    # TODO: Trigger any inbound SMS workflows/notifications
+    # ==========================================================================
+    # Workflow Trigger: Feed into SMS Intelligence Queue for AI analysis,
+    # entity matching, SLA tracking, and notification dispatching.
+    # This mirrors the Twilio webhook flow in sms_intelligence_routes.py.
+    # ==========================================================================
 
-    return {"status": "received", "from": from_number}
+    intelligence_queue_id = None
+    try:
+        # Insert into sms_intelligence_queue (same schema as Twilio webhook path)
+        result = db.execute(sa_text("""
+            INSERT INTO sms_intelligence_queue (
+                sms_provider, provider_message_id, from_phone, to_phone,
+                direction, message_body, has_media, media_count,
+                received_at, status
+            ) VALUES (
+                'telnyx', :message_id, :from_phone, :to_phone,
+                'inbound', :body, :has_media, :media_count,
+                CURRENT_TIMESTAMP, 'pending'
+            )
+            ON CONFLICT (sms_provider, provider_message_id) DO NOTHING
+            RETURNING id
+        """), {
+            "message_id": event.message_id,
+            "from_phone": normalized_from,
+            "to_phone": normalized_to,
+            "body": message_body,
+            "has_media": False,  # Telnyx media handled separately if needed
+            "media_count": 0,
+        })
+        row = result.fetchone()
+        if row:
+            intelligence_queue_id = row[0]
+        db.commit()
+        logger.info(f"Telnyx SMS queued for intelligence processing: id={intelligence_queue_id}")
+    except Exception as e:
+        logger.error(f"Failed to queue SMS for intelligence processing: {e}")
+        db.rollback()
+
+    # Trigger background AI analysis and workflow processing
+    if intelligence_queue_id:
+        try:
+            from routes.sms_intelligence_routes import process_incoming_sms
+            asyncio.create_task(process_incoming_sms(intelligence_queue_id))
+            logger.info(f"Background SMS processing triggered for queue id {intelligence_queue_id}")
+        except ImportError:
+            logger.warning("sms_intelligence_routes not available, skipping AI analysis")
+        except Exception as e:
+            logger.error(f"Failed to trigger background SMS processing: {e}")
+
+    # ==========================================================================
+    # Real-time notification: Alert loan officer via WebSocket
+    # ==========================================================================
+
+    try:
+        # Look up which user owns this phone number / is assigned to the contact
+        lo_match = db.execute(sa_text("""
+            SELECT DISTINCT l.loan_officer_id
+            FROM loans l
+            WHERE l.borrower_phone = :phone
+            AND l.loan_officer_id IS NOT NULL
+            LIMIT 1
+        """), {"phone": normalized_from}).fetchone()
+
+        if not lo_match:
+            # Try matching via leads table
+            lo_match = db.execute(sa_text("""
+                SELECT DISTINCT l.assigned_to
+                FROM leads l
+                WHERE l.phone = :phone
+                AND l.assigned_to IS NOT NULL
+                LIMIT 1
+            """), {"phone": normalized_from}).fetchone()
+
+        if lo_match:
+            lo_user_id = lo_match[0]
+            try:
+                from services.workflow_websocket_events import WorkflowWebSocketNotifier
+                notifier = WorkflowWebSocketNotifier()
+                notifier.notify_user_sync(lo_user_id, {
+                    "type": "sms_received",
+                    "from_phone": from_number,
+                    "preview": message_body[:100] if message_body else "",
+                    "provider": "telnyx",
+                    "queue_id": intelligence_queue_id,
+                    "timestamp": datetime.utcnow().isoformat(),
+                })
+                logger.info(f"WebSocket notification sent to LO user_id={lo_user_id}")
+            except ImportError:
+                logger.debug("WebSocket notifier not available")
+            except Exception as e:
+                logger.debug(f"WebSocket notification failed (non-critical): {e}")
+    except Exception as e:
+        logger.debug(f"LO lookup for notification failed (non-critical): {e}")
+
+    return {"status": "received", "from": from_number, "queue_id": intelligence_queue_id}
 
 
 # =============================================================================
@@ -352,7 +461,7 @@ async def handle_recording_saved(event: TelnyxCallEvent, db: Session):
 
     if recording_url:
         # Store recording URL
-        db.execute(text("""
+        db.execute(sa_text("""
             UPDATE call_attempts
             SET recording_url = :url
             WHERE call_sid = :call_id
@@ -392,7 +501,7 @@ async def texml_voicemail(
 ):
     """TeXML response to play voicemail message"""
     # Get call info
-    result = db.execute(text("""
+    result = db.execute(sa_text("""
         SELECT voicemail_message, voicemail_audio, client_name, lo_name, purpose
         FROM amd_outbound_calls
         WHERE id = :tracking_id
@@ -407,7 +516,7 @@ async def texml_voicemail(
     voicemail_message, voicemail_audio, client_name, lo_name, purpose = result
 
     # Update status
-    db.execute(text("""
+    db.execute(sa_text("""
         UPDATE amd_outbound_calls
         SET status = 'voicemail_left', handling_method = 'voicemail_tts'
         WHERE id = :tracking_id
@@ -447,7 +556,7 @@ async def texml_connect_ai(
 ):
     """TeXML response to connect call to AI via WebSocket stream"""
     # Get call info
-    result = db.execute(text("""
+    result = db.execute(sa_text("""
         SELECT client_name, to_number, purpose, lo_name
         FROM amd_outbound_calls
         WHERE id = :tracking_id
@@ -462,7 +571,7 @@ async def texml_connect_ai(
     client_name, to_number, purpose, lo_name = result
 
     # Update status
-    db.execute(text("""
+    db.execute(sa_text("""
         UPDATE amd_outbound_calls
         SET status = 'connected', handling_method = 'ai_stream'
         WHERE id = :tracking_id

@@ -529,6 +529,50 @@ class PerenniaS3Service:
                 "error": str(e)
             }
 
+    def download_file(self, storage_key: str) -> Dict[str, Any]:
+        """
+        Download file content directly from S3.
+
+        Args:
+            storage_key: S3 object key
+
+        Returns:
+            Dict with file content bytes and metadata
+        """
+        try:
+            response = self.s3_client.get_object(
+                Bucket=self.bucket_name,
+                Key=storage_key
+            )
+
+            content = response['Body'].read()
+
+            logger.info(f"Downloaded {len(content)} bytes from s3://{self.bucket_name}/{storage_key}")
+
+            return {
+                "success": True,
+                "content": content,
+                "content_type": response.get('ContentType', 'application/octet-stream'),
+                "file_size": response['ContentLength'],
+                "last_modified": response['LastModified'].isoformat(),
+                "metadata": response.get('Metadata', {})
+            }
+
+        except ClientError as e:
+            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+            if error_code == '404' or error_code == 'NoSuchKey':
+                logger.warning(f"File not found in S3: {storage_key}")
+                return {
+                    "success": False,
+                    "error": "File not found",
+                    "not_found": True
+                }
+            logger.error(f"S3 download failed ({error_code}): {e}")
+            return {
+                "success": False,
+                "error": f"S3 download failed: {error_code}"
+            }
+
     def move_file(
         self,
         source_key: str,

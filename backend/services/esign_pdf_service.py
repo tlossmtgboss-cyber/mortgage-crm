@@ -422,6 +422,200 @@ class EsignPDFService:
             logger.error(f"Error combining PDFs: {e}")
             raise
 
+    def generate_signed_pdf(self, envelope_id: int, db=None) -> Dict[str, Any]:
+        """
+        Generate the complete signed PDF package for a completed envelope.
+
+        Orchestrates the full flow:
+        1. Fetch envelope data, signers, fields, field values, and audit events from DB
+        2. Download original PDF from S3
+        3. Flatten field values onto PDF (signatures, text, dates, checkboxes)
+        4. Generate audit trail PDF
+        5. Combine signed PDF + audit trail
+        6. Upload final document back to S3
+        7. Record completed document in database
+
+        Args:
+            envelope_id: The envelope ID to generate documents for
+            db: Database session (required)
+
+        Returns:
+            Dict with success status and document details
+        """
+        if db is None:
+            return {"success": False, "error": "Database session required"}
+
+        if self.s3_service is None:
+            return {"success": False, "error": "S3 service not configured"}
+
+        try:
+            from sqlalchemy import text as sql_text
+
+            # 1. Fetch envelope
+            envelope_row = db.execute(sql_text(
+                "SELECT * FROM esign_envelopes WHERE id = :id"
+            ), {"id": envelope_id}).fetchone()
+
+            if not envelope_row:
+                return {"success": False, "error": f"Envelope {envelope_id} not found"}
+
+            envelope = dict(envelope_row._mapping)
+
+            if envelope["status"] != "completed":
+                return {"success": False, "error": "Envelope not yet completed"}
+
+            pdf_storage_key = envelope.get("pdf_storage_key")
+            if not pdf_storage_key:
+                return {"success": False, "error": "No PDF storage key on envelope"}
+
+            # 2. Fetch signers, fields, field values, audit events
+            signers = [
+                dict(r._mapping) for r in db.execute(sql_text(
+                    "SELECT * FROM esign_signers WHERE envelope_id = :id"
+                ), {"id": envelope_id}).fetchall()
+            ]
+
+            fields = [
+                dict(r._mapping) for r in db.execute(sql_text(
+                    "SELECT * FROM esign_fields WHERE envelope_id = :id"
+                ), {"id": envelope_id}).fetchall()
+            ]
+
+            field_values = [
+                dict(r._mapping) for r in db.execute(sql_text("""
+                    SELECT fv.* FROM esign_field_values fv
+                    JOIN esign_fields f ON f.id = fv.field_id
+                    WHERE f.envelope_id = :id
+                """), {"id": envelope_id}).fetchall()
+            ]
+
+            audit_events = [
+                dict(r._mapping) for r in db.execute(sql_text("""
+                    SELECT * FROM esign_audit_events
+                    WHERE envelope_id = :id
+                    ORDER BY created_at ASC
+                """), {"id": envelope_id}).fetchall()
+            ]
+
+            # 3. Download original PDF from S3
+            download_result = self.s3_service.download_file(pdf_storage_key)
+            if not download_result.get("success"):
+                return {
+                    "success": False,
+                    "error": f"Failed to download PDF: {download_result.get('error')}"
+                }
+
+            original_pdf_bytes = download_result["content"]
+            logger.info(f"Downloaded original PDF ({len(original_pdf_bytes)} bytes) for envelope {envelope_id}")
+
+            # 4. Flatten signed PDF with field values
+            signed_pdf_bytes, pdf_hash = self.flatten_signed_pdf(
+                original_pdf_bytes=original_pdf_bytes,
+                fields=fields,
+                field_values=field_values,
+                signers=signers,
+            )
+            logger.info(f"Flattened signed PDF ({len(signed_pdf_bytes)} bytes) hash={pdf_hash[:16]}...")
+
+            # 5. Generate audit trail PDF
+            audit_pdf_bytes = self.generate_audit_trail_pdf(
+                envelope=envelope,
+                signers=signers,
+                audit_events=audit_events,
+            )
+            logger.info(f"Generated audit trail PDF ({len(audit_pdf_bytes)} bytes)")
+
+            # 6. Combine signed PDF + audit trail
+            combined_pdf_bytes = self.combine_pdfs(signed_pdf_bytes, audit_pdf_bytes)
+            logger.info(f"Combined PDF ({len(combined_pdf_bytes)} bytes)")
+
+            combined_hash = hashlib.sha256(combined_pdf_bytes).hexdigest()
+
+            # 7. Upload final document to S3
+            # Store alongside original with _signed suffix
+            base_key = pdf_storage_key.rsplit('.', 1)[0] if '.' in pdf_storage_key else pdf_storage_key
+            signed_key = f"{base_key}_signed.pdf"
+            audit_key = f"{base_key}_audit.pdf"
+            combined_key = f"{base_key}_complete.pdf"
+
+            # Upload all three variants
+            upload_results = {}
+            for key, content, label in [
+                (signed_key, signed_pdf_bytes, "signed"),
+                (audit_key, audit_pdf_bytes, "audit"),
+                (combined_key, combined_pdf_bytes, "complete"),
+            ]:
+                result = self.s3_service.upload_file(
+                    storage_key=key,
+                    file_content=content,
+                    content_type="application/pdf",
+                    metadata={
+                        "envelope_id": str(envelope_id),
+                        "document_type": label,
+                    }
+                )
+                upload_results[label] = result
+                if not result.get("success"):
+                    logger.error(f"Failed to upload {label} PDF: {result.get('error')}")
+
+            # 8. Record completed document in database
+            now = datetime.now(timezone.utc).isoformat()
+            try:
+                db.execute(sql_text("""
+                    INSERT INTO esign_completed_documents
+                        (envelope_id, document_type, storage_key, file_size, sha256_hash, created_at)
+                    VALUES
+                        (:envelope_id, 'signed', :signed_key, :signed_size, :signed_hash, :now),
+                        (:envelope_id, 'audit_trail', :audit_key, :audit_size, :audit_hash, :now),
+                        (:envelope_id, 'complete', :combined_key, :combined_size, :combined_hash, :now)
+                """), {
+                    "envelope_id": envelope_id,
+                    "signed_key": signed_key,
+                    "signed_size": len(signed_pdf_bytes),
+                    "signed_hash": pdf_hash,
+                    "audit_key": audit_key,
+                    "audit_size": len(audit_pdf_bytes),
+                    "audit_hash": hashlib.sha256(audit_pdf_bytes).hexdigest(),
+                    "combined_key": combined_key,
+                    "combined_size": len(combined_pdf_bytes),
+                    "combined_hash": combined_hash,
+                    "now": now,
+                })
+                db.commit()
+            except Exception as e:
+                logger.warning(f"Could not record completed documents (table may not exist): {e}")
+                db.rollback()
+
+            return {
+                "success": True,
+                "envelope_id": envelope_id,
+                "documents": {
+                    "signed": {
+                        "storage_key": signed_key,
+                        "file_size": len(signed_pdf_bytes),
+                        "sha256": pdf_hash,
+                    },
+                    "audit_trail": {
+                        "storage_key": audit_key,
+                        "file_size": len(audit_pdf_bytes),
+                    },
+                    "complete": {
+                        "storage_key": combined_key,
+                        "file_size": len(combined_pdf_bytes),
+                        "sha256": combined_hash,
+                    },
+                },
+                "signer_count": len(signers),
+                "field_count": len(fields),
+            }
+
+        except Exception as e:
+            logger.error(f"Error generating signed PDF for envelope {envelope_id}: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+            }
+
     def generate_preview_pages(
         self,
         pdf_bytes: bytes,

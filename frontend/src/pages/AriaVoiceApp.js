@@ -1,5 +1,9 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useBiometricLogin } from '../hooks/useBiometricLogin';
+import { authAPI } from '../services/api';
+import { setAuth } from '../utils/auth';
+import { haptics } from '../services/nativeServices';
 import './AriaVoiceApp.css';
 
 const AriaVoiceApp = () => {
@@ -10,6 +14,16 @@ const AriaVoiceApp = () => {
   const [error, setError] = useState(null);
   const [conversationHistory, setConversationHistory] = useState([]);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState(null);
+
+  const {
+    isAvailable: biometricAvailable,
+    biometryDisplayName,
+    hasStoredCredentials,
+    isNative: isNativePlatform,
+    authenticateWithBiometrics,
+  } = useBiometricLogin();
 
   const wsRef = useRef(null);
   const audioContextRef = useRef(null);
@@ -35,6 +49,14 @@ const AriaVoiceApp = () => {
       setIsAuthenticated(true);
     }
   }, []);
+
+  // Auto-attempt biometric login if available and user not authenticated
+  useEffect(() => {
+    if (!isAuthenticated && biometricAvailable && hasStoredCredentials) {
+      handleBiometricLogin();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, biometricAvailable, hasStoredCredentials]);
 
   // Initialize audio context
   const initAudioContext = useCallback(() => {
@@ -321,11 +343,44 @@ Be conversational, helpful, and concise. When users ask to perform actions, conf
     }
   };
 
-  // Quick login with stored credentials
+  // Biometric login - authenticate with Face ID/Touch ID
+  const handleBiometricLogin = async () => {
+    setLoginLoading(true);
+    setLoginError(null);
+
+    try {
+      const credentials = await authenticateWithBiometrics();
+
+      if (credentials) {
+        // Use stored credentials to call login API
+        const data = await authAPI.login(credentials.username, credentials.password);
+
+        if (data.access_token) {
+          await setAuth(data.access_token, data.user);
+          setIsAuthenticated(true);
+          haptics.success();
+          return;
+        }
+      }
+      // Biometric succeeded but no credentials or no token - fall back
+      setLoginError('Biometric login failed. Please sign in manually.');
+      haptics.warning();
+    } catch (err) {
+      console.error('Biometric login error:', err);
+      setLoginError('Authentication failed. Please sign in manually.');
+      haptics.error();
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  // Quick login - try biometrics first, fall back to login page
   const handleQuickLogin = async () => {
-    // For now, redirect to login page
-    // TODO: Implement biometric login
-    navigate('/login?redirect=/aria');
+    if (biometricAvailable && hasStoredCredentials) {
+      await handleBiometricLogin();
+    } else {
+      navigate('/login?redirect=/aria');
+    }
   };
 
   // Get status display
@@ -353,8 +408,33 @@ Be conversational, helpful, and concise. When users ask to perform actions, conf
           </div>
           <h1 className="aria-title">Aria</h1>
           <p className="aria-subtitle">Your AI Voice Assistant</p>
-          <button className="aria-login-btn" onClick={handleQuickLogin}>
-            Sign In to Continue
+
+          {loginError && (
+            <p className="aria-error" style={{ color: '#ff6b6b', fontSize: '14px', margin: '8px 0' }}>
+              {loginError}
+            </p>
+          )}
+
+          {/* Biometric login button (Face ID / Touch ID) */}
+          {biometricAvailable && hasStoredCredentials && (
+            <button
+              className="aria-login-btn aria-biometric-btn"
+              onClick={handleBiometricLogin}
+              disabled={loginLoading}
+              style={{ marginBottom: '12px' }}
+            >
+              {loginLoading ? 'Authenticating...' : `Sign In with ${biometryDisplayName}`}
+            </button>
+          )}
+
+          {/* Standard sign in button */}
+          <button
+            className="aria-login-btn"
+            onClick={() => navigate('/login?redirect=/aria')}
+            disabled={loginLoading}
+            style={biometricAvailable && hasStoredCredentials ? { opacity: 0.7, fontSize: '14px' } : {}}
+          >
+            {biometricAvailable && hasStoredCredentials ? 'Sign In with Email' : 'Sign In to Continue'}
           </button>
         </div>
       </div>

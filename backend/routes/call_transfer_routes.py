@@ -141,6 +141,104 @@ def get_from_number() -> str:
     return os.getenv("TWILIO_PHONE_NUMBER", "")
 
 
+def _notify_agent_transfer_event(
+    db: Session,
+    transfer_id: int,
+    event_type: str,
+    details: Optional[str] = None
+):
+    """
+    Notify the initiating agent about a transfer event (rejection, failure, etc.)
+
+    Sends both:
+    1. A real-time WebSocket notification for immediate alert
+    2. A persistent notification record in the database
+
+    Args:
+        db: Database session
+        transfer_id: The call_transfers record ID
+        event_type: One of 'rejected', 'failed', 'consultation_failed'
+        details: Optional extra detail (e.g. failure reason)
+    """
+    try:
+        # Look up the transfer to get the initiating agent
+        transfer = db.execute(text("""
+            SELECT ct.from_user_id, ct.to_user_id, ct.to_phone,
+                   ct.transfer_type, ct.original_call_sid, ct.transfer_reason,
+                   u_to.name as to_name
+            FROM call_transfers ct
+            LEFT JOIN users u_to ON u_to.id = ct.to_user_id
+            WHERE ct.id = :id
+        """), {"id": transfer_id}).fetchone()
+
+        if not transfer or not transfer.from_user_id:
+            logger.debug(f"No initiating agent to notify for transfer {transfer_id}")
+            return
+
+        from_user_id = transfer.from_user_id
+        to_name = transfer.to_name or transfer.to_phone or "Unknown"
+
+        # Build notification message
+        messages = {
+            "rejected": f"Transfer to {to_name} was declined.",
+            "failed": f"Transfer to {to_name} failed: {details or 'no answer'}.",
+            "consultation_failed": f"Consultation with {to_name} failed: {details or 'unavailable'}. Caller is still on hold.",
+        }
+        message = messages.get(event_type, f"Transfer update: {event_type}")
+
+        # 1. Send real-time WebSocket notification
+        try:
+            from services.workflow_websocket_events import WorkflowWebSocketNotifier
+            notifier = WorkflowWebSocketNotifier()
+            notifier.notify_user_sync(from_user_id, {
+                "type": "transfer_update",
+                "event": event_type,
+                "transfer_id": transfer_id,
+                "transfer_type": transfer.transfer_type,
+                "to_name": to_name,
+                "message": message,
+                "original_call_sid": transfer.original_call_sid,
+                "requires_action": event_type in ("rejected", "consultation_failed"),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+            logger.info(f"WebSocket notification sent to agent {from_user_id}: {event_type}")
+        except ImportError:
+            logger.debug("WebSocket notifier not available")
+        except Exception as e:
+            logger.debug(f"WebSocket notification failed (non-critical): {e}")
+
+        # 2. Store persistent notification in database
+        try:
+            db.execute(text("""
+                INSERT INTO notifications (
+                    user_id, type, title, message, data, is_read, created_at
+                ) VALUES (
+                    :user_id, :type, :title, :message, :data, FALSE, CURRENT_TIMESTAMP
+                )
+            """), {
+                "user_id": from_user_id,
+                "type": "transfer_update",
+                "title": f"Transfer {event_type.replace('_', ' ').title()}",
+                "message": message,
+                "data": json.dumps({
+                    "transfer_id": transfer_id,
+                    "event": event_type,
+                    "to_name": to_name,
+                    "original_call_sid": transfer.original_call_sid,
+                }),
+            })
+            db.commit()
+        except Exception as e:
+            # Notifications table may not exist yet - non-critical
+            logger.debug(f"Could not store persistent notification: {e}")
+            db.rollback()
+
+        logger.info(f"Agent {from_user_id} notified: transfer {transfer_id} {event_type}")
+
+    except Exception as e:
+        logger.error(f"Failed to notify agent for transfer {transfer_id}: {e}")
+
+
 def get_hold_music_url(db: Session, music_id: Optional[int] = None) -> str:
     """Get hold music URL"""
     if music_id:
@@ -801,6 +899,9 @@ async def warm_transfer_decision_twiml(
             """), {"id": transfer_id})
             db.commit()
 
+            # Notify the initiating agent that the transfer was declined
+            _notify_agent_transfer_event(db, int(transfer_id), "rejected")
+
         return Response(content=str(response), media_type="application/xml")
 
     except SQLAlchemyError as e:
@@ -949,6 +1050,11 @@ async def transfer_status_twiml(
                 """), {"id": transfer_id, "reason": dial_status})
                 db.commit()
 
+                # Notify the initiating agent that the transfer failed
+                _notify_agent_transfer_event(
+                    db, int(transfer_id), "failed", details=dial_status
+                )
+
             response.say(
                 "We were unable to complete your transfer. Please try again later.",
                 voice="Polly.Joanna"
@@ -996,7 +1102,12 @@ async def consultation_status_webhook(
             """), {"id": transfer_id, "reason": f"Consultation {call_status}"})
             db.commit()
 
-            # TODO: Could notify agent or return caller here
+            # Notify the initiating agent that the consultation failed
+            if transfer_id:
+                _notify_agent_transfer_event(
+                    db, int(transfer_id), "consultation_failed",
+                    details=f"Consultation {call_status}"
+                )
 
         elif call_status == "completed":
             db.execute(text("""

@@ -156,19 +156,24 @@ def generate_signed_documents(envelope_id: int):
         db = next(db_gen)
 
         try:
-            from services.esign_pdf_service import EsignPdfService
-            pdf_service = EsignPdfService(db)
+            from services.esign_pdf_service import get_esign_pdf_service
+            from services.perennia_s3_service import get_s3_service
 
-            # Generate the signed PDF
-            result = pdf_service.generate_signed_pdf(envelope_id)
+            s3_service = get_s3_service()
+            pdf_service = get_esign_pdf_service(s3_service=s3_service)
+
+            # Generate the signed PDF (fetches from S3, flattens, uploads back)
+            result = pdf_service.generate_signed_pdf(envelope_id, db=db)
 
             if result.get("success"):
-                logger.info(f"Successfully generated signed PDF for envelope {envelope_id}")
+                logger.info(f"Successfully generated signed PDF for envelope {envelope_id}: "
+                           f"signed={result['documents']['signed']['file_size']} bytes, "
+                           f"complete={result['documents']['complete']['file_size']} bytes")
             else:
                 logger.error(f"Failed to generate signed PDF for envelope {envelope_id}: {result.get('error')}")
 
-        except ImportError:
-            logger.error("EsignPdfService not available for document generation")
+        except ImportError as e:
+            logger.error(f"Service not available for document generation: {e}")
         except Exception as e:
             logger.error(f"Error generating signed PDF for envelope {envelope_id}: {e}")
         finally:
@@ -672,6 +677,10 @@ async def generate_signed_document(
     """
     Generate the final signed PDF and audit trail.
     Only available for completed envelopes.
+
+    Fetches the original PDF from S3, flattens all field values onto it,
+    generates an audit trail PDF, combines them, and uploads the results
+    back to S3.
     """
     envelope = db.execute(text("""
         SELECT * FROM esign_envelopes WHERE id = :id
@@ -683,38 +692,36 @@ async def generate_signed_document(
     if envelope.status != "completed":
         raise HTTPException(status_code=400, detail="Envelope not yet completed")
 
-    # Get all data needed for PDF generation
-    signers = db.execute(text("""
-        SELECT * FROM esign_signers WHERE envelope_id = :id
-    """), {"id": envelope_id}).fetchall()
+    try:
+        from services.perennia_s3_service import get_s3_service
 
-    fields = db.execute(text("""
-        SELECT * FROM esign_fields WHERE envelope_id = :id
-    """), {"id": envelope_id}).fetchall()
+        s3_service = get_s3_service()
+        pdf_service = get_esign_pdf_service(s3_service=s3_service)
 
-    field_values = db.execute(text("""
-        SELECT fv.* FROM esign_field_values fv
-        JOIN esign_fields f ON f.id = fv.field_id
-        WHERE f.envelope_id = :id
-    """), {"id": envelope_id}).fetchall()
+        result = pdf_service.generate_signed_pdf(envelope_id, db=db)
 
-    audit_events = db.execute(text("""
-        SELECT * FROM esign_audit_events
-        WHERE envelope_id = :id
-        ORDER BY created_at ASC
-    """), {"id": envelope_id}).fetchall()
+        if not result.get("success"):
+            raise HTTPException(
+                status_code=500,
+                detail=result.get("error", "Failed to generate signed document")
+            )
 
-    # TODO: Fetch original PDF from S3
-    # For now, return success with placeholder
+        return result
 
-    return {
-        "success": True,
-        "envelope_id": envelope_id,
-        "message": "Document generation queued",
-        "signer_count": len(signers),
-        "field_count": len(fields),
-        "note": "PDF generation requires S3 integration"
-    }
+    except HTTPException:
+        raise
+    except ImportError as e:
+        logger.error(f"Service not available for document generation: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail="PDF generation service not available"
+        )
+    except Exception as e:
+        logger.error(f"Error generating signed document for envelope {envelope_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Document generation failed: {str(e)}"
+        )
 
 
 @router.get("/envelopes/{envelope_id}/documents")

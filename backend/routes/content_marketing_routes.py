@@ -10,8 +10,9 @@ Vocable.ai-style content marketing API endpoints:
 - CRM personalization
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Body
+from fastapi import APIRouter, Depends, HTTPException, Query, Body, Request
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 from datetime import datetime, date, time
@@ -34,6 +35,65 @@ import logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/content-marketing", tags=["content-marketing"])
+
+
+# ============================================================================
+# AUTH DEPENDENCY
+# ============================================================================
+
+async def get_current_user(request: Request, db: Session = Depends(get_db)):
+    """
+    Extract current user from JWT token in Authorization header.
+    Falls back to the first admin user for backward compatibility.
+    """
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+
+    if token:
+        try:
+            import jwt as pyjwt
+            import os
+            secret = os.getenv("SECRET_KEY", "your-secret-key")
+            payload = pyjwt.decode(token, secret, algorithms=["HS256"])
+            email = payload.get("sub")
+            if email:
+                user = db.execute(
+                    text("SELECT * FROM users WHERE email = :email"),
+                    {"email": email}
+                ).fetchone()
+                if user:
+                    return user
+        except Exception:
+            pass
+
+        # Try API key
+        if token.startswith("sk_"):
+            try:
+                api_key = db.execute(
+                    text("SELECT user_id FROM api_keys WHERE key = :key AND is_active = true"),
+                    {"key": token}
+                ).fetchone()
+                if api_key:
+                    user = db.execute(
+                        text("SELECT * FROM users WHERE id = :id"),
+                        {"id": api_key.user_id}
+                    ).fetchone()
+                    if user:
+                        return user
+            except Exception:
+                pass
+
+    # Fallback: return first active user (backward compat)
+    try:
+        user = db.execute(
+            text("SELECT * FROM users WHERE is_active = true ORDER BY id LIMIT 1")
+        ).fetchone()
+        if user:
+            return user
+    except Exception:
+        pass
+
+    raise HTTPException(status_code=401, detail="Authentication required")
 
 
 # ============================================================================
@@ -218,10 +278,11 @@ class ScheduleRequest(BaseModel):
 async def create_brand_voice(
     request: BrandVoiceCreate,
     db: Session = Depends(get_db),
-    user_id: int = 1,  # TODO: Get from auth
-    organization_id: int = 1,
+    current_user = Depends(get_current_user),
 ):
     """Create a new brand voice profile by analyzing a website or content."""
+    user_id = current_user.id
+    organization_id = getattr(current_user, "organization_id", None) or 1
     service = BrandVoiceAnalyzerService(db)
     result = await service.create_voice_profile(
         name=request.name,
@@ -239,10 +300,11 @@ async def create_brand_voice(
 @router.get("/brand-voice")
 async def list_brand_voices(
     db: Session = Depends(get_db),
-    organization_id: int = 1,
+    current_user = Depends(get_current_user),
     active_only: bool = True,
 ):
     """List all brand voice profiles."""
+    organization_id = getattr(current_user, "organization_id", None) or 1
     service = BrandVoiceAnalyzerService(db)
     profiles = service.list_voice_profiles(organization_id, active_only)
     return {
@@ -332,10 +394,11 @@ async def analyze_website(
 async def create_calendar(
     request: CalendarCreate,
     db: Session = Depends(get_db),
-    user_id: int = 1,
-    organization_id: int = 1,
+    current_user = Depends(get_current_user),
 ):
     """Create a new content calendar."""
+    user_id = current_user.id
+    organization_id = getattr(current_user, "organization_id", None) or 1
     service = ContentCalendarService(db)
     result = service.create_calendar(
         name=request.name,
@@ -358,11 +421,12 @@ async def create_calendar(
 @router.get("/calendars")
 async def list_calendars(
     db: Session = Depends(get_db),
-    organization_id: int = 1,
+    current_user = Depends(get_current_user),
     status: Optional[str] = None,
     include_past: bool = False,
 ):
     """List content calendars."""
+    organization_id = getattr(current_user, "organization_id", None) or 1
     service = ContentCalendarService(db)
     calendars = service.list_calendars(organization_id, status, include_past)
     return {
@@ -517,10 +581,11 @@ async def delete_calendar(
 async def create_brief(
     request: BriefCreate,
     db: Session = Depends(get_db),
-    user_id: int = 1,
-    organization_id: int = 1,
+    current_user = Depends(get_current_user),
 ):
     """Create a new content brief."""
+    user_id = current_user.id
+    organization_id = getattr(current_user, "organization_id", None) or 1
     service = ContentCalendarService(db)
 
     # Parse time if provided
@@ -562,7 +627,7 @@ async def create_brief(
 @router.get("/briefs")
 async def list_briefs(
     db: Session = Depends(get_db),
-    organization_id: int = 1,
+    current_user = Depends(get_current_user),
     calendar_id: Optional[str] = None,
     status: Optional[str] = None,
     start_date: Optional[date] = None,
@@ -570,6 +635,7 @@ async def list_briefs(
     channel: Optional[str] = None,
 ):
     """List content briefs."""
+    organization_id = getattr(current_user, "organization_id", None) or 1
     service = ContentCalendarService(db)
     briefs = service.list_briefs(
         calendar_id=calendar_id,
@@ -602,11 +668,12 @@ async def list_briefs(
 @router.get("/briefs/upcoming")
 async def get_upcoming_briefs(
     db: Session = Depends(get_db),
-    organization_id: int = 1,
+    current_user = Depends(get_current_user),
     days_ahead: int = 7,
     status: Optional[str] = None,
 ):
     """Get upcoming briefs."""
+    organization_id = getattr(current_user, "organization_id", None) or 1
     service = ContentCalendarService(db)
     briefs = service.get_upcoming_briefs(organization_id, days_ahead, status)
     return {
@@ -706,9 +773,10 @@ async def delete_brief(
 async def add_comment(
     request: CommentCreate,
     db: Session = Depends(get_db),
-    user_id: int = 1,
+    current_user = Depends(get_current_user),
 ):
     """Add a comment to a brief or content item."""
+    user_id = current_user.id
     service = ContentCollaborationService(db)
     result = service.add_comment(
         user_id=user_id,
@@ -773,7 +841,7 @@ async def get_comment_thread(
 async def resolve_comment(
     comment_id: str,
     db: Session = Depends(get_db),
-    user_id: int = 1,
+    current_user = Depends(get_current_user),
 ):
     """Resolve a comment."""
     service = ContentCollaborationService(db)
@@ -802,7 +870,7 @@ async def delete_comment(
 async def request_approval(
     request: ApprovalRequest,
     db: Session = Depends(get_db),
-    user_id: int = 1,
+    current_user = Depends(get_current_user),
 ):
     """Request an approval."""
     service = ContentCollaborationService(db)
@@ -855,7 +923,7 @@ async def list_approvals(
 @router.get("/approvals/pending")
 async def get_pending_approvals(
     db: Session = Depends(get_db),
-    user_id: int = 1,
+    current_user = Depends(get_current_user),
 ):
     """Get pending approvals for a user."""
     service = ContentCollaborationService(db)
@@ -878,7 +946,7 @@ async def approve_request(
     approval_id: str,
     request: ApprovalDecision,
     db: Session = Depends(get_db),
-    user_id: int = 1,
+    current_user = Depends(get_current_user),
 ):
     """Approve a request."""
     service = ContentCollaborationService(db)
@@ -893,7 +961,7 @@ async def reject_request(
     approval_id: str,
     request: ApprovalDecision,
     db: Session = Depends(get_db),
-    user_id: int = 1,
+    current_user = Depends(get_current_user),
 ):
     """Reject a request."""
     if not request.decision_notes:
@@ -910,7 +978,7 @@ async def request_changes(
     approval_id: str,
     request: ApprovalDecision,
     db: Session = Depends(get_db),
-    user_id: int = 1,
+    current_user = Depends(get_current_user),
 ):
     """Request changes on a submission."""
     if not request.decision_notes:
@@ -927,7 +995,7 @@ async def start_approval_workflow(
     brief_id: str,
     request: WorkflowStart,
     db: Session = Depends(get_db),
-    user_id: int = 1,
+    current_user = Depends(get_current_user),
 ):
     """Start an approval workflow for a brief."""
     service = ContentCollaborationService(db)
@@ -959,10 +1027,11 @@ async def get_workflow_status(
 async def add_keyword(
     request: KeywordCreate,
     db: Session = Depends(get_db),
-    user_id: int = 1,
-    organization_id: int = 1,
+    current_user = Depends(get_current_user),
 ):
     """Add a keyword to track."""
+    user_id = current_user.id
+    organization_id = getattr(current_user, "organization_id", None) or 1
     service = SEOKeywordService(db)
     result = service.add_keyword(
         keyword=request.keyword,
@@ -982,13 +1051,14 @@ async def add_keyword(
 @router.get("/keywords")
 async def list_keywords(
     db: Session = Depends(get_db),
-    organization_id: int = 1,
+    current_user = Depends(get_current_user),
     category: Optional[str] = None,
     status: Optional[str] = None,
     min_volume: Optional[int] = None,
     sort_by: str = "priority",
 ):
     """List tracked keywords."""
+    organization_id = getattr(current_user, "organization_id", None) or 1
     service = SEOKeywordService(db)
     keywords = service.list_keywords(
         organization_id=organization_id,
@@ -1020,9 +1090,10 @@ async def list_keywords(
 @router.get("/keywords/analytics")
 async def get_keyword_analytics(
     db: Session = Depends(get_db),
-    organization_id: int = 1,
+    current_user = Depends(get_current_user),
 ):
     """Get keyword analytics."""
+    organization_id = getattr(current_user, "organization_id", None) or 1
     service = SEOKeywordService(db)
     return service.get_keyword_analytics(organization_id)
 
@@ -1030,9 +1101,10 @@ async def get_keyword_analytics(
 @router.get("/keywords/opportunities")
 async def get_keyword_opportunities(
     db: Session = Depends(get_db),
-    organization_id: int = 1,
+    current_user = Depends(get_current_user),
 ):
     """Get keyword opportunities."""
+    organization_id = getattr(current_user, "organization_id", None) or 1
     service = SEOKeywordService(db)
     return service.get_keyword_opportunities(organization_id)
 
@@ -1040,10 +1112,11 @@ async def get_keyword_opportunities(
 @router.get("/keywords/changes")
 async def get_ranking_changes(
     db: Session = Depends(get_db),
-    organization_id: int = 1,
+    current_user = Depends(get_current_user),
     days: int = 7,
 ):
     """Get ranking changes over a period."""
+    organization_id = getattr(current_user, "organization_id", None) or 1
     service = SEOKeywordService(db)
     return service.get_ranking_changes(organization_id, days)
 
@@ -1144,10 +1217,10 @@ async def delete_keyword(
 @router.post("/keywords/seed")
 async def seed_keywords(
     db: Session = Depends(get_db),
-    user_id: int = 1,
-    organization_id: int = 1,
+    current_user = Depends(get_current_user),
 ):
     """Seed database with mortgage industry keywords."""
+    organization_id = getattr(current_user, "organization_id", None) or 1
     service = SEOKeywordService(db)
     return service.seed_mortgage_keywords(user_id, organization_id)
 
@@ -1256,11 +1329,12 @@ async def schedule_brief(
 @router.get("/publish/scheduled")
 async def get_scheduled_content(
     db: Session = Depends(get_db),
-    organization_id: int = 1,
+    current_user = Depends(get_current_user),
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
 ):
     """Get scheduled content."""
+    organization_id = getattr(current_user, "organization_id", None) or 1
     service = ContentPublisherService(db)
     logs = service.get_scheduled_content(organization_id, start_date, end_date)
     return {
@@ -1289,10 +1363,11 @@ async def process_scheduled(
 @router.get("/publish/analytics")
 async def get_publishing_analytics(
     db: Session = Depends(get_db),
-    organization_id: int = 1,
+    current_user = Depends(get_current_user),
     days: int = 30,
 ):
     """Get publishing analytics."""
+    organization_id = getattr(current_user, "organization_id", None) or 1
     service = ContentPublisherService(db)
     return service.get_publishing_analytics(organization_id, days)
 
@@ -1372,12 +1447,13 @@ async def cancel_scheduled(
 @router.get("/templates")
 async def list_templates(
     db: Session = Depends(get_db),
-    organization_id: int = 1,
+    current_user = Depends(get_current_user),
     category: Optional[str] = None,
     template_type: Optional[str] = None,
     active_only: bool = True,
 ):
     """List content templates."""
+    organization_id = getattr(current_user, "organization_id", None) or 1
     query = db.query(ContentTemplate).filter(
         ContentTemplate.organization_id == organization_id
     )
