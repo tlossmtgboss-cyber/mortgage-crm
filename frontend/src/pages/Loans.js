@@ -683,7 +683,7 @@ function Loans() {
         <div className="page-header">
           <div>
             <h1>Active Loans</h1>
-          <p>{safeLoans.filter(loan => !isFundedLoan(loan)).length} active loans</p>
+          <p>{safeLoans.filter(loan => !isInactiveLoan(loan)).length} active loans</p>
         </div>
         <div className="header-actions">
           {selectedLoans.length > 0 && (
