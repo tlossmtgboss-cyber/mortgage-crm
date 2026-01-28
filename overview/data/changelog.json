@@ -1,0 +1,23 @@
+{
+  "version": "2026-01-27-001",
+  "entries": [
+    {
+      "date": "2026-01-27",
+      "title": "Living Overview Page",
+      "description": "Overview page now auto-updates stats on every push and shows returning visitors what's new.",
+      "features": ["ai-agent-system", "e-signature"]
+    },
+    {
+      "date": "2026-01-27",
+      "title": "E-Sign & Auth Completion",
+      "description": "Completed 7 unfinished features including eSign, authentication, calendar sync, SMS, transfers, and biometrics.",
+      "features": ["e-signature", "mobile-voice-app"]
+    },
+    {
+      "date": "2026-01-25",
+      "title": "Mobile Call Intelligence",
+      "description": "Added mobile call intelligence with 6 AI agents and Deepgram streaming for real-time transcription.",
+      "features": ["call-intelligence", "voice-os"]
+    }
+  ]
+}

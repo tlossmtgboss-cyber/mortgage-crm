@@ -1,0 +1,1421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Perennia AI - AI-Powered Mortgage CRM Platform</title>
+<meta name="description" content="The industry's most comprehensive AI-powered mortgage origination platform. 22 AI agents, 160+ tools, full compliance automation.">
+<meta property="og:title" content="Perennia AI - Mortgage CRM Platform">
+<meta property="og:description" content="AI-native mortgage CRM with 22 specialized agents, pipeline management, compliance automation, and omni-channel communications.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://www.perenniaai.com">
+<link rel="canonical" href="https://www.perenniaai.com">
+<style>
+/* ============================================================
+   CSS RESET & BASE
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --navy: #1a365d;
+  --navy-light: #2a4a7f;
+  --navy-dark: #0f2440;
+  --teal: #319795;
+  --teal-light: #4fd1c5;
+  --teal-dark: #285e61;
+  --gray-50: #f7fafc;
+  --gray-100: #edf2f7;
+  --gray-200: #e2e8f0;
+  --gray-300: #cbd5e0;
+  --gray-400: #a0aec0;
+  --gray-500: #718096;
+  --gray-600: #4a5568;
+  --gray-700: #2d3748;
+  --gray-800: #1a202c;
+  --white: #ffffff;
+  --green: #38a169;
+  --green-light: #c6f6d5;
+  --yellow: #d69e2e;
+  --yellow-light: #fefcbf;
+  --red: #e53e3e;
+  --red-light: #fed7d7;
+  --blue-light: #ebf8ff;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.1);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.1);
+  --shadow-lg: 0 10px 30px rgba(0,0,0,.12);
+  --shadow-xl: 0 20px 50px rgba(0,0,0,.15);
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --transition: all .25s ease;
+}
+
+html { scroll-behavior: smooth; font-size: 16px; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  color: var(--gray-700);
+  background: var(--gray-50);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============================================================
+   PRINT STYLES
+   ============================================================ */
+@media print {
+  body { background: white; font-size: 11pt; }
+  .no-print, .nav-sidebar, .back-to-top, .whats-new-banner { display: none !important; }
+  .section { break-inside: avoid; page-break-inside: avoid; box-shadow: none !important; border: 1px solid #ddd; }
+  .hero { background: var(--navy) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .card { box-shadow: none !important; border: 1px solid #ddd; }
+}
+
+/* ============================================================
+   LAYOUT
+   ============================================================ */
+.container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+@media (max-width: 900px) {
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+}
+@media (min-width: 901px) and (max-width: 1100px) {
+  .grid-3 { grid-template-columns: repeat(2, 1fr); }
+  .grid-4 { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ============================================================
+   NAVIGATION
+   ============================================================ */
+.nav-bar {
+  position: sticky; top: 0; z-index: 100;
+  background: var(--navy-dark);
+  border-bottom: 2px solid var(--teal);
+  backdrop-filter: blur(12px);
+}
+.nav-inner {
+  display: flex; align-items: center; justify-content: space-between;
+  max-width: 1200px; margin: 0 auto; padding: 12px 24px;
+}
+.nav-logo {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 1.25rem; font-weight: 700; color: var(--white);
+  text-decoration: none;
+}
+.nav-logo-icon {
+  width: 36px; height: 36px; background: var(--teal); border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem; color: white;
+}
+.nav-links { display: flex; gap: 6px; flex-wrap: wrap; }
+.nav-links a {
+  color: var(--gray-300); text-decoration: none; padding: 6px 12px;
+  border-radius: 6px; font-size: .82rem; font-weight: 500;
+  transition: var(--transition);
+}
+.nav-links a:hover { color: var(--white); background: rgba(255,255,255,.1); }
+@media (max-width: 900px) {
+  .nav-links { display: none; }
+}
+
+/* ============================================================
+   WHAT'S NEW BANNER
+   ============================================================ */
+.whats-new-banner {
+  background: var(--navy);
+  border-bottom: 2px solid var(--teal);
+  color: var(--white);
+  padding: 16px 24px;
+  display: none;
+}
+.whats-new-banner.visible { display: block; }
+.whats-new-inner {
+  max-width: 1200px; margin: 0 auto;
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+}
+.whats-new-content { flex: 1; }
+.whats-new-title {
+  font-size: .85rem; font-weight: 700; color: var(--teal-light);
+  text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px;
+}
+.whats-new-list { list-style: none; padding: 0; margin: 0; }
+.whats-new-list li {
+  font-size: .88rem; padding: 2px 0;
+  padding-left: 16px; position: relative;
+}
+.whats-new-list li::before {
+  content: '\2022'; position: absolute; left: 0;
+  color: var(--teal-light); font-weight: bold;
+}
+.whats-new-dismiss {
+  background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2);
+  color: var(--white); padding: 6px 14px; border-radius: 6px;
+  font-size: .8rem; cursor: pointer; white-space: nowrap;
+  transition: var(--transition); font-family: inherit;
+}
+.whats-new-dismiss:hover { background: rgba(255,255,255,.2); }
+
+/* NEW badge on feature cards */
+.badge-new {
+  background: var(--teal); color: var(--white);
+  padding: 2px 8px; border-radius: 4px;
+  font-size: .65rem; font-weight: 700;
+  letter-spacing: .5px; text-transform: uppercase;
+  margin-left: 8px; animation: pulse-new 2s ease-in-out infinite;
+}
+@keyframes pulse-new {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .7; }
+}
+
+/* ============================================================
+   HERO
+   ============================================================ */
+.hero {
+  background: linear-gradient(135deg, var(--navy-dark) 0%, var(--navy) 50%, var(--navy-light) 100%);
+  color: var(--white);
+  padding: 80px 24px 60px;
+  position: relative; overflow: hidden;
+}
+.hero::before {
+  content: ''; position: absolute; top: -50%; right: -20%;
+  width: 600px; height: 600px;
+  background: radial-gradient(circle, rgba(49,151,149,.15) 0%, transparent 70%);
+  border-radius: 50%;
+}
+.hero::after {
+  content: ''; position: absolute; bottom: -30%; left: -10%;
+  width: 400px; height: 400px;
+  background: radial-gradient(circle, rgba(49,151,149,.1) 0%, transparent 70%);
+  border-radius: 50%;
+}
+.hero-content { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; }
+.hero-badge {
+  display: inline-block; padding: 4px 14px;
+  background: rgba(49,151,149,.2); border: 1px solid rgba(49,151,149,.4);
+  border-radius: 20px; font-size: .8rem; font-weight: 600;
+  color: var(--teal-light); margin-bottom: 20px; letter-spacing: .5px;
+}
+.hero h1 { font-size: 3rem; font-weight: 800; line-height: 1.15; margin-bottom: 16px; }
+.hero h1 span { color: var(--teal-light); }
+.hero-subtitle {
+  font-size: 1.2rem; color: var(--gray-300); max-width: 700px;
+  margin-bottom: 40px; line-height: 1.7;
+}
+.hero-stats {
+  display: flex; gap: 40px; flex-wrap: wrap;
+  padding-top: 32px; border-top: 1px solid rgba(255,255,255,.1);
+}
+.hero-stat { text-align: center; min-width: 120px; }
+.hero-stat-value {
+  font-size: 2rem; font-weight: 800; color: var(--teal-light);
+  line-height: 1.2;
+}
+.hero-stat-label { font-size: .8rem; color: var(--gray-400); text-transform: uppercase; letter-spacing: .5px; margin-top: 4px; }
+
+/* ============================================================
+   SECTIONS
+   ============================================================ */
+.section {
+  background: var(--white);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+  margin: 32px auto;
+  max-width: 1200px;
+  padding: 48px;
+  position: relative;
+}
+.section-header {
+  display: flex; align-items: center; gap: 14px;
+  margin-bottom: 32px; padding-bottom: 16px;
+  border-bottom: 2px solid var(--gray-100);
+}
+.section-icon {
+  width: 44px; height: 44px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.3rem; flex-shrink: 0;
+}
+.section-icon-navy { background: rgba(26,54,93,.08); color: var(--navy); }
+.section-icon-teal { background: rgba(49,151,149,.08); color: var(--teal); }
+.section-icon-green { background: rgba(56,161,105,.08); color: var(--green); }
+.section-title { font-size: 1.6rem; font-weight: 700; color: var(--navy); }
+.section-subtitle { font-size: .9rem; color: var(--gray-500); margin-top: 2px; }
+
+/* ============================================================
+   CARDS
+   ============================================================ */
+.card {
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  transition: var(--transition);
+  position: relative;
+  display: flex; flex-direction: column;
+}
+.card:hover {
+  border-color: var(--teal);
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+}
+.card-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  margin-bottom: 12px;
+}
+.card-title { font-size: 1.05rem; font-weight: 700; color: var(--navy); }
+.card-desc { font-size: .88rem; color: var(--gray-600); line-height: 1.6; margin-bottom: 16px; }
+.card-icon {
+  width: 40px; height: 40px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.2rem; margin-bottom: 12px; flex-shrink: 0;
+}
+
+/* Status Badges */
+.badge {
+  display: inline-flex; align-items: center; padding: 3px 10px;
+  border-radius: 12px; font-size: .72rem; font-weight: 600;
+  letter-spacing: .3px; text-transform: uppercase;
+}
+.badge-live { background: var(--green-light); color: #22543d; }
+.badge-beta { background: var(--yellow-light); color: #744210; }
+.badge-dev { background: var(--blue-light); color: #2b6cb0; }
+
+/* Capability Tags */
+.cap-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
+.cap-tag {
+  padding: 3px 10px; border-radius: 6px; font-size: .75rem;
+  background: var(--gray-100); color: var(--gray-600); font-weight: 500;
+}
+
+/* ============================================================
+   STAT BOXES
+   ============================================================ */
+.stat-box {
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  text-align: center;
+  transition: var(--transition);
+}
+.stat-box:hover { border-color: var(--teal); background: rgba(49,151,149,.03); }
+.stat-value { font-size: 2rem; font-weight: 800; color: var(--navy); line-height: 1.2; }
+.stat-label { font-size: .82rem; color: var(--gray-500); margin-top: 4px; }
+
+/* ============================================================
+   ARCHITECTURE DIAGRAM
+   ============================================================ */
+.arch-diagram {
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  padding: 40px 32px;
+  overflow-x: auto;
+}
+.arch-layer {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 12px; flex-wrap: wrap;
+}
+.arch-label {
+  min-width: 140px; padding: 10px 16px;
+  background: var(--navy); color: var(--white);
+  border-radius: var(--radius); font-size: .82rem;
+  font-weight: 600; text-align: center; flex-shrink: 0;
+}
+.arch-items { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; }
+.arch-item {
+  padding: 8px 14px; border-radius: var(--radius);
+  font-size: .78rem; font-weight: 500;
+  border: 1px solid transparent;
+  transition: var(--transition);
+}
+.arch-item:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.arch-item-teal { background: rgba(49,151,149,.08); color: var(--teal-dark); border-color: rgba(49,151,149,.2); }
+.arch-item-navy { background: rgba(26,54,93,.06); color: var(--navy); border-color: rgba(26,54,93,.15); }
+.arch-item-green { background: rgba(56,161,105,.06); color: #22543d; border-color: rgba(56,161,105,.15); }
+.arch-item-yellow { background: rgba(214,158,46,.06); color: #744210; border-color: rgba(214,158,46,.15); }
+.arch-connector {
+  text-align: center; color: var(--gray-400); font-size: 1.2rem;
+  margin: 4px 0; letter-spacing: 8px;
+}
+
+/* ============================================================
+   WORKFLOW DIAGRAMS
+   ============================================================ */
+.flow-container { overflow-x: auto; padding: 8px 0; }
+.flow {
+  display: flex; align-items: center; gap: 0;
+  min-width: max-content; padding: 12px 0;
+}
+.flow-step {
+  display: flex; flex-direction: column; align-items: center;
+  min-width: 110px; padding: 14px 12px;
+  background: var(--white); border: 2px solid var(--gray-200);
+  border-radius: var(--radius-lg); text-align: center;
+  transition: var(--transition);
+  position: relative;
+}
+.flow-step:hover { border-color: var(--teal); box-shadow: var(--shadow-md); }
+.flow-step-icon { font-size: 1.3rem; margin-bottom: 6px; }
+.flow-step-label { font-size: .75rem; font-weight: 600; color: var(--navy); line-height: 1.3; }
+.flow-step-sub { font-size: .68rem; color: var(--gray-500); margin-top: 2px; }
+.flow-step-active { border-color: var(--teal); background: rgba(49,151,149,.04); }
+.flow-step-complete { border-color: var(--green); background: rgba(56,161,105,.04); }
+.flow-arrow { color: var(--gray-400); font-size: 1.2rem; padding: 0 4px; flex-shrink: 0; }
+
+/* ============================================================
+   TABLES
+   ============================================================ */
+.table-wrapper { overflow-x: auto; border-radius: var(--radius-lg); border: 1px solid var(--gray-200); }
+table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+thead th {
+  background: var(--navy); color: var(--white);
+  padding: 12px 16px; text-align: left; font-weight: 600;
+  font-size: .8rem; text-transform: uppercase; letter-spacing: .5px;
+}
+tbody td { padding: 12px 16px; border-bottom: 1px solid var(--gray-100); }
+tbody tr:hover { background: var(--gray-50); }
+tbody tr:last-child td { border-bottom: none; }
+
+/* ============================================================
+   COLLAPSIBLE SECTIONS
+   ============================================================ */
+.collapsible { border: 1px solid var(--gray-200); border-radius: var(--radius-lg); margin-bottom: 12px; overflow: hidden; }
+.collapsible-toggle {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; background: var(--gray-50);
+  border: none; cursor: pointer; font-size: .95rem;
+  font-weight: 600; color: var(--navy); transition: var(--transition);
+  font-family: inherit; text-align: left;
+}
+.collapsible-toggle:hover { background: var(--gray-100); }
+.collapsible-toggle::after {
+  content: '+'; font-size: 1.3rem; font-weight: 400;
+  color: var(--gray-400); transition: var(--transition);
+}
+.collapsible-toggle.active::after { content: '\2212'; }
+.collapsible-content {
+  max-height: 0; overflow: hidden; transition: max-height .35s ease;
+  padding: 0 20px;
+}
+.collapsible-content.open { max-height: 3000px; padding: 20px; }
+
+/* ============================================================
+   GALLERY / PLACEHOLDERS
+   ============================================================ */
+.gallery-placeholder {
+  background: var(--gray-100);
+  border: 2px dashed var(--gray-300);
+  border-radius: var(--radius-lg);
+  padding: 48px 24px;
+  text-align: center;
+  transition: var(--transition);
+}
+.gallery-placeholder:hover { border-color: var(--teal); background: rgba(49,151,149,.03); }
+.gallery-placeholder-icon { font-size: 2.5rem; margin-bottom: 12px; }
+.gallery-placeholder-title { font-weight: 600; color: var(--navy); margin-bottom: 4px; }
+.gallery-placeholder-desc { font-size: .82rem; color: var(--gray-500); }
+
+/* ============================================================
+   ROADMAP
+   ============================================================ */
+.roadmap-track {
+  position: relative; padding-left: 32px;
+  border-left: 3px solid var(--gray-200); margin-left: 16px;
+}
+.roadmap-item {
+  position: relative; padding: 16px 0 24px;
+}
+.roadmap-dot {
+  position: absolute; left: -40px; top: 18px;
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 3px solid; background: var(--white);
+}
+.roadmap-dot-teal { border-color: var(--teal); }
+.roadmap-dot-navy { border-color: var(--navy); }
+.roadmap-dot-gray { border-color: var(--gray-400); }
+.roadmap-label {
+  font-size: .72rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .5px; margin-bottom: 4px;
+}
+.roadmap-title { font-size: 1rem; font-weight: 600; color: var(--navy); margin-bottom: 4px; }
+.roadmap-desc { font-size: .85rem; color: var(--gray-600); }
+
+/* ============================================================
+   MISC
+   ============================================================ */
+.back-to-top {
+  position: fixed; bottom: 24px; right: 24px; z-index: 99;
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--navy); color: var(--white);
+  border: none; cursor: pointer; font-size: 1.3rem;
+  box-shadow: var(--shadow-lg); transition: var(--transition);
+  display: flex; align-items: center; justify-content: center;
+}
+.back-to-top:hover { background: var(--teal); transform: translateY(-2px); }
+.text-teal { color: var(--teal); }
+.text-navy { color: var(--navy); }
+.text-muted { color: var(--gray-500); }
+.text-sm { font-size: .85rem; }
+.text-xs { font-size: .75rem; }
+.fw-600 { font-weight: 600; }
+.fw-700 { font-weight: 700; }
+.mt-24 { margin-top: 24px; }
+.mt-16 { margin-top: 16px; }
+.mb-16 { margin-bottom: 16px; }
+.mb-24 { margin-bottom: 24px; }
+.mb-8 { margin-bottom: 8px; }
+hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0; }
+
+.footer {
+  background: var(--navy-dark); color: var(--gray-400);
+  padding: 40px 24px; text-align: center; font-size: .85rem;
+  margin-top: 48px;
+}
+.footer strong { color: var(--white); }
+
+/* Highlight cards for key value props */
+.value-card {
+  background: linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 100%);
+  border-radius: var(--radius-lg); padding: 28px;
+  color: var(--white); transition: var(--transition);
+}
+.value-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-xl); }
+.value-card-icon { font-size: 2rem; margin-bottom: 12px; }
+.value-card-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 8px; }
+.value-card-text { font-size: .85rem; color: var(--gray-300); line-height: 1.6; }
+
+.tech-stack-group { margin-bottom: 20px; }
+.tech-stack-label { font-size: .78rem; font-weight: 700; color: var(--gray-500); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
+.tech-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.tech-pill {
+  padding: 5px 12px; border-radius: 6px; font-size: .78rem; font-weight: 500;
+  transition: var(--transition);
+}
+.tech-pill:hover { transform: translateY(-1px); }
+.tech-pill-primary { background: rgba(26,54,93,.08); color: var(--navy); }
+.tech-pill-accent { background: rgba(49,151,149,.08); color: var(--teal-dark); }
+.tech-pill-muted { background: var(--gray-100); color: var(--gray-600); }
+
+/* Live-data shimmer for loading state */
+.stat-loading {
+  background: linear-gradient(90deg, var(--gray-100) 25%, var(--gray-200) 50%, var(--gray-100) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+  display: inline-block;
+  min-width: 60px;
+  min-height: 1.2em;
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     NAVIGATION
+     ============================================================ -->
+<nav class="nav-bar no-print">
+  <div class="nav-inner">
+    <a href="#top" class="nav-logo">
+      <div class="nav-logo-icon">P</div>
+      Perennia AI
+    </a>
+    <div class="nav-links">
+      <a href="#executive-summary">Summary</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#features">Features</a>
+      <a href="#workflows">Workflows</a>
+      <a href="#key-workflows">Key Workflows</a>
+      <a href="#gallery">Gallery</a>
+      <a href="#metrics">Metrics</a>
+      <a href="#roadmap">Roadmap</a>
+    </div>
+  </div>
+</nav>
+
+<!-- What's New Banner (hidden by default, shown by JS for returning visitors) -->
+<div class="whats-new-banner no-print" id="whats-new-banner">
+  <div class="whats-new-inner">
+    <div class="whats-new-content">
+      <div class="whats-new-title">What's New Since Your Last Visit</div>
+      <ul class="whats-new-list" id="whats-new-list"></ul>
+    </div>
+    <button class="whats-new-dismiss" id="whats-new-dismiss">Dismiss</button>
+  </div>
+</div>
+
+<!-- ============================================================
+     HERO
+     ============================================================ -->
+<header class="hero" id="top">
+  <div class="hero-content">
+    <div class="hero-badge">PLATFORM OVERVIEW</div>
+    <h1>Perennia <span>AI</span><br>Mortgage CRM</h1>
+    <p class="hero-subtitle">
+      The industry's most comprehensive AI-powered mortgage origination platform.
+      Purpose-built for loan officers, processors, underwriters, and branch managers
+      to automate workflows, ensure compliance, and close loans faster.
+    </p>
+    <div class="hero-stats">
+      <div class="hero-stat">
+        <div class="hero-stat-value" data-stat="loc">703K</div>
+        <div class="hero-stat-label">Lines of Code</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-value" data-stat="files">26,218</div>
+        <div class="hero-stat-label">Source Files</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-value" data-stat="tools">160+</div>
+        <div class="hero-stat-label">AI Agent Tools</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-value" data-stat="integrations">27+</div>
+        <div class="hero-stat-label">Integrations</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-value" data-stat="pages">164</div>
+        <div class="hero-stat-label">Frontend Pages</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-value" data-stat="agents">22</div>
+        <div class="hero-stat-label">AI Agents</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ============================================================
+     1. EXECUTIVE SUMMARY
+     ============================================================ -->
+<section class="section" id="executive-summary">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Executive Summary</div>
+      <div class="section-subtitle">What Perennia AI does and who it serves</div>
+    </div>
+  </div>
+
+  <p class="text-sm mb-24" style="max-width:800px; line-height:1.8;">
+    <strong>Perennia AI</strong> is an end-to-end, AI-native mortgage CRM platform that replaces fragmented
+    point solutions with a single, intelligent system of record. The platform orchestrates <span data-stat="agents-inline">22</span> specialized
+    AI agents across <span data-stat="tools-inline">160+</span> tools to automate loan origination, compliance monitoring, document collection,
+    borrower communication, and pipeline management&mdash;while keeping loan officers in control of every decision.
+  </p>
+
+  <!-- Value Props -->
+  <div class="grid-4 mb-24">
+    <div class="value-card">      <div class="value-card-title">AI-First Design</div>
+      <div class="value-card-text">22 specialized agents with LangGraph orchestration, intent-based tool loading, and self-improving feedback loops.</div>
+    </div>
+    <div class="value-card">      <div class="value-card-title">Full Pipeline Visibility</div>
+      <div class="value-card-text">21-stage loan lifecycle with real-time SLA tracking, bottleneck detection, and predictive close-date forecasting.</div>
+    </div>
+    <div class="value-card">      <div class="value-card-title">Built-In Compliance</div>
+      <div class="value-card-text">Automated TRID, RESPA, fair lending, and state-specific consent monitoring with audit trails.</div>
+    </div>
+    <div class="value-card">      <div class="value-card-title">Omni-Channel Comms</div>
+      <div class="value-card-text">Email, SMS, voice, video, and in-app chat&mdash;all AI-optimized with sentiment analysis and compliance checking.</div>
+    </div>
+  </div>
+
+  <!-- Target Users -->
+  <h3 class="fw-700 text-navy mb-8">Target Users</h3>
+  <div class="grid-4" style="margin-bottom:0;">
+    <div class="stat-box"><div class="stat-label">Loan Officers</div></div>
+    <div class="stat-box"><div class="stat-label">Processors &amp; UWs</div></div>
+    <div class="stat-box"><div class="stat-label">Branch Managers</div></div>
+    <div class="stat-box"><div class="stat-label">Borrowers &amp; Realtors</div></div>
+  </div>
+</section>
+
+<!-- ============================================================
+     2. ARCHITECTURE OVERVIEW
+     ============================================================ -->
+<section class="section" id="architecture">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Architecture Overview</div>
+      <div class="section-subtitle">System architecture, tech stack, and integration points</div>
+    </div>
+  </div>
+
+  <!-- Architecture Diagram -->
+  <div class="arch-diagram mb-24">
+    <div class="arch-layer">
+      <div class="arch-label">Client Layer</div>
+      <div class="arch-items">
+        <div class="arch-item arch-item-teal">React 18 SPA</div>
+        <div class="arch-item arch-item-teal">iOS (Capacitor)</div>
+        <div class="arch-item arch-item-teal">Borrower Portal</div>
+        <div class="arch-item arch-item-teal">Realtor Portal</div>
+        <div class="arch-item arch-item-teal">Recruit Portal</div>
+        <div class="arch-item arch-item-teal">LO Microsites</div>
+      </div>
+    </div>
+    <div class="arch-connector">&#x25BC; &#x25BC; &#x25BC;</div>
+    <div class="arch-layer">
+      <div class="arch-label">API Gateway</div>
+      <div class="arch-items">
+        <div class="arch-item arch-item-navy">FastAPI + Uvicorn</div>
+        <div class="arch-item arch-item-navy">JWT Auth + RBAC</div>
+        <div class="arch-item arch-item-navy">Rate Limiting</div>
+        <div class="arch-item arch-item-navy">WebSocket Server</div>
+        <div class="arch-item arch-item-navy" data-stat="routes-arch">140 API Routes</div>
+      </div>
+    </div>
+    <div class="arch-connector">&#x25BC; &#x25BC; &#x25BC;</div>
+    <div class="arch-layer">
+      <div class="arch-label">AI Agent Layer</div>
+      <div class="arch-items">
+        <div class="arch-item arch-item-green">LangGraph Orchestrator</div>
+        <div class="arch-item arch-item-green" data-stat="agents-arch">22 Specialized Agents</div>
+        <div class="arch-item arch-item-green" data-stat="tools-arch">160+ Tools</div>
+        <div class="arch-item arch-item-green">Intent Router</div>
+        <div class="arch-item arch-item-green">Hallucination Verifier</div>
+      </div>
+    </div>
+    <div class="arch-connector">&#x25BC; &#x25BC; &#x25BC;</div>
+    <div class="arch-layer">
+      <div class="arch-label">Service Layer</div>
+      <div class="arch-items">
+        <div class="arch-item arch-item-navy" data-stat="services-arch">177 Backend Services</div>
+        <div class="arch-item arch-item-navy">Workflow Orchestrator</div>
+        <div class="arch-item arch-item-navy">SLA Engine</div>
+        <div class="arch-item arch-item-navy">Compliance Monitor</div>
+        <div class="arch-item arch-item-navy">Notification Hub</div>
+      </div>
+    </div>
+    <div class="arch-connector">&#x25BC; &#x25BC; &#x25BC;</div>
+    <div class="arch-layer">
+      <div class="arch-label">Data Layer</div>
+      <div class="arch-items">
+        <div class="arch-item arch-item-yellow">PostgreSQL 15</div>
+        <div class="arch-item arch-item-yellow">Redis Cache</div>
+        <div class="arch-item arch-item-yellow">Pinecone Vector DB</div>
+        <div class="arch-item arch-item-yellow">S3 Object Storage</div>
+        <div class="arch-item arch-item-yellow" data-stat="models-arch">55+ Data Models</div>
+      </div>
+    </div>
+    <div class="arch-connector">&#x25BC; &#x25BC; &#x25BC;</div>
+    <div class="arch-layer">
+      <div class="arch-label">External Services</div>
+      <div class="arch-items">
+        <div class="arch-item arch-item-teal">Claude / OpenAI</div>
+        <div class="arch-item arch-item-teal">Twilio</div>
+        <div class="arch-item arch-item-teal">Salesforce</div>
+        <div class="arch-item arch-item-teal">DocuSign</div>
+        <div class="arch-item arch-item-teal">Stripe</div>
+        <div class="arch-item arch-item-teal">MS Graph</div>
+        <div class="arch-item arch-item-teal">Zoom</div>
+        <div class="arch-item arch-item-teal">Google APIs</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tech Stack -->
+  <h3 class="fw-700 text-navy mb-16">Technology Stack</h3>
+  <div class="grid-2 mb-24">
+    <div>
+      <div class="tech-stack-group">
+        <div class="tech-stack-label">Frontend</div>
+        <div class="tech-pills">
+          <span class="tech-pill tech-pill-primary">React 18</span>
+          <span class="tech-pill tech-pill-primary">React Router 6</span>
+          <span class="tech-pill tech-pill-primary">TanStack Query</span>
+          <span class="tech-pill tech-pill-primary">Material UI</span>
+          <span class="tech-pill tech-pill-primary">Capacitor (iOS)</span>
+          <span class="tech-pill tech-pill-muted">WebSocket</span>
+          <span class="tech-pill tech-pill-muted">ReCharts</span>
+        </div>
+      </div>
+      <div class="tech-stack-group">
+        <div class="tech-stack-label">Backend</div>
+        <div class="tech-pills">
+          <span class="tech-pill tech-pill-accent">Python 3.11</span>
+          <span class="tech-pill tech-pill-accent">FastAPI</span>
+          <span class="tech-pill tech-pill-accent">SQLAlchemy 2</span>
+          <span class="tech-pill tech-pill-accent">Pydantic 2</span>
+          <span class="tech-pill tech-pill-accent">Celery + Redis</span>
+          <span class="tech-pill tech-pill-muted">APScheduler</span>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="tech-stack-group">
+        <div class="tech-stack-label">AI / ML</div>
+        <div class="tech-pills">
+          <span class="tech-pill tech-pill-primary">Claude (Anthropic)</span>
+          <span class="tech-pill tech-pill-primary">OpenAI</span>
+          <span class="tech-pill tech-pill-primary">LangGraph</span>
+          <span class="tech-pill tech-pill-primary">LangChain</span>
+          <span class="tech-pill tech-pill-muted">Pinecone</span>
+          <span class="tech-pill tech-pill-muted">Retell AI</span>
+        </div>
+      </div>
+      <div class="tech-stack-group">
+        <div class="tech-stack-label">Infrastructure</div>
+        <div class="tech-pills">
+          <span class="tech-pill tech-pill-accent">Railway</span>
+          <span class="tech-pill tech-pill-accent">Vercel</span>
+          <span class="tech-pill tech-pill-accent">PostgreSQL 15</span>
+          <span class="tech-pill tech-pill-accent">Docker</span>
+          <span class="tech-pill tech-pill-muted">GitHub Actions CI/CD</span>
+          <span class="tech-pill tech-pill-muted">Sentry + Datadog</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Database Highlights -->
+  <h3 class="fw-700 text-navy mb-16">Database Structure</h3>
+  <div class="grid-3">
+    <div class="stat-box"><div class="stat-value" data-stat="models">55+</div><div class="stat-label">Data Models</div></div>
+    <div class="stat-box"><div class="stat-value">175</div><div class="stat-label">Migrations</div></div>
+    <div class="stat-box"><div class="stat-value">Multi-Tenant</div><div class="stat-label">Organization Isolation</div></div>
+  </div>
+  <p class="text-sm text-muted mt-16">Key entities: Loans (53-field profile with 27 milestone dates), Leads, Contacts, Tasks, Documents, Call Records, SLA Milestones, Workflows, AI Agent State, Conversations, Calendar Events, Compliance Issues, and Financial Intelligence.</p>
+</section>
+
+<!-- ============================================================
+     3. CORE FEATURES & MODULES (dynamic)
+     ============================================================ -->
+<section class="section" id="features">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Core Features &amp; Modules</div>
+      <div class="section-subtitle">Complete platform capabilities across 15+ modules</div>
+    </div>
+  </div>
+
+  <div class="grid-3" id="feature-cards">
+    <!-- JS renders feature cards here from features.json -->
+    <!-- Static fallback cards below, replaced by JS on load -->
+    <div class="card" data-fallback>
+      <div class="card-header">
+        <div><div class="card-title">AI Agent System</div></div>
+        <span class="badge badge-live">Live</span>
+      </div>
+      <div class="card-desc">22 specialized agents with LangGraph orchestration. Intent-based tool loading delivers only 8&ndash;16 relevant tools per query.</div>
+      <div class="cap-list">
+        <span class="cap-tag">Lead Agent</span>
+        <span class="cap-tag">Pipeline Agent</span>
+        <span class="cap-tag">Document Agent</span>
+        <span class="cap-tag">Compliance Agent</span>
+      </div>
+    </div>
+    <div class="card" data-fallback>
+      <div class="card-header">
+        <div><div class="card-title">Pipeline Management</div></div>
+        <span class="badge badge-live">Live</span>
+      </div>
+      <div class="card-desc">21-stage loan lifecycle from Application to Funded with SLA tracking and predictive close-date forecasting.</div>
+      <div class="cap-list">
+        <span class="cap-tag">21 Stages</span>
+        <span class="cap-tag">SLA Tracking</span>
+        <span class="cap-tag">Bottleneck Alerts</span>
+      </div>
+    </div>
+    <div class="card" data-fallback>
+      <div class="card-header">
+        <div><div class="card-title">Loading...</div></div>
+      </div>
+      <div class="card-desc">Feature data is loading from the server.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     4. WORKFLOW DOCUMENTATION
+     ============================================================ -->
+<section class="section" id="workflows">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Workflow Documentation</div>
+      <div class="section-subtitle">Core workflows with process flows and automation details</div>
+    </div>
+  </div>
+
+  <div class="collapsible">
+    <button class="collapsible-toggle" onclick="toggleCollapsible(this)">
+      Loan Lifecycle (21 Stages)
+    </button>
+    <div class="collapsible-content">
+      <p class="text-sm mb-16">The complete loan origination workflow from application to funding, with automated SLA tracking and AI-driven stage management.</p>
+      <div class="flow-container">
+        <div class="flow">
+          <div class="flow-step flow-step-active"><div class="flow-step-label">Application</div><div class="flow-step-sub">SLA: 3 days</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">Disclosed</div><div class="flow-step-sub">LE sent</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">Processing</div><div class="flow-step-sub">SLA: 5 days</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">Submitted</div><div class="flow-step-sub">To UW</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">Underwriting</div><div class="flow-step-sub">SLA: 7 days</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">Approved</div><div class="flow-step-sub">Conditional</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">CTC</div><div class="flow-step-sub">SLA: 3 days</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">Docs Out</div><div class="flow-step-sub">CD sent</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step flow-step-complete"><div class="flow-step-label">Funded</div><div class="flow-step-sub">Complete</div></div>
+        </div>
+      </div>
+      <div class="mt-16">
+        <p class="text-sm"><strong>Triggers:</strong> DailyPipelineSweep (9 AM), LoanStageChanged, LoanAged, ConditionCleared, DocumentReceived</p>
+        <p class="text-sm"><strong>Automation:</strong> Stale-loan detection (configurable thresholds per stage), automatic milestone completion, nudge task creation, supervisor escalation at 10+ days.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="collapsible">
+    <button class="collapsible-toggle" onclick="toggleCollapsible(this)">
+      Document Collection &amp; Tracking
+    </button>
+    <div class="collapsible-content">
+      <p class="text-sm mb-16">Automated document lifecycle from needs-list generation through AI classification, review, and expiry monitoring.</p>
+      <div class="flow-container">
+        <div class="flow">
+          <div class="flow-step"><div class="flow-step-label">Needs List</div><div class="flow-step-sub">Auto-generated</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">Request Sent</div><div class="flow-step-sub">Email + SMS</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">Reminders</div><div class="flow-step-sub">24h/72h/7d/14d</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">Upload</div><div class="flow-step-sub">Portal/Email</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">AI Classify</div><div class="flow-step-sub">95%+ confidence</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">Approved</div><div class="flow-step-sub">Auto/manual</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">Freshness</div><div class="flow-step-sub">Expiry tracking</div></div>
+        </div>
+      </div>
+      <div class="mt-16">
+        <p class="text-sm"><strong>Triggers:</strong> Application submitted, document uploaded, document expiring, condition added</p>
+        <p class="text-sm"><strong>Automation:</strong> Auto-classification, screenshot detection, cascading reminders (email then SMS), auto-renewal requests 30 days before expiry.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="collapsible">
+    <button class="collapsible-toggle" onclick="toggleCollapsible(this)">
+      Lead Scoring &amp; Nurturing
+    </button>
+    <div class="collapsible-content">
+      <p class="text-sm mb-16">9-stage lead lifecycle with automated scoring (A-D), intelligent routing, and cadenced engagement sequences.</p>
+      <div class="flow-container">
+        <div class="flow">
+          <div class="flow-step"><div class="flow-step-label">New Lead</div><div class="flow-step-sub">Auto-scored</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">Contact</div><div class="flow-step-sub">5-min SLA</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">Qualify</div><div class="flow-step-sub">Credit/DTI check</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">Apply</div><div class="flow-step-sub">App link sent</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">Pre-Approved</div><div class="flow-step-sub">Converted</div></div>
+        </div>
+      </div>
+      <div class="mt-16">
+        <p class="text-sm"><strong>Scoring:</strong> Profile (25pts) + Engagement (25pts) + Recency (25pts) + Intent (25pts) = Grade A-D</p>
+        <p class="text-sm"><strong>Automation:</strong> Auto-routing by loan type, welcome SMS/email sequence, discovery appointment scheduling, 7-day touchpoint cadence with AI-personalized tone.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="collapsible">
+    <button class="collapsible-toggle" onclick="toggleCollapsible(this)">
+      Omni-Channel Communications
+    </button>
+    <div class="collapsible-content">
+      <p class="text-sm mb-16">Coordinated messaging across email, SMS, voice, and in-app channels with compliance checking and AI-generated content.</p>
+      <div class="flow-container">
+        <div class="flow">
+          <div class="flow-step"><div class="flow-step-label">Trigger Event</div><div class="flow-step-sub">Stage change</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">AI Drafts</div><div class="flow-step-sub">Personalized</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">Compliance</div><div class="flow-step-sub">DNC + consent</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">Deliver</div><div class="flow-step-sub">Best channel</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">Track</div><div class="flow-step-sub">Open/click/reply</div></div>
+        </div>
+      </div>
+      <div class="mt-16">
+        <p class="text-sm"><strong>Triggers:</strong> LoanMilestoneReached, ClientInquiry, 7DaysSinceLastContact, RateLockExpiring, DocumentRequested</p>
+        <p class="text-sm"><strong>Automation:</strong> AI auto-sends at &gt;90% confidence, tone adjustment per borrower profile (first-time buyer vs. investor vs. repeat client), overlap prevention.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="collapsible">
+    <button class="collapsible-toggle" onclick="toggleCollapsible(this)">
+      Company &amp; User Onboarding
+    </button>
+    <div class="collapsible-content">
+      <p class="text-sm mb-16">Multi-step guided onboarding from account creation through team setup, branding, integrations, and payment.</p>
+      <div class="flow-container">
+        <div class="flow">
+          <div class="flow-step"><div class="flow-step-label">Account</div><div class="flow-step-sub">Create admin</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">Company</div><div class="flow-step-sub">Profile + logo</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">Profile</div><div class="flow-step-sub">NMLS, photo</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">Team</div><div class="flow-step-sub">Invite up to 50</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">Payment</div><div class="flow-step-sub">Stripe + promo</div></div>
+        </div>
+      </div>
+      <div class="mt-16">
+        <p class="text-sm"><strong>Automation:</strong> Invitation emails, role auto-assignment, default workflow creation, Stripe subscription setup, 14-day free trial.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="collapsible">
+    <button class="collapsible-toggle" onclick="toggleCollapsible(this)">
+      Compliance Monitoring
+    </button>
+    <div class="collapsible-content">
+      <p class="text-sm mb-16">Continuous compliance checking across TRID, RESPA, fair lending, call recording consent, and fee tolerance.</p>
+      <div class="flow-container">
+        <div class="flow">
+          <div class="flow-step"><div class="flow-step-label">Monitor</div><div class="flow-step-sub">Real-time</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">Detect</div><div class="flow-step-sub">Violation found</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">Alert</div><div class="flow-step-sub">Notify team</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">Remediate</div><div class="flow-step-sub">Guided fix</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">Audit Log</div><div class="flow-step-sub">Full trail</div></div>
+        </div>
+      </div>
+      <div class="mt-16">
+        <p class="text-sm"><strong>Checks:</strong> LE timing (3 business days), CD timing (3 days before close), zero/10% fee tolerance, state recording consent (15 two-party states), rate variance &gt;0.25%.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     5. KEY WORKFLOWS (Top 10)
+     ============================================================ -->
+<section class="section" id="key-workflows">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Top 10 Workflows by Impact</div>
+      <div class="section-subtitle">Highest-value automations ranked by importance and integration complexity</div>
+    </div>
+  </div>
+
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Workflow</th>
+          <th>Trigger</th>
+          <th>Automation</th>
+          <th>Dependencies</th>
+          <th>Impact</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>1</strong></td><td><strong>5-Minute Lead Response</strong></td><td>Lead created / web form</td><td>Auto-qualify, route by loan type, send welcome SMS + email, schedule call</td><td>Twilio, AI Agent</td><td>95%+ first-contact SLA</td></tr>
+        <tr><td><strong>2</strong></td><td><strong>Pipeline Stage Orchestration</strong></td><td>Loan stage changed</td><td>SLA clock start, milestone tracking, task creation, next-step notifications</td><td>SLA Engine, Scheduler</td><td>20% fewer stuck loans</td></tr>
+        <tr><td><strong>3</strong></td><td><strong>Smart Document Collection</strong></td><td>Application submitted</td><td>Generate needs list, send requests, cascade reminders, AI classify on upload</td><td>AI Agent, Email, SMS</td><td>30% faster doc chase</td></tr>
+        <tr><td><strong>4</strong></td><td><strong>TRID Compliance Guard</strong></td><td>Disclosure events</td><td>Validate LE/CD timing, check fee tolerance, flag violations, create cure tasks</td><td>Compliance Engine</td><td>Zero tolerance violations</td></tr>
+        <tr><td><strong>5</strong></td><td><strong>AI Call Intelligence</strong></td><td>Call completed</td><td>Transcribe, extract data, QA score, create tasks, update loan record</td><td>Twilio, AI Agent, NLP</td><td>Eliminates manual notes</td></tr>
+        <tr><td><strong>6</strong></td><td><strong>Borrower Communication Cadence</strong></td><td>7 days since last contact</td><td>AI drafts personalized message, compliance check, auto-send if &gt;90% confidence</td><td>AI Agent, Email, SMS</td><td>100% touchpoint compliance</td></tr>
+        <tr><td><strong>7</strong></td><td><strong>Stale Loan Sweep</strong></td><td>Daily at 9 AM</td><td>Scan all active loans, identify over-threshold, create nudge tasks, escalate</td><td>Scheduler, AI Agent</td><td>24-hour stuck detection</td></tr>
+        <tr><td><strong>8</strong></td><td><strong>Portfolio Refi Scanner</strong></td><td>Monthly schedule</td><td>Scan closed loans, check rate savings, calculate break-even, create campaigns</td><td>Rate Monitor, AI Agent</td><td>20+ refi opps/month</td></tr>
+        <tr><td><strong>9</strong></td><td><strong>Webhook Event Broadcast</strong></td><td>Any system event</td><td>HMAC-signed webhook to Zapier/Make, retry with exponential backoff</td><td>Webhook Service</td><td>5,000+ app connections</td></tr>
+        <tr><td><strong>10</strong></td><td><strong>AI Receptionist Call Routing</strong></td><td>Inbound call</td><td>State consent check, AI greeting, intent detection, route to agent or voicemail</td><td>Retell AI, Twilio</td><td>24/7 call coverage</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============================================================
+     6. VISUAL CONTENT GALLERY
+     ============================================================ -->
+<section class="section" id="gallery">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Visual Content Gallery</div>
+      <div class="section-subtitle">Screenshot placeholders &mdash; replace with actual screenshots</div>
+    </div>
+  </div>
+
+  <div class="grid-3">
+    <div class="gallery-placeholder">      <div class="gallery-placeholder-title">Command Center Dashboard</div><div class="gallery-placeholder-desc">Main dashboard with pipeline summary, tasks, alerts, and AI insights</div></div>
+    <div class="gallery-placeholder">      <div class="gallery-placeholder-title">Pipeline View</div><div class="gallery-placeholder-desc">21-stage pipeline board with loan cards, SLA indicators, and bottleneck highlights</div></div>
+    <div class="gallery-placeholder">      <div class="gallery-placeholder-title">Smart Documents</div><div class="gallery-placeholder-desc">Needs list with document status, freshness badges, and upload interface</div></div>
+    <div class="gallery-placeholder">      <div class="gallery-placeholder-title">AI Assistant (Aria)</div><div class="gallery-placeholder-desc">Chat interface showing AI-powered loan queries and task creation</div></div>
+    <div class="gallery-placeholder">      <div class="gallery-placeholder-title">Borrower Portal</div><div class="gallery-placeholder-desc">Milestone timeline, document upload, and close-on-time guarantee view</div></div>
+    <div class="gallery-placeholder">      <div class="gallery-placeholder-title">Call Intelligence</div><div class="gallery-placeholder-desc">Active call monitor with live transcription and coaching suggestions</div></div>
+    <div class="gallery-placeholder">      <div class="gallery-placeholder-title">Voice OS</div><div class="gallery-placeholder-desc">IVR builder, agent studio, and call queue management interface</div></div>
+    <div class="gallery-placeholder">      <div class="gallery-placeholder-title">Mobile App</div><div class="gallery-placeholder-desc">iOS app with Aria voice assistant and biometric login</div></div>
+    <div class="gallery-placeholder">      <div class="gallery-placeholder-title">Profitability Dashboard</div><div class="gallery-placeholder-desc">Loan profitability analysis with cost breakdowns and margin indicators</div></div>
+  </div>
+</section>
+
+<!-- ============================================================
+     7. METRICS & IMPACT
+     ============================================================ -->
+<section class="section" id="metrics">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Metrics &amp; Impact</div>
+      <div class="section-subtitle">Platform performance benchmarks and operational indicators</div>
+    </div>
+  </div>
+
+  <h3 class="fw-700 text-navy mb-16">Engineering Metrics</h3>
+  <div class="grid-4 mb-24">
+    <div class="stat-box"><div class="stat-value" data-stat="loc-metric">703K</div><div class="stat-label">Lines of Source Code</div></div>
+    <div class="stat-box"><div class="stat-value" data-stat="commits">4,509</div><div class="stat-label">Git Commits</div></div>
+    <div class="stat-box"><div class="stat-value" data-stat="routes">140</div><div class="stat-label">API Endpoints</div></div>
+    <div class="stat-box"><div class="stat-value" data-stat="services">177</div><div class="stat-label">Backend Services</div></div>
+  </div>
+
+  <h3 class="fw-700 text-navy mb-16">AI Performance Benchmarks</h3>
+  <div class="grid-3 mb-24">
+    <div class="stat-box">
+      <div class="stat-value" style="color:var(--teal);">50-80%</div>
+      <div class="stat-label">Token Reduction via Optimized Prompts</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-value" style="color:var(--teal);">5-7s</div>
+      <div class="stat-label">Latency Saved (Unified LLM Mode)</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-value" style="color:var(--teal);">8-16</div>
+      <div class="stat-label">Tools Loaded per Query (vs 160+)</div>
+    </div>
+  </div>
+
+  <h3 class="fw-700 text-navy mb-16">Operational Impact Targets</h3>
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr><th>Metric</th><th>Before</th><th>After (Target)</th><th>Improvement</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Lead First-Contact Time</td><td>2-4 hours</td><td>&lt; 5 minutes</td><td style="color:var(--green); font-weight:600;">95%+ faster</td></tr>
+        <tr><td>Document Collection Cycle</td><td>7-14 days</td><td>3-7 days</td><td style="color:var(--green); font-weight:600;">30-50% reduction</td></tr>
+        <tr><td>Stuck Loan Detection</td><td>Weekly review</td><td>&lt; 24 hours</td><td style="color:var(--green); font-weight:600;">6x faster</td></tr>
+        <tr><td>Compliance Violations</td><td>Manual audits</td><td>Real-time detection</td><td style="color:var(--green); font-weight:600;">Proactive vs reactive</td></tr>
+        <tr><td>Call Notes / Data Entry</td><td>10-15 min/call</td><td>Automated</td><td style="color:var(--green); font-weight:600;">Eliminated</td></tr>
+        <tr><td>Borrower Communication Gap</td><td>Inconsistent</td><td>7-day max cadence</td><td style="color:var(--green); font-weight:600;">100% touchpoint rate</td></tr>
+        <tr><td>Portfolio Refi Opportunities</td><td>Manual review</td><td>20+ auto-identified/month</td><td style="color:var(--green); font-weight:600;">Net-new revenue</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 class="fw-700 text-navy mb-16 mt-24">Platform Scope</h3>
+  <div class="grid-4">
+    <div class="stat-box"><div class="stat-value" data-stat="pages-metric">164</div><div class="stat-label">Frontend Pages</div></div>
+    <div class="stat-box"><div class="stat-value" data-stat="components">250+</div><div class="stat-label">UI Components</div></div>
+    <div class="stat-box"><div class="stat-value" data-stat="agents-metric">22</div><div class="stat-label">AI Agents</div></div>
+    <div class="stat-box"><div class="stat-value" data-stat="integrations-metric">27+</div><div class="stat-label">Integrations</div></div>
+  </div>
+</section>
+
+<!-- ============================================================
+     8. ROADMAP & FUTURE ENHANCEMENTS
+     ============================================================ -->
+<section class="section" id="roadmap">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Roadmap &amp; Future Enhancements</div>
+      <div class="section-subtitle">Planned improvements across near-term, mid-term, and vision horizons</div>
+    </div>
+  </div>
+
+  <div class="grid-3">
+    <div>
+      <h3 class="fw-700 text-teal mb-16">Near-Term (30 Days)</h3>
+      <div class="roadmap-track">
+        <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-teal"></div><div class="roadmap-label text-teal">Agent Refinement</div><div class="roadmap-title">Agent Gym v2</div><div class="roadmap-desc">Enhanced agent testing environment with automated regression testing against production scenarios.</div></div>
+        <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-teal"></div><div class="roadmap-label text-teal">Documents</div><div class="roadmap-title">Bank Statement Auto-Parse</div><div class="roadmap-desc">Automated income worksheet generation from uploaded bank statements with multi-month aggregation.</div></div>
+        <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-teal"></div><div class="roadmap-label text-teal">Mobile</div><div class="roadmap-title">CarPlay Document Upload</div><div class="roadmap-desc">Voice-activated document upload and loan status updates via CarPlay for on-the-go LOs.</div></div>
+        <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-teal"></div><div class="roadmap-label text-teal">Compliance</div><div class="roadmap-title">State Licensing Tracker</div><div class="roadmap-desc">Automated NMLS license renewal tracking and CE credit monitoring per state.</div></div>
+      </div>
+    </div>
+    <div>
+      <h3 class="fw-700 text-navy mb-16">Mid-Term (90 Days)</h3>
+      <div class="roadmap-track">
+        <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-navy"></div><div class="roadmap-label text-navy">AI</div><div class="roadmap-title">Multi-Agent Collaboration</div><div class="roadmap-desc">Agents hand off context seamlessly&mdash;Lead Agent passes qualified borrower data directly to Pipeline Agent.</div></div>
+        <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-navy"></div><div class="roadmap-label text-navy">Portal</div><div class="roadmap-title">Realtor White-Label Portals</div><div class="roadmap-desc">Fully branded partner portals with real-time deal tracking, commission visibility, and co-marketing tools.</div></div>
+        <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-navy"></div><div class="roadmap-label text-navy">Analytics</div><div class="roadmap-title">Predictive Pipeline Scoring</div><div class="roadmap-desc">ML-based probability-to-close scoring using 50+ loan attributes and historical conversion patterns.</div></div>
+        <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-navy"></div><div class="roadmap-label text-navy">Integrations</div><div class="roadmap-title">LOS Bidirectional Sync</div><div class="roadmap-desc">Real-time sync with Encompass, BytePro, and LendingPad loan origination systems.</div></div>
+      </div>
+    </div>
+    <div>
+      <h3 class="fw-700 mb-16" style="color:var(--gray-500);">Vision Items</h3>
+      <div class="roadmap-track">
+        <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-gray"></div><div class="roadmap-label" style="color:var(--gray-500);">Platform</div><div class="roadmap-title">Marketplace</div><div class="roadmap-desc">Third-party app marketplace for custom integrations, templates, and workflow plugins.</div></div>
+        <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-gray"></div><div class="roadmap-label" style="color:var(--gray-500);">AI</div><div class="roadmap-title">Autonomous Loan Processing</div><div class="roadmap-desc">End-to-end AI-managed processing for low-complexity loans with human oversight.</div></div>
+        <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-gray"></div><div class="roadmap-label" style="color:var(--gray-500);">Scale</div><div class="roadmap-title">Enterprise Multi-Branch</div><div class="roadmap-desc">Regional and national rollout support with branch-level dashboards, corporate reporting, and centralized compliance.</div></div>
+        <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-gray"></div><div class="roadmap-label" style="color:var(--gray-500);">Revenue</div><div class="roadmap-title">Embedded Lending APIs</div><div class="roadmap-desc">Public APIs enabling real estate platforms and fintechs to embed Perennia-powered mortgage workflows.</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     FOOTER
+     ============================================================ -->
+<footer class="footer">
+  <p><strong>Perennia AI</strong> &mdash; Mortgage CRM Platform Overview</p>
+  <p style="margin-top:8px;" id="footer-date">Generated January 27, 2026</p>
+  <p style="margin-top:8px; font-size:.78rem;" id="footer-stats">703,525 lines of code &bull; 26,218 source files &bull; 4,509 commits &bull; Built Nov 2025 &ndash; Jan 2026</p>
+</footer>
+
+<!-- Back to Top -->
+<button class="back-to-top no-print" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="Back to top">&#x2191;</button>
+
+<!-- ============================================================
+     JAVASCRIPT
+     ============================================================ -->
+<script>
+/* --- Collapsible toggle --- */
+function toggleCollapsible(btn) {
+  btn.classList.toggle('active');
+  btn.nextElementSibling.classList.toggle('open');
+}
+
+/* --- Data loading --- */
+function loadJSON(file) {
+  var bust = Date.now();
+  return fetch('data/' + file + '?v=' + bust)
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .catch(function() { return null; });
+}
+
+function formatNumber(n) {
+  if (n == null) return '';
+  return n.toLocaleString('en-US');
+}
+
+/* --- Render stats into [data-stat] elements --- */
+function renderStats(stats) {
+  if (!stats) return;
+
+  var map = {
+    'loc':               stats.codebase.lines_of_code_display,
+    'files':             formatNumber(stats.codebase.source_files),
+    'tools':             stats.architecture.ai_tools + '+',
+    'integrations':      stats.architecture.integrations + '+',
+    'pages':             String(stats.architecture.frontend_pages),
+    'agents':            String(stats.architecture.ai_agents),
+    'agents-inline':     String(stats.architecture.ai_agents),
+    'tools-inline':      stats.architecture.ai_tools + '+',
+    'routes-arch':       stats.architecture.api_routes + ' API Routes',
+    'agents-arch':       stats.architecture.ai_agents + ' Specialized Agents',
+    'tools-arch':        stats.architecture.ai_tools + '+ Tools',
+    'services-arch':     stats.architecture.backend_services + ' Backend Services',
+    'models-arch':       stats.architecture.data_models + '+ Data Models',
+    'models':            stats.architecture.data_models + '+',
+    'loc-metric':        stats.codebase.lines_of_code_display,
+    'commits':           formatNumber(stats.repo.total_commits),
+    'routes':            String(stats.architecture.api_routes),
+    'services':          String(stats.architecture.backend_services),
+    'pages-metric':      String(stats.architecture.frontend_pages),
+    'components':        stats.architecture.ui_components + '+',
+    'agents-metric':     String(stats.architecture.ai_agents),
+    'integrations-metric': stats.architecture.integrations + '+',
+  };
+
+  Object.keys(map).forEach(function(key) {
+    var els = document.querySelectorAll('[data-stat="' + key + '"]');
+    els.forEach(function(el) { el.textContent = map[key]; });
+  });
+
+  /* Footer */
+  var d = new Date(stats.generated_at);
+  var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var footerDate = document.getElementById('footer-date');
+  if (footerDate) {
+    footerDate.textContent = 'Last updated ' + months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+  }
+  var footerStats = document.getElementById('footer-stats');
+  if (footerStats) {
+    footerStats.textContent =
+      formatNumber(stats.codebase.lines_of_code) + ' lines of code \u2022 ' +
+      formatNumber(stats.codebase.source_files) + ' source files \u2022 ' +
+      formatNumber(stats.repo.total_commits) + ' commits \u2022 ' +
+      'Built Nov 2025 \u2013 present';
+  }
+}
+
+/* --- Render feature cards from features.json --- */
+function renderFeatures(data, visitor) {
+  if (!data || !data.features) return;
+
+  var grid = document.getElementById('feature-cards');
+  if (!grid) return;
+
+  /* Remove fallback cards */
+  var fallbacks = grid.querySelectorAll('[data-fallback]');
+  fallbacks.forEach(function(el) { el.remove(); });
+
+  var lastVisit = visitor && visitor.lastVisit ? visitor.lastVisit : null;
+
+  var features = data.features.slice().sort(function(a, b) { return a.order - b.order; });
+
+  features.forEach(function(f) {
+    var card = document.createElement('div');
+    card.className = 'card';
+    card.setAttribute('data-feature-id', f.id);
+
+    var statusClass = f.status === 'live' ? 'badge-live' : f.status === 'beta' ? 'badge-beta' : 'badge-dev';
+    var statusLabel = f.status.charAt(0).toUpperCase() + f.status.slice(1);
+
+    var isNew = lastVisit && f.addedDate && new Date(f.addedDate) > new Date(lastVisit);
+    var newBadge = isNew ? '<span class="badge-new">NEW</span>' : '';
+
+    var caps = f.capabilities.map(function(c) {
+      return '<span class="cap-tag">' + c + '</span>';
+    }).join('');
+
+    card.innerHTML =
+      '<div class="card-header">' +
+        '<div><div class="card-title">' + f.title + newBadge + '</div></div>' +
+        '<span class="badge ' + statusClass + '">' + statusLabel + '</span>' +
+      '</div>' +
+      '<div class="card-desc">' + f.description + '</div>' +
+      '<div class="cap-list">' + caps + '</div>';
+
+    grid.appendChild(card);
+  });
+}
+
+/* --- Visitor tracking (localStorage) --- */
+var VISITOR_KEY = 'perennia_visitor';
+
+function getVisitor() {
+  try {
+    var raw = localStorage.getItem(VISITOR_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+
+function saveVisitor(v) {
+  try { localStorage.setItem(VISITOR_KEY, JSON.stringify(v)); } catch (e) { /* noop */ }
+}
+
+function handleVisitor(changelog) {
+  var now = new Date().toISOString();
+  var visitor = getVisitor();
+
+  if (!visitor) {
+    /* First visit */
+    saveVisitor({ firstVisit: now, lastVisit: now, seenVersion: changelog ? changelog.version : null });
+    return { isNew: true, visitor: getVisitor() };
+  }
+
+  /* Return visit */
+  var result = { isNew: false, visitor: visitor, newEntries: [] };
+
+  if (changelog && changelog.version !== visitor.seenVersion) {
+    /* Find entries newer than last visit */
+    var lastVisitDate = new Date(visitor.lastVisit);
+    result.newEntries = (changelog.entries || []).filter(function(e) {
+      return new Date(e.date) > lastVisitDate;
+    }).slice(0, 5);
+  }
+
+  return result;
+}
+
+function showWhatsNew(entries) {
+  if (!entries || entries.length === 0) return;
+
+  var banner = document.getElementById('whats-new-banner');
+  var list = document.getElementById('whats-new-list');
+  if (!banner || !list) return;
+
+  entries.forEach(function(entry) {
+    var li = document.createElement('li');
+    li.textContent = entry.title + ' \u2014 ' + entry.description;
+    list.appendChild(li);
+  });
+
+  banner.classList.add('visible');
+
+  document.getElementById('whats-new-dismiss').addEventListener('click', function() {
+    banner.classList.remove('visible');
+    var visitor = getVisitor();
+    if (visitor) {
+      visitor.seenVersion = null; /* Will be set properly below */
+      visitor.lastVisit = new Date().toISOString();
+    }
+    /* Re-fetch changelog version to store */
+    loadJSON('changelog.json').then(function(cl) {
+      var v = getVisitor();
+      if (v && cl) {
+        v.seenVersion = cl.version;
+        v.lastVisit = new Date().toISOString();
+        saveVisitor(v);
+      }
+    });
+  });
+}
+
+/* --- Init --- */
+function initPage() {
+  Promise.all([
+    loadJSON('stats.json'),
+    loadJSON('features.json'),
+    loadJSON('changelog.json')
+  ]).then(function(results) {
+    var stats = results[0];
+    var features = results[1];
+    var changelog = results[2];
+
+    var visitorResult = handleVisitor(changelog);
+
+    renderStats(stats);
+    renderFeatures(features, visitorResult.visitor);
+
+    if (!visitorResult.isNew && visitorResult.newEntries && visitorResult.newEntries.length > 0) {
+      showWhatsNew(visitorResult.newEntries);
+    }
+
+    /* Update last visit time (but not seenVersion until dismiss) */
+    var visitor = getVisitor();
+    if (visitor) {
+      visitor.lastVisit = new Date().toISOString();
+      if (visitorResult.isNew && changelog) {
+        visitor.seenVersion = changelog.version;
+      }
+      saveVisitor(visitor);
+    }
+  });
+}
+
+/* --- Boot --- */
+document.addEventListener('DOMContentLoaded', function() {
+  initPage();
+  /* Auto-open first collapsible */
+  var first = document.querySelector('.collapsible-toggle');
+  if (first) first.click();
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,169 @@
+{
+  "features": [
+    {
+      "id": "ai-agent-system",
+      "title": "AI Agent System",
+      "description": "22 specialized agents with LangGraph orchestration. Intent-based tool loading delivers only 8\u201316 relevant tools per query. Unified 2-LLM-call mode reduces latency by 5\u20137 seconds.",
+      "category": "ai",
+      "status": "live",
+      "addedDate": "2025-11-15",
+      "updatedDate": "2026-01-27",
+      "capabilities": ["Lead Agent", "Pipeline Agent", "Document Agent", "Compliance Agent", "Coaching Agent", "Portfolio Agent"],
+      "order": 1
+    },
+    {
+      "id": "pipeline-management",
+      "title": "Pipeline Management",
+      "description": "21-stage loan lifecycle from Application to Funded. Real-time stage transition validation, bottleneck detection, stale-loan sweeps, and predictive close-date forecasting powered by historical data.",
+      "category": "core",
+      "status": "live",
+      "addedDate": "2025-11-10",
+      "updatedDate": "2026-01-20",
+      "capabilities": ["21 Stages", "SLA Tracking", "Velocity Metrics", "Bottleneck Alerts"],
+      "order": 2
+    },
+    {
+      "id": "smart-documents",
+      "title": "Smart Documents",
+      "description": "AI-powered document collection with automatic OCR, type classification (95%+ confidence), freshness tracking, screenshot detection, and cascading reminder sequences via email and SMS.",
+      "category": "core",
+      "status": "live",
+      "addedDate": "2025-11-12",
+      "updatedDate": "2026-01-18",
+      "capabilities": ["Auto-Classify", "Needs List", "OCR Extraction", "Expiry Alerts"],
+      "order": 3
+    },
+    {
+      "id": "compliance-engine",
+      "title": "Compliance Engine",
+      "description": "Automated TRID timing validation, RESPA Section 8 checks, fair lending analysis, fee tolerance monitoring, and state-specific call recording consent management across all 50 states.",
+      "category": "compliance",
+      "status": "live",
+      "addedDate": "2025-11-20",
+      "updatedDate": "2026-01-25",
+      "capabilities": ["TRID", "RESPA", "Fair Lending", "State Consent"],
+      "order": 4
+    },
+    {
+      "id": "voice-os",
+      "title": "Voice OS & Telephony",
+      "description": "AI receptionist, IVR builder, call queue management, hold music config, power dialer, live call whisper coaching, voice biometrics, and real-time transcription with sentiment analysis.",
+      "category": "communication",
+      "status": "live",
+      "addedDate": "2025-12-05",
+      "updatedDate": "2026-01-27",
+      "capabilities": ["AI Receptionist", "IVR Builder", "Call Whisper", "Power Dialer"],
+      "order": 5
+    },
+    {
+      "id": "call-intelligence",
+      "title": "Call Intelligence",
+      "description": "Active call monitoring dashboard, automatic transcription, data extraction from conversations, call-to-application conversion, QA scoring, and coaching recommendations.",
+      "category": "ai",
+      "status": "live",
+      "addedDate": "2025-12-10",
+      "updatedDate": "2026-01-27",
+      "capabilities": ["Live Monitor", "Auto-Transcribe", "QA Scoring", "Data Extraction"],
+      "order": 6
+    },
+    {
+      "id": "borrower-portal",
+      "title": "Borrower Portal",
+      "description": "Production-ready portal with milestone timeline, document upload, close-on-time guarantees, home value intelligence, total cost analysis, and real-time status via WebSocket.",
+      "category": "portal",
+      "status": "live",
+      "addedDate": "2025-11-25",
+      "updatedDate": "2026-01-22",
+      "capabilities": ["Milestone Timeline", "Doc Upload", "Cost Analysis", "Real-Time Updates"],
+      "order": 7
+    },
+    {
+      "id": "recruiting-assessment",
+      "title": "Recruiting & Assessment",
+      "description": "DISC personality assessments, AI-powered candidate analysis, video interviews, skill scoring, capacity planning, and branded recruit portals with PURL technology.",
+      "category": "operations",
+      "status": "live",
+      "addedDate": "2025-12-15",
+      "updatedDate": "2026-01-15",
+      "capabilities": ["DISC Assessment", "AI Analysis", "Video Interviews", "Capacity Planning"],
+      "order": 8
+    },
+    {
+      "id": "content-marketing",
+      "title": "Content & Marketing",
+      "description": "AI daily blog generation, social carousel builder, LO-branded microsites with custom domains, avatar studio, video hosting and rendering pipeline, and email campaign tools.",
+      "category": "marketing",
+      "status": "live",
+      "addedDate": "2025-12-01",
+      "updatedDate": "2026-01-20",
+      "capabilities": ["AI Blog", "Carousel Builder", "Microsites", "Video Studio"],
+      "order": 9
+    },
+    {
+      "id": "analytics-intelligence",
+      "title": "Analytics & Intelligence",
+      "description": "Scorecard dashboards, YoY analysis, production predictor, pipeline probability, profitability tracking, partner ROI, usage intelligence, and scenario modeling tools.",
+      "category": "analytics",
+      "status": "live",
+      "addedDate": "2025-11-18",
+      "updatedDate": "2026-01-25",
+      "capabilities": ["Scorecard", "Predictor", "Profitability", "Scenario Lab"],
+      "order": 10
+    },
+    {
+      "id": "workflow-engine",
+      "title": "Workflow Engine",
+      "description": "Advanced orchestration with branching, parallel execution, AI decisions, human tasks, wait conditions, loops, and sub-processes. Full error handling with retry and rollback.",
+      "category": "core",
+      "status": "live",
+      "addedDate": "2025-12-08",
+      "updatedDate": "2026-01-18",
+      "capabilities": ["Visual Builder", "Branching Logic", "AI Decisions", "Auto-Retry"],
+      "order": 11
+    },
+    {
+      "id": "integrations-hub",
+      "title": "Integrations Hub",
+      "description": "27+ third-party integrations: Salesforce, HubSpot, Twilio, DocuSign, Stripe, Zoom, Google Calendar, Microsoft 365, Retell AI, Optimal Blue, Vidyard, and Zapier webhook support.",
+      "category": "integrations",
+      "status": "live",
+      "addedDate": "2025-11-20",
+      "updatedDate": "2026-01-27",
+      "capabilities": ["Salesforce", "Twilio", "DocuSign", "Zapier"],
+      "order": 12
+    },
+    {
+      "id": "e-signature",
+      "title": "E-Signature",
+      "description": "DocuSign integration with drag-to-place field builder, signing ceremony UI, multi-party workflows, and document tracking with status updates.",
+      "category": "core",
+      "status": "live",
+      "addedDate": "2026-01-10",
+      "updatedDate": "2026-01-27",
+      "capabilities": ["Field Placement", "Signing Session", "Multi-Party"],
+      "order": 13
+    },
+    {
+      "id": "accounting-suite",
+      "title": "Accounting Suite",
+      "description": "Full general ledger, chart of accounts, journal entries, accounts receivable, accounts payable, bank connections, budgeting, and financial reporting.",
+      "category": "operations",
+      "status": "beta",
+      "addedDate": "2026-01-05",
+      "updatedDate": "2026-01-25",
+      "capabilities": ["GL", "AR/AP", "Banking", "Budgets"],
+      "order": 14
+    },
+    {
+      "id": "mobile-voice-app",
+      "title": "Mobile & Voice App",
+      "description": "iOS app via Capacitor with Face ID / Touch ID login, Aria voice assistant with WebSocket audio streaming, push notifications, camera document capture, and haptic feedback.",
+      "category": "mobile",
+      "status": "live",
+      "addedDate": "2025-12-20",
+      "updatedDate": "2026-01-27",
+      "capabilities": ["Face ID", "Voice Assistant", "Push Notifs", "Camera Capture"],
+      "order": 15
+    }
+  ]
+}

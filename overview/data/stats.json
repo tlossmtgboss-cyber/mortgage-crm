@@ -1,0 +1,30 @@
+{
+  "codebase": {
+    "lines_of_code": 13691492,
+    "lines_of_code_display": "13.69M",
+    "source_files": 26223,
+    "backend_files": 21597,
+    "frontend_files": 2330
+  },
+  "repo": {
+    "total_commits": 4509,
+    "first_commit_date": "2025-11-07",
+    "latest_commit_date": "2026-01-27"
+  },
+  "architecture": {
+    "api_routes": 140,
+    "backend_services": 177,
+    "ai_agents": 22,
+    "ai_tools": 160,
+    "frontend_pages": 164,
+    "ui_components": 250,
+    "integrations": 27,
+    "data_models": 55
+  },
+  "velocity": {
+    "commits_last_7d": 196,
+    "commits_last_30d": 1185
+  },
+  "generated_at": "2026-01-28T00:25:14Z",
+  "commit_sha": "9b4cd37c"
+}
