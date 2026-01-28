@@ -678,11 +678,20 @@ async def create_call_request(
         preferred_time_slot=request.preferred_time_slot,
     )
 
-    # If immediate, trigger Twilio click-to-call
+    # If immediate, trigger Twilio/Telnyx click-to-call
     if request.is_immediate:
-        # This will be handled by the Twilio service
-        # For now, just return the request
-        pass
+        try:
+            from services.click_to_call_service import ClickToCallService
+            click_service = ClickToCallService(db)
+            call_result = click_service.initiate_call(call_request.id)
+            if call_result.get("success"):
+                logger.info(f"Click-to-call initiated for session {session_id}: {call_result.get('call_sid')}")
+            else:
+                logger.warning(f"Click-to-call failed for session {session_id}: {call_result.get('error')}")
+        except ImportError:
+            logger.warning("ClickToCallService not available - call request created but not initiated")
+        except Exception as e:
+            logger.error(f"Click-to-call error for session {session_id}: {e}")
 
     return {
         "id": str(call_request.id),

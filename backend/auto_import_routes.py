@@ -12,6 +12,7 @@ import json
 import uuid
 from datetime import datetime
 import logging
+import os
 
 from field_mapping_service import (
     auto_map_fields,
@@ -28,14 +29,24 @@ router = APIRouter(prefix="/api/v1/auto-import", tags=["Auto Import"])
 try:
     from main import get_current_user, get_db, SessionLocal
 except ImportError:
-    # Fallback for standalone testing
+    # Fallback: import from database module directly
+    try:
+        from database import get_db, SessionLocal
+    except ImportError:
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+        _fallback_engine = create_engine(os.getenv("DATABASE_URL", "sqlite:///./mortgage_crm.db"))
+        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_fallback_engine)
+
+        def get_db():
+            db = SessionLocal()
+            try:
+                yield db
+            finally:
+                db.close()
+
     async def get_current_user():
         return {"email": "admin@perenniaai.com", "id": str(uuid.uuid4())}
-
-    def get_db():
-        pass
-
-    SessionLocal = None
 
 
 def get_db_connection():

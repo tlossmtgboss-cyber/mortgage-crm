@@ -5,10 +5,73 @@
  * Audio playback will be added in a future phase.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 
 const RecordingPlayer = ({ transcript, participants, session }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const audioRef = useRef(null);
+
+  const audioUrl = session?.recording_id
+    ? `/api/v1/ci-voice/recordings/${session.recording_id}/audio`
+    : null;
+
+  // Audio event handlers
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const onTimeUpdate = () => setCurrentTime(audio.currentTime);
+    const onDurationChange = () => setDuration(audio.duration || 0);
+    const onEnded = () => setIsPlaying(false);
+    const onPlay = () => setIsPlaying(true);
+    const onPause = () => setIsPlaying(false);
+
+    audio.addEventListener('timeupdate', onTimeUpdate);
+    audio.addEventListener('durationchange', onDurationChange);
+    audio.addEventListener('ended', onEnded);
+    audio.addEventListener('play', onPlay);
+    audio.addEventListener('pause', onPause);
+
+    return () => {
+      audio.removeEventListener('timeupdate', onTimeUpdate);
+      audio.removeEventListener('durationchange', onDurationChange);
+      audio.removeEventListener('ended', onEnded);
+      audio.removeEventListener('play', onPlay);
+      audio.removeEventListener('pause', onPause);
+    };
+  }, [audioUrl]);
+
+  const togglePlayback = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (isPlaying) {
+      audio.pause();
+    } else {
+      audio.play().catch(() => {});
+    }
+  }, [isPlaying]);
+
+  const handleSeek = useCallback((e) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.currentTime = Number(e.target.value);
+  }, []);
+
+  const skip = useCallback((seconds) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.currentTime = Math.max(0, Math.min(audio.duration || 0, audio.currentTime + seconds));
+  }, []);
+
+  const formatTime = (seconds) => {
+    if (!seconds || !isFinite(seconds)) return '0:00';
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
 
   if (!transcript) {
     return (
@@ -89,28 +152,95 @@ const RecordingPlayer = ({ transcript, participants, session }) => {
           }}
         />
 
-        {session?.recording_id && (
-          <button
-            style={{
-              padding: '8px 16px',
-              background: '#f3f4f6',
-              border: '1px solid #e5e7eb',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '0.875rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
-            onClick={() => {/* TODO: Open audio player */}}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polygon points="5 3 19 12 5 21 5 3" />
-            </svg>
-            Play Audio
-          </button>
+        {audioUrl && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <button
+              style={{
+                padding: '8px 12px',
+                background: isPlaying ? '#dbeafe' : '#f3f4f6',
+                border: `1px solid ${isPlaying ? '#93c5fd' : '#e5e7eb'}`,
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '0.875rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                minWidth: '36px',
+                justifyContent: 'center',
+              }}
+              onClick={() => skip(-10)}
+              title="Back 10s"
+            >
+              -10s
+            </button>
+            <button
+              style={{
+                padding: '8px 16px',
+                background: isPlaying ? '#dbeafe' : '#f3f4f6',
+                border: `1px solid ${isPlaying ? '#93c5fd' : '#e5e7eb'}`,
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '0.875rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+              onClick={togglePlayback}
+            >
+              {isPlaying ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="6" y="4" width="4" height="16" />
+                  <rect x="14" y="4" width="4" height="16" />
+                </svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polygon points="5 3 19 12 5 21 5 3" />
+                </svg>
+              )}
+              {isPlaying ? 'Pause' : 'Play'}
+            </button>
+            <button
+              style={{
+                padding: '8px 12px',
+                background: isPlaying ? '#dbeafe' : '#f3f4f6',
+                border: `1px solid ${isPlaying ? '#93c5fd' : '#e5e7eb'}`,
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '0.875rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                minWidth: '36px',
+                justifyContent: 'center',
+              }}
+              onClick={() => skip(10)}
+              title="Forward 10s"
+            >
+              +10s
+            </button>
+            <span style={{ fontSize: '0.75rem', color: '#6b7280', minWidth: '70px' }}>
+              {formatTime(currentTime)} / {formatTime(duration)}
+            </span>
+          </div>
         )}
       </div>
+
+      {/* Hidden Audio Element + Seek Bar */}
+      {audioUrl && (
+        <>
+          <audio ref={audioRef} src={audioUrl} preload="metadata" />
+          <div style={{ padding: '0 0 12px 0' }}>
+            <input
+              type="range"
+              min="0"
+              max={duration || 0}
+              value={currentTime}
+              onChange={handleSeek}
+              style={{ width: '100%', cursor: 'pointer' }}
+            />
+          </div>
+        </>
+      )}
 
       {/* Participants Legend */}
       {participants && participants.length > 0 && (

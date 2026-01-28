@@ -3256,8 +3256,16 @@ def get_clients_by_filter(db: Session, user_id: int, filter_criteria: Dict[str, 
         query = query.filter(Lead.status == filter_criteria["status"])
 
     if "tag" in filter_criteria:
-        # Filter by tag if your Lead model supports tags
-        pass
+        from sqlalchemy import text
+        tag_leads = db.execute(
+            text("SELECT lead_id FROM lead_tags WHERE tag = :tag"),
+            {"tag": filter_criteria["tag"]}
+        ).fetchall()
+        tag_lead_ids = [row[0] for row in tag_leads]
+        if tag_lead_ids:
+            query = query.filter(Lead.id.in_(tag_lead_ids))
+        else:
+            query = query.filter(Lead.id == None)
 
     return query.limit(100).all()
 
