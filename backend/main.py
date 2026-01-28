@@ -62556,23 +62556,9 @@ async def startup_event():
             except Exception as ls_e:
                 logger.warning(f"⚠️ Leadstage enum migration skipped: {ls_e}")
 
-            # Reset admin password (always runs) - uses pre-computed hash to avoid bcrypt/passlib issues
-            try:
-                db_temp = SessionLocal()
-                admin_check = db_temp.execute(text(
-                    "SELECT id FROM users WHERE email = 'admin@perenniaai.com'"
-                ))
-                if admin_check.fetchone():
-                    # Pre-computed bcrypt hash for "demo123" using passlib with bcrypt 4.1.3
-                    admin_hash = "$2b$12$okQ2nh4jbjfdA8nmZ7zj4enIL0tFjd3O7s58t2I/0K6bZPNY8nEuy"
-                    db_temp.execute(text(
-                        "UPDATE users SET hashed_password = :pwd WHERE email = 'admin@perenniaai.com'"
-                    ), {"pwd": admin_hash})
-                    db_temp.commit()
-                    logger.info("✅ Admin password reset to demo123")
-                db_temp.close()
-            except Exception as pwd_e:
-                logger.warning(f"⚠️ Admin password reset skipped: {pwd_e}")
+            # NOTE: Admin password reset removed - was overwriting password on every startup
+            # Password is now only set during initial admin user creation (see later in startup)
+            # To reset admin password manually, use: python check_and_fix_login.py --reset
 
             # Clean up demo user if admin exists
             try:
