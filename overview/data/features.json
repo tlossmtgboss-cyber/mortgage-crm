@@ -3,12 +3,12 @@
     {
       "id": "ai-agent-system",
       "title": "AI Agent System",
-      "description": "22 specialized agents with LangGraph orchestration. Intent-based tool loading delivers only 8\u201316 relevant tools per query. Unified 2-LLM-call mode reduces latency by 5\u20137 seconds.",
+      "description": "42 specialized agents with LangGraph orchestration. Intent-based tool loading delivers only 8-16 relevant tools per query. Unified 2-LLM-call mode reduces latency by 5-7 seconds.",
       "category": "ai",
       "status": "live",
       "addedDate": "2025-11-15",
       "updatedDate": "2026-01-27",
-      "capabilities": ["Lead Agent", "Pipeline Agent", "Document Agent", "Compliance Agent", "Coaching Agent", "Portfolio Agent"],
+      "capabilities": ["42 Agents", "Intent Router", "173 AI Tools", "LangGraph Orchestration", "Agent Governance", "Agent Gym"],
       "order": 1
     },
     {
@@ -19,19 +19,41 @@
       "status": "live",
       "addedDate": "2025-11-10",
       "updatedDate": "2026-01-20",
-      "capabilities": ["21 Stages", "SLA Tracking", "Velocity Metrics", "Bottleneck Alerts"],
+      "capabilities": ["21 Stages", "SLA Tracking", "Velocity Metrics", "Bottleneck Alerts", "Merge Center", "Reconciliation"],
       "order": 2
+    },
+    {
+      "id": "adaptive-urla",
+      "title": "Adaptive URLA & Loan Applications",
+      "description": "7-stage adaptive Universal Residential Loan Application with conditional logic, smart income engine, asset engine with Plaid integration, gift funds module, and TurboTax-style micro-interactions.",
+      "category": "core",
+      "status": "live",
+      "addedDate": "2025-12-01",
+      "updatedDate": "2026-01-20",
+      "capabilities": ["7-Stage Flow", "Income Engine", "Plaid Assets", "Purchase & Refi", "Co-Borrower", "Pre-Qual Forms"],
+      "order": 3
+    },
+    {
+      "id": "ai-underwriter",
+      "title": "AI Underwriter",
+      "description": "Chat-based underwriting interface with smart file analysis, OCR, applicant profile analysis, and guideline lookup across Conventional, FHA, VA, USDA, Jumbo, and Non-QM programs.",
+      "category": "ai",
+      "status": "live",
+      "addedDate": "2025-12-15",
+      "updatedDate": "2026-01-22",
+      "capabilities": ["Guideline Lookup", "File Analysis", "Condition Automation", "Escalation Panel", "6 Loan Programs"],
+      "order": 4
     },
     {
       "id": "smart-documents",
       "title": "Smart Documents",
-      "description": "AI-powered document collection with automatic OCR, type classification (95%+ confidence), freshness tracking, screenshot detection, and cascading reminder sequences via email and SMS.",
+      "description": "AI-powered document collection with automatic OCR, type classification at 95%+ confidence, freshness tracking, screenshot detection, and cascading reminder sequences via email and SMS.",
       "category": "core",
       "status": "live",
       "addedDate": "2025-11-12",
       "updatedDate": "2026-01-18",
-      "capabilities": ["Auto-Classify", "Needs List", "OCR Extraction", "Expiry Alerts"],
-      "order": 3
+      "capabilities": ["Auto-Classify", "Needs List", "OCR Extraction", "Expiry Alerts", "Visibility Controls"],
+      "order": 5
     },
     {
       "id": "compliance-engine",
@@ -41,41 +63,151 @@
       "status": "live",
       "addedDate": "2025-11-20",
       "updatedDate": "2026-01-25",
-      "capabilities": ["TRID", "RESPA", "Fair Lending", "State Consent"],
-      "order": 4
+      "capabilities": ["TRID", "RESPA", "Fair Lending", "Fee Tolerance", "50-State Consent"],
+      "order": 6
     },
     {
       "id": "voice-os",
       "title": "Voice OS & Telephony",
-      "description": "AI receptionist, IVR builder, call queue management, hold music config, power dialer, live call whisper coaching, voice biometrics, and real-time transcription with sentiment analysis.",
+      "description": "Complete telephony platform with AI receptionist, visual IVR builder, call queue management, hold music config, power dialer, live call whisper coaching, and voice biometrics.",
       "category": "communication",
       "status": "live",
       "addedDate": "2025-12-05",
       "updatedDate": "2026-01-27",
-      "capabilities": ["AI Receptionist", "IVR Builder", "Call Whisper", "Power Dialer"],
-      "order": 5
+      "capabilities": ["IVR Builder", "Call Queues", "Power Dialer", "Call Whisper", "Voice Biometrics", "Hold Music"],
+      "order": 7
     },
     {
       "id": "call-intelligence",
-      "title": "Call Intelligence",
-      "description": "Active call monitoring dashboard, automatic transcription, data extraction from conversations, call-to-application conversion, QA scoring, and coaching recommendations.",
+      "title": "Call Intelligence & Monitoring",
+      "description": "Active call monitoring dashboard, automatic transcription via Deepgram, real-time data extraction, call-to-application conversion tracking, QA scoring, and AI coaching recommendations.",
       "category": "ai",
       "status": "live",
       "addedDate": "2025-12-10",
       "updatedDate": "2026-01-27",
-      "capabilities": ["Live Monitor", "Auto-Transcribe", "QA Scoring", "Data Extraction"],
-      "order": 6
+      "capabilities": ["Live Monitor", "Auto-Transcribe", "QA Scoring", "Data Extraction", "Call Screening"],
+      "order": 8
+    },
+    {
+      "id": "ai-receptionist",
+      "title": "AI Receptionist",
+      "description": "Voice and chat AI receptionist with natural conversation, lead qualification during calls, intelligent call routing, spam detection, and automatic appointment scheduling.",
+      "category": "ai",
+      "status": "live",
+      "addedDate": "2025-12-12",
+      "updatedDate": "2026-01-27",
+      "capabilities": ["Voice AI", "Lead Qualification", "Call Routing", "Spam Detection", "Auto-Schedule"],
+      "order": 9
+    },
+    {
+      "id": "email-intelligence",
+      "title": "Email Intelligence",
+      "description": "AI-powered email analysis with automatic categorization, intent detection, AI response drafting, conversation threading, SLA monitoring, and multi-provider sync with Gmail and Outlook.",
+      "category": "ai",
+      "status": "live",
+      "addedDate": "2025-12-08",
+      "updatedDate": "2026-01-22",
+      "capabilities": ["Intent Detection", "AI Drafts", "Auto-Categorize", "Gmail Sync", "Outlook Sync", "SLA Alerts"],
+      "order": 10
+    },
+    {
+      "id": "conversation-intelligence",
+      "title": "Conversation Intelligence",
+      "description": "Multi-channel conversation analysis across calls, emails, and SMS. Sentiment tracking, topic extraction, key moment identification, and quality assurance scoring with coaching insights.",
+      "category": "ai",
+      "status": "live",
+      "addedDate": "2025-12-18",
+      "updatedDate": "2026-01-25",
+      "capabilities": ["Multi-Channel", "Sentiment Analysis", "Topic Extraction", "QA Scoring", "Coaching Insights"],
+      "order": 11
     },
     {
       "id": "borrower-portal",
       "title": "Borrower Portal",
-      "description": "Production-ready portal with milestone timeline, document upload, close-on-time guarantees, home value intelligence, total cost analysis, and real-time status via WebSocket.",
+      "description": "Production-ready portal with milestone timeline, document upload, close-on-time guarantees, home value intelligence, total cost analysis, and real-time status updates via WebSocket.",
       "category": "portal",
       "status": "live",
       "addedDate": "2025-11-25",
       "updatedDate": "2026-01-22",
-      "capabilities": ["Milestone Timeline", "Doc Upload", "Cost Analysis", "Real-Time Updates"],
-      "order": 7
+      "capabilities": ["Milestone Timeline", "Doc Upload", "Cost Analysis", "Real-Time Updates", "Payment Calculator"],
+      "order": 12
+    },
+    {
+      "id": "partner-portals",
+      "title": "Partner & Realtor Portals",
+      "description": "Dedicated portals for referral partners, realtors, and listing agents. Token-based access, loan status visibility, pre-qual letter generation, team communication, and performance dashboards.",
+      "category": "portal",
+      "status": "live",
+      "addedDate": "2025-12-10",
+      "updatedDate": "2026-01-20",
+      "capabilities": ["Partner Dashboard", "Realtor Portal", "Listing Agent Portal", "Magic Link Auth", "Pre-Qual Letters"],
+      "order": 13
+    },
+    {
+      "id": "purl-workspaces",
+      "title": "PURL Workspaces",
+      "description": "Persistent URL workspaces for borrowers with loan status, document needs list, task management, milestone timeline, appointment scheduling, payment calculators, and team messaging.",
+      "category": "portal",
+      "status": "live",
+      "addedDate": "2025-12-15",
+      "updatedDate": "2026-01-18",
+      "capabilities": ["Persistent URLs", "Loan Status", "Doc Needs", "Scheduling", "Team Messaging"],
+      "order": 14
+    },
+    {
+      "id": "estimate-comparison",
+      "title": "Estimate Comparison",
+      "description": "Upload and parse loan estimates with AI-powered side-by-side comparison, estimate critique, provenance tracking, and borrower Q&A about cost differences.",
+      "category": "core",
+      "status": "live",
+      "addedDate": "2025-12-20",
+      "updatedDate": "2026-01-15",
+      "capabilities": ["Side-by-Side", "AI Critique", "Provenance", "Borrower Q&A"],
+      "order": 15
+    },
+    {
+      "id": "rate-advisory",
+      "title": "Rate Monitoring & Lock Advisory",
+      "description": "Rate sheet upload and parsing, rate tracking, change alerts, rate target management, market opportunity identification, lock recommendations, and competitive rate comparison.",
+      "category": "core",
+      "status": "live",
+      "addedDate": "2025-12-10",
+      "updatedDate": "2026-01-25",
+      "capabilities": ["Rate Sheets", "Lock Alerts", "Market Monitor", "Rate Targets", "Competitive Analysis"],
+      "order": 16
+    },
+    {
+      "id": "smart-scheduler",
+      "title": "Smart Scheduler",
+      "description": "AI-powered appointment scheduling with availability optimization, load balancing, round-robin distribution, calendar sync across Google, Outlook, and Calendly, with timezone handling.",
+      "category": "operations",
+      "status": "live",
+      "addedDate": "2025-12-05",
+      "updatedDate": "2026-01-27",
+      "capabilities": ["Load Balancing", "Round-Robin", "Multi-Calendar Sync", "Timezone Aware", "Public Booking"],
+      "order": 17
+    },
+    {
+      "id": "workflow-engine",
+      "title": "Workflow Engine",
+      "description": "Advanced orchestration with branching, parallel execution, AI decisions, human tasks, wait conditions, loops, and sub-processes. Full error handling with retry and rollback support.",
+      "category": "core",
+      "status": "live",
+      "addedDate": "2025-12-08",
+      "updatedDate": "2026-01-18",
+      "capabilities": ["Visual Builder", "Branching Logic", "AI Decisions", "Auto-Retry", "SLA Enforcement"],
+      "order": 18
+    },
+    {
+      "id": "deal-alerts",
+      "title": "Deal Alerts & SLA Tracking",
+      "description": "Real-time deal alerts with stale deal detection, rate lock expiration warnings, condition overdue alerts, document expiry notifications, and configurable SLA rules per loan type.",
+      "category": "core",
+      "status": "live",
+      "addedDate": "2025-12-12",
+      "updatedDate": "2026-01-25",
+      "capabilities": ["Real-Time Alerts", "Stale Detection", "Lock Expiry", "SLA Rules", "Escalation"],
+      "order": 19
     },
     {
       "id": "recruiting-assessment",
@@ -85,74 +217,140 @@
       "status": "live",
       "addedDate": "2025-12-15",
       "updatedDate": "2026-01-15",
-      "capabilities": ["DISC Assessment", "AI Analysis", "Video Interviews", "Capacity Planning"],
-      "order": 8
+      "capabilities": ["DISC Assessment", "AI Analysis", "Video Interviews", "Capacity Planning", "Recruit Portal"],
+      "order": 20
+    },
+    {
+      "id": "team-coaching",
+      "title": "Team Coaching & Goals",
+      "description": "AI-driven coaching recommendations, performance feedback, call review with coaching insights, skill gap identification, development plans, and personal and team goal tracking.",
+      "category": "operations",
+      "status": "live",
+      "addedDate": "2025-12-18",
+      "updatedDate": "2026-01-22",
+      "capabilities": ["AI Coaching", "Call Review", "Skill Gaps", "Goal Tracker", "Performance Plans"],
+      "order": 21
     },
     {
       "id": "content-marketing",
-      "title": "Content & Marketing",
-      "description": "AI daily blog generation, social carousel builder, LO-branded microsites with custom domains, avatar studio, video hosting and rendering pipeline, and email campaign tools.",
+      "title": "Content Marketing Engine",
+      "description": "AI daily blog generation from PDF content mining, social carousel builder, email campaign tools, content calendar management, voice profile customization, and performance analytics.",
       "category": "marketing",
       "status": "live",
       "addedDate": "2025-12-01",
       "updatedDate": "2026-01-20",
-      "capabilities": ["AI Blog", "Carousel Builder", "Microsites", "Video Studio"],
-      "order": 9
+      "capabilities": ["AI Blog", "Carousel Builder", "Content Calendar", "Email Campaigns", "Voice Profile"],
+      "order": 22
+    },
+    {
+      "id": "avatar-video",
+      "title": "Avatar Studio & Video OS",
+      "description": "AI avatar creation with custom appearance and voice configuration, video synthesis and rendering pipeline, template-based video creation, hosting, engagement analytics, and sharing.",
+      "category": "marketing",
+      "status": "live",
+      "addedDate": "2025-12-20",
+      "updatedDate": "2026-01-20",
+      "capabilities": ["AI Avatars", "Video Rendering", "Templates", "Engagement Analytics", "Hosting"],
+      "order": 23
+    },
+    {
+      "id": "microsites",
+      "title": "Microsites & Custom Domains",
+      "description": "LO-branded microsites with drag-and-drop builder, custom domain management with SSL, lead capture forms, mobile optimization, theme rendering, and performance tracking.",
+      "category": "marketing",
+      "status": "live",
+      "addedDate": "2025-12-15",
+      "updatedDate": "2026-01-18",
+      "capabilities": ["Drag-and-Drop", "Custom Domains", "SSL/TLS", "Lead Capture", "Theme Editor"],
+      "order": 24
     },
     {
       "id": "analytics-intelligence",
-      "title": "Analytics & Intelligence",
+      "title": "Analytics & Business Intelligence",
       "description": "Scorecard dashboards, YoY analysis, production predictor, pipeline probability, profitability tracking, partner ROI, usage intelligence, and scenario modeling tools.",
       "category": "analytics",
       "status": "live",
       "addedDate": "2025-11-18",
       "updatedDate": "2026-01-25",
-      "capabilities": ["Scorecard", "Predictor", "Profitability", "Scenario Lab"],
-      "order": 10
+      "capabilities": ["Scorecard", "Production Predictor", "Pipeline Probability", "Usage Intelligence", "YoY Analysis"],
+      "order": 25
     },
     {
-      "id": "workflow-engine",
-      "title": "Workflow Engine",
-      "description": "Advanced orchestration with branching, parallel execution, AI decisions, human tasks, wait conditions, loops, and sub-processes. Full error handling with retry and rollback.",
-      "category": "core",
+      "id": "profitability",
+      "title": "Profitability & Financial Analytics",
+      "description": "Revenue per loan calculations, cost tracking, margin analysis, team profitability dashboards, expense budgeting, what-if scenario modeling, and acquisition cost analysis.",
+      "category": "analytics",
       "status": "live",
-      "addedDate": "2025-12-08",
-      "updatedDate": "2026-01-18",
-      "capabilities": ["Visual Builder", "Branching Logic", "AI Decisions", "Auto-Retry"],
-      "order": 11
+      "addedDate": "2025-12-10",
+      "updatedDate": "2026-01-22",
+      "capabilities": ["Revenue/Loan", "Margin Analysis", "Budget Tracking", "Scenario Modeling", "Acquisition ROI"],
+      "order": 26
+    },
+    {
+      "id": "decision-lab",
+      "title": "Decision Lab",
+      "description": "Borrower confidence assessment, loan option scenario comparison, education content integration, confidence scoring, and decision support tools to guide borrowers through complex choices.",
+      "category": "ai",
+      "status": "live",
+      "addedDate": "2026-01-05",
+      "updatedDate": "2026-01-20",
+      "capabilities": ["Confidence Scoring", "Scenario Comparison", "Education Content", "Decision Support"],
+      "order": 27
     },
     {
       "id": "integrations-hub",
       "title": "Integrations Hub",
-      "description": "27+ third-party integrations: Salesforce, HubSpot, Twilio, DocuSign, Stripe, Zoom, Google Calendar, Microsoft 365, Retell AI, Optimal Blue, Vidyard, and Zapier webhook support.",
+      "description": "25 third-party integrations including Salesforce bidirectional sync, HubSpot, Twilio, DocuSign, Stripe, Zoom, Google Calendar, Microsoft 365, Retell AI, RingCentral, Telnyx, and Slack.",
       "category": "integrations",
       "status": "live",
       "addedDate": "2025-11-20",
       "updatedDate": "2026-01-27",
-      "capabilities": ["Salesforce", "Twilio", "DocuSign", "Zapier"],
-      "order": 12
+      "capabilities": ["Salesforce Sync", "Twilio", "DocuSign", "Stripe", "Microsoft 365", "Slack"],
+      "order": 28
     },
     {
       "id": "e-signature",
       "title": "E-Signature",
-      "description": "DocuSign integration with drag-to-place field builder, signing ceremony UI, multi-party workflows, and document tracking with status updates.",
+      "description": "DocuSign integration with drag-to-place field builder, signing ceremony UI, multi-party workflows, document tracking, signature verification, and audit trail.",
       "category": "core",
       "status": "live",
       "addedDate": "2026-01-10",
       "updatedDate": "2026-01-27",
-      "capabilities": ["Field Placement", "Signing Session", "Multi-Party"],
-      "order": 13
+      "capabilities": ["Field Placement", "Signing Ceremony", "Multi-Party", "Audit Trail"],
+      "order": 29
     },
     {
       "id": "accounting-suite",
       "title": "Accounting Suite",
-      "description": "Full general ledger, chart of accounts, journal entries, accounts receivable, accounts payable, bank connections, budgeting, and financial reporting.",
+      "description": "Full general ledger, chart of accounts, journal entries, accounts receivable, accounts payable, bank connections, budgeting, trial balance, P&L, cash flow, and balance sheet reporting.",
       "category": "operations",
-      "status": "beta",
+      "status": "live",
       "addedDate": "2026-01-05",
       "updatedDate": "2026-01-25",
-      "capabilities": ["GL", "AR/AP", "Banking", "Budgets"],
-      "order": 14
+      "capabilities": ["General Ledger", "AR/AP", "Banking", "Budgets", "Financial Reports"],
+      "order": 30
+    },
+    {
+      "id": "mortgage-calculators",
+      "title": "Mortgage Calculator Suite",
+      "description": "Payment calculator, affordability calculator, refinance comparison, investment property analysis, scenario modeling, savings projections, rate comparison, and shareable calculator links.",
+      "category": "core",
+      "status": "live",
+      "addedDate": "2025-12-05",
+      "updatedDate": "2026-01-15",
+      "capabilities": ["Payment Calc", "Affordability", "Refi Compare", "Investment Analysis", "Shareable Links"],
+      "order": 31
+    },
+    {
+      "id": "mission-control",
+      "title": "Mission Control & Admin",
+      "description": "System health dashboard, agent performance monitoring, recent actions log, company setup wizard, user management, role and permission configuration, data import, and audit logs.",
+      "category": "operations",
+      "status": "live",
+      "addedDate": "2025-11-20",
+      "updatedDate": "2026-01-25",
+      "capabilities": ["System Health", "Agent Monitoring", "User Management", "Permissions", "Data Import"],
+      "order": 32
     },
     {
       "id": "mobile-voice-app",
@@ -162,8 +360,8 @@
       "status": "live",
       "addedDate": "2025-12-20",
       "updatedDate": "2026-01-27",
-      "capabilities": ["Face ID", "Voice Assistant", "Push Notifs", "Camera Capture"],
-      "order": 15
+      "capabilities": ["Face ID", "Voice Assistant", "Push Notifs", "Camera Capture", "Offline Mode"],
+      "order": 33
     }
   ]
 }

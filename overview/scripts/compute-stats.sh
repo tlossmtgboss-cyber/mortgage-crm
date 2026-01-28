@@ -47,17 +47,17 @@ COMMITS_30D=$(git rev-list --count --since="30 days ago" HEAD)
 
 # --- Architecture (curated values, preserved from existing stats.json) ---
 if [ -f "$OUT" ]; then
-  API_ROUTES=$(python3 -c "import json; print(json.load(open('$OUT'))['architecture']['api_routes'])" 2>/dev/null || echo 140)
-  BACKEND_SERVICES=$(python3 -c "import json; print(json.load(open('$OUT'))['architecture']['backend_services'])" 2>/dev/null || echo 177)
-  AI_AGENTS=$(python3 -c "import json; print(json.load(open('$OUT'))['architecture']['ai_agents'])" 2>/dev/null || echo 22)
-  AI_TOOLS=$(python3 -c "import json; print(json.load(open('$OUT'))['architecture']['ai_tools'])" 2>/dev/null || echo 160)
-  FRONTEND_PAGES=$(python3 -c "import json; print(json.load(open('$OUT'))['architecture']['frontend_pages'])" 2>/dev/null || echo 164)
-  UI_COMPONENTS=$(python3 -c "import json; print(json.load(open('$OUT'))['architecture']['ui_components'])" 2>/dev/null || echo 250)
-  INTEGRATIONS=$(python3 -c "import json; print(json.load(open('$OUT'))['architecture']['integrations'])" 2>/dev/null || echo 27)
-  DATA_MODELS=$(python3 -c "import json; print(json.load(open('$OUT'))['architecture']['data_models'])" 2>/dev/null || echo 55)
+  API_ROUTES=$(python3 -c "import json; print(json.load(open('$OUT'))['architecture']['api_routes'])" 2>/dev/null || echo 3934)
+  BACKEND_SERVICES=$(python3 -c "import json; print(json.load(open('$OUT'))['architecture']['backend_services'])" 2>/dev/null || echo 230)
+  AI_AGENTS=$(python3 -c "import json; print(json.load(open('$OUT'))['architecture']['ai_agents'])" 2>/dev/null || echo 42)
+  AI_TOOLS=$(python3 -c "import json; print(json.load(open('$OUT'))['architecture']['ai_tools'])" 2>/dev/null || echo 173)
+  FRONTEND_PAGES=$(python3 -c "import json; print(json.load(open('$OUT'))['architecture']['frontend_pages'])" 2>/dev/null || echo 271)
+  UI_COMPONENTS=$(python3 -c "import json; print(json.load(open('$OUT'))['architecture']['ui_components'])" 2>/dev/null || echo 286)
+  INTEGRATIONS=$(python3 -c "import json; print(json.load(open('$OUT'))['architecture']['integrations'])" 2>/dev/null || echo 25)
+  DATA_MODELS=$(python3 -c "import json; print(json.load(open('$OUT'))['architecture']['data_models'])" 2>/dev/null || echo 723)
 else
-  API_ROUTES=140; BACKEND_SERVICES=177; AI_AGENTS=22; AI_TOOLS=160
-  FRONTEND_PAGES=164; UI_COMPONENTS=250; INTEGRATIONS=27; DATA_MODELS=55
+  API_ROUTES=3934; BACKEND_SERVICES=230; AI_AGENTS=42; AI_TOOLS=173
+  FRONTEND_PAGES=271; UI_COMPONENTS=286; INTEGRATIONS=25; DATA_MODELS=723
 fi
 
 GENERATED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
