@@ -1044,39 +1044,34 @@ def create_test_mum_clients(db, owner_id, org_id):
 
         db.execute(text("""
             INSERT INTO mum_clients (
-                name, email, phone, status,
-                original_loan_date, original_loan_amount,
-                original_property_value, current_property_value,
-                interest_rate, loan_term, loan_type,
-                first_payment_date,
-                last_contact_date, next_touchpoint_type,
-                engagement_score, lifecycle_stage,
-                loan_officer_name, created_at
+                client_name, email, phone, status,
+                organization_id,
+                original_close_date, closing_date, first_payment_date,
+                interest_rate, original_loan_amount, current_loan_amount,
+                appraisal_value_at_closing, current_property_value,
+                engagement_score, last_contact, next_touchpoint
             ) VALUES (
                 :name, :email, :phone, 'active',
-                :loan_date, :loan_amount,
-                :orig_prop, :orig_prop,
-                :rate, :term, :ltype,
-                :first_payment,
-                :last_contact, :next_ms,
-                :engagement, 'active',
-                :lo_name, CURRENT_TIMESTAMP
+                :org_id,
+                :close_date, :close_date, :first_payment,
+                :rate, :loan_amount, :loan_amount,
+                :appraisal_value, :current_prop,
+                :engagement, :last_contact, :next_touchpoint
             )
         """), {
             "name": client["name"],
             "email": client["email"],
             "phone": client["phone"],
-            "loan_date": original_loan_date,
-            "loan_amount": client["original_loan_amount"],
-            "orig_prop": original_property,
-            "rate": client["interest_rate"],
-            "term": client["loan_term"],
-            "ltype": client["loan_type"],
+            "org_id": org_id,
+            "close_date": original_loan_date,
             "first_payment": first_payment_date,
-            "last_contact": last_contact,
-            "next_ms": client["next_milestone"],
+            "rate": client["interest_rate"],
+            "loan_amount": client["original_loan_amount"],
+            "appraisal_value": original_property,
+            "current_prop": original_property * 1.05,  # Slight appreciation
             "engagement": engagement,
-            "lo_name": lo_name,
+            "last_contact": last_contact,
+            "next_touchpoint": datetime.now(timezone.utc) + timedelta(days=30),
         })
         created += 1
         logger.info(f"  Created MUM client: {client['name']} ({client['engagement_level']})")
