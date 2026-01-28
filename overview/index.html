@@ -116,8 +116,34 @@ body {
   transition: var(--transition);
 }
 .nav-links a:hover { color: var(--white); background: rgba(255,255,255,.1); }
+/* Nav Action Buttons */
+.nav-actions { display: flex; align-items: center; gap: 10px; }
+.btn-login {
+  color: var(--gray-300); text-decoration: none; padding: 7px 16px;
+  border-radius: 6px; font-size: .82rem; font-weight: 600;
+  transition: var(--transition); border: 1px solid rgba(255,255,255,.2);
+  background: transparent;
+}
+.btn-login:hover { color: var(--white); background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.4); }
+.btn-demo {
+  padding: 7px 18px; border-radius: 6px; font-size: .82rem; font-weight: 700;
+  background: var(--teal); color: var(--white); border: none;
+  cursor: pointer; transition: var(--transition); font-family: inherit;
+  letter-spacing: .3px;
+}
+.btn-demo:hover { background: var(--teal-light); color: var(--navy-dark); transform: translateY(-1px); }
+.btn-demo-hero {
+  display: inline-block; padding: 14px 32px; border-radius: 8px;
+  font-size: 1rem; font-weight: 700; background: var(--teal);
+  color: var(--white); border: none; cursor: pointer;
+  transition: var(--transition); font-family: inherit;
+  letter-spacing: .3px; margin-top: 12px;
+}
+.btn-demo-hero:hover { background: var(--teal-light); color: var(--navy-dark); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(49,151,149,.4); }
+
 @media (max-width: 900px) {
   .nav-links { display: none; }
+  .btn-login { display: none; }
 }
 
 /* ============================================================
@@ -499,6 +525,160 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
 .tech-pill-accent { background: rgba(49,151,149,.08); color: var(--teal-dark); }
 .tech-pill-muted { background: var(--gray-100); color: var(--gray-600); }
 
+/* ============================================================
+   DEMO LIGHTBOX / MODAL
+   ============================================================ */
+.modal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 1000;
+  background: rgba(15,36,64,.7); backdrop-filter: blur(4px);
+  align-items: center; justify-content: center; padding: 24px;
+}
+.modal-overlay.open { display: flex; }
+.modal-box {
+  background: var(--white); border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl); width: 100%; max-width: 820px;
+  max-height: 90vh; overflow: hidden; position: relative;
+  display: flex; flex-direction: column;
+  animation: modalIn .25s ease;
+}
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(20px) scale(.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.modal-close {
+  position: absolute; top: 16px; right: 16px; z-index: 2;
+  width: 36px; height: 36px; border-radius: 50%;
+  background: var(--gray-100); border: none; cursor: pointer;
+  font-size: 1.2rem; color: var(--gray-600); display: flex;
+  align-items: center; justify-content: center;
+  transition: var(--transition);
+}
+.modal-close:hover { background: var(--gray-200); color: var(--navy); }
+.modal-header {
+  padding: 28px 32px 0; text-align: center;
+}
+.modal-header h2 { font-size: 1.5rem; font-weight: 800; color: var(--navy); margin-bottom: 4px; }
+.modal-header p { font-size: .9rem; color: var(--gray-500); }
+.modal-body {
+  padding: 24px 32px 32px; overflow-y: auto; flex: 1;
+}
+
+/* Scheduler Grid */
+.sched-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+@media (max-width: 700px) { .sched-layout { grid-template-columns: 1fr; } }
+
+/* Calendar */
+.sched-cal-nav {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px;
+}
+.sched-cal-nav span { font-weight: 700; color: var(--navy); font-size: .95rem; }
+.sched-cal-btn {
+  width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--gray-200);
+  background: var(--white); cursor: pointer; font-size: 1.1rem;
+  color: var(--gray-600); display: flex; align-items: center; justify-content: center;
+  transition: var(--transition);
+}
+.sched-cal-btn:hover { background: var(--gray-100); color: var(--navy); }
+.sched-cal-btn:disabled { opacity: .3; cursor: default; }
+
+.sched-weekdays {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;
+  margin-bottom: 4px;
+}
+.sched-weekday {
+  text-align: center; font-size: .7rem; font-weight: 700;
+  color: var(--gray-400); text-transform: uppercase; padding: 4px 0;
+}
+.sched-days {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;
+}
+.sched-day {
+  aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+  flex-direction: column; border-radius: 8px; font-size: .85rem; font-weight: 600;
+  cursor: default; color: var(--gray-400); position: relative;
+  transition: var(--transition);
+}
+.sched-day.has-slots {
+  color: var(--navy); cursor: pointer; background: rgba(49,151,149,.04);
+}
+.sched-day.has-slots:hover { background: rgba(49,151,149,.12); }
+.sched-day.selected { background: var(--teal); color: var(--white); }
+.sched-day.today { font-weight: 800; }
+.sched-day.today::after {
+  content: ''; width: 4px; height: 4px; border-radius: 50%;
+  background: var(--teal); position: absolute; bottom: 4px;
+}
+.sched-day.selected.today::after { background: var(--white); }
+.sched-day .slot-dot {
+  width: 4px; height: 4px; border-radius: 50%; background: var(--teal);
+  position: absolute; bottom: 4px;
+}
+.sched-day.selected .slot-dot { background: var(--white); }
+
+/* Time Slots */
+.sched-times-header { font-size: .95rem; font-weight: 700; color: var(--navy); margin-bottom: 12px; }
+.sched-slots { display: flex; flex-direction: column; gap: 6px; max-height: 280px; overflow-y: auto; }
+.sched-slot {
+  padding: 10px 14px; border: 1px solid var(--gray-200); border-radius: 8px;
+  font-size: .88rem; font-weight: 600; color: var(--navy);
+  cursor: pointer; transition: var(--transition); text-align: center;
+  background: var(--white);
+}
+.sched-slot:hover { border-color: var(--teal); background: rgba(49,151,149,.04); }
+.sched-slot.selected { border-color: var(--teal); background: var(--teal); color: var(--white); }
+.sched-prompt {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 200px; color: var(--gray-400); text-align: center; gap: 8px;
+}
+.sched-prompt-icon { font-size: 2rem; }
+
+/* Booking Form */
+.sched-form { margin-top: 20px; border-top: 1px solid var(--gray-200); padding-top: 20px; }
+.sched-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+@media (max-width: 500px) { .sched-form-row { grid-template-columns: 1fr; } }
+.sched-input {
+  padding: 10px 14px; border: 1px solid var(--gray-200); border-radius: 8px;
+  font-size: .88rem; font-family: inherit; color: var(--gray-700);
+  transition: var(--transition); width: 100%;
+}
+.sched-input:focus { outline: none; border-color: var(--teal); box-shadow: 0 0 0 3px rgba(49,151,149,.15); }
+.sched-input::placeholder { color: var(--gray-400); }
+.sched-submit {
+  width: 100%; padding: 12px; border: none; border-radius: 8px;
+  background: var(--teal); color: var(--white); font-size: .95rem;
+  font-weight: 700; cursor: pointer; transition: var(--transition);
+  font-family: inherit; margin-top: 4px;
+}
+.sched-submit:hover { background: var(--teal-dark); }
+.sched-submit:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Confirmation State */
+.sched-confirmed {
+  text-align: center; padding: 32px 16px;
+}
+.sched-confirmed-icon {
+  width: 56px; height: 56px; border-radius: 50%; background: var(--green-light);
+  color: var(--green); display: flex; align-items: center; justify-content: center;
+  font-size: 1.8rem; margin: 0 auto 16px;
+}
+.sched-confirmed h3 { font-size: 1.2rem; color: var(--navy); margin-bottom: 8px; }
+.sched-confirmed p { color: var(--gray-600); font-size: .9rem; line-height: 1.6; }
+.sched-confirmed .detail { margin-top: 16px; padding: 16px; background: var(--gray-50); border-radius: 8px; }
+.sched-confirmed .detail strong { color: var(--navy); }
+
+/* Loading spinner for scheduler */
+.sched-loading {
+  display: flex; align-items: center; justify-content: center; padding: 48px;
+  flex-direction: column; gap: 12px; color: var(--gray-500);
+}
+.sched-spinner {
+  width: 32px; height: 32px; border: 3px solid var(--gray-200);
+  border-top-color: var(--teal); border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
 /* Live-data shimmer for loading state */
 .stat-loading {
   background: linear-gradient(90deg, var(--gray-100) 25%, var(--gray-200) 50%, var(--gray-100) 75%);
@@ -536,6 +716,10 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
       <a href="#metrics">Metrics</a>
       <a href="#roadmap">Roadmap</a>
     </div>
+    <div class="nav-actions">
+      <a href="https://app.perenniaai.com/login" class="btn-login">Log In</a>
+      <button class="btn-demo" onclick="openDemoModal()">Schedule a Demo</button>
+    </div>
   </div>
 </nav>
 
@@ -562,6 +746,7 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
       Purpose-built for loan officers, processors, underwriters, and branch managers
       to automate workflows, ensure compliance, and close loans faster.
     </p>
+    <button class="btn-demo-hero" onclick="openDemoModal()">Schedule a Demo</button>
     <div class="hero-stats">
       <div class="hero-stat">
         <div class="hero-stat-value" data-stat="loc">703K</div>
@@ -1185,6 +1370,22 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
   <p style="margin-top:8px; font-size:.78rem;" id="footer-stats">703,525 lines of code &bull; 26,218 source files &bull; 4,509 commits &bull; Built Nov 2025 &ndash; Jan 2026</p>
 </footer>
 
+<!-- ============================================================
+     DEMO SCHEDULING MODAL
+     ============================================================ -->
+<div class="modal-overlay" id="demo-modal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeDemoModal()" title="Close">&times;</button>
+    <div class="modal-header">
+      <h2>Schedule a Demo</h2>
+      <p>See Perennia AI in action. Pick a time that works for you.</p>
+    </div>
+    <div class="modal-body" id="demo-modal-body">
+      <!-- Populated by JS -->
+    </div>
+  </div>
+</div>
+
 <!-- Back to Top -->
 <button class="back-to-top no-print" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="Back to top">&#x2191;</button>
 
@@ -1405,6 +1606,328 @@ function initPage() {
       }
       saveVisitor(visitor);
     }
+  });
+}
+
+/* =========================================================
+   DEMO SCHEDULING MODAL + SMART CALENDAR
+   ========================================================= */
+var SCHEDULER_API = 'https://api.perenniaai.com';
+var BOOKING_SLUG = 'demo';
+var APPT_TYPE = 'platform-demo';
+var DURATION = 30;
+var DAYS_AHEAD = 21;
+
+var schedState = {
+  slotsByDate: {},
+  selectedDate: null,
+  selectedSlot: null,
+  currentMonth: new Date(),
+  loading: true,
+  confirmed: false
+};
+
+function openDemoModal() {
+  var modal = document.getElementById('demo-modal');
+  modal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  schedState = {
+    slotsByDate: {},
+    selectedDate: null,
+    selectedSlot: null,
+    currentMonth: new Date(),
+    loading: true,
+    confirmed: false
+  };
+  renderScheduler();
+  fetchSlots();
+}
+
+function closeDemoModal() {
+  document.getElementById('demo-modal').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+/* Close on overlay click or Escape */
+document.addEventListener('click', function(e) {
+  if (e.target.id === 'demo-modal') closeDemoModal();
+});
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeDemoModal();
+});
+
+function fetchSlots() {
+  schedState.loading = true;
+  renderScheduler();
+
+  var start = new Date();
+  var end = new Date();
+  end.setDate(end.getDate() + DAYS_AHEAD);
+
+  fetch(SCHEDULER_API + '/api/v1/scheduler/public/available-slots', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      start_date: isoDate(start),
+      end_date: isoDate(end),
+      duration_minutes: DURATION,
+      appointment_type: APPT_TYPE
+    })
+  })
+  .then(function(r) { return r.ok ? r.json() : null; })
+  .then(function(data) {
+    schedState.loading = false;
+    if (data && data.available_slots) {
+      var grouped = {};
+      data.available_slots.forEach(function(slot) {
+        var d = new Date(slot.start_time).toISOString().split('T')[0];
+        if (!grouped[d]) grouped[d] = [];
+        grouped[d].push(slot);
+      });
+      schedState.slotsByDate = grouped;
+    }
+    renderScheduler();
+  })
+  .catch(function() {
+    schedState.loading = false;
+    renderScheduler();
+  });
+}
+
+function isoDate(d) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function renderScheduler() {
+  var body = document.getElementById('demo-modal-body');
+  if (!body) return;
+
+  if (schedState.confirmed) {
+    renderConfirmation(body);
+    return;
+  }
+
+  if (schedState.loading) {
+    body.innerHTML = '<div class="sched-loading"><div class="sched-spinner"></div><p>Loading available times...</p></div>';
+    return;
+  }
+
+  var html = '<div class="sched-layout">';
+  html += renderCalendar();
+  html += renderTimeSlots();
+  html += '</div>';
+  html += renderBookingForm();
+  body.innerHTML = html;
+
+  /* Attach event listeners after render */
+  attachCalendarEvents();
+}
+
+function renderCalendar() {
+  var cm = schedState.currentMonth;
+  var year = cm.getFullYear();
+  var month = cm.getMonth();
+  var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var today = new Date(); today.setHours(0,0,0,0);
+  var maxDate = new Date(); maxDate.setDate(maxDate.getDate() + DAYS_AHEAD);
+  var isCurrentMonth = (month === today.getMonth() && year === today.getFullYear());
+
+  var h = '<div class="sched-calendar">';
+  h += '<div class="sched-cal-nav">';
+  h += '<button class="sched-cal-btn" id="sched-prev" ' + (isCurrentMonth ? 'disabled' : '') + '>&lsaquo;</button>';
+  h += '<span>' + months[month] + ' ' + year + '</span>';
+  h += '<button class="sched-cal-btn" id="sched-next">&rsaquo;</button>';
+  h += '</div>';
+
+  h += '<div class="sched-weekdays">';
+  ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(function(d) {
+    h += '<div class="sched-weekday">' + d + '</div>';
+  });
+  h += '</div>';
+
+  h += '<div class="sched-days">';
+  var firstDay = new Date(year, month, 1).getDay();
+  var lastDate = new Date(year, month + 1, 0).getDate();
+
+  for (var i = 0; i < firstDay; i++) {
+    h += '<div class="sched-day"></div>';
+  }
+
+  for (var day = 1; day <= lastDate; day++) {
+    var date = new Date(year, month, day);
+    var ds = isoDate(date);
+    var isPast = date < today;
+    var isTooFar = date > maxDate;
+    var hasSlots = schedState.slotsByDate[ds] && schedState.slotsByDate[ds].length > 0;
+    var isToday = date.toDateString() === today.toDateString();
+    var isSelected = schedState.selectedDate === ds;
+
+    var cls = 'sched-day';
+    if (hasSlots && !isPast && !isTooFar) cls += ' has-slots';
+    if (isToday) cls += ' today';
+    if (isSelected) cls += ' selected';
+
+    h += '<div class="' + cls + '" data-date="' + ds + '">';
+    h += day;
+    if (hasSlots && !isPast && !isTooFar && !isSelected) h += '<span class="slot-dot"></span>';
+    h += '</div>';
+  }
+  h += '</div></div>';
+  return h;
+}
+
+function renderTimeSlots() {
+  var h = '<div class="sched-times">';
+
+  if (!schedState.selectedDate) {
+    h += '<div class="sched-prompt"><div class="sched-prompt-icon">&#128197;</div><p>Select a date to see<br>available times</p></div>';
+    h += '</div>';
+    return h;
+  }
+
+  var slots = schedState.slotsByDate[schedState.selectedDate] || [];
+  var selDate = new Date(schedState.selectedDate + 'T12:00:00');
+  h += '<div class="sched-times-header">' + selDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) + '</div>';
+
+  if (slots.length === 0) {
+    h += '<div class="sched-prompt"><p>No available times for this date</p></div>';
+  } else {
+    h += '<div class="sched-slots">';
+    slots.forEach(function(slot, idx) {
+      var time = new Date(slot.start_time);
+      var label = time.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+      var isSel = schedState.selectedSlot && schedState.selectedSlot.start_time === slot.start_time;
+      h += '<button class="sched-slot' + (isSel ? ' selected' : '') + '" data-slot-idx="' + idx + '">' + label + '</button>';
+    });
+    h += '</div>';
+  }
+
+  h += '</div>';
+  return h;
+}
+
+function renderBookingForm() {
+  if (!schedState.selectedSlot) return '';
+
+  var slot = schedState.selectedSlot;
+  var dt = new Date(slot.start_time);
+  var dateLabel = dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  var timeLabel = dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+
+  var h = '<div class="sched-form">';
+  h += '<p style="font-size:.88rem;color:var(--gray-600);margin-bottom:12px;">Booking for <strong style="color:var(--navy);">' + dateLabel + '</strong> at <strong style="color:var(--teal);">' + timeLabel + '</strong> (' + DURATION + ' min)</p>';
+  h += '<div class="sched-form-row">';
+  h += '<input class="sched-input" id="sched-name" type="text" placeholder="Full Name" required>';
+  h += '<input class="sched-input" id="sched-email" type="email" placeholder="Email Address" required>';
+  h += '</div>';
+  h += '<div class="sched-form-row">';
+  h += '<input class="sched-input" id="sched-phone" type="tel" placeholder="Phone (optional)">';
+  h += '<input class="sched-input" id="sched-company" type="text" placeholder="Company (optional)">';
+  h += '</div>';
+  h += '<button class="sched-submit" id="sched-book-btn">Confirm Demo Booking</button>';
+  h += '</div>';
+  return h;
+}
+
+function renderConfirmation(body) {
+  var c = schedState.confirmedData;
+  var h = '<div class="sched-confirmed">';
+  h += '<div class="sched-confirmed-icon">&#10003;</div>';
+  h += '<h3>Demo Scheduled!</h3>';
+  h += '<p>You\'re all set. We\'ll send a confirmation to your email with meeting details.</p>';
+  if (c && c.confirmation_details) {
+    var d = c.confirmation_details;
+    h += '<div class="detail">';
+    h += '<p><strong>' + (d.date || '') + '</strong> at <strong>' + (d.time || '') + '</strong></p>';
+    h += '<p>' + (d.duration || DURATION + ' minutes') + ' &bull; ' + (d.meeting_mode || 'Video') + '</p>';
+    if (c.video_link) h += '<p style="margin-top:8px;"><a href="' + c.video_link + '" style="color:var(--teal);font-weight:600;">Join Video Link</a></p>';
+    h += '</div>';
+  }
+  h += '</div>';
+  body.innerHTML = h;
+}
+
+function attachCalendarEvents() {
+  /* Month navigation */
+  var prev = document.getElementById('sched-prev');
+  var next = document.getElementById('sched-next');
+  if (prev) prev.addEventListener('click', function() {
+    schedState.currentMonth = new Date(schedState.currentMonth.getFullYear(), schedState.currentMonth.getMonth() - 1, 1);
+    renderScheduler();
+  });
+  if (next) next.addEventListener('click', function() {
+    schedState.currentMonth = new Date(schedState.currentMonth.getFullYear(), schedState.currentMonth.getMonth() + 1, 1);
+    renderScheduler();
+  });
+
+  /* Day click */
+  document.querySelectorAll('.sched-day.has-slots').forEach(function(el) {
+    el.addEventListener('click', function() {
+      schedState.selectedDate = this.getAttribute('data-date');
+      schedState.selectedSlot = null;
+      renderScheduler();
+    });
+  });
+
+  /* Slot click */
+  document.querySelectorAll('.sched-slot').forEach(function(el) {
+    el.addEventListener('click', function() {
+      var idx = parseInt(this.getAttribute('data-slot-idx'));
+      var slots = schedState.slotsByDate[schedState.selectedDate] || [];
+      schedState.selectedSlot = slots[idx] || null;
+      renderScheduler();
+    });
+  });
+
+  /* Book button */
+  var bookBtn = document.getElementById('sched-book-btn');
+  if (bookBtn) {
+    bookBtn.addEventListener('click', function() {
+      submitBooking();
+    });
+  }
+}
+
+function submitBooking() {
+  var name = document.getElementById('sched-name');
+  var email = document.getElementById('sched-email');
+  var phone = document.getElementById('sched-phone');
+  var company = document.getElementById('sched-company');
+  var btn = document.getElementById('sched-book-btn');
+
+  if (!name || !name.value.trim()) { name.focus(); return; }
+  if (!email || !email.value.trim() || !email.value.includes('@')) { email.focus(); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Booking...';
+
+  var slot = schedState.selectedSlot;
+  var payload = {
+    appointment_type_id: 1,
+    start_time: slot.start_time,
+    duration_minutes: DURATION,
+    attendee_name: name.value.trim(),
+    attendee_email: email.value.trim(),
+    meeting_mode: 'video'
+  };
+  if (phone && phone.value.trim()) payload.attendee_phone = phone.value.trim();
+  if (company && company.value.trim()) payload.notes = 'Company: ' + company.value.trim();
+
+  fetch(SCHEDULER_API + '/api/v1/scheduler/public/book/' + BOOKING_SLUG + '/confirm', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    schedState.confirmed = true;
+    schedState.confirmedData = data;
+    renderScheduler();
+  })
+  .catch(function() {
+    btn.disabled = false;
+    btn.textContent = 'Confirm Demo Booking';
+    alert('Something went wrong. Please try again or email us directly.');
   });
 }
 
