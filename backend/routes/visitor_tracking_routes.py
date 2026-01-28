@@ -542,7 +542,7 @@ async def run_visitor_tracking_migration(
     Run the visitor tracking database migration.
     Requires SECRET_KEY for authorization.
     """
-    expected_key = os.getenv("SECRET_KEY", "")
+    expected_key = os.getenv("SECRET_KEY", "").replace("\n", "").replace(" ", "").strip()
     if not expected_key or secret_key != expected_key:
         raise HTTPException(status_code=403, detail="Invalid secret key")
 
