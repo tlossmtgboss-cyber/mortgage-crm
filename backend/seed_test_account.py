@@ -956,31 +956,29 @@ def create_test_leads(db, owner_id, org_id):
         ltv = (loan_amount / lead["property_value"]) * 100 if lead.get("property_value") else 80
         dti = round(35.0 + random.uniform(-10, 10), 1)
 
+        # Use only core fields that are guaranteed to exist in production DB
         db.execute(text("""
             INSERT INTO leads (
-                name, email, phone, co_applicant_name,
+                name, email, phone,
                 stage, source, loan_type, credit_score,
                 annual_income, property_value, down_payment,
                 loan_amount, ltv, dti, city, state,
-                first_time_buyer, owner_id, organization_id,
+                owner_id, organization_id,
                 ai_score, sentiment,
-                referral_source_score, referral_source_rating,
                 created_at, updated_at
             ) VALUES (
-                :name, :email, :phone, :co_applicant,
+                :name, :email, :phone,
                 :stage, :source, :loan_type, :credit_score,
                 :income, :property_value, :down_payment,
                 :loan_amount, :ltv, :dti, :city, :state,
-                :first_time, :owner_id, :org_id,
+                :owner_id, :org_id,
                 :ai_score, 'positive',
-                :ref_score, :ref_rating,
                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
             )
         """), {
             "name": lead["name"],
             "email": lead["email"],
             "phone": lead.get("phone"),
-            "co_applicant": lead.get("co_applicant_name"),
             "stage": lead["stage"],
             "source": lead["source"],
             "loan_type": lead["loan_type"],
@@ -993,12 +991,9 @@ def create_test_leads(db, owner_id, org_id):
             "dti": dti,
             "city": lead.get("city"),
             "state": lead.get("state"),
-            "first_time": lead.get("first_time_buyer", False),
             "owner_id": owner_id,
             "org_id": org_id,
             "ai_score": 50 + random.randint(-20, 30),
-            "ref_score": lead.get("referral_source_score", 0),
-            "ref_rating": lead.get("referral_source_rating"),
         })
         created += 1
         logger.info(f"  Created lead: {lead['name']} ({lead['stage']})")
