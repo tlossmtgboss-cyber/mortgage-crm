@@ -5243,6 +5243,7 @@ CALENDAR_PURPOSES = [
     {"purpose": "document_review", "label": "Document Review Call"},
     {"purpose": "closing_call", "label": "Closing Preparation Call"},
     {"purpose": "general_appointment", "label": "General Appointment"},
+    {"purpose": "website_demo", "label": "Website Demo Scheduler"},
 ]
 
 # ============================================================================
@@ -62049,6 +62050,14 @@ async def startup_event():
             except Exception as org_e:
                 logger.warning(f"⚠️ Organization migration skipped: {org_e}")
 
+            # Create onboarding_roles table and multi-role system (MUST run early - other features depend on it)
+            try:
+                from migrations.create_onboarding_roles_table import run_migration as run_onboarding_roles_migration
+                run_onboarding_roles_migration()
+                logger.info("✅ Onboarding roles and multi-role system tables initialized")
+            except Exception as roles_e:
+                logger.warning(f"⚠️ Onboarding roles migration skipped: {roles_e}")
+
             # Add missing slug column to users table (microsite URL identifier)
             try:
                 db_temp = SessionLocal()
@@ -65738,6 +65747,34 @@ async def fix_company_admin_role_migration(
     except Exception as e:
         db.rollback()
         logger.error(f"Company Admin role migration error: {e}")
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
+@app.post("/api/v1/public/migrations/create-onboarding-roles", response_model=None)
+async def create_onboarding_roles_migration(
+    migration_key: str = "",
+    db: Session = Depends(get_db)
+):
+    """
+    Create onboarding_roles table and seed default roles.
+    Also creates user_assigned_roles and user_active_role tables.
+    Public endpoint - requires migration key for security.
+
+    This is the FOUNDATIONAL migration - run this first if role system is broken.
+    """
+    if migration_key != "create-onboarding-roles":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    try:
+        from migrations.create_onboarding_roles_table import run_migration
+        result = run_migration()
+        return {
+            "success": True,
+            "message": "Onboarding roles table created and seeded with default roles"
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Onboarding roles migration error: {e}")
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 
