@@ -766,7 +766,7 @@ async def connect_integration(
                     )
                 # Get user_id for state parameter
                 user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
-                frontend_url = os.getenv("FRONTEND_URL", "https://www.perenniaai.com")
+                frontend_url = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
                 state = f"{user_id}:{frontend_url}/settings/integrations"
                 oauth_url = hubspot_client.get_authorization_url(state=state)
                 return success_response({
@@ -785,7 +785,7 @@ async def connect_integration(
                         detail=error_response("Google Calendar integration not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables.", code="NOT_CONFIGURED")
                     )
                 user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
-                frontend_url = os.getenv("FRONTEND_URL", "https://www.perenniaai.com")
+                frontend_url = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
                 state = f"{user_id}:{frontend_url}/settings/integrations"
                 oauth_url = google_calendar_client.get_authorization_url(state=state)
                 return success_response({
@@ -804,7 +804,7 @@ async def connect_integration(
                         detail=error_response("Zoom integration not configured. Please set ZOOM_CLIENT_ID and ZOOM_CLIENT_SECRET environment variables.", code="NOT_CONFIGURED")
                     )
                 user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
-                frontend_url = os.getenv("FRONTEND_URL", "https://www.perenniaai.com")
+                frontend_url = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
                 state = f"{user_id}:{frontend_url}/settings/integrations"
                 oauth_url = zoom_client.get_authorization_url(state=state)
                 return success_response({
@@ -823,7 +823,7 @@ async def connect_integration(
                         detail=error_response("Slack integration not configured. Please set SLACK_CLIENT_ID and SLACK_CLIENT_SECRET environment variables.", code="NOT_CONFIGURED")
                     )
                 user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
-                frontend_url = os.getenv("FRONTEND_URL", "https://www.perenniaai.com")
+                frontend_url = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
                 state = f"{user_id}:{frontend_url}/settings/integrations"
                 oauth_url = slack_client.get_authorization_url(state=state)
                 return success_response({
@@ -842,7 +842,7 @@ async def connect_integration(
                         detail=error_response("DocuSign integration not configured. Please set DOCUSIGN_CLIENT_ID and DOCUSIGN_CLIENT_SECRET environment variables.", code="NOT_CONFIGURED")
                     )
                 user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
-                frontend_url = os.getenv("FRONTEND_URL", "https://www.perenniaai.com")
+                frontend_url = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
                 state = f"{user_id}:{frontend_url}/settings/integrations"
                 oauth_url = docusign_client.get_authorization_url(state=state)
                 return success_response({
@@ -861,7 +861,7 @@ async def connect_integration(
                         detail=error_response("Microsoft Outlook integration not configured. Please set MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET environment variables.", code="NOT_CONFIGURED")
                     )
                 user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
-                frontend_url = os.getenv("FRONTEND_URL", "https://www.perenniaai.com")
+                frontend_url = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
                 state = f"{user_id}|{frontend_url}/settings/integrations|calendar"
                 oauth_url = microsoft_outlook_client.get_authorization_url(state=state, integration_type="calendar")
                 return success_response({
@@ -880,7 +880,7 @@ async def connect_integration(
                         detail=error_response("Microsoft Outlook integration not configured. Please set MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET environment variables.", code="NOT_CONFIGURED")
                     )
                 user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
-                frontend_url = os.getenv("FRONTEND_URL", "https://www.perenniaai.com")
+                frontend_url = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
                 state = f"{user_id}|{frontend_url}/settings/integrations|email"
                 oauth_url = microsoft_outlook_client.get_authorization_url(state=state, integration_type="email")
                 return success_response({

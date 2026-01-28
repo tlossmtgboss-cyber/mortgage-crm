@@ -83,7 +83,7 @@ async def microsoft_auth(
         )
 
     user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
-    frontend_url = os.getenv("FRONTEND_URL", "https://www.perenniaai.com")
+    frontend_url = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
     state = f"{user_id}|{frontend_url}/settings/integrations|{integration_type}"
 
     auth_url = microsoft_outlook_client.get_authorization_url(state=state, integration_type=integration_type)
@@ -103,7 +103,7 @@ async def microsoft_callback(
     Handle OAuth callback from Microsoft.
     Exchanges authorization code for access token.
     """
-    frontend_url = os.getenv("FRONTEND_URL", "https://www.perenniaai.com")
+    frontend_url = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
 
     if error:
         logger.error(f"Microsoft OAuth error: {error} - {error_description}")
@@ -665,10 +665,30 @@ async def sync_outlook_emails(
     if messages is None:
         raise HTTPException(status_code=500, detail="Failed to fetch emails from Outlook")
 
-    processed_count = len(messages.get("value", []))
+    email_list = messages.get("value", [])
+    processed_count = 0
+    skipped_count = 0
+    errors = []
+
+    # Import the DRE processing function (same pattern as gmail_routes.py)
+    from main import process_microsoft_email_to_dre
+
+    for email_data in email_list:
+        try:
+            result = await process_microsoft_email_to_dre(email_data, user_id, db)
+            if result and result.get("status") == "skipped":
+                skipped_count += 1
+            else:
+                processed_count += 1
+        except Exception as e:
+            logger.error(f"Error processing email {email_data.get('id', 'unknown')}: {e}")
+            errors.append(str(e))
+            continue
 
     return success_response(f"Synced {processed_count} emails from Outlook", {
         "synced": True,
         "processed_count": processed_count,
-        "messages": messages.get("value", [])
+        "skipped_count": skipped_count,
+        "total_fetched": len(email_list),
+        "errors": errors[:5] if errors else []
     })
