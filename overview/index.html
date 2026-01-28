@@ -535,11 +535,28 @@ body {
   transition: var(--transition);
   position: relative;
   display: flex; flex-direction: column;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
 }
 .card:hover {
   border-color: var(--teal);
   box-shadow: var(--shadow-lg);
-  transform: translateY(-2px);
+  transform: translateY(-4px);
+}
+.card::after {
+  content: 'Learn More →';
+  position: absolute;
+  bottom: 16px;
+  right: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--teal);
+  opacity: 0;
+  transition: var(--transition);
+}
+.card:hover::after {
+  opacity: 1;
 }
 .card-header {
   display: flex; align-items: flex-start; justify-content: space-between;
@@ -752,8 +769,57 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
 
 .footer {
   background: var(--navy-dark); color: var(--gray-400);
-  padding: 40px 24px; text-align: center; font-size: .85rem;
+  padding: 60px 24px 40px; font-size: .85rem;
   margin-top: 48px;
+}
+.footer-inner {
+  max-width: 1200px; margin: 0 auto;
+  display: grid; grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 40px;
+}
+.footer-brand { }
+.footer-logo {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 1.3rem; font-weight: 800; color: var(--white);
+  margin-bottom: 16px;
+}
+.footer-logo-icon {
+  width: 36px; height: 36px; background: var(--teal);
+  border-radius: 8px; display: flex; align-items: center;
+  justify-content: center; font-weight: 800; color: var(--white);
+}
+.footer-tagline { color: var(--gray-400); line-height: 1.6; margin-bottom: 20px; }
+.footer-section-title {
+  font-weight: 700; color: var(--white); margin-bottom: 16px;
+  font-size: .9rem; text-transform: uppercase; letter-spacing: .5px;
+}
+.footer-links { list-style: none; padding: 0; margin: 0; }
+.footer-links li { margin-bottom: 10px; }
+.footer-links a {
+  color: var(--gray-400); text-decoration: none;
+  transition: var(--transition);
+}
+.footer-links a:hover { color: var(--teal-light); }
+.footer-bottom {
+  max-width: 1200px; margin: 40px auto 0;
+  padding-top: 24px; border-top: 1px solid rgba(255,255,255,.1);
+  display: flex; justify-content: space-between; align-items: center;
+  flex-wrap: wrap; gap: 16px;
+}
+.footer-copyright { color: var(--gray-500); font-size: .8rem; }
+.footer-legal { display: flex; gap: 24px; }
+.footer-legal a {
+  color: var(--gray-500); text-decoration: none; font-size: .8rem;
+  transition: var(--transition);
+}
+.footer-legal a:hover { color: var(--gray-300); }
+@media (max-width: 768px) {
+  .footer-inner { grid-template-columns: 1fr 1fr; }
+  .footer-brand { grid-column: 1 / -1; }
+  .footer-bottom { flex-direction: column; text-align: center; }
+}
+@media (max-width: 480px) {
+  .footer-inner { grid-template-columns: 1fr; }
 }
 .footer strong { color: var(--white); }
 
@@ -1896,9 +1962,50 @@ details.section-details > .details-body { padding: 20px; }
      FOOTER
      ============================================================ -->
 <footer class="footer">
-  <p><strong>Perennia AI</strong> &mdash; Mortgage CRM Platform Overview</p>
-  <p style="margin-top:8px;" id="footer-date">Last updated January 28, 2026</p>
-  <p style="margin-top:8px; font-size:.78rem;" id="footer-stats">1,465,946 lines of code &bull; 3,704 source files &bull; 4,512 commits &bull; Built Nov 2025 &ndash; present</p>
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <div class="footer-logo">
+        <div class="footer-logo-icon">P</div>
+        Perennia AI
+      </div>
+      <p class="footer-tagline">The AI-native mortgage operating system. Purpose-built for loan officers, processors, and branch managers to orchestrate every stage of origination with precision and clarity.</p>
+    </div>
+    <div class="footer-section">
+      <div class="footer-section-title">Platform</div>
+      <ul class="footer-links">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#workflows">Workflows</a></li>
+        <li><a href="#architecture">Architecture</a></li>
+        <li><a href="#security">Security</a></li>
+      </ul>
+    </div>
+    <div class="footer-section">
+      <div class="footer-section-title">Company</div>
+      <ul class="footer-links">
+        <li><a href="#executive-summary">About</a></li>
+        <li><a href="#roadmap">Roadmap</a></li>
+        <li><a href="javascript:openDemoModal()">Schedule Demo</a></li>
+        <li><a href="https://app.perenniaai.com/login">Log In</a></li>
+      </ul>
+    </div>
+    <div class="footer-section">
+      <div class="footer-section-title">Resources</div>
+      <ul class="footer-links">
+        <li><a href="/llms.txt">AI Documentation</a></li>
+        <li><a href="/sitemap.xml">Sitemap</a></li>
+        <li><a href="#metrics">Metrics</a></li>
+        <li><a href="#gallery">Gallery</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <div class="footer-copyright">&copy; 2026 Perennia AI. All rights reserved.</div>
+    <div class="footer-legal">
+      <a href="#">Privacy Policy</a>
+      <a href="#">Terms of Service</a>
+      <a href="#">Cookie Policy</a>
+    </div>
+  </div>
 </footer>
 
 <!-- ============================================================
@@ -2095,8 +2202,9 @@ function renderFeatures(data, visitor) {
   var features = data.features.slice().sort(function(a, b) { return a.order - b.order; });
 
   features.forEach(function(f) {
-    var card = document.createElement('div');
+    var card = document.createElement('a');
     card.className = 'card';
+    card.href = 'feature.html?id=' + f.id;
     card.setAttribute('data-feature-id', f.id);
 
     var statusClass = f.status === 'live' ? 'badge-live' : f.status === 'beta' ? 'badge-beta' : 'badge-dev';
@@ -2115,7 +2223,7 @@ function renderFeatures(data, visitor) {
         '<span class="badge ' + statusClass + '">' + statusLabel + '</span>' +
       '</div>' +
       '<div class="card-desc">' + f.description + '</div>' +
-      '<div class="cap-list">' + caps + '</div>';
+      '<div class="cap-list" style="margin-bottom:24px;">' + caps + '</div>';
 
     grid.appendChild(card);
   });

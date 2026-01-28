@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Feature - Perennia AI</title>
+<meta name="description" content="Discover how Perennia AI transforms mortgage origination with AI-powered automation.">
+<link rel="canonical" href="https://www.perenniaai.com/feature.html">
+
+<style>
+:root {
+  --navy: #0f2440;
+  --navy-dark: #0a1929;
+  --navy-light: #1a3a5c;
+  --teal: #26c6da;
+  --teal-light: #4dd0e1;
+  --teal-dark: #0097a7;
+  --white: #ffffff;
+  --gray-50: #f8fafc;
+  --gray-100: #f1f5f9;
+  --gray-200: #e2e8f0;
+  --gray-300: #cbd5e1;
+  --gray-400: #94a3b8;
+  --gray-500: #64748b;
+  --gray-600: #475569;
+  --gray-700: #334155;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --shadow-lg: 0 10px 40px rgba(15, 36, 64, 0.15);
+  --shadow-xl: 0 20px 60px rgba(15, 36, 64, 0.2);
+  --transition: all 0.2s ease;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  background: var(--gray-50);
+  color: var(--gray-700);
+  line-height: 1.6;
+}
+
+/* Navigation */
+.nav {
+  background: var(--navy);
+  padding: 16px 24px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.nav-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--white);
+  font-weight: 800;
+  font-size: 1.2rem;
+}
+
+.nav-logo-icon {
+  width: 32px;
+  height: 32px;
+  background: var(--teal);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+}
+
+.nav-links {
+  display: flex;
+  gap: 8px;
+}
+
+.nav-links a {
+  color: var(--gray-300);
+  text-decoration: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: var(--transition);
+}
+
+.nav-links a:hover {
+  color: var(--white);
+  background: rgba(255,255,255,0.1);
+}
+
+.btn-demo {
+  background: var(--teal);
+  color: var(--navy);
+  padding: 10px 20px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 0.9rem;
+  transition: var(--transition);
+}
+
+.btn-demo:hover {
+  background: var(--teal-light);
+  transform: translateY(-1px);
+}
+
+/* Hero Section */
+.hero {
+  background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%);
+  padding: 80px 24px 100px;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -20%;
+  width: 80%;
+  height: 200%;
+  background: radial-gradient(ellipse, rgba(38,198,218,0.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.hero-inner {
+  max-width: 900px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+.hero-badge {
+  display: inline-block;
+  background: rgba(38,198,218,0.15);
+  color: var(--teal-light);
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 24px;
+}
+
+.hero h1 {
+  font-size: 3rem;
+  font-weight: 800;
+  color: var(--white);
+  line-height: 1.2;
+  margin-bottom: 24px;
+}
+
+.hero h1 span {
+  color: var(--teal-light);
+}
+
+.hero-subtitle {
+  font-size: 1.25rem;
+  color: var(--gray-300);
+  max-width: 700px;
+  line-height: 1.7;
+  margin-bottom: 40px;
+}
+
+.hero-cta {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.btn-primary {
+  background: var(--teal);
+  color: var(--navy);
+  padding: 16px 32px;
+  border-radius: 10px;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 1rem;
+  transition: var(--transition);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-primary:hover {
+  background: var(--teal-light);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(38,198,218,0.3);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--white);
+  padding: 16px 32px;
+  border-radius: 10px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 1rem;
+  border: 2px solid rgba(255,255,255,0.3);
+  transition: var(--transition);
+}
+
+.btn-secondary:hover {
+  border-color: var(--white);
+  background: rgba(255,255,255,0.1);
+}
+
+/* Content Sections */
+.section {
+  padding: 80px 24px;
+}
+
+.section-inner {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.section-light {
+  background: var(--white);
+}
+
+.section-title {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--navy);
+  margin-bottom: 16px;
+}
+
+.section-subtitle {
+  font-size: 1.1rem;
+  color: var(--gray-500);
+  margin-bottom: 40px;
+  max-width: 600px;
+}
+
+/* Problem/Solution */
+.problem-solution {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+  margin-bottom: 60px;
+}
+
+.problem-card, .solution-card {
+  padding: 40px;
+  border-radius: var(--radius-xl);
+}
+
+.problem-card {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  border: 1px solid #fecaca;
+}
+
+.solution-card {
+  background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%);
+  border: 1px solid #99f6e4;
+}
+
+.card-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  margin-bottom: 20px;
+}
+
+.problem-card .card-icon {
+  background: #fecaca;
+}
+
+.solution-card .card-icon {
+  background: #99f6e4;
+}
+
+.card-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.problem-card .card-title { color: #991b1b; }
+.solution-card .card-title { color: #065f46; }
+
+.card-text {
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.problem-card .card-text { color: #7f1d1d; }
+.solution-card .card-text { color: #064e3b; }
+
+/* Benefits Grid */
+.benefits-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-bottom: 60px;
+}
+
+.benefit-card {
+  background: var(--white);
+  padding: 32px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--gray-100);
+  transition: var(--transition);
+}
+
+.benefit-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-xl);
+}
+
+.benefit-icon {
+  width: 56px;
+  height: 56px;
+  background: linear-gradient(135deg, var(--teal) 0%, var(--teal-dark) 100%);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  margin-bottom: 20px;
+  color: var(--white);
+}
+
+.benefit-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--navy);
+  margin-bottom: 8px;
+}
+
+.benefit-text {
+  font-size: 0.95rem;
+  color: var(--gray-600);
+  line-height: 1.6;
+}
+
+/* Capabilities */
+.capabilities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 60px;
+}
+
+.cap-tag {
+  background: var(--navy);
+  color: var(--white);
+  padding: 10px 20px;
+  border-radius: 25px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+/* Stats */
+.stats-bar {
+  background: linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 100%);
+  padding: 40px;
+  border-radius: var(--radius-xl);
+  display: flex;
+  justify-content: space-around;
+  margin-bottom: 60px;
+}
+
+.stat-item {
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: var(--teal-light);
+  line-height: 1;
+}
+
+.stat-label {
+  font-size: 0.85rem;
+  color: var(--gray-400);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-top: 8px;
+}
+
+/* Testimonial */
+.testimonial {
+  background: var(--white);
+  padding: 48px;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+  margin-bottom: 60px;
+  border-left: 4px solid var(--teal);
+}
+
+.testimonial-quote {
+  font-size: 1.25rem;
+  color: var(--gray-700);
+  font-style: italic;
+  line-height: 1.8;
+  margin-bottom: 24px;
+  max-width: 700px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.testimonial-author {
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.testimonial-role {
+  color: var(--gray-500);
+  font-size: 0.9rem;
+}
+
+/* CTA Section */
+.cta-section {
+  background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%);
+  padding: 80px 24px;
+  text-align: center;
+}
+
+.cta-inner {
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.cta-title {
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: var(--white);
+  margin-bottom: 16px;
+}
+
+.cta-subtitle {
+  font-size: 1.15rem;
+  color: var(--gray-300);
+  margin-bottom: 40px;
+  line-height: 1.7;
+}
+
+.cta-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+/* Footer */
+.footer {
+  background: var(--navy-dark);
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.footer-text {
+  color: var(--gray-500);
+  font-size: 0.85rem;
+}
+
+.footer-text a {
+  color: var(--gray-400);
+  text-decoration: none;
+}
+
+.footer-text a:hover {
+  color: var(--teal-light);
+}
+
+/* Loading State */
+.loading {
+  text-align: center;
+  padding: 100px 24px;
+  color: var(--gray-500);
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--gray-200);
+  border-top-color: var(--teal);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 20px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .hero h1 { font-size: 2rem; }
+  .problem-solution { grid-template-columns: 1fr; }
+  .benefits-grid { grid-template-columns: 1fr; }
+  .stats-bar { flex-direction: column; gap: 30px; }
+  .nav-links { display: none; }
+}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo">
+      <div class="nav-logo-icon">P</div>
+      Perennia AI
+    </a>
+    <div class="nav-links">
+      <a href="index.html#features">Features</a>
+      <a href="index.html#workflows">Workflows</a>
+      <a href="index.html#security">Security</a>
+    </div>
+    <a href="javascript:openDemoModal()" class="btn-demo">Schedule Demo</a>
+  </div>
+</nav>
+
+<div id="feature-content">
+  <div class="loading">
+    <div class="loading-spinner"></div>
+    <p>Loading feature details...</p>
+  </div>
+</div>
+
+<!-- Demo Modal -->
+<div class="modal-overlay" id="demo-modal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(15,36,64,.8);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:24px;">
+  <div style="background:var(--white);border-radius:16px;max-width:500px;width:100%;padding:40px;position:relative;">
+    <button onclick="closeDemoModal()" style="position:absolute;top:16px;right:16px;background:var(--gray-100);border:none;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:20px;">&times;</button>
+    <h2 style="font-size:1.5rem;color:var(--navy);margin-bottom:8px;">Schedule a Demo</h2>
+    <p style="color:var(--gray-500);margin-bottom:24px;">See this feature in action. Our team will walk you through the platform.</p>
+    <form id="demo-form" onsubmit="submitDemoRequest(event)">
+      <input type="text" name="name" placeholder="Your Name" required style="width:100%;padding:14px;border:1px solid var(--gray-200);border-radius:8px;margin-bottom:12px;font-size:1rem;">
+      <input type="email" name="email" placeholder="Work Email" required style="width:100%;padding:14px;border:1px solid var(--gray-200);border-radius:8px;margin-bottom:12px;font-size:1rem;">
+      <input type="tel" name="phone" placeholder="Phone (optional)" style="width:100%;padding:14px;border:1px solid var(--gray-200);border-radius:8px;margin-bottom:12px;font-size:1rem;">
+      <input type="text" name="company" placeholder="Company Name" style="width:100%;padding:14px;border:1px solid var(--gray-200);border-radius:8px;margin-bottom:20px;font-size:1rem;">
+      <button type="submit" style="width:100%;padding:16px;background:var(--teal);color:var(--navy);border:none;border-radius:8px;font-size:1rem;font-weight:700;cursor:pointer;">Request Demo</button>
+    </form>
+  </div>
+</div>
+
+<script>
+// Feature extended data with sales copy
+var FEATURES_EXTENDED = {
+  "ai-agent-system": {
+    headline: "42 AI Agents Working Around the Clock",
+    subheadline: "Intelligent automation that handles the work while you focus on closing deals",
+    problem: "Loan officers spend 60% of their time on administrative tasks instead of building relationships and closing loans. Manual processes lead to errors, delays, and missed opportunities.",
+    solution: "Perennia's AI Agent System deploys 42 specialized agents that work 24/7 to automate workflows, process documents, monitor compliance, and keep your pipeline moving—all while you sleep.",
+    benefits: [
+      { icon: "🤖", title: "Always On", text: "AI agents work around the clock, ensuring nothing falls through the cracks even outside business hours." },
+      { icon: "⚡", title: "5-7 Second Response", text: "Intent-based tool loading delivers relevant actions instantly, reducing latency and improving productivity." },
+      { icon: "🎯", title: "Specialized Expertise", text: "Each agent is trained for specific tasks—from underwriting to compliance—ensuring expert-level performance." },
+      { icon: "📊", title: "Self-Improving", text: "Feedback loops help agents learn from every interaction, continuously improving accuracy and efficiency." },
+      { icon: "🔒", title: "Human Oversight", text: "You remain in control. Agents assist and recommend, but critical decisions always require human approval." },
+      { icon: "🔗", title: "Seamless Integration", text: "LangGraph orchestration ensures agents work together seamlessly, passing context and coordinating actions." }
+    ],
+    stats: [
+      { value: "42", label: "Specialized Agents" },
+      { value: "173+", label: "AI Tools" },
+      { value: "5-7s", label: "Avg Response" },
+      { value: "24/7", label: "Availability" }
+    ],
+    testimonial: {
+      quote: "The AI agents have transformed how we operate. What used to take hours now happens automatically. Our team can focus on what matters most—our clients.",
+      author: "Branch Manager",
+      role: "Top 100 Mortgage Company"
+    }
+  },
+  "pipeline-management": {
+    headline: "Complete Pipeline Visibility in Real-Time",
+    subheadline: "Never lose track of a loan again with 21-stage lifecycle management",
+    problem: "Loans get stuck, deadlines get missed, and nobody knows where files are in the process. Lack of visibility leads to frustrated borrowers and blown closings.",
+    solution: "Perennia's Pipeline Management gives you a crystal-clear view of every loan across 21 stages. Real-time SLA tracking, automatic bottleneck detection, and predictive close-date forecasting keep your team on track.",
+    benefits: [
+      { icon: "📋", title: "21-Stage Visibility", text: "Track loans from application to funding with granular stage tracking and milestone monitoring." },
+      { icon: "⏱️", title: "SLA Tracking", text: "Automatic monitoring ensures no loan sits too long. Get alerts before SLAs are breached." },
+      { icon: "🚨", title: "Bottleneck Alerts", text: "AI identifies where loans are getting stuck and who needs to take action." },
+      { icon: "📈", title: "Predictive Forecasting", text: "Know your close dates before they happen with AI-powered timeline predictions." },
+      { icon: "🔄", title: "Velocity Metrics", text: "Understand how fast loans move through each stage and optimize your process." },
+      { icon: "👥", title: "Team Accountability", text: "Clear ownership at every stage means no more finger-pointing or confusion." }
+    ],
+    stats: [
+      { value: "21", label: "Pipeline Stages" },
+      { value: "20%", label: "Fewer Stuck Loans" },
+      { value: "Real-Time", label: "Updates" },
+      { value: "95%", label: "SLA Compliance" }
+    ],
+    testimonial: {
+      quote: "For the first time, I can see exactly where every loan is and predict issues before they become problems. Pipeline management has never been this clear.",
+      author: "Operations Director",
+      role: "Regional Mortgage Lender"
+    }
+  },
+  "smart-documents": {
+    headline: "AI-Powered Document Collection That Works",
+    subheadline: "Stop chasing documents. Let AI handle the heavy lifting.",
+    problem: "Document collection is the #1 cause of loan delays. Borrowers submit wrong documents, miss deadlines, and processors waste hours tracking down paperwork.",
+    solution: "Smart Documents uses AI to automatically classify uploads with 95%+ accuracy, generate needs lists, track freshness dates, and send cascading reminders until documents arrive.",
+    benefits: [
+      { icon: "🧠", title: "AI Classification", text: "Documents are automatically categorized with 95%+ confidence—no manual sorting required." },
+      { icon: "📝", title: "Auto Needs List", text: "Generate borrower-specific document checklists based on loan type and scenario." },
+      { icon: "⏰", title: "Freshness Tracking", text: "Know when documents expire and need to be re-collected before it's too late." },
+      { icon: "📧", title: "Cascading Reminders", text: "Automated email and SMS sequences until documents are received." },
+      { icon: "🔍", title: "OCR Extraction", text: "Extract data directly from documents to auto-populate loan applications." },
+      { icon: "👁️", title: "Screenshot Detection", text: "AI flags screenshots and low-quality images that won't pass underwriting." }
+    ],
+    stats: [
+      { value: "95%+", label: "Classification Accuracy" },
+      { value: "30%", label: "Faster Collection" },
+      { value: "Auto", label: "OCR Extraction" },
+      { value: "24/7", label: "Processing" }
+    ],
+    testimonial: {
+      quote: "We used to spend 3-4 hours per file just on document collection. Now it's mostly automated and borrowers actually submit the right documents the first time.",
+      author: "Senior Processor",
+      role: "Independent Mortgage Broker"
+    }
+  },
+  "compliance-engine": {
+    headline: "Compliance Monitoring That Protects Your Business",
+    subheadline: "Stay ahead of TRID, RESPA, and fair lending requirements automatically",
+    problem: "Compliance violations are costly—fines, lawsuits, and reputation damage. Manual tracking is error-prone, and the rules keep changing.",
+    solution: "Perennia's Compliance Engine provides automated monitoring for TRID timing, RESPA Section 8 checks, fair lending analysis, and state-specific requirements. Get alerts before violations occur.",
+    benefits: [
+      { icon: "⚖️", title: "TRID Automation", text: "Automatic LE and CD timing validation. Never miss a disclosure deadline again." },
+      { icon: "🔍", title: "RESPA Monitoring", text: "Section 8 violation detection catches kickback and fee-splitting risks." },
+      { icon: "📊", title: "Fair Lending Analysis", text: "Identify pricing disparities and documentation gaps before auditors do." },
+      { icon: "🗺️", title: "50-State Coverage", text: "State-specific requirements for recording consent, licensing, and disclosures." },
+      { icon: "📋", title: "Audit Trail", text: "Complete documentation of every compliance check for examiner requests." },
+      { icon: "🚨", title: "Proactive Alerts", text: "Get notified of potential issues while there's still time to fix them." }
+    ],
+    stats: [
+      { value: "TRID", label: "Timing Validated" },
+      { value: "50", label: "States Covered" },
+      { value: "Real-Time", label: "Monitoring" },
+      { value: "100%", label: "Audit Trail" }
+    ],
+    testimonial: {
+      quote: "The compliance engine caught three potential TRID violations last month that we would have missed. It's already paid for itself many times over.",
+      author: "Compliance Officer",
+      role: "Multi-State Lender"
+    }
+  },
+  "voice-os": {
+    headline: "Enterprise Telephony Built for Mortgage",
+    subheadline: "Professional call handling that converts more leads into loans",
+    problem: "Missed calls mean missed opportunities. Generic phone systems don't understand mortgage workflows, and your team wastes time on calls that go nowhere.",
+    solution: "Voice OS delivers a complete telephony platform with AI receptionist, visual IVR builder, power dialer, call queues, whisper coaching, and voice biometrics—all designed for mortgage professionals.",
+    benefits: [
+      { icon: "🤖", title: "AI Receptionist", text: "Never miss a call. AI answers 24/7, qualifies leads, and schedules callbacks." },
+      { icon: "📞", title: "Power Dialer", text: "Triple your call volume with intelligent dialing that skips voicemails and bad numbers." },
+      { icon: "🎯", title: "Smart Routing", text: "Route calls to the right person based on caller history, loan status, or time of day." },
+      { icon: "🎓", title: "Whisper Coaching", text: "Real-time suggestions during calls help LOs handle objections and close more deals." },
+      { icon: "🔐", title: "Voice Biometrics", text: "Secure caller verification without tedious security questions." },
+      { icon: "📊", title: "Call Analytics", text: "Understand call patterns, conversion rates, and team performance at a glance." }
+    ],
+    stats: [
+      { value: "24/7", label: "AI Coverage" },
+      { value: "3x", label: "Call Volume" },
+      { value: "Real-Time", label: "Coaching" },
+      { value: "15", label: "Consent States" }
+    ],
+    testimonial: {
+      quote: "The AI receptionist handles our after-hours calls and qualifies leads before passing them to us. We've seen a 40% increase in lead conversion since implementing Voice OS.",
+      author: "Sales Manager",
+      role: "High-Volume Mortgage Shop"
+    }
+  },
+  "borrower-portal": {
+    headline: "The Borrower Experience That Wins Referrals",
+    subheadline: "Give borrowers visibility, confidence, and a reason to recommend you",
+    problem: "Borrowers feel anxious and uninformed during the loan process. They call constantly asking for updates, and you lose referrals because the experience feels chaotic.",
+    solution: "The Borrower Portal gives your clients a beautiful, real-time view of their loan journey. Milestone timeline, document upload, cost analysis, and payment calculators—all in one place.",
+    benefits: [
+      { icon: "📍", title: "Milestone Timeline", text: "Borrowers see exactly where they are in the process and what's coming next." },
+      { icon: "📤", title: "Easy Doc Upload", text: "Simple document submission from any device with instant confirmation." },
+      { icon: "💰", title: "Cost Transparency", text: "Total cost analysis helps borrowers understand their numbers with confidence." },
+      { icon: "🔔", title: "Real-Time Updates", text: "WebSocket-powered notifications keep borrowers informed instantly." },
+      { icon: "📱", title: "Mobile Optimized", text: "Full functionality on any device—borrowers can manage their loan from anywhere." },
+      { icon: "🏠", title: "Home Value Intel", text: "Property value insights help borrowers understand their investment." }
+    ],
+    stats: [
+      { value: "Real-Time", label: "Updates" },
+      { value: "90%", label: "Fewer Status Calls" },
+      { value: "Mobile", label: "Optimized" },
+      { value: "5-Star", label: "Experience" }
+    ],
+    testimonial: {
+      quote: "Our borrowers love the portal. They can see everything happening with their loan, and we've gotten more referrals than ever because the experience is so smooth.",
+      author: "Loan Officer",
+      role: "Top Producer"
+    }
+  }
+};
+
+// Add more features with similar structure...
+// For brevity, adding generic fallback for features not yet defined
+function getFeatureData(featureId, baseFeature) {
+  if (FEATURES_EXTENDED[featureId]) {
+    return { ...baseFeature, ...FEATURES_EXTENDED[featureId] };
+  }
+
+  // Generate generic sales copy for features not yet customized
+  return {
+    ...baseFeature,
+    headline: baseFeature.title,
+    subheadline: baseFeature.description,
+    problem: "Manual processes slow down your mortgage operations, leading to delays, errors, and frustrated clients. Without the right tools, your team spends more time on administration than building relationships.",
+    solution: "Perennia AI's " + baseFeature.title + " transforms how you work. " + baseFeature.description + " Experience the difference intelligent automation makes.",
+    benefits: baseFeature.capabilities.map(function(cap, i) {
+      var icons = ["⚡", "🎯", "📊", "🔄", "✨", "🚀"];
+      return {
+        icon: icons[i % icons.length],
+        title: cap,
+        text: "Streamline your workflow and improve efficiency with this powerful capability."
+      };
+    }),
+    stats: [
+      { value: "AI", label: "Powered" },
+      { value: "24/7", label: "Available" },
+      { value: "Real-Time", label: "Processing" },
+      { value: "Secure", label: "& Compliant" }
+    ],
+    testimonial: {
+      quote: "Perennia AI has transformed how we operate. The platform is intuitive, powerful, and has made our team significantly more productive.",
+      author: "Mortgage Professional",
+      role: "Industry Leader"
+    }
+  };
+}
+
+function renderFeature(feature) {
+  var data = getFeatureData(feature.id, feature);
+  var categoryLabels = {
+    ai: "AI & Automation",
+    core: "Core Platform",
+    communication: "Communication",
+    portal: "Client Portals",
+    compliance: "Compliance",
+    operations: "Operations",
+    marketing: "Marketing",
+    analytics: "Analytics",
+    integrations: "Integrations",
+    mobile: "Mobile"
+  };
+
+  var html = '<header class="hero">';
+  html += '<div class="hero-inner">';
+  html += '<div class="hero-badge">' + (categoryLabels[feature.category] || feature.category) + '</div>';
+  html += '<h1>' + data.headline + '</h1>';
+  html += '<p class="hero-subtitle">' + data.subheadline + '</p>';
+  html += '<div class="hero-cta">';
+  html += '<a href="javascript:openDemoModal()" class="btn-primary">Schedule a Demo →</a>';
+  html += '<a href="index.html#features" class="btn-secondary">View All Features</a>';
+  html += '</div>';
+  html += '</div>';
+  html += '</header>';
+
+  // Problem/Solution
+  html += '<section class="section section-light">';
+  html += '<div class="section-inner">';
+  html += '<div class="problem-solution">';
+  html += '<div class="problem-card">';
+  html += '<div class="card-icon">😓</div>';
+  html += '<div class="card-title">The Challenge</div>';
+  html += '<div class="card-text">' + data.problem + '</div>';
+  html += '</div>';
+  html += '<div class="solution-card">';
+  html += '<div class="card-icon">✨</div>';
+  html += '<div class="card-title">The Solution</div>';
+  html += '<div class="card-text">' + data.solution + '</div>';
+  html += '</div>';
+  html += '</div>';
+
+  // Stats
+  html += '<div class="stats-bar">';
+  data.stats.forEach(function(stat) {
+    html += '<div class="stat-item">';
+    html += '<div class="stat-value">' + stat.value + '</div>';
+    html += '<div class="stat-label">' + stat.label + '</div>';
+    html += '</div>';
+  });
+  html += '</div>';
+  html += '</div>';
+  html += '</section>';
+
+  // Benefits
+  html += '<section class="section">';
+  html += '<div class="section-inner">';
+  html += '<h2 class="section-title">Why ' + feature.title + '?</h2>';
+  html += '<p class="section-subtitle">Transform your mortgage operations with these powerful capabilities.</p>';
+  html += '<div class="benefits-grid">';
+  data.benefits.forEach(function(benefit) {
+    html += '<div class="benefit-card">';
+    html += '<div class="benefit-icon">' + benefit.icon + '</div>';
+    html += '<div class="benefit-title">' + benefit.title + '</div>';
+    html += '<div class="benefit-text">' + benefit.text + '</div>';
+    html += '</div>';
+  });
+  html += '</div>';
+
+  // Capabilities
+  html += '<h3 style="font-size:1.25rem;font-weight:700;color:var(--navy);margin-bottom:16px;">Key Capabilities</h3>';
+  html += '<div class="capabilities">';
+  feature.capabilities.forEach(function(cap) {
+    html += '<span class="cap-tag">' + cap + '</span>';
+  });
+  html += '</div>';
+
+  // Testimonial
+  html += '<div class="testimonial">';
+  html += '<div class="testimonial-quote">"' + data.testimonial.quote + '"</div>';
+  html += '<div class="testimonial-author">' + data.testimonial.author + '</div>';
+  html += '<div class="testimonial-role">' + data.testimonial.role + '</div>';
+  html += '</div>';
+  html += '</div>';
+  html += '</section>';
+
+  // CTA
+  html += '<section class="cta-section">';
+  html += '<div class="cta-inner">';
+  html += '<h2 class="cta-title">Ready to Transform Your Mortgage Business?</h2>';
+  html += '<p class="cta-subtitle">See ' + feature.title + ' in action. Schedule a personalized demo with our team and discover how Perennia AI can help you close more loans, faster.</p>';
+  html += '<div class="cta-buttons">';
+  html += '<a href="javascript:openDemoModal()" class="btn-primary">Schedule Your Demo →</a>';
+  html += '<a href="index.html" class="btn-secondary">Explore Platform</a>';
+  html += '</div>';
+  html += '</div>';
+  html += '</section>';
+
+  // Footer
+  html += '<footer class="footer">';
+  html += '<p class="footer-text">© 2026 Perennia AI. All rights reserved. | <a href="index.html">Back to Overview</a></p>';
+  html += '</footer>';
+
+  document.getElementById('feature-content').innerHTML = html;
+  document.title = feature.title + ' - Perennia AI';
+
+  // Update meta description
+  var metaDesc = document.querySelector('meta[name="description"]');
+  if (metaDesc) {
+    metaDesc.setAttribute('content', data.subheadline);
+  }
+}
+
+function loadFeature() {
+  var params = new URLSearchParams(window.location.search);
+  var featureId = params.get('id');
+
+  if (!featureId) {
+    window.location.href = 'index.html#features';
+    return;
+  }
+
+  fetch('data/features.json?v=' + Date.now())
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var feature = data.features.find(function(f) { return f.id === featureId; });
+      if (feature) {
+        renderFeature(feature);
+      } else {
+        document.getElementById('feature-content').innerHTML = '<div class="loading"><p>Feature not found. <a href="index.html#features">View all features</a></p></div>';
+      }
+    })
+    .catch(function() {
+      document.getElementById('feature-content').innerHTML = '<div class="loading"><p>Error loading feature. <a href="index.html#features">View all features</a></p></div>';
+    });
+}
+
+function openDemoModal() {
+  document.getElementById('demo-modal').style.display = 'flex';
+}
+
+function closeDemoModal() {
+  document.getElementById('demo-modal').style.display = 'none';
+}
+
+function submitDemoRequest(e) {
+  e.preventDefault();
+  var form = e.target;
+  var btn = form.querySelector('button[type="submit"]');
+  btn.textContent = 'Submitting...';
+  btn.disabled = true;
+
+  // Simulate submission
+  setTimeout(function() {
+    form.innerHTML = '<div style="text-align:center;padding:20px;"><h3 style="color:var(--navy);margin-bottom:12px;">Thank You!</h3><p style="color:var(--gray-600);">We\'ll be in touch within 24 hours to schedule your demo.</p></div>';
+  }, 1500);
+}
+
+document.addEventListener('click', function(e) {
+  if (e.target.id === 'demo-modal') closeDemoModal();
+});
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeDemoModal();
+});
+
+document.addEventListener('DOMContentLoaded', loadFeature);
+</script>
+
+</body>
+</html>
