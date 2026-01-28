@@ -964,7 +964,6 @@ def create_test_leads(db, owner_id, org_id):
                 loan_amount, ltv, dti, city, state,
                 first_time_buyer, owner_id, organization_id,
                 ai_score, sentiment,
-                employer_name, job_title,
                 referral_source_score, referral_source_rating,
                 created_at, updated_at
             ) VALUES (
@@ -974,7 +973,6 @@ def create_test_leads(db, owner_id, org_id):
                 :loan_amount, :ltv, :dti, :city, :state,
                 :first_time, :owner_id, :org_id,
                 :ai_score, 'positive',
-                :employer_name, :job_title,
                 :ref_score, :ref_rating,
                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
             )
@@ -999,8 +997,6 @@ def create_test_leads(db, owner_id, org_id):
             "owner_id": owner_id,
             "org_id": org_id,
             "ai_score": 50 + random.randint(-20, 30),
-            "employer_name": lead.get("employer_name"),
-            "job_title": lead.get("job_title"),
             "ref_score": lead.get("referral_source_score", 0),
             "ref_rating": lead.get("referral_source_rating"),
         })
