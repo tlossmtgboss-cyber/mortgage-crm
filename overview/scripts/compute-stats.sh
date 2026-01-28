@@ -32,16 +32,8 @@ BACKEND_FILES=$(grep -c '\.py$' "$TMPFILE" || echo 0)
 FRONTEND_FILES=$(grep -cE '\.(js|jsx|ts|tsx|css)$' "$TMPFILE" || echo 0)
 rm -f "$TMPFILE"
 
-# Human-readable LOC display (pure bash, no bc dependency)
-if [ "$LOC" -ge 1000000 ]; then
-  LOC_MAJOR=$((LOC / 1000000))
-  LOC_MINOR=$(( (LOC % 1000000) / 10000 ))
-  LOC_DISPLAY="${LOC_MAJOR}.${LOC_MINOR}M"
-elif [ "$LOC" -ge 1000 ]; then
-  LOC_DISPLAY="$((LOC / 1000))K"
-else
-  LOC_DISPLAY="$LOC"
-fi
+# Human-readable LOC display (full number with commas)
+LOC_DISPLAY=$(printf "%'d" "$LOC")
 
 # --- Repo ---
 TOTAL_COMMITS=$(git rev-list --count HEAD)
