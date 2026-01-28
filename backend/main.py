@@ -485,6 +485,8 @@ class User(Base):
     nmls_id = Column(String, nullable=True)
     # Timezone for AI scheduling and display
     timezone = Column(String, default="America/New_York")
+    # Activity tracking
+    last_activity_at = Column(DateTime, nullable=True)
     branch = relationship("Branch", back_populates="users")
     organization = relationship("Organization", back_populates="users")
     leads = relationship("Lead", back_populates="owner")
@@ -5682,6 +5684,16 @@ async def get_current_user(
                     return impersonated_user
 
     # No impersonation, return actual user
+    # Update last_activity_at (throttled to every 5 minutes to avoid excessive DB writes)
+    try:
+        now = datetime.now(timezone.utc)
+        if actual_user.last_activity_at is None or (now - actual_user.last_activity_at).total_seconds() > 300:
+            actual_user.last_activity_at = now
+            db.commit()
+    except Exception as e:
+        logger.debug(f"Failed to update last_activity_at: {e}")
+        db.rollback()
+
     return actual_user
 
 async def get_current_user_flexible(
@@ -20554,6 +20566,68 @@ except Exception as e:
     import traceback
     logger.error(f"⚠️ Could not load Smart Scheduler routes: {e}")
     logger.error(f"Smart Scheduler traceback: {traceback.format_exc()}")
+
+    # Add fallback endpoint if main scheduler routes failed to load
+    from pydantic import BaseModel
+    from typing import Optional, List, Dict, Any
+    from datetime import datetime, timedelta
+    import pytz
+
+    class FallbackSlotsRequest(BaseModel):
+        start_date: str
+        end_date: str
+        duration_minutes: int = 30
+        appointment_type: str = "platform-demo"
+
+    @app.post("/api/v1/scheduler/public/available-slots")
+    async def fallback_available_slots(request: FallbackSlotsRequest, db: Session = Depends(get_db)):
+        """Fallback endpoint for public available slots when main scheduler routes fail to load"""
+        try:
+            tz = pytz.timezone("America/Chicago")
+            slots = []
+
+            start = datetime.strptime(request.start_date, "%Y-%m-%d")
+            end = datetime.strptime(request.end_date, "%Y-%m-%d")
+
+            # Check for calendar assignment
+            result = db.execute(text("""
+                SELECT ca.assigned_user_id, u.full_name as user_name
+                FROM calendar_assignments ca
+                LEFT JOIN users u ON u.id = ca.assigned_user_id
+                WHERE ca.purpose = 'website_demo' AND ca.is_active = true
+                LIMIT 1
+            """)).fetchone()
+
+            user_name = result.user_name if result else "Team Member"
+            user_id = result.assigned_user_id if result else None
+
+            current = start
+            while current <= end:
+                if current.weekday() < 5:  # Monday-Friday
+                    for hour in range(9, 17):  # 9 AM to 5 PM
+                        for minute in [0, 30]:  # Every 30 minutes
+                            slot_time = tz.localize(current.replace(hour=hour, minute=minute, second=0))
+                            if slot_time > datetime.now(tz):
+                                slots.append({
+                                    "start_time": slot_time.isoformat(),
+                                    "end_time": (slot_time + timedelta(minutes=request.duration_minutes)).isoformat(),
+                                    "user_id": user_id,
+                                    "user_name": user_name,
+                                    "available": True
+                                })
+                current += timedelta(days=1)
+
+            return {
+                "available_slots": slots[:100],  # Limit to 100 slots
+                "message": "Generated default availability (fallback mode)",
+                "configured": bool(result),
+                "fallback": True
+            }
+        except Exception as fallback_error:
+            logger.error(f"Fallback scheduler error: {fallback_error}")
+            return {"available_slots": [], "error": str(fallback_error), "fallback": True}
+
+    logger.info("✅ Fallback scheduler endpoint registered")
 
 # Include Pre-Qualification routes (embeddable form submission)
 try:
@@ -37905,12 +37979,73 @@ async def debug_routers():
         if hasattr(route, 'path'):
             routes.append(route.path)
     scheduler_routes = [r for r in routes if 'scheduler' in r.lower()]
+
+    # Check specifically for the public available-slots endpoint
+    public_slots_exists = '/api/v1/scheduler/public/available-slots' in routes
+
     return {
         "total_routes": len(routes),
         "scheduler_routes_count": len(scheduler_routes),
-        "scheduler_routes_sample": scheduler_routes[:20] if scheduler_routes else [],
-        "smart_scheduler_loaded": any('/api/v1/scheduler/' in r for r in routes)
+        "scheduler_routes_sample": scheduler_routes[:30] if scheduler_routes else [],
+        "smart_scheduler_loaded": any('/api/v1/scheduler/' in r for r in routes),
+        "public_slots_endpoint_exists": public_slots_exists,
+        "public_slots_path": "/api/v1/scheduler/public/available-slots"
     }
+
+
+@app.get("/debug/scheduler-status")
+async def debug_scheduler_status():
+    """Detailed diagnostic for Smart Scheduler routes"""
+    status = {
+        "smart_scheduler_routes_module": False,
+        "smart_scheduler_models_module": False,
+        "notification_service": False,
+        "microsoft_graph": False,
+        "public_slots_route": False,
+        "errors": []
+    }
+
+    # Try importing each dependency
+    try:
+        from smart_scheduler_models import create_smart_scheduler_models
+        status["smart_scheduler_models_module"] = True
+    except Exception as e:
+        status["errors"].append(f"smart_scheduler_models: {str(e)}")
+
+    try:
+        from services.notification_service import notification_service
+        status["notification_service"] = True
+    except Exception as e:
+        status["errors"].append(f"notification_service: {str(e)}")
+
+    try:
+        from services.microsoft_graph import create_event_via_graph, CalendarResult
+        status["microsoft_graph"] = True
+    except Exception as e:
+        status["errors"].append(f"microsoft_graph: {str(e)}")
+
+    try:
+        from smart_scheduler_routes import router as smart_scheduler_router
+        status["smart_scheduler_routes_module"] = True
+        status["router_routes_count"] = len(smart_scheduler_router.routes)
+
+        # Check for specific endpoint
+        for route in smart_scheduler_router.routes:
+            if hasattr(route, 'path') and route.path == '/public/available-slots':
+                status["public_slots_route"] = True
+                break
+    except Exception as e:
+        status["errors"].append(f"smart_scheduler_routes: {str(e)}")
+
+    # Check if route is registered in app
+    for route in app.routes:
+        if hasattr(route, 'path') and route.path == '/api/v1/scheduler/public/available-slots':
+            status["route_registered_in_app"] = True
+            break
+    else:
+        status["route_registered_in_app"] = False
+
+    return status
 
 
 @app.post("/api/v1/debug/complete-onboarding-by-email")
@@ -39965,6 +40100,10 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
                 detail="Incorrect email or password",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+
+        # Update last_activity_at on successful login
+        user.last_activity_at = datetime.now(timezone.utc)
+        db.commit()
 
         access_token = create_access_token(data={"sub": user.email})
         return {
