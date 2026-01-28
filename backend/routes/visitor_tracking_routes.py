@@ -531,3 +531,114 @@ async def convert_visitor_to_lead(
         logger.error(f"Error converting visitor: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/admin/run-migration")
+async def run_visitor_tracking_migration(
+    secret_key: str,
+    db=Depends(get_db)
+):
+    """
+    Run the visitor tracking database migration.
+    Requires SECRET_KEY for authorization.
+    """
+    expected_key = os.getenv("SECRET_KEY", "")
+    if not expected_key or secret_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid secret key")
+
+    MIGRATION_SQL = """
+    CREATE TABLE IF NOT EXISTS website_visitors (
+        id SERIAL PRIMARY KEY,
+        visitor_id VARCHAR(64) NOT NULL UNIQUE,
+        visitor_hash VARCHAR(64),
+        ip_address VARCHAR(45),
+        user_agent TEXT,
+        device_type VARCHAR(20),
+        browser VARCHAR(50),
+        os VARCHAR(50),
+        first_visit_at TIMESTAMP WITH TIME ZONE,
+        last_visit_at TIMESTAMP WITH TIME ZONE,
+        visit_count INTEGER DEFAULT 1,
+        first_page_url TEXT,
+        first_referrer TEXT,
+        utm_source VARCHAR(255),
+        utm_medium VARCHAR(255),
+        utm_campaign VARCHAR(255),
+        utm_term VARCHAR(255),
+        utm_content VARCHAR(255),
+        screen_width INTEGER,
+        screen_height INTEGER,
+        timezone VARCHAR(100),
+        language VARCHAR(20),
+        lead_id UUID,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_website_visitors_visitor_id ON website_visitors(visitor_id);
+    CREATE INDEX IF NOT EXISTS idx_website_visitors_ip ON website_visitors(ip_address);
+    CREATE INDEX IF NOT EXISTS idx_website_visitors_last_visit ON website_visitors(last_visit_at);
+    CREATE TABLE IF NOT EXISTS website_page_views (
+        id SERIAL PRIMARY KEY,
+        visitor_id VARCHAR(64) NOT NULL,
+        page_url TEXT NOT NULL,
+        page_title VARCHAR(500),
+        referrer TEXT,
+        ip_address VARCHAR(45),
+        user_agent TEXT,
+        viewed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_page_views_visitor ON website_page_views(visitor_id);
+    CREATE INDEX IF NOT EXISTS idx_page_views_viewed_at ON website_page_views(viewed_at);
+    CREATE TABLE IF NOT EXISTS website_visitor_leads (
+        id SERIAL PRIMARY KEY,
+        visitor_id VARCHAR(64) NOT NULL UNIQUE,
+        ip_address VARCHAR(45),
+        source VARCHAR(255),
+        status VARCHAR(50) DEFAULT 'anonymous',
+        first_seen_at TIMESTAMP WITH TIME ZONE,
+        last_seen_at TIMESTAMP WITH TIME ZONE,
+        page_views INTEGER DEFAULT 0,
+        utm_source VARCHAR(255),
+        utm_medium VARCHAR(255),
+        utm_campaign VARCHAR(255),
+        device_type VARCHAR(20),
+        browser VARCHAR(50),
+        os VARCHAR(50),
+        email VARCHAR(255),
+        name VARCHAR(255),
+        phone VARCHAR(50),
+        company VARCHAR(255),
+        notes TEXT,
+        converted_lead_id UUID,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_visitor_leads_visitor_id ON website_visitor_leads(visitor_id);
+    CREATE INDEX IF NOT EXISTS idx_visitor_leads_status ON website_visitor_leads(status);
+    CREATE INDEX IF NOT EXISTS idx_visitor_leads_last_seen ON website_visitor_leads(last_seen_at);
+    """
+
+    try:
+        for statement in MIGRATION_SQL.split(';'):
+            statement = statement.strip()
+            if statement:
+                db.execute(text(statement))
+        db.commit()
+
+        # Verify tables exist
+        result = db.execute(text("""
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name LIKE 'website_%'
+        """))
+        tables = [row[0] for row in result.fetchall()]
+
+        return {
+            "success": True,
+            "message": "Migration completed successfully",
+            "tables_created": tables,
+        }
+
+    except Exception as e:
+        logger.error(f"Migration failed: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))

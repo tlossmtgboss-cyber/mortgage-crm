@@ -20162,6 +20162,14 @@ except Exception as e:
 from analytics_routes import router as analytics_router
 app.include_router(analytics_router, tags=["Analytics"])
 
+# Include Visitor Tracking routes
+try:
+    from routes.visitor_tracking_routes import router as visitor_tracking_router
+    app.include_router(visitor_tracking_router, tags=["Visitor Tracking"])
+    logger.info("✅ Visitor Tracking routes loaded")
+except Exception as e:
+    logger.warning(f"Could not load visitor tracking routes: {e}")
+
 # Include AI API routes
 from ai_api_endpoints import router as ai_router
 app.include_router(ai_router, tags=["AI System"])
