@@ -142,10 +142,13 @@ def is_master_admin(user) -> bool:
 
 
 def is_platform_admin(user) -> bool:
-    """Check if user is a platform admin"""
-    admin_roles = ['admin', 'super_admin', 'platform_admin']
+    """Check if user is a platform admin or site admin"""
+    admin_roles = ['admin', 'super_admin', 'platform_admin', 'site_admin', 'master_admin']
     user_role = getattr(user, 'role', None)
+    permission_role = getattr(user, 'permission_role', None)
     if user_role and user_role.lower() in admin_roles:
+        return True
+    if permission_role and permission_role.lower() in admin_roles:
         return True
     return is_master_admin(user)
 

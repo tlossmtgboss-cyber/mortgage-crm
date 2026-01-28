@@ -52,7 +52,9 @@ async def require_admin_dep(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Authentication required")
 
     user_role = getattr(current_user, 'role', '').lower()
-    if user_role not in ('admin', 'superadmin', 'super_admin', 'system_admin'):
+    permission_role = getattr(current_user, 'permission_role', '').lower() if getattr(current_user, 'permission_role', None) else ''
+    admin_roles = ('admin', 'superadmin', 'super_admin', 'system_admin', 'site_admin', 'master_admin')
+    if user_role not in admin_roles and permission_role not in admin_roles:
         raise HTTPException(status_code=403, detail="Admin access required")
 
     return current_user

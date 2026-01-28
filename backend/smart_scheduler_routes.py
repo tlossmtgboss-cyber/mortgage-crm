@@ -1137,6 +1137,14 @@ class PublicBookingConfirmRequest(BaseModel):
     team_member_name: Optional[str] = None
 
 
+class PublicAvailableSlotsRequest(BaseModel):
+    """Request model for website demo scheduler"""
+    start_date: str  # YYYY-MM-DD
+    end_date: str    # YYYY-MM-DD
+    duration_minutes: int = 30
+    appointment_type: str = "platform-demo"
+
+
 class SlotRecommendation(BaseModel):
     slot_start: datetime
     slot_end: datetime
@@ -3697,3 +3705,334 @@ async def run_scheduler_migration(
     except Exception as e:
         logger.error(f"Migration error: {e}")
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
+# ============================================================================
+# PUBLIC WEBSITE DEMO SCHEDULER ENDPOINT
+# ============================================================================
+
+@router.post("/public/available-slots")
+async def get_website_demo_available_slots(
+    request: PublicAvailableSlotsRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Get available slots for website demo scheduling.
+
+    This endpoint looks up the calendar assignment for 'website_demo' purpose
+    and returns available slots from the assigned user's calendar.
+
+    Used by the public website demo scheduler.
+    """
+    from sqlalchemy import text
+
+    try:
+        # Parse dates
+        start_date = datetime.strptime(request.start_date, "%Y-%m-%d").date()
+        end_date = datetime.strptime(request.end_date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+
+    # Look up calendar assignment for website_demo purpose
+    assignment_result = db.execute(text("""
+        SELECT ca.id, ca.assigned_user_id, ca.calendly_url, ca.booking_link_id,
+               u.full_name as user_name, u.email as user_email
+        FROM calendar_assignments ca
+        LEFT JOIN users u ON u.id = ca.assigned_user_id
+        WHERE ca.purpose = 'website_demo' AND ca.is_active = true
+        LIMIT 1
+    """)).fetchone()
+
+    if not assignment_result:
+        # No assignment configured - return empty slots with helpful message
+        logger.warning("No calendar assignment found for website_demo purpose")
+        return {
+            "available_slots": [],
+            "message": "Website demo calendar not configured. Please assign a team member in Calendar Management.",
+            "configured": False
+        }
+
+    assigned_user_id = assignment_result.assigned_user_id
+    calendly_url = assignment_result.calendly_url
+    booking_link_id = assignment_result.booking_link_id
+
+    # If there's a booking link configured, use it
+    if booking_link_id and _models:
+        BookingLink = _models.get('BookingLink')
+        if BookingLink:
+            link = db.query(BookingLink).filter(
+                BookingLink.id == booking_link_id,
+                BookingLink.is_active == True
+            ).first()
+            if link:
+                # Use the booking link's assigned users
+                user_ids = link.assigned_users if link.assigned_users else [link.user_id]
+                return await _generate_slots_for_users(
+                    db, user_ids, start_date, end_date, request.duration_minutes
+                )
+
+    # If there's an assigned user, get their availability
+    if assigned_user_id:
+        return await _generate_slots_for_users(
+            db, [assigned_user_id], start_date, end_date, request.duration_minutes
+        )
+
+    # If there's a Calendly URL, redirect to Calendly
+    if calendly_url:
+        return {
+            "available_slots": [],
+            "calendly_url": calendly_url,
+            "message": "Please use the Calendly link to schedule",
+            "configured": True
+        }
+
+    return {
+        "available_slots": [],
+        "message": "No calendar configuration found",
+        "configured": False
+    }
+
+
+async def _generate_slots_for_users(
+    db: Session,
+    user_ids: List[int],
+    start_date: date,
+    end_date: date,
+    duration_minutes: int = 30
+) -> dict:
+    """Generate available slots for a list of users."""
+    SchedulerConfig = _models.get('SchedulerConfig') if _models else None
+    BlockedTime = _models.get('BlockedTime') if _models else None
+    Appointment = _models.get('Appointment') if _models else None
+
+    if not SchedulerConfig or not BlockedTime or not Appointment:
+        logger.error("Scheduler models not available")
+        return {"available_slots": [], "configured": True, "error": "Scheduler not initialized"}
+
+    all_slots = []
+    now = datetime.utcnow()
+    min_notice_hours = 2  # Default minimum notice
+
+    for user_id in user_ids:
+        config = db.query(SchedulerConfig).filter(
+            SchedulerConfig.user_id == user_id
+        ).first()
+
+        working_hours = config.working_hours if config else DEFAULT_WORKING_HOURS
+        buffer_before = config.buffer_before_minutes if config else 5
+        buffer_after = config.buffer_after_minutes if config else 5
+        if config and config.min_notice_hours:
+            min_notice_hours = config.min_notice_hours
+
+        min_booking_time = now + timedelta(hours=min_notice_hours)
+
+        # Get blocked times
+        start_dt = datetime.combine(start_date, time.min)
+        end_dt = datetime.combine(end_date, time.max)
+
+        blocked_times = db.query(BlockedTime).filter(
+            BlockedTime.is_active == True,
+            or_(
+                BlockedTime.user_id == user_id,
+                BlockedTime.applies_to_all_users == True
+            ),
+            BlockedTime.start_datetime <= end_dt,
+            BlockedTime.end_datetime >= start_dt
+        ).all()
+
+        # Get existing appointments
+        existing_appts = db.query(Appointment).filter(
+            Appointment.assigned_user_id == user_id,
+            Appointment.status.in_([AppointmentStatus.BOOKED, AppointmentStatus.TENTATIVE]),
+            Appointment.scheduled_start >= start_dt,
+            Appointment.scheduled_start <= end_dt
+        ).all()
+
+        # Generate slots for each day
+        current_date = start_date
+        while current_date <= end_date:
+            day_name = current_date.strftime("%A").lower()
+            day_hours = working_hours.get(day_name, {})
+
+            if not day_hours.get("enabled", False):
+                current_date += timedelta(days=1)
+                continue
+
+            try:
+                work_start = datetime.strptime(day_hours.get("start", "09:00"), "%H:%M").time()
+                work_end = datetime.strptime(day_hours.get("end", "17:00"), "%H:%M").time()
+            except ValueError:
+                current_date += timedelta(days=1)
+                continue
+
+            slot_start = datetime.combine(current_date, work_start)
+            day_end = datetime.combine(current_date, work_end)
+
+            while slot_start + timedelta(minutes=duration_minutes) <= day_end:
+                slot_end = slot_start + timedelta(minutes=duration_minutes)
+
+                # Skip if too soon
+                if slot_start < min_booking_time:
+                    slot_start += timedelta(minutes=30)
+                    continue
+
+                # Check for blocked times
+                is_blocked = any(
+                    slot_start < bt.end_datetime and slot_end > bt.start_datetime
+                    for bt in blocked_times
+                )
+
+                if not is_blocked:
+                    # Check for appointment conflicts
+                    has_conflict = any(
+                        slot_start < (appt.scheduled_end + timedelta(minutes=buffer_after)) and
+                        slot_end > (appt.scheduled_start - timedelta(minutes=buffer_before))
+                        for appt in existing_appts
+                    )
+
+                    if not has_conflict:
+                        all_slots.append({
+                            "start_time": slot_start.isoformat() + "Z",
+                            "end_time": slot_end.isoformat() + "Z",
+                            "date": current_date.isoformat(),
+                            "user_id": user_id
+                        })
+
+                slot_start += timedelta(minutes=30)
+
+            current_date += timedelta(days=1)
+
+    # Remove duplicates and sort
+    unique_slots = list({s["start_time"]: s for s in all_slots}.values())
+    unique_slots.sort(key=lambda x: x["start_time"])
+
+    return {
+        "available_slots": unique_slots,
+        "configured": True,
+        "slot_count": len(unique_slots)
+    }
+
+
+class WebsiteDemoBookingRequest(BaseModel):
+    """Request model for website demo booking confirmation"""
+    start_time: str  # ISO datetime
+    duration_minutes: int = 30
+    attendee_name: str
+    attendee_email: EmailStr
+    attendee_phone: Optional[str] = None
+    notes: Optional[str] = None
+    meeting_mode: str = "video"
+
+
+@router.post("/public/book-demo/confirm")
+async def confirm_website_demo_booking(
+    request: WebsiteDemoBookingRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """
+    Confirm a website demo booking.
+
+    This endpoint creates an appointment using the calendar assignment
+    for 'website_demo' purpose.
+    """
+    from sqlalchemy import text
+
+    # Look up calendar assignment for website_demo purpose
+    assignment_result = db.execute(text("""
+        SELECT ca.id, ca.assigned_user_id, ca.calendly_url, ca.booking_link_id,
+               u.full_name as user_name, u.email as user_email
+        FROM calendar_assignments ca
+        LEFT JOIN users u ON u.id = ca.assigned_user_id
+        WHERE ca.purpose = 'website_demo' AND ca.is_active = true
+        LIMIT 1
+    """)).fetchone()
+
+    if not assignment_result or not assignment_result.assigned_user_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Website demo calendar not configured. Please assign a team member in Calendar Management."
+        )
+
+    assigned_user_id = assignment_result.assigned_user_id
+    user_name = assignment_result.user_name or "Team Member"
+    user_email = assignment_result.user_email
+
+    try:
+        # Parse the start time
+        start_time_str = request.start_time.replace("Z", "+00:00")
+        start_time = datetime.fromisoformat(start_time_str)
+        if start_time.tzinfo is None:
+            start_time = start_time.replace(tzinfo=pytz.UTC)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid start_time format: {str(e)}")
+
+    end_time = start_time + timedelta(minutes=request.duration_minutes)
+
+    # Create the appointment
+    Appointment = _models.get('Appointment') if _models else None
+    if not Appointment:
+        raise HTTPException(status_code=500, detail="Scheduler not initialized")
+
+    appointment_id = f"demo-{uuid_lib.uuid4().hex[:8]}"
+
+    new_appointment = Appointment(
+        appointment_id=appointment_id,
+        assigned_user_id=assigned_user_id,
+        scheduled_start=start_time,
+        scheduled_end=end_time,
+        duration_minutes=request.duration_minutes,
+        attendee_name=request.attendee_name,
+        attendee_email=request.attendee_email,
+        attendee_phone=request.attendee_phone,
+        appointment_type="platform-demo",
+        meeting_type=MeetingType.DEMO,
+        meeting_mode=MeetingMode.VIDEO if request.meeting_mode == "video" else MeetingMode.PHONE,
+        status=AppointmentStatus.BOOKED,
+        notes=request.notes,
+        booked_via="website",
+        lo_name=user_name,
+        lo_email=user_email
+    )
+
+    db.add(new_appointment)
+    db.commit()
+    db.refresh(new_appointment)
+
+    # Format confirmation details
+    local_tz = pytz.timezone("America/Chicago")
+    local_start = start_time.astimezone(local_tz)
+    date_str = local_start.strftime("%A, %B %d, %Y")
+    time_str = local_start.strftime("%-I:%M %p %Z")
+
+    # Send confirmation email in background
+    try:
+        background_tasks.add_task(
+            notification_service.send_appointment_confirmation,
+            borrower_email=request.attendee_email,
+            borrower_name=request.attendee_name,
+            appointment_type="Platform Demo",
+            appointment_time=start_time,
+            lo_name=user_name,
+            phone_number=request.attendee_phone,
+            appointment_id=appointment_id,
+            duration_minutes=request.duration_minutes,
+            lo_email=user_email
+        )
+    except Exception as e:
+        logger.warning(f"Failed to queue confirmation email: {e}")
+
+    logger.info(f"Website demo booked: {appointment_id} for {request.attendee_email}")
+
+    return {
+        "success": True,
+        "appointment_id": appointment_id,
+        "confirmation_details": {
+            "date": date_str,
+            "time": time_str,
+            "duration": f"{request.duration_minutes} minutes",
+            "meeting_mode": request.meeting_mode.title(),
+            "host_name": user_name
+        },
+        "message": f"Demo scheduled with {user_name}"
+    }
