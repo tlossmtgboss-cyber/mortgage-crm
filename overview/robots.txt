@@ -1,0 +1,30 @@
+# Perennia AI - Robots.txt
+# https://www.perenniaai.com
+
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://www.perenniaai.com/sitemap.xml
+
+# AI Crawlers - Welcome
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Anthropic-AI
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Cohere-AI
+Allow: /

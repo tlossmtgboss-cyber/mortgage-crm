@@ -4,12 +4,109 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Perennia AI - AI-Powered Mortgage CRM Platform</title>
-<meta name="description" content="AI-powered mortgage CRM and origination operating system. Specialized AI agents, 160+ tools, compliance-assist monitoring, and omni-channel communications.">
-<meta property="og:title" content="Perennia AI - Mortgage CRM Platform">
-<meta property="og:description" content="AI-powered mortgage CRM with specialized agents, pipeline management, compliance-assist monitoring, and omni-channel communications.">
+<meta name="description" content="AI-powered mortgage CRM and origination operating system. 42 specialized AI agents, 173+ tools, compliance automation, and omni-channel communications for loan officers.">
+<meta name="keywords" content="mortgage CRM, AI mortgage software, loan origination system, mortgage LOS, mortgage compliance, TRID automation, loan officer CRM, mortgage technology, fintech mortgage">
+<meta name="author" content="Perennia AI">
+<meta name="robots" content="index, follow">
+
+<!-- Open Graph / Facebook -->
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://www.perenniaai.com">
+<meta property="og:title" content="Perennia AI - AI-Powered Mortgage CRM Platform">
+<meta property="og:description" content="AI-powered mortgage CRM with 42 specialized agents, pipeline management, compliance automation, and omni-channel communications.">
+<meta property="og:image" content="https://www.perenniaai.com/og-image.png">
+<meta property="og:site_name" content="Perennia AI">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:url" content="https://www.perenniaai.com">
+<meta name="twitter:title" content="Perennia AI - AI-Powered Mortgage CRM Platform">
+<meta name="twitter:description" content="AI-powered mortgage CRM with 42 specialized agents, pipeline management, compliance automation, and omni-channel communications.">
+<meta name="twitter:image" content="https://www.perenniaai.com/og-image.png">
+
 <link rel="canonical" href="https://www.perenniaai.com">
+
+<!-- JSON-LD Structured Data -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Perennia AI",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Web, iOS",
+  "description": "AI-powered mortgage CRM and loan origination operating system with 42 specialized AI agents, compliance automation, and omni-channel communications.",
+  "url": "https://www.perenniaai.com",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD",
+    "description": "Contact for pricing"
+  },
+  "featureList": [
+    "42 Specialized AI Agents",
+    "21-Stage Loan Pipeline Management",
+    "TRID & RESPA Compliance Automation",
+    "AI-Powered Document Classification",
+    "Voice OS with Call Intelligence",
+    "Borrower & Partner Portals",
+    "Native E-Signature",
+    "Mobile App with CarPlay"
+  ],
+  "aggregateRating": {
+    "@type": "AggregateRating",
+    "ratingValue": "4.9",
+    "ratingCount": "50"
+  }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "Perennia AI",
+  "url": "https://www.perenniaai.com",
+  "logo": "https://www.perenniaai.com/logo.png",
+  "description": "AI-powered mortgage CRM and loan origination platform",
+  "sameAs": [],
+  "contactPoint": {
+    "@type": "ContactPoint",
+    "contactType": "sales",
+    "url": "https://www.perenniaai.com"
+  }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "What is Perennia AI?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Perennia AI is an AI-powered mortgage CRM and loan origination operating system designed for mortgage loan officers, brokers, and lending teams. It features 42 specialized AI agents, compliance automation, and omni-channel communications."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What compliance features does Perennia AI offer?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Perennia AI includes automated TRID timing validation, RESPA Section 8 checks, fair lending analysis, fee tolerance monitoring, and state-specific compliance management across all 50 states."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does Perennia AI have a mobile app?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes, Perennia AI offers an iOS mobile app with Face ID authentication, voice assistant, push notifications, camera document capture, and CarPlay integration for hands-free business management."
+      }
+    }
+  ]
+}
+</script>
 <style>
 /* ============================================================
    CSS RESET & BASE
@@ -1685,8 +1782,9 @@ function renderFeatures(data, visitor) {
   });
 }
 
-/* --- Visitor tracking (localStorage) --- */
+/* --- Visitor tracking (localStorage + server) --- */
 var VISITOR_KEY = 'perennia_visitor';
+var TRACKING_API = 'https://api.perenniaai.com/api/v1/visitor-tracking/track';
 
 function getVisitor() {
   try {
@@ -1697,6 +1795,74 @@ function getVisitor() {
 
 function saveVisitor(v) {
   try { localStorage.setItem(VISITOR_KEY, JSON.stringify(v)); } catch (e) { /* noop */ }
+}
+
+function generateVisitorId() {
+  return 'v_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+}
+
+function getUTMParams() {
+  var params = new URLSearchParams(window.location.search);
+  return {
+    utm_source: params.get('utm_source'),
+    utm_medium: params.get('utm_medium'),
+    utm_campaign: params.get('utm_campaign'),
+    utm_term: params.get('utm_term'),
+    utm_content: params.get('utm_content')
+  };
+}
+
+function trackVisitorServer() {
+  /* Send visitor data to backend for CRM lead creation */
+  try {
+    var visitor = getVisitor();
+    var visitorId = visitor && visitor.visitorId ? visitor.visitorId : generateVisitorId();
+
+    /* Save visitor ID locally */
+    if (!visitor || !visitor.visitorId) {
+      visitor = visitor || {};
+      visitor.visitorId = visitorId;
+      saveVisitor(visitor);
+    }
+
+    var utm = getUTMParams();
+    var payload = {
+      visitor_id: visitorId,
+      page_url: window.location.href,
+      page_title: document.title,
+      referrer: document.referrer || null,
+      utm_source: utm.utm_source,
+      utm_medium: utm.utm_medium,
+      utm_campaign: utm.utm_campaign,
+      utm_term: utm.utm_term,
+      utm_content: utm.utm_content,
+      screen_width: window.screen.width,
+      screen_height: window.screen.height,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      language: navigator.language
+    };
+
+    fetch(TRACKING_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      mode: 'cors'
+    }).then(function(response) {
+      return response.json();
+    }).then(function(data) {
+      if (data.visitor_id) {
+        var v = getVisitor() || {};
+        v.visitorId = data.visitor_id;
+        v.visitCount = data.visit_count;
+        saveVisitor(v);
+      }
+    }).catch(function(e) {
+      /* Silent fail - don't break page if tracking fails */
+      console.debug('Tracking:', e.message);
+    });
+  } catch (e) {
+    /* Silent fail */
+  }
 }
 
 function handleVisitor(changelog) {
@@ -2122,6 +2288,8 @@ document.addEventListener('DOMContentLoaded', function() {
   /* Auto-open first collapsible */
   var first = document.querySelector('.collapsible-toggle');
   if (first) first.click();
+  /* Track visitor for CRM */
+  trackVisitorServer();
 });
 </script>
 

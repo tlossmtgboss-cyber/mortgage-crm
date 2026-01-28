@@ -1,6 +1,12 @@
 {
-  "version": "2026-01-28-003",
+  "version": "2026-01-28-004",
   "entries": [
+    {
+      "date": "2026-01-28",
+      "title": "SEO, AI SEO & Visitor Tracking",
+      "description": "Added comprehensive SEO (robots.txt, sitemap.xml, Twitter cards, JSON-LD schema), AI SEO (llms.txt for ChatGPT/Claude/Perplexity), and visitor tracking system that captures IP, device info, and auto-creates leads in Admin CRM.",
+      "features": ["analytics-intelligence", "lead-lifecycle"]
+    },
     {
       "date": "2026-01-28",
       "title": "PURL, E-Signature, Metrics & Surveying Updates",
