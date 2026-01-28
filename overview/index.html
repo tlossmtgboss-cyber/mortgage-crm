@@ -347,6 +347,137 @@ body {
   line-height: 1.2;
 }
 .hero-stat-label { font-size: .8rem; color: var(--gray-400); text-transform: uppercase; letter-spacing: .5px; margin-top: 4px; }
+.hero-stat.clickable { cursor: pointer; transition: var(--transition); padding: 12px; margin: -12px; border-radius: var(--radius-lg); }
+.hero-stat.clickable:hover { background: rgba(38,198,218,.15); transform: translateY(-2px); }
+.hero-stat.clickable .hero-stat-value { text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 4px; }
+.hero-stat.clickable:hover .hero-stat-value { text-decoration-style: solid; }
+
+/* Live Stats Pulse Animation */
+@keyframes statPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+.hero-stat-value.updating { animation: statPulse 0.5s ease-in-out; }
+
+/* ============================================================
+   AI TOOLS & AGENTS LIGHTBOX
+   ============================================================ */
+.lightbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+.lightbox-card {
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  transition: var(--transition);
+}
+.lightbox-card:hover {
+  border-color: var(--teal);
+  box-shadow: 0 4px 12px rgba(38,198,218,.15);
+}
+.lightbox-card-title {
+  font-weight: 700;
+  color: var(--navy);
+  font-size: 0.95rem;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lightbox-card-title .icon {
+  width: 24px;
+  height: 24px;
+  background: var(--teal);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: white;
+}
+.lightbox-card-desc {
+  font-size: 0.85rem;
+  color: var(--gray-600);
+  line-height: 1.5;
+}
+.lightbox-category {
+  margin-bottom: 24px;
+}
+.lightbox-category-header {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--navy);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--teal);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lightbox-category-header .count {
+  background: var(--teal);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.lightbox-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--gray-200);
+}
+.lightbox-tab {
+  padding: 8px 16px;
+  border-radius: 20px;
+  background: var(--gray-100);
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--gray-600);
+  transition: var(--transition);
+}
+.lightbox-tab:hover { background: var(--gray-200); }
+.lightbox-tab.active { background: var(--teal); color: white; }
+.lightbox-search {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  font-size: 0.9rem;
+  margin-bottom: 16px;
+}
+.lightbox-search:focus { outline: none; border-color: var(--teal); box-shadow: 0 0 0 3px rgba(38,198,218,.1); }
+.modal-box.large { max-width: 1000px; }
+.lightbox-stat-summary {
+  display: flex;
+  gap: 24px;
+  padding: 16px;
+  background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%);
+  border-radius: var(--radius-lg);
+  margin-bottom: 20px;
+}
+.lightbox-stat-item {
+  text-align: center;
+}
+.lightbox-stat-value {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--teal-light);
+}
+.lightbox-stat-label {
+  font-size: 0.75rem;
+  color: var(--gray-400);
+  text-transform: uppercase;
+}
 
 /* ============================================================
    VISION INTRO
@@ -994,11 +1125,9 @@ details.section-details > .details-body { padding: 20px; }
 <header class="hero" id="top">
   <div class="hero-content">
     <div class="hero-badge">PLATFORM OVERVIEW</div>
-    <h1>Perennia <span>AI</span><br>Mortgage CRM</h1>
+    <h1>Perennia <span>AI</span></h1>
     <p class="hero-subtitle">
-      The industry's most comprehensive AI-powered mortgage origination platform.
-      Purpose-built for loan officers, processors, underwriters, and branch managers
-      to automate workflows, assist with compliance monitoring, and close loans faster.
+      An AI-native, leadership-grade mortgage operating system—the industry's most comprehensive platform for directing work, unifying communication, and orchestrating every stage of origination with precision, speed, and clarity, transforming fragmented tasks into a coordinated, intelligent workflow that exposes bottlenecks, accelerates execution, and elevates the client experience.
     </p>
     <button class="btn-demo-hero" onclick="openDemoModal()">Schedule a Demo</button>
     <div class="hero-stats">
@@ -1010,15 +1139,13 @@ details.section-details > .details-body { padding: 20px; }
         <div class="hero-stat-value" data-stat="files">3,704</div>
         <div class="hero-stat-label">Source Files</div>
       </div>
-      <div class="hero-stat tooltip">
+      <div class="hero-stat clickable" onclick="openToolsModal()" title="Click to view all AI Tools">
         <div class="hero-stat-value" data-stat="tools">173+</div>
         <div class="hero-stat-label">AI Tools</div>
-        <span class="tooltip-text"><strong>Tools</strong> = internal agent actions (e.g., pricing lookup, doc classification, task creation, compliance checks, messaging).</span>
       </div>
-      <div class="hero-stat tooltip">
+      <div class="hero-stat clickable" onclick="openAgentsModal()" title="Click to view all AI Agents">
         <div class="hero-stat-value" data-stat="agents">42</div>
         <div class="hero-stat-label">AI Agents</div>
-        <span class="tooltip-text"><strong>Agents</strong> = specialized AI roles (e.g., underwriting assistant, doc triage, SLA monitor) orchestrated by policy and audit logs.</span>
       </div>
       <div class="hero-stat">
         <div class="hero-stat-value">35+</div>
@@ -1663,6 +1790,86 @@ details.section-details > .details-body { padding: 20px; }
   </div>
 </div>
 
+<!-- ============================================================
+     AI TOOLS LIGHTBOX MODAL
+     ============================================================ -->
+<div class="modal-overlay" id="tools-modal">
+  <div class="modal-box large">
+    <button class="modal-close" onclick="closeToolsModal()" title="Close">&times;</button>
+    <div class="modal-header">
+      <h2>AI Tools Library</h2>
+      <p>173+ specialized tools powering Perennia AI agents</p>
+    </div>
+    <div class="modal-body" id="tools-modal-body">
+      <div class="lightbox-stat-summary">
+        <div class="lightbox-stat-item">
+          <div class="lightbox-stat-value">173+</div>
+          <div class="lightbox-stat-label">Total Tools</div>
+        </div>
+        <div class="lightbox-stat-item">
+          <div class="lightbox-stat-value">12</div>
+          <div class="lightbox-stat-label">Categories</div>
+        </div>
+        <div class="lightbox-stat-item">
+          <div class="lightbox-stat-value">42</div>
+          <div class="lightbox-stat-label">Agents Served</div>
+        </div>
+      </div>
+      <input type="text" class="lightbox-search" id="tools-search" placeholder="Search tools..." oninput="filterTools(this.value)">
+      <div class="lightbox-tabs" id="tools-tabs">
+        <button class="lightbox-tab active" data-category="all" onclick="filterToolsCategory('all')">All</button>
+        <button class="lightbox-tab" data-category="pipeline" onclick="filterToolsCategory('pipeline')">Pipeline</button>
+        <button class="lightbox-tab" data-category="compliance" onclick="filterToolsCategory('compliance')">Compliance</button>
+        <button class="lightbox-tab" data-category="leads" onclick="filterToolsCategory('leads')">Lead Nurturing</button>
+        <button class="lightbox-tab" data-category="documents" onclick="filterToolsCategory('documents')">Documents</button>
+        <button class="lightbox-tab" data-category="communication" onclick="filterToolsCategory('communication')">Communication</button>
+        <button class="lightbox-tab" data-category="analytics" onclick="filterToolsCategory('analytics')">Analytics</button>
+      </div>
+      <div id="tools-content"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     AI AGENTS LIGHTBOX MODAL
+     ============================================================ -->
+<div class="modal-overlay" id="agents-modal">
+  <div class="modal-box large">
+    <button class="modal-close" onclick="closeAgentsModal()" title="Close">&times;</button>
+    <div class="modal-header">
+      <h2>AI Agent Directory</h2>
+      <p>42 specialized agents orchestrated by LangGraph</p>
+    </div>
+    <div class="modal-body" id="agents-modal-body">
+      <div class="lightbox-stat-summary">
+        <div class="lightbox-stat-item">
+          <div class="lightbox-stat-value">42</div>
+          <div class="lightbox-stat-label">Total Agents</div>
+        </div>
+        <div class="lightbox-stat-item">
+          <div class="lightbox-stat-value">8</div>
+          <div class="lightbox-stat-label">Domains</div>
+        </div>
+        <div class="lightbox-stat-item">
+          <div class="lightbox-stat-value">24/7</div>
+          <div class="lightbox-stat-label">Availability</div>
+        </div>
+      </div>
+      <input type="text" class="lightbox-search" id="agents-search" placeholder="Search agents..." oninput="filterAgents(this.value)">
+      <div class="lightbox-tabs" id="agents-tabs">
+        <button class="lightbox-tab active" data-category="all" onclick="filterAgentsCategory('all')">All</button>
+        <button class="lightbox-tab" data-category="pipeline" onclick="filterAgentsCategory('pipeline')">Pipeline</button>
+        <button class="lightbox-tab" data-category="compliance" onclick="filterAgentsCategory('compliance')">Compliance</button>
+        <button class="lightbox-tab" data-category="communication" onclick="filterAgentsCategory('communication')">Communication</button>
+        <button class="lightbox-tab" data-category="document" onclick="filterAgentsCategory('document')">Documents</button>
+        <button class="lightbox-tab" data-category="lead" onclick="filterAgentsCategory('lead')">Leads</button>
+        <button class="lightbox-tab" data-category="operations" onclick="filterAgentsCategory('operations')">Operations</button>
+      </div>
+      <div id="agents-content"></div>
+    </div>
+  </div>
+</div>
+
 <!-- Back to Top -->
 <button class="back-to-top no-print" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="Back to top">&#x2191;</button>
 
@@ -2004,12 +2211,301 @@ function closeDemoModal() {
   document.body.style.overflow = '';
 }
 
+/* =========================================================
+   AI TOOLS & AGENTS LIGHTBOX
+   ========================================================= */
+var AI_TOOLS_DATA = {
+  pipeline: [
+    { name: 'get_pipeline_metrics', desc: 'Get pipeline metrics including count, volume, and velocity for a loan officer or branch' },
+    { name: 'get_loans_by_status', desc: 'Get loans filtered by status with details' },
+    { name: 'get_loan_aging_report', desc: 'Get aging report showing how long loans have been in each stage' },
+    { name: 'calculate_conversion_rates', desc: 'Calculate stage-to-stage conversion rates' },
+    { name: 'predict_closing_timeline', desc: 'Predict closing timeline based on current stage and historical data' },
+    { name: 'get_bottleneck_analysis', desc: 'Identify bottlenecks in the pipeline' },
+    { name: 'compare_to_benchmark', desc: 'Compare pipeline metrics to company or industry benchmarks' },
+    { name: 'get_lo_pipeline_breakdown', desc: 'Get pipeline breakdown by loan officer' },
+    { name: 'get_stage_velocity', desc: 'Track velocity through each pipeline stage' },
+    { name: 'forecast_monthly_closings', desc: 'Forecast closings for current and future months' },
+    { name: 'get_stale_loans', desc: 'Identify loans stuck too long in a stage' },
+    { name: 'calculate_pull_through', desc: 'Calculate application to funding pull-through rates' }
+  ],
+  compliance: [
+    { name: 'check_trid_compliance', desc: 'Check TILA-RESPA Integrated Disclosure compliance for a loan' },
+    { name: 'check_respa_compliance', desc: 'Check RESPA Section 8 compliance for kickback/fee splitting violations' },
+    { name: 'check_fair_lending', desc: 'Check fair lending compliance and identify potential disparities' },
+    { name: 'get_state_requirements', desc: 'Get state-specific compliance requirements' },
+    { name: 'audit_loan_file', desc: 'Perform comprehensive compliance audit on a loan file' },
+    { name: 'get_disclosure_timeline', desc: 'Get disclosure timeline and status for a loan' },
+    { name: 'check_tolerance_violations', desc: 'Check for fee tolerance violations between LE and CD' },
+    { name: 'get_compliance_history', desc: 'Get compliance history and past issues for loan or LO' },
+    { name: 'validate_consent_recording', desc: 'Validate call recording consent by state' },
+    { name: 'check_mlo_licensing', desc: 'Verify MLO licensing for transaction states' },
+    { name: 'audit_fee_changes', desc: 'Audit fee changes requiring redisclosure' },
+    { name: 'calculate_qm_points_fees', desc: 'Calculate QM points and fees threshold' }
+  ],
+  leads: [
+    { name: 'get_lead_details', desc: 'Get complete lead profile and current status' },
+    { name: 'get_engagement_history', desc: 'Get complete engagement history for a lead' },
+    { name: 'score_lead', desc: 'Calculate or update lead score based on behavior and profile' },
+    { name: 'suggest_followup', desc: 'Suggest next best action for lead follow-up' },
+    { name: 'draft_message', desc: 'Draft personalized message for lead outreach' },
+    { name: 'schedule_outreach', desc: 'Schedule automated outreach sequence' },
+    { name: 'get_similar_converted_leads', desc: 'Find similar leads that converted to understand success patterns' },
+    { name: 'get_optimal_contact_time', desc: 'Determine optimal time to contact lead based on history' },
+    { name: 'segment_leads', desc: 'Segment leads by behavior and demographics' },
+    { name: 'predict_conversion', desc: 'Predict lead conversion probability' },
+    { name: 'assign_lead_round_robin', desc: 'Assign leads using round-robin distribution' },
+    { name: 'track_lead_source_roi', desc: 'Track ROI by lead source and campaign' }
+  ],
+  documents: [
+    { name: 'get_missing_documents', desc: 'Get list of missing or pending documents for a loan' },
+    { name: 'get_loan_conditions', desc: 'Get outstanding conditions for a loan' },
+    { name: 'track_document_request', desc: 'Track status of a document request' },
+    { name: 'send_document_reminder', desc: 'Send reminder for outstanding documents' },
+    { name: 'escalate_issue', desc: 'Escalate a document or condition issue' },
+    { name: 'get_document_timeline', desc: 'Get document collection timeline for a loan' },
+    { name: 'check_document_expiration', desc: 'Check for expiring or expired documents' },
+    { name: 'get_third_party_status', desc: 'Get status of third-party orders (appraisal, title, etc.)' },
+    { name: 'classify_document', desc: 'AI-powered document type classification' },
+    { name: 'extract_document_data', desc: 'OCR and extract data from uploaded documents' },
+    { name: 'validate_document_freshness', desc: 'Check document age requirements' },
+    { name: 'generate_needs_list', desc: 'Generate borrower document needs list' }
+  ],
+  communication: [
+    { name: 'send_sms', desc: 'Send SMS message via Twilio' },
+    { name: 'send_email', desc: 'Send email with templates and tracking' },
+    { name: 'initiate_call', desc: 'Initiate outbound call via power dialer' },
+    { name: 'schedule_callback', desc: 'Schedule callback with borrower' },
+    { name: 'get_conversation_history', desc: 'Get full conversation history across channels' },
+    { name: 'transcribe_call', desc: 'Get call transcription via Deepgram' },
+    { name: 'analyze_sentiment', desc: 'Analyze conversation sentiment' },
+    { name: 'draft_response', desc: 'AI-draft response to email or message' },
+    { name: 'route_inbound_call', desc: 'Route inbound call to appropriate queue' },
+    { name: 'get_call_recording', desc: 'Retrieve call recording and metadata' },
+    { name: 'send_push_notification', desc: 'Send mobile push notification' },
+    { name: 'create_portal_message', desc: 'Send message to borrower portal' }
+  ],
+  analytics: [
+    { name: 'get_production_metrics', desc: 'Get loan officer production metrics' },
+    { name: 'calculate_profitability', desc: 'Calculate loan and branch profitability' },
+    { name: 'get_scorecard', desc: 'Get performance scorecard' },
+    { name: 'forecast_production', desc: 'AI production forecasting' },
+    { name: 'analyze_partner_roi', desc: 'Analyze referral partner ROI' },
+    { name: 'get_market_comparison', desc: 'Compare performance to market' },
+    { name: 'track_sla_compliance', desc: 'Track SLA compliance rates' },
+    { name: 'get_usage_analytics', desc: 'Get platform usage analytics' },
+    { name: 'calculate_ltv', desc: 'Calculate customer lifetime value' },
+    { name: 'get_funnel_metrics', desc: 'Get sales funnel metrics' },
+    { name: 'benchmark_cycle_time', desc: 'Benchmark cycle time vs industry' },
+    { name: 'generate_executive_report', desc: 'Generate executive summary report' }
+  ]
+};
+
+var AI_AGENTS_DATA = {
+  pipeline: [
+    { name: 'Pipeline Analyst', desc: 'Monitors loan pipeline health, tracks velocity metrics, identifies bottlenecks, and predicts closing timelines.' },
+    { name: 'SLA Monitor', desc: 'Tracks stage duration against SLA targets, generates alerts for at-risk loans, and enforces timing requirements.' },
+    { name: 'Milestone Tracker', desc: 'Monitors critical milestone completion, sends reminders, and coordinates cross-team handoffs.' },
+    { name: 'Pricing Engine Agent', desc: 'Handles rate lookups, lock recommendations, and competitive pricing analysis.' },
+    { name: 'Lock Advisor', desc: 'Monitors rate movements and provides lock/float recommendations based on market conditions.' }
+  ],
+  compliance: [
+    { name: 'TRID Compliance Agent', desc: 'Validates disclosure timing, monitors fee changes, and ensures TILA-RESPA compliance.' },
+    { name: 'RESPA Monitor', desc: 'Checks for Section 8 violations, affiliated business arrangements, and kickback risks.' },
+    { name: 'Fair Lending Analyst', desc: 'Monitors pricing disparities, exceptions, and fair lending compliance.' },
+    { name: 'State Compliance Agent', desc: 'Tracks state-specific requirements, licensing, and disclosure rules across all 50 states.' },
+    { name: 'QC Auditor', desc: 'Performs pre-close and post-close quality control audits.' },
+    { name: 'Consent Manager', desc: 'Manages call recording consent requirements by state and jurisdiction.' }
+  ],
+  communication: [
+    { name: 'AI Receptionist', desc: 'Handles inbound calls with natural conversation, qualifies leads, and routes to appropriate team members.' },
+    { name: 'Email Intelligence Agent', desc: 'Analyzes incoming emails, extracts intent, drafts responses, and categorizes communications.' },
+    { name: 'SMS Coordinator', desc: 'Manages two-way SMS communication, appointment reminders, and status updates.' },
+    { name: 'Call Coach', desc: 'Provides real-time coaching during calls, suggests talking points, and tracks conversation quality.' },
+    { name: 'Omni-Channel Router', desc: 'Routes communications across channels based on borrower preferences and urgency.' },
+    { name: 'Notification Manager', desc: 'Coordinates push notifications, emails, and SMS for status updates and alerts.' }
+  ],
+  document: [
+    { name: 'Document Triage Agent', desc: 'Classifies incoming documents, routes to appropriate workflow, and validates completeness.' },
+    { name: 'OCR Extractor', desc: 'Extracts structured data from documents using AI-powered OCR.' },
+    { name: 'Condition Tracker', desc: 'Monitors outstanding conditions, sends reminders, and escalates overdue items.' },
+    { name: 'Document Validator', desc: 'Validates document freshness, authenticity, and compliance with requirements.' },
+    { name: 'Needs List Generator', desc: 'Creates and updates borrower document needs lists based on loan program.' },
+    { name: 'Third-Party Order Manager', desc: 'Tracks appraisal, title, and other third-party orders.' }
+  ],
+  lead: [
+    { name: 'Lead Nurturer', desc: 'Manages lead engagement sequences, scores leads, and suggests follow-up actions.' },
+    { name: 'Lead Qualifier', desc: 'Qualifies inbound leads, gathers initial information, and routes to appropriate LO.' },
+    { name: 'Conversion Predictor', desc: 'Predicts lead conversion probability and prioritizes high-value opportunities.' },
+    { name: 'Re-engagement Agent', desc: 'Identifies dormant leads and initiates win-back campaigns.' },
+    { name: 'Source Attribution Agent', desc: 'Tracks lead sources, calculates ROI, and optimizes marketing spend.' }
+  ],
+  operations: [
+    { name: 'Team Coach', desc: 'Provides AI-driven coaching recommendations, identifies skill gaps, and tracks development.' },
+    { name: 'Scheduler Agent', desc: 'Optimizes appointment scheduling, manages calendars, and handles rescheduling.' },
+    { name: 'Workflow Orchestrator', desc: 'Coordinates multi-step workflows, handles branching logic, and manages exceptions.' },
+    { name: 'Capacity Planner', desc: 'Forecasts workload, balances assignments, and optimizes team capacity.' },
+    { name: 'Reporting Agent', desc: 'Generates automated reports, dashboards, and executive summaries.' },
+    { name: 'Alert Dispatcher', desc: 'Coordinates alerts across channels based on priority and escalation rules.' }
+  ],
+  underwriting: [
+    { name: 'AI Underwriter', desc: 'Assists with file analysis, guideline lookups, and condition recommendations.' },
+    { name: 'Income Calculator', desc: 'Calculates qualifying income from paystubs, W2s, tax returns, and 1099s.' },
+    { name: 'Asset Analyzer', desc: 'Validates asset documentation and calculates available funds.' },
+    { name: 'DTI Calculator', desc: 'Calculates debt-to-income ratios and identifies qualifying issues.' },
+    { name: 'AUS Interpreter', desc: 'Interprets automated underwriting findings and suggests remediation.' }
+  ],
+  marketing: [
+    { name: 'Content Generator', desc: 'Creates blog posts, social content, and email campaigns from AI voice profiles.' },
+    { name: 'Avatar Producer', desc: 'Creates and manages AI avatar videos for marketing.' },
+    { name: 'Campaign Manager', desc: 'Orchestrates multi-channel marketing campaigns and tracks performance.' },
+    { name: 'SEO Optimizer', desc: 'Optimizes content for search engines and manages microsite SEO.' }
+  ]
+};
+
+var currentToolsCategory = 'all';
+var currentAgentsCategory = 'all';
+
+function openToolsModal() {
+  document.getElementById('tools-modal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  renderToolsContent();
+}
+
+function closeToolsModal() {
+  document.getElementById('tools-modal').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function openAgentsModal() {
+  document.getElementById('agents-modal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  renderAgentsContent();
+}
+
+function closeAgentsModal() {
+  document.getElementById('agents-modal').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function filterToolsCategory(category) {
+  currentToolsCategory = category;
+  document.querySelectorAll('#tools-tabs .lightbox-tab').forEach(function(t) {
+    t.classList.toggle('active', t.getAttribute('data-category') === category);
+  });
+  renderToolsContent();
+}
+
+function filterTools(searchTerm) {
+  renderToolsContent(searchTerm.toLowerCase());
+}
+
+function renderToolsContent(searchTerm) {
+  var container = document.getElementById('tools-content');
+  var html = '';
+
+  Object.keys(AI_TOOLS_DATA).forEach(function(category) {
+    if (currentToolsCategory !== 'all' && currentToolsCategory !== category) return;
+
+    var tools = AI_TOOLS_DATA[category].filter(function(tool) {
+      if (!searchTerm) return true;
+      return tool.name.toLowerCase().includes(searchTerm) || tool.desc.toLowerCase().includes(searchTerm);
+    });
+
+    if (tools.length === 0) return;
+
+    var categoryNames = {
+      pipeline: 'Pipeline Management',
+      compliance: 'Compliance & Audit',
+      leads: 'Lead Nurturing',
+      documents: 'Document Management',
+      communication: 'Communication',
+      analytics: 'Analytics & Reporting'
+    };
+
+    html += '<div class="lightbox-category">';
+    html += '<div class="lightbox-category-header">' + categoryNames[category] + ' <span class="count">' + tools.length + '</span></div>';
+    html += '<div class="lightbox-grid">';
+
+    tools.forEach(function(tool) {
+      html += '<div class="lightbox-card">';
+      html += '<div class="lightbox-card-title"><span class="icon">T</span>' + tool.name + '</div>';
+      html += '<div class="lightbox-card-desc">' + tool.desc + '</div>';
+      html += '</div>';
+    });
+
+    html += '</div></div>';
+  });
+
+  container.innerHTML = html || '<p style="text-align:center;color:var(--gray-500);padding:40px;">No tools found matching your search.</p>';
+}
+
+function filterAgentsCategory(category) {
+  currentAgentsCategory = category;
+  document.querySelectorAll('#agents-tabs .lightbox-tab').forEach(function(t) {
+    t.classList.toggle('active', t.getAttribute('data-category') === category);
+  });
+  renderAgentsContent();
+}
+
+function filterAgents(searchTerm) {
+  renderAgentsContent(searchTerm.toLowerCase());
+}
+
+function renderAgentsContent(searchTerm) {
+  var container = document.getElementById('agents-content');
+  var html = '';
+
+  Object.keys(AI_AGENTS_DATA).forEach(function(category) {
+    if (currentAgentsCategory !== 'all' && currentAgentsCategory !== category) return;
+
+    var agents = AI_AGENTS_DATA[category].filter(function(agent) {
+      if (!searchTerm) return true;
+      return agent.name.toLowerCase().includes(searchTerm) || agent.desc.toLowerCase().includes(searchTerm);
+    });
+
+    if (agents.length === 0) return;
+
+    var categoryNames = {
+      pipeline: 'Pipeline Management',
+      compliance: 'Compliance & Audit',
+      communication: 'Communication',
+      document: 'Document Management',
+      lead: 'Lead Management',
+      operations: 'Operations',
+      underwriting: 'Underwriting',
+      marketing: 'Marketing & Content'
+    };
+
+    html += '<div class="lightbox-category">';
+    html += '<div class="lightbox-category-header">' + categoryNames[category] + ' <span class="count">' + agents.length + '</span></div>';
+    html += '<div class="lightbox-grid">';
+
+    agents.forEach(function(agent) {
+      html += '<div class="lightbox-card">';
+      html += '<div class="lightbox-card-title"><span class="icon">A</span>' + agent.name + '</div>';
+      html += '<div class="lightbox-card-desc">' + agent.desc + '</div>';
+      html += '</div>';
+    });
+
+    html += '</div></div>';
+  });
+
+  container.innerHTML = html || '<p style="text-align:center;color:var(--gray-500);padding:40px;">No agents found matching your search.</p>';
+}
+
 /* Close on overlay click or Escape */
 document.addEventListener('click', function(e) {
   if (e.target.id === 'demo-modal') closeDemoModal();
+  if (e.target.id === 'tools-modal') closeToolsModal();
+  if (e.target.id === 'agents-modal') closeAgentsModal();
 });
 document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') closeDemoModal();
+  if (e.key === 'Escape') {
+    closeDemoModal();
+    closeToolsModal();
+    closeAgentsModal();
+  }
 });
 
 function fetchSlots() {
