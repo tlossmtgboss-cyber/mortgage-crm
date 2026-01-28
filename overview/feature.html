@@ -40,78 +40,90 @@ body {
   line-height: 1.6;
 }
 
-/* Navigation */
-.nav {
-  background: var(--navy);
-  padding: 16px 24px;
+/* Navigation - Matching main site */
+.nav-bar {
   position: sticky;
   top: 0;
   z-index: 100;
+  background: var(--navy-dark);
+  border-bottom: 2px solid var(--teal);
+  backdrop-filter: blur(12px);
 }
 
 .nav-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   max-width: 1200px;
   margin: 0 auto;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  padding: 12px 24px;
 }
 
 .nav-logo {
   display: flex;
   align-items: center;
   gap: 10px;
-  text-decoration: none;
+  font-size: 1.25rem;
+  font-weight: 700;
   color: var(--white);
-  font-weight: 800;
-  font-size: 1.2rem;
+  text-decoration: none;
 }
 
 .nav-logo-icon {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   background: var(--teal);
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 800;
+  font-size: 1.1rem;
+  color: white;
 }
 
 .nav-links {
   display: flex;
-  gap: 8px;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .nav-links a {
   color: var(--gray-300);
   text-decoration: none;
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-size: 0.9rem;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: .82rem;
   font-weight: 500;
   transition: var(--transition);
 }
 
 .nav-links a:hover {
   color: var(--white);
-  background: rgba(255,255,255,0.1);
+  background: rgba(255,255,255,.1);
 }
 
-.btn-demo {
-  background: var(--teal);
-  color: var(--navy);
-  padding: 10px 20px;
-  border-radius: 8px;
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-login {
+  color: var(--gray-300);
   text-decoration: none;
-  font-weight: 700;
-  font-size: 0.9rem;
+  padding: 7px 16px;
+  border-radius: 6px;
+  font-size: .82rem;
+  font-weight: 600;
   transition: var(--transition);
+  border: 1px solid rgba(255,255,255,.2);
+  background: transparent;
 }
 
-.btn-demo:hover {
-  background: var(--teal-light);
-  transform: translateY(-1px);
+.btn-login:hover {
+  color: var(--white);
+  background: rgba(255,255,255,.1);
+  border-color: rgba(255,255,255,.4);
 }
 
 /* Hero Section */
@@ -267,29 +279,10 @@ body {
   border: 1px solid #99f6e4;
 }
 
-.card-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-  margin-bottom: 20px;
-}
-
-.problem-card .card-icon {
-  background: #fecaca;
-}
-
-.solution-card .card-icon {
-  background: #99f6e4;
-}
-
 .card-title {
   font-size: 1.25rem;
   font-weight: 700;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
 .problem-card .card-title { color: #991b1b; }
@@ -323,26 +316,14 @@ body {
 .benefit-card:hover {
   transform: translateY(-4px);
   box-shadow: var(--shadow-xl);
-}
-
-.benefit-icon {
-  width: 56px;
-  height: 56px;
-  background: linear-gradient(135deg, var(--teal) 0%, var(--teal-dark) 100%);
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 28px;
-  margin-bottom: 20px;
-  color: var(--white);
+  border-color: var(--teal);
 }
 
 .benefit-title {
   font-size: 1.1rem;
   font-weight: 700;
   color: var(--navy);
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
 
 .benefit-text {
@@ -397,38 +378,6 @@ body {
   margin-top: 8px;
 }
 
-/* Testimonial */
-.testimonial {
-  background: var(--white);
-  padding: 48px;
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-lg);
-  text-align: center;
-  margin-bottom: 60px;
-  border-left: 4px solid var(--teal);
-}
-
-.testimonial-quote {
-  font-size: 1.25rem;
-  color: var(--gray-700);
-  font-style: italic;
-  line-height: 1.8;
-  margin-bottom: 24px;
-  max-width: 700px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.testimonial-author {
-  font-weight: 700;
-  color: var(--navy);
-}
-
-.testimonial-role {
-  color: var(--gray-500);
-  font-size: 0.9rem;
-}
-
 /* CTA Section */
 .cta-section {
   background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%);
@@ -462,25 +411,111 @@ body {
   flex-wrap: wrap;
 }
 
-/* Footer */
+/* Footer - Matching main site */
 .footer {
   background: var(--navy-dark);
-  padding: 40px 24px;
-  text-align: center;
+  color: var(--gray-400);
+  padding: 60px 24px 40px;
+  font-size: .85rem;
+  margin-top: 0;
 }
 
-.footer-text {
-  color: var(--gray-500);
-  font-size: 0.85rem;
+.footer-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 40px;
 }
 
-.footer-text a {
+.footer-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--white);
+  margin-bottom: 16px;
+}
+
+.footer-logo-icon {
+  width: 36px;
+  height: 36px;
+  background: var(--teal);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  color: var(--white);
+}
+
+.footer-tagline {
+  color: var(--gray-400);
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+.footer-section-title {
+  font-weight: 700;
+  color: var(--white);
+  margin-bottom: 16px;
+  font-size: .9rem;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+
+.footer-links {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.footer-links li {
+  margin-bottom: 10px;
+}
+
+.footer-links a {
   color: var(--gray-400);
   text-decoration: none;
+  transition: var(--transition);
 }
 
-.footer-text a:hover {
+.footer-links a:hover {
   color: var(--teal-light);
+}
+
+.footer-bottom {
+  max-width: 1200px;
+  margin: 40px auto 0;
+  padding-top: 24px;
+  border-top: 1px solid rgba(255,255,255,.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.footer-copyright {
+  color: var(--gray-500);
+  font-size: .8rem;
+}
+
+.footer-legal {
+  display: flex;
+  gap: 24px;
+}
+
+.footer-legal a {
+  color: var(--gray-500);
+  text-decoration: none;
+  font-size: .8rem;
+  transition: var(--transition);
+}
+
+.footer-legal a:hover {
+  color: var(--gray-300);
 }
 
 /* Loading State */
@@ -511,23 +546,38 @@ body {
   .benefits-grid { grid-template-columns: 1fr; }
   .stats-bar { flex-direction: column; gap: 30px; }
   .nav-links { display: none; }
+  .footer-inner { grid-template-columns: 1fr 1fr; }
+  .footer-brand { grid-column: 1 / -1; }
+  .footer-bottom { flex-direction: column; text-align: center; }
+}
+
+@media (max-width: 480px) {
+  .footer-inner { grid-template-columns: 1fr; }
 }
 </style>
 </head>
 <body>
 
-<nav class="nav">
+<nav class="nav-bar">
   <div class="nav-inner">
     <a href="index.html" class="nav-logo">
       <div class="nav-logo-icon">P</div>
       Perennia AI
     </a>
     <div class="nav-links">
+      <a href="index.html#executive-summary">Executive Summary</a>
       <a href="index.html#features">Features</a>
       <a href="index.html#workflows">Workflows</a>
+      <a href="index.html#key-workflows">Key Workflows</a>
+      <a href="index.html#gallery">Gallery</a>
+      <a href="index.html#metrics">Metrics</a>
+      <a href="index.html#roadmap">Roadmap</a>
+      <a href="index.html#architecture">Architecture</a>
       <a href="index.html#security">Security</a>
     </div>
-    <a href="javascript:openDemoModal()" class="btn-demo">Schedule Demo</a>
+    <div class="nav-actions">
+      <a href="https://app.perenniaai.com/login" class="btn-login">Log In</a>
+    </div>
   </div>
 </nav>
 
@@ -555,7 +605,7 @@ body {
 </div>
 
 <script>
-// Feature extended data with sales copy
+// Feature extended data with sales copy (no icons)
 var FEATURES_EXTENDED = {
   "ai-agent-system": {
     headline: "42 AI Agents Working Around the Clock",
@@ -563,24 +613,19 @@ var FEATURES_EXTENDED = {
     problem: "Loan officers spend 60% of their time on administrative tasks instead of building relationships and closing loans. Manual processes lead to errors, delays, and missed opportunities.",
     solution: "Perennia's AI Agent System deploys 42 specialized agents that work 24/7 to automate workflows, process documents, monitor compliance, and keep your pipeline moving—all while you sleep.",
     benefits: [
-      { icon: "🤖", title: "Always On", text: "AI agents work around the clock, ensuring nothing falls through the cracks even outside business hours." },
-      { icon: "⚡", title: "5-7 Second Response", text: "Intent-based tool loading delivers relevant actions instantly, reducing latency and improving productivity." },
-      { icon: "🎯", title: "Specialized Expertise", text: "Each agent is trained for specific tasks—from underwriting to compliance—ensuring expert-level performance." },
-      { icon: "📊", title: "Self-Improving", text: "Feedback loops help agents learn from every interaction, continuously improving accuracy and efficiency." },
-      { icon: "🔒", title: "Human Oversight", text: "You remain in control. Agents assist and recommend, but critical decisions always require human approval." },
-      { icon: "🔗", title: "Seamless Integration", text: "LangGraph orchestration ensures agents work together seamlessly, passing context and coordinating actions." }
+      { title: "Always On", text: "AI agents work around the clock, ensuring nothing falls through the cracks even outside business hours." },
+      { title: "5-7 Second Response", text: "Intent-based tool loading delivers relevant actions instantly, reducing latency and improving productivity." },
+      { title: "Specialized Expertise", text: "Each agent is trained for specific tasks—from underwriting to compliance—ensuring expert-level performance." },
+      { title: "Self-Improving", text: "Feedback loops help agents learn from every interaction, continuously improving accuracy and efficiency." },
+      { title: "Human Oversight", text: "You remain in control. Agents assist and recommend, but critical decisions always require human approval." },
+      { title: "Seamless Integration", text: "LangGraph orchestration ensures agents work together seamlessly, passing context and coordinating actions." }
     ],
     stats: [
       { value: "42", label: "Specialized Agents" },
       { value: "173+", label: "AI Tools" },
       { value: "5-7s", label: "Avg Response" },
       { value: "24/7", label: "Availability" }
-    ],
-    testimonial: {
-      quote: "The AI agents have transformed how we operate. What used to take hours now happens automatically. Our team can focus on what matters most—our clients.",
-      author: "Branch Manager",
-      role: "Top 100 Mortgage Company"
-    }
+    ]
   },
   "pipeline-management": {
     headline: "Complete Pipeline Visibility in Real-Time",
@@ -588,24 +633,19 @@ var FEATURES_EXTENDED = {
     problem: "Loans get stuck, deadlines get missed, and nobody knows where files are in the process. Lack of visibility leads to frustrated borrowers and blown closings.",
     solution: "Perennia's Pipeline Management gives you a crystal-clear view of every loan across 21 stages. Real-time SLA tracking, automatic bottleneck detection, and predictive close-date forecasting keep your team on track.",
     benefits: [
-      { icon: "📋", title: "21-Stage Visibility", text: "Track loans from application to funding with granular stage tracking and milestone monitoring." },
-      { icon: "⏱️", title: "SLA Tracking", text: "Automatic monitoring ensures no loan sits too long. Get alerts before SLAs are breached." },
-      { icon: "🚨", title: "Bottleneck Alerts", text: "AI identifies where loans are getting stuck and who needs to take action." },
-      { icon: "📈", title: "Predictive Forecasting", text: "Know your close dates before they happen with AI-powered timeline predictions." },
-      { icon: "🔄", title: "Velocity Metrics", text: "Understand how fast loans move through each stage and optimize your process." },
-      { icon: "👥", title: "Team Accountability", text: "Clear ownership at every stage means no more finger-pointing or confusion." }
+      { title: "21-Stage Visibility", text: "Track loans from application to funding with granular stage tracking and milestone monitoring." },
+      { title: "SLA Tracking", text: "Automatic monitoring ensures no loan sits too long. Get alerts before SLAs are breached." },
+      { title: "Bottleneck Alerts", text: "AI identifies where loans are getting stuck and who needs to take action." },
+      { title: "Predictive Forecasting", text: "Know your close dates before they happen with AI-powered timeline predictions." },
+      { title: "Velocity Metrics", text: "Understand how fast loans move through each stage and optimize your process." },
+      { title: "Team Accountability", text: "Clear ownership at every stage means no more finger-pointing or confusion." }
     ],
     stats: [
       { value: "21", label: "Pipeline Stages" },
       { value: "20%", label: "Fewer Stuck Loans" },
       { value: "Real-Time", label: "Updates" },
       { value: "95%", label: "SLA Compliance" }
-    ],
-    testimonial: {
-      quote: "For the first time, I can see exactly where every loan is and predict issues before they become problems. Pipeline management has never been this clear.",
-      author: "Operations Director",
-      role: "Regional Mortgage Lender"
-    }
+    ]
   },
   "smart-documents": {
     headline: "AI-Powered Document Collection That Works",
@@ -613,24 +653,19 @@ var FEATURES_EXTENDED = {
     problem: "Document collection is the #1 cause of loan delays. Borrowers submit wrong documents, miss deadlines, and processors waste hours tracking down paperwork.",
     solution: "Smart Documents uses AI to automatically classify uploads with 95%+ accuracy, generate needs lists, track freshness dates, and send cascading reminders until documents arrive.",
     benefits: [
-      { icon: "🧠", title: "AI Classification", text: "Documents are automatically categorized with 95%+ confidence—no manual sorting required." },
-      { icon: "📝", title: "Auto Needs List", text: "Generate borrower-specific document checklists based on loan type and scenario." },
-      { icon: "⏰", title: "Freshness Tracking", text: "Know when documents expire and need to be re-collected before it's too late." },
-      { icon: "📧", title: "Cascading Reminders", text: "Automated email and SMS sequences until documents are received." },
-      { icon: "🔍", title: "OCR Extraction", text: "Extract data directly from documents to auto-populate loan applications." },
-      { icon: "👁️", title: "Screenshot Detection", text: "AI flags screenshots and low-quality images that won't pass underwriting." }
+      { title: "AI Classification", text: "Documents are automatically categorized with 95%+ confidence—no manual sorting required." },
+      { title: "Auto Needs List", text: "Generate borrower-specific document checklists based on loan type and scenario." },
+      { title: "Freshness Tracking", text: "Know when documents expire and need to be re-collected before it's too late." },
+      { title: "Cascading Reminders", text: "Automated email and SMS sequences until documents are received." },
+      { title: "OCR Extraction", text: "Extract data directly from documents to auto-populate loan applications." },
+      { title: "Screenshot Detection", text: "AI flags screenshots and low-quality images that won't pass underwriting." }
     ],
     stats: [
       { value: "95%+", label: "Classification Accuracy" },
       { value: "30%", label: "Faster Collection" },
       { value: "Auto", label: "OCR Extraction" },
       { value: "24/7", label: "Processing" }
-    ],
-    testimonial: {
-      quote: "We used to spend 3-4 hours per file just on document collection. Now it's mostly automated and borrowers actually submit the right documents the first time.",
-      author: "Senior Processor",
-      role: "Independent Mortgage Broker"
-    }
+    ]
   },
   "compliance-engine": {
     headline: "Compliance Monitoring That Protects Your Business",
@@ -638,24 +673,19 @@ var FEATURES_EXTENDED = {
     problem: "Compliance violations are costly—fines, lawsuits, and reputation damage. Manual tracking is error-prone, and the rules keep changing.",
     solution: "Perennia's Compliance Engine provides automated monitoring for TRID timing, RESPA Section 8 checks, fair lending analysis, and state-specific requirements. Get alerts before violations occur.",
     benefits: [
-      { icon: "⚖️", title: "TRID Automation", text: "Automatic LE and CD timing validation. Never miss a disclosure deadline again." },
-      { icon: "🔍", title: "RESPA Monitoring", text: "Section 8 violation detection catches kickback and fee-splitting risks." },
-      { icon: "📊", title: "Fair Lending Analysis", text: "Identify pricing disparities and documentation gaps before auditors do." },
-      { icon: "🗺️", title: "50-State Coverage", text: "State-specific requirements for recording consent, licensing, and disclosures." },
-      { icon: "📋", title: "Audit Trail", text: "Complete documentation of every compliance check for examiner requests." },
-      { icon: "🚨", title: "Proactive Alerts", text: "Get notified of potential issues while there's still time to fix them." }
+      { title: "TRID Automation", text: "Automatic LE and CD timing validation. Never miss a disclosure deadline again." },
+      { title: "RESPA Monitoring", text: "Section 8 violation detection catches kickback and fee-splitting risks." },
+      { title: "Fair Lending Analysis", text: "Identify pricing disparities and documentation gaps before auditors do." },
+      { title: "50-State Coverage", text: "State-specific requirements for recording consent, licensing, and disclosures." },
+      { title: "Audit Trail", text: "Complete documentation of every compliance check for examiner requests." },
+      { title: "Proactive Alerts", text: "Get notified of potential issues while there's still time to fix them." }
     ],
     stats: [
       { value: "TRID", label: "Timing Validated" },
       { value: "50", label: "States Covered" },
       { value: "Real-Time", label: "Monitoring" },
       { value: "100%", label: "Audit Trail" }
-    ],
-    testimonial: {
-      quote: "The compliance engine caught three potential TRID violations last month that we would have missed. It's already paid for itself many times over.",
-      author: "Compliance Officer",
-      role: "Multi-State Lender"
-    }
+    ]
   },
   "voice-os": {
     headline: "Enterprise Telephony Built for Mortgage",
@@ -663,24 +693,19 @@ var FEATURES_EXTENDED = {
     problem: "Missed calls mean missed opportunities. Generic phone systems don't understand mortgage workflows, and your team wastes time on calls that go nowhere.",
     solution: "Voice OS delivers a complete telephony platform with AI receptionist, visual IVR builder, power dialer, call queues, whisper coaching, and voice biometrics—all designed for mortgage professionals.",
     benefits: [
-      { icon: "🤖", title: "AI Receptionist", text: "Never miss a call. AI answers 24/7, qualifies leads, and schedules callbacks." },
-      { icon: "📞", title: "Power Dialer", text: "Triple your call volume with intelligent dialing that skips voicemails and bad numbers." },
-      { icon: "🎯", title: "Smart Routing", text: "Route calls to the right person based on caller history, loan status, or time of day." },
-      { icon: "🎓", title: "Whisper Coaching", text: "Real-time suggestions during calls help LOs handle objections and close more deals." },
-      { icon: "🔐", title: "Voice Biometrics", text: "Secure caller verification without tedious security questions." },
-      { icon: "📊", title: "Call Analytics", text: "Understand call patterns, conversion rates, and team performance at a glance." }
+      { title: "AI Receptionist", text: "Never miss a call. AI answers 24/7, qualifies leads, and schedules callbacks." },
+      { title: "Power Dialer", text: "Triple your call volume with intelligent dialing that skips voicemails and bad numbers." },
+      { title: "Smart Routing", text: "Route calls to the right person based on caller history, loan status, or time of day." },
+      { title: "Whisper Coaching", text: "Real-time suggestions during calls help LOs handle objections and close more deals." },
+      { title: "Voice Biometrics", text: "Secure caller verification without tedious security questions." },
+      { title: "Call Analytics", text: "Understand call patterns, conversion rates, and team performance at a glance." }
     ],
     stats: [
       { value: "24/7", label: "AI Coverage" },
       { value: "3x", label: "Call Volume" },
       { value: "Real-Time", label: "Coaching" },
       { value: "15", label: "Consent States" }
-    ],
-    testimonial: {
-      quote: "The AI receptionist handles our after-hours calls and qualifies leads before passing them to us. We've seen a 40% increase in lead conversion since implementing Voice OS.",
-      author: "Sales Manager",
-      role: "High-Volume Mortgage Shop"
-    }
+    ]
   },
   "borrower-portal": {
     headline: "The Borrower Experience That Wins Referrals",
@@ -688,29 +713,22 @@ var FEATURES_EXTENDED = {
     problem: "Borrowers feel anxious and uninformed during the loan process. They call constantly asking for updates, and you lose referrals because the experience feels chaotic.",
     solution: "The Borrower Portal gives your clients a beautiful, real-time view of their loan journey. Milestone timeline, document upload, cost analysis, and payment calculators—all in one place.",
     benefits: [
-      { icon: "📍", title: "Milestone Timeline", text: "Borrowers see exactly where they are in the process and what's coming next." },
-      { icon: "📤", title: "Easy Doc Upload", text: "Simple document submission from any device with instant confirmation." },
-      { icon: "💰", title: "Cost Transparency", text: "Total cost analysis helps borrowers understand their numbers with confidence." },
-      { icon: "🔔", title: "Real-Time Updates", text: "WebSocket-powered notifications keep borrowers informed instantly." },
-      { icon: "📱", title: "Mobile Optimized", text: "Full functionality on any device—borrowers can manage their loan from anywhere." },
-      { icon: "🏠", title: "Home Value Intel", text: "Property value insights help borrowers understand their investment." }
+      { title: "Milestone Timeline", text: "Borrowers see exactly where they are in the process and what's coming next." },
+      { title: "Easy Doc Upload", text: "Simple document submission from any device with instant confirmation." },
+      { title: "Cost Transparency", text: "Total cost analysis helps borrowers understand their numbers with confidence." },
+      { title: "Real-Time Updates", text: "WebSocket-powered notifications keep borrowers informed instantly." },
+      { title: "Mobile Optimized", text: "Full functionality on any device—borrowers can manage their loan from anywhere." },
+      { title: "Home Value Intel", text: "Property value insights help borrowers understand their investment." }
     ],
     stats: [
       { value: "Real-Time", label: "Updates" },
       { value: "90%", label: "Fewer Status Calls" },
       { value: "Mobile", label: "Optimized" },
       { value: "5-Star", label: "Experience" }
-    ],
-    testimonial: {
-      quote: "Our borrowers love the portal. They can see everything happening with their loan, and we've gotten more referrals than ever because the experience is so smooth.",
-      author: "Loan Officer",
-      role: "Top Producer"
-    }
+    ]
   }
 };
 
-// Add more features with similar structure...
-// For brevity, adding generic fallback for features not yet defined
 function getFeatureData(featureId, baseFeature) {
   if (FEATURES_EXTENDED[featureId]) {
     return { ...baseFeature, ...FEATURES_EXTENDED[featureId] };
@@ -723,10 +741,8 @@ function getFeatureData(featureId, baseFeature) {
     subheadline: baseFeature.description,
     problem: "Manual processes slow down your mortgage operations, leading to delays, errors, and frustrated clients. Without the right tools, your team spends more time on administration than building relationships.",
     solution: "Perennia AI's " + baseFeature.title + " transforms how you work. " + baseFeature.description + " Experience the difference intelligent automation makes.",
-    benefits: baseFeature.capabilities.map(function(cap, i) {
-      var icons = ["⚡", "🎯", "📊", "🔄", "✨", "🚀"];
+    benefits: baseFeature.capabilities.map(function(cap) {
       return {
-        icon: icons[i % icons.length],
         title: cap,
         text: "Streamline your workflow and improve efficiency with this powerful capability."
       };
@@ -736,12 +752,7 @@ function getFeatureData(featureId, baseFeature) {
       { value: "24/7", label: "Available" },
       { value: "Real-Time", label: "Processing" },
       { value: "Secure", label: "& Compliant" }
-    ],
-    testimonial: {
-      quote: "Perennia AI has transformed how we operate. The platform is intuitive, powerful, and has made our team significantly more productive.",
-      author: "Mortgage Professional",
-      role: "Industry Leader"
-    }
+    ]
   };
 }
 
@@ -766,7 +777,7 @@ function renderFeature(feature) {
   html += '<h1>' + data.headline + '</h1>';
   html += '<p class="hero-subtitle">' + data.subheadline + '</p>';
   html += '<div class="hero-cta">';
-  html += '<a href="javascript:openDemoModal()" class="btn-primary">Schedule a Demo →</a>';
+  html += '<a href="javascript:openDemoModal()" class="btn-primary">Schedule a Demo</a>';
   html += '<a href="index.html#features" class="btn-secondary">View All Features</a>';
   html += '</div>';
   html += '</div>';
@@ -777,12 +788,10 @@ function renderFeature(feature) {
   html += '<div class="section-inner">';
   html += '<div class="problem-solution">';
   html += '<div class="problem-card">';
-  html += '<div class="card-icon">😓</div>';
   html += '<div class="card-title">The Challenge</div>';
   html += '<div class="card-text">' + data.problem + '</div>';
   html += '</div>';
   html += '<div class="solution-card">';
-  html += '<div class="card-icon">✨</div>';
   html += '<div class="card-title">The Solution</div>';
   html += '<div class="card-text">' + data.solution + '</div>';
   html += '</div>';
@@ -808,7 +817,6 @@ function renderFeature(feature) {
   html += '<div class="benefits-grid">';
   data.benefits.forEach(function(benefit) {
     html += '<div class="benefit-card">';
-    html += '<div class="benefit-icon">' + benefit.icon + '</div>';
     html += '<div class="benefit-title">' + benefit.title + '</div>';
     html += '<div class="benefit-text">' + benefit.text + '</div>';
     html += '</div>';
@@ -822,13 +830,6 @@ function renderFeature(feature) {
     html += '<span class="cap-tag">' + cap + '</span>';
   });
   html += '</div>';
-
-  // Testimonial
-  html += '<div class="testimonial">';
-  html += '<div class="testimonial-quote">"' + data.testimonial.quote + '"</div>';
-  html += '<div class="testimonial-author">' + data.testimonial.author + '</div>';
-  html += '<div class="testimonial-role">' + data.testimonial.role + '</div>';
-  html += '</div>';
   html += '</div>';
   html += '</section>';
 
@@ -838,15 +839,58 @@ function renderFeature(feature) {
   html += '<h2 class="cta-title">Ready to Transform Your Mortgage Business?</h2>';
   html += '<p class="cta-subtitle">See ' + feature.title + ' in action. Schedule a personalized demo with our team and discover how Perennia AI can help you close more loans, faster.</p>';
   html += '<div class="cta-buttons">';
-  html += '<a href="javascript:openDemoModal()" class="btn-primary">Schedule Your Demo →</a>';
+  html += '<a href="javascript:openDemoModal()" class="btn-primary">Schedule Your Demo</a>';
   html += '<a href="index.html" class="btn-secondary">Explore Platform</a>';
   html += '</div>';
   html += '</div>';
   html += '</section>';
 
-  // Footer
+  // Footer - Matching main site
   html += '<footer class="footer">';
-  html += '<p class="footer-text">© 2026 Perennia AI. All rights reserved. | <a href="index.html">Back to Overview</a></p>';
+  html += '<div class="footer-inner">';
+  html += '<div class="footer-brand">';
+  html += '<div class="footer-logo">';
+  html += '<div class="footer-logo-icon">P</div>';
+  html += 'Perennia AI';
+  html += '</div>';
+  html += '<p class="footer-tagline">The AI-native mortgage operating system. Purpose-built for loan officers, processors, and branch managers to orchestrate every stage of origination with precision and clarity.</p>';
+  html += '</div>';
+  html += '<div class="footer-section">';
+  html += '<div class="footer-section-title">Platform</div>';
+  html += '<ul class="footer-links">';
+  html += '<li><a href="index.html#features">Features</a></li>';
+  html += '<li><a href="index.html#workflows">Workflows</a></li>';
+  html += '<li><a href="index.html#architecture">Architecture</a></li>';
+  html += '<li><a href="index.html#security">Security</a></li>';
+  html += '</ul>';
+  html += '</div>';
+  html += '<div class="footer-section">';
+  html += '<div class="footer-section-title">Company</div>';
+  html += '<ul class="footer-links">';
+  html += '<li><a href="index.html#executive-summary">About</a></li>';
+  html += '<li><a href="index.html#roadmap">Roadmap</a></li>';
+  html += '<li><a href="javascript:openDemoModal()">Schedule Demo</a></li>';
+  html += '<li><a href="https://app.perenniaai.com/login">Log In</a></li>';
+  html += '</ul>';
+  html += '</div>';
+  html += '<div class="footer-section">';
+  html += '<div class="footer-section-title">Resources</div>';
+  html += '<ul class="footer-links">';
+  html += '<li><a href="/llms.txt">AI Documentation</a></li>';
+  html += '<li><a href="/sitemap.xml">Sitemap</a></li>';
+  html += '<li><a href="index.html#metrics">Metrics</a></li>';
+  html += '<li><a href="index.html#gallery">Gallery</a></li>';
+  html += '</ul>';
+  html += '</div>';
+  html += '</div>';
+  html += '<div class="footer-bottom">';
+  html += '<div class="footer-copyright">&copy; 2026 Perennia AI. All rights reserved.</div>';
+  html += '<div class="footer-legal">';
+  html += '<a href="#">Privacy Policy</a>';
+  html += '<a href="#">Terms of Service</a>';
+  html += '<a href="#">Cookie Policy</a>';
+  html += '</div>';
+  html += '</div>';
   html += '</footer>';
 
   document.getElementById('feature-content').innerHTML = html;
