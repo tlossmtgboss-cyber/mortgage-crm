@@ -11,11 +11,12 @@ cd "$REPO_ROOT"
 # --- Codebase ---
 # Build file list once, reuse for counts
 TMPFILE=$(mktemp)
-find . -type f \( -name "*.py" -o -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" -o -name "*.html" -o -name "*.css" -o -name "*.sql" -o -name "*.json" \) \
-  -not -name "package-lock.json" \
-  -not -path "./.venv/*" -not -path "*/node_modules/*" -not -path "./.git/*" \
+find . -type f \( -name "*.py" -o -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" -o -name "*.html" -o -name "*.css" -o -name "*.sql" \) \
+  -not -path "*/venv/*" -not -path "*/.venv/*" -not -path "*/site-packages/*" \
+  -not -path "*/node_modules/*" -not -path "./.git/*" \
   -not -path "*/__pycache__/*" -not -path "*/build/*" -not -path "*/dist/*" \
-  -not -path "./.next/*" -not -name "*.min.js" -not -name "*.map" \
+  -not -path "./.next/*" -not -path "*/DerivedData/*" \
+  -not -name "*.min.js" -not -name "*.min.css" -not -name "*.map" \
   > "$TMPFILE" 2>/dev/null || true
 
 # Count LOC using xargs in batches to avoid arg-list-too-long
