@@ -1,6 +1,12 @@
 {
-  "version": "2026-01-28-001",
+  "version": "2026-01-28-002",
   "entries": [
+    {
+      "date": "2026-01-28",
+      "title": "Lead Lifecycle & MUM Portfolio Added",
+      "description": "Added Lead Lifecycle Management (9-stage pipeline, dual scoring, AI nurturing) and Mortgages Under Management Portfolio (refi detection, retention scoring, client portal). Total features now 35.",
+      "features": ["lead-lifecycle", "mum-portfolio"]
+    },
     {
       "date": "2026-01-28",
       "title": "Complete Feature Audit & Accuracy Update",

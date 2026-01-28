@@ -362,6 +362,28 @@
       "updatedDate": "2026-01-27",
       "capabilities": ["Face ID", "Voice Assistant", "Push Notifs", "Camera Capture", "Offline Mode"],
       "order": 33
+    },
+    {
+      "id": "lead-lifecycle",
+      "title": "Lead Lifecycle Management",
+      "description": "Full 9-stage lead pipeline from New to Converted with dual scoring models (behavioral + demographic), 17+ AI-powered nurturing tools, automated drip campaigns, source attribution, and SLA-driven follow-up enforcement.",
+      "category": "core",
+      "status": "live",
+      "addedDate": "2025-11-15",
+      "updatedDate": "2026-01-28",
+      "capabilities": ["9-Stage Pipeline", "Dual Lead Scoring", "AI Nurturing", "Drip Campaigns", "Source Attribution", "SLA Follow-ups"],
+      "order": 34
+    },
+    {
+      "id": "mum-portfolio",
+      "title": "Mortgages Under Management Portfolio",
+      "description": "Post-close client portfolio platform for serviced loans. Automated refinance opportunity detection, HELOC cross-sell triggers, retention risk scoring, client anniversary and milestone outreach, home value monitoring, and dedicated client portal.",
+      "category": "core",
+      "status": "live",
+      "addedDate": "2025-12-15",
+      "updatedDate": "2026-01-28",
+      "capabilities": ["Refi Detection", "HELOC Cross-Sell", "Retention Scoring", "Anniversary Outreach", "Home Value Monitor", "Client Portal"],
+      "order": 35
     }
   ]
 }

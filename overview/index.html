@@ -708,13 +708,13 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
     </a>
     <div class="nav-links">
       <a href="#executive-summary">Summary</a>
-      <a href="#architecture">Architecture</a>
       <a href="#features">Features</a>
       <a href="#workflows">Workflows</a>
       <a href="#key-workflows">Key Workflows</a>
       <a href="#gallery">Gallery</a>
       <a href="#metrics">Metrics</a>
       <a href="#roadmap">Roadmap</a>
+      <a href="#architecture">Architecture</a>
     </div>
     <div class="nav-actions">
       <a href="https://app.perenniaai.com/login" class="btn-login">Log In</a>
@@ -749,27 +749,27 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
     <button class="btn-demo-hero" onclick="openDemoModal()">Schedule a Demo</button>
     <div class="hero-stats">
       <div class="hero-stat">
-        <div class="hero-stat-value" data-stat="loc">703K</div>
+        <div class="hero-stat-value" data-stat="loc">1,465,946</div>
         <div class="hero-stat-label">Lines of Code</div>
       </div>
       <div class="hero-stat">
-        <div class="hero-stat-value" data-stat="files">26,218</div>
+        <div class="hero-stat-value" data-stat="files">3,704</div>
         <div class="hero-stat-label">Source Files</div>
       </div>
       <div class="hero-stat">
-        <div class="hero-stat-value" data-stat="tools">160+</div>
+        <div class="hero-stat-value" data-stat="tools">173+</div>
         <div class="hero-stat-label">AI Agent Tools</div>
       </div>
       <div class="hero-stat">
-        <div class="hero-stat-value" data-stat="integrations">27+</div>
+        <div class="hero-stat-value" data-stat="integrations">25+</div>
         <div class="hero-stat-label">Integrations</div>
       </div>
       <div class="hero-stat">
-        <div class="hero-stat-value" data-stat="pages">164</div>
+        <div class="hero-stat-value" data-stat="pages">271</div>
         <div class="hero-stat-label">Frontend Pages</div>
       </div>
       <div class="hero-stat">
-        <div class="hero-stat-value" data-stat="agents">22</div>
+        <div class="hero-stat-value" data-stat="agents">42</div>
         <div class="hero-stat-label">AI Agents</div>
       </div>
     </div>
@@ -789,15 +789,15 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
 
   <p class="text-sm mb-24" style="max-width:800px; line-height:1.8;">
     <strong>Perennia AI</strong> is an end-to-end, AI-native mortgage CRM platform that replaces fragmented
-    point solutions with a single, intelligent system of record. The platform orchestrates <span data-stat="agents-inline">22</span> specialized
-    AI agents across <span data-stat="tools-inline">160+</span> tools to automate loan origination, compliance monitoring, document collection,
+    point solutions with a single, intelligent system of record. The platform orchestrates <span data-stat="agents-inline">42</span> specialized
+    AI agents across <span data-stat="tools-inline">173+</span> tools to automate loan origination, compliance monitoring, document collection,
     borrower communication, and pipeline management&mdash;while keeping loan officers in control of every decision.
   </p>
 
   <!-- Value Props -->
   <div class="grid-4 mb-24">
     <div class="value-card">      <div class="value-card-title">AI-First Design</div>
-      <div class="value-card-text">22 specialized agents with LangGraph orchestration, intent-based tool loading, and self-improving feedback loops.</div>
+      <div class="value-card-text">42 specialized agents with LangGraph orchestration, intent-based tool loading, and self-improving feedback loops.</div>
     </div>
     <div class="value-card">      <div class="value-card-title">Full Pipeline Visibility</div>
       <div class="value-card-text">21-stage loan lifecycle with real-time SLA tracking, bottleneck detection, and predictive close-date forecasting.</div>
@@ -821,155 +821,7 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
 </section>
 
 <!-- ============================================================
-     2. ARCHITECTURE OVERVIEW
-     ============================================================ -->
-<section class="section" id="architecture">
-  <div class="section-header">
-    <div>
-      <div class="section-title">Architecture Overview</div>
-      <div class="section-subtitle">System architecture, tech stack, and integration points</div>
-    </div>
-  </div>
-
-  <!-- Architecture Diagram -->
-  <div class="arch-diagram mb-24">
-    <div class="arch-layer">
-      <div class="arch-label">Client Layer</div>
-      <div class="arch-items">
-        <div class="arch-item arch-item-teal">React 18 SPA</div>
-        <div class="arch-item arch-item-teal">iOS (Capacitor)</div>
-        <div class="arch-item arch-item-teal">Borrower Portal</div>
-        <div class="arch-item arch-item-teal">Realtor Portal</div>
-        <div class="arch-item arch-item-teal">Recruit Portal</div>
-        <div class="arch-item arch-item-teal">LO Microsites</div>
-      </div>
-    </div>
-    <div class="arch-connector">&#x25BC; &#x25BC; &#x25BC;</div>
-    <div class="arch-layer">
-      <div class="arch-label">API Gateway</div>
-      <div class="arch-items">
-        <div class="arch-item arch-item-navy">FastAPI + Uvicorn</div>
-        <div class="arch-item arch-item-navy">JWT Auth + RBAC</div>
-        <div class="arch-item arch-item-navy">Rate Limiting</div>
-        <div class="arch-item arch-item-navy">WebSocket Server</div>
-        <div class="arch-item arch-item-navy" data-stat="routes-arch">140 API Routes</div>
-      </div>
-    </div>
-    <div class="arch-connector">&#x25BC; &#x25BC; &#x25BC;</div>
-    <div class="arch-layer">
-      <div class="arch-label">AI Agent Layer</div>
-      <div class="arch-items">
-        <div class="arch-item arch-item-green">LangGraph Orchestrator</div>
-        <div class="arch-item arch-item-green" data-stat="agents-arch">22 Specialized Agents</div>
-        <div class="arch-item arch-item-green" data-stat="tools-arch">160+ Tools</div>
-        <div class="arch-item arch-item-green">Intent Router</div>
-        <div class="arch-item arch-item-green">Hallucination Verifier</div>
-      </div>
-    </div>
-    <div class="arch-connector">&#x25BC; &#x25BC; &#x25BC;</div>
-    <div class="arch-layer">
-      <div class="arch-label">Service Layer</div>
-      <div class="arch-items">
-        <div class="arch-item arch-item-navy" data-stat="services-arch">177 Backend Services</div>
-        <div class="arch-item arch-item-navy">Workflow Orchestrator</div>
-        <div class="arch-item arch-item-navy">SLA Engine</div>
-        <div class="arch-item arch-item-navy">Compliance Monitor</div>
-        <div class="arch-item arch-item-navy">Notification Hub</div>
-      </div>
-    </div>
-    <div class="arch-connector">&#x25BC; &#x25BC; &#x25BC;</div>
-    <div class="arch-layer">
-      <div class="arch-label">Data Layer</div>
-      <div class="arch-items">
-        <div class="arch-item arch-item-yellow">PostgreSQL 15</div>
-        <div class="arch-item arch-item-yellow">Redis Cache</div>
-        <div class="arch-item arch-item-yellow">Pinecone Vector DB</div>
-        <div class="arch-item arch-item-yellow">S3 Object Storage</div>
-        <div class="arch-item arch-item-yellow" data-stat="models-arch">55+ Data Models</div>
-      </div>
-    </div>
-    <div class="arch-connector">&#x25BC; &#x25BC; &#x25BC;</div>
-    <div class="arch-layer">
-      <div class="arch-label">External Services</div>
-      <div class="arch-items">
-        <div class="arch-item arch-item-teal">Claude / OpenAI</div>
-        <div class="arch-item arch-item-teal">Twilio</div>
-        <div class="arch-item arch-item-teal">Salesforce</div>
-        <div class="arch-item arch-item-teal">DocuSign</div>
-        <div class="arch-item arch-item-teal">Stripe</div>
-        <div class="arch-item arch-item-teal">MS Graph</div>
-        <div class="arch-item arch-item-teal">Zoom</div>
-        <div class="arch-item arch-item-teal">Google APIs</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Tech Stack -->
-  <h3 class="fw-700 text-navy mb-16">Technology Stack</h3>
-  <div class="grid-2 mb-24">
-    <div>
-      <div class="tech-stack-group">
-        <div class="tech-stack-label">Frontend</div>
-        <div class="tech-pills">
-          <span class="tech-pill tech-pill-primary">React 18</span>
-          <span class="tech-pill tech-pill-primary">React Router 6</span>
-          <span class="tech-pill tech-pill-primary">TanStack Query</span>
-          <span class="tech-pill tech-pill-primary">Material UI</span>
-          <span class="tech-pill tech-pill-primary">Capacitor (iOS)</span>
-          <span class="tech-pill tech-pill-muted">WebSocket</span>
-          <span class="tech-pill tech-pill-muted">ReCharts</span>
-        </div>
-      </div>
-      <div class="tech-stack-group">
-        <div class="tech-stack-label">Backend</div>
-        <div class="tech-pills">
-          <span class="tech-pill tech-pill-accent">Python 3.11</span>
-          <span class="tech-pill tech-pill-accent">FastAPI</span>
-          <span class="tech-pill tech-pill-accent">SQLAlchemy 2</span>
-          <span class="tech-pill tech-pill-accent">Pydantic 2</span>
-          <span class="tech-pill tech-pill-accent">Celery + Redis</span>
-          <span class="tech-pill tech-pill-muted">APScheduler</span>
-        </div>
-      </div>
-    </div>
-    <div>
-      <div class="tech-stack-group">
-        <div class="tech-stack-label">AI / ML</div>
-        <div class="tech-pills">
-          <span class="tech-pill tech-pill-primary">Claude (Anthropic)</span>
-          <span class="tech-pill tech-pill-primary">OpenAI</span>
-          <span class="tech-pill tech-pill-primary">LangGraph</span>
-          <span class="tech-pill tech-pill-primary">LangChain</span>
-          <span class="tech-pill tech-pill-muted">Pinecone</span>
-          <span class="tech-pill tech-pill-muted">Retell AI</span>
-        </div>
-      </div>
-      <div class="tech-stack-group">
-        <div class="tech-stack-label">Infrastructure</div>
-        <div class="tech-pills">
-          <span class="tech-pill tech-pill-accent">Railway</span>
-          <span class="tech-pill tech-pill-accent">Vercel</span>
-          <span class="tech-pill tech-pill-accent">PostgreSQL 15</span>
-          <span class="tech-pill tech-pill-accent">Docker</span>
-          <span class="tech-pill tech-pill-muted">GitHub Actions CI/CD</span>
-          <span class="tech-pill tech-pill-muted">Sentry + Datadog</span>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Database Highlights -->
-  <h3 class="fw-700 text-navy mb-16">Database Structure</h3>
-  <div class="grid-3">
-    <div class="stat-box"><div class="stat-value" data-stat="models">55+</div><div class="stat-label">Data Models</div></div>
-    <div class="stat-box"><div class="stat-value">175</div><div class="stat-label">Migrations</div></div>
-    <div class="stat-box"><div class="stat-value">Multi-Tenant</div><div class="stat-label">Organization Isolation</div></div>
-  </div>
-  <p class="text-sm text-muted mt-16">Key entities: Loans (53-field profile with 27 milestone dates), Leads, Contacts, Tasks, Documents, Call Records, SLA Milestones, Workflows, AI Agent State, Conversations, Calendar Events, Compliance Issues, and Financial Intelligence.</p>
-</section>
-
-<!-- ============================================================
-     3. CORE FEATURES & MODULES (dynamic)
+     2. CORE FEATURES & MODULES (dynamic)
      ============================================================ -->
 <section class="section" id="features">
   <div class="section-header">
@@ -1270,10 +1122,10 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
 
   <h3 class="fw-700 text-navy mb-16">Engineering Metrics</h3>
   <div class="grid-4 mb-24">
-    <div class="stat-box"><div class="stat-value" data-stat="loc-metric">703K</div><div class="stat-label">Lines of Source Code</div></div>
-    <div class="stat-box"><div class="stat-value" data-stat="commits">4,509</div><div class="stat-label">Git Commits</div></div>
-    <div class="stat-box"><div class="stat-value" data-stat="routes">140</div><div class="stat-label">API Endpoints</div></div>
-    <div class="stat-box"><div class="stat-value" data-stat="services">177</div><div class="stat-label">Backend Services</div></div>
+    <div class="stat-box"><div class="stat-value" data-stat="loc-metric">1,465,946</div><div class="stat-label">Lines of Source Code</div></div>
+    <div class="stat-box"><div class="stat-value" data-stat="commits">4,512</div><div class="stat-label">Git Commits</div></div>
+    <div class="stat-box"><div class="stat-value" data-stat="routes">3,934</div><div class="stat-label">API Endpoints</div></div>
+    <div class="stat-box"><div class="stat-value" data-stat="services">230</div><div class="stat-label">Backend Services</div></div>
   </div>
 
   <h3 class="fw-700 text-navy mb-16">AI Performance Benchmarks</h3>
@@ -1288,7 +1140,7 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
     </div>
     <div class="stat-box">
       <div class="stat-value" style="color:var(--teal);">8-16</div>
-      <div class="stat-label">Tools Loaded per Query (vs 160+)</div>
+      <div class="stat-label">Tools Loaded per Query (vs 173+)</div>
     </div>
   </div>
 
@@ -1312,10 +1164,10 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
 
   <h3 class="fw-700 text-navy mb-16 mt-24">Platform Scope</h3>
   <div class="grid-4">
-    <div class="stat-box"><div class="stat-value" data-stat="pages-metric">164</div><div class="stat-label">Frontend Pages</div></div>
-    <div class="stat-box"><div class="stat-value" data-stat="components">250+</div><div class="stat-label">UI Components</div></div>
-    <div class="stat-box"><div class="stat-value" data-stat="agents-metric">22</div><div class="stat-label">AI Agents</div></div>
-    <div class="stat-box"><div class="stat-value" data-stat="integrations-metric">27+</div><div class="stat-label">Integrations</div></div>
+    <div class="stat-box"><div class="stat-value" data-stat="pages-metric">271</div><div class="stat-label">Frontend Pages</div></div>
+    <div class="stat-box"><div class="stat-value" data-stat="components">286+</div><div class="stat-label">UI Components</div></div>
+    <div class="stat-box"><div class="stat-value" data-stat="agents-metric">42</div><div class="stat-label">AI Agents</div></div>
+    <div class="stat-box"><div class="stat-value" data-stat="integrations-metric">25+</div><div class="stat-label">Integrations</div></div>
   </div>
 </section>
 
@@ -1362,12 +1214,160 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
 </section>
 
 <!-- ============================================================
+     ARCHITECTURE OVERVIEW
+     ============================================================ -->
+<section class="section" id="architecture">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Architecture Overview</div>
+      <div class="section-subtitle">System architecture, tech stack, and integration points</div>
+    </div>
+  </div>
+
+  <!-- Architecture Diagram -->
+  <div class="arch-diagram mb-24">
+    <div class="arch-layer">
+      <div class="arch-label">Client Layer</div>
+      <div class="arch-items">
+        <div class="arch-item arch-item-teal">React 18 SPA</div>
+        <div class="arch-item arch-item-teal">iOS (Capacitor)</div>
+        <div class="arch-item arch-item-teal">Borrower Portal</div>
+        <div class="arch-item arch-item-teal">Realtor Portal</div>
+        <div class="arch-item arch-item-teal">Recruit Portal</div>
+        <div class="arch-item arch-item-teal">LO Microsites</div>
+      </div>
+    </div>
+    <div class="arch-connector">&#x25BC; &#x25BC; &#x25BC;</div>
+    <div class="arch-layer">
+      <div class="arch-label">API Gateway</div>
+      <div class="arch-items">
+        <div class="arch-item arch-item-navy">FastAPI + Uvicorn</div>
+        <div class="arch-item arch-item-navy">JWT Auth + RBAC</div>
+        <div class="arch-item arch-item-navy">Rate Limiting</div>
+        <div class="arch-item arch-item-navy">WebSocket Server</div>
+        <div class="arch-item arch-item-navy" data-stat="routes-arch">3,934 API Routes</div>
+      </div>
+    </div>
+    <div class="arch-connector">&#x25BC; &#x25BC; &#x25BC;</div>
+    <div class="arch-layer">
+      <div class="arch-label">AI Agent Layer</div>
+      <div class="arch-items">
+        <div class="arch-item arch-item-green">LangGraph Orchestrator</div>
+        <div class="arch-item arch-item-green" data-stat="agents-arch">42 Specialized Agents</div>
+        <div class="arch-item arch-item-green" data-stat="tools-arch">173+ Tools</div>
+        <div class="arch-item arch-item-green">Intent Router</div>
+        <div class="arch-item arch-item-green">Hallucination Verifier</div>
+      </div>
+    </div>
+    <div class="arch-connector">&#x25BC; &#x25BC; &#x25BC;</div>
+    <div class="arch-layer">
+      <div class="arch-label">Service Layer</div>
+      <div class="arch-items">
+        <div class="arch-item arch-item-navy" data-stat="services-arch">230 Backend Services</div>
+        <div class="arch-item arch-item-navy">Workflow Orchestrator</div>
+        <div class="arch-item arch-item-navy">SLA Engine</div>
+        <div class="arch-item arch-item-navy">Compliance Monitor</div>
+        <div class="arch-item arch-item-navy">Notification Hub</div>
+      </div>
+    </div>
+    <div class="arch-connector">&#x25BC; &#x25BC; &#x25BC;</div>
+    <div class="arch-layer">
+      <div class="arch-label">Data Layer</div>
+      <div class="arch-items">
+        <div class="arch-item arch-item-yellow">PostgreSQL 15</div>
+        <div class="arch-item arch-item-yellow">Redis Cache</div>
+        <div class="arch-item arch-item-yellow">Pinecone Vector DB</div>
+        <div class="arch-item arch-item-yellow">S3 Object Storage</div>
+        <div class="arch-item arch-item-yellow" data-stat="models-arch">723+ Data Models</div>
+      </div>
+    </div>
+    <div class="arch-connector">&#x25BC; &#x25BC; &#x25BC;</div>
+    <div class="arch-layer">
+      <div class="arch-label">External Services</div>
+      <div class="arch-items">
+        <div class="arch-item arch-item-teal">Claude / OpenAI</div>
+        <div class="arch-item arch-item-teal">Twilio</div>
+        <div class="arch-item arch-item-teal">Salesforce</div>
+        <div class="arch-item arch-item-teal">DocuSign</div>
+        <div class="arch-item arch-item-teal">Stripe</div>
+        <div class="arch-item arch-item-teal">MS Graph</div>
+        <div class="arch-item arch-item-teal">Zoom</div>
+        <div class="arch-item arch-item-teal">Google APIs</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tech Stack -->
+  <h3 class="fw-700 text-navy mb-16">Technology Stack</h3>
+  <div class="grid-2 mb-24">
+    <div>
+      <div class="tech-stack-group">
+        <div class="tech-stack-label">Frontend</div>
+        <div class="tech-pills">
+          <span class="tech-pill tech-pill-primary">React 18</span>
+          <span class="tech-pill tech-pill-primary">React Router 6</span>
+          <span class="tech-pill tech-pill-primary">TanStack Query</span>
+          <span class="tech-pill tech-pill-primary">Material UI</span>
+          <span class="tech-pill tech-pill-primary">Capacitor (iOS)</span>
+          <span class="tech-pill tech-pill-muted">WebSocket</span>
+          <span class="tech-pill tech-pill-muted">ReCharts</span>
+        </div>
+      </div>
+      <div class="tech-stack-group">
+        <div class="tech-stack-label">Backend</div>
+        <div class="tech-pills">
+          <span class="tech-pill tech-pill-accent">Python 3.11</span>
+          <span class="tech-pill tech-pill-accent">FastAPI</span>
+          <span class="tech-pill tech-pill-accent">SQLAlchemy 2</span>
+          <span class="tech-pill tech-pill-accent">Pydantic 2</span>
+          <span class="tech-pill tech-pill-accent">Celery + Redis</span>
+          <span class="tech-pill tech-pill-muted">APScheduler</span>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="tech-stack-group">
+        <div class="tech-stack-label">AI / ML</div>
+        <div class="tech-pills">
+          <span class="tech-pill tech-pill-primary">Claude (Anthropic)</span>
+          <span class="tech-pill tech-pill-primary">OpenAI</span>
+          <span class="tech-pill tech-pill-primary">LangGraph</span>
+          <span class="tech-pill tech-pill-primary">LangChain</span>
+          <span class="tech-pill tech-pill-muted">Pinecone</span>
+          <span class="tech-pill tech-pill-muted">Retell AI</span>
+        </div>
+      </div>
+      <div class="tech-stack-group">
+        <div class="tech-stack-label">Infrastructure</div>
+        <div class="tech-pills">
+          <span class="tech-pill tech-pill-accent">Railway</span>
+          <span class="tech-pill tech-pill-accent">Vercel</span>
+          <span class="tech-pill tech-pill-accent">PostgreSQL 15</span>
+          <span class="tech-pill tech-pill-accent">Docker</span>
+          <span class="tech-pill tech-pill-muted">GitHub Actions CI/CD</span>
+          <span class="tech-pill tech-pill-muted">Sentry + Datadog</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Database Highlights -->
+  <h3 class="fw-700 text-navy mb-16">Database Structure</h3>
+  <div class="grid-3">
+    <div class="stat-box"><div class="stat-value" data-stat="models">723+</div><div class="stat-label">Data Models</div></div>
+    <div class="stat-box"><div class="stat-value">175</div><div class="stat-label">Migrations</div></div>
+    <div class="stat-box"><div class="stat-value">Multi-Tenant</div><div class="stat-label">Organization Isolation</div></div>
+  </div>
+  <p class="text-sm text-muted mt-16">Key entities: Loans (53-field profile with 27 milestone dates), Leads, Contacts, Tasks, Documents, Call Records, SLA Milestones, Workflows, AI Agent State, Conversations, Calendar Events, Compliance Issues, and Financial Intelligence.</p>
+</section>
+
+<!-- ============================================================
      FOOTER
      ============================================================ -->
 <footer class="footer">
   <p><strong>Perennia AI</strong> &mdash; Mortgage CRM Platform Overview</p>
   <p style="margin-top:8px;" id="footer-date">Generated January 27, 2026</p>
-  <p style="margin-top:8px; font-size:.78rem;" id="footer-stats">703,525 lines of code &bull; 26,218 source files &bull; 4,509 commits &bull; Built Nov 2025 &ndash; Jan 2026</p>
+  <p style="margin-top:8px; font-size:.78rem;" id="footer-stats">1,465,946 lines of code &bull; 3,704 source files &bull; 4,512 commits &bull; Built Nov 2025 &ndash; present</p>
 </footer>
 
 <!-- ============================================================
