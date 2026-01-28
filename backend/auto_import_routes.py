@@ -833,6 +833,59 @@ async def get_field_mappings(
 # ADMIN: TEST ACCOUNT SEEDING
 # =============================================================================
 
+@router.post("/bootstrap/seed-test-account")
+async def seed_test_account_bootstrap(
+    secret_key: str = Form(...)
+):
+    """
+    Bootstrap endpoint to seed the test account - NO AUTH REQUIRED.
+    Only requires the secret key. Use this for initial setup when no users exist.
+
+    curl -X POST https://your-app.railway.app/api/v1/auto-import/bootstrap/seed-test-account \
+         -F "secret_key=YOUR_SECRET_KEY"
+    """
+    import os
+
+    # Verify secret key
+    expected_key = os.getenv("SECRET_KEY", "")
+    if not expected_key or secret_key != expected_key:
+        raise HTTPException(
+            status_code=403,
+            detail="Invalid secret key"
+        )
+
+    try:
+        from seed_test_account import seed_test_account
+
+        result = seed_test_account()
+
+        if not result.get("success"):
+            raise HTTPException(
+                status_code=500,
+                detail=f"Seeding failed: {result.get('error', 'Unknown error')}"
+            )
+
+        return {
+            "success": True,
+            "message": "Test account seeded successfully",
+            "credentials": result.get("credentials"),
+            "data_created": result.get("data"),
+        }
+
+    except ImportError as e:
+        logger.error(f"Failed to import seed_test_account: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to import seeding module: {str(e)}"
+        )
+    except Exception as e:
+        logger.error(f"Error seeding test account: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error seeding test account: {str(e)}"
+        )
+
+
 @router.post("/admin/seed-test-account")
 async def seed_test_account_endpoint(
     secret_key: str = Form(...),
