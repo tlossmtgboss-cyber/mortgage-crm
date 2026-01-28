@@ -41016,8 +41016,15 @@ async def update_current_user_profile(
         params = {"user_id": current_user.id}
 
         if profile_update.full_name is not None:
-            update_fields.append("full_name = :full_name")
-            params["full_name"] = profile_update.full_name
+            # Parse full_name into first_name and last_name (database has separate columns)
+            name_parts = profile_update.full_name.strip().split(None, 1)  # Split on first whitespace
+            first_name = name_parts[0] if name_parts else ""
+            last_name = name_parts[1] if len(name_parts) > 1 else ""
+
+            update_fields.append("first_name = :first_name")
+            params["first_name"] = first_name
+            update_fields.append("last_name = :last_name")
+            params["last_name"] = last_name
 
         if profile_update.phone is not None:
             update_fields.append("phone = :phone")
@@ -41066,21 +41073,26 @@ async def update_current_user_profile(
 
         # Fetch updated user data directly with SQL to avoid ORM issues
         user_result = db.execute(text("""
-            SELECT id, email, full_name, phone, nmls_number, title, business_hours
+            SELECT id, email, first_name, last_name, phone, nmls_number, title, business_hours
             FROM users WHERE id = :user_id
         """), {"user_id": current_user.id}).fetchone()
 
         if not user_result:
             raise HTTPException(status_code=404, detail="User not found after update")
 
+        # Compute full_name from first_name and last_name
+        first_name = user_result[2] or ""
+        last_name = user_result[3] or ""
+        computed_full_name = f"{first_name} {last_name}".strip() if first_name or last_name else ""
+
         # Parse business hours from result
         business_hours = {}
-        if user_result[6]:  # business_hours column
-            if isinstance(user_result[6], dict):
-                business_hours = user_result[6]
-            elif isinstance(user_result[6], str):
+        if user_result[7]:  # business_hours column (index shifted due to first_name/last_name split)
+            if isinstance(user_result[7], dict):
+                business_hours = user_result[7]
+            elif isinstance(user_result[7], str):
                 try:
-                    business_hours = json_module.loads(user_result[6])
+                    business_hours = json_module.loads(user_result[7])
                 except (json.JSONDecodeError, TypeError):
                     business_hours = {}
 
@@ -41091,10 +41103,12 @@ async def update_current_user_profile(
             "user": {
                 "id": user_result[0],
                 "email": user_result[1],
-                "full_name": user_result[2],
-                "phone": user_result[3],
-                "nmls_number": user_result[4],
-                "job_title": user_result[5],  # title column
+                "full_name": computed_full_name,
+                "first_name": first_name,
+                "last_name": last_name,
+                "phone": user_result[4],
+                "nmls_number": user_result[5],
+                "job_title": user_result[6],  # title column
                 "work_hours_start": business_hours.get('start', '09:00'),
                 "work_hours_end": business_hours.get('end', '17:00'),
                 "work_days": business_hours.get('days', ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'])
