@@ -2,6 +2,7 @@ import { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Capacitor } from '@capacitor/core';
+import { SplashScreen } from '@capacitor/splash-screen';
 import { isAuthenticatedSync as isAuthenticated } from './utils/auth';
 import { ImpersonationProvider } from './contexts/ImpersonationContext';
 import { PermissionProvider } from './contexts/PermissionContext';
@@ -314,6 +315,11 @@ function LazyPage({ children }) {
 }
 
 function App() {
+  // Hide Capacitor splash screen on mount
+  useEffect(() => {
+    SplashScreen.hide().catch(() => {});
+  }, []);
+
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [coachOpen, setCoachOpen] = useState(false);
   const [taskSidebarOpen, setTaskSidebarOpen] = useState(false);

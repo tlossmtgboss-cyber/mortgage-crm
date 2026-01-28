@@ -5,7 +5,6 @@ const config: CapacitorConfig = {
   appName: 'Perennia AI',
   webDir: 'build',
   server: {
-    // For development: point to local dev server
     url: 'http://192.168.1.240:3000',
     cleartext: true,
     // Allow the app to make requests to the production backend

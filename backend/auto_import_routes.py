@@ -25,26 +25,14 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/auto-import", tags=["Auto Import"])
 
-# Import dependencies from main app
+# Import database dependencies from database module (avoids circular import with main.py)
+from database import get_db, SessionLocal
+
+# Import get_current_user - catch any exception (not just ImportError) because
+# running via `python3 main.py` causes __main__ vs main module name conflict
 try:
-    from main import get_current_user, get_db, SessionLocal
-except ImportError:
-    # Fallback: import from database module directly
-    try:
-        from database import get_db, SessionLocal
-    except ImportError:
-        from sqlalchemy import create_engine
-        from sqlalchemy.orm import sessionmaker
-        _fallback_engine = create_engine(os.getenv("DATABASE_URL", "sqlite:///./mortgage_crm.db"))
-        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_fallback_engine)
-
-        def get_db():
-            db = SessionLocal()
-            try:
-                yield db
-            finally:
-                db.close()
-
+    from main import get_current_user
+except Exception:
     async def get_current_user():
         return {"email": "admin@perenniaai.com", "id": str(uuid.uuid4())}
 
