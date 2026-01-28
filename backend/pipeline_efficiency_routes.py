@@ -2,7 +2,7 @@
 Pipeline Efficiency Routes - Real-time pipeline analytics from actual database data
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func, case, and_, or_, extract
 from datetime import datetime, timedelta, timezone
@@ -22,14 +22,19 @@ def set_dependencies(get_db_func, get_current_user_func):
     _get_current_user = get_current_user_func
 
 def get_db():
+    """Generator wrapper for database dependency."""
     if _get_db is None:
-        raise HTTPException(status_code=500, detail="Database dependency not configured")
-    return next(_get_db())
+        raise RuntimeError("Dependencies not set")
+    yield from _get_db()
 
-def get_current_user():
+async def get_current_user(request: Request, db: Session = Depends(get_db)):
+    """Async wrapper for current user dependency."""
     if _get_current_user is None:
-        raise HTTPException(status_code=500, detail="Auth dependency not configured")
-    return _get_current_user
+        raise RuntimeError("Dependencies not set")
+    # Extract token from Authorization header
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    return await _get_current_user(token=token, request=request, db=db)
 
 
 class TimeRange(str, Enum):
