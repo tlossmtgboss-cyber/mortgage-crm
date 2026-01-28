@@ -89,7 +89,7 @@ DUMMY_LEADS = [
         "name": "Derek Holmes",
         "email": "derek.holmes@testlead.com",
         "phone": "(555) 100-2004",
-        "stage": "Document Fulfillment",
+        "stage": "Application",
         "source": "Facebook Ad",
         "loan_type": "Purchase - VA",
         "credit_score": 700,
