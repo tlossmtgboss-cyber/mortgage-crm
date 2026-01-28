@@ -3,9 +3,9 @@
   "entries": [
     {
       "date": "2026-01-28",
-      "title": "Surveying, Metrics Overhaul & Feature Corrections",
-      "description": "Added Client Surveying & Satisfaction module (36 total features). Restructured Metrics & Impact to lead with time savings, efficiency, and client satisfaction. Fixed PURL (Personal URL), E-Signature (native, no DocuSign), CarPlay (business command center), and Integrations Hub descriptions.",
-      "features": ["client-surveying", "purl-workspaces", "e-signature"]
+      "title": "PURL, E-Signature, Metrics & Surveying Updates",
+      "description": "Fixed PURL (Personal URL) description, updated E-Signature to native platform, enhanced CarPlay for business management and call intelligence, expanded Metrics section with efficiency/time savings and customer satisfaction targets, added Surveying feature. Total features now 36.",
+      "features": ["purl-workspaces", "e-signature", "mobile-voice-app", "surveying"]
     },
     {
       "date": "2026-01-28",
