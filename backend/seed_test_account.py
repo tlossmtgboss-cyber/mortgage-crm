@@ -307,7 +307,7 @@ DUMMY_LOANS = [
         "loan_number": "TEST-001007",
         "borrower_name": "Jeffrey Kim",
         "coborrower_name": "Michelle Kim",
-        "stage": "Closing",
+        "stage": "CTC",
         "program": "Conventional 30-Year Fixed",
         "loan_type": "Purchase",
         "amount": 525000,
