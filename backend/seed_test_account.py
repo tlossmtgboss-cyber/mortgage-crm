@@ -1913,41 +1913,20 @@ def seed_test_account():
         event_count, extract_count = create_test_reconciliation_data(db, user_id, org_id)
         logger.info("")
 
-        # 8. Create activities
-        activity_count = create_test_activities(db, user_id, org_id)
-        logger.info("")
-
-        # 9. Create calendar events
-        calendar_count = create_test_calendar_events(db, user_id, org_id)
-        logger.info("")
-
-        # 10. Create documents
-        document_count = create_test_documents(db, user_id, org_id)
-        logger.info("")
-
-        # 11. Create notifications
-        notification_count = create_test_notifications(db, user_id, org_id)
-        logger.info("")
-
-        # 12. Create SMS conversations
-        sms_conv_count, sms_msg_count = create_test_sms_conversations(db, user_id, org_id)
-        logger.info("")
-
-        # 13. Create email messages
-        email_count = create_test_email_messages(db, user_id, org_id)
-        logger.info("")
-
-        # 14. Create stage history
-        stage_history_count = create_test_stage_history(db, user_id, org_id)
-        logger.info("")
-
-        # 15. Create goals
-        goal_count, kr_count = create_test_goals(db, user_id, org_id)
-        logger.info("")
-
-        # 16. Create call logs
-        call_log_count = create_test_call_logs(db, user_id, org_id)
-        logger.info("")
+        # 8-16: Skipped due to schema compatibility issues with production database
+        # These can be added later once enum/schema issues are resolved
+        activity_count = 0
+        calendar_count = 0
+        document_count = 0
+        notification_count = 0
+        sms_conv_count = 0
+        sms_msg_count = 0
+        email_count = 0
+        stage_history_count = 0
+        goal_count = 0
+        kr_count = 0
+        call_log_count = 0
+        logger.info("Skipped secondary data (activities, calendar, etc.) due to schema compatibility")
 
         # Summary
         logger.info("=" * 80)
