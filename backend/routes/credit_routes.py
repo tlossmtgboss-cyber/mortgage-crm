@@ -233,22 +233,24 @@ def ensure_tables():
 @router.get("/loans/{loan_id}/credit-reports")
 async def get_loan_credit_reports(
     loan_id: int,
-    db: Session = Depends(get_db_session())
+    db: Session = Depends(get_db_session()),
+    current_user = Depends(get_current_user_dep())
 ):
     """Get credit reports, items, and summary for a loan."""
-    from main import get_current_user, Loan, Document, DocumentCategory
+    from main import Loan, Document, DocumentCategory
     filter_leads_by_permissions, filter_loans_by_permissions = get_filters()
 
     ensure_tables()
 
-    # Get current user from request state if available
-    try:
-        current_user = db.info.get("current_user")
-    except Exception:
-        current_user = None
+    # Verify loan exists with tenant isolation
+    org_id = getattr(current_user, 'organization_id', None)
+    is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
 
-    # Verify loan exists
-    loan = db.query(Loan).filter(Loan.id == loan_id).first()
+    query = db.query(Loan).filter(Loan.id == loan_id)
+    if not is_platform_admin and org_id:
+        query = query.filter(Loan.organization_id == org_id)
+
+    loan = query.first()
     if not loan:
         raise HTTPException(status_code=404, detail="Loan not found")
 
@@ -349,15 +351,23 @@ async def get_loan_credit_reports(
 @router.get("/leads/{lead_id}/credit-reports")
 async def get_lead_credit_reports(
     lead_id: int,
-    db: Session = Depends(get_db_session())
+    db: Session = Depends(get_db_session()),
+    current_user = Depends(get_current_user_dep())
 ):
     """Get credit reports, items, and summary for a lead."""
     from main import Lead, Document, DocumentCategory
 
     ensure_tables()
 
-    # Verify lead exists
-    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    # Verify lead exists with tenant isolation
+    org_id = getattr(current_user, 'organization_id', None)
+    is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+
+    query = db.query(Lead).filter(Lead.id == lead_id)
+    if not is_platform_admin and org_id:
+        query = query.filter(Lead.organization_id == org_id)
+
+    lead = query.first()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 

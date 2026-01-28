@@ -20,6 +20,7 @@ from datetime import date, datetime, timedelta, timezone
 import logging
 
 from database import get_db, Base, engine
+from main import get_current_user
 
 from models.sla_tracking import (
     SLAMeasure,
@@ -677,7 +678,8 @@ async def get_milestone_drilldown(
     status: Optional[str] = Query(None, description="Filter by status: on_track, at_risk, overdue"),
     milestone_type: Optional[str] = Query(None, description="Filter by milestone type"),
     limit: int = Query(100, le=500),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """
     Get loan-level drill-down data for SLA milestones.
@@ -686,8 +688,16 @@ async def get_milestone_drilldown(
     try:
         from main import Loan, Lead
 
+        # Tenant isolation
+        org_id = getattr(current_user, 'organization_id', None)
+        is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+
         # Build base query joining milestones with loans/leads
         query = db.query(LoanMilestoneHistory)
+
+        # Apply tenant isolation filter
+        if not is_platform_admin and org_id:
+            query = query.filter(LoanMilestoneHistory.organization_id == org_id)
 
         # Filter by status
         if status == "on_track":

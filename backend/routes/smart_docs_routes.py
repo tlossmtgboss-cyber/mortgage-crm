@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from database import get_db
+from main import get_current_user
 from models.smart_docs_models import (
     DocumentRequest, SmartDocument, DocPolicyEvent, NeedsListTemplate,
     DocType, RequestStatus, RequestPriority, AppliesTo, PayrollFrequency,
@@ -695,6 +696,7 @@ async def download_document(
 async def merge_documents(
     request: MergeDocumentsRequest,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Merge multiple documents into a single PDF for download.
@@ -704,10 +706,23 @@ async def merge_documents(
     """
     from fastapi.responses import StreamingResponse
     from pypdf import PdfWriter, PdfReader
+    from models.loan import Loan
     import io
 
     if not request.document_ids:
         raise HTTPException(status_code=400, detail="No document IDs provided")
+
+    # Tenant isolation - verify loan belongs to user's organization
+    org_id = getattr(current_user, 'organization_id', None)
+    is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+
+    loan_query = db.query(Loan).filter(Loan.id == request.loan_id)
+    if not is_platform_admin and org_id:
+        loan_query = loan_query.filter(Loan.organization_id == org_id)
+
+    loan = loan_query.first()
+    if not loan:
+        raise HTTPException(status_code=404, detail="Loan not found")
 
     # Get all requested documents
     documents = db.query(SmartDocument).filter(
@@ -771,10 +786,8 @@ async def merge_documents(
     writer.write(output)
     output.seek(0)
 
-    # Get loan info for filename
-    from models.loan import Loan
-    loan = db.query(Loan).filter(Loan.id == request.loan_id).first()
-    filename = f"merged_documents_{loan.borrower_name if loan else request.loan_id}.pdf"
+    # Use already-retrieved loan for filename
+    filename = f"merged_documents_{loan.borrower_name if loan.borrower_name else request.loan_id}.pdf"
 
     return StreamingResponse(
         output,
@@ -789,6 +802,7 @@ async def merge_documents(
 async def merge_and_email_documents(
     request: MergeDocumentsRequest,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Merge multiple documents into a single PDF and email it.
@@ -797,10 +811,23 @@ async def merge_and_email_documents(
     and sends via email.
     """
     from pypdf import PdfWriter, PdfReader
+    from models.loan import Loan
     import io
 
     if not request.document_ids:
         raise HTTPException(status_code=400, detail="No document IDs provided")
+
+    # Tenant isolation - verify loan belongs to user's organization
+    org_id = getattr(current_user, 'organization_id', None)
+    is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+
+    loan_query = db.query(Loan).filter(Loan.id == request.loan_id)
+    if not is_platform_admin and org_id:
+        loan_query = loan_query.filter(Loan.organization_id == org_id)
+
+    loan = loan_query.first()
+    if not loan:
+        raise HTTPException(status_code=404, detail="Loan not found")
 
     # Get all requested documents
     documents = db.query(SmartDocument).filter(
@@ -814,12 +841,6 @@ async def merge_and_email_documents(
     s3_service = get_smart_docs_s3_service()
     if not s3_service.is_available:
         raise HTTPException(status_code=503, detail="Document storage not available")
-
-    # Get loan info for context
-    from models.loan import Loan
-    loan = db.query(Loan).filter(Loan.id == request.loan_id).first()
-    if not loan:
-        raise HTTPException(status_code=404, detail="Loan not found")
 
     # Determine recipient email
     recipient_email = request.recipient_email
@@ -1563,6 +1584,7 @@ async def get_applicants_with_outstanding_docs(
     limit: int = Query(default=20, ge=1, le=100),
     include_overdue_only: bool = Query(default=False),
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Get all applicants/loans that have outstanding document requests (needs list items not fulfilled).
@@ -1570,9 +1592,20 @@ async def get_applicants_with_outstanding_docs(
     """
     from sqlalchemy import func, distinct, case
     from models.purl import PURLLoan, PURLWorkspace
+    from models.loan import Loan
+
+    # Tenant isolation
+    org_id = getattr(current_user, 'organization_id', None)
+    is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
 
     # Build filter for outstanding requests
     outstanding_filter = [DocumentRequest.status == RequestStatus.OPEN]
+
+    # Add tenant isolation - filter by loans that belong to user's organization
+    if not is_platform_admin and org_id:
+        # Subquery to get loan_ids that belong to user's organization
+        org_loan_ids = db.query(Loan.id).filter(Loan.organization_id == org_id).subquery()
+        outstanding_filter.append(DocumentRequest.loan_id.in_(org_loan_ids))
 
     if include_overdue_only:
         outstanding_filter.append(DocumentRequest.due_date < func.now())

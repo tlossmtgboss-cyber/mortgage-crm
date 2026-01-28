@@ -1129,9 +1129,10 @@ async def search_contacts_for_workspace(
     from sqlalchemy import or_, cast, String
 
     search_term = f"%{q}%"
+    org_id = get_user_org_id(current_user)
 
-    # Search leads by name (full name or first/last name)
-    leads = db.query(Lead).filter(
+    # Search leads by name (full name or first/last name) with tenant isolation
+    query = db.query(Lead).filter(
         Lead.owner_id == current_user.id,
         or_(
             Lead.name.ilike(search_term),
@@ -1139,7 +1140,12 @@ async def search_contacts_for_workspace(
             Lead.last_name.ilike(search_term),
             (Lead.first_name + " " + Lead.last_name).ilike(search_term)
         )
-    ).order_by(Lead.name).limit(limit).all()
+    )
+    # Defense in depth: also filter by organization
+    if org_id:
+        query = query.filter(Lead.organization_id == org_id)
+
+    leads = query.order_by(Lead.name).limit(limit).all()
 
     # Check which leads already have workspaces
     lead_ids = [str(lead.id) for lead in leads]
