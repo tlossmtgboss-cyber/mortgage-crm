@@ -54159,21 +54159,29 @@ def init_db():
                         CREATE INDEX IF NOT EXISTS idx_user_permissions_composite ON user_permissions(user_id, permission_key, granted);
                     """))
 
-                    # Add missing enum values to loanstage type
-                    conn.execute(text("""
-                        DO $$
-                        BEGIN
-                            -- Add DOCS to loanstage enum if it doesn't exist
-                            IF NOT EXISTS (
-                                SELECT 1 FROM pg_enum WHERE enumlabel = 'Docs Out'
-                                AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'loanstage')
-                            ) THEN
-                                ALTER TYPE loanstage ADD VALUE IF NOT EXISTS 'Docs Out';
-                            END IF;
-                        EXCEPTION
-                            WHEN duplicate_object THEN NULL;
-                        END $$;
-                    """))
+                    # Add all missing enum values to loanstage type
+                    # Must use raw connection with autocommit - ALTER TYPE ADD VALUE cannot run in a transaction
+                    try:
+                        raw_conn = engine.raw_connection()
+                        raw_conn.set_isolation_level(0)  # AUTOCOMMIT
+                        raw_cursor = raw_conn.cursor()
+                        for loanstage_val in [
+                            "APPLICATION", "DISCLOSED", "PROCESSING", "SUBMITTED",
+                            "UNDERWRITING", "UW_RECEIVED", "CONDITIONAL_APPROVAL",
+                            "APPROVED", "SUSPENDED", "CTC", "CLEAR_TO_CLOSE",
+                            "CLOSING", "DOCS", "DOCS_OUT", "FUNDED",
+                            "CANCELLED", "DENIED", "DEAD", "NURTURE",
+                            "WITHDRAWN", "DOES_NOT_QUALIFY", "Docs Out",
+                        ]:
+                            try:
+                                raw_cursor.execute(f"ALTER TYPE loanstage ADD VALUE IF NOT EXISTS '{loanstage_val}'")
+                            except Exception:
+                                pass
+                        raw_cursor.close()
+                        raw_conn.close()
+                        logger.info("✅ Ensured all loanstage enum values exist")
+                    except Exception as enum_e:
+                        logger.warning(f"⚠️ loanstage enum migration: {enum_e}")
 
                     # Add role_responsibilities column for dynamic workflow roles
                     conn.execute(text("""
@@ -66909,16 +66917,28 @@ async def add_loanstage_values_migration(
             "CTC",
             "Docs Out",
             "Funded",
-            # Enum names (SQLAlchemy sends these)
+            # Enum names (SQLAlchemy sends these) - must match LoanStage Python enum
+            "APPLICATION",
             "DISCLOSED",
             "PROCESSING",
             "SUBMITTED",
+            "UNDERWRITING",
             "UW_RECEIVED",
+            "CONDITIONAL_APPROVAL",
             "APPROVED",
             "SUSPENDED",
             "CTC",
+            "CLEAR_TO_CLOSE",
+            "CLOSING",
             "DOCS",
+            "DOCS_OUT",
             "FUNDED",
+            "CANCELLED",
+            "DENIED",
+            "DEAD",
+            "NURTURE",
+            "WITHDRAWN",
+            "DOES_NOT_QUALIFY",
         ]
 
         # Get the raw connection and execute outside transaction
