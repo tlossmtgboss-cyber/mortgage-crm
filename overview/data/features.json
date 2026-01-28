@@ -145,13 +145,13 @@
     },
     {
       "id": "purl-workspaces",
-      "title": "PURL Workspaces",
-      "description": "Persistent URL workspaces for borrowers with loan status, document needs list, task management, milestone timeline, appointment scheduling, payment calculators, and team messaging.",
+      "title": "PURL Workspaces (Personal URL)",
+      "description": "Personal URL workspaces that give each borrower a dedicated, branded portal with real-time loan status, document needs list, task management, milestone timeline, appointment scheduling, payment calculators, and team messaging.",
       "category": "portal",
       "status": "live",
       "addedDate": "2025-12-15",
-      "updatedDate": "2026-01-18",
-      "capabilities": ["Persistent URLs", "Loan Status", "Doc Needs", "Scheduling", "Team Messaging"],
+      "updatedDate": "2026-01-28",
+      "capabilities": ["Personal URLs", "Loan Status", "Doc Needs", "Scheduling", "Team Messaging"],
       "order": 14
     },
     {
@@ -300,22 +300,22 @@
     {
       "id": "integrations-hub",
       "title": "Integrations Hub",
-      "description": "25 third-party integrations including Salesforce bidirectional sync, HubSpot, Twilio, DocuSign, Stripe, Zoom, Google Calendar, Microsoft 365, Retell AI, RingCentral, Telnyx, and Slack.",
+      "description": "25+ third-party integrations including Salesforce bidirectional sync, HubSpot, Twilio, Stripe, Zoom, Google Calendar, Microsoft 365, Retell AI, RingCentral, Telnyx, and Slack.",
       "category": "integrations",
       "status": "live",
       "addedDate": "2025-11-20",
-      "updatedDate": "2026-01-27",
-      "capabilities": ["Salesforce Sync", "Twilio", "DocuSign", "Stripe", "Microsoft 365", "Slack"],
+      "updatedDate": "2026-01-28",
+      "capabilities": ["Salesforce Sync", "Twilio", "Stripe", "Microsoft 365", "Slack", "RingCentral"],
       "order": 28
     },
     {
       "id": "e-signature",
       "title": "E-Signature",
-      "description": "DocuSign integration with drag-to-place field builder, signing ceremony UI, multi-party workflows, document tracking, signature verification, and audit trail.",
+      "description": "Built-in electronic signature system with drag-to-place field builder, signing ceremony UI, multi-party workflows, document tracking, signature verification, and audit trail. Fully native—no third-party e-sign dependency.",
       "category": "core",
       "status": "live",
       "addedDate": "2026-01-10",
-      "updatedDate": "2026-01-27",
+      "updatedDate": "2026-01-28",
       "capabilities": ["Field Placement", "Signing Ceremony", "Multi-Party", "Audit Trail"],
       "order": 29
     },
@@ -384,6 +384,17 @@
       "updatedDate": "2026-01-28",
       "capabilities": ["Refi Detection", "HELOC Cross-Sell", "Retention Scoring", "Anniversary Outreach", "Home Value Monitor", "Client Portal"],
       "order": 35
+    },
+    {
+      "id": "client-surveying",
+      "title": "Client Surveying & Satisfaction",
+      "description": "Built-in survey engine for measuring client satisfaction at every milestone. NPS scoring, post-close surveys, borrower experience tracking, target savings validation, and automated feedback collection to drive continuous improvement.",
+      "category": "core",
+      "status": "live",
+      "addedDate": "2026-01-28",
+      "updatedDate": "2026-01-28",
+      "capabilities": ["NPS Scoring", "Milestone Surveys", "Satisfaction Tracking", "Savings Validation", "Automated Collection"],
+      "order": 36
     }
   ]
 }

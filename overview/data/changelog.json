@@ -1,6 +1,12 @@
 {
-  "version": "2026-01-28-002",
+  "version": "2026-01-28-003",
   "entries": [
+    {
+      "date": "2026-01-28",
+      "title": "Surveying, Metrics Overhaul & Feature Corrections",
+      "description": "Added Client Surveying & Satisfaction module (36 total features). Restructured Metrics & Impact to lead with time savings, efficiency, and client satisfaction. Fixed PURL (Personal URL), E-Signature (native, no DocuSign), CarPlay (business command center), and Integrations Hub descriptions.",
+      "features": ["client-surveying", "purl-workspaces", "e-signature"]
+    },
     {
       "date": "2026-01-28",
       "title": "Lead Lifecycle & MUM Portfolio Added",
