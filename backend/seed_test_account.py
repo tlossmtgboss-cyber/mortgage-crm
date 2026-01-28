@@ -724,6 +724,162 @@ DUMMY_TASKS = [
     {"title": "Send rate update to pre-approved leads", "description": "Rates dropped 0.125%. Notify all pre-approved leads.", "status": "completed", "priority": "high", "due_days": -1, "link": None, "link_name": None},
 ]
 
+# =============================================================================
+# ADDITIONAL DUMMY DATA DEFINITIONS
+# =============================================================================
+
+DUMMY_ACTIVITIES = [
+    # Lead activities
+    {"type": "Call", "content": "Initial contact call - discussed loan options and timeline. Prospect is interested in conventional purchase.", "link_type": "lead", "link_ref": "alice.morgan@testlead.com", "days_ago": 2, "duration": "8 min", "sentiment": "positive"},
+    {"type": "Email", "content": "Sent rate sheet and pre-qualification checklist. Follow-up scheduled for Thursday.", "link_type": "lead", "link_ref": "alice.morgan@testlead.com", "days_ago": 1, "sentiment": "positive"},
+    {"type": "Note", "content": "Strong lead - pre-approved at previous lender but shopping for better rate. Has realtor actively showing properties.", "link_type": "lead", "link_ref": "elena.vasquez@testlead.com", "days_ago": 3, "sentiment": "positive"},
+    {"type": "Meeting", "content": "Zoom consultation - reviewed jumbo loan requirements and provided custom rate quote. Very engaged.", "link_type": "lead", "link_ref": "elena.vasquez@testlead.com", "days_ago": 1, "duration": "35 min", "sentiment": "positive"},
+    {"type": "SMS", "content": "Thanks for the info! I'll review and get back to you tomorrow.", "link_type": "lead", "link_ref": "brian.carter@testlead.com", "days_ago": 4, "sentiment": "positive"},
+    {"type": "Call", "content": "Left voicemail - second attempt. Will try again Monday.", "link_type": "lead", "link_ref": "grace.okonkwo@testlead.com", "days_ago": 5, "duration": "1 min", "sentiment": "neutral"},
+    {"type": "Email", "content": "Sent first-time buyer guide and FHA program overview.", "link_type": "lead", "link_ref": "grace.okonkwo@testlead.com", "days_ago": 4, "sentiment": "neutral"},
+    {"type": "Call", "content": "Discussed refinance options - current rate is 6.5%, can save with rate/term refi. Sending comparison.", "link_type": "lead", "link_ref": "carmen.delgado@testlead.com", "days_ago": 2, "duration": "12 min", "sentiment": "positive"},
+    # Loan activities
+    {"type": "Email", "content": "Received updated bank statements from borrower. Forwarded to processor.", "link_type": "loan", "link_ref": "TEST-001001", "days_ago": 1, "sentiment": "positive"},
+    {"type": "Call", "content": "Coordination call with processor Amanda - appraisal ordered, title in process.", "link_type": "loan", "link_ref": "TEST-001001", "days_ago": 2, "duration": "6 min", "sentiment": "positive"},
+    {"type": "Note", "content": "UW received conditions cleared. Waiting on appraisal review.", "link_type": "loan", "link_ref": "TEST-001002", "days_ago": 3, "sentiment": "positive"},
+    {"type": "Meeting", "content": "Closing prep call with David & Ngozi Okafor - reviewed CD, no surprises.", "link_type": "loan", "link_ref": "TEST-001005", "days_ago": 1, "duration": "20 min", "sentiment": "positive"},
+    {"type": "Email", "content": "CD sent for review. Closing confirmed for Feb 2nd at Premier Title.", "link_type": "loan", "link_ref": "TEST-001007", "days_ago": 0, "sentiment": "positive"},
+    {"type": "Call", "content": "Rate lock discussion with borrower - locked 45-day at 6.75%. Lock confirmation sent.", "link_type": "loan", "link_ref": "TEST-001003", "days_ago": 5, "duration": "10 min", "sentiment": "positive"},
+    {"type": "Document", "content": "Appraisal received - value came in at asking price. No issues.", "link_type": "loan", "link_ref": "TEST-001006", "days_ago": 2, "sentiment": "positive"},
+    {"type": "Note", "content": "Processor flagged: need updated VOE - employer verification expired.", "link_type": "loan", "link_ref": "TEST-001003", "days_ago": 1, "sentiment": "neutral"},
+    # MUM client activities
+    {"type": "Email", "content": "Sent annual home value report and refinance analysis.", "link_type": "mum", "link_ref": "alex.wright@testmum.com", "days_ago": 10, "sentiment": "positive"},
+    {"type": "Call", "content": "Anniversary check-in - reviewed current market and discussed home equity options.", "link_type": "mum", "link_ref": "curtis.palmer@testmum.com", "days_ago": 5, "duration": "15 min", "sentiment": "positive"},
+    {"type": "SMS", "content": "Happy 1-year anniversary in your new home! Let me know if you ever have questions.", "link_type": "mum", "link_ref": "fiona.blake@testmum.com", "days_ago": 3, "sentiment": "positive"},
+]
+
+DUMMY_CALENDAR_EVENTS = [
+    {"title": "Call - Alice Morgan (New Lead)", "description": "Follow-up call to discuss pre-approval", "event_type": "call", "days_from_now": 1, "hour": 10, "duration_min": 30, "link_type": "lead", "link_ref": "alice.morgan@testlead.com"},
+    {"title": "Zoom - Elena Vasquez (Pre-Approval)", "description": "Final pre-approval review and rate lock discussion", "event_type": "meeting", "days_from_now": 2, "hour": 14, "duration_min": 45, "link_type": "lead", "link_ref": "elena.vasquez@testlead.com"},
+    {"title": "Closing - Jeffrey & Michelle Kim", "description": "Closing at Premier Title Services, 789 Oak Dr Nashville", "event_type": "closing", "days_from_now": 4, "hour": 14, "duration_min": 90, "link_type": "loan", "link_ref": "TEST-001007"},
+    {"title": "Closing - David & Ngozi Okafor", "description": "Jumbo purchase closing at Premier Title", "event_type": "closing", "days_from_now": 6, "hour": 10, "duration_min": 90, "link_type": "loan", "link_ref": "TEST-001005"},
+    {"title": "Check-in Call - Diana Wells (MUM)", "description": "Refinance opportunity discussion", "event_type": "call", "days_from_now": 3, "hour": 11, "duration_min": 20, "link_type": "mum", "link_ref": "diana.wells@testmum.com"},
+    {"title": "Weekly Pipeline Review", "description": "Internal team meeting to review pipeline status", "event_type": "meeting", "days_from_now": 2, "hour": 9, "duration_min": 60, "link_type": None, "link_ref": None},
+    {"title": "Partner Lunch - Sarah Kim Realty", "description": "Quarterly partner relationship lunch", "event_type": "meeting", "days_from_now": 5, "hour": 12, "duration_min": 90, "link_type": "partner", "link_ref": "sarah.kim@kwrealty.com"},
+    {"title": "Appraisal - 221 Birch Lane", "description": "Appraiser access for Powell property", "event_type": "appraisal", "days_from_now": 1, "hour": 13, "duration_min": 120, "link_type": "loan", "link_ref": "TEST-001001"},
+]
+
+DUMMY_DOCUMENTS = [
+    {"loan_ref": "TEST-001001", "doc_type": "W2", "category": "Income", "filename": "powell_w2_2025.pdf"},
+    {"loan_ref": "TEST-001001", "doc_type": "Paystub", "category": "Income", "filename": "powell_paystub_jan2026.pdf"},
+    {"loan_ref": "TEST-001001", "doc_type": "Bank Statement", "category": "Assets", "filename": "powell_chase_statement.pdf"},
+    {"loan_ref": "TEST-001002", "doc_type": "Tax Return (1040)", "category": "Income", "filename": "yee_1040_2024.pdf"},
+    {"loan_ref": "TEST-001002", "doc_type": "W2", "category": "Income", "filename": "yee_w2_2025.pdf"},
+    {"loan_ref": "TEST-001003", "doc_type": "Employment Verification", "category": "Income", "filename": "chen_voe.pdf"},
+    {"loan_ref": "TEST-001003", "doc_type": "Bank Statement", "category": "Assets", "filename": "chen_boa_statement.pdf"},
+    {"loan_ref": "TEST-001005", "doc_type": "Bank Statement", "category": "Assets", "filename": "okafor_statements_combined.pdf"},
+    {"loan_ref": "TEST-001005", "doc_type": "Gift Letter", "category": "Assets", "filename": "okafor_gift_letter.pdf"},
+    {"loan_ref": "TEST-001007", "doc_type": "Closing Disclosure", "category": "Disclosures", "filename": "kim_cd_final.pdf"},
+]
+
+DUMMY_NOTIFICATIONS = [
+    {"type": "loan_milestone", "title": "Closing in 4 days", "message": "Jeffrey Kim loan closing scheduled for Feb 2nd.", "days_ago": 0, "read": False},
+    {"type": "loan_milestone", "title": "Appraisal Received", "message": "Appraisal for Sandra Yee (TEST-001002) received - value: $295,000", "days_ago": 1, "read": True},
+    {"type": "task_due", "title": "Task Due Today", "message": "Send pre-approval package to Elena Vasquez", "days_ago": 0, "read": False},
+    {"type": "lead_activity", "title": "New Lead Response", "message": "Isabella Moreno replied to your email about Portland home purchase", "days_ago": 1, "read": True},
+    {"type": "partner_referral", "title": "New Referral from Sarah Kim", "message": "New lead referral from Sarah Kim Realty - John Smith interested in $400K purchase", "days_ago": 2, "read": True},
+    {"type": "rate_alert", "title": "Rate Alert Triggered", "message": "30-year fixed dropped below 6.5% - consider notifying pre-approved leads", "days_ago": 3, "read": True},
+    {"type": "compliance", "title": "Disclosure Reminder", "message": "LE disclosure due for Brian Carter within 2 business days", "days_ago": 0, "read": False},
+    {"type": "system", "title": "Weekly Report Available", "message": "Your weekly pipeline performance report is ready to view", "days_ago": 1, "read": False},
+]
+
+DUMMY_SMS_CONVERSATIONS = [
+    {
+        "contact_phone": "(555) 100-2001",
+        "contact_name": "Alice Morgan",
+        "link_ref": "alice.morgan@testlead.com",
+        "messages": [
+            {"direction": "outbound", "content": "Hi Alice, this is Test User from Perennia. Great speaking with you! Here's the pre-approval checklist we discussed.", "hours_ago": 48},
+            {"direction": "inbound", "content": "Thanks! I'll gather those documents this week.", "hours_ago": 46},
+            {"direction": "outbound", "content": "Perfect! Let me know when you're ready and we can schedule a call to review.", "hours_ago": 45},
+        ]
+    },
+    {
+        "contact_phone": "(555) 100-2005",
+        "contact_name": "Elena Vasquez",
+        "link_ref": "elena.vasquez@testlead.com",
+        "messages": [
+            {"direction": "outbound", "content": "Hi Elena! Just sent over the jumbo loan rate sheet. Let me know if you have any questions.", "hours_ago": 24},
+            {"direction": "inbound", "content": "Got it, thanks! The 7% rate looks good. Can we lock that?", "hours_ago": 22},
+            {"direction": "outbound", "content": "Absolutely! I'll send over the lock agreement. We can discuss on our call tomorrow.", "hours_ago": 21},
+            {"direction": "inbound", "content": "Sounds great, talk then!", "hours_ago": 20},
+        ]
+    },
+]
+
+DUMMY_EMAIL_MESSAGES = [
+    {"link_type": "lead", "link_ref": "alice.morgan@testlead.com", "to_email": "alice.morgan@testlead.com", "subject": "Your Pre-Approval Checklist", "body": "Hi Alice,\n\nThank you for your interest in obtaining a mortgage pre-approval. Attached is the checklist we discussed...", "direction": "outbound", "days_ago": 2},
+    {"link_type": "lead", "link_ref": "elena.vasquez@testlead.com", "to_email": "elena.vasquez@testlead.com", "subject": "Jumbo Loan Rate Quote", "body": "Hi Elena,\n\nGreat speaking with you today! Here are the jumbo loan options we discussed...", "direction": "outbound", "days_ago": 1},
+    {"link_type": "lead", "link_ref": "elena.vasquez@testlead.com", "to_email": "testuser@perenniaai.com", "subject": "Re: Jumbo Loan Rate Quote", "body": "Thanks for sending this over! The rates look competitive. I'm ready to move forward with the pre-approval.", "direction": "inbound", "days_ago": 0},
+    {"link_type": "loan", "link_ref": "TEST-001001", "to_email": "marcus.powell@email.com", "subject": "Rate Lock Confirmation", "body": "Hi Marcus,\n\nThis email confirms your rate lock at 6.750% for 45 days...", "direction": "outbound", "days_ago": 5},
+    {"link_type": "loan", "link_ref": "TEST-001007", "to_email": "jeffrey.kim@email.com", "subject": "Closing Disclosure - Please Review", "body": "Hi Jeffrey & Michelle,\n\nAttached is your Closing Disclosure for review before closing on Feb 2nd...", "direction": "outbound", "days_ago": 1},
+]
+
+DUMMY_STAGE_HISTORY = [
+    # Lead stage progressions
+    {"entity_type": "lead", "ref": "alice.morgan@testlead.com", "stages": [("New", 3)]},
+    {"entity_type": "lead", "ref": "brian.carter@testlead.com", "stages": [("New", 10), ("Prospect", 5)]},
+    {"entity_type": "lead", "ref": "elena.vasquez@testlead.com", "stages": [("New", 14), ("Prospect", 10), ("Application Started", 6), ("Pre-Approved", 2)]},
+    {"entity_type": "lead", "ref": "carmen.delgado@testlead.com", "stages": [("New", 8), ("Prospect", 5), ("Application Started", 2)]},
+    {"entity_type": "lead", "ref": "grace.okonkwo@testlead.com", "stages": [("New", 12), ("Attempted Contact", 7)]},
+    # Loan stage progressions
+    {"entity_type": "loan", "ref": "TEST-001001", "stages": [("Disclosed", 20), ("Processing", 10)]},
+    {"entity_type": "loan", "ref": "TEST-001002", "stages": [("Disclosed", 18), ("Processing", 12), ("UW Received", 5)]},
+    {"entity_type": "loan", "ref": "TEST-001003", "stages": [("Disclosed", 25), ("Processing", 18), ("UW Received", 12), ("Approved", 6)]},
+    {"entity_type": "loan", "ref": "TEST-001005", "stages": [("Disclosed", 30), ("Processing", 22), ("UW Received", 15), ("Approved", 10), ("CTC", 4)]},
+    {"entity_type": "loan", "ref": "TEST-001007", "stages": [("Disclosed", 28), ("Processing", 20), ("UW Received", 14), ("Approved", 8), ("CTC", 5), ("Docs Out", 2)]},
+]
+
+DUMMY_GOALS = [
+    {
+        "objective": "Close 15 loans in Q1 2026",
+        "start_date": "2026-01-01",
+        "end_date": "2026-03-31",
+        "status": "on_track",
+        "key_results": [
+            {"metric": "Closed Loans", "target": 15, "current": 3, "unit": "loans"},
+            {"metric": "Total Volume", "target": 5000000, "current": 988000, "unit": "dollars"},
+            {"metric": "Average Loan Size", "target": 333333, "current": 329333, "unit": "dollars"},
+        ],
+    },
+    {
+        "objective": "Build referral partner network",
+        "start_date": "2026-01-01",
+        "end_date": "2026-06-30",
+        "status": "on_track",
+        "key_results": [
+            {"metric": "Active Partners", "target": 15, "current": 8, "unit": "partners"},
+            {"metric": "Partner Referrals", "target": 20, "current": 6, "unit": "referrals"},
+            {"metric": "Partner Closed Loans", "target": 8, "current": 2, "unit": "loans"},
+        ],
+    },
+    {
+        "objective": "Improve lead conversion rate",
+        "start_date": "2026-01-01",
+        "end_date": "2026-03-31",
+        "status": "at_risk",
+        "key_results": [
+            {"metric": "Lead Response Time", "target": 5, "current": 8, "unit": "minutes"},
+            {"metric": "Conversion Rate", "target": 25, "current": 18, "unit": "percent"},
+            {"metric": "Pre-Approvals Issued", "target": 30, "current": 8, "unit": "pre-approvals"},
+        ],
+    },
+]
+
+DUMMY_CALL_LOGS = [
+    {"contact_phone": "(555) 100-2001", "contact_name": "Alice Morgan", "link_type": "lead", "link_ref": "alice.morgan@testlead.com", "outcome": "completed", "duration": 480, "disposition": "interested", "notes": "Discussed conventional loan options. Very interested in 20% down.", "days_ago": 2},
+    {"contact_phone": "(555) 100-2005", "contact_name": "Elena Vasquez", "link_type": "lead", "link_ref": "elena.vasquez@testlead.com", "outcome": "completed", "duration": 2100, "disposition": "application_started", "notes": "Deep dive into jumbo requirements. Starting application.", "days_ago": 1},
+    {"contact_phone": "(555) 100-2007", "contact_name": "Grace Okonkwo", "link_type": "lead", "link_ref": "grace.okonkwo@testlead.com", "outcome": "no_answer", "duration": 60, "disposition": "voicemail", "notes": "Left voicemail - will try again Monday", "days_ago": 5},
+    {"contact_phone": "(555) 100-2003", "contact_name": "Carmen Delgado", "link_type": "lead", "link_ref": "carmen.delgado@testlead.com", "outcome": "completed", "duration": 720, "disposition": "interested", "notes": "Refi analysis - can save $200/mo. Sending comparison.", "days_ago": 2},
+    {"contact_phone": "(555) 400-5001", "contact_name": "Sarah Kim", "link_type": "partner", "link_ref": "sarah.kim@kwrealty.com", "outcome": "completed", "duration": 600, "disposition": "partnership", "notes": "Monthly check-in. She has 3 buyers in the pipeline.", "days_ago": 3},
+    {"contact_phone": "(555) 300-4003", "contact_name": "Curtis Palmer", "link_type": "mum", "link_ref": "curtis.palmer@testmum.com", "outcome": "completed", "duration": 900, "disposition": "annual_review", "notes": "1-year anniversary call. Happy with service, may refer friends.", "days_ago": 5},
+]
+
 
 # =============================================================================
 # SEED FUNCTIONS
