@@ -1490,7 +1490,10 @@ details.section-details > .details-body { padding: 20px; }
   </div>
 
   <!-- Architecture Diagram -->
-  <div class="arch-diagram mb-24">
+  <details class="section-details">
+  <summary>System Architecture</summary>
+  <div class="details-body">
+  <div class="arch-diagram">
     <div class="arch-layer">
       <div class="arch-label">Client Layer</div>
       <div class="arch-items">
@@ -1561,6 +1564,8 @@ details.section-details > .details-body { padding: 20px; }
       </div>
     </div>
   </div>
+  </div><!-- /.details-body -->
+  </details>
 
   <!-- Tech Stack -->
   <details class="section-details">
@@ -2264,7 +2269,7 @@ function submitBooking() {
   if (phone && phone.value.trim()) payload.attendee_phone = phone.value.trim();
   if (company && company.value.trim()) payload.notes = 'Company: ' + company.value.trim();
 
-  fetch(SCHEDULER_API + '/api/v1/scheduler/public/book/' + BOOKING_SLUG + '/confirm', {
+  fetch(SCHEDULER_API + '/api/v1/scheduler/public/book-demo/confirm', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
