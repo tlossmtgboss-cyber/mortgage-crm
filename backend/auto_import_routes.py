@@ -846,9 +846,9 @@ async def seed_test_account_bootstrap(
     """
     import os
 
-    # Verify secret key
-    expected_key = os.getenv("SECRET_KEY", "")
-    if not expected_key or secret_key != expected_key:
+    # Verify secret key (strip whitespace as Railway env vars can have newlines)
+    expected_key = os.getenv("SECRET_KEY", "").strip()
+    if not expected_key or secret_key.strip() != expected_key:
         raise HTTPException(
             status_code=403,
             detail="Invalid secret key"
@@ -910,9 +910,9 @@ async def seed_test_account_endpoint(
     """
     import os
 
-    # Verify secret key
-    expected_key = os.getenv("SECRET_KEY", "")
-    if not expected_key or secret_key != expected_key:
+    # Verify secret key (strip whitespace as Railway env vars can have newlines)
+    expected_key = os.getenv("SECRET_KEY", "").strip()
+    if not expected_key or secret_key.strip() != expected_key:
         raise HTTPException(
             status_code=403,
             detail="Invalid secret key"
