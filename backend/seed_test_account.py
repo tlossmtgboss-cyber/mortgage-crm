@@ -231,7 +231,7 @@ DUMMY_LOANS = [
     {
         "loan_number": "TEST-001002",
         "borrower_name": "Sandra Yee",
-        "stage": "UW_RECEIVED",
+        "stage": "UNDERWRITING",
         "program": "FHA 30-Year Fixed",
         "loan_type": "Purchase",
         "amount": 278000,
@@ -307,7 +307,7 @@ DUMMY_LOANS = [
         "loan_number": "TEST-001007",
         "borrower_name": "Jeffrey Kim",
         "coborrower_name": "Michelle Kim",
-        "stage": "DOCS_OUT",
+        "stage": "CLOSING",
         "program": "Conventional 30-Year Fixed",
         "loan_type": "Purchase",
         "amount": 525000,
