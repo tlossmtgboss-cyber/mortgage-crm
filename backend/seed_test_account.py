@@ -676,28 +676,28 @@ DUMMY_TASKS = [
 # =============================================================================
 
 DUMMY_ACTIVITIES = [
-    # Lead activities
-    {"type": "Call", "content": "Initial contact call - discussed loan options and timeline. Prospect is interested in conventional purchase.", "link_type": "lead", "link_ref": "alice.morgan@testlead.com", "days_ago": 2, "duration": "8 min", "sentiment": "positive"},
-    {"type": "Email", "content": "Sent rate sheet and pre-qualification checklist. Follow-up scheduled for Thursday.", "link_type": "lead", "link_ref": "alice.morgan@testlead.com", "days_ago": 1, "sentiment": "positive"},
-    {"type": "Note", "content": "Strong lead - pre-approved at previous lender but shopping for better rate. Has realtor actively showing properties.", "link_type": "lead", "link_ref": "elena.vasquez@testlead.com", "days_ago": 3, "sentiment": "positive"},
-    {"type": "Meeting", "content": "Zoom consultation - reviewed jumbo loan requirements and provided custom rate quote. Very engaged.", "link_type": "lead", "link_ref": "elena.vasquez@testlead.com", "days_ago": 1, "duration": "35 min", "sentiment": "positive"},
-    {"type": "SMS", "content": "Thanks for the info! I'll review and get back to you tomorrow.", "link_type": "lead", "link_ref": "brian.carter@testlead.com", "days_ago": 4, "sentiment": "positive"},
-    {"type": "Call", "content": "Left voicemail - second attempt. Will try again Monday.", "link_type": "lead", "link_ref": "grace.okonkwo@testlead.com", "days_ago": 5, "duration": "1 min", "sentiment": "neutral"},
-    {"type": "Email", "content": "Sent first-time buyer guide and FHA program overview.", "link_type": "lead", "link_ref": "grace.okonkwo@testlead.com", "days_ago": 4, "sentiment": "neutral"},
-    {"type": "Call", "content": "Discussed refinance options - current rate is 6.5%, can save with rate/term refi. Sending comparison.", "link_type": "lead", "link_ref": "carmen.delgado@testlead.com", "days_ago": 2, "duration": "12 min", "sentiment": "positive"},
+    # Lead activities - using lowercase type values to match DB enum
+    {"type": "call", "content": "Initial contact call - discussed loan options and timeline. Prospect is interested in conventional purchase.", "link_type": "lead", "link_ref": "alice.morgan@testlead.com", "days_ago": 2, "duration": "8 min", "sentiment": "positive"},
+    {"type": "email", "content": "Sent rate sheet and pre-qualification checklist. Follow-up scheduled for Thursday.", "link_type": "lead", "link_ref": "alice.morgan@testlead.com", "days_ago": 1, "sentiment": "positive"},
+    {"type": "note", "content": "Strong lead - pre-approved at previous lender but shopping for better rate. Has realtor actively showing properties.", "link_type": "lead", "link_ref": "elena.vasquez@testlead.com", "days_ago": 3, "sentiment": "positive"},
+    {"type": "meeting", "content": "Zoom consultation - reviewed jumbo loan requirements and provided custom rate quote. Very engaged.", "link_type": "lead", "link_ref": "elena.vasquez@testlead.com", "days_ago": 1, "duration": "35 min", "sentiment": "positive"},
+    {"type": "sms", "content": "Thanks for the info! I'll review and get back to you tomorrow.", "link_type": "lead", "link_ref": "brian.carter@testlead.com", "days_ago": 4, "sentiment": "positive"},
+    {"type": "call", "content": "Left voicemail - second attempt. Will try again Monday.", "link_type": "lead", "link_ref": "grace.okonkwo@testlead.com", "days_ago": 5, "duration": "1 min", "sentiment": "neutral"},
+    {"type": "email", "content": "Sent first-time buyer guide and FHA program overview.", "link_type": "lead", "link_ref": "grace.okonkwo@testlead.com", "days_ago": 4, "sentiment": "neutral"},
+    {"type": "call", "content": "Discussed refinance options - current rate is 6.5%, can save with rate/term refi. Sending comparison.", "link_type": "lead", "link_ref": "carmen.delgado@testlead.com", "days_ago": 2, "duration": "12 min", "sentiment": "positive"},
     # Loan activities
-    {"type": "Email", "content": "Received updated bank statements from borrower. Forwarded to processor.", "link_type": "loan", "link_ref": "TEST-001001", "days_ago": 1, "sentiment": "positive"},
-    {"type": "Call", "content": "Coordination call with processor Amanda - appraisal ordered, title in process.", "link_type": "loan", "link_ref": "TEST-001001", "days_ago": 2, "duration": "6 min", "sentiment": "positive"},
-    {"type": "Note", "content": "UW received conditions cleared. Waiting on appraisal review.", "link_type": "loan", "link_ref": "TEST-001002", "days_ago": 3, "sentiment": "positive"},
-    {"type": "Meeting", "content": "Closing prep call with David & Ngozi Okafor - reviewed CD, no surprises.", "link_type": "loan", "link_ref": "TEST-001005", "days_ago": 1, "duration": "20 min", "sentiment": "positive"},
-    {"type": "Email", "content": "CD sent for review. Closing confirmed for Feb 2nd at Premier Title.", "link_type": "loan", "link_ref": "TEST-001007", "days_ago": 0, "sentiment": "positive"},
-    {"type": "Call", "content": "Rate lock discussion with borrower - locked 45-day at 6.75%. Lock confirmation sent.", "link_type": "loan", "link_ref": "TEST-001003", "days_ago": 5, "duration": "10 min", "sentiment": "positive"},
-    {"type": "Document", "content": "Appraisal received - value came in at asking price. No issues.", "link_type": "loan", "link_ref": "TEST-001006", "days_ago": 2, "sentiment": "positive"},
-    {"type": "Note", "content": "Processor flagged: need updated VOE - employer verification expired.", "link_type": "loan", "link_ref": "TEST-001003", "days_ago": 1, "sentiment": "neutral"},
+    {"type": "email", "content": "Received updated bank statements from borrower. Forwarded to processor.", "link_type": "loan", "link_ref": "TEST-001001", "days_ago": 1, "sentiment": "positive"},
+    {"type": "call", "content": "Coordination call with processor Amanda - appraisal ordered, title in process.", "link_type": "loan", "link_ref": "TEST-001001", "days_ago": 2, "duration": "6 min", "sentiment": "positive"},
+    {"type": "note", "content": "UW received conditions cleared. Waiting on appraisal review.", "link_type": "loan", "link_ref": "TEST-001002", "days_ago": 3, "sentiment": "positive"},
+    {"type": "meeting", "content": "Closing prep call with David & Ngozi Okafor - reviewed CD, no surprises.", "link_type": "loan", "link_ref": "TEST-001005", "days_ago": 1, "duration": "20 min", "sentiment": "positive"},
+    {"type": "email", "content": "CD sent for review. Closing confirmed for Feb 2nd at Premier Title.", "link_type": "loan", "link_ref": "TEST-001007", "days_ago": 0, "sentiment": "positive"},
+    {"type": "call", "content": "Rate lock discussion with borrower - locked 45-day at 6.75%. Lock confirmation sent.", "link_type": "loan", "link_ref": "TEST-001003", "days_ago": 5, "duration": "10 min", "sentiment": "positive"},
+    {"type": "document", "content": "Appraisal received - value came in at asking price. No issues.", "link_type": "loan", "link_ref": "TEST-001006", "days_ago": 2, "sentiment": "positive"},
+    {"type": "note", "content": "Processor flagged: need updated VOE - employer verification expired.", "link_type": "loan", "link_ref": "TEST-001003", "days_ago": 1, "sentiment": "neutral"},
     # MUM client activities
-    {"type": "Email", "content": "Sent annual home value report and refinance analysis.", "link_type": "mum", "link_ref": "alex.wright@testmum.com", "days_ago": 10, "sentiment": "positive"},
-    {"type": "Call", "content": "Anniversary check-in - reviewed current market and discussed home equity options.", "link_type": "mum", "link_ref": "curtis.palmer@testmum.com", "days_ago": 5, "duration": "15 min", "sentiment": "positive"},
-    {"type": "SMS", "content": "Happy 1-year anniversary in your new home! Let me know if you ever have questions.", "link_type": "mum", "link_ref": "fiona.blake@testmum.com", "days_ago": 3, "sentiment": "positive"},
+    {"type": "email", "content": "Sent annual home value report and refinance analysis.", "link_type": "mum", "link_ref": "alex.wright@testmum.com", "days_ago": 10, "sentiment": "positive"},
+    {"type": "call", "content": "Anniversary check-in - reviewed current market and discussed home equity options.", "link_type": "mum", "link_ref": "curtis.palmer@testmum.com", "days_ago": 5, "duration": "15 min", "sentiment": "positive"},
+    {"type": "sms", "content": "Happy 1-year anniversary in your new home! Let me know if you ever have questions.", "link_type": "mum", "link_ref": "fiona.blake@testmum.com", "days_ago": 3, "sentiment": "positive"},
 ]
 
 DUMMY_CALENDAR_EVENTS = [
