@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Perennia AI - AI-Powered Mortgage CRM Platform</title>
-<meta name="description" content="The industry's most comprehensive AI-powered mortgage origination platform. 22 AI agents, 160+ tools, full compliance automation.">
+<meta name="description" content="AI-powered mortgage CRM and origination operating system. Specialized AI agents, 160+ tools, compliance-assist monitoring, and omni-channel communications.">
 <meta property="og:title" content="Perennia AI - Mortgage CRM Platform">
-<meta property="og:description" content="AI-native mortgage CRM with 22 specialized agents, pipeline management, compliance automation, and omni-channel communications.">
+<meta property="og:description" content="AI-powered mortgage CRM with specialized agents, pipeline management, compliance-assist monitoring, and omni-channel communications.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://www.perenniaai.com">
 <link rel="canonical" href="https://www.perenniaai.com">
@@ -65,10 +65,20 @@ body {
    ============================================================ */
 @media print {
   body { background: white; font-size: 11pt; }
-  .no-print, .nav-sidebar, .back-to-top, .whats-new-banner { display: none !important; }
+  .no-print, .nav-sidebar, .back-to-top, .whats-new-banner, .print-hide { display: none !important; }
+  .print-only { display: block !important; }
   .section { break-inside: avoid; page-break-inside: avoid; box-shadow: none !important; border: 1px solid #ddd; }
   .hero { background: var(--navy) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .card { box-shadow: none !important; border: 1px solid #ddd; }
+  .card { box-shadow: none !important; border: 1px solid #ddd; break-inside: avoid; page-break-inside: avoid; }
+  .btn-demo, .btn-demo-hero, .btn-login, .modal-overlay { display: none !important; }
+  .value-card, .stat-box, .arch-diagram, .flow-container { break-inside: avoid; page-break-inside: avoid; }
+  .value-card:hover, .card:hover, .stat-box:hover, .arch-item:hover, .flow-step:hover { transform: none; box-shadow: none; }
+  /* Force all details/collapsibles open for print */
+  details.section-details { border: 1px solid #ddd; }
+  details.section-details > summary { background: #f0f0f0; }
+  details.section-details > .details-body { display: block !important; }
+  .collapsible-content { max-height: none !important; overflow: visible !important; padding: 20px !important; }
+  .tooltip .tooltip-text { display: none; }
 }
 
 /* ============================================================
@@ -693,6 +703,137 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+
+/* ============================================================
+   TOOLTIP
+   ============================================================ */
+.tooltip {
+  position: relative;
+  cursor: help;
+  border-bottom: 1px dotted var(--gray-400);
+}
+.tooltip .tooltip-text {
+  visibility: hidden;
+  opacity: 0;
+  position: absolute;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 300px;
+  background: var(--navy-dark);
+  color: var(--white);
+  font-size: .78rem;
+  font-weight: 400;
+  line-height: 1.5;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  z-index: 50;
+  transition: opacity .2s ease;
+  pointer-events: none;
+}
+.tooltip .tooltip-text::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 6px;
+  border-style: solid;
+  border-color: var(--navy-dark) transparent transparent transparent;
+}
+.tooltip:hover .tooltip-text { visibility: visible; opacity: 1; }
+
+/* ============================================================
+   NATIVE DETAILS / SUMMARY (Collapsible)
+   ============================================================ */
+details.section-details {
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+details.section-details > summary {
+  padding: 16px 20px;
+  background: var(--gray-50);
+  font-size: .95rem;
+  font-weight: 600;
+  color: var(--navy);
+  cursor: pointer;
+  transition: var(--transition);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+details.section-details > summary::-webkit-details-marker { display: none; }
+details.section-details > summary::after {
+  content: '+';
+  font-size: 1.3rem;
+  font-weight: 400;
+  color: var(--gray-400);
+  transition: var(--transition);
+}
+details.section-details[open] > summary::after { content: '\2212'; }
+details.section-details > summary:hover { background: var(--gray-100); }
+details.section-details > .details-body { padding: 20px; }
+
+/* ============================================================
+   PROOF STRIP
+   ============================================================ */
+.proof-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding: 16px 24px;
+  margin-top: 24px;
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  font-size: .82rem;
+  color: var(--gray-600);
+  font-weight: 500;
+}
+.proof-strip .proof-dot { color: var(--gray-300); }
+
+/* ============================================================
+   LAST UPDATED STAMP
+   ============================================================ */
+.last-updated {
+  font-size: .75rem;
+  color: var(--gray-400);
+  text-align: center;
+  margin-top: 12px;
+  font-style: italic;
+}
+
+/* ============================================================
+   SKELETON CARD (no-JS fallback)
+   ============================================================ */
+.skeleton-card {
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+}
+.skeleton-bar {
+  background: linear-gradient(90deg, var(--gray-100) 25%, var(--gray-200) 50%, var(--gray-100) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+  height: 14px;
+  margin-bottom: 10px;
+}
+.skeleton-bar.w-60 { width: 60%; }
+.skeleton-bar.w-80 { width: 80%; }
+.skeleton-bar.w-40 { width: 40%; }
+.skeleton-bar.h-20 { height: 20px; margin-bottom: 14px; }
+
+/* Reusable utility classes */
+.print-hide { }
+.print-only { display: none; }
 </style>
 </head>
 <body>
@@ -707,7 +848,7 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
       Perennia AI
     </a>
     <div class="nav-links">
-      <a href="#executive-summary">Summary</a>
+      <a href="#executive-summary">Executive Summary</a>
       <a href="#features">Features</a>
       <a href="#workflows">Workflows</a>
       <a href="#key-workflows">Key Workflows</a>
@@ -744,7 +885,7 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
     <p class="hero-subtitle">
       The industry's most comprehensive AI-powered mortgage origination platform.
       Purpose-built for loan officers, processors, underwriters, and branch managers
-      to automate workflows, ensure compliance, and close loans faster.
+      to automate workflows, assist with compliance monitoring, and close loans faster.
     </p>
     <button class="btn-demo-hero" onclick="openDemoModal()">Schedule a Demo</button>
     <div class="hero-stats">
@@ -756,22 +897,27 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
         <div class="hero-stat-value" data-stat="files">3,704</div>
         <div class="hero-stat-label">Source Files</div>
       </div>
-      <div class="hero-stat">
+      <div class="hero-stat tooltip">
         <div class="hero-stat-value" data-stat="tools">173+</div>
-        <div class="hero-stat-label">AI Agent Tools</div>
+        <div class="hero-stat-label">AI Tools</div>
+        <span class="tooltip-text"><strong>Tools</strong> = internal agent actions (e.g., pricing lookup, doc classification, task creation, compliance checks, messaging).</span>
+      </div>
+      <div class="hero-stat tooltip">
+        <div class="hero-stat-value" data-stat="agents">42</div>
+        <div class="hero-stat-label">AI Agents</div>
+        <span class="tooltip-text"><strong>Agents</strong> = specialized AI roles (e.g., underwriting assistant, doc triage, SLA monitor) orchestrated by policy and audit logs.</span>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-value">35+</div>
+        <div class="hero-stat-label">Modules</div>
       </div>
       <div class="hero-stat">
         <div class="hero-stat-value" data-stat="integrations">25+</div>
         <div class="hero-stat-label">Integrations</div>
       </div>
-      <div class="hero-stat">
-        <div class="hero-stat-value" data-stat="pages">271</div>
-        <div class="hero-stat-label">Frontend Pages</div>
-      </div>
-      <div class="hero-stat">
-        <div class="hero-stat-value" data-stat="agents">42</div>
-        <div class="hero-stat-label">AI Agents</div>
-      </div>
+    </div>
+    <div class="last-updated" id="hero-last-updated" style="color:var(--gray-400); text-align:left;">
+      Last updated: <span id="last-updated-date">January 28, 2026</span>
     </div>
   </div>
 </header>
@@ -787,36 +933,61 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
     </div>
   </div>
 
+  <p class="text-sm mb-16" style="max-width:800px; line-height:1.8;">
+    Perennia AI is an AI-powered mortgage CRM and origination operating system that unifies pipeline execution, borrower communication, document collection, and compliance monitoring in one platform. It helps loan teams reduce cycle time, prevent missed milestones, and standardize borrower experience&mdash;while keeping humans in control of approvals, disclosures, and critical decisions.
+  </p>
   <p class="text-sm mb-24" style="max-width:800px; line-height:1.8;">
-    <strong>Perennia AI</strong> is an end-to-end, AI-native mortgage CRM platform that replaces fragmented
-    point solutions with a single, intelligent system of record. The platform orchestrates <span data-stat="agents-inline">42</span> specialized
-    AI agents across <span data-stat="tools-inline">173+</span> tools to automate loan origination, compliance monitoring, document collection,
-    borrower communication, and pipeline management&mdash;while keeping loan officers in control of every decision.
+    The platform coordinates <span class="tooltip" data-stat="agents-inline">22 specialized AI agents<span class="tooltip-text"><strong>Agents</strong> = specialized AI roles (e.g., underwriting assistant, doc triage, SLA monitor) orchestrated by policy and audit logs.</span></span> and <span class="tooltip" data-stat="tools-inline">160+ tools<span class="tooltip-text"><strong>Tools</strong> = internal agent actions (e.g., pricing lookup, doc classification, task creation, compliance checks, messaging).</span></span> to assist with workflow automation, document intelligence, task orchestration, and communication&mdash;backed by audit trails, role-based access, and configurable compliance checks.
   </p>
 
   <!-- Value Props -->
-  <div class="grid-4 mb-24">
+  <div class="grid-4 mb-16">
     <div class="value-card">      <div class="value-card-title">AI-First Design</div>
-      <div class="value-card-text">42 specialized agents with LangGraph orchestration, intent-based tool loading, and self-improving feedback loops.</div>
+      <div class="value-card-text">Specialized agents with LangGraph orchestration, intent-based tool loading, and self-improving feedback loops.</div>
     </div>
     <div class="value-card">      <div class="value-card-title">Full Pipeline Visibility</div>
       <div class="value-card-text">21-stage loan lifecycle with real-time SLA tracking, bottleneck detection, and predictive close-date forecasting.</div>
     </div>
-    <div class="value-card">      <div class="value-card-title">Built-In Compliance</div>
-      <div class="value-card-text">Automated TRID, RESPA, fair lending, and state-specific consent monitoring with audit trails.</div>
+    <div class="value-card">      <div class="value-card-title">Compliance-Assist Monitoring</div>
+      <div class="value-card-text">Compliance-assist monitoring for TRID/RESPA/fair lending and state-specific consent rules, with alerts and audit trails.</div>
     </div>
     <div class="value-card">      <div class="value-card-title">Omni-Channel Comms</div>
       <div class="value-card-text">Email, SMS, voice, video, and in-app chat&mdash;all AI-optimized with sentiment analysis and compliance checking.</div>
     </div>
   </div>
 
+  <!-- Leadership Outcomes -->
+  <h3 class="fw-700 text-navy mb-8">Leadership Outcomes</h3>
+  <div class="grid-4 mb-24">
+    <div class="stat-box"><div class="stat-label"><strong>Faster cycle time:</strong> fewer stalled loans via SLA + escalation</div></div>
+    <div class="stat-box"><div class="stat-label"><strong>Higher conversion:</strong> faster lead response + smarter routing</div></div>
+    <div class="stat-box"><div class="stat-label"><strong>Lower risk:</strong> proactive compliance flags + audit trail</div></div>
+    <div class="stat-box"><div class="stat-label"><strong>More capacity per headcount:</strong> less admin per file</div></div>
+  </div>
+
   <!-- Target Users -->
-  <h3 class="fw-700 text-navy mb-8">Target Users</h3>
-  <div class="grid-4" style="margin-bottom:0;">
+  <h3 class="fw-700 text-navy mb-8">Primary Users</h3>
+  <div class="grid-4 mb-16">
     <div class="stat-box"><div class="stat-label">Loan Officers</div></div>
-    <div class="stat-box"><div class="stat-label">Processors &amp; UWs</div></div>
+    <div class="stat-box"><div class="stat-label">Processors</div></div>
+    <div class="stat-box"><div class="stat-label">Underwriters</div></div>
     <div class="stat-box"><div class="stat-label">Branch Managers</div></div>
-    <div class="stat-box"><div class="stat-label">Borrowers &amp; Realtors</div></div>
+  </div>
+  <h3 class="fw-700 text-navy mb-8">External Participants</h3>
+  <div class="grid-2 mb-24" style="max-width:600px;">
+    <div class="stat-box"><div class="stat-label">Borrowers (via portals)</div></div>
+    <div class="stat-box"><div class="stat-label">Realtors (via portals)</div></div>
+  </div>
+
+  <!-- Proof Strip -->
+  <div class="proof-strip">
+    <span data-stat="routes">3,934</span> API endpoints
+    <span class="proof-dot">&bull;</span>
+    <span data-stat="services">230</span> backend services
+    <span class="proof-dot">&bull;</span>
+    Multi-tenant org isolation
+    <span class="proof-dot">&bull;</span>
+    Audit logs
   </div>
 </section>
 
@@ -827,7 +998,7 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
   <div class="section-header">
     <div>
       <div class="section-title">Core Features &amp; Modules</div>
-      <div class="section-subtitle">Complete platform capabilities across 15+ modules</div>
+      <div class="section-subtitle">Complete platform capabilities across 35+ modules</div>
     </div>
   </div>
 
@@ -839,7 +1010,7 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
         <div><div class="card-title">AI Agent System</div></div>
         <span class="badge badge-live">Live</span>
       </div>
-      <div class="card-desc">22 specialized agents with LangGraph orchestration. Intent-based tool loading delivers only 8&ndash;16 relevant tools per query.</div>
+      <div class="card-desc">Specialized agents with LangGraph orchestration. Intent-based tool loading delivers only 8&ndash;16 relevant tools per query.</div>
       <div class="cap-list">
         <span class="cap-tag">Lead Agent</span>
         <span class="cap-tag">Pipeline Agent</span>
@@ -859,11 +1030,11 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
         <span class="cap-tag">Bottleneck Alerts</span>
       </div>
     </div>
-    <div class="card" data-fallback>
-      <div class="card-header">
-        <div><div class="card-title">Loading...</div></div>
-      </div>
-      <div class="card-desc">Feature data is loading from the server.</div>
+    <div class="skeleton-card" data-fallback>
+      <div class="skeleton-bar h-20 w-60"></div>
+      <div class="skeleton-bar w-80"></div>
+      <div class="skeleton-bar w-80"></div>
+      <div class="skeleton-bar w-40"></div>
     </div>
   </div>
 </section>
@@ -879,11 +1050,9 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
     </div>
   </div>
 
-  <div class="collapsible">
-    <button class="collapsible-toggle" onclick="toggleCollapsible(this)">
-      Loan Lifecycle (21 Stages)
-    </button>
-    <div class="collapsible-content">
+  <details class="section-details">
+    <summary>Loan Lifecycle (21 Stages)</summary>
+    <div class="details-body">
       <p class="text-sm mb-16">The complete loan origination workflow from application to funding, with automated SLA tracking and AI-driven stage management.</p>
       <div class="flow-container">
         <div class="flow">
@@ -911,13 +1080,11 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
         <p class="text-sm"><strong>Automation:</strong> Stale-loan detection (configurable thresholds per stage), automatic milestone completion, nudge task creation, supervisor escalation at 10+ days.</p>
       </div>
     </div>
-  </div>
+  </details>
 
-  <div class="collapsible">
-    <button class="collapsible-toggle" onclick="toggleCollapsible(this)">
-      Document Collection &amp; Tracking
-    </button>
-    <div class="collapsible-content">
+  <details class="section-details">
+    <summary>Document Collection &amp; Tracking</summary>
+    <div class="details-body">
       <p class="text-sm mb-16">Automated document lifecycle from needs-list generation through AI classification, review, and expiry monitoring.</p>
       <div class="flow-container">
         <div class="flow">
@@ -941,14 +1108,12 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
         <p class="text-sm"><strong>Automation:</strong> Auto-classification, screenshot detection, cascading reminders (email then SMS), auto-renewal requests 30 days before expiry.</p>
       </div>
     </div>
-  </div>
+  </details>
 
-  <div class="collapsible">
-    <button class="collapsible-toggle" onclick="toggleCollapsible(this)">
-      Lead Scoring &amp; Nurturing
-    </button>
-    <div class="collapsible-content">
-      <p class="text-sm mb-16">9-stage lead lifecycle with automated scoring (A-D), intelligent routing, and cadenced engagement sequences.</p>
+  <details class="section-details">
+    <summary>Lead Scoring &amp; Nurturing</summary>
+    <div class="details-body">
+      <p class="text-sm mb-16">9-stage lead lifecycle with automated scoring (A&ndash;D), intelligent routing, and cadenced engagement sequences.</p>
       <div class="flow-container">
         <div class="flow">
           <div class="flow-step"><div class="flow-step-label">New Lead</div><div class="flow-step-sub">Auto-scored</div></div>
@@ -967,13 +1132,11 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
         <p class="text-sm"><strong>Automation:</strong> Auto-routing by loan type, welcome SMS/email sequence, discovery appointment scheduling, 7-day touchpoint cadence with AI-personalized tone.</p>
       </div>
     </div>
-  </div>
+  </details>
 
-  <div class="collapsible">
-    <button class="collapsible-toggle" onclick="toggleCollapsible(this)">
-      Omni-Channel Communications
-    </button>
-    <div class="collapsible-content">
+  <details class="section-details">
+    <summary>Omni-Channel Communications</summary>
+    <div class="details-body">
       <p class="text-sm mb-16">Coordinated messaging across email, SMS, voice, and in-app channels with compliance checking and AI-generated content.</p>
       <div class="flow-container">
         <div class="flow">
@@ -993,13 +1156,11 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
         <p class="text-sm"><strong>Automation:</strong> AI auto-sends at &gt;90% confidence, tone adjustment per borrower profile (first-time buyer vs. investor vs. repeat client), overlap prevention.</p>
       </div>
     </div>
-  </div>
+  </details>
 
-  <div class="collapsible">
-    <button class="collapsible-toggle" onclick="toggleCollapsible(this)">
-      Company &amp; User Onboarding
-    </button>
-    <div class="collapsible-content">
+  <details class="section-details">
+    <summary>Company &amp; User Onboarding</summary>
+    <div class="details-body">
       <p class="text-sm mb-16">Multi-step guided onboarding from account creation through team setup, branding, integrations, and payment.</p>
       <div class="flow-container">
         <div class="flow">
@@ -1018,14 +1179,12 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
         <p class="text-sm"><strong>Automation:</strong> Invitation emails, role auto-assignment, default workflow creation, Stripe subscription setup, 14-day free trial.</p>
       </div>
     </div>
-  </div>
+  </details>
 
-  <div class="collapsible">
-    <button class="collapsible-toggle" onclick="toggleCollapsible(this)">
-      Compliance Monitoring
-    </button>
-    <div class="collapsible-content">
-      <p class="text-sm mb-16">Continuous compliance checking across TRID, RESPA, fair lending, call recording consent, and fee tolerance.</p>
+  <details class="section-details">
+    <summary>Compliance Monitoring</summary>
+    <div class="details-body">
+      <p class="text-sm mb-16">Compliance-assist monitoring for TRID/RESPA/fair lending and state-specific consent rules, with alerts and audit trails.</p>
       <div class="flow-container">
         <div class="flow">
           <div class="flow-step"><div class="flow-step-label">Monitor</div><div class="flow-step-sub">Real-time</div></div>
@@ -1043,7 +1202,7 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
         <p class="text-sm"><strong>Checks:</strong> LE timing (3 business days), CD timing (3 days before close), zero/10% fee tolerance, state recording consent (15 two-party states), rate variance &gt;0.25%.</p>
       </div>
     </div>
-  </div>
+  </details>
 </section>
 
 <!-- ============================================================
@@ -1073,9 +1232,9 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
         <tr><td><strong>1</strong></td><td><strong>5-Minute Lead Response</strong></td><td>Lead created / web form</td><td>Auto-qualify, route by loan type, send welcome SMS + email, schedule call</td><td>Twilio, AI Agent</td><td>95%+ first-contact SLA</td></tr>
         <tr><td><strong>2</strong></td><td><strong>Pipeline Stage Orchestration</strong></td><td>Loan stage changed</td><td>SLA clock start, milestone tracking, task creation, next-step notifications</td><td>SLA Engine, Scheduler</td><td>20% fewer stuck loans</td></tr>
         <tr><td><strong>3</strong></td><td><strong>Smart Document Collection</strong></td><td>Application submitted</td><td>Generate needs list, send requests, cascade reminders, AI classify on upload</td><td>AI Agent, Email, SMS</td><td>30% faster doc chase</td></tr>
-        <tr><td><strong>4</strong></td><td><strong>TRID Compliance Guard</strong></td><td>Disclosure events</td><td>Validate LE/CD timing, check fee tolerance, flag violations, create cure tasks</td><td>Compliance Engine</td><td>Zero tolerance violations</td></tr>
+        <tr><td><strong>4</strong></td><td><strong>TRID Compliance Guard</strong></td><td>Disclosure events</td><td>Validate LE/CD timing, check fee tolerance, flag violations, create cure tasks</td><td>Compliance Engine</td><td>Target: reduce violations via early detection</td></tr>
         <tr><td><strong>5</strong></td><td><strong>AI Call Intelligence</strong></td><td>Call completed</td><td>Transcribe, extract data, QA score, create tasks, update loan record</td><td>Twilio, AI Agent, NLP</td><td>Eliminates manual notes</td></tr>
-        <tr><td><strong>6</strong></td><td><strong>Borrower Communication Cadence</strong></td><td>7 days since last contact</td><td>AI drafts personalized message, compliance check, auto-send if &gt;90% confidence</td><td>AI Agent, Email, SMS</td><td>100% touchpoint compliance</td></tr>
+        <tr><td><strong>6</strong></td><td><strong>Borrower Communication Cadence</strong></td><td>7 days since last contact</td><td>AI drafts personalized message, compliance check, auto-send if &gt;90% confidence</td><td>AI Agent, Email, SMS</td><td>Target: consistent touchpoint cadence</td></tr>
         <tr><td><strong>7</strong></td><td><strong>Stale Loan Sweep</strong></td><td>Daily at 9 AM</td><td>Scan all active loans, identify over-threshold, create nudge tasks, escalate</td><td>Scheduler, AI Agent</td><td>24-hour stuck detection</td></tr>
         <tr><td><strong>8</strong></td><td><strong>Portfolio Refi Scanner</strong></td><td>Monthly schedule</td><td>Scan closed loans, check rate savings, calculate break-even, create campaigns</td><td>Rate Monitor, AI Agent</td><td>20+ refi opps/month</td></tr>
         <tr><td><strong>9</strong></td><td><strong>Webhook Event Broadcast</strong></td><td>Any system event</td><td>HMAC-signed webhook to Zapier/Make, retry with exponential backoff</td><td>Webhook Service</td><td>5,000+ app connections</td></tr>
@@ -1122,7 +1281,7 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
 
   <h3 class="fw-700 text-navy mb-16">Engineering Metrics</h3>
   <div class="grid-4 mb-24">
-    <div class="stat-box"><div class="stat-value" data-stat="loc-metric">1,465,946</div><div class="stat-label">Lines of Source Code</div></div>
+    <div class="stat-box"><div class="stat-value" data-stat="loc-metric">1,465,946</div><div class="stat-label">Lines of Code</div></div>
     <div class="stat-box"><div class="stat-value" data-stat="commits">4,512</div><div class="stat-label">Git Commits</div></div>
     <div class="stat-box"><div class="stat-value" data-stat="routes">3,934</div><div class="stat-label">API Endpoints</div></div>
     <div class="stat-box"><div class="stat-value" data-stat="services">230</div><div class="stat-label">Backend Services</div></div>
@@ -1131,36 +1290,40 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
   <h3 class="fw-700 text-navy mb-16">AI Performance Benchmarks</h3>
   <div class="grid-3 mb-24">
     <div class="stat-box">
-      <div class="stat-value" style="color:var(--teal);">50-80%</div>
+      <div class="stat-value" style="color:var(--teal);">50&ndash;80%</div>
       <div class="stat-label">Token Reduction via Optimized Prompts</div>
     </div>
     <div class="stat-box">
-      <div class="stat-value" style="color:var(--teal);">5-7s</div>
-      <div class="stat-label">Latency Saved (Unified LLM Mode)</div>
+      <div class="stat-value" style="color:var(--teal);">5&ndash;7s</div>
+      <div class="stat-label tooltip">Latency Saved (Unified LLM Mode)<span class="tooltip-text">Unified LLM Mode = a single AI routing layer that chooses the best model per task to reduce latency and cost while preserving provider flexibility.</span></div>
     </div>
     <div class="stat-box">
-      <div class="stat-value" style="color:var(--teal);">8-16</div>
+      <div class="stat-value" style="color:var(--teal);">8&ndash;16</div>
       <div class="stat-label">Tools Loaded per Query (vs 173+)</div>
     </div>
   </div>
 
-  <h3 class="fw-700 text-navy mb-16">Operational Impact Targets</h3>
+  <details class="section-details" open>
+  <summary>Operational Impact Targets</summary>
+  <div class="details-body">
   <div class="table-wrapper">
     <table>
       <thead>
         <tr><th>Metric</th><th>Before</th><th>After (Target)</th><th>Improvement</th></tr>
       </thead>
       <tbody>
-        <tr><td>Lead First-Contact Time</td><td>2-4 hours</td><td>&lt; 5 minutes</td><td style="color:var(--green); font-weight:600;">95%+ faster</td></tr>
-        <tr><td>Document Collection Cycle</td><td>7-14 days</td><td>3-7 days</td><td style="color:var(--green); font-weight:600;">30-50% reduction</td></tr>
+        <tr><td>Lead First-Contact Time</td><td>2&ndash;4 hours</td><td>&lt; 5 minutes</td><td style="color:var(--green); font-weight:600;">95%+ faster</td></tr>
+        <tr><td>Document Collection Cycle</td><td>7&ndash;14 days</td><td>3&ndash;7 days</td><td style="color:var(--green); font-weight:600;">30&ndash;50% reduction</td></tr>
         <tr><td>Stuck Loan Detection</td><td>Weekly review</td><td>&lt; 24 hours</td><td style="color:var(--green); font-weight:600;">6x faster</td></tr>
         <tr><td>Compliance Violations</td><td>Manual audits</td><td>Real-time detection</td><td style="color:var(--green); font-weight:600;">Proactive vs reactive</td></tr>
-        <tr><td>Call Notes / Data Entry</td><td>10-15 min/call</td><td>Automated</td><td style="color:var(--green); font-weight:600;">Eliminated</td></tr>
+        <tr><td>Call Notes / Data Entry</td><td>10&ndash;15 min/call</td><td>Automated</td><td style="color:var(--green); font-weight:600;">Eliminated</td></tr>
         <tr><td>Borrower Communication Gap</td><td>Inconsistent</td><td>7-day max cadence</td><td style="color:var(--green); font-weight:600;">100% touchpoint rate</td></tr>
         <tr><td>Portfolio Refi Opportunities</td><td>Manual review</td><td>20+ auto-identified/month</td><td style="color:var(--green); font-weight:600;">Net-new revenue</td></tr>
       </tbody>
     </table>
   </div>
+  </div><!-- /.details-body -->
+  </details>
 
   <h3 class="fw-700 text-navy mb-16 mt-24">Platform Scope</h3>
   <div class="grid-4">
@@ -1182,35 +1345,41 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
     </div>
   </div>
 
-  <div class="grid-3">
-    <div>
-      <h3 class="fw-700 text-teal mb-16">Near-Term (30 Days)</h3>
-      <div class="roadmap-track">
-        <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-teal"></div><div class="roadmap-label text-teal">Agent Refinement</div><div class="roadmap-title">Agent Gym v2</div><div class="roadmap-desc">Enhanced agent testing environment with automated regression testing against production scenarios.</div></div>
-        <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-teal"></div><div class="roadmap-label text-teal">Documents</div><div class="roadmap-title">Bank Statement Auto-Parse</div><div class="roadmap-desc">Automated income worksheet generation from uploaded bank statements with multi-month aggregation.</div></div>
-        <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-teal"></div><div class="roadmap-label text-teal">Mobile</div><div class="roadmap-title">CarPlay Document Upload</div><div class="roadmap-desc">Voice-activated document upload and loan status updates via CarPlay for on-the-go LOs.</div></div>
-        <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-teal"></div><div class="roadmap-label text-teal">Compliance</div><div class="roadmap-title">State Licensing Tracker</div><div class="roadmap-desc">Automated NMLS license renewal tracking and CE credit monitoring per state.</div></div>
-      </div>
-    </div>
-    <div>
-      <h3 class="fw-700 text-navy mb-16">Mid-Term (90 Days)</h3>
-      <div class="roadmap-track">
-        <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-navy"></div><div class="roadmap-label text-navy">AI</div><div class="roadmap-title">Multi-Agent Collaboration</div><div class="roadmap-desc">Agents hand off context seamlessly&mdash;Lead Agent passes qualified borrower data directly to Pipeline Agent.</div></div>
-        <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-navy"></div><div class="roadmap-label text-navy">Portal</div><div class="roadmap-title">Realtor White-Label Portals</div><div class="roadmap-desc">Fully branded partner portals with real-time deal tracking, commission visibility, and co-marketing tools.</div></div>
-        <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-navy"></div><div class="roadmap-label text-navy">Analytics</div><div class="roadmap-title">Predictive Pipeline Scoring</div><div class="roadmap-desc">ML-based probability-to-close scoring using 50+ loan attributes and historical conversion patterns.</div></div>
-        <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-navy"></div><div class="roadmap-label text-navy">Integrations</div><div class="roadmap-title">LOS Bidirectional Sync</div><div class="roadmap-desc">Real-time sync with Encompass, BytePro, and LendingPad loan origination systems.</div></div>
-      </div>
-    </div>
-    <div>
-      <h3 class="fw-700 mb-16" style="color:var(--gray-500);">Vision Items</h3>
-      <div class="roadmap-track">
-        <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-gray"></div><div class="roadmap-label" style="color:var(--gray-500);">Platform</div><div class="roadmap-title">Marketplace</div><div class="roadmap-desc">Third-party app marketplace for custom integrations, templates, and workflow plugins.</div></div>
-        <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-gray"></div><div class="roadmap-label" style="color:var(--gray-500);">AI</div><div class="roadmap-title">Autonomous Loan Processing</div><div class="roadmap-desc">End-to-end AI-managed processing for low-complexity loans with human oversight.</div></div>
-        <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-gray"></div><div class="roadmap-label" style="color:var(--gray-500);">Scale</div><div class="roadmap-title">Enterprise Multi-Branch</div><div class="roadmap-desc">Regional and national rollout support with branch-level dashboards, corporate reporting, and centralized compliance.</div></div>
-        <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-gray"></div><div class="roadmap-label" style="color:var(--gray-500);">Revenue</div><div class="roadmap-title">Embedded Lending APIs</div><div class="roadmap-desc">Public APIs enabling real estate platforms and fintechs to embed Perennia-powered mortgage workflows.</div></div>
-      </div>
+  <details class="section-details" open>
+  <summary>Near-Term (30 Days)</summary>
+  <div class="details-body">
+    <div class="roadmap-track">
+      <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-teal"></div><div class="roadmap-label text-teal">Agent Refinement</div><div class="roadmap-title">Agent Gym v2</div><div class="roadmap-desc">Enhanced agent testing environment with automated regression testing against production scenarios.</div></div>
+      <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-teal"></div><div class="roadmap-label text-teal">Documents</div><div class="roadmap-title">Bank Statement Auto-Parse</div><div class="roadmap-desc">Automated income worksheet generation from uploaded bank statements with multi-month aggregation.</div></div>
+      <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-teal"></div><div class="roadmap-label text-teal">Mobile</div><div class="roadmap-title">CarPlay Document Upload</div><div class="roadmap-desc">Voice-activated document upload and loan status updates via CarPlay for on-the-go LOs.</div></div>
+      <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-teal"></div><div class="roadmap-label text-teal">Compliance</div><div class="roadmap-title">State Licensing Tracker</div><div class="roadmap-desc">Automated NMLS license renewal tracking and CE credit monitoring per state.</div></div>
     </div>
   </div>
+  </details>
+
+  <details class="section-details">
+  <summary>Mid-Term (90 Days)</summary>
+  <div class="details-body">
+    <div class="roadmap-track">
+      <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-navy"></div><div class="roadmap-label text-navy">AI</div><div class="roadmap-title">Multi-Agent Collaboration</div><div class="roadmap-desc">Agents hand off context seamlessly&mdash;Lead Agent passes qualified borrower data directly to Pipeline Agent.</div></div>
+      <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-navy"></div><div class="roadmap-label text-navy">Portal</div><div class="roadmap-title">Realtor White-Label Portals</div><div class="roadmap-desc">Fully branded partner portals with real-time deal tracking, commission visibility, and co-marketing tools.</div></div>
+      <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-navy"></div><div class="roadmap-label text-navy">Analytics</div><div class="roadmap-title">Predictive Pipeline Scoring</div><div class="roadmap-desc">ML-based probability-to-close scoring using 50+ loan attributes and historical conversion patterns.</div></div>
+      <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-navy"></div><div class="roadmap-label text-navy">Integrations</div><div class="roadmap-title">LOS Bidirectional Sync</div><div class="roadmap-desc">Real-time sync with Encompass, BytePro, and LendingPad loan origination systems.</div></div>
+    </div>
+  </div>
+  </details>
+
+  <details class="section-details">
+  <summary>Vision Items</summary>
+  <div class="details-body">
+    <div class="roadmap-track">
+      <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-gray"></div><div class="roadmap-label" style="color:var(--gray-500);">Platform</div><div class="roadmap-title">Marketplace</div><div class="roadmap-desc">Third-party app marketplace for custom integrations, templates, and workflow plugins.</div></div>
+      <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-gray"></div><div class="roadmap-label" style="color:var(--gray-500);">AI</div><div class="roadmap-title">Autonomous Loan Processing</div><div class="roadmap-desc">End-to-end AI-managed processing for low-complexity loans with human oversight.</div></div>
+      <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-gray"></div><div class="roadmap-label" style="color:var(--gray-500);">Scale</div><div class="roadmap-title">Enterprise Multi-Branch</div><div class="roadmap-desc">Regional and national rollout support with branch-level dashboards, corporate reporting, and centralized compliance.</div></div>
+      <div class="roadmap-item"><div class="roadmap-dot roadmap-dot-gray"></div><div class="roadmap-label" style="color:var(--gray-500);">Revenue</div><div class="roadmap-title">Embedded Lending APIs</div><div class="roadmap-desc">Public APIs enabling real estate platforms and fintechs to embed Perennia-powered mortgage workflows.</div></div>
+    </div>
+  </div>
+  </details>
 </section>
 
 <!-- ============================================================
@@ -1285,7 +1454,7 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
     <div class="arch-layer">
       <div class="arch-label">External Services</div>
       <div class="arch-items">
-        <div class="arch-item arch-item-teal">Claude / OpenAI</div>
+        <div class="arch-item arch-item-teal">LLM Providers (configurable)</div>
         <div class="arch-item arch-item-teal">Twilio</div>
         <div class="arch-item arch-item-teal">Salesforce</div>
         <div class="arch-item arch-item-teal">DocuSign</div>
@@ -1298,7 +1467,9 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
   </div>
 
   <!-- Tech Stack -->
-  <h3 class="fw-700 text-navy mb-16">Technology Stack</h3>
+  <details class="section-details">
+  <summary>Technology Stack</summary>
+  <div class="details-body">
   <div class="grid-2 mb-24">
     <div>
       <div class="tech-stack-group">
@@ -1329,8 +1500,7 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
       <div class="tech-stack-group">
         <div class="tech-stack-label">AI / ML</div>
         <div class="tech-pills">
-          <span class="tech-pill tech-pill-primary">Claude (Anthropic)</span>
-          <span class="tech-pill tech-pill-primary">OpenAI</span>
+          <span class="tech-pill tech-pill-primary">LLM Providers (configurable)</span>
           <span class="tech-pill tech-pill-primary">LangGraph</span>
           <span class="tech-pill tech-pill-primary">LangChain</span>
           <span class="tech-pill tech-pill-muted">Pinecone</span>
@@ -1350,15 +1520,21 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
       </div>
     </div>
   </div>
+  </div><!-- /.details-body -->
+  </details>
 
   <!-- Database Highlights -->
-  <h3 class="fw-700 text-navy mb-16">Database Structure</h3>
+  <details class="section-details">
+  <summary>Database Structure</summary>
+  <div class="details-body">
   <div class="grid-3">
     <div class="stat-box"><div class="stat-value" data-stat="models">723+</div><div class="stat-label">Data Models</div></div>
     <div class="stat-box"><div class="stat-value">175</div><div class="stat-label">Migrations</div></div>
     <div class="stat-box"><div class="stat-value">Multi-Tenant</div><div class="stat-label">Organization Isolation</div></div>
   </div>
   <p class="text-sm text-muted mt-16">Key entities: Loans (53-field profile with 27 milestone dates), Leads, Contacts, Tasks, Documents, Call Records, SLA Milestones, Workflows, AI Agent State, Conversations, Calendar Events, Compliance Issues, and Financial Intelligence.</p>
+  </div><!-- /.details-body -->
+  </details>
 </section>
 
 <!-- ============================================================
@@ -1366,7 +1542,7 @@ hr.divider { border: none; border-top: 1px solid var(--gray-200); margin: 32px 0
      ============================================================ -->
 <footer class="footer">
   <p><strong>Perennia AI</strong> &mdash; Mortgage CRM Platform Overview</p>
-  <p style="margin-top:8px;" id="footer-date">Generated January 27, 2026</p>
+  <p style="margin-top:8px;" id="footer-date">Last updated January 28, 2026</p>
   <p style="margin-top:8px; font-size:.78rem;" id="footer-stats">1,465,946 lines of code &bull; 3,704 source files &bull; 4,512 commits &bull; Built Nov 2025 &ndash; present</p>
 </footer>
 
@@ -1446,12 +1622,17 @@ function renderStats(stats) {
     els.forEach(function(el) { el.textContent = map[key]; });
   });
 
-  /* Footer */
+  /* Footer + hero last-updated stamp */
   var d = new Date(stats.generated_at);
   var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var dateStr = months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
   var footerDate = document.getElementById('footer-date');
   if (footerDate) {
-    footerDate.textContent = 'Last updated ' + months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+    footerDate.textContent = 'Last updated ' + dateStr;
+  }
+  var heroDate = document.getElementById('last-updated-date');
+  if (heroDate) {
+    heroDate.textContent = dateStr;
   }
   var footerStats = document.getElementById('footer-stats');
   if (footerStats) {
@@ -1576,6 +1757,11 @@ function showWhatsNew(entries) {
     });
   });
 }
+
+/* --- Print: force all <details> open --- */
+window.onbeforeprint = function() {
+  document.querySelectorAll('details').forEach(function(d) { d.open = true; });
+};
 
 /* --- Init --- */
 function initPage() {
