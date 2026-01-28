@@ -1436,6 +1436,508 @@ def create_test_reconciliation_data(db, user_id, org_id):
     return created_events, created_extracts
 
 
+def create_test_activities(db, user_id, org_id):
+    """Create test activity records."""
+    logger.info("Creating test activities...")
+    created = 0
+
+    for activity in DUMMY_ACTIVITIES:
+        # Resolve linked entity
+        lead_id = None
+        loan_id = None
+        mum_client_id = None
+
+        if activity["link_type"] == "lead":
+            row = db.execute(text("SELECT id FROM leads WHERE email = :email AND organization_id = :org"),
+                            {"email": activity["link_ref"], "org": org_id}).fetchone()
+            if row:
+                lead_id = row.id
+        elif activity["link_type"] == "loan":
+            row = db.execute(text("SELECT id FROM loans WHERE loan_number = :ln AND organization_id = :org"),
+                            {"ln": activity["link_ref"], "org": org_id}).fetchone()
+            if row:
+                loan_id = row.id
+        elif activity["link_type"] == "mum":
+            row = db.execute(text("SELECT id FROM mum_clients WHERE email = :email"),
+                            {"email": activity["link_ref"]}).fetchone()
+            if row:
+                mum_client_id = row.id
+
+        created_at = datetime.now(timezone.utc) - timedelta(days=activity.get("days_ago", 0))
+
+        db.execute(text("""
+            INSERT INTO activities (
+                organization_id, type, content, lead_id, loan_id, mum_client_id,
+                user_id, duration, sentiment, created_at
+            ) VALUES (
+                :org_id, :type, :content, :lead_id, :loan_id, :mum_id,
+                :user_id, :duration, :sentiment, :created_at
+            )
+        """), {
+            "org_id": org_id,
+            "type": activity["type"],
+            "content": activity["content"],
+            "lead_id": lead_id,
+            "loan_id": loan_id,
+            "mum_id": mum_client_id,
+            "user_id": user_id,
+            "duration": activity.get("duration"),
+            "sentiment": activity.get("sentiment", "neutral"),
+            "created_at": created_at,
+        })
+        created += 1
+
+    db.commit()
+    logger.info(f"Created {created} test activities")
+    return created
+
+
+def create_test_calendar_events(db, user_id, org_id):
+    """Create test calendar events."""
+    logger.info("Creating test calendar events...")
+    created = 0
+
+    for event in DUMMY_CALENDAR_EVENTS:
+        lead_id = None
+        loan_id = None
+
+        if event["link_type"] == "lead":
+            row = db.execute(text("SELECT id FROM leads WHERE email = :email AND organization_id = :org"),
+                            {"email": event["link_ref"], "org": org_id}).fetchone()
+            if row:
+                lead_id = row.id
+        elif event["link_type"] == "loan":
+            row = db.execute(text("SELECT id FROM loans WHERE loan_number = :ln AND organization_id = :org"),
+                            {"ln": event["link_ref"], "org": org_id}).fetchone()
+            if row:
+                loan_id = row.id
+        elif event["link_type"] == "mum":
+            # MUM events don't have direct FK, just note in description
+            pass
+
+        start_time = datetime.now(timezone.utc).replace(hour=event["hour"], minute=0, second=0, microsecond=0) + timedelta(days=event["days_from_now"])
+        end_time = start_time + timedelta(minutes=event["duration_min"])
+
+        db.execute(text("""
+            INSERT INTO calendar_events (
+                title, description, start_time, end_time, event_type,
+                lead_id, loan_id, user_id, status, created_at
+            ) VALUES (
+                :title, :desc, :start, :end, :type,
+                :lead_id, :loan_id, :user_id, 'scheduled', CURRENT_TIMESTAMP
+            )
+        """), {
+            "title": event["title"],
+            "desc": event["description"],
+            "start": start_time,
+            "end": end_time,
+            "type": event["event_type"],
+            "lead_id": lead_id,
+            "loan_id": loan_id,
+            "user_id": user_id,
+        })
+        created += 1
+
+    db.commit()
+    logger.info(f"Created {created} test calendar events")
+    return created
+
+
+def create_test_documents(db, user_id, org_id):
+    """Create test document records."""
+    logger.info("Creating test documents...")
+    created = 0
+
+    for doc in DUMMY_DOCUMENTS:
+        row = db.execute(text("SELECT id, borrower_name FROM loans WHERE loan_number = :ln AND organization_id = :org"),
+                        {"ln": doc["loan_ref"], "org": org_id}).fetchone()
+        if not row:
+            continue
+
+        loan_id = row.id
+
+        db.execute(text("""
+            INSERT INTO documents (
+                organization_id, loan_id, doc_type, doc_category,
+                filename, original_filename, file_location, status,
+                source, uploaded_by_user_id, uploaded_at
+            ) VALUES (
+                :org_id, :loan_id, :doc_type, :category,
+                :filename, :filename, :location, 'active',
+                'MANUAL_UPLOAD', :user_id, CURRENT_TIMESTAMP
+            )
+        """), {
+            "org_id": org_id,
+            "loan_id": loan_id,
+            "doc_type": doc["doc_type"],
+            "category": doc["category"],
+            "filename": doc["filename"],
+            "location": f"/documents/{org_id}/{loan_id}/{doc['filename']}",
+            "user_id": user_id,
+        })
+        created += 1
+
+    db.commit()
+    logger.info(f"Created {created} test documents")
+    return created
+
+
+def create_test_notifications(db, user_id, org_id):
+    """Create test notifications."""
+    logger.info("Creating test notifications...")
+    created = 0
+
+    for notif in DUMMY_NOTIFICATIONS:
+        created_at = datetime.now(timezone.utc) - timedelta(days=notif.get("days_ago", 0))
+        read_at = created_at if notif.get("read") else None
+
+        db.execute(text("""
+            INSERT INTO notifications (
+                user_id, type, title, message, is_read, read_at, created_at
+            ) VALUES (
+                :user_id, :type, :title, :message, :is_read, :read_at, :created_at
+            )
+        """), {
+            "user_id": user_id,
+            "type": notif["type"],
+            "title": notif["title"],
+            "message": notif["message"],
+            "is_read": notif.get("read", False),
+            "read_at": read_at,
+            "created_at": created_at,
+        })
+        created += 1
+
+    db.commit()
+    logger.info(f"Created {created} test notifications")
+    return created
+
+
+def create_test_sms_conversations(db, user_id, org_id):
+    """Create test SMS conversations."""
+    logger.info("Creating test SMS conversations...")
+    conv_count = 0
+    msg_count = 0
+
+    for conv in DUMMY_SMS_CONVERSATIONS:
+        # Get lead_id
+        lead_id = None
+        row = db.execute(text("SELECT id FROM leads WHERE email = :email AND organization_id = :org"),
+                        {"email": conv["link_ref"], "org": org_id}).fetchone()
+        if row:
+            lead_id = row.id
+
+        # Create conversation
+        db.execute(text("""
+            INSERT INTO sms_conversations (
+                phone_number, user_id, lead_id, contact_name,
+                is_active, ai_enabled, message_count, created_at
+            ) VALUES (
+                :phone, :user_id, :lead_id, :contact_name,
+                true, true, :msg_count, CURRENT_TIMESTAMP
+            )
+        """), {
+            "phone": conv["contact_phone"],
+            "user_id": user_id,
+            "lead_id": lead_id,
+            "contact_name": conv["contact_name"],
+            "msg_count": len(conv["messages"]),
+        })
+        db.flush()
+        conv_count += 1
+
+        # Get conversation ID
+        conv_row = db.execute(text("""
+            SELECT id FROM sms_conversations WHERE phone_number = :phone AND user_id = :user_id
+            ORDER BY id DESC LIMIT 1
+        """), {"phone": conv["contact_phone"], "user_id": user_id}).fetchone()
+
+        if not conv_row:
+            continue
+
+        conv_id = conv_row.id
+
+        # Create messages
+        for msg in conv["messages"]:
+            created_at = datetime.now(timezone.utc) - timedelta(hours=msg["hours_ago"])
+            from_num = "(555) 000-0000" if msg["direction"] == "outbound" else conv["contact_phone"]
+            to_num = conv["contact_phone"] if msg["direction"] == "outbound" else "(555) 000-0000"
+
+            db.execute(text("""
+                INSERT INTO sms_messages (
+                    user_id, lead_id, conversation_id,
+                    to_number, from_number, message, direction,
+                    status, created_at
+                ) VALUES (
+                    :user_id, :lead_id, :conv_id,
+                    :to_num, :from_num, :message, :direction,
+                    :status, :created_at
+                )
+            """), {
+                "user_id": user_id,
+                "lead_id": lead_id,
+                "conv_id": conv_id,
+                "to_num": to_num,
+                "from_num": from_num,
+                "message": msg["content"],
+                "direction": msg["direction"],
+                "status": "delivered" if msg["direction"] == "outbound" else "received",
+                "created_at": created_at,
+            })
+            msg_count += 1
+
+    db.commit()
+    logger.info(f"Created {conv_count} SMS conversations with {msg_count} messages")
+    return conv_count, msg_count
+
+
+def create_test_email_messages(db, user_id, org_id):
+    """Create test email messages."""
+    logger.info("Creating test email messages...")
+    created = 0
+
+    user_email = TEST_EMAIL
+
+    for email in DUMMY_EMAIL_MESSAGES:
+        lead_id = None
+        loan_id = None
+
+        if email["link_type"] == "lead":
+            row = db.execute(text("SELECT id FROM leads WHERE email = :email AND organization_id = :org"),
+                            {"email": email["link_ref"], "org": org_id}).fetchone()
+            if row:
+                lead_id = row.id
+        elif email["link_type"] == "loan":
+            row = db.execute(text("SELECT id FROM loans WHERE loan_number = :ln AND organization_id = :org"),
+                            {"ln": email["link_ref"], "org": org_id}).fetchone()
+            if row:
+                loan_id = row.id
+
+        created_at = datetime.now(timezone.utc) - timedelta(days=email.get("days_ago", 0))
+
+        to_addr = email["to_email"] if email["direction"] == "outbound" else user_email
+        from_addr = user_email if email["direction"] == "outbound" else email["to_email"]
+
+        db.execute(text("""
+            INSERT INTO email_messages (
+                user_id, lead_id, loan_id, to_email, from_email,
+                subject, body, direction, status, created_at
+            ) VALUES (
+                :user_id, :lead_id, :loan_id, :to_email, :from_email,
+                :subject, :body, :direction, :status, :created_at
+            )
+        """), {
+            "user_id": user_id,
+            "lead_id": lead_id,
+            "loan_id": loan_id,
+            "to_email": to_addr,
+            "from_email": from_addr,
+            "subject": email["subject"],
+            "body": email["body"],
+            "direction": email["direction"],
+            "status": "sent" if email["direction"] == "outbound" else "received",
+            "created_at": created_at,
+        })
+        created += 1
+
+    db.commit()
+    logger.info(f"Created {created} test email messages")
+    return created
+
+
+def create_test_stage_history(db, user_id, org_id):
+    """Create test stage history records."""
+    logger.info("Creating test stage history...")
+    created = 0
+
+    for history in DUMMY_STAGE_HISTORY:
+        entity_id = None
+        lead_id = None
+        loan_id = None
+
+        if history["entity_type"] == "lead":
+            row = db.execute(text("SELECT id FROM leads WHERE email = :email AND organization_id = :org"),
+                            {"email": history["ref"], "org": org_id}).fetchone()
+            if row:
+                entity_id = row.id
+                lead_id = row.id
+        elif history["entity_type"] == "loan":
+            row = db.execute(text("SELECT id FROM loans WHERE loan_number = :ln AND organization_id = :org"),
+                            {"ln": history["ref"], "org": org_id}).fetchone()
+            if row:
+                entity_id = row.id
+                loan_id = row.id
+
+        if not entity_id:
+            continue
+
+        # Create stage progression
+        prev_stage = None
+        for to_stage, days_ago in history["stages"]:
+            changed_at = datetime.now(timezone.utc) - timedelta(days=days_ago)
+
+            db.execute(text("""
+                INSERT INTO stage_history (
+                    organization_id, entity_type, entity_id,
+                    lead_id, loan_id, from_stage, to_stage,
+                    changed_at, changed_by_id
+                ) VALUES (
+                    :org_id, :entity_type, :entity_id,
+                    :lead_id, :loan_id, :from_stage, :to_stage,
+                    :changed_at, :changed_by
+                )
+            """), {
+                "org_id": org_id,
+                "entity_type": history["entity_type"],
+                "entity_id": entity_id,
+                "lead_id": lead_id,
+                "loan_id": loan_id,
+                "from_stage": prev_stage,
+                "to_stage": to_stage,
+                "changed_at": changed_at,
+                "changed_by": user_id,
+            })
+            created += 1
+            prev_stage = to_stage
+
+    db.commit()
+    logger.info(f"Created {created} test stage history records")
+    return created
+
+
+def create_test_goals(db, user_id, org_id):
+    """Create test user goals with key results."""
+    logger.info("Creating test goals...")
+    goal_count = 0
+    kr_count = 0
+
+    for goal in DUMMY_GOALS:
+        start_date = datetime.strptime(goal["start_date"], "%Y-%m-%d").date()
+        end_date = datetime.strptime(goal["end_date"], "%Y-%m-%d").date()
+
+        db.execute(text("""
+            INSERT INTO user_goals (
+                user_id, objective, start_date, end_date, status,
+                created_by_id, created_at
+            ) VALUES (
+                :user_id, :objective, :start_date, :end_date, :status,
+                :user_id, CURRENT_TIMESTAMP
+            )
+        """), {
+            "user_id": user_id,
+            "objective": goal["objective"],
+            "start_date": start_date,
+            "end_date": end_date,
+            "status": goal["status"],
+        })
+        db.flush()
+        goal_count += 1
+
+        # Get goal ID
+        goal_row = db.execute(text("""
+            SELECT id FROM user_goals WHERE user_id = :user_id AND objective = :obj
+            ORDER BY id DESC LIMIT 1
+        """), {"user_id": user_id, "obj": goal["objective"]}).fetchone()
+
+        if not goal_row:
+            continue
+
+        goal_id = goal_row.id
+
+        # Create key results
+        for kr in goal["key_results"]:
+            kr_status = "on_track"
+            if kr["current"] >= kr["target"]:
+                kr_status = "completed"
+            elif kr["current"] < kr["target"] * 0.5:
+                kr_status = "at_risk"
+            elif kr["current"] > kr["target"]:
+                kr_status = "ahead"
+
+            db.execute(text("""
+                INSERT INTO goal_key_results (
+                    goal_id, metric, target, current, unit, status
+                ) VALUES (
+                    :goal_id, :metric, :target, :current, :unit, :status
+                )
+            """), {
+                "goal_id": goal_id,
+                "metric": kr["metric"],
+                "target": kr["target"],
+                "current": kr["current"],
+                "unit": kr["unit"],
+                "status": kr_status,
+            })
+            kr_count += 1
+
+    db.commit()
+    logger.info(f"Created {goal_count} goals with {kr_count} key results")
+    return goal_count, kr_count
+
+
+def create_test_call_logs(db, user_id, org_id):
+    """Create test call log records."""
+    logger.info("Creating test call logs...")
+    created = 0
+
+    for call in DUMMY_CALL_LOGS:
+        lead_id = None
+        referral_partner_id = None
+        mum_client_id = None
+
+        if call["link_type"] == "lead":
+            row = db.execute(text("SELECT id FROM leads WHERE email = :email AND organization_id = :org"),
+                            {"email": call["link_ref"], "org": org_id}).fetchone()
+            if row:
+                lead_id = row.id
+        elif call["link_type"] == "partner":
+            row = db.execute(text("SELECT id FROM referral_partners WHERE email = :email AND organization_id = :org"),
+                            {"email": call["link_ref"], "org": org_id}).fetchone()
+            if row:
+                referral_partner_id = row.id
+        elif call["link_type"] == "mum":
+            row = db.execute(text("SELECT id FROM mum_clients WHERE email = :email"),
+                            {"email": call["link_ref"]}).fetchone()
+            if row:
+                mum_client_id = row.id
+
+        start_time = datetime.now(timezone.utc) - timedelta(days=call.get("days_ago", 0), hours=random.randint(9, 17))
+        end_time = start_time + timedelta(seconds=call.get("duration", 0))
+
+        db.execute(text("""
+            INSERT INTO call_logs (
+                agent_id, contact_phone, contact_name,
+                lead_id, referral_partner_id, mum_client_id,
+                start_time, end_time, duration_seconds,
+                outcome, disposition, notes, created_at
+            ) VALUES (
+                :agent_id, :phone, :name,
+                :lead_id, :partner_id, :mum_id,
+                :start_time, :end_time, :duration,
+                :outcome, :disposition, :notes, :created_at
+            )
+        """), {
+            "agent_id": user_id,
+            "phone": call["contact_phone"],
+            "name": call["contact_name"],
+            "lead_id": lead_id,
+            "partner_id": referral_partner_id,
+            "mum_id": mum_client_id,
+            "start_time": start_time,
+            "end_time": end_time,
+            "duration": call.get("duration", 0),
+            "outcome": call["outcome"],
+            "disposition": call.get("disposition"),
+            "notes": call.get("notes"),
+            "created_at": start_time,
+        })
+        created += 1
+
+    db.commit()
+    logger.info(f"Created {created} test call logs")
+    return created
+
+
 # =============================================================================
 # MAIN EXECUTION
 # =============================================================================
@@ -1478,6 +1980,42 @@ def seed_test_account():
         event_count, extract_count = create_test_reconciliation_data(db, user_id, org_id)
         logger.info("")
 
+        # 8. Create activities
+        activity_count = create_test_activities(db, user_id, org_id)
+        logger.info("")
+
+        # 9. Create calendar events
+        calendar_count = create_test_calendar_events(db, user_id, org_id)
+        logger.info("")
+
+        # 10. Create documents
+        document_count = create_test_documents(db, user_id, org_id)
+        logger.info("")
+
+        # 11. Create notifications
+        notification_count = create_test_notifications(db, user_id, org_id)
+        logger.info("")
+
+        # 12. Create SMS conversations
+        sms_conv_count, sms_msg_count = create_test_sms_conversations(db, user_id, org_id)
+        logger.info("")
+
+        # 13. Create email messages
+        email_count = create_test_email_messages(db, user_id, org_id)
+        logger.info("")
+
+        # 14. Create stage history
+        stage_history_count = create_test_stage_history(db, user_id, org_id)
+        logger.info("")
+
+        # 15. Create goals
+        goal_count, kr_count = create_test_goals(db, user_id, org_id)
+        logger.info("")
+
+        # 16. Create call logs
+        call_log_count = create_test_call_logs(db, user_id, org_id)
+        logger.info("")
+
         # Summary
         logger.info("=" * 80)
         logger.info("TEST ACCOUNT SEEDING COMPLETE")
@@ -1495,7 +2033,19 @@ def seed_test_account():
         logger.info(f"    Tasks:              {task_count}")
         logger.info(f"    Data Events:        {event_count}")
         logger.info(f"    Extracted Data:     {extract_count}")
-        total = leads_count + loans_count + mum_count + partner_count + task_count + event_count + extract_count
+        logger.info(f"    Activities:         {activity_count}")
+        logger.info(f"    Calendar Events:    {calendar_count}")
+        logger.info(f"    Documents:          {document_count}")
+        logger.info(f"    Notifications:      {notification_count}")
+        logger.info(f"    SMS Conversations:  {sms_conv_count} ({sms_msg_count} messages)")
+        logger.info(f"    Email Messages:     {email_count}")
+        logger.info(f"    Stage History:      {stage_history_count}")
+        logger.info(f"    Goals:              {goal_count} ({kr_count} key results)")
+        logger.info(f"    Call Logs:          {call_log_count}")
+        total = (leads_count + loans_count + mum_count + partner_count + task_count +
+                 event_count + extract_count + activity_count + calendar_count +
+                 document_count + notification_count + sms_conv_count + sms_msg_count +
+                 email_count + stage_history_count + goal_count + kr_count + call_log_count)
         logger.info(f"    TOTAL RECORDS:      {total}")
         logger.info("=" * 80)
 
@@ -1513,6 +2063,17 @@ def seed_test_account():
                 "tasks": task_count,
                 "data_events": event_count,
                 "extracted_data": extract_count,
+                "activities": activity_count,
+                "calendar_events": calendar_count,
+                "documents": document_count,
+                "notifications": notification_count,
+                "sms_conversations": sms_conv_count,
+                "sms_messages": sms_msg_count,
+                "email_messages": email_count,
+                "stage_history": stage_history_count,
+                "goals": goal_count,
+                "goal_key_results": kr_count,
+                "call_logs": call_log_count,
             },
         }
 

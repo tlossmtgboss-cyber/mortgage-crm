@@ -827,3 +827,81 @@ async def get_field_mappings(
             for f in FIELD_MAPPINGS
         ]
     }
+
+
+# =============================================================================
+# ADMIN: TEST ACCOUNT SEEDING
+# =============================================================================
+
+@router.post("/admin/seed-test-account")
+async def seed_test_account_endpoint(
+    secret_key: str = Form(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Admin endpoint to seed the test account with comprehensive demo data.
+
+    Requires a secret key for additional protection. The key should match
+    the SECRET_KEY environment variable.
+
+    Creates:
+    - Test user account (testuser@perenniaai.com / TestAccount2026!)
+    - 13 leads across various stages
+    - 10 pipeline loans
+    - 8 MUM clients
+    - 8 referral partners
+    - 15+ tasks
+    - Activities, calendar events, documents
+    - SMS/email messages, call logs
+    - Stage history, goals, notifications
+    """
+    import os
+
+    # Verify secret key
+    expected_key = os.getenv("SECRET_KEY", "")
+    if not expected_key or secret_key != expected_key:
+        raise HTTPException(
+            status_code=403,
+            detail="Invalid secret key"
+        )
+
+    # Verify user is admin
+    user_email = current_user.get("email", "")
+    user_role = current_user.get("role", "")
+    if user_role not in ["site_admin", "admin"] and not user_email.endswith("@perenniaai.com"):
+        raise HTTPException(
+            status_code=403,
+            detail="Admin access required"
+        )
+
+    try:
+        # Import and run the seed function
+        from seed_test_account import seed_test_account
+
+        result = seed_test_account()
+
+        if not result.get("success"):
+            raise HTTPException(
+                status_code=500,
+                detail=f"Seeding failed: {result.get('error', 'Unknown error')}"
+            )
+
+        return {
+            "success": True,
+            "message": "Test account seeded successfully",
+            "credentials": result.get("credentials"),
+            "data_created": result.get("data"),
+        }
+
+    except ImportError as e:
+        logger.error(f"Failed to import seed_test_account: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to import seeding module: {str(e)}"
+        )
+    except Exception as e:
+        logger.error(f"Error seeding test account: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error seeding test account: {str(e)}"
+        )
