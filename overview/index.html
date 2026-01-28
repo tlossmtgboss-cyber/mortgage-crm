@@ -1101,6 +1101,7 @@ details.section-details > .details-body { padding: 20px; }
       <a href="#metrics">Metrics</a>
       <a href="#roadmap">Roadmap</a>
       <a href="#architecture">Architecture</a>
+      <a href="#security">Security</a>
     </div>
     <div class="nav-actions">
       <a href="https://app.perenniaai.com/login" class="btn-login">Log In</a>
@@ -1762,6 +1763,132 @@ details.section-details > .details-body { padding: 20px; }
   </div>
   <p class="text-sm text-muted mt-16">Key entities: Loans (53-field profile with 27 milestone dates), Leads, Contacts, Tasks, Documents, Call Records, SLA Milestones, Workflows, AI Agent State, Conversations, Calendar Events, Compliance Issues, and Financial Intelligence.</p>
   </div><!-- /.details-body -->
+  </details>
+</section>
+
+<!-- ============================================================
+     9. SECURITY & COMPLIANCE
+     ============================================================ -->
+<section class="section" id="security">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Security & Data Protection</div>
+      <div class="section-subtitle">Enterprise-grade security built into every layer</div>
+    </div>
+  </div>
+
+  <div class="grid-4 mb-24">
+    <div class="value-card">
+      <div class="value-card-title">Authentication</div>
+      <div class="value-card-text">Face ID / Touch ID, SSO integration, MFA support, session management, and JWT token handling with secure refresh.</div>
+    </div>
+    <div class="value-card">
+      <div class="value-card-title">Access Control</div>
+      <div class="value-card-text">Role-based permissions (Admin, Manager, LO, Processor), organization isolation, and granular feature-level access.</div>
+    </div>
+    <div class="value-card">
+      <div class="value-card-title">Data Encryption</div>
+      <div class="value-card-text">TLS 1.3 in transit, AES-256 at rest, encrypted database connections, and secure credential storage.</div>
+    </div>
+    <div class="value-card">
+      <div class="value-card-title">API Security</div>
+      <div class="value-card-text">Rate limiting, IP blocking, HMAC-signed webhooks, request validation, and comprehensive security headers.</div>
+    </div>
+  </div>
+
+  <details class="section-details" open>
+    <summary>Security Infrastructure</summary>
+    <div class="details-body">
+      <div class="grid-3 mb-16">
+        <div class="stat-box"><div class="stat-value">TLS 1.3</div><div class="stat-label">Transport Security</div></div>
+        <div class="stat-box"><div class="stat-value">AES-256</div><div class="stat-label">Encryption at Rest</div></div>
+        <div class="stat-box"><div class="stat-value">Multi-Tenant</div><div class="stat-label">Data Isolation</div></div>
+      </div>
+      <div class="tech-stack-group">
+        <div class="tech-stack-label">Security Features</div>
+        <div class="tech-pills">
+          <span class="tech-pill tech-pill-accent">Rate Limiting</span>
+          <span class="tech-pill tech-pill-accent">IP Blocking</span>
+          <span class="tech-pill tech-pill-accent">DDoS Protection</span>
+          <span class="tech-pill tech-pill-accent">CORS Policy</span>
+          <span class="tech-pill tech-pill-accent">CSP Headers</span>
+          <span class="tech-pill tech-pill-accent">XSS Prevention</span>
+          <span class="tech-pill tech-pill-primary">SQL Injection Protection</span>
+          <span class="tech-pill tech-pill-primary">Input Validation</span>
+          <span class="tech-pill tech-pill-primary">Request Sanitization</span>
+          <span class="tech-pill tech-pill-muted">Security Logging</span>
+          <span class="tech-pill tech-pill-muted">Anomaly Detection</span>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <details class="section-details">
+    <summary>Compliance & Audit</summary>
+    <div class="details-body">
+      <div class="grid-2">
+        <div>
+          <p class="text-sm mb-12"><strong>Regulatory Compliance:</strong></p>
+          <ul class="text-sm" style="margin-left: 20px; line-height: 1.8;">
+            <li>TRID timing validation and monitoring</li>
+            <li>RESPA Section 8 violation detection</li>
+            <li>Fair lending analysis and reporting</li>
+            <li>State-specific consent management (50 states)</li>
+            <li>Call recording compliance (15 two-party states)</li>
+          </ul>
+        </div>
+        <div>
+          <p class="text-sm mb-12"><strong>Audit & Logging:</strong></p>
+          <ul class="text-sm" style="margin-left: 20px; line-height: 1.8;">
+            <li>Complete audit trail for all actions</li>
+            <li>User activity logging with timestamps</li>
+            <li>Data change history and versioning</li>
+            <li>Security event monitoring</li>
+            <li>Compliance issue tracking and remediation</li>
+          </ul>
+        </div>
+      </div>
+      <div class="mt-16">
+        <div class="tech-stack-group">
+          <div class="tech-stack-label">Privacy & Data Protection</div>
+          <div class="tech-pills">
+            <span class="tech-pill tech-pill-accent">GDPR Ready</span>
+            <span class="tech-pill tech-pill-accent">CCPA Compliant</span>
+            <span class="tech-pill tech-pill-accent">SOC 2 Framework</span>
+            <span class="tech-pill tech-pill-primary">Data Retention Policies</span>
+            <span class="tech-pill tech-pill-primary">Right to Deletion</span>
+            <span class="tech-pill tech-pill-muted">Cookie Consent</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <details class="section-details">
+    <summary>Authentication & Identity</summary>
+    <div class="details-body">
+      <div class="flow-container">
+        <div class="flow">
+          <div class="flow-step"><div class="flow-step-label">Login</div><div class="flow-step-sub">Email + Password</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">MFA</div><div class="flow-step-sub">TOTP / SMS</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">Biometric</div><div class="flow-step-sub">Face ID / Touch ID</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">Session</div><div class="flow-step-sub">JWT + Refresh</div></div>
+          <div class="flow-arrow">&#x2192;</div>
+          <div class="flow-step"><div class="flow-step-label">Access</div><div class="flow-step-sub">Role-Based</div></div>
+        </div>
+      </div>
+      <div class="mt-16 grid-2">
+        <div>
+          <p class="text-sm"><strong>Mobile Security:</strong> Biometric authentication (Face ID, Touch ID), secure keychain storage, certificate pinning, jailbreak detection.</p>
+        </div>
+        <div>
+          <p class="text-sm"><strong>Session Management:</strong> Automatic timeout, secure token refresh, device tracking, concurrent session limits, forced logout capability.</p>
+        </div>
+      </div>
+    </div>
   </details>
 </section>
 
