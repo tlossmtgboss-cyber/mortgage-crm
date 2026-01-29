@@ -3269,6 +3269,49 @@ async def run_survey_migration_simple(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/run-survey-seed")
+async def run_survey_seed_simple(
+    secret_key: str = Header(None, alias="X-Secret-Key")
+):
+    """
+    Simple survey seeding endpoint - requires X-Secret-Key header matching SECRET_KEY env var.
+    Seeds default survey templates.
+    """
+    import re
+    expected_key = re.sub(r'\s+', '', os.getenv("SECRET_KEY", ""))
+    provided_key = re.sub(r'\s+', '', secret_key or "")
+
+    if not expected_key or provided_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid secret key")
+
+    try:
+        from seeds.seed_surveys import seed_surveys
+
+        logger.info("Seeding survey templates...")
+        success = seed_surveys(organization_id=1)
+
+        if success:
+            return {
+                "status": "success",
+                "message": "Survey templates seeded successfully",
+                "templates": [
+                    "Post-Close NPS Survey",
+                    "Customer Satisfaction Survey (CSAT)",
+                    "Customer Effort Score (CES)",
+                    "Savings Validation Survey",
+                    "Milestone Check-in Survey"
+                ]
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Seeding failed")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Survey seeding error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/seed-survey-templates")
 async def seed_survey_templates(
     admin: Any = Depends(verify_admin_access)
