@@ -1198,6 +1198,21 @@ async def get_connection_status(
         logger.info(f"No Salesforce profile found for user {user_id}")
         return ConnectionStatus(connected=False)
 
+    # Auto-fix status if mappings exist but status is still mapping_required
+    if profile.status == 'mapping_required':
+        try:
+            mappings_count = db.query(FieldMapping).filter(
+                FieldMapping.integration_profile_id == profile.id,
+                FieldMapping.enabled == True
+            ).count()
+            if mappings_count > 0:
+                logger.info(f"Auto-fixing status for user {user_id}: mapping_required -> active ({mappings_count} mappings)")
+                profile.status = 'active'
+                db.commit()
+        except Exception as e:
+            logger.warning(f"Could not auto-fix status: {e}")
+            db.rollback()
+
     return ConnectionStatus(
         connected=profile.status not in ('disconnected', 'error'),
         status=profile.status,
@@ -1722,6 +1737,21 @@ async def trigger_sync(
 
     if not profile:
         raise HTTPException(status_code=400, detail="Salesforce not connected")
+
+    # Auto-activate if there are mappings but status is still mapping_required
+    if profile.status in ('mapping_required', 'connected'):
+        try:
+            mappings_count = db.query(FieldMapping).filter(
+                FieldMapping.integration_profile_id == profile.id,
+                FieldMapping.enabled == True
+            ).count()
+            if mappings_count > 0:
+                logger.info(f"Auto-activating integration for user {user_id} with {mappings_count} mappings")
+                profile.status = 'active'
+                db.commit()
+        except Exception as e:
+            logger.warning(f"Could not check/auto-activate mappings: {e}")
+            db.rollback()
 
     if profile.status != 'active':
         raise HTTPException(
