@@ -3399,27 +3399,36 @@ async def run_content_marketing_migration(
         # Run migration
         from migrations.add_content_marketing_tables import run_migration
         logger.info("Starting Content Marketing tables migration...")
-        success = run_migration()
+        run_migration()
 
-        if success:
-            return {
-                "status": "success",
-                "message": "Content Marketing tables created successfully",
-                "created": True,
-                "tables": [
-                    "content_brand_voices",
-                    "content_calendars",
-                    "content_briefs",
-                    "content_comments",
-                    "content_approvals",
-                    "seo_keywords",
-                    "content_templates",
-                    "personalization_tokens",
-                    "content_publish_logs"
-                ]
-            }
-        else:
-            raise HTTPException(status_code=500, detail="Migration failed")
+        # Verify tables were created
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'content_brand_voices'
+                )
+            """)).scalar()
+
+            if result:
+                return {
+                    "status": "success",
+                    "message": "Content Marketing tables created successfully",
+                    "created": True,
+                    "tables": [
+                        "content_brand_voices",
+                        "content_calendars",
+                        "content_briefs",
+                        "content_comments",
+                        "content_approvals",
+                        "seo_keywords",
+                        "content_templates",
+                        "personalization_tokens",
+                        "content_publish_logs"
+                    ]
+                }
+            else:
+                raise HTTPException(status_code=500, detail="Migration ran but tables not found")
 
     except HTTPException:
         raise
