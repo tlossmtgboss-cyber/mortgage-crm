@@ -186,23 +186,23 @@ class RetellClient:
         if config.metadata:
             payload["metadata"] = config.metadata
 
-        return await self._request("POST", "/v2/agent", data=payload)
+        return await self._request("POST", "/create-agent", data=payload)
 
     async def get_agent(self, agent_id: str) -> Dict[str, Any]:
         """Get agent details."""
-        return await self._request("GET", f"/v2/agent/{agent_id}")
+        return await self._request("GET", f"/get-agent/{agent_id}")
 
     async def list_agents(self) -> List[Dict[str, Any]]:
         """List all agents."""
-        return await self._request("GET", "/v2/agent")
+        return await self._request("GET", "/list-agents")
 
     async def update_agent(self, agent_id: str, config: Dict[str, Any]) -> Dict[str, Any]:
         """Update an existing agent."""
-        return await self._request("PATCH", f"/v2/agent/{agent_id}", data=config)
+        return await self._request("PATCH", f"/update-agent/{agent_id}", data=config)
 
     async def delete_agent(self, agent_id: str) -> None:
         """Delete an agent."""
-        await self._request("DELETE", f"/v2/agent/{agent_id}")
+        await self._request("DELETE", f"/delete-agent/{agent_id}")
 
     # ==================== Phone Number Management ====================
 
@@ -225,7 +225,7 @@ class RetellClient:
         if area_code:
             payload["area_code"] = area_code
 
-        return await self._request("POST", "/v2/phone-number", data=payload)
+        return await self._request("POST", "/create-phone-number", data=payload)
 
     async def import_phone_number(
         self,
@@ -251,15 +251,15 @@ class RetellClient:
         if termination_uri:
             payload["termination_uri"] = termination_uri
 
-        return await self._request("POST", "/v2/phone-number/import", data=payload)
+        return await self._request("POST", "/import-phone-number", data=payload)
 
     async def get_phone_number(self, phone_number: str) -> Dict[str, Any]:
         """Get phone number details."""
-        return await self._request("GET", f"/v2/phone-number/{phone_number}")
+        return await self._request("GET", f"/get-phone-number/{phone_number}")
 
     async def list_phone_numbers(self) -> List[Dict[str, Any]]:
         """List all phone numbers."""
-        return await self._request("GET", "/v2/phone-number")
+        return await self._request("GET", "/list-phone-numbers")
 
     async def update_phone_number(
         self,
@@ -277,11 +277,11 @@ class RetellClient:
         if outbound_agent_id:
             payload["outbound_agent_id"] = outbound_agent_id
 
-        return await self._request("PATCH", f"/v2/phone-number/{phone_number}", data=payload)
+        return await self._request("PATCH", f"/update-phone-number/{phone_number}", data=payload)
 
     async def delete_phone_number(self, phone_number: str) -> None:
         """Delete/release a phone number."""
-        await self._request("DELETE", f"/v2/phone-number/{phone_number}")
+        await self._request("DELETE", f"/delete-phone-number/{phone_number}")
 
     # ==================== Call Management ====================
 
@@ -312,11 +312,11 @@ class RetellClient:
         if config.metadata:
             payload["metadata"] = config.metadata
 
-        return await self._request("POST", "/v2/call", data=payload)
+        return await self._request("POST", "/create-phone-call", data=payload)
 
     async def get_call(self, call_id: str) -> Dict[str, Any]:
         """Get call details."""
-        return await self._request("GET", f"/v2/call/{call_id}")
+        return await self._request("GET", f"/get-call/{call_id}")
 
     async def list_calls(
         self,
@@ -328,11 +328,11 @@ class RetellClient:
         if filter_criteria:
             params.update(filter_criteria)
 
-        return await self._request("GET", "/v2/call", params=params)
+        return await self._request("GET", "/list-calls", params=params)
 
     async def end_call(self, call_id: str) -> Dict[str, Any]:
         """End an active call."""
-        return await self._request("POST", f"/v2/call/{call_id}/end")
+        return await self._request("POST", f"/end-call/{call_id}")
 
     async def transfer_call(
         self,
@@ -342,7 +342,7 @@ class RetellClient:
         """Transfer an active call to another number."""
         return await self._request(
             "POST",
-            f"/v2/call/{call_id}/transfer",
+            f"/transfer-call/{call_id}",
             data={"transfer_to": transfer_to},
         )
 
@@ -380,19 +380,19 @@ class RetellClient:
         if states:
             payload["states"] = states
 
-        return await self._request("POST", "/v2/llm", data=payload)
+        return await self._request("POST", "/create-retell-llm", data=payload)
 
     async def get_retell_llm(self, llm_id: str) -> Dict[str, Any]:
         """Get LLM configuration."""
-        return await self._request("GET", f"/v2/llm/{llm_id}")
+        return await self._request("GET", f"/get-retell-llm/{llm_id}")
 
     async def update_retell_llm(self, llm_id: str, config: Dict[str, Any]) -> Dict[str, Any]:
         """Update LLM configuration."""
-        return await self._request("PATCH", f"/v2/llm/{llm_id}", data=config)
+        return await self._request("PATCH", f"/update-retell-llm/{llm_id}", data=config)
 
     async def delete_retell_llm(self, llm_id: str) -> None:
         """Delete LLM configuration."""
-        await self._request("DELETE", f"/v2/llm/{llm_id}")
+        await self._request("DELETE", f"/delete-retell-llm/{llm_id}")
 
     # ==================== Webhook Verification ====================
 
@@ -428,7 +428,7 @@ class RetellClient:
 
     async def list_voices(self) -> List[Dict[str, Any]]:
         """List available voices."""
-        return await self._request("GET", "/v2/voice")
+        return await self._request("GET", "/list-voices")
 
 
 class RetellAPIError(Exception):
