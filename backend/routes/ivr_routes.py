@@ -167,19 +167,26 @@ async def list_ivr_menus(
 
         menus = []
         for row in results:
+            created_at = None
+            if hasattr(row, 'created_at') and row.created_at:
+                if hasattr(row.created_at, 'isoformat'):
+                    created_at = row.created_at.isoformat()
+                else:
+                    created_at = str(row.created_at)
+
             menus.append({
                 "id": row.id,
                 "name": row.name,
-                "description": row.description,
-                "is_default": row.is_default,
-                "is_active": row.is_active,
-                "greeting_text": row.greeting_text,
-                "greeting_audio_url": row.greeting_audio_url,
-                "timeout_seconds": row.timeout_seconds,
-                "max_attempts": row.max_attempts,
-                "timeout_action": row.timeout_action,
-                "option_count": row.option_count,
-                "created_at": row.created_at.isoformat() if row.created_at else None
+                "description": getattr(row, 'description', None),
+                "is_default": getattr(row, 'is_default', False),
+                "is_active": getattr(row, 'is_active', True),
+                "greeting_text": getattr(row, 'greeting_text', None),
+                "greeting_audio_url": getattr(row, 'greeting_audio_url', None),
+                "timeout_seconds": getattr(row, 'timeout_seconds', 10),
+                "max_attempts": getattr(row, 'max_attempts', 3),
+                "timeout_action": getattr(row, 'timeout_action', 'ai_receptionist'),
+                "option_count": getattr(row, 'option_count', 0),
+                "created_at": created_at
             })
 
         return {
@@ -187,9 +194,19 @@ async def list_ivr_menus(
             "count": len(menus)
         }
 
+    except SQLAlchemyError as e:
+        # Table might not exist
+        logger.warning(f"Database error listing IVR menus (table may not exist): {e}")
+        return {
+            "menus": [],
+            "count": 0
+        }
     except Exception as e:
         logger.error(f"Error listing IVR menus: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return {
+            "menus": [],
+            "count": 0
+        }
 
 
 @router.get("/menus/{menu_id}")

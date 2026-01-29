@@ -205,7 +205,7 @@ async def list_hold_music(
         music_list = []
         for row in results:
             comfort_msgs = None
-            if row.comfort_messages:
+            if hasattr(row, 'comfort_messages') and row.comfort_messages:
                 try:
                     comfort_msgs = json.loads(row.comfort_messages)
                 except Exception:
@@ -214,16 +214,16 @@ async def list_hold_music(
             music_list.append({
                 "id": row.id,
                 "name": row.name,
-                "description": row.description,
-                "source_type": row.source_type,
+                "description": getattr(row, 'description', None),
+                "source_type": getattr(row, 'source_type', 'url'),
                 "audio_url": row.audio_url,
-                "twilio_music_name": row.twilio_music_name,
-                "duration_seconds": row.duration_seconds,
+                "twilio_music_name": getattr(row, 'twilio_music_name', None),
+                "duration_seconds": getattr(row, 'duration_seconds', None),
                 "is_default": row.is_default,
-                "is_active": row.is_active,
+                "is_active": getattr(row, 'is_active', True),
                 "comfort_messages": comfort_msgs,
-                "comfort_message_interval": row.comfort_message_interval,
-                "created_at": safe_isoformat(row.created_at)
+                "comfort_message_interval": getattr(row, 'comfort_message_interval', 30),
+                "created_at": safe_isoformat(getattr(row, 'created_at', None))
             })
 
         return {
@@ -232,9 +232,21 @@ async def list_hold_music(
             "twilio_defaults": list(TWILIO_DEFAULT_MUSIC.keys())
         }
 
+    except SQLAlchemyError as e:
+        # Table might not exist or have different schema
+        logger.warning(f"Database error listing hold music (table may not exist): {e}")
+        return {
+            "music": [],
+            "count": 0,
+            "twilio_defaults": list(TWILIO_DEFAULT_MUSIC.keys())
+        }
     except Exception as e:
         logger.error(f"Error listing hold music: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return {
+            "music": [],
+            "count": 0,
+            "twilio_defaults": list(TWILIO_DEFAULT_MUSIC.keys())
+        }
 
 
 @router.get("/twilio-defaults")
