@@ -15,11 +15,13 @@ router = APIRouter(prefix="/api/v1/pipeline", tags=["Pipeline Efficiency"])
 # Dependencies will be set from main.py
 _get_db = None
 _get_current_user = None
+_models = None
 
-def set_dependencies(get_db_func, get_current_user_func):
-    global _get_db, _get_current_user
+def set_dependencies(get_db_func, get_current_user_func, models_dict=None):
+    global _get_db, _get_current_user, _models
     _get_db = get_db_func
     _get_current_user = get_current_user_func
+    _models = models_dict
 
 def get_db():
     if _get_db is None:
@@ -66,7 +68,17 @@ async def get_pipeline_efficiency(
     logger = logging.getLogger(__name__)
 
     try:
-        from main import Lead, Loan, LeadStage, LoanStage, User
+        # Use models from dependency injection to avoid circular imports
+        if _models is None:
+            raise RuntimeError("Models not configured - call set_dependencies with models_dict")
+
+        Lead = _models.get('Lead')
+        Loan = _models.get('Loan')
+        LeadStage = _models.get('LeadStage')
+        LoanStage = _models.get('LoanStage')
+
+        if not all([Lead, Loan, LeadStage, LoanStage]):
+            raise RuntimeError(f"Missing required models. Available: {list(_models.keys())}")
 
         start_date = get_date_filter(time_range)
         now = datetime.now(timezone.utc)
@@ -173,7 +185,13 @@ async def get_stage_metrics(
     current_user = Depends(get_current_user)
 ):
     """Get stage-by-stage pipeline metrics"""
-    from main import Lead, Loan, LeadStage, LoanStage
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Models not configured")
+
+    Lead = _models.get('Lead')
+    Loan = _models.get('Loan')
+    LeadStage = _models.get('LeadStage')
+    LoanStage = _models.get('LoanStage')
 
     start_date = get_date_filter(time_range)
     now = datetime.now(timezone.utc)
@@ -348,7 +366,13 @@ async def get_bottlenecks(
     current_user = Depends(get_current_user)
 ):
     """Get current pipeline bottlenecks"""
-    from main import Lead, Loan, LeadStage, LoanStage
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Models not configured")
+
+    Lead = _models.get('Lead')
+    Loan = _models.get('Loan')
+    LeadStage = _models.get('LeadStage')
+    LoanStage = _models.get('LoanStage')
 
     now = datetime.now(timezone.utc)
     bottlenecks = []
@@ -429,7 +453,11 @@ async def get_trends(
     current_user = Depends(get_current_user)
 ):
     """Get efficiency trends over time"""
-    from main import Lead, Loan
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Models not configured")
+
+    Lead = _models.get('Lead')
+    Loan = _models.get('Loan')
 
     now = datetime.now(timezone.utc)
     trends = []

@@ -21705,7 +21705,15 @@ except Exception as e:
 # Pipeline Efficiency routes (Real-time pipeline analytics)
 try:
     from pipeline_efficiency_routes import router as pipeline_efficiency_router, set_dependencies as set_pipeline_deps
-    set_pipeline_deps(get_db, get_current_user)
+    # Pass models dict to avoid circular imports
+    pipeline_models = {
+        'Lead': Lead,
+        'Loan': Loan,
+        'LeadStage': LeadStage,
+        'LoanStage': LoanStage,
+        'User': User,
+    }
+    set_pipeline_deps(get_db, get_current_user, pipeline_models)
     app.include_router(pipeline_efficiency_router, tags=["Pipeline Efficiency"])
     logger.info("✅ Pipeline Efficiency routes loaded")
 except Exception as e:
