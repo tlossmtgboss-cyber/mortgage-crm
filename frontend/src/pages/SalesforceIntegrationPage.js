@@ -31,6 +31,8 @@ function SalesforceIntegrationPage() {
   const [syncingCalendar, setSyncingCalendar] = useState(false);
   const [importingClosedLoans, setImportingClosedLoans] = useState(false);
   const [importResults, setImportResults] = useState(null);
+  const [syncingToMum, setSyncingToMum] = useState(false);
+  const [mumSyncResults, setMumSyncResults] = useState(null);
   const [includeAllFields, setIncludeAllFields] = useState(true);
 
   const token = localStorage.getItem('token');
@@ -388,6 +390,29 @@ function SalesforceIntegrationPage() {
       toast.error('Import failed: ' + (err.message || 'Network error'));
       setImportingClosedLoans(false);
     }
+  };
+
+  const syncToMum = async () => {
+    setSyncingToMum(true);
+    setMumSyncResults(null);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/salesforce/import-to-mum`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMumSyncResults(data);
+        toast.success(data.message || `Synced ${data.imported} loans to MUM Clients`);
+      } else {
+        console.error('Sync to MUM error:', data);
+        toast.error(data.detail || data.message || 'Sync to MUM failed');
+      }
+    } catch (err) {
+      console.error('Sync to MUM exception:', err);
+      toast.error('Sync to MUM failed: ' + (err.message || 'Network error'));
+    }
+    setSyncingToMum(false);
   };
 
   // Render sidebar navigation
@@ -890,10 +915,26 @@ function SalesforceIntegrationPage() {
             >
               {importingClosedLoans ? 'Importing...' : 'Import All Closed Loans'}
             </button>
+            <button
+              className="sf-btn sf-btn-primary"
+              onClick={syncToMum}
+              disabled={syncingToMum}
+              style={{ marginLeft: '10px' }}
+            >
+              {syncingToMum ? 'Syncing...' : 'Sync to MUM Clients'}
+            </button>
           </div>
           {importResults && (
             <div className="sf-import-results">
               <p>Found: {importResults.total_found} | Imported: {importResults.imported} | Updated: {importResults.updated}</p>
+              {importResults.mum_imported !== undefined && (
+                <p>MUM Clients: {importResults.mum_imported} added</p>
+              )}
+            </div>
+          )}
+          {mumSyncResults && (
+            <div className="sf-import-results">
+              <p>MUM Sync: {mumSyncResults.imported} loans added to MUM Clients</p>
             </div>
           )}
         </div>
