@@ -77,89 +77,89 @@ async def get_pipeline_efficiency(
             Lead.owner_id == current_user.id
         ).scalar() or 0
 
-    # Get total loans in period
-    total_loans = db.query(func.count(Loan.id)).filter(
-        Loan.created_at >= start_date,
-        Loan.loan_officer_id == current_user.id
-    ).scalar() or 0
+        # Get total loans in period
+        total_loans = db.query(func.count(Loan.id)).filter(
+            Loan.created_at >= start_date,
+            Loan.loan_officer_id == current_user.id
+        ).scalar() or 0
 
-    # Calculate conversion rate (leads that became loans)
-    converted_leads = db.query(func.count(Lead.id)).filter(
-        Lead.created_at >= start_date,
-        Lead.owner_id == current_user.id,
-        Lead.stage == LeadStage.CONVERTED
-    ).scalar() or 0
+        # Calculate conversion rate (leads that became loans)
+        converted_leads = db.query(func.count(Lead.id)).filter(
+            Lead.created_at >= start_date,
+            Lead.owner_id == current_user.id,
+            Lead.stage == LeadStage.CONVERTED
+        ).scalar() or 0
 
-    pull_through_rate = round((converted_leads / total_leads * 100), 1) if total_leads > 0 else 0
+        pull_through_rate = round((converted_leads / total_leads * 100), 1) if total_leads > 0 else 0
 
-    # Calculate average time to close (for funded loans)
-    funded_loans = db.query(Loan).filter(
-        Loan.funded_date >= start_date,
-        Loan.loan_officer_id == current_user.id,
-        Loan.funded_date.isnot(None),
-        Loan.created_at.isnot(None)
-    ).all()
+        # Calculate average time to close (for funded loans)
+        funded_loans = db.query(Loan).filter(
+            Loan.funded_date >= start_date,
+            Loan.loan_officer_id == current_user.id,
+            Loan.funded_date.isnot(None),
+            Loan.created_at.isnot(None)
+        ).all()
 
-    if funded_loans:
-        total_days = sum(
-            (loan.funded_date - loan.created_at).days
-            for loan in funded_loans
-            if loan.funded_date and loan.created_at
-        )
-        avg_time_to_close = round(total_days / len(funded_loans), 1) if funded_loans else 0
-    else:
-        avg_time_to_close = 0
+        if funded_loans:
+            total_days = sum(
+                (loan.funded_date - loan.created_at).days
+                for loan in funded_loans
+                if loan.funded_date and loan.created_at
+            )
+            avg_time_to_close = round(total_days / len(funded_loans), 1) if funded_loans else 0
+        else:
+            avg_time_to_close = 0
 
-    # Get loans falling behind (in processing/underwriting for more than 14 days)
-    falling_behind_stages = [LoanStage.PROCESSING, LoanStage.SUBMITTED, LoanStage.UNDERWRITING]
-    fourteen_days_ago = now - timedelta(days=14)
+        # Get loans falling behind (in processing/underwriting for more than 14 days)
+        falling_behind_stages = [LoanStage.PROCESSING, LoanStage.SUBMITTED, LoanStage.UNDERWRITING]
+        fourteen_days_ago = now - timedelta(days=14)
 
-    loans_falling_behind = db.query(func.count(Loan.id)).filter(
-        Loan.loan_officer_id == current_user.id,
-        Loan.stage.in_(falling_behind_stages),
-        Loan.created_at < fourteen_days_ago
-    ).scalar() or 0
+        loans_falling_behind = db.query(func.count(Loan.id)).filter(
+            Loan.loan_officer_id == current_user.id,
+            Loan.stage.in_(falling_behind_stages),
+            Loan.created_at < fourteen_days_ago
+        ).scalar() or 0
 
-    # Calculate overall efficiency score (weighted average)
-    # Higher pull-through = better, Lower time to close = better, fewer falling behind = better
-    efficiency_components = []
-    if total_leads > 0:
-        efficiency_components.append(min(pull_through_rate, 100))
-    if avg_time_to_close > 0:
-        # Benchmark: 45 days is average, lower is better
-        time_efficiency = max(0, 100 - ((avg_time_to_close - 30) * 2))
-        efficiency_components.append(min(time_efficiency, 100))
-    if total_loans > 0:
-        behind_rate = (loans_falling_behind / total_loans) * 100 if total_loans > 0 else 0
-        behind_efficiency = max(0, 100 - (behind_rate * 5))
-        efficiency_components.append(behind_efficiency)
+        # Calculate overall efficiency score (weighted average)
+        # Higher pull-through = better, Lower time to close = better, fewer falling behind = better
+        efficiency_components = []
+        if total_leads > 0:
+            efficiency_components.append(min(pull_through_rate, 100))
+        if avg_time_to_close > 0:
+            # Benchmark: 45 days is average, lower is better
+            time_efficiency = max(0, 100 - ((avg_time_to_close - 30) * 2))
+            efficiency_components.append(min(time_efficiency, 100))
+        if total_loans > 0:
+            behind_rate = (loans_falling_behind / total_loans) * 100 if total_loans > 0 else 0
+            behind_efficiency = max(0, 100 - (behind_rate * 5))
+            efficiency_components.append(behind_efficiency)
 
-    overall_score = round(sum(efficiency_components) / len(efficiency_components), 0) if efficiency_components else 0
+        overall_score = round(sum(efficiency_components) / len(efficiency_components), 0) if efficiency_components else 0
 
-    return {
-        "overallScore": overall_score,
-        "trend": 0,  # Would need historical data to calculate
-        "lastUpdated": now.isoformat(),
-        "hasData": total_leads > 0 or total_loans > 0,
-        "keyMetrics": {
-            "avgTimeToClose": avg_time_to_close,
-            "avgTimeToCloseChange": 0,
-            "pullThroughRate": pull_through_rate,
-            "pullThroughRateChange": 0,
-            "loansFallingBehind": loans_falling_behind,
-            "loansFallingBehindChange": 0,
-            "automationRate": 0,  # Would need task tracking to calculate
-            "automationRateChange": 0,
-            "customerSatisfaction": 0,  # Would need feedback system
-            "customerSatisfactionChange": 0
-        },
-        "summary": {
-            "totalLeads": total_leads,
-            "totalLoans": total_loans,
-            "convertedLeads": converted_leads,
-            "fundedLoans": len(funded_loans) if funded_loans else 0
+        return {
+            "overallScore": overall_score,
+            "trend": 0,  # Would need historical data to calculate
+            "lastUpdated": now.isoformat(),
+            "hasData": total_leads > 0 or total_loans > 0,
+            "keyMetrics": {
+                "avgTimeToClose": avg_time_to_close,
+                "avgTimeToCloseChange": 0,
+                "pullThroughRate": pull_through_rate,
+                "pullThroughRateChange": 0,
+                "loansFallingBehind": loans_falling_behind,
+                "loansFallingBehindChange": 0,
+                "automationRate": 0,  # Would need task tracking to calculate
+                "automationRateChange": 0,
+                "customerSatisfaction": 0,  # Would need feedback system
+                "customerSatisfactionChange": 0
+            },
+            "summary": {
+                "totalLeads": total_leads,
+                "totalLoans": total_loans,
+                "convertedLeads": converted_leads,
+                "fundedLoans": len(funded_loans) if funded_loans else 0
+            }
         }
-    }
     except Exception as e:
         logger.error(f"Pipeline efficiency error: {e}")
         logger.error(traceback.format_exc())
