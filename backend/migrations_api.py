@@ -3312,6 +3312,55 @@ async def run_survey_seed_simple(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/debug-survey-templates")
+async def debug_survey_templates(key: str = ""):
+    """
+    Debug endpoint to check survey templates.
+    Call with: GET /api/v1/migrations/debug-survey-templates?key=debug
+    """
+    if key != "debug":
+        raise HTTPException(status_code=403, detail="Invalid key")
+
+    try:
+        from database import engine
+        from sqlalchemy import text
+
+        with engine.connect() as conn:
+            # Get templates
+            templates = conn.execute(text("""
+                SELECT id, name, survey_type, status, trigger_type,
+                       (SELECT COUNT(*) FROM survey_questions WHERE template_id = st.id) as question_count
+                FROM survey_templates st
+                ORDER BY id
+            """)).fetchall()
+
+            # Get question count
+            total_questions = conn.execute(text("""
+                SELECT COUNT(*) FROM survey_questions
+            """)).scalar() or 0
+
+            return {
+                "status": "success",
+                "templates_count": len(templates),
+                "total_questions": total_questions,
+                "templates": [
+                    {
+                        "id": t[0],
+                        "name": t[1],
+                        "type": t[2],
+                        "status": t[3],
+                        "trigger": t[4],
+                        "questions": t[5]
+                    }
+                    for t in templates
+                ]
+            }
+
+    except Exception as e:
+        logger.error(f"Debug survey templates error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/seed-survey-templates")
 async def seed_survey_templates(
     admin: Any = Depends(verify_admin_access)
