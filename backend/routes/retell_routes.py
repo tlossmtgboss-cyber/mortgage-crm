@@ -226,11 +226,15 @@ async def connect_retell(
         return {"status": "connected", "message": "Retell AI connected successfully"}
 
     except RetellAPIError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid API key: {e.message}")
+        logger.error(f"Retell API error: status={e.status_code}, message={e.message}")
+        detail = f"Retell API error: {e.message}"
+        if e.status_code == 401:
+            detail = "Invalid API key. Please check your key from dashboard.retellai.com"
+        raise HTTPException(status_code=400, detail=detail)
     except Exception as e:
         logger.error(f"Error connecting Retell: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to save configuration: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to connect: {str(e)}")
 
 
 @router.get("/status")
