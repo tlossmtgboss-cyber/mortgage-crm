@@ -337,13 +337,17 @@ function SalesforceIntegrationPage() {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
+      const data = await res.json();
       if (res.ok) {
-        const data = await res.json();
         setImportResults(data);
-        toast.success(`Imported ${data.imported} loans`);
+        toast.success(data.message || `Imported ${data.imported} loans, updated ${data.updated}`);
+      } else {
+        console.error('Import closed loans error:', data);
+        toast.error(data.detail || data.message || 'Import failed');
       }
     } catch (err) {
-      toast.error('Import failed');
+      console.error('Import closed loans exception:', err);
+      toast.error('Import failed: ' + (err.message || 'Network error'));
     }
     setImportingClosedLoans(false);
   };
