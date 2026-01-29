@@ -62902,6 +62902,14 @@ async def startup_event():
             except Exception as e:
                 logger.warning(f"⚠️ Call Monitoring System migration skipped: {e}")
 
+            # Run Advanced Telephony migration (IVR menus, hold music, call queues)
+            try:
+                from migrations.add_advanced_telephony_tables import run_migration as run_telephony_migration
+                run_telephony_migration()
+                logger.info("✅ Advanced Telephony migration completed")
+            except Exception as e:
+                logger.warning(f"⚠️ Advanced Telephony migration skipped: {e}")
+
             # Run Document Extraction migration (AI extraction, owner detection)
             try:
                 from migrations.add_document_extraction_tables import run_migration as run_doc_extraction_migration
