@@ -3225,6 +3225,50 @@ async def add_survey_tables(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/run-survey-migration")
+async def run_survey_migration_simple(
+    secret_key: str = Header(None, alias="X-Secret-Key")
+):
+    """
+    Simple survey migration endpoint - requires X-Secret-Key header matching SECRET_KEY env var.
+    Creates all survey tables.
+    """
+    import re
+    expected_key = re.sub(r'\s+', '', os.getenv("SECRET_KEY", ""))
+    provided_key = re.sub(r'\s+', '', secret_key or "")
+
+    if not expected_key or provided_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid secret key")
+
+    try:
+        from migrations.survey_tables import run_migration, check_tables_exist
+
+        if check_tables_exist():
+            return {
+                "status": "success",
+                "message": "Survey tables already exist",
+                "created": False
+            }
+
+        logger.info("Starting survey tables migration...")
+        success = run_migration()
+
+        if success:
+            return {
+                "status": "success",
+                "message": "Survey tables created successfully",
+                "created": True
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Migration failed")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Survey migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/seed-survey-templates")
 async def seed_survey_templates(
     admin: Any = Depends(verify_admin_access)
