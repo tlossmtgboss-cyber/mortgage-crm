@@ -62231,6 +62231,14 @@ async def startup_event():
             except Exception as roles_e:
                 logger.warning(f"⚠️ Onboarding roles migration skipped: {roles_e}")
 
+            # Create carousel builder tables (for AI-powered social media carousels)
+            try:
+                from migrations.add_carousel_builder_tables import run_migration as run_carousel_migration
+                run_carousel_migration()
+                logger.info("✅ Carousel builder tables initialized")
+            except Exception as carousel_e:
+                logger.warning(f"⚠️ Carousel builder migration skipped: {carousel_e}")
+
             # Add missing slug column to users table (microsite URL identifier)
             try:
                 db_temp = SessionLocal()
