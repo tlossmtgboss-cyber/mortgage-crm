@@ -2131,7 +2131,6 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
     from database import SessionLocal
     import uuid
 
-    db = SessionLocal()
     try:
         _import_jobs[job_id] = {'status': 'running', 'progress': 'Connecting to Salesforce...'}
         logger.info(f"Starting background import job {job_id} for user {user_id}")
@@ -2148,7 +2147,9 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
         mum_results = {'imported': 0, 'errors': []}
 
         # Also import to MUM clients if requested
+        # Create a FRESH db session to see the newly committed loans
         if also_import_to_mum:
+            db = SessionLocal()
             try:
                 # Get funded loans not already in mum_clients
                 funded_loans = db.execute(text("""
@@ -2211,6 +2212,8 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
             except Exception as e:
                 logger.error(f"MUM import phase failed: {e}")
                 mum_results['errors'].append(f"MUM import failed: {str(e)}")
+            finally:
+                db.close()
 
         # Update job status with results
         _import_jobs[job_id] = {
@@ -2231,8 +2234,6 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
     except Exception as e:
         logger.error(f"Import job {job_id} failed: {e}")
         _import_jobs[job_id] = {'status': 'failed', 'error': str(e)}
-    finally:
-        db.close()
 
 
 @router.post("/import-closed-loans")
