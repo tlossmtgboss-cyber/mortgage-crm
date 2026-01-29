@@ -261,7 +261,7 @@ def check_project_access(project: CarouselProject, user_id: int) -> bool:
 # Project Routes
 # =============================================================================
 
-@router.get("", response_model=List[ProjectResponse])
+@router.get("")
 async def list_projects(
     request: Request,
     db: Session = Depends(get_db),
@@ -273,64 +273,71 @@ async def list_projects(
     offset: int = Query(0, ge=0)
 ):
     """List user's carousel projects."""
-    user = await get_user_from_request(request, db)
+    try:
+        user = await get_user_from_request(request, db)
 
-    query = db.query(CarouselProject).filter(
-        CarouselProject.user_id == user.id
-    )
+        query = db.query(CarouselProject).filter(
+            CarouselProject.user_id == user.id
+        )
 
-    if project_type:
-        query = query.filter(CarouselProject.project_type == project_type)
-    if platform:
-        query = query.filter(CarouselProject.platform == platform)
-    if status:
-        query = query.filter(CarouselProject.status == status)
-    if search:
-        query = query.filter(CarouselProject.name.ilike(f"%{search}%"))
+        if project_type:
+            query = query.filter(CarouselProject.project_type == project_type)
+        if platform:
+            query = query.filter(CarouselProject.platform == platform)
+        if status:
+            query = query.filter(CarouselProject.status == status)
+        if search:
+            query = query.filter(CarouselProject.name.ilike(f"%{search}%"))
 
-    projects = query.order_by(desc(CarouselProject.updated_at)).offset(offset).limit(limit).all()
+        projects = query.order_by(desc(CarouselProject.updated_at)).offset(offset).limit(limit).all()
 
-    # Add slide count
-    result = []
-    for project in projects:
-        slide_count = db.query(func.count(CarouselSlide.id)).filter(
-            CarouselSlide.project_id == project.id
-        ).scalar()
+        # Add slide count
+        result = []
+        for project in projects:
+            slide_count = db.query(func.count(CarouselSlide.id)).filter(
+                CarouselSlide.project_id == project.id
+            ).scalar()
 
-        project_data = {
-            "id": project.id,
-            "name": project.name,
-            "description": project.description,
-            "project_type": project.project_type.value if hasattr(project.project_type, 'value') else str(project.project_type),
-            "platform": project.platform.value if hasattr(project.platform, 'value') else str(project.platform),
-            "aspect_ratio": project.aspect_ratio.value if hasattr(project.aspect_ratio, 'value') else str(project.aspect_ratio),
-            "width": project.width,
-            "height": project.height,
-            "loan_id": project.loan_id,
-            "lead_id": project.lead_id,
-            "theme_id": project.theme_id,
-            "custom_branding": project.custom_branding or {},
-            "status": project.status.value if hasattr(project.status, 'value') else str(project.status),
-            "ai_generated": project.ai_generated,
-            "slide_count": slide_count,
-            "created_at": project.created_at,
-            "updated_at": project.updated_at,
-        }
-        result.append(project_data)
+            project_data = {
+                "id": project.id,
+                "name": project.name,
+                "description": project.description,
+                "project_type": project.project_type.value if hasattr(project.project_type, 'value') else str(project.project_type),
+                "platform": project.platform.value if hasattr(project.platform, 'value') else str(project.platform),
+                "aspect_ratio": project.aspect_ratio.value if hasattr(project.aspect_ratio, 'value') else str(project.aspect_ratio),
+                "width": project.width,
+                "height": project.height,
+                "loan_id": project.loan_id,
+                "lead_id": project.lead_id,
+                "theme_id": project.theme_id,
+                "custom_branding": project.custom_branding or {},
+                "status": project.status.value if hasattr(project.status, 'value') else str(project.status),
+                "ai_generated": project.ai_generated,
+                "slide_count": slide_count,
+                "created_at": project.created_at,
+                "updated_at": project.updated_at,
+            }
+            result.append(project_data)
 
-    return result
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Error listing carousel projects: {e}")
+        return []
 
 
-@router.post("", response_model=ProjectDetailResponse)
+@router.post("")
 async def create_project(
     request: Request,
     project_data: ProjectCreate,
     db: Session = Depends(get_db)
 ):
     """Create a new carousel project."""
-    user = await get_user_from_request(request, db)
+    try:
+        user = await get_user_from_request(request, db)
 
-    width, height = get_dimensions_for_aspect_ratio(project_data.aspect_ratio)
+        width, height = get_dimensions_for_aspect_ratio(project_data.aspect_ratio)
 
     project = CarouselProject(
         id=generate_short_uuid(),
@@ -438,6 +445,12 @@ async def create_project(
             for s in sorted(project.slides, key=lambda x: x.order)
         ],
     }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating carousel project: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to create carousel: {str(e)}")
 
 
 # =============================================================================

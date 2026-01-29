@@ -21,10 +21,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/ivr", tags=["ivr"])
 
 
-def get_current_user_flexible():
-    """Lazy import auth dependency"""
-    from main import get_current_user_flexible as _get_current_user_flexible
-    return _get_current_user_flexible
+async def get_current_user_optional(request: Request, db: Session = Depends(get_db)):
+    """
+    Optional authentication - returns user if authenticated, None otherwise.
+    Lazy imports from main to avoid circular imports.
+    """
+    try:
+        from main import get_current_user_flexible as auth_func
+        return await auth_func(request, db)
+    except Exception as e:
+        logger.debug(f"Auth failed (optional): {e}")
+        return None
 
 
 # ============================================================================
