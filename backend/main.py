@@ -24863,6 +24863,8 @@ def create_milestone_tasks(loan, updated_fields: list, db: Session) -> list:
                 due_date=due_date,
                 loan_id=loan.id,
                 owner_id=loan.loan_officer_id,  # Use loan_officer_id, not owner_id (Loan model doesn't have owner_id)
+                related_contact_name=loan.borrower_name,  # Display borrower name in task list
+                related_type="loan",
                 created_at=datetime.now(timezone.utc)
             )
 
@@ -49521,7 +49523,8 @@ async def get_unified_tasks(
                 entity_name = lead.name
 
             ai_response = task.suggested_action or task.ai_reasoning
-            client_name = task.borrower_name or entity_name or "Client"
+            # Prefer entity name from loan/lead relationship for accuracy
+            client_name = entity_name or task.borrower_name or "Client"
             has_scheduling = detect_scheduling_intent(task.title or "", task.description or "")
 
             # Only fetch calendly slots if needed (lazy load once)
@@ -49593,7 +49596,8 @@ async def get_unified_tasks(
                 entity_name = lead.name
 
             ai_confidence = 50
-            client_name = task.related_contact_name or entity_name or "Client"
+            # Prefer loan/lead entity name over related_contact_name for accuracy
+            client_name = entity_name or task.related_contact_name or "Client"
             ai_response = f"Complete task: {task.title}"
             has_calendly = detect_scheduling_intent(task.title or "", task.description or "")
 
