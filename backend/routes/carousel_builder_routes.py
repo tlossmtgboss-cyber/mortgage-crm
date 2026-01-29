@@ -397,15 +397,31 @@ async def create_project(
 
         width, height = get_dimensions_for_aspect_ratio(project_data.aspect_ratio)
 
+        # Convert string values to enums if needed
+        try:
+            project_type_enum = CarouselProjectType(project_data.project_type) if project_data.project_type else CarouselProjectType.CUSTOM
+        except ValueError:
+            project_type_enum = CarouselProjectType.CUSTOM
+
+        try:
+            platform_enum = CarouselPlatform(project_data.platform) if project_data.platform else CarouselPlatform.LINKEDIN
+        except ValueError:
+            platform_enum = CarouselPlatform.LINKEDIN
+
+        try:
+            aspect_ratio_enum = CarouselAspectRatio(project_data.aspect_ratio) if project_data.aspect_ratio else CarouselAspectRatio.SQUARE
+        except ValueError:
+            aspect_ratio_enum = CarouselAspectRatio.SQUARE
+
         project = CarouselProject(
             id=generate_short_uuid(),
             user_id=user.id,
             organization_id=getattr(user, 'organization_id', 1),
             name=project_data.name,
             description=project_data.description,
-            project_type=project_data.project_type,
-            platform=project_data.platform,
-            aspect_ratio=project_data.aspect_ratio,
+            project_type=project_type_enum,
+            platform=platform_enum,
+            aspect_ratio=aspect_ratio_enum,
             width=width,
             height=height,
             loan_id=project_data.loan_id,
