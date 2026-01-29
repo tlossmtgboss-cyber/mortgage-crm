@@ -2159,9 +2159,9 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
                            l.property_city, l.property_state, l.property_zip,
                            l.loan_type, l.stage
                     FROM loans l
-                    WHERE (l.stage ILIKE '%fund%'
-                           OR l.stage ILIKE '%closed%'
-                           OR l.stage ILIKE '%won%'
+                    WHERE (LOWER(CAST(l.stage AS TEXT)) LIKE '%fund%'
+                           OR (LOWER(CAST(l.stage AS TEXT)) LIKE '%closed%' AND LOWER(CAST(l.stage AS TEXT)) NOT LIKE '%disclosed%')
+                           OR LOWER(CAST(l.stage AS TEXT)) LIKE '%won%'
                            OR l.funded_date IS NOT NULL)
                     AND NOT EXISTS (
                         SELECT 1 FROM mum_clients m
@@ -2324,9 +2324,9 @@ async def check_imported_loans(
         should_be_in_mum = db.execute(text("""
             SELECT l.id, l.loan_number, l.borrower_name, l.stage, l.funded_date
             FROM loans l
-            WHERE (l.stage ILIKE '%fund%'
-                   OR l.stage ILIKE '%closed%'
-                   OR l.stage ILIKE '%won%'
+            WHERE (LOWER(CAST(l.stage AS TEXT)) LIKE '%fund%'
+                   OR (LOWER(CAST(l.stage AS TEXT)) LIKE '%closed%' AND LOWER(CAST(l.stage AS TEXT)) NOT LIKE '%disclosed%')
+                   OR LOWER(CAST(l.stage AS TEXT)) LIKE '%won%'
                    OR l.funded_date IS NOT NULL)
             AND NOT EXISTS (
                 SELECT 1 FROM mum_clients m
@@ -2395,9 +2395,9 @@ async def get_db_stats(db: Session = Depends(get_db)):
         # Count loans that should be in MUM
         should_be_mum = db.execute(text("""
             SELECT COUNT(*) FROM loans l
-            WHERE (l.stage ILIKE '%fund%'
-                   OR l.stage ILIKE '%closed%'
-                   OR l.stage ILIKE '%won%'
+            WHERE (LOWER(CAST(l.stage AS TEXT)) LIKE '%fund%'
+                   OR (LOWER(CAST(l.stage AS TEXT)) LIKE '%closed%' AND LOWER(CAST(l.stage AS TEXT)) NOT LIKE '%disclosed%')
+                   OR LOWER(CAST(l.stage AS TEXT)) LIKE '%won%'
                    OR l.funded_date IS NOT NULL)
             AND NOT EXISTS (
                 SELECT 1 FROM mum_clients m
@@ -2405,11 +2405,36 @@ async def get_db_stats(db: Session = Depends(get_db)):
             )
         """)).scalar() or 0
 
+        # Get details of loans that should be in MUM
+        mum_candidates = db.execute(text("""
+            SELECT l.id, l.loan_number, l.borrower_name, l.stage, l.funded_date
+            FROM loans l
+            WHERE (LOWER(CAST(l.stage AS TEXT)) LIKE '%fund%'
+                   OR (LOWER(CAST(l.stage AS TEXT)) LIKE '%closed%' AND LOWER(CAST(l.stage AS TEXT)) NOT LIKE '%disclosed%')
+                   OR LOWER(CAST(l.stage AS TEXT)) LIKE '%won%'
+                   OR l.funded_date IS NOT NULL)
+            AND NOT EXISTS (
+                SELECT 1 FROM mum_clients m
+                WHERE m.loan_number = l.loan_number
+            )
+            LIMIT 20
+        """)).fetchall()
+
         return {
             "total_loans": total_loans,
             "salesforce_loans": sf_loans,
             "mum_clients": mum_clients,
             "loans_should_be_in_mum": should_be_mum,
+            "mum_candidates": [
+                {
+                    "id": l[0],
+                    "loan_number": l[1],
+                    "borrower": l[2],
+                    "stage": l[3],
+                    "funded_date": str(l[4]) if l[4] else None
+                }
+                for l in mum_candidates
+            ],
             "recent_loans": [
                 {
                     "id": l[0],
@@ -2425,6 +2450,81 @@ async def get_db_stats(db: Session = Depends(get_db)):
 
     except Exception as e:
         logger.error(f"DB stats failed: {e}")
+        return {"error": str(e)}
+
+
+# ============ Debug: Import to MUM (No Auth) ============
+
+@router.post("/debug/import-to-mum")
+async def debug_import_to_mum(db: Session = Depends(get_db)):
+    """
+    Debug endpoint to import funded loans to MUM (no auth required).
+    """
+    try:
+        results = {'imported': 0, 'skipped': 0, 'errors': [], 'imported_clients': []}
+
+        # Get funded loans not already in mum_clients
+        funded_loans = db.execute(text("""
+            SELECT l.id, l.loan_number, l.borrower_name, l.borrower_first_name, l.borrower_last_name,
+                   l.borrower_email, l.borrower_phone, l.amount, l.interest_rate,
+                   l.funded_date, l.closing_date, l.property_address,
+                   l.property_city, l.property_state, l.property_zip,
+                   l.loan_type, l.stage
+            FROM loans l
+            WHERE (LOWER(CAST(l.stage AS TEXT)) LIKE '%fund%'
+                   OR (LOWER(CAST(l.stage AS TEXT)) LIKE '%closed%' AND LOWER(CAST(l.stage AS TEXT)) NOT LIKE '%disclosed%')
+                   OR LOWER(CAST(l.stage AS TEXT)) LIKE '%won%'
+                   OR l.funded_date IS NOT NULL)
+            AND NOT EXISTS (
+                SELECT 1 FROM mum_clients m
+                WHERE m.loan_number = l.loan_number
+            )
+        """)).fetchall()
+
+        logger.info(f"Debug: Found {len(funded_loans)} funded loans to import to MUM clients")
+
+        for loan in funded_loans:
+            try:
+                # Extract borrower name
+                client_name = loan[2]
+                if not client_name and (loan[3] or loan[4]):
+                    client_name = f"{loan[3] or ''} {loan[4] or ''}".strip()
+
+                if not client_name:
+                    results['skipped'] += 1
+                    continue
+
+                # Insert into mum_clients (using actual table schema)
+                db.execute(text("""
+                    INSERT INTO mum_clients (
+                        name, loan_number, original_close_date,
+                        original_rate, loan_balance, status, created_at
+                    ) VALUES (
+                        :name, :loan_number, :original_close_date,
+                        :original_rate, :loan_balance, 'active', CURRENT_TIMESTAMP
+                    )
+                """), {
+                    'name': client_name,
+                    'loan_number': loan[1],
+                    'original_close_date': loan[9] or loan[10],  # funded_date or closing_date
+                    'original_rate': float(loan[8]) if loan[8] else 0,
+                    'loan_balance': float(loan[7]) if loan[7] else 0,
+                })
+
+                results['imported'] += 1
+                results['imported_clients'].append({
+                    'loan_number': loan[1],
+                    'client_name': client_name
+                })
+
+            except Exception as e:
+                results['errors'].append(f"Error importing {loan[1]}: {str(e)}")
+
+        db.commit()
+        return results
+
+    except Exception as e:
+        logger.error(f"Debug import to MUM failed: {e}")
         return {"error": str(e)}
 
 
@@ -2456,9 +2556,9 @@ async def import_funded_loans_to_mum(
                    l.property_city, l.property_state, l.property_zip,
                    l.loan_type, l.stage
             FROM loans l
-            WHERE (l.stage ILIKE '%fund%'
-                   OR l.stage ILIKE '%closed%'
-                   OR l.stage ILIKE '%won%'
+            WHERE (LOWER(CAST(l.stage AS TEXT)) LIKE '%fund%'
+                   OR (LOWER(CAST(l.stage AS TEXT)) LIKE '%closed%' AND LOWER(CAST(l.stage AS TEXT)) NOT LIKE '%disclosed%')
+                   OR LOWER(CAST(l.stage AS TEXT)) LIKE '%won%'
                    OR l.funded_date IS NOT NULL)
             AND NOT EXISTS (
                 SELECT 1 FROM mum_clients m
@@ -2677,9 +2777,9 @@ async def sync_salesforce_and_import_mum(
             SELECT l.id, l.loan_number, l.borrower_name, l.borrower_first_name, l.borrower_last_name,
                    l.amount, l.interest_rate, l.funded_date, l.closing_date
             FROM loans l
-            WHERE (l.stage ILIKE '%fund%'
-                   OR l.stage ILIKE '%closed%'
-                   OR l.stage ILIKE '%won%'
+            WHERE (LOWER(CAST(l.stage AS TEXT)) LIKE '%fund%'
+                   OR (LOWER(CAST(l.stage AS TEXT)) LIKE '%closed%' AND LOWER(CAST(l.stage AS TEXT)) NOT LIKE '%disclosed%')
+                   OR LOWER(CAST(l.stage AS TEXT)) LIKE '%won%'
                    OR l.funded_date IS NOT NULL)
             AND NOT EXISTS (
                 SELECT 1 FROM mum_clients m

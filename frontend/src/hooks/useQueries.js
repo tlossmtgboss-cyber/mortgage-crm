@@ -142,7 +142,7 @@ export const useTask = (taskId, options = {}) => {
 export const usePortfolio = (options = {}) => {
   return useQuery({
     queryKey: ['portfolio', options],
-    queryFn: () => fetchWithAuth('/api/v1/clients'),
+    queryFn: () => fetchWithAuth('/api/v1/mum-clients'),
     staleTime: 1000 * 60 * 5,
     ...options,
   });
@@ -151,7 +151,7 @@ export const usePortfolio = (options = {}) => {
 export const useClient = (clientId, options = {}) => {
   return useQuery({
     queryKey: ['client', clientId],
-    queryFn: () => fetchWithAuth(`/api/v1/clients/${clientId}`),
+    queryFn: () => fetchWithAuth(`/api/v1/mum-clients/${clientId}`),
     enabled: !!clientId,
     staleTime: 1000 * 60 * 5,
     ...options,
@@ -263,7 +263,7 @@ export const usePrefetch = () => {
   const prefetchPortfolio = () => {
     queryClient.prefetchQuery({
       queryKey: ['portfolio', {}],
-      queryFn: () => fetchWithAuth('/api/v1/clients'),
+      queryFn: () => fetchWithAuth('/api/v1/mum-clients'),
       staleTime: 1000 * 60 * 5,
     });
   };

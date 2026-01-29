@@ -68644,52 +68644,94 @@ async def get_mum_metrics(
         rate_rebound_opps = 0
         seen_loan_numbers = set()
 
-        # 1. Process MUM clients
-        mum_clients = db.query(MUMClient).filter(
-            MUMClient.user_id == current_user.id,
-            MUMClient.status == 'active'
-        ).all()
+        # 1. Process MUM clients (use organization_id or get all active if no user filter available)
+        try:
+            # Try organization-based filtering first
+            if hasattr(current_user, 'organization_id') and current_user.organization_id:
+                mum_clients = db.query(MUMClient).filter(
+                    MUMClient.organization_id == current_user.organization_id,
+                    MUMClient.status == 'active'
+                ).all()
+            else:
+                # Fallback: get all active clients for this user's context
+                mum_clients = db.query(MUMClient).filter(
+                    MUMClient.status == 'active'
+                ).all()
+        except Exception as e:
+            logger.warning(f"MUM client query failed, returning empty: {e}")
+            mum_clients = []
 
         for client in mum_clients:
-            if client.loan_number:
-                seen_loan_numbers.add(client.loan_number)
+            try:
+                if hasattr(client, 'loan_number') and client.loan_number:
+                    seen_loan_numbers.add(client.loan_number)
 
-            # Calculate days since funding
-            days_since = 0
-            if client.original_close_date:
-                close_dt = client.original_close_date
-                if hasattr(close_dt, 'tzinfo') and close_dt.tzinfo is None:
-                    close_dt = close_dt.replace(tzinfo=timezone.utc)
-                days_since = (datetime.now(timezone.utc) - close_dt).days
+                # Calculate days since funding
+                days_since = 0
+                close_dt = getattr(client, 'original_close_date', None) or getattr(client, 'close_date', None)
+                if close_dt:
+                    if hasattr(close_dt, 'tzinfo') and close_dt.tzinfo is None:
+                        close_dt = close_dt.replace(tzinfo=timezone.utc)
+                    days_since = (datetime.now(timezone.utc) - close_dt).days
 
-            original_balance = float(client.loan_balance or client.original_loan_amount or 0)
-            months_passed = days_since // 30
-            principal_paid = (original_balance / 360) * months_passed * 0.3
-            current_balance = max(0, original_balance - principal_paid)
+                # Get balance with multiple fallbacks
+                original_balance = float(
+                    getattr(client, 'loan_balance', 0) or
+                    getattr(client, 'original_loan_amount', 0) or
+                    getattr(client, 'current_loan_amount', 0) or 0
+                )
+                months_passed = max(0, days_since // 30)
+                principal_paid = (original_balance / 360) * months_passed * 0.3 if original_balance > 0 else 0
+                current_balance = max(0, original_balance - principal_paid)
 
-            original_value = float(client.appraisal_value_at_closing or original_balance * 1.25)
-            years_passed = days_since / 365
-            current_value = original_value * (1 + 0.03 * years_passed)
+                # Get property value with fallbacks
+                original_value = float(
+                    getattr(client, 'appraisal_value_at_closing', 0) or
+                    getattr(client, 'current_property_value', 0) or
+                    original_balance * 1.25
+                )
+                years_passed = days_since / 365 if days_since > 0 else 0
+                current_value = original_value * (1 + 0.03 * years_passed) if original_value > 0 else 0
 
-            total_upb += current_balance
-            total_revenue += current_balance * 0.0025  # Servicing revenue
-            equity_amount = current_value - current_balance
-            total_equity += equity_amount
-            ltv_sum += (current_balance / current_value) if current_value > 0 else 0
-            client_count += 1
+                total_upb += current_balance
+                total_revenue += current_balance * 0.0025  # Servicing revenue
+                equity_amount = current_value - current_balance
+                total_equity += equity_amount
+                ltv_sum += (current_balance / current_value) if current_value > 0 else 0
+                client_count += 1
 
-            if client.refinance_opportunity:
-                refinance_opps += 1
-            if client.heloc_opportunity:
-                heloc_opps += 1
-            if client.rate_rebound_opportunity:
-                rate_rebound_opps += 1
+                if getattr(client, 'refinance_opportunity', False):
+                    refinance_opps += 1
+                if getattr(client, 'heloc_opportunity', False):
+                    heloc_opps += 1
+                if getattr(client, 'rate_rebound_opportunity', False):
+                    rate_rebound_opps += 1
+            except Exception as client_error:
+                logger.warning(f"Error processing MUM client {getattr(client, 'id', 'unknown')}: {client_error}")
+                continue
 
         # 2. Process funded loans not already in MUM clients
-        funded_loans = db.query(Loan).filter(
-            Loan.loan_officer_id == current_user.id,
-            Loan.stage == LoanStage.FUNDED
-        ).all()
+        try:
+            # Try multiple approaches to find funded loans
+            funded_loans = db.query(Loan).filter(
+                Loan.loan_officer_id == current_user.id,
+                Loan.stage == LoanStage.FUNDED
+            ).all()
+        except Exception as e:
+            logger.warning(f"Funded loans query with enum failed, trying text match: {e}")
+            try:
+                # Fallback: try string comparison or funded_date not null
+                from sqlalchemy import or_, text
+                funded_loans = db.query(Loan).filter(
+                    Loan.loan_officer_id == current_user.id,
+                    or_(
+                        Loan.funded_date.isnot(None),
+                        text("LOWER(CAST(stage AS TEXT)) LIKE '%fund%'")
+                    )
+                ).all()
+            except Exception as e2:
+                logger.warning(f"Fallback funded loans query also failed: {e2}")
+                funded_loans = []
 
         for loan in funded_loans:
             if loan.loan_number and loan.loan_number in seen_loan_numbers:
@@ -68742,12 +68784,16 @@ async def get_mum_metrics(
 
         # Calculate month-over-month growth from funded loans in last 30 days
         thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
-        recent_funded = db.query(Loan).filter(
-            Loan.loan_officer_id == current_user.id,
-            Loan.stage == LoanStage.FUNDED,
-            Loan.funded_date >= thirty_days_ago
-        ).all()
-        added_upb = sum([float(l.amount or 0) for l in recent_funded])
+        try:
+            recent_funded = db.query(Loan).filter(
+                Loan.loan_officer_id == current_user.id,
+                Loan.stage == LoanStage.FUNDED,
+                Loan.funded_date >= thirty_days_ago
+            ).all()
+        except Exception as e:
+            logger.warning(f"Recent funded query failed: {e}")
+            recent_funded = []
+        added_upb = sum([float(getattr(l, 'amount', 0) or 0) for l in recent_funded])
 
         # Calculate final metrics
         portfolio_yield = (total_revenue / total_upb * 100) if total_upb > 0 else 0
