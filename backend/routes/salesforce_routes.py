@@ -17,7 +17,7 @@ import logging
 from datetime import datetime
 from typing import Optional, Dict, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Query, Body, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Query, Body, Response, BackgroundTasks
 from fastapi.responses import RedirectResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -2122,39 +2122,33 @@ async def admin_pull_recent_loans(
 
 # ============ Import Closed Loans from Salesforce ============
 
-@router.post("/import-closed-loans")
-async def import_closed_loans_from_salesforce(
-    request: Request,
-    also_import_to_mum: bool = Query(True, description="Also import funded loans to MUM clients"),
-    db: Session = Depends(get_db)
-):
-    """
-    Import all closed/funded loans from Salesforce into the CRM.
+# In-memory tracking of import jobs (for background task status)
+_import_jobs: Dict[str, Dict[str, Any]] = {}
 
-    This endpoint queries Salesforce for all Opportunities with Stage = 'Closed Won'
-    (or similar funded stages) and imports them into the CRM loans table with all
-    available fields.
 
-    If also_import_to_mum is True (default), funded loans are also imported to the
-    mum_clients table for portfolio management.
+async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
+    """Background task to run the Salesforce import"""
+    from database import SessionLocal
+    import uuid
 
-    Data flows ONE-WAY: Salesforce → CRM → MUM Clients
-    """
-    user_id = get_current_user_id(request, db)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
+    db = SessionLocal()
     try:
+        _import_jobs[job_id] = {'status': 'running', 'progress': 'Connecting to Salesforce...'}
+        logger.info(f"Starting background import job {job_id} for user {user_id}")
+
         from scripts.import_salesforce_closed_loans import SalesforceClosedLoansImporter
 
         # Create importer with user context
+        _import_jobs[job_id]['progress'] = 'Querying Salesforce opportunities...'
         importer = SalesforceClosedLoansImporter(user_id=user_id)
         results = await importer.run()
+
+        _import_jobs[job_id]['progress'] = f"Imported {results['imported']} loans, processing MUM clients..."
 
         mum_results = {'imported': 0, 'errors': []}
 
         # Also import to MUM clients if requested
-        if also_import_to_mum and results['imported'] > 0:
+        if also_import_to_mum:
             try:
                 # Get funded loans not already in mum_clients
                 funded_loans = db.execute(text("""
@@ -2218,21 +2212,84 @@ async def import_closed_loans_from_salesforce(
                 logger.error(f"MUM import phase failed: {e}")
                 mum_results['errors'].append(f"MUM import failed: {str(e)}")
 
-        return {
-            "status": "success" if results['success'] else "partial",
-            "message": f"Import complete: {results['imported']} new loans, {results['updated']} updated, {mum_results['imported']} added to MUM clients",
-            "total_found": results['total_found'],
-            "imported": results['imported'],
-            "updated": results['updated'],
-            "failed": results['failed'],
-            "mum_imported": mum_results['imported'],
-            "errors": (results['errors'] + mum_results['errors'])[:20],  # Limit errors in response
-            "imported_loans": results['imported_loans'][:50]  # Limit response size
+        # Update job status with results
+        _import_jobs[job_id] = {
+            'status': 'completed',
+            'results': {
+                "status": "success" if results['success'] else "partial",
+                "message": f"Import complete: {results['imported']} new loans, {results['updated']} updated, {mum_results['imported']} added to MUM clients",
+                "total_found": results['total_found'],
+                "imported": results['imported'],
+                "updated": results['updated'],
+                "failed": results['failed'],
+                "mum_imported": mum_results['imported'],
+                "errors": (results['errors'] + mum_results['errors'])[:20],
+            }
         }
+        logger.info(f"Import job {job_id} completed: {results['imported']} imported, {mum_results['imported']} to MUM")
 
     except Exception as e:
-        logger.error(f"Import closed loans failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Import job {job_id} failed: {e}")
+        _import_jobs[job_id] = {'status': 'failed', 'error': str(e)}
+    finally:
+        db.close()
+
+
+@router.post("/import-closed-loans")
+async def import_closed_loans_from_salesforce(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    also_import_to_mum: bool = Query(True, description="Also import funded loans to MUM clients"),
+    db: Session = Depends(get_db)
+):
+    """
+    Import all closed/funded loans from Salesforce into the CRM.
+
+    This endpoint starts a background import job and returns immediately.
+    Use GET /import-closed-loans/status/{job_id} to check progress.
+
+    The import queries Salesforce for all Opportunities with Stage = 'Closed Won'
+    (or similar funded stages) and imports them into the CRM loans table.
+
+    If also_import_to_mum is True (default), funded loans are also imported to the
+    mum_clients table for portfolio management.
+
+    Data flows ONE-WAY: Salesforce → CRM → MUM Clients
+    """
+    import uuid
+
+    user_id = get_current_user_id(request, db)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    # Generate job ID
+    job_id = str(uuid.uuid4())[:8]
+
+    # Start background task
+    background_tasks.add_task(_run_import_job, job_id, user_id, also_import_to_mum)
+
+    logger.info(f"Started import job {job_id} for user {user_id}")
+
+    return {
+        "status": "started",
+        "message": "Import started in background. Check MUM Clients page in 1-2 minutes for results.",
+        "job_id": job_id,
+        "check_status_url": f"/api/v1/salesforce/import-closed-loans/status/{job_id}"
+    }
+
+
+@router.get("/import-closed-loans/status/{job_id}")
+async def get_import_job_status(job_id: str, request: Request, db: Session = Depends(get_db)):
+    """Get the status of an import job"""
+    user_id = get_current_user_id(request, db)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    job = _import_jobs.get(job_id)
+    if not job:
+        return {"status": "not_found", "message": "Job not found or expired"}
+
+    return job
 
 
 # ============ Import Funded Loans to MUM Clients ============

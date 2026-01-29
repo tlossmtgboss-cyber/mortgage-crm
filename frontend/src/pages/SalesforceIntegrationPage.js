@@ -339,17 +339,55 @@ function SalesforceIntegrationPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        setImportResults(data);
-        toast.success(data.message || `Imported ${data.imported} loans, updated ${data.updated}`);
+        if (data.status === 'started') {
+          // Background job started - poll for status
+          toast.success('Import started! Processing in background...');
+
+          // Poll for completion (check every 5 seconds, up to 3 minutes)
+          let attempts = 0;
+          const maxAttempts = 36;
+          const pollInterval = setInterval(async () => {
+            attempts++;
+            try {
+              const statusRes = await fetch(`${API_URL}${data.check_status_url}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+              });
+              const statusData = await statusRes.json();
+
+              if (statusData.status === 'completed') {
+                clearInterval(pollInterval);
+                setImportResults(statusData.results);
+                toast.success(statusData.results?.message || 'Import complete!');
+                setImportingClosedLoans(false);
+              } else if (statusData.status === 'failed') {
+                clearInterval(pollInterval);
+                toast.error('Import failed: ' + (statusData.error || 'Unknown error'));
+                setImportingClosedLoans(false);
+              } else if (attempts >= maxAttempts) {
+                clearInterval(pollInterval);
+                toast.info('Import still running. Check MUM Clients page for results.');
+                setImportingClosedLoans(false);
+              }
+            } catch (pollErr) {
+              console.error('Poll error:', pollErr);
+            }
+          }, 5000);
+        } else {
+          // Immediate result (old behavior)
+          setImportResults(data);
+          toast.success(data.message || `Imported ${data.imported} loans, updated ${data.updated}`);
+          setImportingClosedLoans(false);
+        }
       } else {
         console.error('Import closed loans error:', data);
         toast.error(data.detail || data.message || 'Import failed');
+        setImportingClosedLoans(false);
       }
     } catch (err) {
       console.error('Import closed loans exception:', err);
       toast.error('Import failed: ' + (err.message || 'Network error'));
+      setImportingClosedLoans(false);
     }
-    setImportingClosedLoans(false);
   };
 
   // Render sidebar navigation
