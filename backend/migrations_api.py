@@ -74,6 +74,47 @@ async def verify_admin_access(
     )
 
 
+@router.get("/debug-auth")
+async def debug_auth(
+    authorization: Optional[str] = Header(None)
+):
+    """Debug endpoint to check auth token decoding"""
+    from jose import jwt, JWTError
+
+    if not authorization or not authorization.startswith("Bearer "):
+        return {"error": "No Bearer token provided"}
+
+    token = authorization.replace("Bearer ", "")
+    SECRET_KEY = os.getenv("SECRET_KEY", "")
+
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        email = payload.get("sub")
+
+        db = SessionLocal()
+        try:
+            result = db.execute(text("""
+                SELECT u.id, u.email, u.is_admin, u.role
+                FROM users u
+                WHERE u.email = :email
+            """), {"email": email}).fetchone()
+
+            if result:
+                return {
+                    "token_valid": True,
+                    "email": email,
+                    "user_id": result[0],
+                    "is_admin": result[2],
+                    "role": result[3],
+                    "would_allow": result[2] or result[3] in ('admin', 'site_admin')
+                }
+            return {"token_valid": True, "email": email, "user_found": False}
+        finally:
+            db.close()
+    except JWTError as e:
+        return {"token_valid": False, "error": str(e), "secret_key_set": bool(SECRET_KEY)}
+
+
 @router.post("/add-guideline-updates-tables")
 async def run_guideline_updates_migration(
     admin: Any = Depends(verify_admin_access)
