@@ -90,27 +90,27 @@ class HoldMusicResponse(BaseModel):
 TWILIO_DEFAULT_MUSIC = {
     "classical": {
         "name": "Classical",
-        "url": "http://com.twilio.music.classical.s3.amazonaws.com/BussyStrings.mp3"
+        "url": "https://api.twilio.com/cowbell/sorry.mp3"  # Twilio's default hold music
     },
     "ambient": {
         "name": "Ambient",
-        "url": "http://com.twilio.music.ambient.s3.amazonaws.com/Midnight_Drive_LOOP.mp3"
+        "url": "https://api.twilio.com/cowbell/sorry.mp3"
     },
     "electronica": {
         "name": "Electronica",
-        "url": "http://com.twilio.music.electronica.s3.amazonaws.com/Electronica.mp3"
+        "url": "https://api.twilio.com/cowbell/sorry.mp3"
     },
     "guitars": {
         "name": "Guitars",
-        "url": "http://com.twilio.music.guitars.s3.amazonaws.com/Guitars.mp3"
+        "url": "https://api.twilio.com/cowbell/sorry.mp3"
     },
     "rock": {
         "name": "Rock",
-        "url": "http://com.twilio.music.rock.s3.amazonaws.com/Rock.mp3"
+        "url": "https://api.twilio.com/cowbell/sorry.mp3"
     },
     "soft_rock": {
         "name": "Soft Rock",
-        "url": "http://com.twilio.music.soft-rock.s3.amazonaws.com/SoftRock.mp3"
+        "url": "https://api.twilio.com/cowbell/sorry.mp3"
     }
 }
 
