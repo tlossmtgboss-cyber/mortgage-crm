@@ -339,112 +339,112 @@ async def create_project(
 
         width, height = get_dimensions_for_aspect_ratio(project_data.aspect_ratio)
 
-    project = CarouselProject(
-        id=generate_short_uuid(),
-        user_id=user.id,
-        organization_id=getattr(user, 'organization_id', 1),
-        name=project_data.name,
-        description=project_data.description,
-        project_type=project_data.project_type,
-        platform=project_data.platform,
-        aspect_ratio=project_data.aspect_ratio,
-        width=width,
-        height=height,
-        loan_id=project_data.loan_id,
-        lead_id=project_data.lead_id,
-        active_loan_id=project_data.active_loan_id,
-        theme_id=project_data.theme_id,
-        status=CarouselStatus.DRAFT,
-    )
-
-    db.add(project)
-
-    # If template_id provided, copy slides from template
-    if project_data.template_id:
-        template = db.query(CarouselTemplate).filter(
-            CarouselTemplate.id == project_data.template_id
-        ).first()
-        if template and template.slide_templates:
-            for i, slide_template in enumerate(template.slide_templates):
-                slide = CarouselSlide(
-                    id=generate_short_uuid(),
-                    project_id=project.id,
-                    order=i,
-                    title=slide_template.get('title'),
-                    subtitle=slide_template.get('subtitle'),
-                    body_text=slide_template.get('body_text'),
-                    background_type=slide_template.get('background_type', 'solid'),
-                    background_color=slide_template.get('background_color', '#ffffff'),
-                    background_gradient=slide_template.get('background_gradient'),
-                    layout_template=slide_template.get('layout_template', 'centered'),
-                    elements=slide_template.get('elements', []),
-                    custom_styles=slide_template.get('custom_styles', {}),
-                )
-                db.add(slide)
-
-            # Update template usage count
-            template.times_used = (template.times_used or 0) + 1
-    else:
-        # Create a default first slide
-        default_slide = CarouselSlide(
+        project = CarouselProject(
             id=generate_short_uuid(),
-            project_id=project.id,
-            order=0,
-            title="Your Title Here",
-            subtitle="Add a subtitle",
-            background_type=SlideBackgroundType.SOLID,
-            background_color="#217F8D",
-            layout_template=SlideLayoutTemplate.CENTERED,
-            elements=[],
-            custom_styles={},
+            user_id=user.id,
+            organization_id=getattr(user, 'organization_id', 1),
+            name=project_data.name,
+            description=project_data.description,
+            project_type=project_data.project_type,
+            platform=project_data.platform,
+            aspect_ratio=project_data.aspect_ratio,
+            width=width,
+            height=height,
+            loan_id=project_data.loan_id,
+            lead_id=project_data.lead_id,
+            active_loan_id=project_data.active_loan_id,
+            theme_id=project_data.theme_id,
+            status=CarouselStatus.DRAFT,
         )
-        db.add(default_slide)
 
-    db.commit()
-    db.refresh(project)
+        db.add(project)
 
-    # Fetch with slides
-    project = db.query(CarouselProject).options(
-        joinedload(CarouselProject.slides)
-    ).filter(CarouselProject.id == project.id).first()
+        # If template_id provided, copy slides from template
+        if project_data.template_id:
+            template = db.query(CarouselTemplate).filter(
+                CarouselTemplate.id == project_data.template_id
+            ).first()
+            if template and template.slide_templates:
+                for i, slide_template in enumerate(template.slide_templates):
+                    slide = CarouselSlide(
+                        id=generate_short_uuid(),
+                        project_id=project.id,
+                        order=i,
+                        title=slide_template.get('title'),
+                        subtitle=slide_template.get('subtitle'),
+                        body_text=slide_template.get('body_text'),
+                        background_type=slide_template.get('background_type', 'solid'),
+                        background_color=slide_template.get('background_color', '#ffffff'),
+                        background_gradient=slide_template.get('background_gradient'),
+                        layout_template=slide_template.get('layout_template', 'centered'),
+                        elements=slide_template.get('elements', []),
+                        custom_styles=slide_template.get('custom_styles', {}),
+                    )
+                    db.add(slide)
 
-    return {
-        "id": project.id,
-        "name": project.name,
-        "description": project.description,
-        "project_type": project.project_type.value if hasattr(project.project_type, 'value') else str(project.project_type),
-        "platform": project.platform.value if hasattr(project.platform, 'value') else str(project.platform),
-        "aspect_ratio": project.aspect_ratio.value if hasattr(project.aspect_ratio, 'value') else str(project.aspect_ratio),
-        "width": project.width,
-        "height": project.height,
-        "loan_id": project.loan_id,
-        "lead_id": project.lead_id,
-        "theme_id": project.theme_id,
-        "custom_branding": project.custom_branding or {},
-        "status": project.status.value if hasattr(project.status, 'value') else str(project.status),
-        "ai_generated": project.ai_generated,
-        "created_at": project.created_at,
-        "updated_at": project.updated_at,
-        "slides": [
-            {
-                "id": s.id,
-                "order": s.order,
-                "title": s.title,
-                "subtitle": s.subtitle,
-                "body_text": s.body_text,
-                "background_type": s.background_type.value if hasattr(s.background_type, 'value') else str(s.background_type),
-                "background_color": s.background_color,
-                "background_gradient": s.background_gradient,
-                "background_image_url": s.background_image_url,
-                "layout_template": s.layout_template.value if hasattr(s.layout_template, 'value') else str(s.layout_template),
-                "elements": s.elements or [],
-                "custom_styles": s.custom_styles or {},
-                "created_at": s.created_at,
-                "updated_at": s.updated_at,
-            }
-            for s in sorted(project.slides, key=lambda x: x.order)
-        ],
-    }
+                # Update template usage count
+                template.times_used = (template.times_used or 0) + 1
+        else:
+            # Create a default first slide
+            default_slide = CarouselSlide(
+                id=generate_short_uuid(),
+                project_id=project.id,
+                order=0,
+                title="Your Title Here",
+                subtitle="Add a subtitle",
+                background_type=SlideBackgroundType.SOLID,
+                background_color="#217F8D",
+                layout_template=SlideLayoutTemplate.CENTERED,
+                elements=[],
+                custom_styles={},
+            )
+            db.add(default_slide)
+
+        db.commit()
+        db.refresh(project)
+
+        # Fetch with slides
+        project = db.query(CarouselProject).options(
+            joinedload(CarouselProject.slides)
+        ).filter(CarouselProject.id == project.id).first()
+
+        return {
+            "id": project.id,
+            "name": project.name,
+            "description": project.description,
+            "project_type": project.project_type.value if hasattr(project.project_type, 'value') else str(project.project_type),
+            "platform": project.platform.value if hasattr(project.platform, 'value') else str(project.platform),
+            "aspect_ratio": project.aspect_ratio.value if hasattr(project.aspect_ratio, 'value') else str(project.aspect_ratio),
+            "width": project.width,
+            "height": project.height,
+            "loan_id": project.loan_id,
+            "lead_id": project.lead_id,
+            "theme_id": project.theme_id,
+            "custom_branding": project.custom_branding or {},
+            "status": project.status.value if hasattr(project.status, 'value') else str(project.status),
+            "ai_generated": project.ai_generated,
+            "created_at": project.created_at,
+            "updated_at": project.updated_at,
+            "slides": [
+                {
+                    "id": s.id,
+                    "order": s.order,
+                    "title": s.title,
+                    "subtitle": s.subtitle,
+                    "body_text": s.body_text,
+                    "background_type": s.background_type.value if hasattr(s.background_type, 'value') else str(s.background_type),
+                    "background_color": s.background_color,
+                    "background_gradient": s.background_gradient,
+                    "background_image_url": s.background_image_url,
+                    "layout_template": s.layout_template.value if hasattr(s.layout_template, 'value') else str(s.layout_template),
+                    "elements": s.elements or [],
+                    "custom_styles": s.custom_styles or {},
+                    "created_at": s.created_at,
+                    "updated_at": s.updated_at,
+                }
+                for s in sorted(project.slides, key=lambda x: x.order)
+            ],
+        }
     except HTTPException:
         raise
     except Exception as e:
