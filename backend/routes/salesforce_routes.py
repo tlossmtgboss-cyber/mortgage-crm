@@ -2125,6 +2125,7 @@ async def admin_pull_recent_loans(
 @router.post("/import-closed-loans")
 async def import_closed_loans_from_salesforce(
     request: Request,
+    also_import_to_mum: bool = Query(True, description="Also import funded loans to MUM clients"),
     db: Session = Depends(get_db)
 ):
     """
@@ -2134,7 +2135,10 @@ async def import_closed_loans_from_salesforce(
     (or similar funded stages) and imports them into the CRM loans table with all
     available fields.
 
-    Data flows ONE-WAY: Salesforce → CRM
+    If also_import_to_mum is True (default), funded loans are also imported to the
+    mum_clients table for portfolio management.
+
+    Data flows ONE-WAY: Salesforce → CRM → MUM Clients
     """
     user_id = get_current_user_id(request, db)
     if not user_id:
@@ -2147,14 +2151,82 @@ async def import_closed_loans_from_salesforce(
         importer = SalesforceClosedLoansImporter(user_id=user_id)
         results = await importer.run()
 
+        mum_results = {'imported': 0, 'errors': []}
+
+        # Also import to MUM clients if requested
+        if also_import_to_mum and results['imported'] > 0:
+            try:
+                # Get funded loans not already in mum_clients
+                funded_loans = db.execute(text("""
+                    SELECT l.id, l.loan_number, l.borrower_name, l.borrower_first_name, l.borrower_last_name,
+                           l.borrower_email, l.borrower_phone, l.amount, l.interest_rate,
+                           l.funded_date, l.closing_date, l.property_address,
+                           l.property_city, l.property_state, l.property_zip,
+                           l.loan_type, l.stage, l.status
+                    FROM loans l
+                    WHERE (l.stage IN ('FUNDED', 'Funded', 'funded', 'Closed Won')
+                           OR l.status IN ('funded', 'FUNDED', 'Funded', 'closed', 'CLOSED')
+                           OR l.funded_date IS NOT NULL)
+                    AND NOT EXISTS (
+                        SELECT 1 FROM mum_clients m
+                        WHERE m.loan_number = l.loan_number
+                    )
+                """)).fetchall()
+
+                logger.info(f"Found {len(funded_loans)} funded loans to import to MUM clients")
+
+                for loan in funded_loans:
+                    try:
+                        # Build client name
+                        client_name = loan[2]  # borrower_name
+                        if not client_name and (loan[3] or loan[4]):  # first/last name
+                            client_name = f"{loan[3] or ''} {loan[4] or ''}".strip()
+                        if not client_name:
+                            client_name = f"Client - {loan[1]}"  # loan_number
+
+                        # Get closing date
+                        close_date = loan[9] or loan[10]  # funded_date or closing_date
+
+                        # Insert into mum_clients
+                        db.execute(text("""
+                            INSERT INTO mum_clients (
+                                name, loan_number, original_close_date,
+                                original_rate, loan_balance,
+                                status, engagement_score, created_at
+                            ) VALUES (
+                                :name, :loan_number, :close_date,
+                                :rate, :balance,
+                                'active', 50, CURRENT_TIMESTAMP
+                            )
+                        """), {
+                            'name': client_name,
+                            'loan_number': loan[1],
+                            'close_date': close_date,
+                            'rate': loan[8],  # interest_rate
+                            'balance': loan[7],  # amount
+                        })
+                        mum_results['imported'] += 1
+
+                    except Exception as e:
+                        mum_results['errors'].append(f"MUM import - Loan {loan[1]}: {str(e)}")
+                        logger.error(f"Error importing loan {loan[1]} to MUM: {e}")
+
+                db.commit()
+                logger.info(f"Imported {mum_results['imported']} loans to MUM clients")
+
+            except Exception as e:
+                logger.error(f"MUM import phase failed: {e}")
+                mum_results['errors'].append(f"MUM import failed: {str(e)}")
+
         return {
             "status": "success" if results['success'] else "partial",
-            "message": f"Import complete: {results['imported']} new, {results['updated']} updated, {results['failed']} failed",
+            "message": f"Import complete: {results['imported']} new loans, {results['updated']} updated, {mum_results['imported']} added to MUM clients",
             "total_found": results['total_found'],
             "imported": results['imported'],
             "updated": results['updated'],
             "failed": results['failed'],
-            "errors": results['errors'][:20],  # Limit errors in response
+            "mum_imported": mum_results['imported'],
+            "errors": (results['errors'] + mum_results['errors'])[:20],  # Limit errors in response
             "imported_loans": results['imported_loans'][:50]  # Limit response size
         }
 
