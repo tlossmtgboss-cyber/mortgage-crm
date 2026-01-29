@@ -1095,81 +1095,135 @@ async def get_dashboard(
     """
     Get rate monitor dashboard metrics.
     """
-    # Active monitors
-    active_monitors = db.query(RateMonitorTarget).filter(
-        RateMonitorTarget.is_active == True
-    ).count()
+    try:
+        # Active monitors
+        try:
+            active_monitors = db.query(RateMonitorTarget).filter(
+                RateMonitorTarget.is_active == True
+            ).count()
+        except Exception:
+            active_monitors = 0
 
-    # Auto-call enabled
-    auto_call_enabled = db.query(RateMonitorTarget).filter(
-        RateMonitorTarget.is_active == True,
-        RateMonitorTarget.auto_call_enabled == True
-    ).count()
+        # Auto-call enabled
+        try:
+            auto_call_enabled = db.query(RateMonitorTarget).filter(
+                RateMonitorTarget.is_active == True,
+                RateMonitorTarget.auto_call_enabled == True
+            ).count()
+        except Exception:
+            auto_call_enabled = 0
 
-    # Pending alerts
-    pending_alerts = db.query(RateMonitorAlert).filter(
-        RateMonitorAlert.status == 'pending'
-    ).count()
+        # Pending alerts
+        try:
+            pending_alerts = db.query(RateMonitorAlert).filter(
+                RateMonitorAlert.status == 'pending'
+            ).count()
+        except Exception:
+            pending_alerts = 0
 
-    # Alerts by priority
-    high_priority = db.query(RateMonitorAlert).filter(
-        RateMonitorAlert.status == 'pending',
-        RateMonitorAlert.priority == 'high'
-    ).count()
+        # Alerts by priority
+        try:
+            high_priority = db.query(RateMonitorAlert).filter(
+                RateMonitorAlert.status == 'pending',
+                RateMonitorAlert.priority == 'high'
+            ).count()
+        except Exception:
+            high_priority = 0
 
-    # Alerts triggered today
-    today = date.today()
-    alerts_today = db.query(RateMonitorAlert).filter(
-        func.date(RateMonitorAlert.created_at) == today
-    ).count()
+        # Alerts triggered today
+        today = date.today()
+        try:
+            alerts_today = db.query(RateMonitorAlert).filter(
+                func.date(RateMonitorAlert.created_at) == today
+            ).count()
+        except Exception:
+            alerts_today = 0
 
-    # Conversions this month
-    first_of_month = today.replace(day=1)
-    conversions = db.query(RateMonitorAlert).filter(
-        RateMonitorAlert.converted_to_application == True,
-        RateMonitorAlert.conversion_date >= first_of_month
-    ).count()
+        # Conversions this month
+        first_of_month = today.replace(day=1)
+        try:
+            conversions = db.query(RateMonitorAlert).filter(
+                RateMonitorAlert.converted_to_application == True,
+                RateMonitorAlert.conversion_date >= first_of_month
+            ).count()
+        except Exception:
+            conversions = 0
 
-    # Calls made this month
-    calls_made = db.query(RateMonitorAlert).filter(
-        RateMonitorAlert.auto_call_attempted == True,
-        RateMonitorAlert.created_at >= datetime.combine(first_of_month, datetime.min.time())
-    ).count()
+        # Calls made this month
+        try:
+            calls_made = db.query(RateMonitorAlert).filter(
+                RateMonitorAlert.auto_call_attempted == True,
+                RateMonitorAlert.created_at >= datetime.combine(first_of_month, datetime.min.time())
+            ).count()
+        except Exception:
+            calls_made = 0
 
-    # Appointments scheduled this month
-    appointments = db.query(RateMonitorAlert).filter(
-        RateMonitorAlert.appointment_scheduled_at.isnot(None),
-        RateMonitorAlert.appointment_scheduled_at >= datetime.combine(first_of_month, datetime.min.time())
-    ).count()
+        # Appointments scheduled this month
+        try:
+            appointments = db.query(RateMonitorAlert).filter(
+                RateMonitorAlert.appointment_scheduled_at.isnot(None),
+                RateMonitorAlert.appointment_scheduled_at >= datetime.combine(first_of_month, datetime.min.time())
+            ).count()
+        except Exception:
+            appointments = 0
 
-    # Total potential savings from pending alerts
-    pending_savings = db.query(func.sum(RateMonitorAlert.monthly_savings)).filter(
-        RateMonitorAlert.status == 'pending'
-    ).scalar() or 0
+        # Total potential savings from pending alerts
+        try:
+            pending_savings = db.query(func.sum(RateMonitorAlert.monthly_savings)).filter(
+                RateMonitorAlert.status == 'pending'
+            ).scalar() or 0
+        except Exception:
+            pending_savings = 0
 
-    # Get current rates for display
-    service = OptimalBlueService(db)
-    rates = await service.get_current_rates()
+        # Get current rates for display
+        try:
+            service = OptimalBlueService(db)
+            rates = await service.get_current_rates()
+        except Exception:
+            rates = {'30_year': {'rate': None, 'is_mock': True}, '15_year': {'rate': None, 'is_mock': True}}
 
-    return {
-        'metrics': {
-            'active_monitors': active_monitors,
-            'auto_call_enabled': auto_call_enabled,
-            'pending_alerts': pending_alerts,
-            'high_priority_alerts': high_priority,
-            'alerts_today': alerts_today,
-            'conversions_this_month': conversions,
-            'calls_made_this_month': calls_made,
-            'appointments_this_month': appointments,
-            'pending_monthly_savings': float(pending_savings),
-        },
-        'current_rates': {
-            '30_year': rates.get('30_year', {}).get('rate'),
-            '15_year': rates.get('15_year', {}).get('rate'),
-            'is_mock': rates.get('30_year', {}).get('is_mock', True),
-        },
-        'timestamp': datetime.utcnow().isoformat(),
-    }
+        return {
+            'metrics': {
+                'active_monitors': active_monitors,
+                'auto_call_enabled': auto_call_enabled,
+                'pending_alerts': pending_alerts,
+                'high_priority_alerts': high_priority,
+                'alerts_today': alerts_today,
+                'conversions_this_month': conversions,
+                'calls_made_this_month': calls_made,
+                'appointments_this_month': appointments,
+                'pending_monthly_savings': float(pending_savings),
+            },
+            'current_rates': {
+                '30_year': rates.get('30_year', {}).get('rate'),
+                '15_year': rates.get('15_year', {}).get('rate'),
+                'is_mock': rates.get('30_year', {}).get('is_mock', True),
+            },
+            'timestamp': datetime.utcnow().isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"Rate monitor dashboard error: {e}")
+        # Return empty metrics instead of 500
+        return {
+            'metrics': {
+                'active_monitors': 0,
+                'auto_call_enabled': 0,
+                'pending_alerts': 0,
+                'high_priority_alerts': 0,
+                'alerts_today': 0,
+                'conversions_this_month': 0,
+                'calls_made_this_month': 0,
+                'appointments_this_month': 0,
+                'pending_monthly_savings': 0,
+            },
+            'current_rates': {
+                '30_year': None,
+                '15_year': None,
+                'is_mock': True,
+            },
+            'timestamp': datetime.utcnow().isoformat(),
+            'error': str(e),
+        }
 
 
 @router.get("/history")

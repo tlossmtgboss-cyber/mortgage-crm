@@ -97,6 +97,31 @@ def sync_emails_from_salesforce_sync(integration_profile_id: int, **kwargs) -> D
 
 
 # ============================================================================
+# Task: Push Emails to Salesforce
+# ============================================================================
+
+async def push_emails_to_salesforce(
+    integration_profile_id: int,
+    limit: int = 100,
+    db: Session = None
+) -> Dict[str, Any]:
+    """Push emails from CRM to Salesforce (placeholder for bidirectional sync)."""
+    logger.info(f"push_emails_to_salesforce called for profile {integration_profile_id}")
+    # This is a placeholder for future bidirectional email sync
+    return {
+        "status": "not_implemented",
+        "message": "Email push to Salesforce not yet implemented",
+        "pushed": 0,
+        "errors": []
+    }
+
+
+def push_emails_to_salesforce_sync(integration_profile_id: int, **kwargs) -> Dict[str, Any]:
+    """Synchronous wrapper for push_emails_to_salesforce"""
+    return asyncio.run(push_emails_to_salesforce(integration_profile_id, **kwargs))
+
+
+# ============================================================================
 # Task: Sync Calendar from Salesforce for a Single User
 # ============================================================================
 
