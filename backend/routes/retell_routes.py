@@ -239,12 +239,12 @@ async def get_retell_status(
     db: Session = Depends(get_db),
 ):
     """Get Retell AI connection status."""
-    api_key = get_user_retell_key(db, current_user["id"])
-
-    if not api_key:
-        return {"connected": False, "message": "Retell AI not configured"}
-
     try:
+        api_key = get_user_retell_key(db, current_user["id"])
+
+        if not api_key:
+            return {"connected": False, "message": "Retell AI not configured"}
+
         client = RetellClient(api_key=api_key)
         agents = await client.list_agents()
         phone_numbers = await client.list_phone_numbers()
@@ -256,6 +256,9 @@ async def get_retell_status(
         }
     except RetellAPIError:
         return {"connected": False, "message": "API key invalid or expired"}
+    except Exception as e:
+        logger.error(f"Error checking Retell status: {e}")
+        return {"connected": False, "message": f"Connection check failed: {str(e)}"}
 
 
 # ==================== Agent Routes ====================
