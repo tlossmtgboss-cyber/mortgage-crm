@@ -102,7 +102,7 @@ const VideoOS = () => {
       const token = localStorage.getItem('token');
 
       // Fetch video library
-      const videosResponse = await fetch(`${API_BASE_URL}/api/v1/video-library`, {
+      const videosResponse = await fetch(`${API_BASE_URL}/api/v1/video-os/library`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -198,7 +198,7 @@ const VideoOS = () => {
 
       // Step 1: Get presigned upload URL
       setUploadProgress(10);
-      const uploadUrlResponse = await fetch(`${API_BASE_URL}/api/v1/video-library/upload-url`, {
+      const uploadUrlResponse = await fetch(`${API_BASE_URL}/api/v1/video-os/library/upload-url`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -234,7 +234,7 @@ const VideoOS = () => {
       setUploadProgress(70);
 
       // Step 3: Complete upload
-      const completeResponse = await fetch(`${API_BASE_URL}/api/v1/video-library/complete`, {
+      const completeResponse = await fetch(`${API_BASE_URL}/api/v1/video-os/library/complete`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
