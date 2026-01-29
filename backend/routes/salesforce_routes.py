@@ -2157,13 +2157,11 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
                            l.borrower_email, l.borrower_phone, l.amount, l.interest_rate,
                            l.funded_date, l.closing_date, l.property_address,
                            l.property_city, l.property_state, l.property_zip,
-                           l.loan_type, l.stage, l.status
+                           l.loan_type, l.stage
                     FROM loans l
                     WHERE (l.stage ILIKE '%fund%'
                            OR l.stage ILIKE '%closed%'
                            OR l.stage ILIKE '%won%'
-                           OR l.status ILIKE '%fund%'
-                           OR l.status ILIKE '%closed%'
                            OR l.funded_date IS NOT NULL)
                     AND NOT EXISTS (
                         SELECT 1 FROM mum_clients m
@@ -2314,7 +2312,7 @@ async def check_imported_loans(
     try:
         # Get all loans with salesforce_id
         sf_loans = db.execute(text("""
-            SELECT id, loan_number, borrower_name, stage, status,
+            SELECT id, loan_number, borrower_name, stage,
                    salesforce_id, funded_date, closing_date, amount
             FROM loans
             WHERE salesforce_id IS NOT NULL
@@ -2324,13 +2322,11 @@ async def check_imported_loans(
 
         # Get funded loans that should be in MUM (flexible matching)
         should_be_in_mum = db.execute(text("""
-            SELECT l.id, l.loan_number, l.borrower_name, l.stage, l.status, l.funded_date
+            SELECT l.id, l.loan_number, l.borrower_name, l.stage, l.funded_date
             FROM loans l
             WHERE (l.stage ILIKE '%fund%'
                    OR l.stage ILIKE '%closed%'
                    OR l.stage ILIKE '%won%'
-                   OR l.status ILIKE '%fund%'
-                   OR l.status ILIKE '%closed%'
                    OR l.funded_date IS NOT NULL)
             AND NOT EXISTS (
                 SELECT 1 FROM mum_clients m
@@ -2345,16 +2341,16 @@ async def check_imported_loans(
             "salesforce_loans": [
                 {
                     "id": l[0], "loan_number": l[1], "borrower": l[2],
-                    "stage": l[3], "status": l[4], "salesforce_id": l[5],
-                    "funded_date": str(l[6]) if l[6] else None,
-                    "amount": float(l[8]) if l[8] else None
+                    "stage": l[3], "salesforce_id": l[4],
+                    "funded_date": str(l[5]) if l[5] else None,
+                    "amount": float(l[7]) if l[7] else None
                 }
                 for l in sf_loans
             ],
             "loans_should_be_in_mum": [
                 {
                     "id": l[0], "loan_number": l[1], "borrower": l[2],
-                    "stage": l[3], "status": l[4], "funded_date": str(l[5]) if l[5] else None
+                    "stage": l[3], "funded_date": str(l[4]) if l[4] else None
                 }
                 for l in should_be_in_mum
             ],
@@ -2388,10 +2384,9 @@ async def get_db_stats(db: Session = Depends(get_db)):
         # Count MUM clients
         mum_clients = db.execute(text("SELECT COUNT(*) FROM mum_clients")).scalar() or 0
 
-        # Get sample of recent loans with their stage/status
+        # Get sample of recent loans with their stage
         sample_loans = db.execute(text("""
-            SELECT id, loan_number, borrower_name, stage, status, salesforce_id,
-                   created_at
+            SELECT id, loan_number, borrower_name, stage, salesforce_id, created_at
             FROM loans
             ORDER BY created_at DESC
             LIMIT 10
@@ -2403,8 +2398,6 @@ async def get_db_stats(db: Session = Depends(get_db)):
             WHERE (l.stage ILIKE '%fund%'
                    OR l.stage ILIKE '%closed%'
                    OR l.stage ILIKE '%won%'
-                   OR l.status ILIKE '%fund%'
-                   OR l.status ILIKE '%closed%'
                    OR l.funded_date IS NOT NULL)
             AND NOT EXISTS (
                 SELECT 1 FROM mum_clients m
@@ -2423,9 +2416,8 @@ async def get_db_stats(db: Session = Depends(get_db)):
                     "loan_number": l[1],
                     "borrower": l[2],
                     "stage": l[3],
-                    "status": l[4],
-                    "salesforce_id": l[5],
-                    "created_at": str(l[6]) if l[6] else None
+                    "salesforce_id": l[4],
+                    "created_at": str(l[5]) if l[5] else None
                 }
                 for l in sample_loans
             ]
@@ -2462,13 +2454,11 @@ async def import_funded_loans_to_mum(
                    l.borrower_email, l.borrower_phone, l.amount, l.interest_rate,
                    l.funded_date, l.closing_date, l.property_address,
                    l.property_city, l.property_state, l.property_zip,
-                   l.loan_type, l.stage, l.status
+                   l.loan_type, l.stage
             FROM loans l
             WHERE (l.stage ILIKE '%fund%'
                    OR l.stage ILIKE '%closed%'
                    OR l.stage ILIKE '%won%'
-                   OR l.status ILIKE '%fund%'
-                   OR l.status ILIKE '%closed%'
                    OR l.funded_date IS NOT NULL)
             AND NOT EXISTS (
                 SELECT 1 FROM mum_clients m
@@ -2687,8 +2677,9 @@ async def sync_salesforce_and_import_mum(
             SELECT l.id, l.loan_number, l.borrower_name, l.borrower_first_name, l.borrower_last_name,
                    l.amount, l.interest_rate, l.funded_date, l.closing_date
             FROM loans l
-            WHERE (l.stage IN ('FUNDED', 'Funded', 'funded')
-                   OR l.status IN ('funded', 'FUNDED', 'Funded', 'closed', 'CLOSED')
+            WHERE (l.stage ILIKE '%fund%'
+                   OR l.stage ILIKE '%closed%'
+                   OR l.stage ILIKE '%won%'
                    OR l.funded_date IS NOT NULL)
             AND NOT EXISTS (
                 SELECT 1 FROM mum_clients m
