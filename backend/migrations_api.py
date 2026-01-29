@@ -3361,6 +3361,73 @@ async def debug_survey_templates(key: str = ""):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/run-content-marketing-migration")
+async def run_content_marketing_migration(
+    secret_key: str = Header(None, alias="X-Secret-Key")
+):
+    """
+    Run the Content Marketing tables migration.
+    Creates tables for brand voices, calendars, briefs, comments, etc.
+    """
+    import re
+    expected_key = re.sub(r'\s+', '', os.getenv("SECRET_KEY", ""))
+    provided_key = re.sub(r'\s+', '', secret_key or "")
+
+    if not expected_key or provided_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid secret key")
+
+    try:
+        from database import engine
+        from sqlalchemy import text
+
+        # Check if tables exist
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'content_brand_voices'
+                )
+            """)).scalar()
+
+            if result:
+                return {
+                    "status": "success",
+                    "message": "Content Marketing tables already exist",
+                    "created": False
+                }
+
+        # Run migration
+        from migrations.add_content_marketing_tables import run_migration
+        logger.info("Starting Content Marketing tables migration...")
+        success = run_migration()
+
+        if success:
+            return {
+                "status": "success",
+                "message": "Content Marketing tables created successfully",
+                "created": True,
+                "tables": [
+                    "content_brand_voices",
+                    "content_calendars",
+                    "content_briefs",
+                    "content_comments",
+                    "content_approvals",
+                    "seo_keywords",
+                    "content_templates",
+                    "personalization_tokens",
+                    "content_publish_logs"
+                ]
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Migration failed")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Content Marketing migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/seed-survey-templates")
 async def seed_survey_templates(
     admin: Any = Depends(verify_admin_access)
