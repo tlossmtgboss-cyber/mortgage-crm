@@ -2151,7 +2151,7 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
         if also_import_to_mum:
             db = SessionLocal()
             try:
-                # Get funded loans not already in mum_clients
+                # Get funded loans not already in mum_clients (use flexible ILIKE matching)
                 funded_loans = db.execute(text("""
                     SELECT l.id, l.loan_number, l.borrower_name, l.borrower_first_name, l.borrower_last_name,
                            l.borrower_email, l.borrower_phone, l.amount, l.interest_rate,
@@ -2159,8 +2159,11 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
                            l.property_city, l.property_state, l.property_zip,
                            l.loan_type, l.stage, l.status
                     FROM loans l
-                    WHERE (l.stage IN ('FUNDED', 'Funded', 'funded', 'Closed Won')
-                           OR l.status IN ('funded', 'FUNDED', 'Funded', 'closed', 'CLOSED')
+                    WHERE (l.stage ILIKE '%fund%'
+                           OR l.stage ILIKE '%closed%'
+                           OR l.stage ILIKE '%won%'
+                           OR l.status ILIKE '%fund%'
+                           OR l.status ILIKE '%closed%'
                            OR l.funded_date IS NOT NULL)
                     AND NOT EXISTS (
                         SELECT 1 FROM mum_clients m
@@ -2319,12 +2322,15 @@ async def check_imported_loans(
             LIMIT 50
         """)).fetchall()
 
-        # Get funded loans that should be in MUM
+        # Get funded loans that should be in MUM (flexible matching)
         should_be_in_mum = db.execute(text("""
             SELECT l.id, l.loan_number, l.borrower_name, l.stage, l.status, l.funded_date
             FROM loans l
-            WHERE (l.stage IN ('FUNDED', 'Funded', 'funded', 'Closed Won')
-                   OR l.status IN ('funded', 'FUNDED', 'Funded', 'closed', 'CLOSED')
+            WHERE (l.stage ILIKE '%fund%'
+                   OR l.stage ILIKE '%closed%'
+                   OR l.stage ILIKE '%won%'
+                   OR l.status ILIKE '%fund%'
+                   OR l.status ILIKE '%closed%'
                    OR l.funded_date IS NOT NULL)
             AND NOT EXISTS (
                 SELECT 1 FROM mum_clients m
@@ -2390,8 +2396,11 @@ async def import_funded_loans_to_mum(
                    l.property_city, l.property_state, l.property_zip,
                    l.loan_type, l.stage, l.status
             FROM loans l
-            WHERE (l.stage IN ('FUNDED', 'Funded', 'funded')
-                   OR l.status IN ('funded', 'FUNDED', 'Funded', 'closed', 'CLOSED')
+            WHERE (l.stage ILIKE '%fund%'
+                   OR l.stage ILIKE '%closed%'
+                   OR l.stage ILIKE '%won%'
+                   OR l.status ILIKE '%fund%'
+                   OR l.status ILIKE '%closed%'
                    OR l.funded_date IS NOT NULL)
             AND NOT EXISTS (
                 SELECT 1 FROM mum_clients m
