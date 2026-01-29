@@ -44,6 +44,57 @@ def generate_short_uuid():
     return str(uuid.uuid4())[:12]
 
 
+def ensure_carousel_tables(db: Session):
+    """Ensure carousel tables exist, create them if not."""
+    try:
+        # Check if tables exist by trying a simple query
+        db.execute(text("SELECT 1 FROM carousel_projects LIMIT 1"))
+        return True
+    except Exception as e:
+        logger.warning(f"Carousel tables may not exist, attempting to create: {e}")
+        try:
+            # Run migration
+            from migrations.add_carousel_builder_tables import run_migration
+            run_migration()
+            logger.info("Carousel tables created successfully")
+            return True
+        except Exception as migration_error:
+            logger.error(f"Failed to create carousel tables: {migration_error}")
+            return False
+
+
+# =============================================================================
+# Health Check / Diagnostic Endpoint
+# =============================================================================
+
+@router.get("/health")
+async def carousel_health_check(db: Session = Depends(get_db)):
+    """Check carousel builder health and table status."""
+    status = {"status": "ok", "tables": {}}
+
+    tables = ["carousel_projects", "carousel_slides", "carousel_themes", "carousel_templates", "carousel_exports"]
+
+    for table in tables:
+        try:
+            result = db.execute(text(f"SELECT COUNT(*) FROM {table}"))
+            count = result.scalar()
+            status["tables"][table] = {"exists": True, "count": count}
+        except Exception as e:
+            status["tables"][table] = {"exists": False, "error": str(e)}
+            status["status"] = "degraded"
+
+    # Try to run migration if any table is missing
+    if status["status"] == "degraded":
+        try:
+            from migrations.add_carousel_builder_tables import run_migration
+            run_migration()
+            status["migration_run"] = True
+        except Exception as e:
+            status["migration_error"] = str(e)
+
+    return status
+
+
 # =============================================================================
 # Pydantic Models - Requests
 # =============================================================================
@@ -274,6 +325,9 @@ async def list_projects(
 ):
     """List user's carousel projects."""
     try:
+        # Ensure tables exist
+        ensure_carousel_tables(db)
+
         user = await get_user_from_request(request, db)
 
         query = db.query(CarouselProject).filter(
@@ -335,6 +389,10 @@ async def create_project(
 ):
     """Create a new carousel project."""
     try:
+        # Ensure tables exist
+        if not ensure_carousel_tables(db):
+            raise HTTPException(status_code=500, detail="Carousel tables not available. Please contact support.")
+
         user = await get_user_from_request(request, db)
 
         width, height = get_dimensions_for_aspect_ratio(project_data.aspect_ratio)
