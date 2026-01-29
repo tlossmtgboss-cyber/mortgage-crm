@@ -21764,6 +21764,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Twilio Click-to-Call routes not loaded: {e}")
 
+# Surveying & Feedback routes (Customer satisfaction surveys, NPS, CSAT)
+try:
+    from routes.survey_routes import router as survey_router
+    app.include_router(survey_router, tags=["Surveys & Feedback"])
+    logger.info("✅ Survey routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Survey routes not loaded: {e}")
+
 @app.get("/api/v1/debug/purl-routes-status")
 async def debug_purl_routes_status():
     """Debug endpoint to check PURL routes loading status"""
