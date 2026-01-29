@@ -1962,27 +1962,36 @@ async def get_email_sync_status(
             "message": "Salesforce not connected"
         }
 
-    # Get last email sync event
-    last_sync = db.execute(text("""
-        SELECT event_type, event_data, created_at
-        FROM integration_events
-        WHERE integration_profile_id = :profile_id
-        AND event_type IN ('email_sync_completed', 'email_sync_failed')
-        ORDER BY created_at DESC
-        LIMIT 1
-    """), {"profile_id": profile.id}).fetchone()
+    last_sync = None
+    email_count = 0
 
-    # Count synced emails
-    email_count = db.execute(text("""
-        SELECT COUNT(*) FROM email_messages
-        WHERE user_id = :user_id
-        AND meta_data->>'source' IN ('salesforce_sync', 'salesforce_task_sync')
-    """), {"user_id": user_id}).scalar()
+    try:
+        # Get last email sync event
+        last_sync = db.execute(text("""
+            SELECT event_type, event_data, created_at
+            FROM integration_events
+            WHERE integration_profile_id = :profile_id
+            AND event_type IN ('email_sync_completed', 'email_sync_failed')
+            ORDER BY created_at DESC
+            LIMIT 1
+        """), {"profile_id": profile.id}).fetchone()
+    except Exception as e:
+        logger.warning(f"Could not fetch email sync events: {e}")
+
+    try:
+        # Count synced emails
+        email_count = db.execute(text("""
+            SELECT COUNT(*) FROM email_messages
+            WHERE user_id = :user_id
+            AND meta_data->>'source' IN ('salesforce_sync', 'salesforce_task_sync')
+        """), {"user_id": user_id}).scalar() or 0
+    except Exception as e:
+        logger.warning(f"Could not count synced emails: {e}")
 
     return {
         "connected": is_profile_connected(profile),
         "email_sync_available": True,
-        "total_synced_emails": email_count or 0,
+        "total_synced_emails": email_count,
         "last_sync": {
             "status": last_sync[0] if last_sync else None,
             "data": last_sync[1] if last_sync else None,
@@ -2054,35 +2063,48 @@ async def get_calendar_sync_status(
             "message": "Salesforce not connected"
         }
 
-    # Get last calendar sync event
-    last_sync = db.execute(text("""
-        SELECT event_type, event_data, created_at
-        FROM integration_events
-        WHERE integration_profile_id = :profile_id
-        AND event_type IN ('calendar_sync_completed', 'calendar_sync_failed')
-        ORDER BY created_at DESC
-        LIMIT 1
-    """), {"profile_id": profile.id}).fetchone()
+    last_sync = None
+    event_count = 0
+    task_count = 0
 
-    # Count synced events
-    event_count = db.execute(text("""
-        SELECT COUNT(*) FROM calendar_events
-        WHERE user_id = :user_id
-        AND meta_data->>'source' = 'salesforce_sync'
-    """), {"user_id": user_id}).scalar()
+    try:
+        # Get last calendar sync event
+        last_sync = db.execute(text("""
+            SELECT event_type, event_data, created_at
+            FROM integration_events
+            WHERE integration_profile_id = :profile_id
+            AND event_type IN ('calendar_sync_completed', 'calendar_sync_failed')
+            ORDER BY created_at DESC
+            LIMIT 1
+        """), {"profile_id": profile.id}).fetchone()
+    except Exception as e:
+        logger.warning(f"Could not fetch calendar sync events: {e}")
 
-    # Count synced tasks
-    task_count = db.execute(text("""
-        SELECT COUNT(*) FROM tasks
-        WHERE user_id = :user_id
-        AND meta_data->>'source' = 'salesforce_sync'
-    """), {"user_id": user_id}).scalar()
+    try:
+        # Count synced events
+        event_count = db.execute(text("""
+            SELECT COUNT(*) FROM calendar_events
+            WHERE user_id = :user_id
+            AND meta_data->>'source' = 'salesforce_sync'
+        """), {"user_id": user_id}).scalar() or 0
+    except Exception as e:
+        logger.warning(f"Could not count calendar events: {e}")
+
+    try:
+        # Count synced tasks
+        task_count = db.execute(text("""
+            SELECT COUNT(*) FROM tasks
+            WHERE user_id = :user_id
+            AND meta_data->>'source' = 'salesforce_sync'
+        """), {"user_id": user_id}).scalar() or 0
+    except Exception as e:
+        logger.warning(f"Could not count synced tasks: {e}")
 
     return {
         "connected": is_profile_connected(profile),
         "calendar_sync_available": True,
-        "total_synced_events": event_count or 0,
-        "total_synced_tasks": task_count or 0,
+        "total_synced_events": event_count,
+        "total_synced_tasks": task_count,
         "last_sync": {
             "status": last_sync[0] if last_sync else None,
             "data": last_sync[1] if last_sync else None,

@@ -199,13 +199,18 @@ class SalesforceClosedLoansImporter:
 
         fields_str = ', '.join(fields_to_query)
 
-        # Query for Closed Won opportunities
+        # Query for Closed/Won/Funded opportunities (broader criteria)
         soql = f"""
             SELECT {fields_str}
             FROM Opportunity
             WHERE StageName = 'Closed Won'
                OR StageName LIKE '%Funded%'
                OR StageName LIKE '%Closed%'
+               OR StageName LIKE '%Won%'
+               OR StageName LIKE '%Complete%'
+               OR StageName LIKE '%Settled%'
+               OR StageName = 'Funded'
+               OR IsWon = true
             ORDER BY CloseDate DESC
             LIMIT 2000
         """
