@@ -40,15 +40,15 @@ async def verify_admin_access(
             token = authorization.replace("Bearer ", "")
             db = SessionLocal()
             try:
-                # Verify token and check admin status
+                # Verify token and check admin status (is_admin flag OR admin role)
                 result = db.execute(text("""
-                    SELECT u.id, u.is_admin
+                    SELECT u.id, u.is_admin, u.role
                     FROM users u
                     JOIN sessions s ON s.user_id = u.id
                     WHERE s.token = :token AND s.expires_at > NOW()
                 """), {"token": token}).fetchone()
 
-                if result and result[1]:  # is_admin = True
+                if result and (result[1] or result[2] in ('admin', 'site_admin')):
                     return True
             finally:
                 db.close()
