@@ -3125,3 +3125,90 @@ async def add_mum_salesforce_id(
     except Exception as e:
         logger.error(f"MUM salesforce_id migration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/add-survey-tables")
+async def add_survey_tables(
+    admin: Any = Depends(verify_admin_access)
+):
+    """
+    Create survey and feedback tables for customer satisfaction measurement.
+    Creates: survey_templates, survey_questions, survey_responses,
+             survey_answers, survey_analytics, savings_validations
+    """
+    try:
+        from migrations.survey_tables import run_migration, check_tables_exist
+
+        if check_tables_exist():
+            return {
+                "status": "success",
+                "message": "Survey tables already exist",
+                "created": False
+            }
+
+        logger.info("Starting survey tables migration...")
+        success = run_migration()
+
+        if success:
+            return {
+                "status": "success",
+                "message": "Survey tables created successfully",
+                "created": True,
+                "tables": [
+                    "survey_templates",
+                    "survey_questions",
+                    "survey_responses",
+                    "survey_answers",
+                    "survey_analytics",
+                    "savings_validations"
+                ]
+            }
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail="Survey tables migration failed"
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Survey tables migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/seed-survey-templates")
+async def seed_survey_templates(
+    admin: Any = Depends(verify_admin_access)
+):
+    """
+    Seed default survey templates (NPS, CSAT, CES, Savings Validation, Milestone).
+    """
+    try:
+        from seeds.seed_surveys import seed_surveys
+
+        logger.info("Seeding survey templates...")
+        success = seed_surveys(organization_id=1)
+
+        if success:
+            return {
+                "status": "success",
+                "message": "Survey templates seeded successfully",
+                "templates": [
+                    "Post-Close NPS Survey",
+                    "Customer Satisfaction Survey (CSAT)",
+                    "Customer Effort Score (CES)",
+                    "Savings Validation Survey",
+                    "Milestone Check-in Survey"
+                ]
+            }
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to seed survey templates"
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Survey seed error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
