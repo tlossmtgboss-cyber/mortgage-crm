@@ -31,27 +31,40 @@ async def verify_admin_access(
     if admin_key and x_admin_key == admin_key:
         return True
 
-    # Option 2: Check for authenticated admin user
+    # Option 2: Check for authenticated admin user via JWT token
     if authorization and authorization.startswith("Bearer "):
         try:
             from database import SessionLocal
             from sqlalchemy import text
+            from jose import jwt, JWTError
 
             token = authorization.replace("Bearer ", "")
-            db = SessionLocal()
-            try:
-                # Verify token and check admin status (is_admin flag OR admin role)
-                result = db.execute(text("""
-                    SELECT u.id, u.is_admin, u.role
-                    FROM users u
-                    JOIN sessions s ON s.user_id = u.id
-                    WHERE s.token = :token AND s.expires_at > NOW()
-                """), {"token": token}).fetchone()
 
-                if result and (result[1] or result[2] in ('admin', 'site_admin')):
-                    return True
-            finally:
-                db.close()
+            # Decode JWT token
+            SECRET_KEY = os.getenv("SECRET_KEY", "")
+            ALGORITHM = "HS256"
+
+            try:
+                payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+                email = payload.get("sub")
+
+                if email:
+                    db = SessionLocal()
+                    try:
+                        # Check if user is admin
+                        result = db.execute(text("""
+                            SELECT u.id, u.is_admin, u.role
+                            FROM users u
+                            WHERE u.email = :email
+                        """), {"email": email}).fetchone()
+
+                        if result and (result[1] or result[2] in ('admin', 'site_admin')):
+                            return True
+                    finally:
+                        db.close()
+            except JWTError as e:
+                logger.warning(f"JWT decode failed: {e}")
+
         except Exception as e:
             logger.warning(f"Admin auth check failed: {e}")
 
