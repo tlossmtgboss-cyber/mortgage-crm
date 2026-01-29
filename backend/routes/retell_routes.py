@@ -146,16 +146,20 @@ class UpdatePhoneNumberRequest(BaseModel):
 
 def get_user_retell_key(db: Session, user_id: int) -> Optional[str]:
     """Get user's Retell API key from database."""
-    result = db.execute(
-        text("""
-        SELECT retell_api_key FROM user_retell_config
-        WHERE user_id = :user_id
-        """),
-        {"user_id": user_id}
-    ).fetchone()
+    try:
+        result = db.execute(
+            text("""
+            SELECT retell_api_key FROM user_retell_config
+            WHERE user_id = :user_id
+            """),
+            {"user_id": user_id}
+        ).fetchone()
 
-    if result and result[0]:
-        return result[0]
+        if result and result[0]:
+            return result[0]
+    except Exception as e:
+        # Table might not exist yet
+        logger.warning(f"Could not query user_retell_config: {e}")
 
     # Fall back to environment variable
     return os.getenv("RETELL_API_KEY")
@@ -186,6 +190,22 @@ async def connect_retell(
         client = RetellClient(api_key=request.api_key)
         await client.list_agents()
 
+        # Ensure the table exists
+        try:
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS user_retell_config (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL UNIQUE,
+                    retell_api_key TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            db.commit()
+        except Exception as table_e:
+            logger.warning(f"Table creation check: {table_e}")
+            db.rollback()
+
         # Save configuration
         db.execute(
             text("""
@@ -207,6 +227,10 @@ async def connect_retell(
 
     except RetellAPIError as e:
         raise HTTPException(status_code=400, detail=f"Invalid API key: {e.message}")
+    except Exception as e:
+        logger.error(f"Error connecting Retell: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to save configuration: {str(e)}")
 
 
 @router.get("/status")
