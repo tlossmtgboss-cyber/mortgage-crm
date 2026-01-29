@@ -2292,6 +2292,75 @@ async def get_import_job_status(job_id: str, request: Request, db: Session = Dep
     return job
 
 
+# ============ Diagnostic: Check Salesforce Imported Loans ============
+
+@router.get("/imported-loans-check")
+async def check_imported_loans(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Diagnostic endpoint to check loans imported from Salesforce
+    and whether they should appear in MUM clients.
+    """
+    user_id = get_current_user_id(request, db)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    try:
+        # Get all loans with salesforce_id
+        sf_loans = db.execute(text("""
+            SELECT id, loan_number, borrower_name, stage, status,
+                   salesforce_id, funded_date, closing_date, amount
+            FROM loans
+            WHERE salesforce_id IS NOT NULL
+            ORDER BY created_at DESC
+            LIMIT 50
+        """)).fetchall()
+
+        # Get funded loans that should be in MUM
+        should_be_in_mum = db.execute(text("""
+            SELECT l.id, l.loan_number, l.borrower_name, l.stage, l.status, l.funded_date
+            FROM loans l
+            WHERE (l.stage IN ('FUNDED', 'Funded', 'funded', 'Closed Won')
+                   OR l.status IN ('funded', 'FUNDED', 'Funded', 'closed', 'CLOSED')
+                   OR l.funded_date IS NOT NULL)
+            AND NOT EXISTS (
+                SELECT 1 FROM mum_clients m
+                WHERE m.loan_number = l.loan_number
+            )
+        """)).fetchall()
+
+        # Get count in MUM
+        mum_count = db.execute(text("SELECT COUNT(*) FROM mum_clients")).scalar()
+
+        return {
+            "salesforce_loans": [
+                {
+                    "id": l[0], "loan_number": l[1], "borrower": l[2],
+                    "stage": l[3], "status": l[4], "salesforce_id": l[5],
+                    "funded_date": str(l[6]) if l[6] else None,
+                    "amount": float(l[8]) if l[8] else None
+                }
+                for l in sf_loans
+            ],
+            "loans_should_be_in_mum": [
+                {
+                    "id": l[0], "loan_number": l[1], "borrower": l[2],
+                    "stage": l[3], "status": l[4], "funded_date": str(l[5]) if l[5] else None
+                }
+                for l in should_be_in_mum
+            ],
+            "mum_client_count": mum_count,
+            "salesforce_loan_count": len(sf_loans),
+            "loans_missing_from_mum": len(should_be_in_mum)
+        }
+
+    except Exception as e:
+        logger.error(f"Check imported loans failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ============ Import Funded Loans to MUM Clients ============
 
 @router.post("/import-to-mum")
