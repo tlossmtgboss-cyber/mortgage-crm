@@ -62252,6 +62252,14 @@ async def startup_event():
             except Exception as carousel_e:
                 logger.warning(f"⚠️ Carousel builder migration skipped: {carousel_e}")
 
+            # Create Retell AI tables (for voice AI agents)
+            try:
+                from migrations.add_retell_tables import run_migration as run_retell_migration
+                run_retell_migration()
+                logger.info("✅ Retell AI tables initialized")
+            except Exception as retell_e:
+                logger.warning(f"⚠️ Retell AI migration skipped: {retell_e}")
+
             # Add missing slug column to users table (microsite URL identifier)
             try:
                 db_temp = SessionLocal()
