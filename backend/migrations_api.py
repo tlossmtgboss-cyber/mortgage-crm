@@ -37,12 +37,9 @@ async def verify_admin_access(
             from database import SessionLocal
             from sqlalchemy import text
             from jose import jwt, JWTError
+            from main import SECRET_KEY, ALGORITHM
 
             token = authorization.replace("Bearer ", "")
-
-            # Decode JWT token
-            SECRET_KEY = os.getenv("SECRET_KEY", "")
-            ALGORITHM = "HS256"
 
             try:
                 payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -80,15 +77,15 @@ async def debug_auth(
 ):
     """Debug endpoint to check auth token decoding"""
     from jose import jwt, JWTError
+    from main import SECRET_KEY, ALGORITHM
 
     if not authorization or not authorization.startswith("Bearer "):
         return {"error": "No Bearer token provided"}
 
     token = authorization.replace("Bearer ", "")
-    SECRET_KEY = os.getenv("SECRET_KEY", "")
 
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email = payload.get("sub")
 
         db = SessionLocal()
@@ -112,7 +109,7 @@ async def debug_auth(
         finally:
             db.close()
     except JWTError as e:
-        return {"token_valid": False, "error": str(e), "secret_key_set": bool(SECRET_KEY)}
+        return {"token_valid": False, "error": str(e)}
 
 
 @router.post("/add-guideline-updates-tables")
