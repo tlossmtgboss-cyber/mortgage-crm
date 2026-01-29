@@ -103,7 +103,7 @@ class IVROptionUpdate(BaseModel):
 async def create_ivr_menu(
     menu: IVRMenuCreate,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_flexible)
+    current_user = Depends(get_current_user_optional)
 ):
     """Create a new IVR menu"""
     try:
@@ -154,7 +154,7 @@ async def create_ivr_menu(
 async def list_ivr_menus(
     include_inactive: bool = False,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_flexible)
+    current_user = Depends(get_current_user_optional)
 ):
     """List all IVR menus"""
     try:
@@ -220,7 +220,7 @@ async def list_ivr_menus(
 async def get_ivr_menu(
     menu_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_flexible)
+    current_user = Depends(get_current_user_optional)
 ):
     """Get IVR menu with all options"""
     try:
@@ -282,7 +282,7 @@ async def update_ivr_menu(
     menu_id: int,
     menu: IVRMenuUpdate,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_flexible)
+    current_user = Depends(get_current_user_optional)
 ):
     """Update IVR menu"""
     try:
@@ -351,7 +351,7 @@ async def update_ivr_menu(
 async def delete_ivr_menu(
     menu_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_flexible)
+    current_user = Depends(get_current_user_optional)
 ):
     """Delete (deactivate) IVR menu"""
     try:
@@ -384,7 +384,7 @@ async def create_ivr_option(
     menu_id: int,
     option: IVROptionCreate,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_flexible)
+    current_user = Depends(get_current_user_optional)
 ):
     """Add an option to an IVR menu"""
     try:
@@ -453,7 +453,7 @@ async def update_ivr_option(
     option_id: int,
     option: IVROptionUpdate,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_flexible)
+    current_user = Depends(get_current_user_optional)
 ):
     """Update an IVR menu option"""
     try:
@@ -508,7 +508,7 @@ async def delete_ivr_option(
     menu_id: int,
     option_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_flexible)
+    current_user = Depends(get_current_user_optional)
 ):
     """Delete an IVR menu option"""
     try:
@@ -898,7 +898,7 @@ async def list_ivr_templates():
 async def apply_ivr_template(
     template_id: str,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_flexible)
+    current_user = Depends(get_current_user_optional)
 ):
     """Apply a predefined template to create an IVR menu"""
     try:

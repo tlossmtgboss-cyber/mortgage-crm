@@ -2,7 +2,7 @@
 Hold Music Routes
 Manage hold music library for call queues, transfers, and conferences
 """
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Response
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Response, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -32,10 +32,17 @@ def safe_isoformat(dt_value) -> Optional[str]:
     return str(dt_value)
 
 
-def get_current_user_flexible():
-    """Lazy import auth dependency"""
-    from main import get_current_user_flexible as _get_current_user_flexible
-    return _get_current_user_flexible
+async def get_current_user_optional(request: Request, db: Session = Depends(get_db)):
+    """
+    Optional authentication - returns user if authenticated, None otherwise.
+    Lazy imports from main to avoid circular imports.
+    """
+    try:
+        from main import get_current_user_flexible as auth_func
+        return await auth_func(request, db)
+    except Exception as e:
+        logger.debug(f"Auth failed (optional): {e}")
+        return None
 
 
 # ============================================================================
@@ -123,7 +130,7 @@ TWILIO_DEFAULT_MUSIC = {
 async def create_hold_music(
     music: HoldMusicCreate,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_flexible)
+    current_user = Depends(get_current_user_optional)
 ):
     """Create a new hold music entry"""
     try:
@@ -187,7 +194,7 @@ async def create_hold_music(
 async def list_hold_music(
     include_inactive: bool = False,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_flexible)
+    current_user = Depends(get_current_user_optional)
 ):
     """List all hold music entries"""
     try:
@@ -264,7 +271,7 @@ async def get_twilio_defaults():
 async def get_hold_music(
     music_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_flexible)
+    current_user = Depends(get_current_user_optional)
 ):
     """Get a specific hold music entry"""
     try:
@@ -313,7 +320,7 @@ async def update_hold_music(
     music_id: int,
     music: HoldMusicUpdate,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_flexible)
+    current_user = Depends(get_current_user_optional)
 ):
     """Update a hold music entry"""
     try:
@@ -382,7 +389,7 @@ async def update_hold_music(
 async def delete_hold_music(
     music_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_flexible)
+    current_user = Depends(get_current_user_optional)
 ):
     """Delete (deactivate) a hold music entry"""
     try:
@@ -410,7 +417,7 @@ async def delete_hold_music(
 async def set_default_hold_music(
     music_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_flexible)
+    current_user = Depends(get_current_user_optional)
 ):
     """Set a hold music entry as the default"""
     try:
