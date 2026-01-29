@@ -3378,7 +3378,9 @@ function LoanDetail() {
               loanId={parseInt(id)}
               borrowerId={loan?.borrower_id}
               borrowerName={loan?.borrower_name || ''}
+              borrowerEmail={loan?.borrower_email || formData?.borrower_email || ''}
               coBorrowerName={loan?.coborrower_name || ''}
+              coBorrowerEmail={loan?.coborrower_email || formData?.coborrower_email || ''}
             />
           </div>
         )}

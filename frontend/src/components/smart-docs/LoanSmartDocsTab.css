@@ -73,7 +73,7 @@
 
 .docs-list-header {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr 80px;
+  grid-template-columns: 2fr 1fr 1fr 1fr 120px;
   padding: 12px 16px;
   background: #f8f9fa;
   border-bottom: 1px solid #e0e0e0;
@@ -85,7 +85,7 @@
 
 .docs-list-row {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr 80px;
+  grid-template-columns: 2fr 1fr 1fr 1fr 120px;
   padding: 14px 16px;
   border-bottom: 1px solid #f0f0f0;
   align-items: center;
@@ -139,6 +139,28 @@
 
 .btn-view-doc:hover {
   background: #dee2e6;
+}
+
+.col-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.btn-esign-doc {
+  padding: 6px 10px;
+  background: #1d4ed8;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-esign-doc:hover {
+  background: #1e40af;
 }
 
 .smart-docs-empty {

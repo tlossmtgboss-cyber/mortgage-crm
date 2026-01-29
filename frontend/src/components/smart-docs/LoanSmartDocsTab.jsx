@@ -9,6 +9,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { API_BASE_URL } from '../../services/api';
 import SmartDocumentUpload from './SmartDocumentUpload';
+import ESignModal from '../esign/ESignModal';
 import './LoanSmartDocsTab.css';
 
 const STATUS_COLORS = {
@@ -19,10 +20,12 @@ const STATUS_COLORS = {
   WAIVED: { bg: '#d1ecf1', color: '#0c5460', label: 'Waived' },
 };
 
-function LoanSmartDocsTab({ loanId, borrowerId, borrowerName, coBorrowerName }) {
+function LoanSmartDocsTab({ loanId, borrowerId, borrowerName, borrowerEmail, coBorrowerName, coBorrowerEmail }) {
   const [loading, setLoading] = useState(true);
   const [documents, setDocuments] = useState([]);
   const [error, setError] = useState(null);
+  const [esignModalOpen, setEsignModalOpen] = useState(false);
+  const [selectedDocForEsign, setSelectedDocForEsign] = useState(null);
 
   const fetchDocuments = useCallback(async () => {
     if (!loanId) return;
@@ -86,6 +89,26 @@ function LoanSmartDocsTab({ loanId, borrowerId, borrowerName, coBorrowerName }) 
 
   const getDocumentUrl = (doc) => {
     return doc.file_url || doc.s3_url || doc.document_url;
+  };
+
+  const handleOpenEsign = (doc) => {
+    setSelectedDocForEsign(doc);
+    setEsignModalOpen(true);
+  };
+
+  const handleEsignSuccess = (envelope) => {
+    console.log('E-sign envelope created:', envelope);
+    // Could update document status or show notification
+    fetchDocuments();
+  };
+
+  const canSendForEsign = (doc) => {
+    // Only show e-sign button for documents that have been uploaded
+    const hasFile = doc.file_url || doc.s3_url || doc.document_url;
+    const isPdf = doc.filename?.toLowerCase().endsWith('.pdf') ||
+                  doc.file_type === 'application/pdf' ||
+                  hasFile; // Assume PDFs if has file
+    return hasFile && isPdf;
   };
 
   if (loading) {
@@ -172,6 +195,15 @@ function LoanSmartDocsTab({ loanId, borrowerId, borrowerName, coBorrowerName }) 
                       View
                     </a>
                   )}
+                  {canSendForEsign(doc) && (
+                    <button
+                      className="btn-esign-doc"
+                      onClick={() => handleOpenEsign(doc)}
+                      title="Send for E-Signature"
+                    >
+                      E-Sign
+                    </button>
+                  )}
                 </span>
               </div>
             );
@@ -197,6 +229,22 @@ function LoanSmartDocsTab({ loanId, borrowerId, borrowerName, coBorrowerName }) 
           onUploadComplete={handleUploadComplete}
         />
       </div>
+
+      {/* E-Sign Modal */}
+      <ESignModal
+        isOpen={esignModalOpen}
+        onClose={() => {
+          setEsignModalOpen(false);
+          setSelectedDocForEsign(null);
+        }}
+        document={selectedDocForEsign}
+        loanId={loanId}
+        borrowerName={borrowerName}
+        borrowerEmail={borrowerEmail}
+        coBorrowerName={coBorrowerName}
+        coBorrowerEmail={coBorrowerEmail}
+        onSuccess={handleEsignSuccess}
+      />
     </div>
   );
 }

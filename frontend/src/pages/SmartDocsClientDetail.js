@@ -17,6 +17,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
 import IncomeCalculatorModal from '../components/income/IncomeCalculatorModal';
+import ESignModal from '../components/esign/ESignModal';
 import './SmartDocsClientDetail.css';
 
 function SmartDocsClientDetail() {
@@ -34,6 +35,8 @@ function SmartDocsClientDetail() {
   const [showIncomeModal, setShowIncomeModal] = useState(false);
   const [editingDocType, setEditingDocType] = useState(false);
   const [editDocTypeValue, setEditDocTypeValue] = useState('');
+  const [esignModalOpen, setEsignModalOpen] = useState(false);
+  const [selectedDocForEsign, setSelectedDocForEsign] = useState(null);
 
   // Available document types for dropdown (must match backend DocType enum)
   const DOCUMENT_TYPES = [
@@ -507,6 +510,27 @@ function SmartDocsClientDetail() {
     return doc.document_id || doc.file_url || doc.s3_url || doc.filename || doc.status === 'PENDING_REVIEW';
   };
 
+  // Check if document can be sent for e-sign
+  const canSendForEsign = (doc) => {
+    const hasFile = doc.file_url || doc.s3_url;
+    return hasFile;
+  };
+
+  // Handle opening e-sign modal
+  const handleOpenEsign = (doc) => {
+    setSelectedDocForEsign(doc);
+    setEsignModalOpen(true);
+  };
+
+  // Handle e-sign success
+  const handleEsignSuccess = (envelope) => {
+    console.log('E-sign envelope created:', envelope);
+    setEsignModalOpen(false);
+    setSelectedDocForEsign(null);
+    // Refresh to show updated status
+    fetchClientData();
+  };
+
   // Format date
   const formatDate = (dateStr) => {
     if (!dateStr) return 'N/A';
@@ -775,6 +799,15 @@ function SmartDocsClientDetail() {
                       >
                         ✉️
                       </button>
+                      {canSendForEsign(selectedDoc) && (
+                        <button
+                          className="esign-btn"
+                          onClick={() => handleOpenEsign(selectedDoc)}
+                          title="Send for E-Signature"
+                        >
+                          ✍️ E-Sign
+                        </button>
+                      )}
                     </>
                   )}
                 </div>
@@ -897,6 +930,20 @@ function SmartDocsClientDetail() {
         onSave={(income) => {
           console.log('Income saved:', income);
         }}
+      />
+
+      {/* E-Sign Modal */}
+      <ESignModal
+        isOpen={esignModalOpen}
+        onClose={() => {
+          setEsignModalOpen(false);
+          setSelectedDocForEsign(null);
+        }}
+        document={selectedDocForEsign}
+        loanId={loanId}
+        borrowerName={client?.name}
+        borrowerEmail={client?.email}
+        onSuccess={handleEsignSuccess}
       />
     </div>
   );
