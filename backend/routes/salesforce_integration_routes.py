@@ -2763,28 +2763,43 @@ async def get_sync_status(
     if not profile:
         raise HTTPException(status_code=400, detail="Salesforce not connected")
 
-    # Get recent sync events
-    events = db.query(IntegrationEvent).filter(
-        IntegrationEvent.integration_profile_id == profile.id,
-        IntegrationEvent.event_type.in_(['sync_completed', 'sync_failed', 'record_synced'])
-    ).order_by(IntegrationEvent.created_at.desc()).limit(20).all()
+    # Get recent sync events (with error handling for missing table)
+    events = []
+    try:
+        events = db.query(IntegrationEvent).filter(
+            IntegrationEvent.integration_profile_id == profile.id,
+            IntegrationEvent.event_type.in_(['sync_completed', 'sync_failed', 'record_synced'])
+        ).order_by(IntegrationEvent.created_at.desc()).limit(20).all()
+    except Exception as e:
+        logger.warning(f"Could not query integration events: {e}")
+        db.rollback()
 
-    # Get mapping stats
-    mappings = db.query(FieldMapping).filter(
-        FieldMapping.integration_profile_id == profile.id,
-        FieldMapping.enabled == True
-    ).count()
+    # Get mapping stats (with error handling for missing table)
+    mappings = 0
+    try:
+        mappings = db.query(FieldMapping).filter(
+            FieldMapping.integration_profile_id == profile.id,
+            FieldMapping.enabled == True
+        ).count()
+    except Exception as e:
+        logger.warning(f"Could not query field mappings: {e}")
+        db.rollback()
 
-    # Get record tracking stats
-    tracking_stats = db.execute(text("""
-        SELECT
-            COUNT(*) as total_tracked,
-            COUNT(CASE WHEN sync_status = 'synced' THEN 1 END) as synced,
-            COUNT(CASE WHEN sync_status = 'pending' THEN 1 END) as pending,
-            MAX(last_synced_at) as last_sync
-        FROM integration_record_tracking
-        WHERE integration_profile_id = :profile_id
-    """), {"profile_id": profile.id}).fetchone()
+    # Get record tracking stats (with error handling for missing table)
+    tracking_stats = None
+    try:
+        tracking_stats = db.execute(text("""
+            SELECT
+                COUNT(*) as total_tracked,
+                COUNT(CASE WHEN sync_status = 'synced' THEN 1 END) as synced,
+                COUNT(CASE WHEN sync_status = 'pending' THEN 1 END) as pending,
+                MAX(last_synced_at) as last_sync
+            FROM integration_record_tracking
+            WHERE integration_profile_id = :profile_id
+        """), {"profile_id": profile.id}).fetchone()
+    except Exception as e:
+        logger.warning(f"Could not query record tracking: {e}")
+        db.rollback()
 
     return {
         "profile_id": profile.id,
