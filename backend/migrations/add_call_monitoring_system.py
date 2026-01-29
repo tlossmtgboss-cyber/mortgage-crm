@@ -41,7 +41,8 @@ def run_migration():
 
         -- Capture source
         capture_mode VARCHAR(30) NOT NULL,
-        recording_id UUID REFERENCES ci_call_recordings(id),
+        -- Note: FK to ci_call_recordings removed - run CI platform migration first
+        recording_id UUID,
 
         -- Linked entities
         loan_id UUID,

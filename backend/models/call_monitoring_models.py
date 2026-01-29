@@ -185,7 +185,9 @@ class CallSession(Base):
 
     # Capture source
     capture_mode = Column(String(30), nullable=False)
-    recording_id = Column(UUID(as_uuid=True), ForeignKey('ci_call_recordings.id'))
+    # Note: FK to ci_call_recordings removed - table may not exist yet
+    # Re-add FK constraint after running conversation intelligence migration
+    recording_id = Column(UUID(as_uuid=True), nullable=True)
 
     # Linked entities
     loan_id = Column(UUID(as_uuid=True), index=True)

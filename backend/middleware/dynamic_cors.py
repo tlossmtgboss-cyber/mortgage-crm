@@ -58,29 +58,35 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
         if not origin:
             return False
 
-        # Use domain service if available
-        if self.domain_service:
-            return self.domain_service.is_allowed_origin(origin)
-
-        # Fallback: allow static domains only
-        static_allowed = {
+        # ALWAYS allow these domains first (before checking domain service)
+        # This ensures CORS works even if domain service fails
+        always_allowed = {
             "http://localhost:3000",
             "http://localhost:3001",
+            "http://localhost:5173",
             "https://perenniaai.com",
             "https://www.perenniaai.com",
             "https://app.perenniaai.com",
+            "https://api.perenniaai.com",
         }
 
-        if origin in static_allowed:
+        if origin in always_allowed:
             return True
 
         # Allow perenniaai.com subdomains
-        if origin.endswith("perenniaai.com"):
+        if "perenniaai.com" in origin:
             return True
 
         # Allow railway.app subdomains (production hosting)
-        if origin.endswith(".railway.app"):
+        if ".railway.app" in origin:
             return True
+
+        # Use domain service for custom domains if available
+        try:
+            if self.domain_service:
+                return self.domain_service.is_allowed_origin(origin)
+        except Exception as e:
+            logger.warning(f"Domain service check failed: {e}")
 
         return False
 
@@ -89,13 +95,10 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
 
         # Handle preflight OPTIONS requests
         if request.method == "OPTIONS":
+            response = Response(status_code=204)
             if origin and self.is_allowed_origin(origin):
-                response = Response(status_code=204)
                 self._add_cors_headers(response, origin)
-                return response
-            else:
-                # Still return 204 but without CORS headers
-                return Response(status_code=204)
+            return response
 
         # Handle regular requests - wrap in try/except to ensure CORS headers
         # are added even when exceptions occur (otherwise browser blocks error responses)
@@ -110,9 +113,10 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
             from starlette.responses import JSONResponse
             response = JSONResponse(
                 status_code=500,
-                content={"detail": "Internal server error"}
+                content={"detail": "Internal server error", "path": request.url.path}
             )
 
+        # Always try to add CORS headers for allowed origins
         if origin and self.is_allowed_origin(origin):
             self._add_cors_headers(response, origin)
 
