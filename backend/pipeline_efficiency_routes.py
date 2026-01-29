@@ -43,6 +43,16 @@ class TimeRange(str, Enum):
     YEAR = "year"
 
 
+# Roles that can see organization-wide data
+ORG_WIDE_ROLES = ['admin', 'site_admin', 'leadership', 'management', 'company_admin', 'branch_manager']
+
+
+def can_view_org_data(user) -> bool:
+    """Check if user can view organization-wide pipeline data"""
+    role = getattr(user, 'permission_role', None) or getattr(user, 'role', '')
+    return role.lower() in [r.lower() for r in ORG_WIDE_ROLES]
+
+
 def get_date_filter(time_range: TimeRange):
     """Get the start date for filtering based on time range"""
     now = datetime.now(timezone.utc)
@@ -83,34 +93,43 @@ async def get_pipeline_efficiency(
         start_date = get_date_filter(time_range)
         now = datetime.now(timezone.utc)
 
+        # Determine if user should see org-wide data or just their own
+        view_org_wide = can_view_org_data(current_user)
+        org_id = getattr(current_user, 'organization_id', None)
+
+        # Build base filters
+        if view_org_wide and org_id:
+            # Admin/management sees entire organization
+            lead_filter = [Lead.created_at >= start_date, Lead.organization_id == org_id]
+            loan_filter = [Loan.created_at >= start_date, Loan.organization_id == org_id]
+            loan_base_filter = [Loan.organization_id == org_id]
+        else:
+            # Regular user sees only their own data
+            lead_filter = [Lead.created_at >= start_date, Lead.owner_id == current_user.id]
+            loan_filter = [Loan.created_at >= start_date, Loan.loan_officer_id == current_user.id]
+            loan_base_filter = [Loan.loan_officer_id == current_user.id]
+
         # Get total leads in period
-        total_leads = db.query(func.count(Lead.id)).filter(
-            Lead.created_at >= start_date,
-            Lead.owner_id == current_user.id
-        ).scalar() or 0
+        total_leads = db.query(func.count(Lead.id)).filter(*lead_filter).scalar() or 0
 
         # Get total loans in period
-        total_loans = db.query(func.count(Loan.id)).filter(
-            Loan.created_at >= start_date,
-            Loan.loan_officer_id == current_user.id
-        ).scalar() or 0
+        total_loans = db.query(func.count(Loan.id)).filter(*loan_filter).scalar() or 0
 
         # Calculate conversion rate (leads that became loans)
         converted_leads = db.query(func.count(Lead.id)).filter(
-            Lead.created_at >= start_date,
-            Lead.owner_id == current_user.id,
+            *lead_filter,
             Lead.stage == LeadStage.CONVERTED
         ).scalar() or 0
 
         pull_through_rate = round((converted_leads / total_leads * 100), 1) if total_leads > 0 else 0
 
         # Calculate average time to close (for funded loans)
-        funded_loans = db.query(Loan).filter(
+        funded_loan_filter = loan_base_filter + [
             Loan.funded_date >= start_date,
-            Loan.loan_officer_id == current_user.id,
             Loan.funded_date.isnot(None),
             Loan.created_at.isnot(None)
-        ).all()
+        ]
+        funded_loans = db.query(Loan).filter(*funded_loan_filter).all()
 
         if funded_loans:
             total_days = sum(
@@ -124,11 +143,13 @@ async def get_pipeline_efficiency(
 
         # Get loans falling behind (in processing/underwriting for more than 14 days)
         falling_behind_stages = [LoanStage.PROCESSING, LoanStage.SUBMITTED, LoanStage.UNDERWRITING]
+        # Also check for string versions in case enum isn't matching
+        falling_behind_stage_values = [s.value if hasattr(s, 'value') else str(s) for s in falling_behind_stages]
         fourteen_days_ago = now - timedelta(days=14)
 
         loans_falling_behind = db.query(func.count(Loan.id)).filter(
-            Loan.loan_officer_id == current_user.id,
-            Loan.stage.in_(falling_behind_stages),
+            *loan_base_filter,
+            or_(Loan.stage.in_(falling_behind_stages), Loan.stage.in_(falling_behind_stage_values)),
             Loan.created_at < fourteen_days_ago
         ).scalar() or 0
 
@@ -196,6 +217,10 @@ async def get_stage_metrics(
     start_date = get_date_filter(time_range)
     now = datetime.now(timezone.utc)
 
+    # Determine if user should see org-wide data or just their own
+    view_org_wide = can_view_org_data(current_user)
+    org_id = getattr(current_user, 'organization_id', None)
+
     # Define stages with their mappings
     lead_stages = [
         {"name": "New Lead", "stage": LeadStage.NEW, "type": "lead"},
@@ -220,15 +245,23 @@ async def get_stage_metrics(
 
     # Process lead stages
     for stage_info in lead_stages:
+        # Build filter based on user role
+        if view_org_wide and org_id:
+            lead_base = [Lead.organization_id == org_id]
+        else:
+            lead_base = [Lead.owner_id == current_user.id]
+
+        # Match both enum and string value for stage
+        stage_value = stage_info["stage"].value if hasattr(stage_info["stage"], 'value') else str(stage_info["stage"])
+        stage_match = or_(Lead.stage == stage_info["stage"], Lead.stage == stage_value)
+
         count = db.query(func.count(Lead.id)).filter(
-            Lead.owner_id == current_user.id,
-            Lead.stage == stage_info["stage"]
+            *lead_base, stage_match
         ).scalar() or 0
 
         # Calculate average days in stage
         leads_in_stage = db.query(Lead).filter(
-            Lead.owner_id == current_user.id,
-            Lead.stage == stage_info["stage"],
+            *lead_base, stage_match,
             Lead.stage_changed_at.isnot(None)
         ).all()
 
@@ -256,9 +289,18 @@ async def get_stage_metrics(
 
     # Process loan stages
     for stage_info in loan_stages:
+        # Build filter based on user role
+        if view_org_wide and org_id:
+            loan_base = [Loan.organization_id == org_id]
+        else:
+            loan_base = [Loan.loan_officer_id == current_user.id]
+
+        # Match both enum and string value for stage
+        stage_value = stage_info["stage"].value if hasattr(stage_info["stage"], 'value') else str(stage_info["stage"])
+        stage_match = or_(Loan.stage == stage_info["stage"], Loan.stage == stage_value)
+
         count = db.query(func.count(Loan.id)).filter(
-            Loan.loan_officer_id == current_user.id,
-            Loan.stage == stage_info["stage"]
+            *loan_base, stage_match
         ).scalar() or 0
 
         # For loans, use created_at as proxy for stage entry (simplified)
@@ -377,6 +419,10 @@ async def get_bottlenecks(
     now = datetime.now(timezone.utc)
     bottlenecks = []
 
+    # Determine if user should see org-wide data or just their own
+    view_org_wide = can_view_org_data(current_user)
+    org_id = getattr(current_user, 'organization_id', None)
+
     # Check for leads stuck in each stage too long
     stage_thresholds = {
         LeadStage.NEW: 2,
@@ -388,9 +434,19 @@ async def get_bottlenecks(
     for stage, threshold_days in stage_thresholds.items():
         threshold_date = now - timedelta(days=threshold_days)
 
+        # Build filter based on user role
+        if view_org_wide and org_id:
+            lead_base = [Lead.organization_id == org_id]
+        else:
+            lead_base = [Lead.owner_id == current_user.id]
+
+        # Match both enum and string value for stage
+        stage_value = stage.value if hasattr(stage, 'value') else str(stage)
+        stage_match = or_(Lead.stage == stage, Lead.stage == stage_value)
+
         stuck_leads = db.query(Lead).filter(
-            Lead.owner_id == current_user.id,
-            Lead.stage == stage,
+            *lead_base,
+            stage_match,
             or_(
                 Lead.stage_changed_at < threshold_date,
                 and_(Lead.stage_changed_at.is_(None), Lead.created_at < threshold_date)
@@ -405,8 +461,8 @@ async def get_bottlenecks(
 
             bottlenecks.append({
                 "id": len(bottlenecks) + 1,
-                "stage": stage.value,
-                "issue": f"Leads stuck in {stage.value}",
+                "stage": stage_value,
+                "issue": f"Leads stuck in {stage_value}",
                 "affectedCount": len(stuck_leads),
                 "avgDelay": f"{round(avg_days, 1)} days",
                 "severity": "high" if avg_days > threshold_days * 2 else "medium",
@@ -423,17 +479,27 @@ async def get_bottlenecks(
     for stage, threshold_days in loan_thresholds.items():
         threshold_date = now - timedelta(days=threshold_days)
 
+        # Build filter based on user role
+        if view_org_wide and org_id:
+            loan_base = [Loan.organization_id == org_id]
+        else:
+            loan_base = [Loan.loan_officer_id == current_user.id]
+
+        # Match both enum and string value for stage
+        stage_value = stage.value if hasattr(stage, 'value') else str(stage)
+        stage_match = or_(Loan.stage == stage, Loan.stage == stage_value)
+
         stuck_loans = db.query(func.count(Loan.id)).filter(
-            Loan.loan_officer_id == current_user.id,
-            Loan.stage == stage,
+            *loan_base,
+            stage_match,
             Loan.created_at < threshold_date
         ).scalar() or 0
 
         if stuck_loans > 0:
             bottlenecks.append({
                 "id": len(bottlenecks) + 1,
-                "stage": stage.value,
-                "issue": f"Loans delayed in {stage.value}",
+                "stage": stage_value,
+                "issue": f"Loans delayed in {stage_value}",
                 "affectedCount": stuck_loans,
                 "avgDelay": f">{threshold_days} days",
                 "severity": "high" if stuck_loans > 3 else "medium",
@@ -462,23 +528,27 @@ async def get_trends(
     now = datetime.now(timezone.utc)
     trends = []
 
+    # Determine if user should see org-wide data or just their own
+    view_org_wide = can_view_org_data(current_user)
+    org_id = getattr(current_user, 'organization_id', None)
+
     for i in range(weeks - 1, -1, -1):
         week_end = now - timedelta(weeks=i)
         week_start = week_end - timedelta(weeks=1)
 
+        # Build filters based on user role
+        if view_org_wide and org_id:
+            lead_filter = [Lead.organization_id == org_id, Lead.created_at >= week_start, Lead.created_at < week_end]
+            loan_filter = [Loan.organization_id == org_id, Loan.created_at >= week_start, Loan.created_at < week_end]
+        else:
+            lead_filter = [Lead.owner_id == current_user.id, Lead.created_at >= week_start, Lead.created_at < week_end]
+            loan_filter = [Loan.loan_officer_id == current_user.id, Loan.created_at >= week_start, Loan.created_at < week_end]
+
         # Count leads created in this week
-        lead_count = db.query(func.count(Lead.id)).filter(
-            Lead.owner_id == current_user.id,
-            Lead.created_at >= week_start,
-            Lead.created_at < week_end
-        ).scalar() or 0
+        lead_count = db.query(func.count(Lead.id)).filter(*lead_filter).scalar() or 0
 
         # Count loans created in this week
-        loan_count = db.query(func.count(Loan.id)).filter(
-            Loan.loan_officer_id == current_user.id,
-            Loan.created_at >= week_start,
-            Loan.created_at < week_end
-        ).scalar() or 0
+        loan_count = db.query(func.count(Loan.id)).filter(*loan_filter).scalar() or 0
 
         total_volume = lead_count + loan_count
         # Simple efficiency score based on volume (would be more sophisticated in production)
