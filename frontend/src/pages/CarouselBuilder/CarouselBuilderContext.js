@@ -5,7 +5,7 @@
  * Handles projects, slides, selection, and API operations.
  */
 
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import api from '../../services/api';
 
 const CarouselBuilderContext = createContext(null);
@@ -47,6 +47,10 @@ export function CarouselBuilderProvider({ children }) {
   const [isDirty, setIsDirty] = useState(false);
   const [error, setError] = useState(null);
 
+  // Prevent duplicate fetches during mount/unmount cycles
+  const isFetchingRef = useRef(false);
+  const hasFetchedRef = useRef(false);
+
   // Computed values
   const selectedSlide = slides.find(s => s.id === selectedSlideId);
   const selectedElement = selectedSlide?.elements?.find(e => e.id === selectedElementId);
@@ -55,16 +59,37 @@ export function CarouselBuilderProvider({ children }) {
   // Project Operations
   // =========================================================================
 
-  const fetchProjects = useCallback(async () => {
+  const fetchProjects = useCallback(async (force = false) => {
+    // Prevent duplicate fetches and infinite loops
+    if (isFetchingRef.current) {
+      console.log('[CarouselBuilder] Skipping fetch - already fetching');
+      return;
+    }
+    if (hasFetchedRef.current && !force) {
+      console.log('[CarouselBuilder] Skipping fetch - already fetched');
+      return;
+    }
+
     try {
+      isFetchingRef.current = true;
       setLoading(true);
+      setError(null);
       const response = await api.get('/api/v1/carousels');
       setProjects(response.data);
+      hasFetchedRef.current = true;
     } catch (err) {
       console.error('Failed to fetch projects:', err);
-      setError('Failed to load projects');
+      // Mark as fetched even on error to prevent infinite retry loops
+      hasFetchedRef.current = true;
+      // Only set error if not a rate limit (429) to avoid confusing users
+      if (err.response?.status === 429) {
+        setError('Too many requests. Please wait a moment and refresh.');
+      } else {
+        setError('Failed to load projects');
+      }
     } finally {
       setLoading(false);
+      isFetchingRef.current = false;
     }
   }, []);
 
@@ -392,6 +417,11 @@ export function CarouselBuilderProvider({ children }) {
 
     return () => clearTimeout(timer);
   }, [isDirty, currentProject, selectedSlide, saveCurrentSlide]);
+
+  // Initial fetch on mount - do this in the provider to avoid mount/unmount loops
+  useEffect(() => {
+    fetchProjects();
+  }, [fetchProjects]);
 
   // =========================================================================
   // Template Operations
