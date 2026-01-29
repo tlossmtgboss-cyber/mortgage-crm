@@ -21035,13 +21035,26 @@ except Exception as e:
     logger.warning(f"⚠️ Could not load Content Marketing routes: {e}")
 
 # Include Carousel Builder routes (AI-powered social media carousels)
+_carousel_routes_error = None
 try:
     from routes.carousel_builder_routes import router as carousel_builder_router, set_dependencies as set_carousel_deps
     set_carousel_deps(User, get_current_user)
     app.include_router(carousel_builder_router, tags=["Carousel Builder"])
     logger.info("✅ Carousel Builder routes loaded")
 except Exception as e:
+    import traceback
+    _carousel_routes_error = f"{e}\n{traceback.format_exc()}"
     logger.warning(f"⚠️ Could not load Carousel Builder routes: {e}")
+    logger.warning(f"Full traceback: {traceback.format_exc()}")
+
+
+@app.get("/api/v1/debug/carousel-routes-status", tags=["Debug"])
+async def debug_carousel_routes_status():
+    """Check if carousel builder routes loaded successfully"""
+    if _carousel_routes_error:
+        return {"status": "failed", "error": _carousel_routes_error}
+    return {"status": "loaded"}
+
 
 # Include Email Monitor routes
 from email_monitor_routes import router as email_monitor_router
