@@ -34,15 +34,13 @@ async def verify_admin_access(
     # Option 2: Check for authenticated admin user via JWT token
     if authorization and authorization.startswith("Bearer "):
         try:
-            from database import SessionLocal
-            from sqlalchemy import text
             from jose import jwt, JWTError
-            from main import SECRET_KEY, ALGORITHM
 
             token = authorization.replace("Bearer ", "")
+            secret_key = os.getenv("SECRET_KEY", "")
 
             try:
-                payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+                payload = jwt.decode(token, secret_key, algorithms=["HS256"])
                 email = payload.get("sub")
 
                 if email:
@@ -77,15 +75,15 @@ async def debug_auth(
 ):
     """Debug endpoint to check auth token decoding"""
     from jose import jwt, JWTError
-    from main import SECRET_KEY, ALGORITHM
 
     if not authorization or not authorization.startswith("Bearer "):
         return {"error": "No Bearer token provided"}
 
     token = authorization.replace("Bearer ", "")
+    secret_key = os.getenv("SECRET_KEY", "")
 
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, secret_key, algorithms=["HS256"])
         email = payload.get("sub")
 
         db = SessionLocal()
