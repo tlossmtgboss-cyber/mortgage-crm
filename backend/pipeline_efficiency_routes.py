@@ -22,16 +22,13 @@ def set_dependencies(get_db_func, get_current_user_func):
     _get_current_user = get_current_user_func
 
 def get_db():
-    """Generator wrapper for database dependency."""
     if _get_db is None:
         raise RuntimeError("Dependencies not set")
     yield from _get_db()
 
 async def get_current_user(request: Request, db: Session = Depends(get_db)):
-    """Async wrapper for current user dependency."""
     if _get_current_user is None:
         raise RuntimeError("Dependencies not set")
-    # Extract token from Authorization header
     auth_header = request.headers.get("Authorization", "")
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
     return await _get_current_user(token=token, request=request, db=db)
@@ -64,16 +61,21 @@ async def get_pipeline_efficiency(
     current_user = Depends(get_current_user)
 ):
     """Get overall pipeline efficiency metrics from real data"""
-    from main import Lead, Loan, LeadStage, LoanStage, User
+    import traceback
+    import logging
+    logger = logging.getLogger(__name__)
 
-    start_date = get_date_filter(time_range)
-    now = datetime.now(timezone.utc)
+    try:
+        from main import Lead, Loan, LeadStage, LoanStage, User
 
-    # Get total leads in period
-    total_leads = db.query(func.count(Lead.id)).filter(
-        Lead.created_at >= start_date,
-        Lead.owner_id == current_user.id
-    ).scalar() or 0
+        start_date = get_date_filter(time_range)
+        now = datetime.now(timezone.utc)
+
+        # Get total leads in period
+        total_leads = db.query(func.count(Lead.id)).filter(
+            Lead.created_at >= start_date,
+            Lead.owner_id == current_user.id
+        ).scalar() or 0
 
     # Get total loans in period
     total_loans = db.query(func.count(Loan.id)).filter(
@@ -158,6 +160,10 @@ async def get_pipeline_efficiency(
             "fundedLoans": len(funded_loans) if funded_loans else 0
         }
     }
+    except Exception as e:
+        logger.error(f"Pipeline efficiency error: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Pipeline efficiency error: {str(e)}")
 
 
 @router.get("/stages")
