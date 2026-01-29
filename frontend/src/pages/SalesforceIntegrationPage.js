@@ -333,7 +333,7 @@ function SalesforceIntegrationPage() {
   const importClosedLoans = async () => {
     setImportingClosedLoans(true);
     try {
-      const res = await fetch(`${API_URL}/api/integrations/salesforce/import-closed-loans`, {
+      const res = await fetch(`${API_URL}/api/v1/salesforce/import-closed-loans`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });

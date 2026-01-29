@@ -2619,7 +2619,7 @@ export const salesforceAPI = {
 
   // Import closed loans
   importClosedLoans: async () => {
-    const response = await api.post('/api/v1/salesforce/import/closed-loans');
+    const response = await api.post('/api/v1/salesforce/import-closed-loans');
     return response.data;
   },
 
