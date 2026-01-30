@@ -506,15 +506,17 @@ async def auto_import(
                         if user_id and 'owner_id' not in row_data:
                             row_data['owner_id'] = user_id
 
-                        # Check for existing by email
+                        # Check for existing by email (case-insensitive)
                         email = row_data.get('email')
                         if email:
+                            email_normalized = str(email).strip().lower()
                             result = db.execute(
-                                text("SELECT id FROM leads WHERE LOWER(email) = LOWER(:email)"),
-                                {"email": email}
+                                text("SELECT id FROM leads WHERE LOWER(TRIM(email)) = :email"),
+                                {"email": email_normalized}
                             )
                             existing = result.fetchone()
                             if existing:
+                                logger.info(f"✅ Matched lead email '{email_normalized}' to existing lead ID {existing[0]}")
                                 # Update existing
                                 update_data = {k: v for k, v in row_data.items() if k not in ['created_at']}
                                 update_data['updated_at'] = datetime.utcnow()
@@ -554,14 +556,25 @@ async def auto_import(
                         if user_id and 'loan_officer_id' not in row_data:
                             row_data['loan_officer_id'] = user_id
 
-                        # Check for existing by loan_number
+                        # Check for existing by loan_number (case-insensitive, trimmed)
                         loan_number = row_data.get('loan_number')
                         if loan_number:
+                            # Normalize the loan number for matching
+                            loan_number_normalized = str(loan_number).strip()
                             result = db.execute(
-                                text("SELECT id FROM loans WHERE loan_number = :loan_number"),
-                                {"loan_number": loan_number}
+                                text("""
+                                    SELECT id FROM loans
+                                    WHERE UPPER(TRIM(loan_number)) = UPPER(TRIM(:loan_number))
+                                """),
+                                {"loan_number": loan_number_normalized}
                             )
                             existing = result.fetchone()
+
+                            # Log matching attempt for debugging
+                            if existing:
+                                logger.info(f"✅ Matched loan_number '{loan_number_normalized}' to existing loan ID {existing[0]}")
+                            else:
+                                logger.info(f"ℹ️ No existing loan found for loan_number '{loan_number_normalized}' - will create new")
                             if existing:
                                 # Update existing
                                 update_data = {k: v for k, v in row_data.items() if k not in ['loan_number', 'created_at']}
@@ -638,15 +651,20 @@ async def auto_import(
                         # Filter to valid columns
                         row_data = {k: v for k, v in row_data.items() if k in valid_columns}
 
-                        # Check for existing by loan_number
+                        # Check for existing by loan_number (case-insensitive, trimmed)
                         loan_number = row_data.get('loan_number')
                         if loan_number:
+                            loan_number_normalized = str(loan_number).strip()
                             result = db.execute(
-                                text("SELECT id FROM mum_clients WHERE loan_number = :ln"),
-                                {"ln": loan_number}
+                                text("""
+                                    SELECT id FROM mum_clients
+                                    WHERE UPPER(TRIM(loan_number)) = UPPER(TRIM(:ln))
+                                """),
+                                {"ln": loan_number_normalized}
                             )
                             existing = result.fetchone()
                             if existing:
+                                logger.info(f"✅ Matched MUM client loan_number '{loan_number_normalized}' to ID {existing[0]}")
                                 # Update existing
                                 update_data = {k: v for k, v in row_data.items() if k not in ['created_at', 'loan_number']}
                                 update_data['updated_at'] = datetime.utcnow()
