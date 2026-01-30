@@ -372,6 +372,46 @@ def ensure_organization_on_create(entity: Any, tenant: TenantContext) -> Any:
 # Migration/Backfill Utilities
 # =============================================================================
 
+def get_tenant_context_from_user(user) -> TenantContext:
+    """
+    Create TenantContext from an authenticated user object.
+
+    This is the preferred way to get tenant context in routes that already
+    use get_current_user dependency.
+
+    Usage:
+        @router.get("/leads")
+        async def get_leads(
+            db: Session = Depends(get_db),
+            current_user: User = Depends(get_current_user)
+        ):
+            tenant = get_tenant_context_from_user(current_user)
+            leads = tenant.filter_query(db.query(Lead)).all()
+
+    Args:
+        user: Authenticated user object with organization_id attribute
+
+    Returns:
+        TenantContext for the user's organization
+    """
+    organization_id = getattr(user, 'organization_id', None)
+    user_id = user.id
+    user_role = getattr(user, 'permission_role', 'sales')
+
+    # Platform admins have special access
+    is_platform_admin = user_role == 'admin'
+
+    if not organization_id and not is_platform_admin:
+        logger.warning(f"User {user_id} has no organization_id assigned")
+
+    return TenantContext(
+        organization_id=organization_id,
+        user_id=user_id,
+        user_role=user_role,
+        is_platform_admin=is_platform_admin
+    )
+
+
 def backfill_organization_id_for_user(db: Session, user_id: int, organization_id: int):
     """
     Backfill organization_id for all entities owned by a user.

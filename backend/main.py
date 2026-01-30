@@ -5471,6 +5471,9 @@ from middleware.dynamic_cors import DynamicCORSMiddleware
 # PHASE 3: Impersonation read-only enforcement middleware
 from middleware.impersonation_middleware import ImpersonationEnforcementMiddleware
 
+# Multi-Tenant: Tenant context middleware for organization isolation
+from middleware.tenant_context_middleware import TenantContextMiddleware
+
 # Add security middleware FIRST (order matters - last added = outermost = first to execute)
 # Security middleware runs first, then CORS wraps everything including error responses
 app.add_middleware(SecurityHeadersMiddleware)
@@ -5504,6 +5507,19 @@ try:
     logger.info("✅ Performance monitoring middleware enabled")
 except Exception as e:
     logger.warning(f"⚠️ Performance monitoring middleware not loaded: {e}")
+
+# Multi-Tenant: Add tenant context middleware
+# This sets request.state.user and request.state.tenant_context for authenticated requests
+try:
+    app.add_middleware(
+        TenantContextMiddleware,
+        secret_key=SECRET_KEY,
+        get_db=get_db,
+        user_model=User,
+    )
+    logger.info("✅ Tenant context middleware enabled")
+except Exception as e:
+    logger.warning(f"⚠️ Tenant context middleware not loaded: {e}")
 
 logger.info(f"✅ Security middleware enabled (ENVIRONMENT={os.getenv('ENVIRONMENT', 'development')}): "
             "CORS (outermost), IP access control, rate limiting, IP blocking, security headers, request validation, and logging")
@@ -20121,6 +20137,14 @@ When scheduling appointments, confirm the time first via SMS before creating the
 # Include public routes - Import AFTER defining functions it needs
 from public_routes import router as public_router
 app.include_router(public_router, tags=["Public"])
+
+# Include organization (multi-tenant) management routes
+try:
+    from routes.organization_routes import router as organization_router
+    app.include_router(organization_router, prefix="/api/v1", tags=["Organizations"])
+    logger.info("✅ Organization management routes loaded")
+except Exception as e:
+    logger.warning(f"Could not load organization routes: {e}")
 
 # Include microsite routes (public LO profiles, lead capture)
 from microsite_routes import router as microsite_router
@@ -66135,6 +66159,38 @@ async def cleanup_tim_loss_account_migration(
     except Exception as e:
         db.rollback()
         logger.error(f"Cleanup error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed: {str(e)}")
+
+
+@app.post("/api/v1/public/migrations/setup-tim-loss-organization", response_model=None)
+async def setup_tim_loss_organization_migration(
+    migration_key: str = "",
+    db: Session = Depends(get_db)
+):
+    """
+    Set up Tim Loss organization (multi-tenant).
+    Creates CMG Financial organization and assigns Tim Loss to it.
+    """
+    if migration_key != "setup-org":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    try:
+        from setup_tim_loss_organization import setup_tim_loss_organization
+        result = setup_tim_loss_organization()
+
+        if result.get("error"):
+            raise HTTPException(status_code=500, detail=result["error"])
+
+        return {
+            "success": True,
+            "message": "Tim Loss organization created",
+            "data": result
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Organization setup error: {e}")
         raise HTTPException(status_code=500, detail=f"Failed: {str(e)}")
 
 

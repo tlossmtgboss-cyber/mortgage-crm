@@ -1,0 +1,151 @@
+"""
+Tenant Context Middleware
+=========================
+Sets tenant context on request.state for all authenticated requests.
+
+This middleware extracts the authenticated user from the JWT token (if present)
+and populates request.state with:
+- request.state.user: The authenticated User object
+- request.state.tenant_context: TenantContext for the user's organization
+
+This enables the tenant isolation system to work without modifying every route.
+"""
+
+import logging
+from typing import Optional, Callable
+
+from fastapi import Request
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
+from jose import JWTError, jwt
+from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
+
+
+class TenantContextMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware that extracts tenant context from authenticated requests.
+
+    This runs AFTER authentication and sets request.state for use by routes.
+    It's non-blocking - if auth fails, the route's own auth dependency will handle it.
+    """
+
+    def __init__(
+        self,
+        app,
+        secret_key: str,
+        algorithm: str = "HS256",
+        get_db: Callable = None,
+        user_model = None,
+    ):
+        super().__init__(app)
+        self.secret_key = secret_key
+        self.algorithm = algorithm
+        self.get_db = get_db
+        self.user_model = user_model
+
+    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        """Process request and add tenant context if authenticated."""
+
+        # Initialize empty state
+        request.state.user = None
+        request.state.tenant_context = None
+        request.state.organization_id = None
+
+        # Skip tenant context for certain paths
+        skip_paths = [
+            "/health",
+            "/docs",
+            "/openapi.json",
+            "/redoc",
+            "/api/v1/login",
+            "/api/v1/register",
+            "/api/v1/onboarding/",
+            "/static/",
+        ]
+
+        if any(request.url.path.startswith(path) for path in skip_paths):
+            return await call_next(request)
+
+        # Try to extract user from Authorization header
+        auth_header = request.headers.get("Authorization")
+
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header[7:]  # Remove "Bearer " prefix
+
+            # Skip API keys (they start with sk_)
+            if not token.startswith("sk_"):
+                try:
+                    # Decode JWT
+                    payload = jwt.decode(
+                        token,
+                        self.secret_key,
+                        algorithms=[self.algorithm]
+                    )
+                    user_id = payload.get("sub")
+
+                    if user_id and self.get_db and self.user_model:
+                        # Get user from database
+                        db = next(self.get_db())
+                        try:
+                            user = db.query(self.user_model).filter(
+                                self.user_model.id == int(user_id)
+                            ).first()
+
+                            if user:
+                                request.state.user = user
+                                request.state.organization_id = getattr(user, 'organization_id', None)
+
+                                # Create tenant context
+                                from services.tenant_isolation import TenantContext
+
+                                user_role = getattr(user, 'permission_role', 'sales')
+                                is_platform_admin = user_role == 'admin'
+
+                                request.state.tenant_context = TenantContext(
+                                    organization_id=request.state.organization_id,
+                                    user_id=user.id,
+                                    user_role=user_role,
+                                    is_platform_admin=is_platform_admin
+                                )
+
+                                logger.debug(
+                                    f"Tenant context set for user {user.id}, "
+                                    f"org {request.state.organization_id}"
+                                )
+                        finally:
+                            db.close()
+
+                except JWTError as e:
+                    # Token invalid - route auth will handle the error
+                    logger.debug(f"JWT decode failed in middleware: {e}")
+                except Exception as e:
+                    # Don't fail the request - let route auth handle it
+                    logger.debug(f"Tenant context extraction failed: {e}")
+
+        return await call_next(request)
+
+
+def create_tenant_middleware(app, secret_key: str, get_db: Callable, user_model):
+    """
+    Factory function to create and add tenant middleware to app.
+
+    Usage in main.py:
+        from middleware.tenant_context_middleware import create_tenant_middleware
+
+        create_tenant_middleware(app, SECRET_KEY, get_db, User)
+
+    Args:
+        app: FastAPI application
+        secret_key: JWT secret key
+        get_db: Database session dependency function
+        user_model: SQLAlchemy User model class
+    """
+    app.add_middleware(
+        TenantContextMiddleware,
+        secret_key=secret_key,
+        get_db=get_db,
+        user_model=user_model,
+    )
+    logger.info("Tenant context middleware initialized")
