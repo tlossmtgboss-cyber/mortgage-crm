@@ -198,8 +198,8 @@ def setup_tim_loss_organization():
         if not branch:
             print("   Creating default branch...")
             db.execute(text("""
-                INSERT INTO branches (name, organization_id, is_active, created_at, updated_at)
-                VALUES ('Main Office', :org_id, true, :now, :now)
+                INSERT INTO branches (name, organization_id, created_at)
+                VALUES ('Main Office', :org_id, :now)
             """), {"org_id": org_id, "now": datetime.now(timezone.utc)})
             db.commit()
 
