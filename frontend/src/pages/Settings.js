@@ -8,7 +8,7 @@ import TaskWorkflowManager from '../components/TaskWorkflowManager';
 import DocumentIntakeManager from '../components/DocumentIntakeManager';
 import EmailMonitorDashboard from './EmailMonitorDashboard';
 import EmailSignatureTab from '../components/EmailSignatureTab';
-import SmartScheduler from '../components/SmartScheduler';
+import SmartSchedulerSettings from './SmartSchedulerSettings';
 import VideoMeetings from '../components/VideoMeetings';
 import AIFeedbackLog from '../components/AIFeedbackLog';
 import ITHelpdeskAdmin from '../components/ITHelpdeskAdmin';
@@ -5681,9 +5681,9 @@ const API_BASE_URL = isProduction
             </div>
           )}
 
-          {/* Smart Scheduler */}
+          {/* Smart Scheduler Settings */}
           {activeSection === 'smart-scheduler' && (
-            <SmartScheduler />
+            <SmartSchedulerSettings />
           )}
 
           {/* Video Meetings */}
