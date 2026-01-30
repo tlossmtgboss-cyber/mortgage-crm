@@ -18,6 +18,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
 import IncomeCalculatorModal from '../components/income/IncomeCalculatorModal';
 import ESignModal from '../components/esign/ESignModal';
+import RequestDocumentModal from '../components/smart-docs/RequestDocumentModal';
 import './SmartDocsClientDetail.css';
 
 function SmartDocsClientDetail() {
@@ -37,6 +38,7 @@ function SmartDocsClientDetail() {
   const [editDocTypeValue, setEditDocTypeValue] = useState('');
   const [esignModalOpen, setEsignModalOpen] = useState(false);
   const [selectedDocForEsign, setSelectedDocForEsign] = useState(null);
+  const [requestDocModalOpen, setRequestDocModalOpen] = useState(false);
 
   // Available document types for dropdown (must match backend DocType enum)
   const DOCUMENT_TYPES = [
@@ -622,6 +624,13 @@ function SmartDocsClientDetail() {
         </div>
         <div className="header-actions">
           <button
+            className="request-doc-btn"
+            onClick={() => setRequestDocModalOpen(true)}
+            title="Request Document from Borrower"
+          >
+            📝 Request Document
+          </button>
+          <button
             className="income-calc-btn"
             onClick={() => setShowIncomeModal(true)}
             title="Income Calculator"
@@ -944,6 +953,20 @@ function SmartDocsClientDetail() {
         borrowerName={client?.name}
         borrowerEmail={client?.email}
         onSuccess={handleEsignSuccess}
+      />
+
+      {/* Request Document Modal */}
+      <RequestDocumentModal
+        isOpen={requestDocModalOpen}
+        onClose={() => setRequestDocModalOpen(false)}
+        loanId={parseInt(loanId)}
+        borrowerId={1}
+        borrowerName={client?.name}
+        borrowerEmail={client?.email}
+        onSuccess={() => {
+          setRequestDocModalOpen(false);
+          fetchClientData();
+        }}
       />
     </div>
   );

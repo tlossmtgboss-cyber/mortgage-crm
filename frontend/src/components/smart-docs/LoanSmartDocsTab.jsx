@@ -10,6 +10,7 @@ import { Link } from 'react-router-dom';
 import { API_BASE_URL } from '../../services/api';
 import SmartDocumentUpload from './SmartDocumentUpload';
 import ESignModal from '../esign/ESignModal';
+import RequestDocumentModal from './RequestDocumentModal';
 import './LoanSmartDocsTab.css';
 
 const STATUS_COLORS = {
@@ -26,6 +27,7 @@ function LoanSmartDocsTab({ loanId, borrowerId, borrowerName, borrowerEmail, coB
   const [error, setError] = useState(null);
   const [esignModalOpen, setEsignModalOpen] = useState(false);
   const [selectedDocForEsign, setSelectedDocForEsign] = useState(null);
+  const [requestDocModalOpen, setRequestDocModalOpen] = useState(false);
 
   const fetchDocuments = useCallback(async () => {
     if (!loanId) return;
@@ -129,12 +131,20 @@ function LoanSmartDocsTab({ loanId, borrowerId, borrowerName, borrowerEmail, coB
             Upload and manage loan documents. AI-powered extraction automatically parses document data.
           </p>
         </div>
-        <Link
-          to={`/smart-docs/client/${loanId}`}
-          className="btn-view-all"
-        >
-          Open Full View →
-        </Link>
+        <div className="header-actions">
+          <button
+            className="btn-request-doc"
+            onClick={() => setRequestDocModalOpen(true)}
+          >
+            + Request Document
+          </button>
+          <Link
+            to={`/smart-docs/client/${loanId}`}
+            className="btn-view-all"
+          >
+            Open Full View →
+          </Link>
+        </div>
       </div>
 
       {error && (
@@ -244,6 +254,20 @@ function LoanSmartDocsTab({ loanId, borrowerId, borrowerName, borrowerEmail, coB
         coBorrowerName={coBorrowerName}
         coBorrowerEmail={coBorrowerEmail}
         onSuccess={handleEsignSuccess}
+      />
+
+      {/* Request Document Modal */}
+      <RequestDocumentModal
+        isOpen={requestDocModalOpen}
+        onClose={() => setRequestDocModalOpen(false)}
+        loanId={parseInt(loanId)}
+        borrowerId={borrowerId || 1}
+        borrowerName={borrowerName}
+        borrowerEmail={borrowerEmail}
+        onSuccess={() => {
+          setRequestDocModalOpen(false);
+          fetchDocuments();
+        }}
       />
     </div>
   );
