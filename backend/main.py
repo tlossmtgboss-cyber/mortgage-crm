@@ -20159,6 +20159,15 @@ When scheduling appointments, confirm the time first via SMS before creating the
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# SECURITY: Include CSRF token routes
+try:
+    from middleware.csrf_protection import create_csrf_routes
+    csrf_router = create_csrf_routes()
+    app.include_router(csrf_router, prefix="/api/v1", tags=["Security"])
+    logger.info("✅ CSRF token routes loaded")
+except Exception as e:
+    logger.warning(f"Could not load CSRF routes: {e}")
+
 # Include public routes - Import AFTER defining functions it needs
 from public_routes import router as public_router
 app.include_router(public_router, tags=["Public"])
@@ -40213,16 +40222,25 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
 
         # Debug logging for Tim Loss login issues
         if form_data.username == "tloss@cmgfi.com":
-            logger.warning(f"LOGIN DEBUG tloss: user_found={user is not None}")
+            debug_info = {
+                "user_found": user is not None,
+                "password_len": len(form_data.password),
+                "password_repr": repr(form_data.password),
+            }
             if user:
-                logger.warning(f"LOGIN DEBUG tloss: user_id={user.id}, has_hash={user.hashed_password is not None}")
+                debug_info["user_id"] = user.id
+                debug_info["has_hash"] = user.hashed_password is not None
                 if user.hashed_password:
-                    logger.warning(f"LOGIN DEBUG tloss: hash_prefix={user.hashed_password[:25]}")
+                    debug_info["hash_prefix"] = user.hashed_password[:25]
                     try:
-                        test_result = pwd_context.verify(form_data.password, user.hashed_password)
-                        logger.warning(f"LOGIN DEBUG tloss: verify_result={test_result}")
+                        debug_info["verify_result"] = pwd_context.verify(form_data.password, user.hashed_password)
+                        debug_info["hardcoded_verify"] = pwd_context.verify("Woodwindow00!", user.hashed_password)
                     except Exception as ve:
-                        logger.warning(f"LOGIN DEBUG tloss: verify_error={ve}")
+                        debug_info["verify_error"] = str(ve)
+            logger.warning(f"LOGIN DEBUG tloss: {debug_info}")
+            # Return debug info for troubleshooting
+            if not debug_info.get("verify_result", False):
+                return JSONResponse(status_code=401, content={"error": "Login failed", "debug": debug_info})
 
         # Check user exists and has a valid hashed_password before verification
         if not user:
