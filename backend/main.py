@@ -12511,232 +12511,8 @@ async def get_ai_preferences(
 
 
 # =============================================================================
-# AI METRICS DASHBOARD ENDPOINTS
+# AI METRICS DASHBOARD ENDPOINTS - Moved to routes/ai_metrics_dashboard_routes.py
 # =============================================================================
-
-class UserFeedbackRequest(BaseModel):
-    """Schema for submitting user feedback"""
-    session_id: str
-    feedback_type: str  # 'thumbs_up', 'thumbs_down', 'helpful', 'not_helpful', 'accurate', 'inaccurate'
-    message_id: Optional[str] = None
-    rating: Optional[int] = None  # 1-5
-    comment: Optional[str] = None
-    query_type: Optional[str] = None
-
-
-@app.get("/api/v1/ai/metrics/dashboard")
-async def get_ai_metrics_dashboard(
-    days: int = 7,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """
-    Get comprehensive AI metrics dashboard.
-    Returns agent performance, business metrics, and AI quality metrics.
-    """
-    try:
-        from agents.metrics import AIMetricsService
-
-        # Ensure metrics table exists
-        await AIMetricsService.ensure_table_exists(db)
-
-        dashboard = await AIMetricsService.get_dashboard_summary(db, days)
-
-        return {
-            "success": True,
-            "dashboard": dashboard
-        }
-
-    except Exception as e:
-        logger.error(f"Error getting AI metrics dashboard: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/v1/ai/metrics/performance")
-async def get_ai_performance_metrics(
-    days: int = 7,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """
-    Get agent performance metrics: response times, error rates, user satisfaction.
-    """
-    try:
-        from agents.metrics import AIMetricsService
-
-        await AIMetricsService.ensure_table_exists(db)
-        metrics = await AIMetricsService.get_agent_performance(db, days)
-
-        return {
-            "success": True,
-            "metrics": metrics.model_dump()
-        }
-
-    except Exception as e:
-        logger.error(f"Error getting performance metrics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/v1/ai/metrics/business")
-async def get_ai_business_metrics(
-    days: int = 7,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """
-    Get business metrics: query patterns, tool usage, actions executed.
-    """
-    try:
-        from agents.metrics import AIMetricsService
-
-        await AIMetricsService.ensure_table_exists(db)
-        metrics = await AIMetricsService.get_business_metrics(db, days)
-
-        return {
-            "success": True,
-            "metrics": metrics.model_dump()
-        }
-
-    except Exception as e:
-        logger.error(f"Error getting business metrics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/v1/ai/metrics/quality")
-async def get_ai_quality_metrics(
-    days: int = 7,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """
-    Get AI quality metrics: intent accuracy, tool selection, response quality.
-    """
-    try:
-        from agents.metrics import AIMetricsService
-
-        await AIMetricsService.ensure_table_exists(db)
-        metrics = await AIMetricsService.get_ai_quality_metrics(db, days)
-
-        return {
-            "success": True,
-            "metrics": metrics.model_dump()
-        }
-
-    except Exception as e:
-        logger.error(f"Error getting quality metrics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/v1/ai/metrics/response-times")
-async def get_ai_response_time_breakdown(
-    days: int = 7,
-    query_type: Optional[str] = None,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """
-    Get detailed response time breakdown by query type.
-    """
-    try:
-        from agents.metrics import AIMetricsService
-
-        await AIMetricsService.ensure_table_exists(db)
-        breakdown = await AIMetricsService.get_response_time_breakdown(db, days, query_type)
-
-        return {
-            "success": True,
-            "breakdown": breakdown
-        }
-
-    except Exception as e:
-        logger.error(f"Error getting response time breakdown: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/v1/ai/metrics/feedback")
-async def submit_ai_feedback(
-    feedback: UserFeedbackRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """
-    Submit user feedback on AI response (thumbs up/down, rating, comment).
-    """
-    try:
-        from agents.metrics import AIMetricsService
-        from agents.metrics.models import UserFeedbackMetric, FeedbackType
-
-        await AIMetricsService.ensure_table_exists(db)
-
-        # Map feedback type string to enum
-        feedback_type_map = {
-            'thumbs_up': FeedbackType.THUMBS_UP,
-            'thumbs_down': FeedbackType.THUMBS_DOWN,
-            'helpful': FeedbackType.HELPFUL,
-            'not_helpful': FeedbackType.NOT_HELPFUL,
-            'accurate': FeedbackType.ACCURATE,
-            'inaccurate': FeedbackType.INACCURATE
-        }
-
-        fb_type = feedback_type_map.get(feedback.feedback_type.lower())
-        if not fb_type:
-            raise HTTPException(status_code=400, detail=f"Invalid feedback type: {feedback.feedback_type}")
-
-        success = await AIMetricsService.record_user_feedback(
-            db=db,
-            user_id=current_user.id,
-            feedback=UserFeedbackMetric(
-                session_id=feedback.session_id,
-                message_id=feedback.message_id,
-                feedback_type=fb_type,
-                rating=feedback.rating,
-                comment=feedback.comment,
-                query_type=feedback.query_type
-            )
-        )
-
-        return {
-            "success": success,
-            "message": "Feedback recorded" if success else "Failed to record feedback"
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error submitting feedback: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/v1/ai/metrics/followup-click")
-async def record_followup_click(
-    session_id: str,
-    suggestion_text: str,
-    suggestion_index: int = 0,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """
-    Record when user clicks a follow-up suggestion.
-    """
-    try:
-        from agents.metrics import AIMetricsService
-
-        await AIMetricsService.ensure_table_exists(db)
-        success = await AIMetricsService.record_followup_click(
-            db=db,
-            user_id=current_user.id,
-            session_id=session_id,
-            suggestion_text=suggestion_text,
-            suggestion_index=suggestion_index
-        )
-
-        return {
-            "success": success
-        }
-
-    except Exception as e:
-        logger.error(f"Error recording followup click: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 # =============================================================================
@@ -19511,6 +19287,14 @@ try:
     logger.info("✅ AI Context routes loaded")
 except Exception as e:
     logger.warning(f"⚠️ Could not load AI Context routes: {e}")
+
+# Include AI Metrics Dashboard routes for AI performance tracking
+try:
+    from routes.ai_metrics_dashboard_routes import router as ai_metrics_dashboard_router
+    app.include_router(ai_metrics_dashboard_router, tags=["AI Metrics Dashboard"])
+    logger.info("✅ AI Metrics Dashboard routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load AI Metrics Dashboard routes: {e}")
 
 # Include Subscription routes for Perennia AI
 from subscription_routes import router as subscription_router
@@ -65705,6 +65489,60 @@ async def check_user_tloss_migration(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed: {str(e)}")
+
+
+@app.get("/api/v1/public/migrations/fix-tloss-account")
+async def fix_tloss_account_migration(
+    migration_key: str = "",
+    db: Session = Depends(get_db)
+):
+    """Fix Tim Loss account - update SF integration user_id and reset password."""
+    if migration_key != "fix-tloss":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    result = {"steps": []}
+
+    try:
+        # Step 1: Update Salesforce integration user_id from 57 to 118
+        sf_update = db.execute(text("""
+            UPDATE user_integrations
+            SET user_id = 118
+            WHERE provider = 'salesforce' AND user_id = 57
+        """))
+        result["sf_integration_updated"] = sf_update.rowcount
+        result["steps"].append(f"Updated {sf_update.rowcount} SF integration(s) to user_id 118")
+
+        # Step 2: Reset password using raw SQL to ensure it works
+        new_password = "Woodwindow00!"
+        hashed = pwd_context.hash(new_password)
+        pwd_update = db.execute(text("""
+            UPDATE users
+            SET hashed_password = :hashed
+            WHERE email = 'tloss@cmgfi.com'
+        """), {"hashed": hashed})
+        result["password_updated"] = pwd_update.rowcount
+        result["steps"].append(f"Updated password for {pwd_update.rowcount} user(s)")
+
+        db.commit()
+
+        # Step 3: Verify password works
+        user = db.execute(text("""
+            SELECT id, email, hashed_password FROM users WHERE email = 'tloss@cmgfi.com'
+        """)).fetchone()
+
+        if user and user[2]:
+            verify_result = pwd_context.verify(new_password, user[2])
+            result["password_verify"] = verify_result
+            result["steps"].append(f"Password verification: {verify_result}")
+        else:
+            result["password_verify"] = False
+            result["steps"].append("Could not verify - user or password not found")
+
+        result["status"] = "success"
+        return result
+    except Exception as e:
+        db.rollback()
+        return {"status": "error", "error": str(e)}
 
 
 @app.get("/api/v1/public/migrations/refresh-salesforce-token")
