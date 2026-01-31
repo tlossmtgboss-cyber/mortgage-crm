@@ -160,8 +160,36 @@ if not _SECRET_KEY:
 else:
     SECRET_KEY = _SECRET_KEY
 
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+# JWT Configuration - Uses new auth module for RS256 support
+# Keep these for backward compatibility, but auth module settings take precedence
+ALGORITHM = os.getenv("AUTH_ALGORITHM", "HS256")  # Can be overridden to RS256
+ACCESS_TOKEN_EXPIRE_MINUTES = 15  # Reduced from 30 for security
+REFRESH_TOKEN_EXPIRE_DAYS = 7
+
+# Import new auth module for secure token handling
+try:
+    from auth.tokens import (
+        create_access_token as _create_secure_access_token,
+        create_refresh_token as _create_secure_refresh_token,
+        verify_token as _verify_secure_token,
+        token_blacklist,
+        TokenType,
+        TokenData,
+    )
+    from auth.config import get_auth_settings
+    _USE_SECURE_TOKENS = True
+
+    # Initialize token blacklist with Redis if configured
+    _redis_url = os.getenv("REDIS_URL")
+    if _redis_url:
+        token_blacklist.initialize(_redis_url)
+        logger.info("✅ Token blacklist initialized with Redis")
+    else:
+        logger.warning("⚠️ Token blacklist disabled (no REDIS_URL)")
+except ImportError as e:
+    logger.warning(f"⚠️ Secure auth module not available, using legacy JWT: {e}")
+    _USE_SECURE_TOKENS = False
+
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 # Initialize OpenAI client
@@ -5638,11 +5666,46 @@ def verify_password(plain: str, hashed: str) -> bool:
 def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
-def create_access_token(data: dict):
-    to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+def create_access_token(data: dict, user_id: int = None, tenant_id: str = None):
+    """
+    Create a JWT access token with enhanced security.
+
+    Uses the new auth module for RS256 support, proper claims, and blacklist support.
+    Falls back to legacy HS256 if auth module is not available.
+    """
+    if _USE_SECURE_TOKENS:
+        # Use enhanced token with proper claims
+        token_data = data.copy()
+        if user_id:
+            token_data["user_id"] = user_id
+        if tenant_id:
+            token_data["tenant_id"] = tenant_id
+        return _create_secure_access_token(token_data)
+    else:
+        # Legacy fallback
+        to_encode = data.copy()
+        expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        to_encode.update({"exp": expire})
+        return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def create_refresh_token(data: dict, user_id: int = None):
+    """
+    Create a JWT refresh token for session renewal.
+
+    Refresh tokens have longer expiry and are used to get new access tokens.
+    """
+    if _USE_SECURE_TOKENS:
+        token_data = data.copy()
+        if user_id:
+            token_data["user_id"] = user_id
+        return _create_secure_refresh_token(token_data)
+    else:
+        # Legacy fallback - create a longer-lived token
+        to_encode = data.copy()
+        expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        to_encode.update({"exp": expire, "type": "refresh"})
+        return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 async def get_current_user(
     token: str = Depends(oauth2_scheme),
@@ -5685,13 +5748,21 @@ async def get_current_user(
 
     else:
         # Otherwise, treat it as a JWT token
-        try:
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-            email: str = payload.get("sub")
-            if email is None:
+        if _USE_SECURE_TOKENS:
+            # Use secure token verification with blacklist check
+            token_data = _verify_secure_token(token, expected_type=TokenType.ACCESS)
+            if not token_data:
                 raise credentials_exception
-        except JWTError:
-            raise credentials_exception
+            email = token_data.sub
+        else:
+            # Legacy fallback
+            try:
+                payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+                email: str = payload.get("sub")
+                if email is None:
+                    raise credentials_exception
+            except JWTError:
+                raise credentials_exception
 
         actual_user = db.query(User).filter(User.email == email).first()
         if actual_user is None:
@@ -40255,10 +40326,23 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
         user.last_activity_at = datetime.now(timezone.utc)
         db.commit()
 
-        access_token = create_access_token(data={"sub": user.email})
+        # Create tokens with user context for proper security
+        tenant_id = str(user.organization_id) if hasattr(user, 'organization_id') and user.organization_id else None
+        access_token = create_access_token(
+            data={"sub": user.email},
+            user_id=user.id,
+            tenant_id=tenant_id
+        )
+        refresh_token = create_refresh_token(
+            data={"sub": user.email},
+            user_id=user.id
+        )
+
         return {
             "access_token": access_token,
+            "refresh_token": refresh_token,
             "token_type": "bearer",
+            "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # seconds
             "user": {
                 "id": user.id,
                 "email": user.email,
@@ -40276,6 +40360,111 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Login service temporarily unavailable. Please try again.",
         )
+
+@app.post("/token/refresh")
+async def refresh_access_token(
+    refresh_token: str = Body(..., embed=True),
+    db: Session = Depends(get_db)
+):
+    """
+    Exchange a refresh token for a new access token.
+
+    This allows clients to get new access tokens without re-authenticating.
+    The refresh token must be valid and not blacklisted.
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or expired refresh token",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    if _USE_SECURE_TOKENS:
+        # Verify refresh token with blacklist check
+        token_data = _verify_secure_token(refresh_token, expected_type=TokenType.REFRESH)
+        if not token_data:
+            raise credentials_exception
+
+        # Get user from token
+        user = db.query(User).filter(User.email == token_data.sub).first()
+        if not user:
+            raise credentials_exception
+
+        # Create new access token
+        tenant_id = str(user.organization_id) if hasattr(user, 'organization_id') and user.organization_id else None
+        new_access_token = create_access_token(
+            data={"sub": user.email},
+            user_id=user.id,
+            tenant_id=tenant_id
+        )
+
+        return {
+            "access_token": new_access_token,
+            "token_type": "bearer",
+            "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        }
+    else:
+        # Legacy fallback
+        try:
+            payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+            if payload.get("type") != "refresh":
+                raise credentials_exception
+
+            email = payload.get("sub")
+            if not email:
+                raise credentials_exception
+
+            user = db.query(User).filter(User.email == email).first()
+            if not user:
+                raise credentials_exception
+
+            new_access_token = create_access_token(data={"sub": user.email})
+            return {
+                "access_token": new_access_token,
+                "token_type": "bearer",
+                "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            }
+        except JWTError:
+            raise credentials_exception
+
+
+@app.post("/logout")
+async def logout(
+    token: str = Depends(oauth2_scheme),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Logout the current user by blacklisting their token.
+
+    This immediately invalidates the token, preventing reuse.
+    """
+    if _USE_SECURE_TOKENS and token_blacklist._enabled:
+        # Add token to blacklist
+        token_blacklist.add(token, reason="user_logout")
+        logger.info(f"User {current_user.email} logged out, token blacklisted")
+        return {"message": "Successfully logged out"}
+    else:
+        # Without Redis, we can't truly invalidate the token
+        # Client should discard the token
+        logger.info(f"User {current_user.email} logged out (token not blacklisted - no Redis)")
+        return {"message": "Successfully logged out (token should be discarded by client)"}
+
+
+@app.post("/logout/all")
+async def logout_all_sessions(
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Logout all sessions for the current user.
+
+    This revokes all tokens for the user, forcing re-authentication on all devices.
+    """
+    if _USE_SECURE_TOKENS and token_blacklist._enabled:
+        token_blacklist.revoke_all_for_user(current_user.id)
+        logger.info(f"All sessions revoked for user {current_user.email}")
+        return {"message": "All sessions have been logged out"}
+    else:
+        return {"message": "Session revocation not available (no Redis)"}
+
 
 # Password Reset Token Configuration
 PASSWORD_RESET_TOKEN_EXPIRE_MINUTES = 60  # 1 hour
@@ -75988,3 +76177,4 @@ if __name__ == "__main__":
 # force redeploy Sun Dec 21 10:53:37 EST 2025
 
 # Force redeploy Sun Jan 19 19:10:00 EST 2026
+
