@@ -66278,23 +66278,25 @@ async def reset_tim_loss_password_migration(
         new_password = "Woodwindow00!"
         hashed = pwd_context.hash(new_password)
 
-        result = db.execute(text("""
-            UPDATE users
-            SET hashed_password = :hashed
-            WHERE email = 'tloss@cmgfi.com'
-            RETURNING id, email
-        """), {"hashed": hashed})
+        # Use ORM instead of raw SQL
+        user = db.query(User).filter(User.email == "tloss@cmgfi.com").first()
 
-        row = result.fetchone()
-        db.commit()
-
-        if row:
-            return {
-                "success": True,
-                "message": f"Password reset for user {row[0]} ({row[1]})"
-            }
-        else:
+        if not user:
             raise HTTPException(status_code=404, detail="User not found")
+
+        user.hashed_password = hashed
+        db.commit()
+        db.refresh(user)
+
+        # Verify the password was set correctly
+        verify_result = pwd_context.verify(new_password, user.hashed_password)
+
+        return {
+            "success": True,
+            "message": f"Password reset for user {user.id} ({user.email})",
+            "verify_works": verify_result,
+            "hash_prefix": user.hashed_password[:20] if user.hashed_password else None
+        }
     except HTTPException:
         raise
     except Exception as e:
