@@ -5489,14 +5489,39 @@ app.add_middleware(SecurityLoggingMiddleware)
 # Blocks POST/PUT/PATCH/DELETE when impersonation mode is 'read_only'
 app.add_middleware(ImpersonationEnforcementMiddleware, db_session_factory=SessionLocal)
 
+# CSRF Protection middleware - validates tokens on state-changing requests
+# Must be added before CORS to ensure CSRF headers are allowed
+try:
+    from middleware.csrf_protection import CSRFProtectionMiddleware
+    # Enable CSRF in production, disable in development for easier testing
+    csrf_enabled = ENVIRONMENT == "production"
+    app.add_middleware(
+        CSRFProtectionMiddleware,
+        enabled=csrf_enabled,
+        cookie_secure=ENVIRONMENT == "production",
+    )
+    logger.info(f"✅ CSRF protection middleware {'enabled' if csrf_enabled else 'disabled (dev mode)'}")
+except Exception as e:
+    logger.warning(f"⚠️ CSRF protection middleware not loaded: {e}")
+
 # Dynamic CORS middleware - checks database for allowed custom domains
 # Caches domains in memory for performance, refreshes every 60 seconds
+# SECURITY: Using explicit allowlists instead of wildcards
 app.add_middleware(
     DynamicCORSMiddleware,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"],
+    # Explicit method allowlist (no wildcards for security)
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    # Explicit header allowlist (no wildcards for security)
+    allow_headers=[
+        "Accept", "Accept-Language", "Authorization", "Content-Language",
+        "Content-Type", "Origin", "X-Requested-With", "X-CSRF-Token",
+        "X-Request-ID", "X-Visitor-ID", "X-Impersonation-Token",
+    ],
+    expose_headers=[
+        "Content-Length", "Content-Type", "X-Request-ID",
+        "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset",
+    ],
     max_age=3600,
 )
 
@@ -40186,6 +40211,19 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
     try:
         user = db.query(User).filter(User.email == form_data.username).first()
 
+        # Debug logging for Tim Loss login issues
+        if form_data.username == "tloss@cmgfi.com":
+            logger.warning(f"LOGIN DEBUG tloss: user_found={user is not None}")
+            if user:
+                logger.warning(f"LOGIN DEBUG tloss: user_id={user.id}, has_hash={user.hashed_password is not None}")
+                if user.hashed_password:
+                    logger.warning(f"LOGIN DEBUG tloss: hash_prefix={user.hashed_password[:25]}")
+                    try:
+                        test_result = pwd_context.verify(form_data.password, user.hashed_password)
+                        logger.warning(f"LOGIN DEBUG tloss: verify_result={test_result}")
+                    except Exception as ve:
+                        logger.warning(f"LOGIN DEBUG tloss: verify_error={ve}")
+
         # Check user exists and has a valid hashed_password before verification
         if not user:
             raise HTTPException(
@@ -62307,6 +62345,42 @@ async def startup_event():
         logger.info("ℹ️ CRM Context cache module not available")
     except Exception as cache_e:
         logger.warning(f"⚠️ CRM Context cache initialization skipped: {cache_e}")
+
+    # SECURITY: Validate security configuration at startup
+    try:
+        from security_config import validate_security_config
+        security_issues = validate_security_config()
+        if security_issues:
+            for issue in security_issues:
+                if issue.startswith("CRITICAL"):
+                    logger.error(f"🔴 {issue}")
+                else:
+                    logger.warning(f"🟡 {issue}")
+        else:
+            logger.info("✅ Security configuration validated")
+    except Exception as sec_e:
+        logger.warning(f"⚠️ Security config validation skipped: {sec_e}")
+
+    # SECURITY: Initialize PII audit logging
+    try:
+        from services.pii_audit_service import pii_audit
+        # Initialize database storage for audit logs (optional, file logging always enabled)
+        pii_audit.initialize_db(SessionLocal)
+        logger.info("✅ PII audit logging initialized")
+    except Exception as audit_e:
+        logger.warning(f"⚠️ PII audit database logging skipped (file logging still active): {audit_e}")
+
+    # SECURITY: Initialize token blacklist with Redis
+    try:
+        redis_url = os.getenv("REDIS_URL")
+        if redis_url:
+            from auth.tokens import token_blacklist
+            token_blacklist.initialize(redis_url)
+            logger.info("✅ Token blacklist initialized with Redis")
+        else:
+            logger.info("ℹ️ Token blacklist running in memory-only mode (REDIS_URL not set)")
+    except Exception as bl_e:
+        logger.warning(f"⚠️ Token blacklist initialization skipped: {bl_e}")
 
     # Run multi-tenant migration FIRST (doesn't depend on init_db_with_retry)
     # This migration handles its own database connection
