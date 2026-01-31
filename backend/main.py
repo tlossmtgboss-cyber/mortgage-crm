@@ -66391,7 +66391,7 @@ async def check_salesforce_tokens_migration(
                 ui.user_id,
                 u.email as crm_email,
                 ui.email as sf_email,
-                ui.instance_url,
+                ui.expires_at,
                 LENGTH(ui.access_token) as token_len,
                 LENGTH(ui.refresh_token) as refresh_len,
                 ui.created_at,
@@ -66403,12 +66403,16 @@ async def check_salesforce_tokens_migration(
         """)).fetchall()
 
         results = []
+        now = datetime.now(timezone.utc)
         for i in integrations:
+            expires_at = i[3]
+            is_expired = expires_at is None or (expires_at.replace(tzinfo=timezone.utc) if expires_at.tzinfo is None else expires_at) < now
             results.append({
                 "user_id": i[0],
                 "crm_email": i[1],
                 "sf_email": i[2],
-                "instance_url": i[3],
+                "expires_at": expires_at.isoformat() if expires_at else None,
+                "is_expired": is_expired,
                 "has_access_token": bool(i[4] and i[4] > 0),
                 "access_token_len": i[4],
                 "has_refresh_token": bool(i[5] and i[5] > 0),
