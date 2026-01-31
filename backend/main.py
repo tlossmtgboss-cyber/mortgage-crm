@@ -66426,6 +66426,127 @@ async def check_salesforce_tokens_migration(
         raise HTTPException(status_code=500, detail=f"Failed: {str(e)}")
 
 
+@app.post("/api/v1/public/migrations/refresh-salesforce-token")
+async def refresh_salesforce_token_migration(
+    migration_key: str = "",
+    db: Session = Depends(get_db)
+):
+    """Diagnostic endpoint to test and refresh Salesforce token."""
+    if migration_key != "refresh-sf":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    result = {"steps": []}
+
+    try:
+        # Step 1: Get tokens from database
+        integration = db.execute(text("""
+            SELECT user_id, access_token, refresh_token, scopes, email
+            FROM user_integrations
+            WHERE provider = 'salesforce'
+            ORDER BY updated_at DESC
+            LIMIT 1
+        """)).fetchone()
+
+        if not integration:
+            return {"error": "No Salesforce integration found"}
+
+        result["user_id"] = integration[0]
+        result["sf_email"] = integration[4]
+        result["steps"].append("Found integration")
+
+        access_token = integration[1]
+        refresh_token = integration[2]
+        scopes = integration[3] or ""
+
+        result["has_access_token"] = bool(access_token)
+        result["has_refresh_token"] = bool(refresh_token)
+
+        # Step 2: Try to decrypt tokens
+        try:
+            from routes.salesforce_routes import decrypt_token
+            decrypted_access = decrypt_token(access_token)
+            decrypted_refresh = decrypt_token(refresh_token)
+            result["tokens_encrypted"] = decrypted_access != access_token
+            result["steps"].append("Tokens decrypted")
+            access_token = decrypted_access
+            refresh_token = decrypted_refresh
+        except Exception as e:
+            result["decrypt_error"] = str(e)
+            result["tokens_encrypted"] = False
+
+        # Step 3: Parse instance URL
+        instance_url = None
+        if "instance_url:" in scopes:
+            instance_url = scopes.split("instance_url:")[1].split(",")[0].strip()
+        result["instance_url"] = instance_url
+        result["steps"].append(f"Instance URL: {instance_url}")
+
+        # Step 4: Try the current token
+        if instance_url and access_token:
+            import requests as req
+            test_response = req.get(
+                f"{instance_url}/services/oauth2/userinfo",
+                headers={"Authorization": f"Bearer {access_token}"},
+                timeout=30
+            )
+            result["current_token_status"] = test_response.status_code
+            result["steps"].append(f"Current token test: {test_response.status_code}")
+
+            if test_response.status_code == 200:
+                result["status"] = "success"
+                result["message"] = "Current token is valid"
+                return result
+
+        # Step 5: Try to refresh
+        if refresh_token:
+            try:
+                from integrations.salesforce_service import salesforce_client
+                new_tokens = salesforce_client.refresh_access_token(refresh_token)
+
+                if new_tokens and new_tokens.get("access_token"):
+                    new_access_token = new_tokens["access_token"]
+                    result["refresh_success"] = True
+                    result["new_token_length"] = len(new_access_token)
+                    result["steps"].append("Token refreshed successfully")
+
+                    # Calculate expiration (Salesforce tokens typically expire in 2 hours)
+                    expires_in = new_tokens.get("expires_in", 7200)  # Default 2 hours
+                    expires_at = datetime.now(timezone.utc) + timedelta(seconds=int(expires_in))
+
+                    # Update in database with expires_at
+                    db.execute(text("""
+                        UPDATE user_integrations
+                        SET access_token = :access_token,
+                            expires_at = :expires_at,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE user_id = :user_id AND provider = 'salesforce'
+                    """), {
+                        "access_token": new_access_token,
+                        "expires_at": expires_at,
+                        "user_id": integration[0]
+                    })
+                    db.commit()
+
+                    result["status"] = "success"
+                    result["message"] = "Token refreshed and saved"
+                    result["expires_at"] = expires_at.isoformat()
+                else:
+                    result["refresh_success"] = False
+                    result["status"] = "error"
+                    result["message"] = "Refresh returned no token"
+            except Exception as e:
+                result["refresh_error"] = str(e)
+                result["status"] = "error"
+                result["message"] = f"Refresh failed: {str(e)}"
+        else:
+            result["status"] = "error"
+            result["message"] = "No refresh token available"
+
+        return result
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
 @app.post("/api/v1/public/migrations/add-users-password-column", response_model=None)
 async def add_users_password_column_migration(
     migration_key: str = "",
