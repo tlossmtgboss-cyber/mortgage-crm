@@ -66426,7 +66426,7 @@ async def check_salesforce_tokens_migration(
         raise HTTPException(status_code=500, detail=f"Failed: {str(e)}")
 
 
-@app.post("/api/v1/public/migrations/refresh-salesforce-token")
+@app.get("/api/v1/public/migrations/refresh-salesforce-token")
 async def refresh_salesforce_token_migration(
     migration_key: str = "",
     db: Session = Depends(get_db)
