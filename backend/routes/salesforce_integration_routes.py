@@ -1021,7 +1021,13 @@ async def connect_salesforce(
             try:
                 import jwt
                 secret_key = os.getenv("SECRET_KEY", "")
-                payload = jwt.decode(token, secret_key, algorithms=["HS256"])
+                # Decode with options to handle various token formats
+                payload = jwt.decode(
+                    token,
+                    secret_key,
+                    algorithms=["HS256"],
+                    options={"verify_aud": False, "verify_iss": False}
+                )
                 email = payload.get("sub")
                 logger.info(f"Salesforce connect: decoded token for email {email}")
                 if email:
