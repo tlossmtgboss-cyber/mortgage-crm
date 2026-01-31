@@ -40,11 +40,14 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
 
     # Paths that are exempt from CSRF (webhooks, public APIs, etc.)
     EXEMPT_PATHS: Set[str] = {
+        "/api/v1/token",  # Login endpoint - can't have CSRF token before auth
+        "/api/v1/auth",  # Auth endpoints
         "/api/v1/webhook",
         "/api/v1/webhooks",
         "/api/v1/zapier",
         "/api/v1/borrower",  # Borrower portal uses JWT auth
         "/api/v1/csrf-token",  # Token endpoint itself
+        "/api/v1/public",  # Public endpoints (migrations, etc.)
         "/health",
         "/api/health",
         "/docs",
