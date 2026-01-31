@@ -66533,7 +66533,8 @@ async def refresh_salesforce_token_migration(
                 else:
                     result["refresh_success"] = False
                     result["status"] = "error"
-                    result["message"] = "Refresh returned no token"
+                    result["message"] = "Refresh token has expired. User must reconnect Salesforce at Settings > Integrations by clicking 'Reconnect'."
+                    result["action_required"] = "RECONNECT"
             except Exception as e:
                 result["refresh_error"] = str(e)
                 result["status"] = "error"
