@@ -21315,6 +21315,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ RETR webhook routes not loaded: {e}")
 
+# Stripe Billing Webhook routes
+try:
+    from routes.stripe_webhook_routes import router as stripe_webhook_router
+    app.include_router(stripe_webhook_router, tags=["Stripe Billing"])
+    logger.info("✅ Stripe webhook routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Stripe webhook routes not loaded: {e}")
+
 # Monitoring routes (cache health and performance metrics)
 try:
     from api.monitoring import router as monitoring_router
@@ -39215,13 +39223,58 @@ async def health_check_detailed():
 
 @app.get("/health/ready")
 async def readiness_check():
-    """Kubernetes readiness probe - can accept traffic?"""
-    if health_checker:
-        is_ready = await health_checker.check_readiness()
-        if is_ready:
-            return {"status": "ready"}
-        return JSONResponse(status_code=503, content={"status": "not_ready"})
-    return {"status": "ready"}
+    """
+    Kubernetes readiness probe - can accept traffic?
+
+    Checks:
+    - Database connectivity
+    - Redis connectivity (required in production)
+    """
+    checks = {"database": False, "redis": False}
+    errors = []
+
+    # Check database
+    try:
+        db = SessionLocal()
+        db.execute(text("SELECT 1"))
+        db.close()
+        checks["database"] = True
+    except Exception as e:
+        errors.append(f"Database: {str(e)}")
+
+    # Check Redis (required in production)
+    try:
+        from tasks.celery_app import check_redis_health
+        redis_status = check_redis_health()
+        checks["redis"] = redis_status.get("status") == "healthy"
+        if not checks["redis"]:
+            errors.append(f"Redis: {redis_status.get('error', 'unhealthy')}")
+    except ImportError:
+        # Celery module not available, try direct Redis check
+        try:
+            import redis as redis_lib
+            from config import settings
+            r = redis_lib.from_url(settings.REDIS_URL)
+            r.ping()
+            checks["redis"] = True
+        except Exception as e:
+            errors.append(f"Redis: {str(e)}")
+
+    # Determine readiness based on environment
+    from config import is_production
+    if is_production():
+        # In production, both database and Redis must be healthy
+        is_ready = all(checks.values())
+    else:
+        # In development, only database is required
+        is_ready = checks["database"]
+
+    if is_ready:
+        return {"status": "ready", "checks": checks}
+    return JSONResponse(
+        status_code=503,
+        content={"status": "not_ready", "checks": checks, "errors": errors}
+    )
 
 @app.get("/health/live")
 async def liveness_check():
@@ -53649,14 +53702,30 @@ async def get_users_with_calendars(
 # DATABASE INITIALIZATION
 # ============================================================================
 
+# Configuration: Skip auto-create tables in production
+# Tables should be managed via Alembic migrations in production
+AUTO_CREATE_TABLES = os.getenv("AUTO_CREATE_TABLES", "false").lower() == "true"
+
+
 def init_db():
-    """Create all database tables"""
+    """
+    Initialize database tables.
+
+    In production (ENVIRONMENT=production), this skips Base.metadata.create_all()
+    to prevent accidental schema changes. Use Alembic migrations instead.
+
+    Set AUTO_CREATE_TABLES=true to force table creation (development only).
+    """
     try:
         # Import models to register them with Base before create_all
         import salesforce_integration_models  # Salesforce integration tables
 
-        Base.metadata.create_all(bind=engine)
-        logger.info("✅ Database tables created successfully")
+        # Skip auto-create in production unless explicitly enabled
+        if ENVIRONMENT == "production" and not AUTO_CREATE_TABLES:
+            logger.info("ℹ️ Skipping Base.metadata.create_all() in production - use Alembic migrations")
+        else:
+            Base.metadata.create_all(bind=engine)
+            logger.info("✅ Database tables created successfully")
 
         # Explicitly create Salesforce integration tables if they don't exist
         # Use individual transactions for each table to ensure partial success
@@ -66191,6 +66260,46 @@ async def setup_tim_loss_organization_migration(
     except Exception as e:
         db.rollback()
         logger.error(f"Organization setup error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed: {str(e)}")
+
+
+@app.post("/api/v1/public/migrations/reset-tim-loss-password", response_model=None)
+async def reset_tim_loss_password_migration(
+    migration_key: str = "",
+    db: Session = Depends(get_db)
+):
+    """
+    Reset password for tloss@cmgfi.com.
+    """
+    if migration_key != "reset-pwd":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    try:
+        new_password = "Woodwindow00!"
+        hashed = pwd_context.hash(new_password)
+
+        result = db.execute(text("""
+            UPDATE users
+            SET hashed_password = :hashed
+            WHERE email = 'tloss@cmgfi.com'
+            RETURNING id, email
+        """), {"hashed": hashed})
+
+        row = result.fetchone()
+        db.commit()
+
+        if row:
+            return {
+                "success": True,
+                "message": f"Password reset for user {row[0]} ({row[1]})"
+            }
+        else:
+            raise HTTPException(status_code=404, detail="User not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Password reset error: {e}")
         raise HTTPException(status_code=500, detail=f"Failed: {str(e)}")
 
 
