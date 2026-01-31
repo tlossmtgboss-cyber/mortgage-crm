@@ -39,16 +39,20 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
     PROTECTED_METHODS: Set[str] = {"POST", "PUT", "PATCH", "DELETE"}
 
     # Paths that are exempt from CSRF (webhooks, public APIs, etc.)
+    # API endpoints use JWT auth which provides sufficient protection
     EXEMPT_PATHS: Set[str] = {
         "/token",  # Login endpoint - can't have CSRF token before auth
         "/api/v1/token",  # Login endpoint alt path
         "/api/v1/auth",  # Auth endpoints
+        "/api/v1/salesforce",  # Salesforce sync - uses JWT auth
+        "/api/v1/integrations",  # Integration endpoints - uses JWT auth
         "/api/v1/webhook",
         "/api/v1/webhooks",
         "/api/v1/zapier",
         "/api/v1/borrower",  # Borrower portal uses JWT auth
         "/api/v1/csrf-token",  # Token endpoint itself
         "/api/v1/public",  # Public endpoints (migrations, etc.)
+        "/api/integrations",  # New integration routes
         "/health",
         "/api/health",
         "/docs",
