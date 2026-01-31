@@ -107,24 +107,18 @@ from models.financial_intelligence import (
 # Import rate sheet models for table creation
 from models.rate_sheet import RateSheet, RateSheetRate, RefinanceOpportunity
 
-# Setup logging - reduce verbosity in production to avoid Railway rate limits
-_is_production = os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("ENVIRONMENT") == "production"
-_log_level = logging.WARNING if _is_production else logging.INFO
-logging.basicConfig(
-    level=_log_level,
-    format='%(levelname)s:%(name)s:%(message)s'
-)
-logger = logging.getLogger(__name__)
+# Setup structured logging with structlog
+# This provides JSON output in production and colored console in development
+from core.logging import configure_logging, get_logger as get_structured_logger
 
-# Suppress noisy loggers in production
-if _log_level == logging.WARNING:
-    logging.getLogger("apscheduler").setLevel(logging.WARNING)
-    logging.getLogger("apscheduler.scheduler").setLevel(logging.WARNING)
-    logging.getLogger("apscheduler.executors").setLevel(logging.WARNING)
-    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
-    logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
-    logging.getLogger("httpx").setLevel(logging.WARNING)
-    logging.getLogger("httpcore").setLevel(logging.WARNING)
+_is_production = os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("ENVIRONMENT") == "production"
+_log_level = "WARNING" if _is_production else "INFO"
+
+# Configure structured logging (call once at startup)
+configure_logging(level=_log_level, json_logs=_is_production)
+
+# Get structured logger for this module
+logger = get_structured_logger(__name__)
 
 # Import io for stdout suppression in production (Railway log rate limits)
 import io
@@ -5521,6 +5515,7 @@ app.add_middleware(
     expose_headers=[
         "Content-Length", "Content-Type", "X-Request-ID",
         "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset",
+        "API-Version", "Deprecation", "Sunset", "Link",
     ],
     max_age=3600,
 )
@@ -5546,8 +5541,31 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Tenant context middleware not loaded: {e}")
 
+# Structured Request Logging middleware
+# Logs all HTTP requests with timing, status codes, user context, and correlation IDs
+# This should be added AFTER tenant context middleware to have access to user/tenant info
+try:
+    from core.logging import RequestLoggingMiddleware as StructuredRequestLoggingMiddleware
+    app.add_middleware(StructuredRequestLoggingMiddleware)
+    logger.info("✅ Structured request logging middleware enabled")
+except Exception as e:
+    logger.warning(f"⚠️ Structured request logging middleware not loaded: {e}")
+
 logger.info(f"✅ Security middleware enabled (ENVIRONMENT={os.getenv('ENVIRONMENT', 'development')}): "
             "CORS (outermost), IP access control, rate limiting, IP blocking, security headers, request validation, and logging")
+
+# ============================================================================
+# API VERSIONING - Headers and deprecation tracking
+# ============================================================================
+try:
+    from middleware.api_versioning import APIVersioningMiddleware
+    app.add_middleware(
+        APIVersioningMiddleware,
+        current_version="1.0",
+    )
+    logger.info("✅ API versioning middleware enabled (API-Version: 1.0)")
+except Exception as e:
+    logger.warning(f"⚠️ API versioning middleware not loaded: {e}")
 
 # ============================================================================
 # PRODUCTION HARDENING - Sentry, structured logging, request tracing
@@ -20167,6 +20185,14 @@ try:
     logger.info("✅ CSRF token routes loaded")
 except Exception as e:
     logger.warning(f"Could not load CSRF routes: {e}")
+
+# Include API version info routes (/api/version, /api/versions)
+try:
+    from api.versioning import version_router
+    app.include_router(version_router, tags=["API Version"])
+    logger.info("✅ API version routes loaded (/api/version, /api/versions)")
+except Exception as e:
+    logger.warning(f"Could not load API version routes: {e}")
 
 # Include public routes - Import AFTER defining functions it needs
 from public_routes import router as public_router
@@ -66373,6 +66399,52 @@ async def reset_tim_loss_password_migration(
     except Exception as e:
         db.rollback()
         logger.error(f"Password reset error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed: {str(e)}")
+
+
+@app.get("/api/v1/public/migrations/check-salesforce-tokens")
+async def check_salesforce_tokens_migration(
+    migration_key: str = "",
+    db: Session = Depends(get_db)
+):
+    """Diagnostic endpoint to check Salesforce integration tokens."""
+    if migration_key != "check-sf":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    try:
+        integrations = db.execute(text("""
+            SELECT
+                ui.user_id,
+                u.email as crm_email,
+                ui.email as sf_email,
+                ui.instance_url,
+                LENGTH(ui.access_token) as token_len,
+                LENGTH(ui.refresh_token) as refresh_len,
+                ui.created_at,
+                ui.updated_at
+            FROM user_integrations ui
+            LEFT JOIN users u ON u.id = ui.user_id
+            WHERE ui.provider = 'salesforce'
+            ORDER BY ui.updated_at DESC
+        """)).fetchall()
+
+        results = []
+        for i in integrations:
+            results.append({
+                "user_id": i[0],
+                "crm_email": i[1],
+                "sf_email": i[2],
+                "instance_url": i[3],
+                "has_access_token": bool(i[4] and i[4] > 0),
+                "access_token_len": i[4],
+                "has_refresh_token": bool(i[5] and i[5] > 0),
+                "refresh_token_len": i[5],
+                "created_at": i[6].isoformat() if i[6] else None,
+                "updated_at": i[7].isoformat() if i[7] else None,
+            })
+
+        return {"total_connections": len(results), "connections": results}
+    except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed: {str(e)}")
 
 
