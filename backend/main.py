@@ -6143,1001 +6143,8 @@ async def _get_coaching_context(db: Session, user_id: int) -> str:
 
 
 # ============================================================================
-# AI CONTEXT ENDPOINTS - Comprehensive data for AI queries
+# AI CONTEXT ENDPOINTS - Moved to routes/ai_context_routes.py
 # ============================================================================
-
-@app.get("/api/v1/ai/context/lead/{lead_id}")
-async def get_lead_context_for_ai(
-    lead_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """Return complete lead context for AI queries"""
-    lead = db.query(Lead).filter(Lead.id == lead_id, Lead.owner_id == current_user.id).first()
-    if not lead:
-        raise HTTPException(status_code=404, detail="Lead not found")
-
-    # Get activities/contact history
-    activities = db.execute(
-        text("""
-            SELECT type, content, created_at
-            FROM activities
-            WHERE lead_id = :lead_id
-            ORDER BY created_at DESC
-            LIMIT 20
-        """),
-        {"lead_id": lead_id}
-    ).fetchall()
-
-    # Get tasks for this lead
-    tasks = db.execute(
-        text("""
-            SELECT title, status, due_date, priority, created_at
-            FROM tasks
-            WHERE lead_id = :lead_id
-            ORDER BY created_at DESC
-            LIMIT 10
-        """),
-        {"lead_id": lead_id}
-    ).fetchall()
-
-    return {
-        "lead_id": lead.id,
-        "name": lead.name,
-        "email": lead.email,
-        "phone": lead.phone,
-        "current_status": lead.stage,
-        "source": lead.source,
-        "loan_type": lead.loan_type,
-        "loan_amount": lead.preapproval_amount,
-        "credit_score": lead.credit_score,
-        "property_value": lead.property_value,
-        "down_payment": lead.down_payment,
-        "annual_income": lead.annual_income,
-        "debt_to_income": lead.debt_to_income,
-        "created_at": lead.created_at.isoformat() if lead.created_at else None,
-        "last_contact": lead.last_contact.isoformat() if lead.last_contact else None,
-        "contact_history": [
-            {
-                "type": a[0],
-                "content": a[1],
-                "date": a[2].isoformat() if a[2] else None
-            }
-            for a in activities
-        ],
-        "pending_tasks": [
-            {
-                "title": t[0],
-                "status": t[1],
-                "due_date": t[2].isoformat() if t[2] else None,
-                "priority": t[3]
-            }
-            for t in tasks
-        ],
-        "timeline_summary": f"Lead created {lead.created_at.strftime('%Y-%m-%d') if lead.created_at else 'N/A'}, currently in {lead.stage} stage with {len(activities)} recorded activities"
-    }
-
-
-@app.get("/api/v1/ai/context/loan/{loan_id}")
-async def get_loan_context_for_ai(
-    loan_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """Return complete loan context for AI queries"""
-    loan = db.query(Loan).filter(
-        Loan.id == loan_id,
-        Loan.loan_officer_id == current_user.id
-    ).first()
-    if not loan:
-        raise HTTPException(status_code=404, detail="Loan not found")
-
-    # Get loan activities
-    activities = db.execute(
-        text("""
-            SELECT type, content, created_at
-            FROM activities
-            WHERE loan_id = :loan_id
-            ORDER BY created_at DESC
-            LIMIT 20
-        """),
-        {"loan_id": loan_id}
-    ).fetchall()
-
-    # Get loan tasks
-    tasks = db.execute(
-        text("""
-            SELECT title, status, due_date, priority
-            FROM tasks
-            WHERE loan_id = :loan_id
-            ORDER BY created_at DESC
-            LIMIT 10
-        """),
-        {"loan_id": loan_id}
-    ).fetchall()
-
-    # Get workflow alerts (table may not exist)
-    try:
-        alerts = db.execute(
-            text("""
-                SELECT alert_type, alert_message, severity, created_at
-                FROM workflow_alerts
-                WHERE loan_id = :loan_id AND is_resolved = false
-                ORDER BY created_at DESC
-                LIMIT 5
-            """),
-            {"loan_id": loan_id}
-        ).fetchall()
-    except Exception:
-        alerts = []
-
-    return {
-        "loan_id": loan.id,
-        "loan_number": loan.loan_number,
-        "borrower_name": loan.borrower_name,
-        "property_address": loan.property_address,
-        "current_stage": str(loan.stage) if loan.stage else None,
-        "loan_type": loan.loan_type,
-        "loan_amount": loan.amount,
-        "interest_rate": loan.rate,
-        "lock_date": loan.lock_date.isoformat() if loan.lock_date else None,
-        "closing_date": loan.closing_date.isoformat() if loan.closing_date else None,
-        "processor": loan.processor,
-        "underwriter": loan.underwriter,
-        "created_at": loan.created_at.isoformat() if loan.created_at else None,
-        "activity_history": [
-            {
-                "type": a[0],
-                "description": a[1],
-                "date": a[2].isoformat() if a[2] else None
-            }
-            for a in activities
-        ],
-        "pending_tasks": [
-            {
-                "title": t[0],
-                "status": t[1],
-                "due_date": t[2].isoformat() if t[2] else None,
-                "priority": t[3]
-            }
-            for t in tasks
-        ],
-        "active_alerts": [
-            {
-                "type": a[0],
-                "message": a[1],
-                "severity": a[2],
-                "date": a[3].isoformat() if a[3] else None
-            }
-            for a in alerts
-        ],
-        "days_in_stage": loan.days_in_stage or 0,
-        "timeline_summary": f"Loan {loan.loan_number} for {loan.borrower_name} at {loan.property_address}, currently in {str(loan.stage) if loan.stage else 'Unknown'} stage"
-    }
-
-
-@app.get("/api/v1/ai/context/client/{client_id}")
-async def get_client_context_for_ai(
-    client_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """Return complete MUM client context for AI queries"""
-    client = db.query(MUMClient).filter(
-        MUMClient.id == client_id,
-        MUMClient.user_id == current_user.id
-    ).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
-
-    # Get client activities
-    activities = db.execute(
-        text("""
-            SELECT type, content, created_at
-            FROM activities
-            WHERE mum_client_id = :client_id
-            ORDER BY created_at DESC
-            LIMIT 20
-        """),
-        {"client_id": client_id}
-    ).fetchall()
-
-    # Get tasks for this client
-    tasks = db.execute(
-        text("""
-            SELECT title, status, due_date, priority
-            FROM ai_tasks
-            WHERE mum_client_id = :client_id
-            ORDER BY created_at DESC
-            LIMIT 10
-        """),
-        {"client_id": client_id}
-    ).fetchall()
-
-    # Get loan balance
-    loan_balance = client.loan_balance or 0
-
-    return {
-        "client_id": client.id,
-        "name": client.name,
-        "email": client.email,
-        "phone": client.phone,
-        "loan_number": client.loan_number,
-        "original_close_date": client.original_close_date.isoformat() if client.original_close_date else None,
-        "original_rate": client.original_rate,
-        "current_rate": client.current_rate,
-        "loan_balance": loan_balance,
-        "days_since_funding": client.days_since_funding,
-        "refinance_opportunity": client.refinance_opportunity,
-        "estimated_savings": client.estimated_savings,
-        "engagement_score": client.engagement_score,
-        "status": client.status,
-        "last_contact": client.last_contact.isoformat() if client.last_contact else None,
-        "next_touchpoint": client.next_touchpoint.isoformat() if client.next_touchpoint else None,
-        "referrals_sent": client.referrals_sent,
-        "notes": client.notes,
-        "loan_officer": client.loan_officer,
-        "processor": client.processor,
-        "contact_history": [
-            {
-                "type": a[0],
-                "description": a[1],
-                "date": a[2].isoformat() if a[2] else None
-            }
-            for a in activities
-        ],
-        "pending_tasks": [
-            {
-                "title": t[0],
-                "status": t[1],
-                "due_date": t[2].isoformat() if t[2] else None,
-                "priority": t[3]
-            }
-            for t in tasks
-        ],
-        "refinance_analysis": {
-            "has_opportunity": client.refinance_opportunity,
-            "estimated_savings": client.estimated_savings,
-            "rate_reduction_potential": (client.original_rate - client.current_rate) if client.original_rate and client.current_rate else 0,
-            "years_since_closing": (client.days_since_funding // 365) if client.days_since_funding else None
-        },
-        "timeline_summary": f"Client since {client.original_close_date.strftime('%Y') if client.original_close_date else 'N/A'}, {client.days_since_funding or 0} days since funding, rate {client.current_rate}%"
-    }
-
-
-@app.get("/api/v1/ai/context/summary")
-async def get_ai_context_summary(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """Return overall CRM summary for AI context"""
-
-    # Count leads by stage
-    lead_counts = db.execute(
-        text("""
-            SELECT stage, COUNT(*) as count
-            FROM leads
-            WHERE owner_id = :user_id
-            GROUP BY stage
-        """),
-        {"user_id": current_user.id}
-    ).fetchall()
-
-    # Count active loans by stage
-    loan_counts = db.execute(
-        text("""
-            SELECT stage, COUNT(*) as count
-            FROM loans
-            WHERE loan_officer_id = :user_id
-            GROUP BY stage
-        """),
-        {"user_id": current_user.id}
-    ).fetchall()
-
-    # Get pending tasks count (ai_tasks table may not exist)
-    try:
-        pending_tasks = db.execute(
-            text("""
-                SELECT COUNT(*) FROM ai_tasks
-                WHERE user_id = :user_id AND status != 'completed'
-            """),
-            {"user_id": current_user.id}
-        ).scalar()
-    except Exception:
-        pending_tasks = 0
-
-    # Get MUM client count and total equity
-    try:
-        mum_stats = db.execute(
-            text("""
-                SELECT
-                    COUNT(*) as total_clients,
-                    SUM(COALESCE(loan_balance, 0)) as total_balance
-                FROM mum_clients
-                WHERE user_id = :user_id
-            """),
-            {"user_id": current_user.id}
-        ).fetchone()
-    except Exception:
-        mum_stats = (0, 0)
-
-    return {
-        "leads_by_stage": {row[0]: row[1] for row in lead_counts},
-        "total_leads": sum(row[1] for row in lead_counts),
-        "loans_by_stage": {row[0]: row[1] for row in loan_counts},
-        "total_active_loans": sum(row[1] for row in loan_counts),
-        "pending_tasks": pending_tasks or 0,
-        "mum_clients": mum_stats[0] if mum_stats else 0,
-        "total_portfolio_balance": float(mum_stats[1]) if mum_stats and mum_stats[1] else 0,
-        "timestamp": datetime.now(timezone.utc).isoformat()
-    }
-
-
-@app.get("/api/v1/ai/context/task/{task_id}")
-async def get_task_context_for_ai(
-    task_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """Return complete task context for AI queries"""
-    task = db.query(Task).filter(
-        Task.id == task_id,
-        Task.owner_id == current_user.id
-    ).first()
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-
-    # Get related lead info if exists
-    lead_info = None
-    if task.lead_id:
-        lead = db.query(Lead).filter(Lead.id == task.lead_id).first()
-        if lead:
-            lead_info = {
-                "id": lead.id,
-                "name": lead.name,
-                "stage": str(lead.stage.value) if lead.stage else None,
-                "email": lead.email,
-                "phone": lead.phone
-            }
-
-    # Get related loan info if exists
-    loan_info = None
-    if task.loan_id:
-        loan = db.query(Loan).filter(Loan.id == task.loan_id).first()
-        if loan:
-            loan_info = {
-                "id": loan.id,
-                "loan_number": loan.loan_number,
-                "borrower_name": loan.borrower_name,
-                "stage": str(loan.stage) if loan.stage else None,
-                "amount": loan.amount
-            }
-
-    return {
-        "task_id": task.id,
-        "title": task.title,
-        "description": task.description,
-        "status": task.status,
-        "priority": task.priority,
-        "due_date": task.due_date.isoformat() if task.due_date else None,
-        "created_at": task.created_at.isoformat() if task.created_at else None,
-        "completed_at": task.completed_at.isoformat() if task.completed_at else None,
-        "related_lead": lead_info,
-        "related_loan": loan_info,
-        "related_contact_name": task.related_contact_name,
-        "context_summary": f"Task '{task.title}' ({task.status}) - Priority: {task.priority}, Due: {task.due_date.strftime('%Y-%m-%d') if task.due_date else 'No due date'}"
-    }
-
-
-@app.get("/api/v1/ai/context/user/profile")
-async def get_user_profile_context_for_ai(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """Return current user's profile and performance context for AI"""
-
-    # Get task stats
-    try:
-        task_stats = db.execute(
-            text("""
-                SELECT
-                    COUNT(*) FILTER (WHERE status = 'pending') as pending,
-                    COUNT(*) FILTER (WHERE status = 'completed') as completed,
-                    COUNT(*) FILTER (WHERE status = 'in_progress') as in_progress,
-                    COUNT(*) FILTER (WHERE due_date < CURRENT_DATE AND status != 'completed') as overdue
-                FROM tasks
-                WHERE owner_id = :user_id
-            """),
-            {"user_id": current_user.id}
-        ).fetchone()
-    except Exception:
-        db.rollback()
-        task_stats = (0, 0, 0, 0)
-
-    # Get lead stats
-    try:
-        lead_stats = db.execute(
-            text("""
-                SELECT
-                    COUNT(*) as total,
-                    COUNT(*) FILTER (WHERE created_at > CURRENT_DATE - INTERVAL '30 days') as new_this_month
-                FROM leads
-                WHERE owner_id = :user_id
-            """),
-            {"user_id": current_user.id}
-        ).fetchone()
-    except Exception:
-        db.rollback()
-        lead_stats = (0, 0)
-
-    # Get loan stats
-    try:
-        loan_stats = db.execute(
-            text("""
-                SELECT
-                    COUNT(*) as total,
-                    COALESCE(SUM(amount), 0) as total_volume,
-                    COUNT(*) FILTER (WHERE stage::text LIKE '%FUNDED%' OR stage::text LIKE '%Funded%') as funded_count
-                FROM loans
-                WHERE loan_officer_id = :user_id
-            """),
-            {"user_id": current_user.id}
-        ).fetchone()
-    except Exception:
-        db.rollback()
-        loan_stats = (0, 0, 0)
-
-    # Get recent activities count
-    try:
-        recent_activities = db.execute(
-            text("""
-                SELECT COUNT(*) FROM activities
-                WHERE user_id = :user_id AND created_at > CURRENT_DATE - INTERVAL '7 days'
-            """),
-            {"user_id": current_user.id}
-        ).scalar()
-    except Exception:
-        db.rollback()
-        recent_activities = 0
-
-    return {
-        "user_id": current_user.id,
-        "email": current_user.email,
-        "full_name": current_user.full_name,
-        "role": current_user.role,
-        "task_stats": {
-            "pending": task_stats[0] if task_stats else 0,
-            "completed": task_stats[1] if task_stats else 0,
-            "in_progress": task_stats[2] if task_stats else 0,
-            "overdue": task_stats[3] if task_stats else 0
-        },
-        "lead_stats": {
-            "total": lead_stats[0] if lead_stats else 0,
-            "new_this_month": lead_stats[1] if lead_stats else 0
-        },
-        "loan_stats": {
-            "total": loan_stats[0] if loan_stats else 0,
-            "total_volume": float(loan_stats[1]) if loan_stats else 0,
-            "funded_count": loan_stats[2] if loan_stats else 0
-        },
-        "recent_activities_7d": recent_activities or 0,
-        "profile_summary": f"{current_user.full_name} ({current_user.role}) - {lead_stats[0] if lead_stats else 0} leads, {loan_stats[0] if loan_stats else 0} loans, {task_stats[0] if task_stats else 0} pending tasks"
-    }
-
-
-@app.get("/api/v1/ai/context/referral-partner/{partner_id}")
-async def get_referral_partner_context_for_ai(
-    partner_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """Return referral partner context for AI queries"""
-    partner = db.query(ReferralPartner).filter(ReferralPartner.id == partner_id).first()
-    if not partner:
-        raise HTTPException(status_code=404, detail="Referral partner not found")
-
-    # Get leads from this partner
-    lead_stats = db.execute(
-        text("""
-            SELECT
-                COUNT(*) as total_leads,
-                COUNT(*) FILTER (WHERE stage IN ('Application', 'PRE_APPROVED', 'CLOSED')) as converted
-            FROM leads
-            WHERE referral_partner_id = :partner_id AND owner_id = :user_id
-        """),
-        {"partner_id": partner_id, "user_id": current_user.id}
-    ).fetchone()
-
-    # Get recent leads from this partner
-    recent_leads = db.execute(
-        text("""
-            SELECT id, name, stage, created_at
-            FROM leads
-            WHERE referral_partner_id = :partner_id AND owner_id = :user_id
-            ORDER BY created_at DESC
-            LIMIT 5
-        """),
-        {"partner_id": partner_id, "user_id": current_user.id}
-    ).fetchall()
-
-    return {
-        "partner_id": partner.id,
-        "name": partner.name,
-        "company": partner.company,
-        "type": partner.type,
-        "phone": partner.phone,
-        "email": partner.email,
-        "notes": partner.notes,
-        "total_referrals": lead_stats[0] if lead_stats else 0,
-        "converted_referrals": lead_stats[1] if lead_stats else 0,
-        "conversion_rate": round((lead_stats[1] / lead_stats[0] * 100) if lead_stats and lead_stats[0] > 0 else 0, 1),
-        "recent_leads": [
-            {
-                "id": l[0],
-                "name": l[1],
-                "stage": str(l[2]) if l[2] else None,
-                "created_at": l[3].isoformat() if l[3] else None
-            }
-            for l in recent_leads
-        ],
-        "partner_summary": f"{partner.name} ({partner.type or 'Unknown type'}) from {partner.company or 'N/A'} - {lead_stats[0] if lead_stats else 0} referrals, {round((lead_stats[1] / lead_stats[0] * 100) if lead_stats and lead_stats[0] > 0 else 0, 1)}% conversion"
-    }
-
-
-@app.get("/api/v1/ai/context/email/{email_id}")
-async def get_email_context_for_ai(
-    email_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """Return email context for AI queries"""
-    email = db.query(Email).filter(
-        Email.id == email_id,
-        Email.user_id == current_user.id
-    ).first()
-    if not email:
-        raise HTTPException(status_code=404, detail="Email not found")
-
-    # Get related lead info if exists
-    lead_info = None
-    if email.lead_id:
-        lead = db.query(Lead).filter(Lead.id == email.lead_id).first()
-        if lead:
-            lead_info = {
-                "id": lead.id,
-                "name": lead.name,
-                "stage": str(lead.stage.value) if lead.stage else None
-            }
-
-    # Get other emails from same sender for context
-    related_emails = db.execute(
-        text("""
-            SELECT id, subject, sender_email, received_date
-            FROM emails
-            WHERE sender_email = :sender_email AND user_id = :user_id AND id != :email_id
-            ORDER BY received_date DESC
-            LIMIT 5
-        """),
-        {"sender_email": email.sender_email, "user_id": current_user.id, "email_id": email_id}
-    ).fetchall()
-
-    return {
-        "email_id": email.id,
-        "message_id": email.message_id,
-        "subject": email.subject,
-        "sender_email": email.sender_email,
-        "sender_name": email.sender_name,
-        "recipients": email.recipient_emails,
-        "body": email.body_text,
-        "received_date": email.received_date.isoformat() if email.received_date else None,
-        "is_read": email.is_read,
-        "has_attachments": email.has_attachments,
-        "folder": email.folder_name,
-        "processed": email.processed,
-        "ai_extracted_data": email.ai_extracted_data,
-        "ai_confidence": email.ai_confidence,
-        "related_lead": lead_info,
-        "related_emails_from_sender": [
-            {
-                "id": e[0],
-                "subject": e[1],
-                "sender": e[2],
-                "date": e[3].isoformat() if e[3] else None
-            }
-            for e in related_emails
-        ],
-        "email_summary": f"Email from {email.sender_name or email.sender_email}: '{email.subject}' - {'Processed' if email.processed else 'Unprocessed'}"
-    }
-
-
-@app.get("/api/v1/ai/context/calendar")
-async def get_calendar_context_for_ai(
-    days_ahead: int = 7,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """Return upcoming calendar events context for AI"""
-
-    events = db.execute(
-        text("""
-            SELECT id, title, description, start_time, end_time, location, event_type,
-                   lead_id, loan_id, attendees
-            FROM calendar_events
-            WHERE user_id = :user_id
-            AND start_time >= CURRENT_TIMESTAMP
-            AND start_time <= CURRENT_TIMESTAMP + :days_interval * INTERVAL '1 day'
-            ORDER BY start_time ASC
-        """),
-        {"user_id": current_user.id, "days_interval": days_ahead}
-    ).fetchall()
-
-    formatted_events = []
-    for e in events:
-        # Get related lead/loan names
-        lead_name = None
-        loan_info = None
-        if e[7]:  # lead_id
-            lead = db.query(Lead).filter(Lead.id == e[7]).first()
-            if lead:
-                lead_name = lead.name
-        if e[8]:  # loan_id
-            loan = db.query(Loan).filter(Loan.id == e[8]).first()
-            if loan:
-                loan_info = f"{loan.loan_number} - {loan.borrower_name}"
-
-        formatted_events.append({
-            "id": e[0],
-            "title": e[1],
-            "description": e[2],
-            "start_time": e[3].isoformat() if e[3] else None,
-            "end_time": e[4].isoformat() if e[4] else None,
-            "location": e[5],
-            "event_type": e[6],
-            "related_lead": lead_name,
-            "related_loan": loan_info,
-            "attendees": e[9]
-        })
-
-    return {
-        "upcoming_events": formatted_events,
-        "total_events": len(formatted_events),
-        "days_covered": days_ahead,
-        "calendar_summary": f"{len(formatted_events)} events in the next {days_ahead} days"
-    }
-
-
-@app.get("/api/v1/ai/context/account-profile/{profile_id}")
-async def get_account_profile_context_for_ai(
-    profile_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """Return account/subscriber profile context for AI"""
-    profile = db.query(ClientProfile).filter(
-        ClientProfile.id == profile_id,
-        ClientProfile.primary_user_id == current_user.id
-    ).first()
-    if not profile:
-        raise HTTPException(status_code=404, detail="Account profile not found")
-
-    # Extract user profile from JSON
-    user_profile = profile.user_profile or {}
-
-    return {
-        "profile_id": profile.id,
-        "account_id": profile.account_id,
-        "account_type": profile.account_type,
-        "company_name": profile.company_name,
-        "nmls_number": profile.nmls_number,
-        "team_size": profile.team_size,
-        "subscription_plan": profile.subscription_plan,
-        "billing_status": profile.billing_status,
-        "user_profile": user_profile,
-        "kpi_targets": profile.kpi_targets,
-        "automation_settings": profile.automation_settings,
-        "integration_settings": profile.integration_settings,
-        "profile_summary": f"{profile.company_name or 'Account'} ({profile.account_type or 'N/A'}) - {profile.team_size or 1} team members, {profile.subscription_plan or 'Unknown'} plan"
-    }
-
-
-@app.get("/api/v1/ai/context/pipeline")
-async def get_pipeline_context_for_ai(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """Return detailed pipeline health context for AI"""
-
-    # Lead pipeline by stage with values
-    lead_pipeline = db.execute(
-        text("""
-            SELECT
-                stage,
-                COUNT(*) as count,
-                COALESCE(SUM(preapproval_amount), 0) as total_value,
-                AVG(ai_score) as avg_score
-            FROM leads
-            WHERE owner_id = :user_id
-            GROUP BY stage
-            ORDER BY count DESC
-        """),
-        {"user_id": current_user.id}
-    ).fetchall()
-
-    # Loan pipeline by stage
-    loan_pipeline = db.execute(
-        text("""
-            SELECT
-                stage,
-                COUNT(*) as count,
-                COALESCE(SUM(amount), 0) as total_value,
-                AVG(days_in_stage) as avg_days
-            FROM loans
-            WHERE loan_officer_id = :user_id
-            GROUP BY stage
-            ORDER BY count DESC
-        """),
-        {"user_id": current_user.id}
-    ).fetchall()
-
-    # At-risk loans (high days in stage)
-    at_risk_loans = db.execute(
-        text("""
-            SELECT id, loan_number, borrower_name, stage, days_in_stage, amount
-            FROM loans
-            WHERE loan_officer_id = :user_id AND days_in_stage > 7
-            ORDER BY days_in_stage DESC
-            LIMIT 5
-        """),
-        {"user_id": current_user.id}
-    ).fetchall()
-
-    # Hot leads (high AI score)
-    hot_leads = db.execute(
-        text("""
-            SELECT id, name, stage, ai_score, preapproval_amount, last_contact
-            FROM leads
-            WHERE owner_id = :user_id AND ai_score >= 70
-            ORDER BY ai_score DESC
-            LIMIT 5
-        """),
-        {"user_id": current_user.id}
-    ).fetchall()
-
-    # Closing this week
-    closing_soon = db.execute(
-        text("""
-            SELECT id, loan_number, borrower_name, amount, closing_date, stage
-            FROM loans
-            WHERE loan_officer_id = :user_id
-            AND closing_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
-            ORDER BY closing_date ASC
-        """),
-        {"user_id": current_user.id}
-    ).fetchall()
-
-    return {
-        "lead_pipeline": [
-            {
-                "stage": str(l[0]) if l[0] else "Unknown",
-                "count": l[1],
-                "total_value": float(l[2]),
-                "avg_ai_score": round(float(l[3]), 1) if l[3] else 0
-            }
-            for l in lead_pipeline
-        ],
-        "loan_pipeline": [
-            {
-                "stage": str(l[0]) if l[0] else "Unknown",
-                "count": l[1],
-                "total_value": float(l[2]),
-                "avg_days_in_stage": round(float(l[3]), 1) if l[3] else 0
-            }
-            for l in loan_pipeline
-        ],
-        "at_risk_loans": [
-            {
-                "id": l[0],
-                "loan_number": l[1],
-                "borrower_name": l[2],
-                "stage": str(l[3]) if l[3] else None,
-                "days_in_stage": l[4],
-                "amount": l[5]
-            }
-            for l in at_risk_loans
-        ],
-        "hot_leads": [
-            {
-                "id": l[0],
-                "name": l[1],
-                "stage": str(l[2]) if l[2] else None,
-                "ai_score": l[3],
-                "loan_amount": l[4],
-                "last_contact": l[5].isoformat() if l[5] else None
-            }
-            for l in hot_leads
-        ],
-        "closing_this_week": [
-            {
-                "id": l[0],
-                "loan_number": l[1],
-                "borrower_name": l[2],
-                "amount": l[3],
-                "closing_date": l[4].isoformat() if l[4] else None,
-                "stage": str(l[5]) if l[5] else None
-            }
-            for l in closing_soon
-        ],
-        "pipeline_summary": f"Pipeline: {sum(l[1] for l in lead_pipeline)} leads (${sum(l[2] for l in lead_pipeline):,.0f}), {sum(l[1] for l in loan_pipeline)} loans (${sum(l[2] for l in loan_pipeline):,.0f}), {len(at_risk_loans)} at-risk, {len(closing_soon)} closing this week"
-    }
-
-
-@app.get("/api/v1/ai/context/activity-feed")
-async def get_activity_feed_context_for_ai(
-    limit: int = 50,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """Return recent activity feed for AI context"""
-
-    activities = db.execute(
-        text("""
-            SELECT a.id, a.type, a.content, a.created_at, a.lead_id, a.loan_id,
-                   l.name as lead_name, lo.loan_number, lo.borrower_name
-            FROM activities a
-            LEFT JOIN leads l ON a.lead_id = l.id
-            LEFT JOIN loans lo ON a.loan_id = lo.id
-            WHERE a.user_id = :user_id
-            ORDER BY a.created_at DESC
-            LIMIT :limit
-        """),
-        {"user_id": current_user.id, "limit": limit}
-    ).fetchall()
-
-    return {
-        "activities": [
-            {
-                "id": a[0],
-                "type": str(a[1]) if a[1] else None,
-                "content": a[2],
-                "timestamp": a[3].isoformat() if a[3] else None,
-                "related_lead": {"id": a[4], "name": a[6]} if a[4] else None,
-                "related_loan": {"id": a[5], "loan_number": a[7], "borrower": a[8]} if a[5] else None
-            }
-            for a in activities
-        ],
-        "total_count": len(activities),
-        "feed_summary": f"Last {len(activities)} activities for user"
-    }
-
-
-@app.get("/api/v1/ai/context/mum-client/{client_id}")
-async def get_mum_client_context_for_ai(
-    client_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """Return MUM (Monitor & Upsell Mortgage) client context for AI"""
-    client = db.query(MUMClient).filter(
-        MUMClient.id == client_id,
-        MUMClient.user_id == current_user.id
-    ).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="MUM client not found")
-
-    # Get related activities
-    activities = db.execute(
-        text("""
-            SELECT type, content, created_at
-            FROM activities
-            WHERE mum_client_id = :client_id
-            ORDER BY created_at DESC
-            LIMIT 10
-        """),
-        {"client_id": client_id}
-    ).fetchall()
-
-    return {
-        "client_id": client.id,
-        "name": client.name,
-        "email": client.email,
-        "phone": client.phone,
-        "loan_number": client.loan_number,
-        "original_close_date": client.original_close_date.isoformat() if client.original_close_date else None,
-        "days_since_funding": client.days_since_funding,
-        "original_rate": client.original_rate,
-        "current_rate": client.current_rate,
-        "loan_balance": client.loan_balance,
-        "refinance_opportunity": client.refinance_opportunity,
-        "estimated_savings": client.estimated_savings,
-        "engagement_score": client.engagement_score,
-        "status": client.status,
-        "last_contact": client.last_contact.isoformat() if client.last_contact else None,
-        "next_touchpoint": client.next_touchpoint.isoformat() if client.next_touchpoint else None,
-        "referrals_sent": client.referrals_sent,
-        "notes": client.notes,
-        "opportunity_notes": client.opportunity_notes,
-        "team": {
-            "loan_officer": client.loan_officer,
-            "processor": client.processor,
-            "underwriter": client.underwriter,
-            "closer": client.closer
-        },
-        "recent_activities": [
-            {
-                "type": str(a[0]) if a[0] else None,
-                "content": a[1],
-                "date": a[2].isoformat() if a[2] else None
-            }
-            for a in activities
-        ],
-        "client_summary": f"{client.name} - Loan #{client.loan_number or 'N/A'}, ${client.loan_balance or 0:,.0f} balance at {client.current_rate or 0}%, {'Refi opportunity' if client.refinance_opportunity else 'No refi opportunity'}"
-    }
-
-
-@app.get("/api/v1/ai/context/tasks")
-async def get_all_tasks_context_for_ai(
-    status: str = None,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """Return all tasks context for AI queries"""
-
-    query = """
-        SELECT t.id, t.title, t.description, t.status, t.priority, t.due_date,
-               t.created_at, t.lead_id, t.loan_id, l.name as lead_name,
-               lo.loan_number, lo.borrower_name
-        FROM tasks t
-        LEFT JOIN leads l ON t.lead_id = l.id
-        LEFT JOIN loans lo ON t.loan_id = lo.id
-        WHERE t.owner_id = :user_id
-    """
-    params = {"user_id": current_user.id}
-
-    if status:
-        query += " AND t.status = :status"
-        params["status"] = status
-
-    query += " ORDER BY t.due_date ASC NULLS LAST, t.priority DESC LIMIT 50"
-
-    tasks = db.execute(text(query), params).fetchall()
-
-    # Get task stats
-    task_stats = db.execute(
-        text("""
-            SELECT
-                COUNT(*) FILTER (WHERE status = 'pending') as pending,
-                COUNT(*) FILTER (WHERE status = 'completed') as completed,
-                COUNT(*) FILTER (WHERE status = 'in_progress') as in_progress,
-                COUNT(*) FILTER (WHERE due_date < CURRENT_DATE AND status != 'completed') as overdue
-            FROM tasks
-            WHERE owner_id = :user_id
-        """),
-        {"user_id": current_user.id}
-    ).fetchone()
-
-    return {
-        "tasks": [
-            {
-                "id": t[0],
-                "title": t[1],
-                "description": t[2],
-                "status": t[3],
-                "priority": t[4],
-                "due_date": t[5].isoformat() if t[5] else None,
-                "created_at": t[6].isoformat() if t[6] else None,
-                "related_lead": {"id": t[7], "name": t[9]} if t[7] else None,
-                "related_loan": {"id": t[8], "loan_number": t[10], "borrower": t[11]} if t[8] else None
-            }
-            for t in tasks
-        ],
-        "stats": {
-            "pending": task_stats[0] if task_stats else 0,
-            "completed": task_stats[1] if task_stats else 0,
-            "in_progress": task_stats[2] if task_stats else 0,
-            "overdue": task_stats[3] if task_stats else 0
-        },
-        "tasks_summary": f"{task_stats[0] if task_stats else 0} pending, {task_stats[3] if task_stats else 0} overdue tasks"
-    }
 
 
 @app.post("/api/v1/ai/smart-chat")
@@ -20496,6 +19503,14 @@ try:
     logger.info("✅ AI Underwriter routes loaded")
 except Exception as e:
     logger.warning(f"⚠️ Could not load AI Underwriter routes: {e}")
+
+# Include AI Context routes for comprehensive AI data queries
+try:
+    from routes.ai_context_routes import router as ai_context_router
+    app.include_router(ai_context_router, tags=["AI Context"])
+    logger.info("✅ AI Context routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load AI Context routes: {e}")
 
 # Include Subscription routes for Perennia AI
 from subscription_routes import router as subscription_router
@@ -39393,6 +38408,29 @@ async def readiness_check():
 async def liveness_check():
     """Kubernetes liveness probe - is process alive?"""
     return {"status": "alive"}
+
+
+@app.get("/health/pool")
+async def pool_status():
+    """
+    Connection pool status for monitoring and debugging.
+
+    Returns pool size, checked in/out connections, and overflow status.
+    Useful for diagnosing connection exhaustion issues.
+    """
+    try:
+        from db import get_pool_status
+        pool_info = get_pool_status()
+
+        # Add recommendations based on pool status
+        if pool_info.get("status") == "saturated":
+            pool_info["recommendation"] = "Pool is saturated. Consider increasing pool_size or using PgBouncer."
+        elif pool_info.get("pool_type") == "NullPool (PgBouncer)":
+            pool_info["recommendation"] = "Using PgBouncer for optimal connection management."
+
+        return pool_info
+    except Exception as e:
+        return {"error": str(e), "status": "unknown"}
 
 @app.get("/health/cache")
 async def cache_health():
@@ -66611,6 +65649,60 @@ async def check_salesforce_tokens_migration(
             })
 
         return {"total_connections": len(results), "connections": results}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed: {str(e)}")
+
+
+@app.get("/api/v1/public/migrations/check-user-tloss")
+async def check_user_tloss_migration(
+    migration_key: str = "",
+    db: Session = Depends(get_db)
+):
+    """Diagnostic endpoint to check Tim Loss user accounts."""
+    if migration_key != "check-user":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    try:
+        # Find all users with tloss email
+        users = db.execute(text("""
+            SELECT id, email, first_name, last_name, organization_id,
+                   LENGTH(hashed_password) as pwd_len,
+                   created_at
+            FROM users
+            WHERE email ILIKE '%tloss%' OR email ILIKE '%cmgfi%'
+            ORDER BY id
+        """)).fetchall()
+
+        # Find user_integrations for salesforce
+        integrations = db.execute(text("""
+            SELECT user_id, provider, email, updated_at
+            FROM user_integrations
+            WHERE provider = 'salesforce'
+        """)).fetchall()
+
+        return {
+            "users": [
+                {
+                    "id": u[0],
+                    "email": u[1],
+                    "name": f"{u[2] or ''} {u[3] or ''}".strip(),
+                    "org_id": u[4],
+                    "has_password": bool(u[5] and u[5] > 0),
+                    "pwd_len": u[5],
+                    "created_at": u[6].isoformat() if u[6] else None
+                }
+                for u in users
+            ],
+            "salesforce_integrations": [
+                {
+                    "user_id": i[0],
+                    "provider": i[1],
+                    "sf_email": i[2],
+                    "updated_at": i[3].isoformat() if i[3] else None
+                }
+                for i in integrations
+            ]
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed: {str(e)}")
 
