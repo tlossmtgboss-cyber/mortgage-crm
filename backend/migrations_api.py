@@ -1784,14 +1784,37 @@ async def delete_sample_data_endpoint(
                 results["errors"].append(f"leads: {str(e)[:100]}")
                 db.rollback()
 
-            # 11. Delete sample loans
+            # 11. Delete sample loans (including seeded sample data)
+            seeded_borrower_names = [
+                'Jeffrey Kim', 'Patricia Luna', 'David Okafor',
+                'Rachel Green', 'William Chen', 'Sandra Yee'
+            ]
             try:
+                # Delete related records first
+                for table in ['loan_documents', 'loan_notes', 'loan_activities', 'loan_conditions', 'loan_team_members']:
+                    try:
+                        db.execute(text(f"""
+                            DELETE FROM {table}
+                            WHERE loan_id IN (
+                                SELECT id FROM loans WHERE
+                                borrower_name = ANY(:names) OR
+                                borrower_name LIKE '%Test%' OR
+                                borrower_name LIKE '%Sample%' OR
+                                borrower_name LIKE '%Demo%'
+                            )
+                        """), {"names": seeded_borrower_names})
+                        db.commit()
+                    except Exception:
+                        db.rollback()
+
+                # Now delete the loans
                 result = db.execute(text("""
                     DELETE FROM loans WHERE
+                    borrower_name = ANY(:names) OR
                     borrower_name LIKE '%Test%' OR
                     borrower_name LIKE '%Sample%' OR
                     borrower_name LIKE '%Demo%'
-                """))
+                """), {"names": seeded_borrower_names})
                 results["loans_deleted"] = result.rowcount
                 db.commit()
             except Exception as e:

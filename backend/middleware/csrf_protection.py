@@ -46,6 +46,7 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
         "/api/v1/auth",  # Auth endpoints
         "/api/v1/salesforce",  # Salesforce sync - uses JWT auth
         "/api/v1/integrations",  # Integration endpoints - uses JWT auth
+        "/api/v1/migrations",  # Admin migrations - uses admin key auth
         "/api/v1/webhook",
         "/api/v1/webhooks",
         "/api/v1/zapier",
