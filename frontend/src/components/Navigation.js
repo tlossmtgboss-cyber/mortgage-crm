@@ -120,9 +120,9 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
 
     return items.map(item => ({
       ...item,
-      // Platform admin users bypass all module restrictions - no locked items ever
-      // Site admins still respect module restrictions
-      isLocked: !isPlatformAdmin && !modulesLoading && item.module && !hasModule(item.module)
+      // TEMPORARY: All users get full access until proper tool segregation is implemented
+      // Original: isLocked: !isPlatformAdmin && !modulesLoading && item.module && !hasModule(item.module)
+      isLocked: false
     }));
   }, [effectiveRole, userRole, hasModule, modulesLoading, isMasterAdminUser, viewAsRole]);
 
