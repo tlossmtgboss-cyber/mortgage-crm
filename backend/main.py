@@ -213,6 +213,101 @@ def get_db():
     finally:
         db.close()
 
+
+# ============================================================================
+# SQL INJECTION PREVENTION UTILITIES
+# ============================================================================
+import re as _re
+
+def _validate_sql_identifier(name: str) -> str:
+    """
+    Validate that a string is a safe SQL identifier (table name, column name).
+
+    Only allows alphanumeric characters and underscores.
+    Must start with a letter or underscore.
+    Raises ValueError if invalid.
+
+    This is used when table/column names come from information_schema or other
+    sources that should be safe but we validate for defense in depth.
+    """
+    if not name or not isinstance(name, str):
+        raise ValueError(f"Invalid SQL identifier: {name!r}")
+
+    # PostgreSQL identifier rules: start with letter/underscore, then alphanumeric/underscore
+    if not _re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', name):
+        raise ValueError(f"Invalid SQL identifier (contains disallowed characters): {name!r}")
+
+    # Additional check: max length (PostgreSQL limit is 63 chars)
+    if len(name) > 63:
+        raise ValueError(f"SQL identifier too long: {name!r}")
+
+    return name
+
+
+def _safe_count_query(db, table_name: str, column_name: str, value, param_name: str = "val") -> int:
+    """
+    Safely count rows in a table where column equals value.
+
+    Validates table_name and column_name are safe identifiers before building query.
+    Returns 0 if table doesn't exist or on any error.
+    """
+    try:
+        safe_table = _validate_sql_identifier(table_name)
+        safe_column = _validate_sql_identifier(column_name)
+        result = db.execute(
+            text(f"SELECT COUNT(*) FROM {safe_table} WHERE {safe_column} = :{param_name}"),
+            {param_name: value}
+        ).scalar()
+        return result or 0
+    except ValueError:
+        # Invalid identifier - log and return 0
+        return 0
+    except Exception:
+        return 0
+
+
+def _safe_delete_query(db, table_name: str, column_name: str, value, param_name: str = "val") -> bool:
+    """
+    Safely delete rows from a table where column equals value.
+
+    Validates table_name and column_name are safe identifiers before building query.
+    Returns True on success, False on any error.
+    """
+    try:
+        safe_table = _validate_sql_identifier(table_name)
+        safe_column = _validate_sql_identifier(column_name)
+        db.execute(
+            text(f"DELETE FROM {safe_table} WHERE {safe_column} = :{param_name}"),
+            {param_name: value}
+        )
+        return True
+    except ValueError:
+        return False
+    except Exception:
+        return False
+
+
+def _safe_update_null_query(db, table_name: str, column_name: str, value, param_name: str = "val") -> bool:
+    """
+    Safely set column to NULL where column equals value.
+
+    Validates table_name and column_name are safe identifiers before building query.
+    Returns True on success, False on any error.
+    """
+    try:
+        safe_table = _validate_sql_identifier(table_name)
+        safe_column = _validate_sql_identifier(column_name)
+        db.execute(
+            text(f"UPDATE {safe_table} SET {safe_column} = NULL WHERE {safe_column} = :{param_name}"),
+            {param_name: value}
+        )
+        return True
+    except ValueError:
+        return False
+    except Exception:
+        return False
+
+
 # ============================================================================
 # ENUMS
 # ============================================================================
@@ -5498,27 +5593,8 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ CSRF protection middleware not loaded: {e}")
 
-# Dynamic CORS middleware - checks database for allowed custom domains
-# Caches domains in memory for performance, refreshes every 60 seconds
-# SECURITY: Using explicit allowlists instead of wildcards
-app.add_middleware(
-    DynamicCORSMiddleware,
-    allow_credentials=True,
-    # Explicit method allowlist (no wildcards for security)
-    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    # Explicit header allowlist (no wildcards for security)
-    allow_headers=[
-        "Accept", "Accept-Language", "Authorization", "Content-Language",
-        "Content-Type", "Origin", "X-Requested-With", "X-CSRF-Token",
-        "X-Request-ID", "X-Visitor-ID", "X-Impersonation-Token",
-    ],
-    expose_headers=[
-        "Content-Length", "Content-Type", "X-Request-ID",
-        "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset",
-        "API-Version", "Deprecation", "Sunset", "Link",
-    ],
-    max_age=3600,
-)
+# NOTE: CORS middleware is added LAST (below) to ensure it's the outermost middleware
+# This is critical for OPTIONS preflight requests to work correctly
 
 # Performance Monitoring middleware - tracks endpoint response times and slow requests
 try:
@@ -5552,7 +5628,7 @@ except Exception as e:
     logger.warning(f"⚠️ Structured request logging middleware not loaded: {e}")
 
 logger.info(f"✅ Security middleware enabled (ENVIRONMENT={os.getenv('ENVIRONMENT', 'development')}): "
-            "CORS (outermost), IP access control, rate limiting, IP blocking, security headers, request validation, and logging")
+            "IP access control, rate limiting, IP blocking, security headers, request validation, and logging")
 
 # ============================================================================
 # API VERSIONING - Headers and deprecation tracking
@@ -5566,6 +5642,32 @@ try:
     logger.info("✅ API versioning middleware enabled (API-Version: 1.0)")
 except Exception as e:
     logger.warning(f"⚠️ API versioning middleware not loaded: {e}")
+
+# ============================================================================
+# CORS MIDDLEWARE - MUST BE LAST (outermost) for preflight requests to work
+# ============================================================================
+# Dynamic CORS middleware - checks database for allowed custom domains
+# CRITICAL: This must be the LAST middleware added so it wraps everything
+# and can handle OPTIONS preflight requests before any other middleware runs
+app.add_middleware(
+    DynamicCORSMiddleware,
+    allow_credentials=True,
+    # Explicit method allowlist (no wildcards for security)
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    # Explicit header allowlist (no wildcards for security)
+    allow_headers=[
+        "Accept", "Accept-Language", "Authorization", "Content-Language",
+        "Content-Type", "Origin", "X-Requested-With", "X-CSRF-Token",
+        "X-Request-ID", "X-Visitor-ID", "X-Impersonation-Token",
+    ],
+    expose_headers=[
+        "Content-Length", "Content-Type", "X-Request-ID",
+        "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset",
+        "API-Version", "Deprecation", "Sunset", "Link",
+    ],
+    max_age=3600,
+)
+logger.info("✅ CORS middleware enabled (outermost - handles preflight)")
 
 # ============================================================================
 # PRODUCTION HARDENING - Sentry, structured logging, request tracing
@@ -21964,10 +22066,8 @@ async def debug_user_delete_diagnosis(
         if table_name == 'users':
             continue
         try:
-            count = db.execute(
-                text(f"SELECT COUNT(*) FROM {table_name} WHERE {column_name} = :uid"),
-                {"uid": user_id}
-            ).scalar()
+            # Use safe count query to prevent SQL injection
+            count = _safe_count_query(db, table_name, column_name, user_id, "uid")
             if count > 0:
                 blocking_tables.append({
                     "table": table_name,
@@ -42705,10 +42805,8 @@ async def debug_user_deletion_blockers(
         result = db.execute(text(fk_query))
         for table_name, column_name in result.fetchall():
             try:
-                count_result = db.execute(
-                    text(f"SELECT COUNT(*) FROM {table_name} WHERE {column_name} = :user_id"),
-                    {"user_id": user_id}
-                ).scalar()
+                # Use safe count query to prevent SQL injection
+                count_result = _safe_count_query(db, table_name, column_name, user_id, "user_id")
                 if count_result and count_result > 0:
                     blockers.append({
                         "table": table_name,
@@ -42872,10 +42970,8 @@ async def get_user_deletion_blockers(
         result = db.execute(text(fk_query))
         for table_name, column_name in result.fetchall():
             try:
-                count_result = db.execute(
-                    text(f"SELECT COUNT(*) FROM {table_name} WHERE {column_name} = :user_id"),
-                    {"user_id": user_id}
-                ).scalar()
+                # Use safe count query to prevent SQL injection
+                count_result = _safe_count_query(db, table_name, column_name, user_id, "user_id")
                 if count_result and count_result > 0:
                     blockers.append({
                         "table": table_name,
@@ -42936,10 +43032,8 @@ async def delete_user(
             result = db.execute(text(fk_query))
             for table_name, column_name in result.fetchall():
                 try:
-                    count = db.execute(
-                        text(f"SELECT COUNT(*) FROM {table_name} WHERE {column_name} = :user_id"),
-                        params
-                    ).scalar()
+                    # Use safe count query to prevent SQL injection
+                    count = _safe_count_query(db, table_name, column_name, user_id, "user_id")
                     if count and count > 0:
                         tables_with_data.append((table_name, column_name, count))
                 except Exception:
@@ -42978,17 +43072,16 @@ async def delete_user(
         # =========================================================================
         cleaned = 0
         for table_name, column_name, count in tables_with_data:
-            try:
-                # Try UPDATE to NULL first (for nullable columns)
-                db.execute(text(f"UPDATE {table_name} SET {column_name} = NULL WHERE {column_name} = :user_id"), params)
+            # Use safe query helpers to prevent SQL injection
+            # Try UPDATE to NULL first (for nullable columns)
+            if _safe_update_null_query(db, table_name, column_name, user_id, "user_id"):
                 cleaned += 1
-            except Exception as update_e:
+            else:
                 # If UPDATE fails (NOT NULL constraint), try DELETE
-                try:
-                    db.execute(text(f"DELETE FROM {table_name} WHERE {column_name} = :user_id"), params)
+                if _safe_delete_query(db, table_name, column_name, user_id, "user_id"):
                     cleaned += 1
-                except Exception as del_e:
-                    logger.warning(f"Could not clean {table_name}.{column_name}: {del_e}")
+                else:
+                    logger.warning(f"Could not clean {table_name}.{column_name}")
 
         # =========================================================================
         # STEP 4: Delete the user
@@ -43096,10 +43189,8 @@ async def cleanup_sample_users(
                 ]
 
                 for table_name, column_name in cleanup_tables:
-                    try:
-                        db.execute(text(f"DELETE FROM {table_name} WHERE {column_name} = :user_id"), params)
-                    except Exception:
-                        pass  # Table may not exist or no matching data
+                    # Use safe delete to prevent SQL injection
+                    _safe_delete_query(db, table_name, column_name, user.id, "user_id")
 
                 # Delete the user
                 db.execute(text("DELETE FROM users WHERE id = :user_id"), params)
@@ -45443,13 +45534,11 @@ async def bulk_delete_leads_v2(
                 savepoint.rollback()
                 continue
 
-            # Delete related records using raw SQL
+            # Delete related records using safe SQL
             for table, column in tables_to_clean:
                 if table in existing_tables:
-                    try:
-                        db.execute(text(f"DELETE FROM {table} WHERE {column} = :lead_id"), {"lead_id": lead_id})
-                    except Exception as te:
-                        logger.warning(f"Error cleaning {table} for lead {lead_id}: {te}")
+                    if not _safe_delete_query(db, table, column, lead_id, "lead_id"):
+                        logger.warning(f"Error cleaning {table} for lead {lead_id}")
 
             # Unlink from loans instead of deleting
             if "loans" in existing_tables:

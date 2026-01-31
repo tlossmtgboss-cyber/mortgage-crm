@@ -31,6 +31,23 @@ def migrate_encrypted_fields():
 
     try:
         engine = create_engine(DATABASE_URL)
+        is_sqlite = DATABASE_URL.startswith("sqlite")
+
+        def safe_add_column(conn, table, column, col_type="VARCHAR"):
+            """Add column if it doesn't exist (works with SQLite and PostgreSQL)."""
+            try:
+                if is_sqlite:
+                    # SQLite doesn't support IF NOT EXISTS for ALTER TABLE
+                    # Try to add and catch error if exists
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
+                else:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {col_type}"))
+                return True
+            except Exception as e:
+                if "duplicate column" in str(e).lower() or "already exists" in str(e).lower():
+                    logger.info(f"    (column {column} already exists)")
+                    return True
+                raise
 
         with engine.connect() as conn:
             trans = conn.begin()
@@ -47,47 +64,26 @@ def migrate_encrypted_fields():
 
                 # Lead table encrypted columns
                 logger.info("  → leads.annual_income_encrypted")
-                conn.execute(text("""
-                    ALTER TABLE leads
-                    ADD COLUMN IF NOT EXISTS annual_income_encrypted VARCHAR
-                """))
+                safe_add_column(conn, "leads", "annual_income_encrypted")
 
                 logger.info("  → leads.monthly_debts_encrypted")
-                conn.execute(text("""
-                    ALTER TABLE leads
-                    ADD COLUMN IF NOT EXISTS monthly_debts_encrypted VARCHAR
-                """))
+                safe_add_column(conn, "leads", "monthly_debts_encrypted")
 
                 logger.info("  → leads.credit_score_encrypted")
-                conn.execute(text("""
-                    ALTER TABLE leads
-                    ADD COLUMN IF NOT EXISTS credit_score_encrypted VARCHAR
-                """))
+                safe_add_column(conn, "leads", "credit_score_encrypted")
 
                 # Loan table encrypted columns
                 logger.info("  → loans.amount_encrypted")
-                conn.execute(text("""
-                    ALTER TABLE loans
-                    ADD COLUMN IF NOT EXISTS amount_encrypted VARCHAR
-                """))
+                safe_add_column(conn, "loans", "amount_encrypted")
 
                 logger.info("  → loans.purchase_price_encrypted")
-                conn.execute(text("""
-                    ALTER TABLE loans
-                    ADD COLUMN IF NOT EXISTS purchase_price_encrypted VARCHAR
-                """))
+                safe_add_column(conn, "loans", "purchase_price_encrypted")
 
                 logger.info("  → loans.down_payment_encrypted")
-                conn.execute(text("""
-                    ALTER TABLE loans
-                    ADD COLUMN IF NOT EXISTS down_payment_encrypted VARCHAR
-                """))
+                safe_add_column(conn, "loans", "down_payment_encrypted")
 
                 logger.info("  → loans.rate_encrypted")
-                conn.execute(text("""
-                    ALTER TABLE loans
-                    ADD COLUMN IF NOT EXISTS rate_encrypted VARCHAR
-                """))
+                safe_add_column(conn, "loans", "rate_encrypted")
 
                 logger.info("✅ New columns added successfully")
 
@@ -162,34 +158,41 @@ def migrate_encrypted_fields():
                 # ============================================================
                 # PHASE 3: DROP OLD COLUMNS AND RENAME
                 # ============================================================
-                logger.info("\n🗑️  Phase 3: Replacing old columns with encrypted versions...")
+                if is_sqlite:
+                    # SQLite has limited ALTER TABLE support
+                    # For local dev, we keep both columns (encrypted data is in *_encrypted columns)
+                    logger.info("\n⚠️  Phase 3: SQLite detected - skipping column drop/rename")
+                    logger.info("    (For local development, encrypted data is in *_encrypted columns)")
+                    logger.info("    (Production PostgreSQL will complete full migration)")
+                else:
+                    logger.info("\n🗑️  Phase 3: Replacing old columns with encrypted versions...")
 
-                # Drop and rename Lead columns
-                logger.info("  → Updating Lead table schema...")
-                conn.execute(text("ALTER TABLE leads DROP COLUMN IF EXISTS annual_income"))
-                conn.execute(text("ALTER TABLE leads RENAME COLUMN annual_income_encrypted TO annual_income"))
+                    # Drop and rename Lead columns
+                    logger.info("  → Updating Lead table schema...")
+                    conn.execute(text("ALTER TABLE leads DROP COLUMN IF EXISTS annual_income"))
+                    conn.execute(text("ALTER TABLE leads RENAME COLUMN annual_income_encrypted TO annual_income"))
 
-                conn.execute(text("ALTER TABLE leads DROP COLUMN IF EXISTS monthly_debts"))
-                conn.execute(text("ALTER TABLE leads RENAME COLUMN monthly_debts_encrypted TO monthly_debts"))
+                    conn.execute(text("ALTER TABLE leads DROP COLUMN IF EXISTS monthly_debts"))
+                    conn.execute(text("ALTER TABLE leads RENAME COLUMN monthly_debts_encrypted TO monthly_debts"))
 
-                conn.execute(text("ALTER TABLE leads DROP COLUMN IF EXISTS credit_score"))
-                conn.execute(text("ALTER TABLE leads RENAME COLUMN credit_score_encrypted TO credit_score"))
+                    conn.execute(text("ALTER TABLE leads DROP COLUMN IF EXISTS credit_score"))
+                    conn.execute(text("ALTER TABLE leads RENAME COLUMN credit_score_encrypted TO credit_score"))
 
-                # Drop and rename Loan columns
-                logger.info("  → Updating Loan table schema...")
-                conn.execute(text("ALTER TABLE loans DROP COLUMN IF EXISTS amount"))
-                conn.execute(text("ALTER TABLE loans RENAME COLUMN amount_encrypted TO amount"))
+                    # Drop and rename Loan columns
+                    logger.info("  → Updating Loan table schema...")
+                    conn.execute(text("ALTER TABLE loans DROP COLUMN IF EXISTS amount"))
+                    conn.execute(text("ALTER TABLE loans RENAME COLUMN amount_encrypted TO amount"))
 
-                conn.execute(text("ALTER TABLE loans DROP COLUMN IF EXISTS purchase_price"))
-                conn.execute(text("ALTER TABLE loans RENAME COLUMN purchase_price_encrypted TO purchase_price"))
+                    conn.execute(text("ALTER TABLE loans DROP COLUMN IF EXISTS purchase_price"))
+                    conn.execute(text("ALTER TABLE loans RENAME COLUMN purchase_price_encrypted TO purchase_price"))
 
-                conn.execute(text("ALTER TABLE loans DROP COLUMN IF EXISTS down_payment"))
-                conn.execute(text("ALTER TABLE loans RENAME COLUMN down_payment_encrypted TO down_payment"))
+                    conn.execute(text("ALTER TABLE loans DROP COLUMN IF EXISTS down_payment"))
+                    conn.execute(text("ALTER TABLE loans RENAME COLUMN down_payment_encrypted TO down_payment"))
 
-                conn.execute(text("ALTER TABLE loans DROP COLUMN IF EXISTS rate"))
-                conn.execute(text("ALTER TABLE loans RENAME COLUMN rate_encrypted TO rate"))
+                    conn.execute(text("ALTER TABLE loans DROP COLUMN IF EXISTS rate"))
+                    conn.execute(text("ALTER TABLE loans RENAME COLUMN rate_encrypted TO rate"))
 
-                logger.info("✅ Schema updated successfully")
+                    logger.info("✅ Schema updated successfully")
 
                 # Commit all changes
                 trans.commit()

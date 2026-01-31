@@ -23,6 +23,31 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
     with caching for performance.
     """
 
+    # SECURITY: Explicit allowlists instead of wildcards
+    DEFAULT_ALLOWED_METHODS = [
+        "GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"
+    ]
+    DEFAULT_ALLOWED_HEADERS = [
+        "Accept",
+        "Accept-Language",
+        "Authorization",
+        "Content-Language",
+        "Content-Type",
+        "Origin",
+        "X-Requested-With",
+        "X-CSRF-Token",
+        "X-Request-ID",
+        "X-Visitor-ID",
+    ]
+    DEFAULT_EXPOSE_HEADERS = [
+        "Content-Length",
+        "Content-Type",
+        "X-Request-ID",
+        "X-RateLimit-Limit",
+        "X-RateLimit-Remaining",
+        "X-RateLimit-Reset",
+    ]
+
     def __init__(
         self,
         app: ASGIApp,
@@ -34,9 +59,10 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
     ):
         super().__init__(app)
         self.allow_credentials = allow_credentials
-        self.allow_methods = allow_methods or ["*"]
-        self.allow_headers = allow_headers or ["*"]
-        self.expose_headers = expose_headers or ["*"]
+        # SECURITY FIX: Use explicit allowlists instead of wildcards
+        self.allow_methods = allow_methods or self.DEFAULT_ALLOWED_METHODS
+        self.allow_headers = allow_headers or self.DEFAULT_ALLOWED_HEADERS
+        self.expose_headers = expose_headers or self.DEFAULT_EXPOSE_HEADERS
         self.max_age = max_age
         self._domain_service = None
 
