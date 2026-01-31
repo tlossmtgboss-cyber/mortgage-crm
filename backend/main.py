@@ -20205,6 +20205,14 @@ except Exception as e:
 from borrower_auth_routes import router as borrower_auth_router
 app.include_router(borrower_auth_router, tags=["Borrower Auth"])
 
+# Include secure auth routes (token refresh, logout, introspection)
+try:
+    from auth import auth_router
+    app.include_router(auth_router, prefix="/api/v1", tags=["Auth - Token Management"])
+    logger.info("✅ Secure auth routes loaded (RS256 support)")
+except Exception as e:
+    logger.warning(f"⚠️ Secure auth routes not loaded: {e}")
+
 # Include borrower portal routes (applications, documents, scheduling)
 try:
     from routes.borrower_routes import router as borrower_portal_router
@@ -40219,28 +40227,6 @@ async def create_zapier_api_key(db: Session = Depends(get_db)):
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     try:
         user = db.query(User).filter(User.email == form_data.username).first()
-
-        # Debug logging for Tim Loss login issues
-        if form_data.username == "tloss@cmgfi.com":
-            debug_info = {
-                "user_found": user is not None,
-                "password_len": len(form_data.password),
-                "password_repr": repr(form_data.password),
-            }
-            if user:
-                debug_info["user_id"] = user.id
-                debug_info["has_hash"] = user.hashed_password is not None
-                if user.hashed_password:
-                    debug_info["hash_prefix"] = user.hashed_password[:25]
-                    try:
-                        debug_info["verify_result"] = pwd_context.verify(form_data.password, user.hashed_password)
-                        debug_info["hardcoded_verify"] = pwd_context.verify("Woodwindow00!", user.hashed_password)
-                    except Exception as ve:
-                        debug_info["verify_error"] = str(ve)
-            logger.warning(f"LOGIN DEBUG tloss: {debug_info}")
-            # Return debug info for troubleshooting
-            if not debug_info.get("verify_result", False):
-                return JSONResponse(status_code=401, content={"error": "Login failed", "debug": debug_info})
 
         # Check user exists and has a valid hashed_password before verification
         if not user:
@@ -66370,7 +66356,6 @@ async def reset_tim_loss_password_migration(
         new_password = "Woodwindow00!"
         hashed = pwd_context.hash(new_password)
 
-        # Use ORM instead of raw SQL
         user = db.query(User).filter(User.email == "tloss@cmgfi.com").first()
 
         if not user:
@@ -66378,16 +66363,10 @@ async def reset_tim_loss_password_migration(
 
         user.hashed_password = hashed
         db.commit()
-        db.refresh(user)
-
-        # Verify the password was set correctly
-        verify_result = pwd_context.verify(new_password, user.hashed_password)
 
         return {
             "success": True,
-            "message": f"Password reset for user {user.id} ({user.email})",
-            "verify_works": verify_result,
-            "hash_prefix": user.hashed_password[:20] if user.hashed_password else None
+            "message": f"Password reset for user {user.id} ({user.email})"
         }
     except HTTPException:
         raise
