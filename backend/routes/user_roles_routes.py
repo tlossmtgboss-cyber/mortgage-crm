@@ -81,8 +81,11 @@ async def get_current_user(
     except HTTPException:
         raise
     except SQLAlchemyError as e:
-        logger.error(f"Auth error: {e}")
-        raise HTTPException(status_code=401, detail="Invalid token")
+        logger.error(f"Database auth error: {e}")
+        raise HTTPException(status_code=401, detail="Authentication failed")
+    except Exception as e:
+        logger.error(f"Auth error (likely JWT): {e}")
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 router = APIRouter(prefix="/api/v1/users", tags=["User Roles"])
 
@@ -141,57 +144,66 @@ async def get_my_roles(
     """
     user_id = current_user.id
 
-    # Get assigned roles
-    assigned_result = db.execute(text("""
-        SELECT
-            uar.role_id,
-            oer.name as role_name,
-            uar.is_primary,
-            uar.assigned_at
-        FROM user_assigned_roles uar
-        JOIN onboarding_roles oer ON oer.id = uar.role_id
-        WHERE uar.user_id = :user_id
-        ORDER BY uar.is_primary DESC, oer.name
-    """), {"user_id": user_id})
+    try:
+        # Get assigned roles
+        assigned_result = db.execute(text("""
+            SELECT
+                uar.role_id,
+                oer.name as role_name,
+                uar.is_primary,
+                uar.assigned_at
+            FROM user_assigned_roles uar
+            JOIN onboarding_roles oer ON oer.id = uar.role_id
+            WHERE uar.user_id = :user_id
+            ORDER BY uar.is_primary DESC, oer.name
+        """), {"user_id": user_id})
 
-    assigned_roles = []
-    for row in assigned_result:
-        assigned_roles.append(RoleInfo(
-            id=row.role_id,
-            name=row.role_name,
-            is_primary=row.is_primary,
-            assigned_at=row.assigned_at
-        ))
+        assigned_roles = []
+        for row in assigned_result:
+            assigned_roles.append(RoleInfo(
+                id=row.role_id,
+                name=row.role_name,
+                is_primary=row.is_primary,
+                assigned_at=row.assigned_at
+            ))
 
-    # Get active role
-    active_result = db.execute(text("""
-        SELECT
-            uac.active_role_id,
-            oer.name as role_name
-        FROM user_active_role uac
-        JOIN onboarding_roles oer ON oer.id = uac.active_role_id
-        WHERE uac.user_id = :user_id
-    """), {"user_id": user_id})
+        # Get active role
+        active_result = db.execute(text("""
+            SELECT
+                uac.active_role_id,
+                oer.name as role_name
+            FROM user_active_role uac
+            JOIN onboarding_roles oer ON oer.id = uac.active_role_id
+            WHERE uac.user_id = :user_id
+        """), {"user_id": user_id})
 
-    active_row = active_result.fetchone()
-    active_role = None
-    if active_row:
-        # Find if active role is primary
-        is_primary = any(r.id == active_row.active_role_id and r.is_primary for r in assigned_roles)
-        active_role = RoleInfo(
-            id=active_row.active_role_id,
-            name=active_row.role_name,
-            is_primary=is_primary
+        active_row = active_result.fetchone()
+        active_role = None
+        if active_row:
+            # Find if active role is primary
+            is_primary = any(r.id == active_row.active_role_id and r.is_primary for r in assigned_roles)
+            active_role = RoleInfo(
+                id=active_row.active_role_id,
+                name=active_row.role_name,
+                is_primary=is_primary
+            )
+        elif assigned_roles:
+            # If no active role set, use primary or first assigned
+            active_role = assigned_roles[0]
+
+        return UserRolesResponse(
+            assigned_roles=assigned_roles,
+            active_role=active_role,
+            can_switch_roles=len(assigned_roles) > 1
         )
-    elif assigned_roles:
-        # If no active role set, use primary or first assigned
-        active_role = assigned_roles[0]
-
-    return UserRolesResponse(
-        assigned_roles=assigned_roles,
-        active_role=active_role,
-        can_switch_roles=len(assigned_roles) > 1
-    )
+    except SQLAlchemyError as e:
+        # Tables might not exist yet - return empty response
+        logger.warning(f"Error fetching user roles (tables may not exist): {e}")
+        return UserRolesResponse(
+            assigned_roles=[],
+            active_role=None,
+            can_switch_roles=False
+        )
 
 
 @router.post("/me/roles/switch")
