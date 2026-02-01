@@ -221,13 +221,16 @@ Respond ONLY with the JSON object, no additional text."""
 
         for attempt in range(self.config.max_retries):
             try:
-                response = await client.messages.create(
-                    model=self.config.model,
-                    max_tokens=self.config.max_tokens,
-                    temperature=self.config.temperature,
-                    messages=[
-                        {"role": "user", "content": prompt}
-                    ]
+                response = await asyncio.wait_for(
+                    client.messages.create(
+                        model=self.config.model,
+                        max_tokens=self.config.max_tokens,
+                        temperature=self.config.temperature,
+                        messages=[
+                            {"role": "user", "content": prompt}
+                        ]
+                    ),
+                    timeout=self.config.timeout
                 )
 
                 # Parse response
@@ -239,6 +242,13 @@ Respond ONLY with the JSON object, no additional text."""
                 if result:
                     return result
 
+            except asyncio.TimeoutError:
+                logger.warning(f"LLM extraction attempt {attempt + 1} timed out after {self.config.timeout}s")
+                if attempt < self.config.max_retries - 1:
+                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                else:
+                    logger.error(f"LLM extraction failed after {self.config.max_retries} attempts (timeout)")
+                    raise
             except Exception as e:
                 logger.warning(f"LLM extraction attempt {attempt + 1} failed: {e}")
                 if attempt < self.config.max_retries - 1:
@@ -267,18 +277,24 @@ Respond ONLY with the JSON object, no additional text."""
 Respond with a JSON object containing the extracted information."""
 
         try:
-            response = await client.messages.create(
-                model=self.config.model,
-                max_tokens=self.config.max_tokens,
-                temperature=self.config.temperature,
-                messages=[
-                    {"role": "user", "content": full_prompt}
-                ]
+            response = await asyncio.wait_for(
+                client.messages.create(
+                    model=self.config.model,
+                    max_tokens=self.config.max_tokens,
+                    temperature=self.config.temperature,
+                    messages=[
+                        {"role": "user", "content": full_prompt}
+                    ]
+                ),
+                timeout=self.config.timeout
             )
 
             content = response.content[0].text
             return self._parse_json_response(content) or {}
 
+        except asyncio.TimeoutError:
+            logger.error(f"Custom prompt extraction timed out after {self.config.timeout}s")
+            return {}
         except Exception as e:
             logger.error(f"Custom prompt extraction failed: {e}")
             return {}
@@ -350,21 +366,30 @@ class OpenAIClient(BaseLLMClient):
 
         for attempt in range(self.config.max_retries):
             try:
-                response = await client.chat.completions.create(
-                    model=self.config.model,
-                    temperature=self.config.temperature,
-                    max_tokens=self.config.max_tokens,
-                    messages=[
-                        {"role": "system", "content": "You are an expert mortgage data extraction assistant. Always respond with valid JSON."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    response_format={"type": "json_object"}
+                response = await asyncio.wait_for(
+                    client.chat.completions.create(
+                        model=self.config.model,
+                        temperature=self.config.temperature,
+                        max_tokens=self.config.max_tokens,
+                        messages=[
+                            {"role": "system", "content": "You are an expert mortgage data extraction assistant. Always respond with valid JSON."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        response_format={"type": "json_object"}
+                    ),
+                    timeout=self.config.timeout
                 )
 
                 content = response.choices[0].message.content
                 result = json.loads(content)
                 return result
 
+            except asyncio.TimeoutError:
+                logger.warning(f"OpenAI extraction attempt {attempt + 1} timed out after {self.config.timeout}s")
+                if attempt < self.config.max_retries - 1:
+                    await asyncio.sleep(2 ** attempt)
+                else:
+                    raise
             except Exception as e:
                 logger.warning(f"OpenAI extraction attempt {attempt + 1} failed: {e}")
                 if attempt < self.config.max_retries - 1:
@@ -383,19 +408,25 @@ class OpenAIClient(BaseLLMClient):
         client = self._get_client()
 
         try:
-            response = await client.chat.completions.create(
-                model=self.config.model,
-                temperature=self.config.temperature,
-                max_tokens=self.config.max_tokens,
-                messages=[
-                    {"role": "system", "content": "You are an expert mortgage data extraction assistant. Always respond with valid JSON."},
-                    {"role": "user", "content": f"{prompt}\n\nTranscript:\n{transcript}"}
-                ],
-                response_format={"type": "json_object"}
+            response = await asyncio.wait_for(
+                client.chat.completions.create(
+                    model=self.config.model,
+                    temperature=self.config.temperature,
+                    max_tokens=self.config.max_tokens,
+                    messages=[
+                        {"role": "system", "content": "You are an expert mortgage data extraction assistant. Always respond with valid JSON."},
+                        {"role": "user", "content": f"{prompt}\n\nTranscript:\n{transcript}"}
+                    ],
+                    response_format={"type": "json_object"}
+                ),
+                timeout=self.config.timeout
             )
 
             return json.loads(response.choices[0].message.content)
 
+        except asyncio.TimeoutError:
+            logger.error(f"OpenAI custom prompt extraction timed out after {self.config.timeout}s")
+            return {}
         except Exception as e:
             logger.error(f"Custom prompt extraction failed: {e}")
             return {}

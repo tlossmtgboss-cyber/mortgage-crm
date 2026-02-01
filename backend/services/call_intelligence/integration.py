@@ -171,14 +171,14 @@ class CallIntelligenceIntegration:
 
                 # Step 3: Create tasks in the system
                 if audit_response.all_tasks:
-                    await self._create_tasks(
+                    self._create_tasks(
                         loan_id=loan_id,
                         organization_id=organization_id,
                         tasks=audit_response.all_tasks,
                     )
 
             # Step 4: Save call intelligence results
-            await self._save_call_results(
+            self._save_call_results(
                 call_id=call_id,
                 loan_id=loan_id,
                 organization_id=organization_id,
@@ -208,13 +208,13 @@ class CallIntelligenceIntegration:
                 "error": safe_error,
             }
 
-    async def _create_tasks(
+    def _create_tasks(
         self,
         loan_id: int,
         organization_id: int,
         tasks: list,
     ) -> None:
-        """Create tasks in the task system."""
+        """Create tasks in the task system (synchronous DB operations)."""
         try:
             from datetime import timedelta
 
@@ -280,7 +280,7 @@ class CallIntelligenceIntegration:
             except Exception:
                 pass  # Rollback failed, but we already logged the original error
 
-    async def _save_call_results(
+    def _save_call_results(
         self,
         call_id: str,
         loan_id: Optional[int],
@@ -289,7 +289,7 @@ class CallIntelligenceIntegration:
         audit_response,
         metadata: Dict[str, Any],
     ) -> None:
-        """Save call processing results to database."""
+        """Save call processing results to database (synchronous DB operations)."""
         try:
             import json
 

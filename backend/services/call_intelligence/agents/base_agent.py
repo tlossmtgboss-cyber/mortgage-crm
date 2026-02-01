@@ -27,6 +27,52 @@ from ..llm_client import (
 logger = logging.getLogger(__name__)
 
 
+# =============================================================================
+# Confidence Score Constants
+# =============================================================================
+# These constants define confidence levels for different extraction scenarios.
+# Scores range from 0-100, where:
+#   90-100: High confidence - clear, unambiguous extraction
+#   70-89:  Moderate confidence - likely correct but may need verification
+#   50-69:  Low confidence - ambiguous, needs manual review
+#   Below 50: Very low confidence - unreliable extraction
+
+class ConfidenceScores:
+    """Standardized confidence scores for extraction results."""
+
+    # LLM extraction defaults
+    LLM_DEFAULT = 75.0  # Default for simple LLM values without confidence metadata
+    LLM_HIGH = 90.0     # High certainty LLM extraction
+    LLM_MEDIUM = 75.0   # Moderate certainty LLM extraction
+    LLM_LOW = 50.0      # Low certainty LLM extraction
+
+    # Regex extraction defaults
+    REGEX_HIGH = 90.0   # Clear pattern match (e.g., email, phone)
+    REGEX_MEDIUM = 80.0 # Good pattern match
+    REGEX_DEFAULT = 75.0  # Standard pattern match
+    REGEX_LOW = 70.0    # Weak pattern match (e.g., currency without context)
+
+    # Specific extraction types
+    EMAIL = 95.0        # Email regex is highly reliable
+    PHONE = 90.0        # Phone regex is reliable
+    NAME = 85.0         # Name extraction
+    DATE = 75.0         # Date extraction
+    CURRENCY = 70.0     # Currency extraction (can be ambiguous)
+    YES_NO = 80.0       # Boolean response extraction
+    SSN_LAST_FOUR = 90.0  # SSN last 4 when full SSN detected
+    SSN_PARTIAL = 85.0    # SSN last 4 from partial input
+
+    # Confidence adjustments
+    VERIFICATION_BOOST = 15   # Boost when value is verified by multiple sources
+    MULTIPLE_MENTION_BOOST = 10  # Boost when mentioned multiple times
+    LLM_REGEX_MATCH_BOOST = 10   # Boost when LLM and regex agree
+
+    # Thresholds
+    HIGH_CONFIDENCE_THRESHOLD = 90  # Above this is high confidence
+    LOW_CONFIDENCE_THRESHOLD = 70   # Below this needs verification
+    SKIP_THRESHOLD = 10             # Below this, skip null values
+
+
 class BaseExtractionAgent(ABC):
     """
     Abstract base class for extraction agents.
@@ -217,7 +263,7 @@ class BaseExtractionAgent(ABC):
                 raw_source_text = field_data.get("source_text", "")
 
                 # Skip null values with low confidence
-                if value is None and confidence < 10:
+                if value is None and confidence < ConfidenceScores.SKIP_THRESHOLD:
                     continue
 
                 # Create ExtractedValue with sanitized source text
@@ -236,7 +282,7 @@ class BaseExtractionAgent(ABC):
                     result.extractions.append(ExtractedValue(
                         field_name=field_name,
                         value=field_data,
-                        confidence=75.0,  # Default confidence for simple values
+                        confidence=ConfidenceScores.LLM_DEFAULT,
                         extraction_method="llm",
                     ))
 
@@ -317,7 +363,7 @@ class BaseExtractionAgent(ABC):
                 # Both found it - compare and potentially boost confidence
                 if self._values_match(llm_extraction.value, regex_extraction.value):
                     # Values match - boost confidence
-                    llm_extraction.confidence = min(100, llm_extraction.confidence + 10)
+                    llm_extraction.confidence = min(100, llm_extraction.confidence + ConfidenceScores.LLM_REGEX_MATCH_BOOST)
                     llm_extraction.verified = True
                 elif llm_extraction.confidence < regex_extraction.confidence:
                     # Regex is more confident - use regex
@@ -361,8 +407,10 @@ class BaseExtractionAgent(ABC):
         text: str,
         pattern: str,
         field_name: str,
-        confidence_base: float = 75.0,
+        confidence_base: float = None,
     ) -> Optional[ExtractedValue]:
+        if confidence_base is None:
+            confidence_base = ConfidenceScores.REGEX_DEFAULT
         """Extract value using regex pattern."""
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
@@ -416,7 +464,7 @@ class BaseExtractionAgent(ABC):
                 return ExtractedValue(
                     field_name=field_name,
                     value=value,
-                    confidence=70.0,
+                    confidence=ConfidenceScores.CURRENCY,
                     source_text=sanitize_source_text(raw_source),
                     extraction_method="regex",
                 )
@@ -444,7 +492,7 @@ class BaseExtractionAgent(ABC):
                 return ExtractedValue(
                     field_name=field_name,
                     value=match.group(1),
-                    confidence=75.0,
+                    confidence=ConfidenceScores.DATE,
                     source_text=sanitize_source_text(raw_source),
                     extraction_method="regex",
                 )
@@ -470,7 +518,7 @@ class BaseExtractionAgent(ABC):
                     return ExtractedValue(
                         field_name=field_name,
                         value=phone,
-                        confidence=90.0,
+                        confidence=ConfidenceScores.PHONE,
                         source_text=sanitize_source_text(raw_source),
                         extraction_method="regex",
                     )
@@ -489,7 +537,7 @@ class BaseExtractionAgent(ABC):
             return ExtractedValue(
                 field_name=field_name,
                 value=match.group(1).lower(),
-                confidence=95.0,
+                confidence=ConfidenceScores.EMAIL,
                 source_text=sanitize_source_text(raw_source),
                 extraction_method="regex",
             )
@@ -525,7 +573,7 @@ class BaseExtractionAgent(ABC):
                 return ExtractedValue(
                     field_name=field_name,
                     value=True,
-                    confidence=80.0,
+                    confidence=ConfidenceScores.YES_NO,
                     source_text=sanitize_source_text(text[:200]),
                     verification_question=question_context,
                     extraction_method="regex",
@@ -536,7 +584,7 @@ class BaseExtractionAgent(ABC):
                 return ExtractedValue(
                     field_name=field_name,
                     value=False,
-                    confidence=80.0,
+                    confidence=ConfidenceScores.YES_NO,
                     source_text=sanitize_source_text(text[:200]),
                     verification_question=question_context,
                     extraction_method="regex",
@@ -550,13 +598,13 @@ class BaseExtractionAgent(ABC):
         verified: bool = False,
         multiple_mentions: bool = False,
     ) -> float:
-        """Calculate final confidence score."""
+        """Calculate final confidence score with standardized adjustments."""
         confidence = extraction.confidence
 
         if verified:
-            confidence = min(100, confidence + 15)
+            confidence = min(100, confidence + ConfidenceScores.VERIFICATION_BOOST)
 
         if multiple_mentions:
-            confidence = min(100, confidence + 10)
+            confidence = min(100, confidence + ConfidenceScores.MULTIPLE_MENTION_BOOST)
 
         return confidence
