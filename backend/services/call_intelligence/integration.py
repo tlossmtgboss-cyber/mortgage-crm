@@ -7,7 +7,7 @@ Automatically processes call transcripts when calls end.
 
 import logging
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, TYPE_CHECKING
 import asyncio
 
 from sqlalchemy.orm import Session
@@ -26,7 +26,31 @@ from services.application_engine import (
     CallTranscriptData,
 )
 
+if TYPE_CHECKING:
+    from services.application_engine import ApplicationAuditResponse
+
 logger = logging.getLogger(__name__)
+
+
+def _safe_get_nested(data: Dict[str, Any], *keys: str, default: Any = None) -> Any:
+    """Safely get nested dictionary values.
+
+    Args:
+        data: Dictionary to traverse
+        *keys: Keys to traverse in order
+        default: Default value if any key is missing or value is not a dict
+
+    Returns:
+        The nested value or default if not found
+    """
+    current = data
+    for key in keys:
+        if not isinstance(current, dict):
+            return default
+        current = current.get(key)
+        if current is None:
+            return default
+    return current if current is not None else default
 
 
 class CallIntelligenceIntegration:
@@ -286,7 +310,7 @@ class CallIntelligenceIntegration:
         loan_id: Optional[int],
         organization_id: int,
         ci_response: CallIntelligenceResponse,
-        audit_response,
+        audit_response: Optional["ApplicationAuditResponse"],
         metadata: Dict[str, Any],
     ) -> None:
         """Save call processing results to database (synchronous DB operations)."""
@@ -360,10 +384,12 @@ async def handle_retell_call_ended(
         logger.warning(f"No transcript in Retell call {call_id}")
         return {"success": False, "error": "No transcript"}
 
-    # Extract loan_id and org_id from call metadata
-    metadata = call_data.get("call_analysis", {}).get("custom_analysis_data", {})
-    loan_id = metadata.get("loan_id") or call_data.get("metadata", {}).get("loan_id")
-    org_id = metadata.get("organization_id") or call_data.get("metadata", {}).get("organization_id")
+    # Extract loan_id and org_id from call metadata (safely handle nested dicts)
+    custom_data = _safe_get_nested(call_data, "call_analysis", "custom_analysis_data", default={})
+    fallback_metadata = _safe_get_nested(call_data, "metadata", default={})
+
+    loan_id = custom_data.get("loan_id") or fallback_metadata.get("loan_id")
+    org_id = custom_data.get("organization_id") or fallback_metadata.get("organization_id")
 
     if not org_id:
         logger.warning(f"No organization_id in Retell call {call_id}")
@@ -408,10 +434,10 @@ async def handle_vapi_call_ended(
         logger.warning(f"No transcript in Vapi call {call_id}")
         return {"success": False, "error": "No transcript"}
 
-    # Extract metadata
-    metadata = call_data.get("assistant", {}).get("metadata", {})
-    loan_id = metadata.get("loan_id")
-    org_id = metadata.get("organization_id")
+    # Extract metadata (safely handle nested dicts)
+    assistant_metadata = _safe_get_nested(call_data, "assistant", "metadata", default={})
+    loan_id = assistant_metadata.get("loan_id")
+    org_id = assistant_metadata.get("organization_id")
 
     if not org_id:
         logger.warning(f"No organization_id in Vapi call {call_id}")
@@ -428,7 +454,7 @@ async def handle_vapi_call_ended(
         call_metadata={
             "source": "vapi",
             "duration": call_data.get("duration"),
-            "assistant_id": call_data.get("assistant", {}).get("id"),
+            "assistant_id": _safe_get_nested(call_data, "assistant", "id"),
         },
     )
 

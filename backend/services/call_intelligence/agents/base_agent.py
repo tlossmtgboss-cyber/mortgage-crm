@@ -72,6 +72,10 @@ class ConfidenceScores:
     LOW_CONFIDENCE_THRESHOLD = 70   # Below this needs verification
     SKIP_THRESHOLD = 10             # Below this, skip null values
 
+    # Extraction settings
+    CONTEXT_WINDOW_SIZE = 50        # Characters to include before/after match for context
+    NUMERIC_MATCH_TOLERANCE = 0.01  # 1% tolerance for numeric comparisons
+
 
 class BaseExtractionAgent(ABC):
     """
@@ -389,11 +393,12 @@ class BaseExtractionAgent(ABC):
         if isinstance(val1, str) and isinstance(val2, str):
             return val1.lower().strip() == val2.lower().strip()
 
-        # Normalize numbers (within 1% tolerance)
+        # Normalize numbers (within tolerance defined by NUMERIC_MATCH_TOLERANCE)
         if isinstance(val1, (int, float)) and isinstance(val2, (int, float)):
-            if val1 == 0 and val2 == 0:
-                return True
-            return abs(val1 - val2) / max(abs(val1), abs(val2)) < 0.01
+            max_abs = max(abs(val1), abs(val2))
+            if max_abs == 0:
+                return True  # Both are zero
+            return abs(val1 - val2) / max_abs < ConfidenceScores.NUMERIC_MATCH_TOLERANCE
 
         # Direct comparison
         return val1 == val2
@@ -409,13 +414,25 @@ class BaseExtractionAgent(ABC):
         field_name: str,
         confidence_base: float = None,
     ) -> Optional[ExtractedValue]:
+        """Extract value using regex pattern.
+
+        Args:
+            text: Text to search in
+            pattern: Regex pattern with capture group
+            field_name: Name of the field being extracted
+            confidence_base: Base confidence score (defaults to REGEX_DEFAULT)
+
+        Returns:
+            ExtractedValue if pattern matches, None otherwise
+        """
         if confidence_base is None:
             confidence_base = ConfidenceScores.REGEX_DEFAULT
-        """Extract value using regex pattern."""
+
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
             value = match.group(1).strip() if match.groups() else match.group(0).strip()
-            raw_source = text[max(0, match.start()-50):match.end()+50]
+            window = ConfidenceScores.CONTEXT_WINDOW_SIZE
+            raw_source = text[max(0, match.start() - window):match.end() + window]
             return ExtractedValue(
                 field_name=field_name,
                 value=value,

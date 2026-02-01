@@ -9,7 +9,7 @@ import os
 import json
 import logging
 import asyncio
-from typing import Dict, Any, Optional, List, Type
+from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from enum import Enum

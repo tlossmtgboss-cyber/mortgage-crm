@@ -68,6 +68,14 @@ class ExtractedValue:
     verification_question: Optional[str] = None  # Question asked to verify
     extraction_method: str = "unknown"  # llm, regex, regex_fallback
 
+    def __post_init__(self):
+        """Validate field values after initialization."""
+        # Clamp confidence to valid range
+        if self.confidence < 0:
+            self.confidence = 0.0
+        elif self.confidence > 100:
+            self.confidence = 100.0
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "field_name": self.field_name,
@@ -88,6 +96,12 @@ class ExtractionResult:
     warnings: List[str] = field(default_factory=list)
     processing_time_ms: int = 0
 
+    def __post_init__(self):
+        """Validate field values after initialization."""
+        # Ensure processing_time_ms is non-negative
+        if self.processing_time_ms < 0:
+            self.processing_time_ms = 0
+
     def get_by_field(self, field_name: str) -> Optional[ExtractedValue]:
         """Get extraction by field name."""
         for ext in self.extractions:
@@ -103,6 +117,11 @@ class ExtractionResult:
             "warnings": self.warnings,
             "processing_time_ms": self.processing_time_ms,
         }
+
+
+# Validation constants
+MAX_CALL_ID_LENGTH = 255
+MAX_TRANSCRIPT_SIZE = 500 * 1024  # 500KB
 
 
 @dataclass
@@ -128,6 +147,26 @@ class CallIntelligenceRequest:
 
     # Context from previous calls/data
     existing_borrower_data: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self):
+        """Validate field values after initialization."""
+        # Validate call_id length
+        if len(self.call_id) > MAX_CALL_ID_LENGTH:
+            raise ValueError(f"call_id exceeds maximum length of {MAX_CALL_ID_LENGTH} characters")
+
+        # Validate transcript size
+        if self.transcript and len(self.transcript) > MAX_TRANSCRIPT_SIZE:
+            raise ValueError(f"transcript exceeds maximum size of {MAX_TRANSCRIPT_SIZE} bytes")
+
+        # Clamp min_confidence_threshold to valid range
+        if self.min_confidence_threshold < 0:
+            self.min_confidence_threshold = 0.0
+        elif self.min_confidence_threshold > 100:
+            self.min_confidence_threshold = 100.0
+
+        # Ensure call_duration_seconds is non-negative
+        if self.call_duration_seconds < 0:
+            self.call_duration_seconds = 0
 
 
 @dataclass

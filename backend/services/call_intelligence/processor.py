@@ -9,7 +9,11 @@ import logging
 import time
 import asyncio
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
+    from .llm_client import BaseLLMClient
 
 from .data_contracts import (
     CallIntelligenceRequest,
@@ -43,7 +47,11 @@ class CallIntelligenceProcessor:
 
     VERSION = "1.0"
 
-    def __init__(self, db_session=None, llm_client=None):
+    def __init__(
+        self,
+        db_session: Optional["Session"] = None,
+        llm_client: Optional["BaseLLMClient"] = None,
+    ):
         """
         Initialize processor with agents.
 

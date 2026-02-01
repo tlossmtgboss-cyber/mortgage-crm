@@ -658,8 +658,6 @@ def print_extraction_report(result: Dict[str, Any]):
 
 # CLI entry point
 if __name__ == "__main__":
-    import sys
-
     # Sample transcript for testing
     sample_transcript = """
 Tim:
