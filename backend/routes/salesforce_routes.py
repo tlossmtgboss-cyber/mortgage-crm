@@ -2159,7 +2159,7 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
                 # Get funded loans not already in mum_clients (use flexible ILIKE matching)
                 funded_loans = db.execute(text("""
                     SELECT l.id, l.loan_number, l.borrower_name,
-                           l.borrower_email, l.borrower_phone, l.amount, l.interest_rate,
+                           l.borrower_email, l.borrower_phone, l.amount, l.rate,
                            l.funded_date, l.closing_date, l.property_address,
                            l.property_city, l.property_state, l.property_zip,
                            l.loan_type, l.stage
@@ -2470,7 +2470,7 @@ async def debug_import_to_mum(db: Session = Depends(get_db)):
         # Columns: 0=id, 1=loan_number, 2=borrower_name, 3=email, 4=phone, 5=amount, 6=rate, 7=funded_date, 8=closing_date
         funded_loans = db.execute(text("""
             SELECT l.id, l.loan_number, l.borrower_name,
-                   l.borrower_email, l.borrower_phone, l.amount, l.interest_rate,
+                   l.borrower_email, l.borrower_phone, l.amount, l.rate,
                    l.funded_date, l.closing_date, l.property_address,
                    l.property_city, l.property_state, l.property_zip,
                    l.loan_type, l.stage
@@ -2554,7 +2554,7 @@ async def import_funded_loans_to_mum(
         # Columns: 0=id, 1=loan_number, 2=borrower_name, 3=email, 4=phone, 5=amount, 6=rate, 7=funded_date, 8=closing_date
         funded_loans = db.execute(text("""
             SELECT l.id, l.loan_number, l.borrower_name,
-                   l.borrower_email, l.borrower_phone, l.amount, l.interest_rate,
+                   l.borrower_email, l.borrower_phone, l.amount, l.rate,
                    l.funded_date, l.closing_date, l.property_address,
                    l.property_city, l.property_state, l.property_zip,
                    l.loan_type, l.stage
@@ -2777,7 +2777,7 @@ async def sync_salesforce_and_import_mum(
     try:
         funded_loans = db.execute(text("""
             SELECT l.id, l.loan_number, l.borrower_name,
-                   l.amount, l.interest_rate, l.funded_date, l.closing_date
+                   l.amount, l.rate, l.funded_date, l.closing_date
             FROM loans l
             WHERE (LOWER(CAST(l.stage AS TEXT)) LIKE '%fund%'
                    OR (LOWER(CAST(l.stage AS TEXT)) LIKE '%closed%' AND LOWER(CAST(l.stage AS TEXT)) NOT LIKE '%disclosed%')
