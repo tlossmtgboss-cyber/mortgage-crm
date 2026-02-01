@@ -7,7 +7,8 @@ a lead in the CRM with the extracted data.
 
 import asyncio
 import logging
-from typing import Dict, Any, List, Optional
+import re
+from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timezone
 
 from .data_contracts import TranscriptSegment, SpeakerRole, ExtractionResult
@@ -23,71 +24,285 @@ from .agents import (
 logger = logging.getLogger(__name__)
 
 
-def parse_transcript(transcript_text: str) -> List[TranscriptSegment]:
+# Role-based keywords for speaker identification (case-insensitive)
+ROLE_KEYWORDS = {
+    SpeakerRole.AI_LO: [
+        'loan officer', 'lo', 'agent', 'advisor', 'consultant',
+        'mortgage officer', 'lender', 'originator', 'representative',
+        'rep', 'assistant', 'ai', 'bot',
+    ],
+    SpeakerRole.BORROWER: [
+        'borrower', 'applicant', 'customer', 'client', 'caller',
+        'prospect', 'lead', 'user',
+    ],
+    SpeakerRole.CO_BORROWER: [
+        'co-borrower', 'coborrower', 'co-applicant', 'coapplicant',
+        'spouse', 'partner',
+    ],
+    SpeakerRole.HUMAN_LO: [
+        'human lo', 'human agent', 'supervisor', 'manager',
+    ],
+}
+
+# LO speech patterns - questions and professional language
+LO_SPEECH_PATTERNS = [
+    r'\b(what is your|can you tell me|could you|may i|let me)\b',
+    r'\b(perfect|great|got it|sounds good|thank you for)\b',
+    r'\b(next step|i\'ll need|we\'ll need|let\'s talk about)\b',
+    r'\b(verify|confirm|walk through|process)\b',
+    r'\b(do you have|are you|have you ever|will you be)\b',
+]
+
+# Borrower speech patterns - personal info and short responses
+BORROWER_SPEECH_PATTERNS = [
+    r'\b(my name is|i am|i\'m|i work|i make|i have)\b',
+    r'\b(yes|no|yeah|nope|correct|right)\b',
+    r'^(about |around |roughly |approximately )?[\$]?\d',  # Amounts
+    r'\b(we\'ve been|we are|we\'re)\b',
+]
+
+
+def identify_speaker_role(
+    speaker_name: str,
+    text: str = "",
+    speaker_mapping: Optional[Dict[str, SpeakerRole]] = None,
+) -> SpeakerRole:
+    """
+    Identify speaker role from name and optionally from speech content.
+
+    Args:
+        speaker_name: The speaker label from the transcript
+        text: The text spoken (used for heuristic inference)
+        speaker_mapping: Optional explicit mapping of names to roles
+
+    Returns:
+        SpeakerRole enum value
+    """
+    speaker_lower = speaker_name.lower().strip()
+
+    # 1. Check explicit mapping first (if provided)
+    if speaker_mapping:
+        for name, role in speaker_mapping.items():
+            if name.lower() == speaker_lower:
+                return role
+
+    # 2. Check role-based keywords (prioritize longer/more specific matches)
+    # Sort roles by checking CO_BORROWER before BORROWER to avoid partial matches
+    role_check_order = [
+        SpeakerRole.CO_BORROWER,  # Check first (more specific than BORROWER)
+        SpeakerRole.AI_LO,
+        SpeakerRole.HUMAN_LO,
+        SpeakerRole.BORROWER,  # Check last (could be substring of CO_BORROWER)
+    ]
+
+    for role in role_check_order:
+        keywords = ROLE_KEYWORDS.get(role, [])
+        for keyword in keywords:
+            # Use word boundary matching for more accuracy
+            if keyword == speaker_lower:
+                return role
+            # Check if keyword is in speaker name (with word boundary awareness)
+            if re.search(rf'\b{re.escape(keyword)}\b', speaker_lower):
+                return role
+            # Also check simple containment for multi-word keywords
+            if ' ' in keyword and keyword in speaker_lower:
+                return role
+
+    # 3. Check for common prefixes/patterns in speaker labels
+    # e.g., "Speaker 1", "Agent (Tim)", "[LO]", etc.
+    if re.search(r'\b(speaker\s*1|agent|lo|rep)\b', speaker_lower):
+        return SpeakerRole.AI_LO
+    if re.search(r'\b(speaker\s*2|caller|customer)\b', speaker_lower):
+        return SpeakerRole.BORROWER
+
+    # 4. Use speech content heuristics if text is provided
+    if text:
+        text_lower = text.lower()
+
+        lo_score = sum(1 for p in LO_SPEECH_PATTERNS if re.search(p, text_lower, re.IGNORECASE))
+        borrower_score = sum(1 for p in BORROWER_SPEECH_PATTERNS if re.search(p, text_lower, re.IGNORECASE))
+
+        if lo_score > borrower_score and lo_score >= 2:
+            return SpeakerRole.AI_LO
+        if borrower_score > lo_score and borrower_score >= 2:
+            return SpeakerRole.BORROWER
+
+    # 5. Return unknown if we can't determine
+    return SpeakerRole.UNKNOWN
+
+
+def infer_roles_from_conversation(
+    raw_segments: List[Tuple[str, str]],
+    speaker_mapping: Optional[Dict[str, SpeakerRole]] = None,
+) -> Dict[str, SpeakerRole]:
+    """
+    Infer speaker roles from conversation patterns.
+
+    In mortgage calls, the LO typically:
+    - Speaks first (greeting/introduction)
+    - Asks questions
+    - Uses professional/structured language
+
+    The borrower typically:
+    - Responds to questions
+    - Provides personal information
+    - Gives shorter responses
+
+    Args:
+        raw_segments: List of (speaker_name, text) tuples
+        speaker_mapping: Optional explicit mapping
+
+    Returns:
+        Dict mapping speaker names to inferred roles
+    """
+    inferred_mapping = {}
+
+    if not raw_segments:
+        return inferred_mapping
+
+    # Get unique speakers
+    unique_speakers = []
+    for speaker, _ in raw_segments:
+        if speaker not in unique_speakers:
+            unique_speakers.append(speaker)
+
+    # If we have exactly 2 speakers and no explicit mapping, use heuristics
+    if len(unique_speakers) == 2 and not speaker_mapping:
+        speaker1, speaker2 = unique_speakers
+
+        # Aggregate text for each speaker
+        speaker1_text = ' '.join(text for s, text in raw_segments if s == speaker1)
+        speaker2_text = ' '.join(text for s, text in raw_segments if s == speaker2)
+
+        # Score each speaker
+        s1_lo_score = sum(1 for p in LO_SPEECH_PATTERNS
+                         if re.search(p, speaker1_text, re.IGNORECASE))
+        s2_lo_score = sum(1 for p in LO_SPEECH_PATTERNS
+                         if re.search(p, speaker2_text, re.IGNORECASE))
+
+        # First speaker in mortgage calls is usually the LO
+        first_speaker_bonus = 2
+
+        s1_total = s1_lo_score + first_speaker_bonus
+        s2_total = s2_lo_score
+
+        if s1_total > s2_total:
+            inferred_mapping[speaker1] = SpeakerRole.AI_LO
+            inferred_mapping[speaker2] = SpeakerRole.BORROWER
+        elif s2_total > s1_total:
+            inferred_mapping[speaker1] = SpeakerRole.BORROWER
+            inferred_mapping[speaker2] = SpeakerRole.AI_LO
+        else:
+            # Tie-breaker: first speaker is LO
+            inferred_mapping[speaker1] = SpeakerRole.AI_LO
+            inferred_mapping[speaker2] = SpeakerRole.BORROWER
+
+        logger.debug(f"Inferred speaker roles: {inferred_mapping}")
+
+    return inferred_mapping
+
+
+def parse_transcript(
+    transcript_text: str,
+    speaker_mapping: Optional[Dict[str, SpeakerRole]] = None,
+) -> List[TranscriptSegment]:
     """
     Parse a raw transcript into TranscriptSegments.
 
-    Handles format like:
-    Speaker Name:
-    Text content here
+    Handles formats like:
+    - "Speaker Name:" followed by text on next lines
+    - "[Speaker Name] text"
+    - "Speaker Name: text" on same line
+
+    Args:
+        transcript_text: Raw transcript text
+        speaker_mapping: Optional dict mapping speaker names to roles.
+            Example: {"Tim": SpeakerRole.AI_LO, "Jack": SpeakerRole.BORROWER}
+            If not provided, roles are inferred from keywords and patterns.
+
+    Returns:
+        List of TranscriptSegment objects
     """
     segments = []
     lines = transcript_text.strip().split('\n')
 
+    # First pass: collect raw segments
+    raw_segments = []
     current_speaker = None
     current_text = []
-    segment_index = 0
-
-    # Map speaker names to roles
-    speaker_role_map = {
-        'tim': SpeakerRole.AI_LO,
-        'loan officer': SpeakerRole.AI_LO,
-        'lo': SpeakerRole.AI_LO,
-        'agent': SpeakerRole.AI_LO,
-        'jack': SpeakerRole.BORROWER,
-        'applicant': SpeakerRole.BORROWER,
-        'borrower': SpeakerRole.BORROWER,
-        'customer': SpeakerRole.BORROWER,
-    }
 
     for line in lines:
         line = line.strip()
         if not line:
             continue
 
-        # Check if this is a speaker line (ends with colon or is just a name)
-        if line.endswith(':'):
-            # Save previous segment
+        # Check for different speaker line formats
+        speaker_match = None
+        remaining_text = None
+
+        # Format: "[Speaker Name] text" or "(Speaker Name) text"
+        bracket_match = re.match(r'[\[\(]([^\]\)]+)[\]\)]\s*(.*)$', line)
+        if bracket_match:
+            speaker_match = bracket_match.group(1).strip()
+            remaining_text = bracket_match.group(2).strip() or None
+
+        # Format: "Speaker Name: text" (inline) - only if not already matched
+        if not speaker_match:
+            inline_match = re.match(r'^([A-Za-z][A-Za-z0-9\s\-]{0,30}):\s+(.+)$', line)
+            if inline_match:
+                speaker_match = inline_match.group(1).strip()
+                remaining_text = inline_match.group(2).strip() or None
+
+        # Format: "Speaker Name:" (speaker label on its own line) - only if not already matched
+        if not speaker_match and line.endswith(':') and len(line) < 50:
+            speaker_match = line[:-1].strip()
+
+        if speaker_match:
+            # Save previous segment before starting new one
             if current_speaker and current_text:
                 text = ' '.join(current_text).strip()
                 if text:
-                    role = speaker_role_map.get(current_speaker.lower(), SpeakerRole.UNKNOWN)
-                    segments.append(TranscriptSegment(
-                        index=segment_index,
-                        speaker=role,
-                        text=text,
-                        start_time=float(segment_index * 10),
-                        end_time=float((segment_index + 1) * 10),
-                    ))
-                    segment_index += 1
+                    raw_segments.append((current_speaker, text))
 
-            current_speaker = line[:-1].strip()
-            current_text = []
+            # Start new segment
+            current_speaker = speaker_match
+            current_text = [remaining_text] if remaining_text else []
         else:
+            # Continue current segment
             current_text.append(line)
 
     # Don't forget the last segment
     if current_speaker and current_text:
         text = ' '.join(current_text).strip()
         if text:
-            role = speaker_role_map.get(current_speaker.lower(), SpeakerRole.UNKNOWN)
-            segments.append(TranscriptSegment(
-                index=segment_index,
-                speaker=role,
-                text=text,
-                start_time=float(segment_index * 10),
-                end_time=float((segment_index + 1) * 10),
-            ))
+            raw_segments.append((current_speaker, text))
+
+    # Second pass: infer roles if not explicitly provided
+    combined_mapping = speaker_mapping.copy() if speaker_mapping else {}
+
+    # Add inferred roles for speakers not in explicit mapping
+    inferred = infer_roles_from_conversation(raw_segments, speaker_mapping)
+    for speaker, role in inferred.items():
+        if speaker not in combined_mapping:
+            combined_mapping[speaker] = role
+
+    # Third pass: create TranscriptSegments with roles
+    for idx, (speaker, text) in enumerate(raw_segments):
+        # Get role from mapping, or identify from content
+        if speaker in combined_mapping:
+            role = combined_mapping[speaker]
+        else:
+            role = identify_speaker_role(speaker, text, combined_mapping)
+            # Cache for consistency
+            combined_mapping[speaker] = role
+
+        segments.append(TranscriptSegment(
+            index=idx,
+            speaker=role,
+            text=text,
+            start_time=float(idx * 10),
+            end_time=float((idx + 1) * 10),
+        ))
 
     return segments
 
@@ -283,6 +498,7 @@ async def process_transcript_and_create_lead(
     db_session=None,
     owner_id: int = None,
     organization_id: int = None,
+    speaker_mapping: Optional[Dict[str, SpeakerRole]] = None,
 ) -> Dict[str, Any]:
     """
     Full pipeline: parse transcript, extract data, create lead.
@@ -292,13 +508,16 @@ async def process_transcript_and_create_lead(
         db_session: SQLAlchemy session (optional - for actual DB creation)
         owner_id: Loan officer user ID
         organization_id: Organization/tenant ID
+        speaker_mapping: Optional dict mapping speaker names to roles.
+            Example: {"Tim": SpeakerRole.AI_LO, "Jack": SpeakerRole.BORROWER}
+            If not provided, roles are inferred automatically from patterns.
 
     Returns:
         Dict with extraction results and lead data
     """
     # Parse transcript
     logger.info("Parsing transcript...")
-    segments = parse_transcript(transcript_text)
+    segments = parse_transcript(transcript_text, speaker_mapping)
     logger.info(f"Parsed {len(segments)} segments")
 
     # Run extraction
@@ -353,11 +572,18 @@ async def process_transcript_and_create_lead(
             'warnings': result.warnings,
         }
 
+    # Count segments by speaker role
+    speaker_distribution = {}
+    for seg in segments:
+        role_name = seg.speaker.value if hasattr(seg.speaker, 'value') else str(seg.speaker)
+        speaker_distribution[role_name] = speaker_distribution.get(role_name, 0) + 1
+
     return {
         'lead_id': lead_id,
         'lead_data': lead_data,
         'extraction_summary': extraction_summary,
         'segments_processed': len(segments),
+        'speaker_distribution': speaker_distribution,
     }
 
 
@@ -369,8 +595,14 @@ def print_extraction_report(result: Dict[str, Any]):
 
     print(f"\nSegments Processed: {result['segments_processed']}")
 
+    # Show speaker distribution
+    if result.get('speaker_distribution'):
+        print("\nSpeaker Roles Detected:")
+        for role, count in result['speaker_distribution'].items():
+            print(f"  - {role}: {count} segments")
+
     if result.get('lead_id'):
-        print(f"Lead Created: ID {result['lead_id']}")
+        print(f"\nLead Created: ID {result['lead_id']}")
 
     print("\n" + "-" * 70)
     print("EXTRACTION RESULTS BY AGENT")
