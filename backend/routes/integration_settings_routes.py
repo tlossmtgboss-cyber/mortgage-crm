@@ -49,8 +49,15 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
     """Get current user - wrapper that works at request time."""
     if _get_current_user is None:
         raise HTTPException(status_code=500, detail="Auth dependency not configured")
+
+    # Try Authorization header first
     auth_header = request.headers.get("Authorization", "")
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+
+    # Fall back to query param (for browser redirects like OAuth flows)
+    if not token:
+        token = request.query_params.get("token", "")
+
     return await _get_current_user(token=token, request=request, db=db)
 
 
@@ -487,6 +494,18 @@ async def get_all_integrations(
                     """), {"user_id": int(user_id)}).fetchone()
                     if retell_result:
                         connected_providers.add("retell")
+                except Exception:
+                    pass  # Table may not exist yet
+
+                # Check for Salesforce connection in integration_profiles table
+                try:
+                    sf_result = db.execute(text("""
+                        SELECT provider FROM integration_profiles
+                        WHERE user_id = :user_id
+                        AND status IN ('connected', 'active', 'mapping_required')
+                    """), {"user_id": int(user_id)}).fetchall()
+                    for row in sf_result:
+                        connected_providers.add(row[0])
                 except Exception:
                     pass  # Table may not exist yet
 
