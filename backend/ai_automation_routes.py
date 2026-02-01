@@ -59,7 +59,7 @@ async def get_current_user(
         secret = os.getenv("SECRET_KEY")
         if not secret:
             raise HTTPException(status_code=500, detail="Server configuration error: SECRET_KEY not set")
-        payload = jwt.decode(token, secret, algorithms=["HS256"])
+        payload = jwt.decode(token, secret, algorithms=["HS256"], options={"verify_aud": False})
         email = payload.get("sub")
 
         if not email:

@@ -40,7 +40,7 @@ async def verify_admin_access(
             secret_key = os.getenv("SECRET_KEY", "")
 
             try:
-                payload = jwt.decode(token, secret_key, algorithms=["HS256"])
+                payload = jwt.decode(token, secret_key, algorithms=["HS256"], options={"verify_aud": False})
                 email = payload.get("sub")
 
                 if email:
@@ -83,7 +83,7 @@ async def debug_auth(
     secret_key = os.getenv("SECRET_KEY", "")
 
     try:
-        payload = jwt.decode(token, secret_key, algorithms=["HS256"])
+        payload = jwt.decode(token, secret_key, algorithms=["HS256"], options={"verify_aud": False})
         email = payload.get("sub")
 
         db = SessionLocal()

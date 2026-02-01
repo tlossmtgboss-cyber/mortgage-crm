@@ -54,7 +54,7 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
             import jwt as pyjwt
             import os
             secret = os.getenv("SECRET_KEY", "your-secret-key")
-            payload = pyjwt.decode(token, secret, algorithms=["HS256"])
+            payload = pyjwt.decode(token, secret, algorithms=["HS256"], options={"verify_aud": False})
             email = payload.get("sub")
             if email:
                 user = db.execute(

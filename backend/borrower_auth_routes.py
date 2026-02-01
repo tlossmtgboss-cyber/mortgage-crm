@@ -113,7 +113,7 @@ def generate_borrower_token(borrower_id: str, email: str) -> str:
 def verify_borrower_token(token: str) -> Optional[dict]:
     """Verify and decode a borrower JWT token."""
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM], options={"verify_aud": False})
         if payload.get("type") != "borrower":
             return None
         return payload

@@ -45,7 +45,7 @@ def get_organization_id(db: Session, request: Request = None) -> int:
         if auth_header.startswith("Bearer "):
             token = auth_header[7:]
             try:
-                payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+                payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"], options={"verify_aud": False})
                 if "org_id" in payload:
                     return payload["org_id"]
                 if "company_id" in payload:

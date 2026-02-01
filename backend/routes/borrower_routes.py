@@ -58,7 +58,7 @@ def get_borrower_from_token(request: Request, db: Session = Depends(get_db)) -> 
     token = auth_header.replace("Bearer ", "")
 
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"], options={"verify_aud": False})
         if payload.get("type") != "borrower":
             raise HTTPException(status_code=401, detail="Invalid token type")
 

@@ -112,7 +112,7 @@ def get_current_company_id(request: Request) -> int:
     if auth_header.startswith("Bearer "):
         token = auth_header[7:]
         try:
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_aud": False})
             company_id = payload.get("company_id")
             if not company_id:
                 raise HTTPException(status_code=401, detail="Token missing company_id")
@@ -136,7 +136,7 @@ def get_current_user_id(request: Request) -> int:
     if auth_header.startswith("Bearer "):
         token = auth_header[7:]
         try:
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_aud": False})
             # Get user ID from email (sub) by querying database, or from user_id claim
             if "user_id" in payload:
                 return payload["user_id"]

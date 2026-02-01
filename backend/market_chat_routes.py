@@ -96,7 +96,7 @@ async def get_current_user(
     try:
         token = credentials.credentials
         secret = os.getenv("SECRET_KEY", "")
-        payload = jwt.decode(token, secret, algorithms=["HS256"])
+        payload = jwt.decode(token, secret, algorithms=["HS256"], options={"verify_aud": False})
         email = payload.get("sub")
 
         if not email:

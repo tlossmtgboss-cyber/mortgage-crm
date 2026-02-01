@@ -97,7 +97,7 @@ def decode_jwt_token(token: str) -> Optional[dict]:
             logger.error("[WebSocketAuth] SECRET_KEY not configured")
             return None
 
-        payload = jwt.decode(token, secret_key, algorithms=["HS256"])
+        payload = jwt.decode(token, secret_key, algorithms=["HS256"], options={"verify_aud": False})
         return payload
 
     except JWTError as e:

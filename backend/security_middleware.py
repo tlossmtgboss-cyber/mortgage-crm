@@ -574,7 +574,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             import os
 
             secret = os.getenv("SECRET_KEY", "")
-            payload = jwt.decode(token, secret, algorithms=["HS256"])
+            payload = jwt.decode(token, secret, algorithms=["HS256"], options={"verify_aud": False})
 
             # Extract user info from token
             user_id = payload.get("user_id") or payload.get("sub")

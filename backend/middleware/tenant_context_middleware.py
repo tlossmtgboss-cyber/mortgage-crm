@@ -8,6 +8,10 @@ and populates request.state with:
 - request.state.user: The authenticated User object
 - request.state.tenant_context: TenantContext for the user's organization
 
+It also sets the structured logging context variables for correlation:
+- user_id: For user-level log correlation
+- tenant_id: For organization-level log correlation (organization_id)
+
 This enables the tenant isolation system to work without modifying every route.
 """
 
@@ -19,6 +23,15 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
+
+# Import structured logging context setters
+try:
+    from core.logging import set_user_id, set_tenant_id
+    STRUCTURED_LOGGING_AVAILABLE = True
+except ImportError:
+    STRUCTURED_LOGGING_AVAILABLE = False
+    set_user_id = None
+    set_tenant_id = None
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +94,8 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                     payload = jwt.decode(
                         token,
                         self.secret_key,
-                        algorithms=[self.algorithm]
+                        algorithms=[self.algorithm],
+                        options={"verify_aud": False}
                     )
                     user_id = payload.get("sub")
 
@@ -109,6 +123,12 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                                     user_role=user_role,
                                     is_platform_admin=is_platform_admin
                                 )
+
+                                # Set structured logging context for correlation
+                                if STRUCTURED_LOGGING_AVAILABLE:
+                                    set_user_id(user.id)
+                                    if request.state.organization_id:
+                                        set_tenant_id(str(request.state.organization_id))
 
                                 logger.debug(
                                     f"Tenant context set for user {user.id}, "

@@ -54,7 +54,7 @@ def extract_user_id_from_token(token: str, db: Session) -> str:
     from sqlalchemy import text
 
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_aud": False})
         email = payload.get("sub")
         if not email:
             raise HTTPException(status_code=401, detail="Invalid token: no subject")

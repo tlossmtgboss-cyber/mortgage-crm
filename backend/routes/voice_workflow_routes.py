@@ -65,7 +65,7 @@ async def get_current_user_id(
 
     # First try JWT token
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_aud": False})
         email = payload.get("sub")
         if email:
             result = db.execute(text("""
@@ -176,7 +176,7 @@ async def voice_workflow_websocket(
 
         # First try JWT token
         try:
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_aud": False})
             email = payload.get("sub")
             if email:
                 result = db.execute(text("""
@@ -602,7 +602,7 @@ async def debug_test_session(
 
         user_id = None
         try:
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_aud": False})
             email = payload.get("sub")
             if email:
                 result = db.execute(text("SELECT id FROM users WHERE email = :email"), {"email": email}).fetchone()

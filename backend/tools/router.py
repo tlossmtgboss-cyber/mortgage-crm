@@ -45,7 +45,7 @@ async def get_user_from_request(request: Request) -> Optional[Dict[str, Any]]:
         secret = os.getenv("SECRET_KEY")
         if not secret:
             raise HTTPException(status_code=500, detail="Server configuration error: SECRET_KEY not set")
-        payload = jwt.decode(token, secret, algorithms=["HS256"])
+        payload = jwt.decode(token, secret, algorithms=["HS256"], options={"verify_aud": False})
 
         # Extract user info from token
         user_email = payload.get("sub")
