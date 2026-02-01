@@ -2189,19 +2189,19 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
                         # Insert into mum_clients
                         db.execute(text("""
                             INSERT INTO mum_clients (
-                                name, loan_number, original_close_date,
+                                client_name, loan_number, original_close_date,
                                 original_rate, loan_balance,
                                 status, engagement_score, created_at
                             ) VALUES (
-                                :name, :loan_number, :close_date,
+                                :client_name, :loan_number, :close_date,
                                 :rate, :balance,
                                 'active', 50, CURRENT_TIMESTAMP
                             )
                         """), {
-                            'name': client_name,
+                            'client_name': client_name,
                             'loan_number': loan[1],
                             'close_date': close_date,
-                            'rate': loan[6],  # interest_rate
+                            'rate': loan[6],  # rate
                             'balance': loan[5],  # amount
                         })
                         mum_results['imported'] += 1
@@ -2209,6 +2209,10 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
                     except Exception as e:
                         mum_results['errors'].append(f"MUM import - Loan {loan[1]}: {str(e)}")
                         logger.error(f"Error importing loan {loan[1]} to MUM: {e}")
+                        try:
+                            db.rollback()  # Reset transaction so next insert can proceed
+                        except Exception:
+                            pass
 
                 db.commit()
                 logger.info(f"Imported {mum_results['imported']} loans to MUM clients")
@@ -2499,14 +2503,14 @@ async def debug_import_to_mum(db: Session = Depends(get_db)):
                 # Insert into mum_clients (using actual table schema)
                 db.execute(text("""
                     INSERT INTO mum_clients (
-                        name, loan_number, original_close_date,
+                        client_name, loan_number, original_close_date,
                         original_rate, loan_balance, status, created_at
                     ) VALUES (
-                        :name, :loan_number, :original_close_date,
+                        :client_name, :loan_number, :original_close_date,
                         :original_rate, :loan_balance, 'active', CURRENT_TIMESTAMP
                     )
                 """), {
-                    'name': client_name,
+                    'client_name': client_name,
                     'loan_number': loan[1],
                     'original_close_date': loan[7] or loan[8],  # funded_date or closing_date
                     'original_rate': float(loan[6]) if loan[6] else 0,
@@ -2521,6 +2525,10 @@ async def debug_import_to_mum(db: Session = Depends(get_db)):
 
             except Exception as e:
                 results['errors'].append(f"Error importing {loan[1]}: {str(e)}")
+                try:
+                    db.rollback()  # Reset transaction so next insert can proceed
+                except Exception:
+                    pass
 
         db.commit()
         return results
@@ -2586,19 +2594,19 @@ async def import_funded_loans_to_mum(
                 # Insert into mum_clients
                 db.execute(text("""
                     INSERT INTO mum_clients (
-                        name, loan_number, original_close_date,
+                        client_name, loan_number, original_close_date,
                         original_rate, loan_balance,
                         status, engagement_score, created_at
                     ) VALUES (
-                        :name, :loan_number, :close_date,
+                        :client_name, :loan_number, :close_date,
                         :rate, :balance,
                         'active', 50, CURRENT_TIMESTAMP
                     )
                 """), {
-                    'name': client_name,
+                    'client_name': client_name,
                     'loan_number': loan[1],
                     'close_date': close_date,
-                    'rate': loan[6],  # interest_rate
+                    'rate': loan[6],  # rate
                     'balance': loan[5],  # amount
                 })
 
@@ -2612,6 +2620,10 @@ async def import_funded_loans_to_mum(
             except Exception as e:
                 results['errors'].append(f"Loan {loan[1]}: {str(e)}")
                 logger.error(f"Error importing loan {loan[1]} to MUM: {e}")
+                try:
+                    db.rollback()  # Reset transaction so next insert can proceed
+                except Exception:
+                    pass
 
         db.commit()
 
@@ -2799,25 +2811,29 @@ async def sync_salesforce_and_import_mum(
 
                 db.execute(text("""
                     INSERT INTO mum_clients (
-                        name, loan_number, original_close_date,
+                        client_name, loan_number, original_close_date,
                         original_rate, loan_balance,
                         status, engagement_score, created_at
                     ) VALUES (
-                        :name, :loan_number, :close_date,
+                        :client_name, :loan_number, :close_date,
                         :rate, :balance,
                         'active', 50, CURRENT_TIMESTAMP
                     )
                 """), {
-                    'name': client_name,
+                    'client_name': client_name,
                     'loan_number': loan[1],
                     'close_date': close_date,
-                    'rate': loan[4],  # interest_rate
+                    'rate': loan[4],  # rate
                     'balance': loan[3],  # amount
                 })
                 results['mum_import']['imported'] += 1
 
             except Exception as e:
                 results['mum_import']['errors'].append(str(e))
+                try:
+                    db.rollback()  # Reset transaction so next insert can proceed
+                except Exception:
+                    pass
 
         db.commit()
 
