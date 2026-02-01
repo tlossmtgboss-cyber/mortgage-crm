@@ -2261,6 +2261,64 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
         _import_jobs[job_id] = {'status': 'failed', 'error': str(e)}
 
 
+@router.get("/debug/salesforce-query")
+async def debug_salesforce_query(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Debug endpoint to see what Salesforce returns for closed opportunities.
+    """
+    user_id = get_current_user_id(request, db)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    try:
+        from scripts.import_salesforce_closed_loans import SalesforceClosedLoansImporter
+
+        importer = SalesforceClosedLoansImporter(user_id=user_id)
+
+        # Get access token
+        importer.access_token, importer.instance_url = await importer.get_access_token(db)
+
+        # Discover fields
+        available_fields = await importer.discover_opportunity_fields()
+
+        # Build query
+        soql = importer.build_soql_query(available_fields)
+
+        # Execute query
+        opportunities = await importer.query_closed_opportunities(soql)
+
+        # Get unique stages
+        stages = {}
+        for opp in opportunities:
+            stage = opp.get('StageName', 'Unknown')
+            stages[stage] = stages.get(stage, 0) + 1
+
+        return {
+            "status": "success",
+            "instance_url": importer.instance_url,
+            "soql_query": soql,
+            "total_opportunities": len(opportunities),
+            "stages_found": stages,
+            "sample_opportunities": [
+                {
+                    "Id": o.get("Id"),
+                    "Name": o.get("Name"),
+                    "StageName": o.get("StageName"),
+                    "Amount": o.get("Amount"),
+                    "CloseDate": o.get("CloseDate")
+                }
+                for o in opportunities[:10]
+            ]
+        }
+
+    except Exception as e:
+        logger.error(f"Debug query failed: {e}")
+        return {"status": "error", "error": str(e)}
+
+
 @router.post("/import-closed-loans")
 async def import_closed_loans_from_salesforce(
     request: Request,
