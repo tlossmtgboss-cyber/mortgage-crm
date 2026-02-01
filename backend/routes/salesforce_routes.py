@@ -2187,22 +2187,37 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
                         close_date = loan[7] or loan[8]  # funded_date or closing_date
 
                         # Insert into mum_clients
+                        loan_amount = float(loan[5]) if loan[5] else 0
+                        loan_rate = float(loan[6]) if loan[6] else 0
                         db.execute(text("""
                             INSERT INTO mum_clients (
                                 client_name, loan_number, original_close_date,
                                 original_rate, loan_balance,
+                                original_loan_amount, current_loan_amount,
+                                interest_rate, appraisal_value_at_closing,
+                                current_property_value, closing_date, first_payment_date,
                                 status, engagement_score, created_at
                             ) VALUES (
                                 :client_name, :loan_number, :close_date,
                                 :rate, :balance,
+                                :original_loan_amount, :current_loan_amount,
+                                :interest_rate, :appraisal_value,
+                                :property_value, :closing_date, :first_payment_date,
                                 'active', 50, CURRENT_TIMESTAMP
                             )
                         """), {
                             'client_name': client_name,
                             'loan_number': loan[1],
                             'close_date': close_date,
-                            'rate': loan[6],  # rate
-                            'balance': loan[5],  # amount
+                            'rate': loan_rate,
+                            'balance': loan_amount,
+                            'original_loan_amount': loan_amount,
+                            'current_loan_amount': loan_amount,
+                            'interest_rate': loan_rate,
+                            'appraisal_value': loan_amount * 1.25,  # Estimate 80% LTV
+                            'property_value': loan_amount * 1.25,
+                            'closing_date': close_date,
+                            'first_payment_date': close_date,
                         })
                         mum_results['imported'] += 1
 
@@ -2501,20 +2516,38 @@ async def debug_import_to_mum(db: Session = Depends(get_db)):
                     continue
 
                 # Insert into mum_clients (using actual table schema)
+                loan_amount = float(loan[5]) if loan[5] else 0
+                loan_rate = float(loan[6]) if loan[6] else 0
+                close_date = loan[7] or loan[8]  # funded_date or closing_date
                 db.execute(text("""
                     INSERT INTO mum_clients (
                         client_name, loan_number, original_close_date,
-                        original_rate, loan_balance, status, created_at
+                        original_rate, loan_balance,
+                        original_loan_amount, current_loan_amount,
+                        interest_rate, appraisal_value_at_closing,
+                        current_property_value, closing_date, first_payment_date,
+                        status, created_at
                     ) VALUES (
                         :client_name, :loan_number, :original_close_date,
-                        :original_rate, :loan_balance, 'active', CURRENT_TIMESTAMP
+                        :original_rate, :loan_balance,
+                        :original_loan_amount, :current_loan_amount,
+                        :interest_rate, :appraisal_value,
+                        :property_value, :closing_date, :first_payment_date,
+                        'active', CURRENT_TIMESTAMP
                     )
                 """), {
                     'client_name': client_name,
                     'loan_number': loan[1],
-                    'original_close_date': loan[7] or loan[8],  # funded_date or closing_date
-                    'original_rate': float(loan[6]) if loan[6] else 0,
-                    'loan_balance': float(loan[5]) if loan[5] else 0,
+                    'original_close_date': close_date,
+                    'original_rate': loan_rate,
+                    'loan_balance': loan_amount,
+                    'original_loan_amount': loan_amount,
+                    'current_loan_amount': loan_amount,
+                    'interest_rate': loan_rate,
+                    'appraisal_value': loan_amount * 1.25,
+                    'property_value': loan_amount * 1.25,
+                    'closing_date': close_date,
+                    'first_payment_date': close_date,
                 })
 
                 results['imported'] += 1
@@ -2590,31 +2623,46 @@ async def import_funded_loans_to_mum(
 
                 # Get closing date
                 close_date = loan[7] or loan[8]  # funded_date or closing_date
+                loan_amount = float(loan[5]) if loan[5] else 0
+                loan_rate = float(loan[6]) if loan[6] else 0
 
                 # Insert into mum_clients
                 db.execute(text("""
                     INSERT INTO mum_clients (
                         client_name, loan_number, original_close_date,
                         original_rate, loan_balance,
+                        original_loan_amount, current_loan_amount,
+                        interest_rate, appraisal_value_at_closing,
+                        current_property_value, closing_date, first_payment_date,
                         status, engagement_score, created_at
                     ) VALUES (
                         :client_name, :loan_number, :close_date,
                         :rate, :balance,
+                        :original_loan_amount, :current_loan_amount,
+                        :interest_rate, :appraisal_value,
+                        :property_value, :closing_date, :first_payment_date,
                         'active', 50, CURRENT_TIMESTAMP
                     )
                 """), {
                     'client_name': client_name,
                     'loan_number': loan[1],
                     'close_date': close_date,
-                    'rate': loan[6],  # rate
-                    'balance': loan[5],  # amount
+                    'rate': loan_rate,
+                    'balance': loan_amount,
+                    'original_loan_amount': loan_amount,
+                    'current_loan_amount': loan_amount,
+                    'interest_rate': loan_rate,
+                    'appraisal_value': loan_amount * 1.25,
+                    'property_value': loan_amount * 1.25,
+                    'closing_date': close_date,
+                    'first_payment_date': close_date,
                 })
 
                 results['imported'] += 1
                 imported_clients.append({
                     'name': client_name,
                     'loan_number': loan[1],
-                    'amount': float(loan[7]) if loan[7] else None
+                    'amount': loan_amount
                 })
 
             except Exception as e:
@@ -2808,23 +2856,38 @@ async def sync_salesforce_and_import_mum(
                     client_name = f"Client - {loan[1]}"
 
                 close_date = loan[5] or loan[6]  # funded_date or closing_date
+                loan_amount = float(loan[3]) if loan[3] else 0
+                loan_rate = float(loan[4]) if loan[4] else 0
 
                 db.execute(text("""
                     INSERT INTO mum_clients (
                         client_name, loan_number, original_close_date,
                         original_rate, loan_balance,
+                        original_loan_amount, current_loan_amount,
+                        interest_rate, appraisal_value_at_closing,
+                        current_property_value, closing_date, first_payment_date,
                         status, engagement_score, created_at
                     ) VALUES (
                         :client_name, :loan_number, :close_date,
                         :rate, :balance,
+                        :original_loan_amount, :current_loan_amount,
+                        :interest_rate, :appraisal_value,
+                        :property_value, :closing_date, :first_payment_date,
                         'active', 50, CURRENT_TIMESTAMP
                     )
                 """), {
                     'client_name': client_name,
                     'loan_number': loan[1],
                     'close_date': close_date,
-                    'rate': loan[4],  # rate
-                    'balance': loan[3],  # amount
+                    'rate': loan_rate,
+                    'balance': loan_amount,
+                    'original_loan_amount': loan_amount,
+                    'current_loan_amount': loan_amount,
+                    'interest_rate': loan_rate,
+                    'appraisal_value': loan_amount * 1.25,
+                    'property_value': loan_amount * 1.25,
+                    'closing_date': close_date,
+                    'first_payment_date': close_date,
                 })
                 results['mum_import']['imported'] += 1
 
