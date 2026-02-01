@@ -2261,6 +2261,60 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
         _import_jobs[job_id] = {'status': 'failed', 'error': str(e)}
 
 
+@router.get("/debug/salesforce-objects")
+async def debug_salesforce_objects(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Debug endpoint to list available Salesforce objects.
+    """
+    user_id = get_current_user_id(request, db)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    try:
+        from scripts.import_salesforce_closed_loans import SalesforceClosedLoansImporter
+        import httpx
+
+        importer = SalesforceClosedLoansImporter(user_id=user_id)
+        importer.access_token, importer.instance_url = await importer.get_access_token(db)
+
+        # Query for all objects
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{importer.instance_url}/services/data/v60.0/sobjects",
+                headers={
+                    'Authorization': f'Bearer {importer.access_token}',
+                    'Content-Type': 'application/json'
+                },
+                timeout=30.0
+            )
+
+            if response.status_code != 200:
+                return {"error": f"Failed to get objects: {response.text}"}
+
+            data = response.json()
+            sobjects = data.get('sobjects', [])
+
+            # Filter for relevant objects (mortgage/loan related)
+            relevant = [o for o in sobjects if any(term in o['name'].lower() for term in
+                        ['loan', 'mortgage', 'opportunity', 'contact', 'account', 'lead', 'mtg', 'crm'])]
+
+            return {
+                "status": "success",
+                "instance_url": importer.instance_url,
+                "total_objects": len(sobjects),
+                "relevant_objects": [{"name": o['name'], "label": o.get('label', '')} for o in relevant],
+                "all_custom_objects": [{"name": o['name'], "label": o.get('label', '')}
+                                        for o in sobjects if o['name'].endswith('__c')][:50]
+            }
+
+    except Exception as e:
+        logger.error(f"Debug objects failed: {e}")
+        return {"status": "error", "error": str(e)}
+
+
 @router.get("/debug/salesforce-query")
 async def debug_salesforce_query(
     request: Request,
