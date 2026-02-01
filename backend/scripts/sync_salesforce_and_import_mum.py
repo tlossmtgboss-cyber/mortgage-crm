@@ -92,11 +92,11 @@ class SalesforceImporter:
 
         field_list = ", ".join(queryable_fields[:50])
 
-        # Query for funded/closed loans
+        # Query for funded/closed/shipped loans
         soql = f"""
             SELECT {field_list}
             FROM {sf_object}
-            WHERE MtgPlanner_CRM__Status__c IN ('Funded', 'Closed', 'Closed Won')
+            WHERE MtgPlanner_CRM__Status__c IN ('Funded', 'Closed', 'Closed Won', 'Shipped')
                OR MtgPlanner_CRM__Funded_Date__c != null
             ORDER BY LastModifiedDate DESC
             LIMIT {limit}

@@ -199,7 +199,7 @@ class SalesforceClosedLoansImporter:
 
         fields_str = ', '.join(fields_to_query)
 
-        # Query for Closed/Won/Funded opportunities (broader criteria)
+        # Query for Closed/Won/Funded/Shipped opportunities (broader criteria)
         soql = f"""
             SELECT {fields_str}
             FROM Opportunity
@@ -209,7 +209,9 @@ class SalesforceClosedLoansImporter:
                OR StageName LIKE '%Won%'
                OR StageName LIKE '%Complete%'
                OR StageName LIKE '%Settled%'
+               OR StageName LIKE '%Ship%'
                OR StageName = 'Funded'
+               OR StageName = 'Shipped'
                OR IsWon = true
             ORDER BY CloseDate DESC
             LIMIT 2000

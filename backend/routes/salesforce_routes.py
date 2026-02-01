@@ -2167,6 +2167,7 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
                     WHERE (LOWER(CAST(l.stage AS TEXT)) LIKE '%fund%'
                            OR (LOWER(CAST(l.stage AS TEXT)) LIKE '%closed%' AND LOWER(CAST(l.stage AS TEXT)) NOT LIKE '%disclosed%')
                            OR LOWER(CAST(l.stage AS TEXT)) LIKE '%won%'
+                           OR LOWER(CAST(l.stage AS TEXT)) LIKE '%ship%'
                            OR l.funded_date IS NOT NULL)
                     AND NOT EXISTS (
                         SELECT 1 FROM mum_clients m
@@ -2350,6 +2351,7 @@ async def check_imported_loans(
             WHERE (LOWER(CAST(l.stage AS TEXT)) LIKE '%fund%'
                    OR (LOWER(CAST(l.stage AS TEXT)) LIKE '%closed%' AND LOWER(CAST(l.stage AS TEXT)) NOT LIKE '%disclosed%')
                    OR LOWER(CAST(l.stage AS TEXT)) LIKE '%won%'
+                   OR LOWER(CAST(l.stage AS TEXT)) LIKE '%ship%'
                    OR l.funded_date IS NOT NULL)
             AND NOT EXISTS (
                 SELECT 1 FROM mum_clients m
@@ -2421,6 +2423,7 @@ async def get_db_stats(db: Session = Depends(get_db)):
             WHERE (LOWER(CAST(l.stage AS TEXT)) LIKE '%fund%'
                    OR (LOWER(CAST(l.stage AS TEXT)) LIKE '%closed%' AND LOWER(CAST(l.stage AS TEXT)) NOT LIKE '%disclosed%')
                    OR LOWER(CAST(l.stage AS TEXT)) LIKE '%won%'
+                   OR LOWER(CAST(l.stage AS TEXT)) LIKE '%ship%'
                    OR l.funded_date IS NOT NULL)
             AND NOT EXISTS (
                 SELECT 1 FROM mum_clients m
@@ -2435,6 +2438,7 @@ async def get_db_stats(db: Session = Depends(get_db)):
             WHERE (LOWER(CAST(l.stage AS TEXT)) LIKE '%fund%'
                    OR (LOWER(CAST(l.stage AS TEXT)) LIKE '%closed%' AND LOWER(CAST(l.stage AS TEXT)) NOT LIKE '%disclosed%')
                    OR LOWER(CAST(l.stage AS TEXT)) LIKE '%won%'
+                   OR LOWER(CAST(l.stage AS TEXT)) LIKE '%ship%'
                    OR l.funded_date IS NOT NULL)
             AND NOT EXISTS (
                 SELECT 1 FROM mum_clients m
@@ -2498,6 +2502,7 @@ async def debug_import_to_mum(db: Session = Depends(get_db)):
             WHERE (LOWER(CAST(l.stage AS TEXT)) LIKE '%fund%'
                    OR (LOWER(CAST(l.stage AS TEXT)) LIKE '%closed%' AND LOWER(CAST(l.stage AS TEXT)) NOT LIKE '%disclosed%')
                    OR LOWER(CAST(l.stage AS TEXT)) LIKE '%won%'
+                   OR LOWER(CAST(l.stage AS TEXT)) LIKE '%ship%'
                    OR l.funded_date IS NOT NULL)
             AND NOT EXISTS (
                 SELECT 1 FROM mum_clients m
@@ -2604,6 +2609,7 @@ async def import_funded_loans_to_mum(
             WHERE (LOWER(CAST(l.stage AS TEXT)) LIKE '%fund%'
                    OR (LOWER(CAST(l.stage AS TEXT)) LIKE '%closed%' AND LOWER(CAST(l.stage AS TEXT)) NOT LIKE '%disclosed%')
                    OR LOWER(CAST(l.stage AS TEXT)) LIKE '%won%'
+                   OR LOWER(CAST(l.stage AS TEXT)) LIKE '%ship%'
                    OR l.funded_date IS NOT NULL)
             AND NOT EXISTS (
                 SELECT 1 FROM mum_clients m
@@ -2884,6 +2890,7 @@ async def sync_salesforce_and_import_mum(
             WHERE (LOWER(CAST(l.stage AS TEXT)) LIKE '%fund%'
                    OR (LOWER(CAST(l.stage AS TEXT)) LIKE '%closed%' AND LOWER(CAST(l.stage AS TEXT)) NOT LIKE '%disclosed%')
                    OR LOWER(CAST(l.stage AS TEXT)) LIKE '%won%'
+                   OR LOWER(CAST(l.stage AS TEXT)) LIKE '%ship%'
                    OR l.funded_date IS NOT NULL)
             AND NOT EXISTS (
                 SELECT 1 FROM mum_clients m
