@@ -529,7 +529,29 @@ class SalesforceSyncService:
 
         This is the post-sync hook that connects Salesforce updates to SLA task generation.
         Now also creates tasks in the main tasks table with SLA tracking columns.
+        Also tracks date field updates for reconciliation.
         """
+        # Track date updates for reconciliation
+        try:
+            from services.date_reconciliation_service import DateReconciliationService, DateUpdate
+
+            service = DateReconciliationService(self.db, self.user_id or 1)
+
+            # Get loan stage to determine if it's closed
+            loan_stage = new_data.get("stage")
+
+            # Track date field changes
+            sf_id = new_data.get("salesforce_id", "")
+            updates = service.track_date_updates(sf_id, old_data, new_data, loan_id)
+
+            # Process each date update
+            for update in updates:
+                service.process_date_update(update, loan_id, loan_stage)
+
+        except Exception as e:
+            # Don't fail the sync if date tracking fails
+            logger.warning(f"Date reconciliation tracking error for loan {loan_id}: {e}")
+
         try:
             sla_service = get_sla_trigger_service(self.db)
             if not sla_service:
@@ -648,11 +670,15 @@ class SalesforceSyncService:
                 else:
                     result.records_failed += 1
                     result.errors.append(f"Failed to upsert record {sf_record.get('Id', 'unknown')}")
+                    # Create reconciliation task for failed record
+                    self._create_reconciliation_task_for_failed_record(sf_record, loan_data)
 
             except Exception as e:
                 result.records_failed += 1
                 result.errors.append(f"Error processing record: {str(e)}")
                 logger.error(f"Error processing Salesforce record: {e}")
+                # Create reconciliation task for exception
+                self._create_reconciliation_task_for_failed_record(sf_record, {}, str(e))
 
         # Determine overall status
         if result.records_failed == result.records_processed:
@@ -766,6 +792,79 @@ class SalesforceSyncService:
             self.db.commit()
         except SQLAlchemyError as e:
             logger.error(f"Failed to log sync event: {e}")
+
+    def _create_reconciliation_task_for_failed_record(
+        self,
+        sf_record: Dict[str, Any],
+        loan_data: Dict[str, Any],
+        error_message: str = ""
+    ):
+        """
+        Create a reconciliation task when a Salesforce record fails to import.
+
+        This allows the user to manually review and fix import issues.
+        """
+        try:
+            from services.date_reconciliation_service import DateReconciliationService, DateUpdate
+
+            sf_id = sf_record.get("Id", "")
+            borrower_name = (
+                sf_record.get("MtgPlanner_CRM__Borrower_Name__c") or
+                loan_data.get("borrower_name") or
+                sf_record.get("Name", "")
+            )
+            loan_number = (
+                sf_record.get("Name") or
+                loan_data.get("loan_number", "")
+            )
+            borrower_email = (
+                sf_record.get("MtgPlanner_CRM__Borrower_Email__c") or
+                loan_data.get("borrower_email")
+            )
+
+            # Extract key info for the task
+            title = f"Import Failed - {borrower_name or loan_number or sf_id[:8]}"
+
+            description = f"""A Salesforce record could not be imported into the CRM.
+
+**Salesforce Record ID:** {sf_id}
+**Error:** {error_message or 'Upsert failed'}
+
+**Record Information:**
+- Borrower Name: {borrower_name or 'Not available'}
+- Loan Number: {loan_number or 'Not available'}
+- Email: {borrower_email or 'Not available'}
+
+**Action Required:**
+1. Review the error and fix any data issues
+2. Import the record manually or re-run the sync
+3. Ensure all required fields are populated in Salesforce
+
+**Quick Actions:**
+- [Retry Import] - Attempt to import this record again
+- [Create Loan Manually] - Create a loan record and link it
+"""
+
+            self.db.execute(text("""
+                INSERT INTO tasks (
+                    title, description, status, priority, source,
+                    entity_type, owner_id, created_by_id, created_at, updated_at
+                ) VALUES (
+                    :title, :description, 'pending', 'high', 'Salesforce Date Sync',
+                    'reconciliation', :owner_id, :owner_id, NOW(), NOW()
+                )
+            """), {
+                "title": title,
+                "description": description,
+                "owner_id": self.user_id or 1,
+            })
+            self.db.commit()
+
+            logger.info(f"Created reconciliation task for failed Salesforce import: {sf_id}")
+
+        except Exception as e:
+            # Don't fail the sync if task creation fails
+            logger.warning(f"Could not create reconciliation task for failed import: {e}")
 
     # =========================================================================
     # OUTBOUND SYNC METHODS (CRM -> Salesforce)

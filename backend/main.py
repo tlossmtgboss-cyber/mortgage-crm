@@ -17499,6 +17499,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Could not load Data Reconciliation routes: {e}")
 
+# Include Date Reconciliation routes for Salesforce date field tracking
+try:
+    from routes.date_reconciliation_routes import router as date_reconciliation_router
+    app.include_router(date_reconciliation_router, prefix="/api/date-reconciliation", tags=["Date Reconciliation"])
+    logger.info("✅ Date Reconciliation routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load Date Reconciliation routes: {e}")
+
 # Include MUM Client Portal routes for portal management
 try:
     from routes.mum_client_portal_routes import router as mum_client_portal_router
