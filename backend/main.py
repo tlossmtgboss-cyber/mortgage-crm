@@ -12516,320 +12516,8 @@ async def get_ai_preferences(
 
 
 # =============================================================================
-# AI KNOWLEDGE BASE ENDPOINTS
+# AI KNOWLEDGE BASE ENDPOINTS - Moved to routes/ai_knowledge_base_routes.py
 # =============================================================================
-
-class KnowledgeBaseCreate(BaseModel):
-    title: str
-    category: str  # loan_products, compliance, underwriting, sales_scripts, company_policies, workflows, other
-    content: str
-    summary: Optional[str] = None
-    source_type: Optional[str] = "manual"
-    source_url: Optional[str] = None
-    source_filename: Optional[str] = None
-    file_type: Optional[str] = None
-    tags: Optional[List[str]] = None
-    priority: Optional[int] = 5
-
-class KnowledgeBaseUpdate(BaseModel):
-    title: Optional[str] = None
-    category: Optional[str] = None
-    content: Optional[str] = None
-    summary: Optional[str] = None
-    tags: Optional[List[str]] = None
-    priority: Optional[int] = None
-    is_active: Optional[bool] = None
-
-class KnowledgeBaseResponse(BaseModel):
-    id: int
-    title: str
-    category: str
-    content: str
-    summary: Optional[str]
-    source_type: str
-    source_url: Optional[str]
-    source_filename: Optional[str]
-    file_type: Optional[str]
-    tags: Optional[List[str]]
-    is_active: bool
-    priority: int
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True
-
-@app.get("/api/v1/ai/knowledge-base")
-async def list_knowledge_base(
-    category: Optional[str] = None,
-    search: Optional[str] = None,
-    is_active: bool = True,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """List all knowledge base entries with optional filtering"""
-    query = db.query(AIKnowledgeBase).filter(AIKnowledgeBase.is_active == is_active)
-
-    if category:
-        query = query.filter(AIKnowledgeBase.category == category)
-
-    if search:
-        search_term = f"%{search}%"
-        query = query.filter(
-            or_(
-                AIKnowledgeBase.title.ilike(search_term),
-                AIKnowledgeBase.content.ilike(search_term),
-                AIKnowledgeBase.summary.ilike(search_term)
-            )
-        )
-
-    entries = query.order_by(AIKnowledgeBase.priority.desc(), AIKnowledgeBase.created_at.desc()).all()
-
-    return [{
-        "id": e.id,
-        "title": e.title,
-        "category": e.category,
-        "content": e.content[:500] + "..." if len(e.content) > 500 else e.content,  # Truncate for list view
-        "summary": e.summary,
-        "source_type": e.source_type,
-        "source_filename": e.source_filename,
-        "tags": e.tags or [],
-        "is_active": e.is_active,
-        "priority": e.priority,
-        "created_at": e.created_at.isoformat() if e.created_at else None,
-        "updated_at": e.updated_at.isoformat() if e.updated_at else None
-    } for e in entries]
-
-@app.get("/api/v1/ai/knowledge-base/categories")
-async def get_knowledge_categories(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """Get all available knowledge base categories with counts"""
-    categories = [
-        {"id": "loan_products", "name": "Loan Products", "description": "Conventional, FHA, VA, USDA, Jumbo loan guidelines"},
-        {"id": "compliance", "name": "Compliance & Regulations", "description": "TRID, RESPA, HMDA, state regulations"},
-        {"id": "underwriting", "name": "Underwriting Guidelines", "description": "DTI, LTV, credit requirements, income docs"},
-        {"id": "sales_scripts", "name": "Sales & Scripts", "description": "Objection handling, follow-up scripts, talking points"},
-        {"id": "company_policies", "name": "Company Policies", "description": "Internal procedures, pricing, guidelines"},
-        {"id": "workflows", "name": "Workflows & Processes", "description": "Stage definitions, checklists, procedures"},
-        {"id": "market_intel", "name": "Market Intelligence", "description": "Rate trends, market conditions, economic indicators"},
-        {"id": "other", "name": "Other", "description": "Miscellaneous knowledge and resources"}
-    ]
-
-    # Get counts for each category
-    for cat in categories:
-        count = db.query(AIKnowledgeBase).filter(
-            AIKnowledgeBase.category == cat["id"],
-            AIKnowledgeBase.is_active == True
-        ).count()
-        cat["count"] = count
-
-    return categories
-
-@app.get("/api/v1/ai/knowledge-base/{entry_id}")
-async def get_knowledge_entry(
-    entry_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """Get a single knowledge base entry with full content"""
-    entry = db.query(AIKnowledgeBase).filter(AIKnowledgeBase.id == entry_id).first()
-    if not entry:
-        raise HTTPException(status_code=404, detail="Knowledge entry not found")
-
-    return {
-        "id": entry.id,
-        "title": entry.title,
-        "category": entry.category,
-        "content": entry.content,
-        "summary": entry.summary,
-        "source_type": entry.source_type,
-        "source_url": entry.source_url,
-        "source_filename": entry.source_filename,
-        "file_type": entry.file_type,
-        "tags": entry.tags or [],
-        "is_active": entry.is_active,
-        "priority": entry.priority,
-        "last_reviewed": entry.last_reviewed.isoformat() if entry.last_reviewed else None,
-        "created_at": entry.created_at.isoformat() if entry.created_at else None,
-        "updated_at": entry.updated_at.isoformat() if entry.updated_at else None
-    }
-
-@app.post("/api/v1/ai/knowledge-base")
-async def create_knowledge_entry(
-    entry: KnowledgeBaseCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """Create a new knowledge base entry"""
-    # Generate summary if not provided using AI
-    summary = entry.summary
-    if not summary and len(entry.content) > 200:
-        try:
-            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "Summarize this content in 1-2 sentences for quick reference. Be concise."},
-                    {"role": "user", "content": entry.content[:3000]}
-                ],
-                max_tokens=100
-            )
-            summary = response.choices[0].message.content
-        except Exception as e:
-            logger.warning(f"Could not generate summary: {e}")
-            summary = entry.content[:200] + "..."
-
-    new_entry = AIKnowledgeBase(
-        title=entry.title,
-        category=entry.category,
-        content=entry.content,
-        summary=summary,
-        source_type=entry.source_type,
-        source_url=entry.source_url,
-        source_filename=entry.source_filename,
-        file_type=entry.file_type,
-        tags=entry.tags,
-        priority=entry.priority or 5,
-        created_by=current_user.id,
-        organization_id=1
-    )
-
-    db.add(new_entry)
-    db.commit()
-    db.refresh(new_entry)
-
-    return {"id": new_entry.id, "message": "Knowledge entry created successfully"}
-
-@app.put("/api/v1/ai/knowledge-base/{entry_id}")
-async def update_knowledge_entry(
-    entry_id: int,
-    update: KnowledgeBaseUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """Update an existing knowledge base entry"""
-    entry = db.query(AIKnowledgeBase).filter(AIKnowledgeBase.id == entry_id).first()
-    if not entry:
-        raise HTTPException(status_code=404, detail="Knowledge entry not found")
-
-    update_data = update.dict(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(entry, key, value)
-
-    db.commit()
-    db.refresh(entry)
-
-    return {"id": entry.id, "message": "Knowledge entry updated successfully"}
-
-@app.delete("/api/v1/ai/knowledge-base/{entry_id}")
-async def delete_knowledge_entry(
-    entry_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """Soft delete a knowledge base entry"""
-    entry = db.query(AIKnowledgeBase).filter(AIKnowledgeBase.id == entry_id).first()
-    if not entry:
-        raise HTTPException(status_code=404, detail="Knowledge entry not found")
-
-    entry.is_active = False
-    db.commit()
-
-    return {"message": "Knowledge entry deleted successfully"}
-
-@app.post("/api/v1/ai/knowledge-base/upload")
-async def upload_knowledge_document(
-    file: UploadFile = File(...),
-    title: str = Form(...),
-    category: str = Form(...),
-    priority: int = Form(5),
-    tags: str = Form(""),  # Comma-separated tags
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """Upload a document to the knowledge base (PDF, DOCX, TXT)"""
-    import io
-
-    # Validate file type
-    allowed_types = [".pdf", ".docx", ".doc", ".txt", ".md"]
-    file_ext = os.path.splitext(file.filename)[1].lower()
-    if file_ext not in allowed_types:
-        raise HTTPException(status_code=400, detail=f"File type not allowed. Supported: {', '.join(allowed_types)}")
-
-    # Read file content
-    content = await file.read()
-    text_content = ""
-
-    try:
-        if file_ext == ".txt" or file_ext == ".md":
-            text_content = content.decode("utf-8")
-        elif file_ext == ".pdf":
-            # Use PyPDF2 or similar to extract text
-            try:
-                import PyPDF2
-                pdf_reader = PyPDF2.PdfReader(io.BytesIO(content))
-                text_content = "\n".join([page.extract_text() for page in pdf_reader.pages])
-            except ImportError:
-                # Fallback if PyPDF2 not available
-                text_content = f"[PDF content from {file.filename} - install PyPDF2 to extract text]"
-        elif file_ext in [".docx", ".doc"]:
-            try:
-                import docx
-                doc = docx.Document(io.BytesIO(content))
-                text_content = "\n".join([para.text for para in doc.paragraphs])
-            except ImportError:
-                text_content = f"[DOCX content from {file.filename} - install python-docx to extract text]"
-    except Exception as e:
-        logger.error(f"Error extracting document content: {e}")
-        text_content = f"[Could not extract content from {file.filename}]"
-
-    # Generate summary using AI
-    summary = None
-    if text_content and len(text_content) > 200:
-        try:
-            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "Summarize this document in 2-3 sentences for quick reference. Be concise."},
-                    {"role": "user", "content": text_content[:4000]}
-                ],
-                max_tokens=150
-            )
-            summary = response.choices[0].message.content
-        except Exception as e:
-            logger.warning(f"Could not generate summary: {e}")
-
-    # Parse tags
-    tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
-
-    # Create knowledge entry
-    new_entry = AIKnowledgeBase(
-        title=title,
-        category=category,
-        content=text_content,
-        summary=summary,
-        source_type="document_upload",
-        source_filename=file.filename,
-        file_type=file_ext.replace(".", ""),
-        tags=tag_list,
-        priority=priority,
-        created_by=current_user.id,
-        organization_id=1
-    )
-
-    db.add(new_entry)
-    db.commit()
-    db.refresh(new_entry)
-
-    return {
-        "id": new_entry.id,
-        "message": f"Document '{file.filename}' uploaded and processed successfully",
-        "summary": summary,
-        "content_length": len(text_content)
-    }
 
 
 @app.post("/api/v1/ai/orchestrator-chat-stream")
@@ -18285,410 +17973,8 @@ async def resume_workflow(
 
 
 # ============================================================================
-# AI UNDERWRITING ENDPOINTS
+# AI UNDERWRITING ENDPOINTS - Moved to routes/ai_underwriting_analysis_routes.py
 # ============================================================================
-
-@app.post("/api/v1/ai/underwriting/analyze")
-async def ai_underwriting_analyze(
-    request: Request,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """
-    AI-powered loan underwriting analysis
-    Analyzes loan application and provides recommendations
-    """
-    try:
-        from openai import OpenAI
-
-        data = await request.json()
-        loan_id = data.get("loan_id")
-
-        # Get loan data
-        loan_data = None
-        if loan_id:
-            loan = db.query(Loan).filter(Loan.id == loan_id).first()
-            if loan:
-                loan_data = {
-                    "loan_amount": float(loan.loan_amount) if loan.loan_amount else 0,
-                    "property_value": float(loan.property_value) if loan.property_value else 0,
-                    "loan_type": loan.loan_type,
-                    "interest_rate": float(loan.interest_rate) if loan.interest_rate else 0,
-                    "term_months": loan.term_months,
-                    "borrower_name": loan.borrower_name,
-                    "credit_score": loan.credit_score,
-                    "dti_ratio": float(loan.dti_ratio) if loan.dti_ratio else 0,
-                    "ltv_ratio": float(loan.ltv_ratio) if loan.ltv_ratio else 0,
-                    "employment_status": loan.employment_status,
-                    "income": float(loan.income) if loan.income else 0,
-                    "assets": float(loan.assets) if loan.assets else 0
-                }
-
-        # Use provided data or loan data
-        analysis_data = data.get("loan_data", loan_data) or {
-            "loan_amount": data.get("loan_amount", 0),
-            "property_value": data.get("property_value", 0),
-            "loan_type": data.get("loan_type", "Conventional"),
-            "credit_score": data.get("credit_score", 0),
-            "dti_ratio": data.get("dti_ratio", 0),
-            "ltv_ratio": data.get("ltv_ratio", 0),
-            "income": data.get("income", 0),
-            "employment_status": data.get("employment_status", "Unknown")
-        }
-
-        # Calculate LTV if not provided
-        if not analysis_data.get("ltv_ratio") and analysis_data.get("loan_amount") and analysis_data.get("property_value"):
-            analysis_data["ltv_ratio"] = (analysis_data["loan_amount"] / analysis_data["property_value"]) * 100
-
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-        # AI Analysis
-        analysis_prompt = f"""You are an expert mortgage underwriter. Analyze this loan application and provide a detailed underwriting assessment.
-
-Loan Details:
-- Loan Amount: ${analysis_data.get('loan_amount', 0):,.2f}
-- Property Value: ${analysis_data.get('property_value', 0):,.2f}
-- Loan Type: {analysis_data.get('loan_type', 'Unknown')}
-- Credit Score: {analysis_data.get('credit_score', 'Not provided')}
-- DTI Ratio: {analysis_data.get('dti_ratio', 'Not provided')}%
-- LTV Ratio: {analysis_data.get('ltv_ratio', 'Not provided')}%
-- Monthly Income: ${analysis_data.get('income', 0):,.2f}
-- Employment: {analysis_data.get('employment_status', 'Unknown')}
-
-Provide your analysis in JSON format:
-{{
-    "recommendation": "<APPROVE|APPROVE_WITH_CONDITIONS|REFER|DECLINE>",
-    "confidence_score": <0-100>,
-    "risk_level": "<LOW|MEDIUM|HIGH|VERY_HIGH>",
-    "risk_factors": ["list of identified risk factors"],
-    "strengths": ["list of positive factors"],
-    "conditions": ["list of conditions if approve with conditions"],
-    "required_documents": ["list of additional documents needed"],
-    "pricing_adjustment": <basis points adjustment suggestion>,
-    "summary": "2-3 sentence summary of the analysis",
-    "detailed_analysis": {{
-        "credit": {{"score": <1-10>, "notes": "..."}},
-        "capacity": {{"score": <1-10>, "notes": "..."}},
-        "collateral": {{"score": <1-10>, "notes": "..."}},
-        "capital": {{"score": <1-10>, "notes": "..."}}
-    }},
-    "compliance_flags": ["any compliance concerns"],
-    "next_steps": ["recommended next steps"]
-}}"""
-
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "You are an expert mortgage underwriter with deep knowledge of Fannie Mae, Freddie Mac, FHA, and VA guidelines."},
-                {"role": "user", "content": analysis_prompt}
-            ],
-            temperature=0.3,
-            response_format={"type": "json_object"}
-        )
-
-        analysis = json.loads(response.choices[0].message.content)
-
-        # Log to Mission Control
-        await log_ai_action_to_mission_control(
-            db=db,
-            agent_name="AI Underwriter",
-            action_type="underwriting_analysis",
-            loan_id=loan_id,
-            user_id=current_user.id,
-            context={"loan_amount": analysis_data.get("loan_amount"), "recommendation": analysis.get("recommendation")},
-            reasoning=analysis.get("summary"),
-            autonomy_level="assisted",
-            status="completed"
-        )
-
-        return {
-            "success": True,
-            "loan_id": loan_id,
-            "input_data": analysis_data,
-            "analysis": analysis,
-            "timestamp": datetime.now().isoformat()
-        }
-
-    except Exception as e:
-        logger.error(f"AI Underwriting error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/v1/ai/underwriting/guidelines")
-async def get_underwriting_guidelines(
-    loan_type: str = "Conventional",
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """
-    Get underwriting guidelines for a specific loan type
-    """
-    guidelines = {
-        "Conventional": {
-            "loan_type": "Conventional",
-            "min_credit_score": 620,
-            "max_dti": 45,
-            "max_ltv": 97,
-            "min_down_payment": 3,
-            "pmi_required_above_ltv": 80,
-            "reserves_required": "2-6 months",
-            "income_documentation": ["W-2s", "Pay stubs", "Tax returns"],
-            "property_types": ["SFR", "Condo", "2-4 Unit", "PUD"],
-            "notes": "Fannie Mae/Freddie Mac guidelines apply"
-        },
-        "FHA": {
-            "loan_type": "FHA",
-            "min_credit_score": 580,
-            "max_dti": 43,
-            "max_ltv": 96.5,
-            "min_down_payment": 3.5,
-            "mip_required": True,
-            "reserves_required": "1-2 months",
-            "income_documentation": ["W-2s", "Pay stubs", "Tax returns"],
-            "property_types": ["SFR", "Condo", "2-4 Unit"],
-            "notes": "FHA mortgage insurance required for life of loan if LTV > 90%"
-        },
-        "VA": {
-            "loan_type": "VA",
-            "min_credit_score": 620,
-            "max_dti": 41,
-            "max_ltv": 100,
-            "min_down_payment": 0,
-            "funding_fee_required": True,
-            "reserves_required": "None typically",
-            "income_documentation": ["W-2s", "Pay stubs", "DD-214", "COE"],
-            "property_types": ["SFR", "Condo", "2-4 Unit"],
-            "notes": "Must be eligible veteran or active duty service member"
-        },
-        "USDA": {
-            "loan_type": "USDA",
-            "min_credit_score": 640,
-            "max_dti": 41,
-            "max_ltv": 100,
-            "min_down_payment": 0,
-            "guarantee_fee_required": True,
-            "reserves_required": "None typically",
-            "income_documentation": ["W-2s", "Pay stubs", "Tax returns"],
-            "property_types": ["SFR"],
-            "notes": "Property must be in eligible rural area, income limits apply"
-        },
-        "Jumbo": {
-            "loan_type": "Jumbo",
-            "min_credit_score": 700,
-            "max_dti": 43,
-            "max_ltv": 80,
-            "min_down_payment": 20,
-            "reserves_required": "6-12 months",
-            "income_documentation": ["W-2s", "Pay stubs", "Tax returns", "Asset statements"],
-            "property_types": ["SFR", "Condo", "2-4 Unit"],
-            "notes": "Loan amount exceeds conforming limits, stricter requirements"
-        }
-    }
-
-    guideline = guidelines.get(loan_type, guidelines["Conventional"])
-
-    return {
-        "loan_type": loan_type,
-        "guidelines": guideline,
-        "conforming_limit_2025": 806500,
-        "high_cost_limit_2025": 1209750
-    }
-
-
-@app.post("/api/v1/ai/underwriting/risk-score")
-async def calculate_risk_score(
-    request: Request,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """
-    Calculate automated risk score for a loan
-    """
-    try:
-        data = await request.json()
-
-        credit_score = data.get("credit_score", 0)
-        dti_ratio = data.get("dti_ratio", 0)
-        ltv_ratio = data.get("ltv_ratio", 0)
-        employment_months = data.get("employment_months", 0)
-        reserves_months = data.get("reserves_months", 0)
-
-        # Credit Score Component (0-30 points)
-        if credit_score >= 760:
-            credit_points = 30
-        elif credit_score >= 720:
-            credit_points = 25
-        elif credit_score >= 680:
-            credit_points = 20
-        elif credit_score >= 640:
-            credit_points = 15
-        elif credit_score >= 620:
-            credit_points = 10
-        else:
-            credit_points = 5
-
-        # DTI Component (0-25 points)
-        if dti_ratio <= 28:
-            dti_points = 25
-        elif dti_ratio <= 36:
-            dti_points = 20
-        elif dti_ratio <= 43:
-            dti_points = 15
-        elif dti_ratio <= 50:
-            dti_points = 10
-        else:
-            dti_points = 5
-
-        # LTV Component (0-25 points)
-        if ltv_ratio <= 60:
-            ltv_points = 25
-        elif ltv_ratio <= 75:
-            ltv_points = 20
-        elif ltv_ratio <= 80:
-            ltv_points = 15
-        elif ltv_ratio <= 90:
-            ltv_points = 10
-        else:
-            ltv_points = 5
-
-        # Employment Stability (0-10 points)
-        if employment_months >= 24:
-            employment_points = 10
-        elif employment_months >= 12:
-            employment_points = 7
-        elif employment_months >= 6:
-            employment_points = 4
-        else:
-            employment_points = 2
-
-        # Reserves (0-10 points)
-        if reserves_months >= 6:
-            reserves_points = 10
-        elif reserves_months >= 3:
-            reserves_points = 7
-        elif reserves_months >= 2:
-            reserves_points = 4
-        else:
-            reserves_points = 2
-
-        total_score = credit_points + dti_points + ltv_points + employment_points + reserves_points
-
-        # Determine risk level
-        if total_score >= 80:
-            risk_level = "LOW"
-            recommendation = "APPROVE"
-        elif total_score >= 60:
-            risk_level = "MEDIUM"
-            recommendation = "APPROVE_WITH_CONDITIONS"
-        elif total_score >= 40:
-            risk_level = "HIGH"
-            recommendation = "REFER"
-        else:
-            risk_level = "VERY_HIGH"
-            recommendation = "DECLINE"
-
-        return {
-            "total_score": total_score,
-            "max_score": 100,
-            "risk_level": risk_level,
-            "recommendation": recommendation,
-            "components": {
-                "credit": {"score": credit_points, "max": 30},
-                "dti": {"score": dti_points, "max": 25},
-                "ltv": {"score": ltv_points, "max": 25},
-                "employment": {"score": employment_points, "max": 10},
-                "reserves": {"score": reserves_points, "max": 10}
-            },
-            "input_data": {
-                "credit_score": credit_score,
-                "dti_ratio": dti_ratio,
-                "ltv_ratio": ltv_ratio,
-                "employment_months": employment_months,
-                "reserves_months": reserves_months
-            }
-        }
-
-    except Exception as e:
-        logger.error(f"Risk score calculation error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/v1/ai/underwriting/checklist/{loan_type}")
-async def get_underwriting_checklist(
-    loan_type: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """
-    Get underwriting checklist for a loan type
-    """
-    base_checklist = [
-        {"category": "Identity", "items": [
-            "Government-issued ID",
-            "Social Security card or verification"
-        ]},
-        {"category": "Income", "items": [
-            "Most recent 30 days pay stubs",
-            "W-2s for past 2 years",
-            "Federal tax returns for past 2 years",
-            "Verification of Employment (VOE)"
-        ]},
-        {"category": "Assets", "items": [
-            "Bank statements (2 months)",
-            "Investment account statements",
-            "Gift letter (if applicable)",
-            "Source of down payment documentation"
-        ]},
-        {"category": "Credit", "items": [
-            "Credit report review",
-            "Letter of explanation for derogatory items",
-            "Bankruptcy discharge papers (if applicable)"
-        ]},
-        {"category": "Property", "items": [
-            "Purchase contract",
-            "Appraisal",
-            "Title commitment",
-            "Homeowners insurance quote",
-            "HOA documents (if applicable)"
-        ]}
-    ]
-
-    # Add loan-type specific items
-    if loan_type == "FHA":
-        base_checklist.append({
-            "category": "FHA Specific",
-            "items": [
-                "FHA case number assignment",
-                "CAIVRS check",
-                "FHA appraisal requirements met",
-                "Mortgage insurance premium calculation"
-            ]
-        })
-    elif loan_type == "VA":
-        base_checklist.append({
-            "category": "VA Specific",
-            "items": [
-                "Certificate of Eligibility (COE)",
-                "DD-214 (if veteran)",
-                "VA appraisal (Notice of Value)",
-                "VA funding fee calculation"
-            ]
-        })
-    elif loan_type == "USDA":
-        base_checklist.append({
-            "category": "USDA Specific",
-            "items": [
-                "Property eligibility verification",
-                "Income eligibility verification",
-                "USDA guarantee fee calculation"
-            ]
-        })
-
-    return {
-        "loan_type": loan_type,
-        "checklist": base_checklist,
-        "total_items": sum(len(cat["items"]) for cat in base_checklist)
-    }
 
 
 @app.post("/api/v1/ai/autonomous-task")
@@ -19295,6 +18581,22 @@ try:
     logger.info("✅ AI Metrics Dashboard routes loaded")
 except Exception as e:
     logger.warning(f"⚠️ Could not load AI Metrics Dashboard routes: {e}")
+
+# Include AI Knowledge Base routes for document management
+try:
+    from routes.ai_knowledge_base_routes import router as ai_knowledge_base_router
+    app.include_router(ai_knowledge_base_router, tags=["AI Knowledge Base"])
+    logger.info("✅ AI Knowledge Base routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load AI Knowledge Base routes: {e}")
+
+# Include AI Underwriting Analysis routes for loan analysis
+try:
+    from routes.ai_underwriting_analysis_routes import router as ai_underwriting_analysis_router
+    app.include_router(ai_underwriting_analysis_router, tags=["AI Underwriting Analysis"])
+    logger.info("✅ AI Underwriting Analysis routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load AI Underwriting Analysis routes: {e}")
 
 # Include Subscription routes for Perennia AI
 from subscription_routes import router as subscription_router
@@ -65543,6 +64845,77 @@ async def fix_tloss_account_migration(
     except Exception as e:
         db.rollback()
         return {"status": "error", "error": str(e)}
+
+
+@app.get("/api/v1/public/migrations/test-login")
+async def test_login_migration(
+    migration_key: str = "",
+    email: str = "tloss@cmgfi.com",
+    password: str = "Woodwindow00!",
+    db: Session = Depends(get_db)
+):
+    """Debug login by comparing ORM vs raw SQL user retrieval."""
+    if migration_key != "test-login":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    result = {"steps": [], "comparisons": {}}
+
+    try:
+        # Method 1: ORM query (same as login endpoint)
+        orm_user = db.query(User).filter(User.email == email).first()
+        if orm_user:
+            result["orm"] = {
+                "found": True,
+                "id": orm_user.id,
+                "email": orm_user.email,
+                "has_password": bool(orm_user.hashed_password),
+                "password_length": len(orm_user.hashed_password) if orm_user.hashed_password else 0,
+                "password_prefix": orm_user.hashed_password[:20] if orm_user.hashed_password else None,
+                "verify_result": pwd_context.verify(password, orm_user.hashed_password) if orm_user.hashed_password else False,
+            }
+            result["steps"].append("ORM query found user")
+        else:
+            result["orm"] = {"found": False}
+            result["steps"].append("ORM query: user NOT found")
+
+        # Method 2: Raw SQL query (same as fix endpoint)
+        raw_user = db.execute(text("""
+            SELECT id, email, hashed_password FROM users WHERE email = :email
+        """), {"email": email}).fetchone()
+
+        if raw_user:
+            result["raw_sql"] = {
+                "found": True,
+                "id": raw_user[0],
+                "email": raw_user[1],
+                "has_password": bool(raw_user[2]),
+                "password_length": len(raw_user[2]) if raw_user[2] else 0,
+                "password_prefix": raw_user[2][:20] if raw_user[2] else None,
+                "verify_result": pwd_context.verify(password, raw_user[2]) if raw_user[2] else False,
+            }
+            result["steps"].append("Raw SQL found user")
+        else:
+            result["raw_sql"] = {"found": False}
+            result["steps"].append("Raw SQL: user NOT found")
+
+        # Compare the two
+        if result.get("orm", {}).get("found") and result.get("raw_sql", {}).get("found"):
+            result["comparisons"] = {
+                "ids_match": result["orm"]["id"] == result["raw_sql"]["id"],
+                "passwords_match": result["orm"]["password_prefix"] == result["raw_sql"]["password_prefix"],
+                "orm_verify": result["orm"]["verify_result"],
+                "raw_verify": result["raw_sql"]["verify_result"],
+            }
+
+        # Also check what verify_password function returns
+        if orm_user and orm_user.hashed_password:
+            result["verify_password_func"] = verify_password(password, orm_user.hashed_password)
+
+        result["status"] = "success"
+        return result
+    except Exception as e:
+        import traceback
+        return {"status": "error", "error": str(e), "traceback": traceback.format_exc()}
 
 
 @app.get("/api/v1/public/migrations/refresh-salesforce-token")
