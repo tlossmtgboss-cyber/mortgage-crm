@@ -22,16 +22,35 @@ class IdentityExtractionAgent(BaseExtractionAgent):
     """Agent for extracting identity information."""
 
     AGENT_NAME = "identity"
-    AGENT_VERSION = "1.0"
+    AGENT_VERSION = "2.0"  # LLM-first extraction
+    EXTRACTION_SCHEMA_KEY = "identity"
 
     async def extract(
         self,
         segments: List[TranscriptSegment],
         existing_data: Dict[str, Any] = None,
     ) -> ExtractionResult:
-        """Extract identity fields from transcript."""
+        """
+        Extract identity fields from transcript.
+
+        Uses LLM extraction as primary method with regex fallback.
+        """
+        # Try LLM extraction first
+        llm_result = await self.extract_with_llm(segments, existing_data)
+
+        # Always run regex as fallback/validation
+        regex_result = self.extract_with_regex(segments, existing_data)
+
+        # Merge results, preferring LLM when available
+        return self.merge_results(llm_result, regex_result)
+
+    def extract_with_regex(
+        self,
+        segments: List[TranscriptSegment],
+        existing_data: Dict[str, Any] = None,
+    ) -> ExtractionResult:
+        """Fallback regex-based extraction for identity fields."""
         result = ExtractionResult(agent_name=self.AGENT_NAME)
-        existing = existing_data or {}
 
         borrower_text = self.get_borrower_text(segments)
         full_text = self.get_full_text(segments)
