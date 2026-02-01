@@ -712,3 +712,671 @@ class TestInputValidation:
         assert result["success"] is False
         assert result["stage"] == "validation"
         assert "255" in result["error"]
+
+
+# =============================================================================
+# Integration Tests - Full Processor Flow
+# =============================================================================
+
+# Mark these tests as slow since they make real LLM API calls
+# Run with: pytest -m slow to include these tests
+@pytest.mark.slow
+class TestProcessorIntegration:
+    """Integration tests for the full processor flow.
+
+    These tests make real LLM API calls and are marked as slow.
+    Skip with: pytest -m "not slow"
+    """
+
+    @pytest.fixture
+    def sample_transcript(self):
+        """Sample mortgage call transcript for testing."""
+        return """Loan Officer: Hi, this is Sarah from ABC Mortgage. How can I help you today?
+Borrower: Hi Sarah, my name is John Smith. I'm looking to buy a house.
+Loan Officer: Great! Can you tell me about your employment situation?
+Borrower: I work at Acme Corporation as a software engineer. I've been there for 3 years.
+Loan Officer: And what is your annual income?
+Borrower: I make about $95,000 a year, plus I usually get a bonus around $10,000.
+Loan Officer: Perfect. Do you have a property in mind?
+Borrower: Yes, it's at 123 Main Street in Austin, Texas. The asking price is $450,000.
+Loan Officer: What about your down payment?
+Borrower: I have about $90,000 saved for the down payment.
+Loan Officer: Are you a US citizen?
+Borrower: Yes, I am.
+Loan Officer: And your marital status?
+Borrower: I'm married.
+Loan Officer: Have you ever filed for bankruptcy?
+Borrower: No, never.
+Loan Officer: Great. We'll get started on your pre-approval."""
+
+    @pytest.mark.asyncio
+    async def test_full_processor_flow_regex_only(self, sample_transcript):
+        """Test full processor flow using regex extraction (no LLM)."""
+        from services.call_intelligence.processor import CallIntelligenceProcessor
+        from services.call_intelligence.data_contracts import CallIntelligenceRequest
+
+        processor = CallIntelligenceProcessor()  # No LLM client
+
+        request = CallIntelligenceRequest(
+            call_id="test-integration-001",
+            organization_id=1,
+            transcript=sample_transcript,
+        )
+
+        response = await processor.process_transcript(request)
+
+        # Should succeed
+        assert response.success is True
+        assert response.call_id == "test-integration-001"
+
+        # Should have extracted data from multiple agents
+        assert response.total_extractions > 0
+
+        # Check identity extractions
+        assert "first_name" in response.identity_extractions
+        assert response.identity_extractions.get("first_name") == "John"
+
+        # Check employment extractions
+        assert len(response.employment_extractions) > 0
+
+        # Check financial extractions (income)
+        assert len(response.income_extractions) > 0
+
+        # Check property extractions
+        assert len(response.address_extractions) > 0
+
+        # Check compliance extractions
+        assert len(response.declarations_extractions) > 0
+
+    @pytest.mark.asyncio
+    async def test_processor_with_specific_agents(self, sample_transcript):
+        """Test running processor with only specific agents."""
+        from services.call_intelligence.processor import CallIntelligenceProcessor
+        from services.call_intelligence.data_contracts import CallIntelligenceRequest
+
+        processor = CallIntelligenceProcessor()
+
+        request = CallIntelligenceRequest(
+            call_id="test-specific-agents",
+            organization_id=1,
+            transcript=sample_transcript,
+            agents_to_run=["identity", "financial"],  # Only run 2 agents
+        )
+
+        response = await processor.process_transcript(request)
+
+        assert response.success is True
+        # Should have results from identity and financial agents
+        agent_names = [r.agent_name for r in response.agent_results]
+        assert "identity" in agent_names
+        assert "financial" in agent_names
+        # Should NOT have results from other agents
+        assert "property" not in agent_names
+        assert "compliance" not in agent_names
+
+    @pytest.mark.asyncio
+    async def test_processor_empty_transcript(self):
+        """Test processor handles empty transcript gracefully."""
+        from services.call_intelligence.processor import CallIntelligenceProcessor
+        from services.call_intelligence.data_contracts import CallIntelligenceRequest
+
+        processor = CallIntelligenceProcessor()
+
+        request = CallIntelligenceRequest(
+            call_id="test-empty",
+            organization_id=1,
+            transcript="",
+        )
+
+        response = await processor.process_transcript(request)
+
+        assert response.success is False
+        assert "No transcript content" in response.errors[0]
+
+    @pytest.mark.asyncio
+    async def test_processor_with_existing_data(self, sample_transcript):
+        """Test processor with pre-existing borrower data."""
+        from services.call_intelligence.processor import CallIntelligenceProcessor
+        from services.call_intelligence.data_contracts import CallIntelligenceRequest
+
+        processor = CallIntelligenceProcessor()
+
+        existing_data = {
+            "first_name": "John",
+            "last_name": "Smith",
+            "email": "john.smith@example.com",
+        }
+
+        request = CallIntelligenceRequest(
+            call_id="test-existing-data",
+            organization_id=1,
+            transcript=sample_transcript,
+            existing_borrower_data=existing_data,
+        )
+
+        response = await processor.process_transcript(request)
+
+        assert response.success is True
+        # Should still extract new data even with existing data
+        assert response.total_extractions > 0
+
+
+# =============================================================================
+# Integration Tests - Webhook Handlers
+# =============================================================================
+
+class TestWebhookHandlers:
+    """Integration tests for Retell and Vapi webhook handlers."""
+
+    @pytest.mark.asyncio
+    async def test_retell_handler_valid_data(self):
+        """Test Retell webhook handler with valid data."""
+        from services.call_intelligence.integration import handle_retell_call_ended
+        from unittest.mock import MagicMock, AsyncMock, patch
+
+        mock_db = MagicMock()
+
+        call_data = {
+            "transcript": "Loan Officer: Hello!\nBorrower: Hi, my name is Jane Doe.",
+            "metadata": {
+                "loan_id": 123,
+                "organization_id": 1,
+            },
+            "duration_ms": 60000,
+            "agent_id": "agent-001",
+        }
+
+        # Mock the processor to avoid actual processing
+        with patch('services.call_intelligence.integration.CallIntelligenceIntegration') as MockIntegration:
+            mock_instance = MagicMock()
+            mock_instance.process_completed_call = AsyncMock(return_value={
+                "success": True,
+                "extractions_count": 5,
+            })
+            MockIntegration.return_value = mock_instance
+
+            result = await handle_retell_call_ended(
+                db=mock_db,
+                call_id="retell-call-001",
+                call_data=call_data,
+            )
+
+            assert result["success"] is True
+            mock_instance.process_completed_call.assert_called_once()
+
+            # Check that metadata was passed correctly
+            call_args = mock_instance.process_completed_call.call_args
+            assert call_args.kwargs["call_id"] == "retell-call-001"
+            assert call_args.kwargs["loan_id"] == 123
+            assert call_args.kwargs["organization_id"] == 1
+            assert call_args.kwargs["call_metadata"]["source"] == "retell"
+
+    @pytest.mark.asyncio
+    async def test_retell_handler_no_transcript(self):
+        """Test Retell handler rejects call without transcript."""
+        from services.call_intelligence.integration import handle_retell_call_ended
+        from unittest.mock import MagicMock
+
+        mock_db = MagicMock()
+
+        call_data = {
+            "transcript": "",  # Empty transcript
+            "metadata": {
+                "organization_id": 1,
+            },
+        }
+
+        result = await handle_retell_call_ended(
+            db=mock_db,
+            call_id="retell-no-transcript",
+            call_data=call_data,
+        )
+
+        assert result["success"] is False
+        assert result["error"] == "No transcript"
+
+    @pytest.mark.asyncio
+    async def test_retell_handler_no_org_id(self):
+        """Test Retell handler rejects call without organization_id."""
+        from services.call_intelligence.integration import handle_retell_call_ended
+        from unittest.mock import MagicMock
+
+        mock_db = MagicMock()
+
+        call_data = {
+            "transcript": "Some transcript content",
+            "metadata": {},  # No organization_id
+        }
+
+        result = await handle_retell_call_ended(
+            db=mock_db,
+            call_id="retell-no-org",
+            call_data=call_data,
+        )
+
+        assert result["success"] is False
+        assert result["error"] == "No organization_id"
+
+    @pytest.mark.asyncio
+    async def test_vapi_handler_valid_data(self):
+        """Test Vapi webhook handler with valid data."""
+        from services.call_intelligence.integration import handle_vapi_call_ended
+        from unittest.mock import MagicMock, AsyncMock, patch
+
+        mock_db = MagicMock()
+
+        call_data = {
+            "messages": [
+                {"role": "assistant", "message": "Hello, how can I help?"},
+                {"role": "user", "message": "I want to buy a house."},
+            ],
+            "assistant": {
+                "id": "assistant-001",
+                "metadata": {
+                    "loan_id": 456,
+                    "organization_id": 2,
+                },
+            },
+            "duration": 120,
+        }
+
+        with patch('services.call_intelligence.integration.CallIntelligenceIntegration') as MockIntegration:
+            mock_instance = MagicMock()
+            mock_instance.process_completed_call = AsyncMock(return_value={
+                "success": True,
+                "extractions_count": 3,
+            })
+            MockIntegration.return_value = mock_instance
+
+            result = await handle_vapi_call_ended(
+                db=mock_db,
+                call_id="vapi-call-001",
+                call_data=call_data,
+            )
+
+            assert result["success"] is True
+            mock_instance.process_completed_call.assert_called_once()
+
+            # Check Vapi-specific metadata
+            call_args = mock_instance.process_completed_call.call_args
+            assert call_args.kwargs["call_metadata"]["source"] == "vapi"
+            assert call_args.kwargs["call_metadata"]["assistant_id"] == "assistant-001"
+
+    @pytest.mark.asyncio
+    async def test_vapi_handler_builds_transcript_from_messages(self):
+        """Test that Vapi handler correctly builds transcript from messages."""
+        from services.call_intelligence.integration import handle_vapi_call_ended
+        from unittest.mock import MagicMock, AsyncMock, patch
+
+        mock_db = MagicMock()
+
+        call_data = {
+            "messages": [
+                {"role": "assistant", "message": "Welcome!"},
+                {"role": "user", "message": "Thanks."},
+                {"role": "assistant", "message": "What's your name?"},
+                {"role": "user", "message": "John Smith."},
+            ],
+            "assistant": {
+                "metadata": {
+                    "organization_id": 1,
+                },
+            },
+        }
+
+        with patch('services.call_intelligence.integration.CallIntelligenceIntegration') as MockIntegration:
+            mock_instance = MagicMock()
+            mock_instance.process_completed_call = AsyncMock(return_value={"success": True})
+            MockIntegration.return_value = mock_instance
+
+            await handle_vapi_call_ended(
+                db=mock_db,
+                call_id="vapi-transcript-test",
+                call_data=call_data,
+            )
+
+            call_args = mock_instance.process_completed_call.call_args
+            transcript = call_args.kwargs["transcript"]
+
+            # Verify transcript is built correctly
+            assert "assistant: Welcome!" in transcript
+            assert "user: Thanks." in transcript
+            assert "user: John Smith." in transcript
+
+    @pytest.mark.asyncio
+    async def test_vapi_handler_no_messages(self):
+        """Test Vapi handler rejects call without messages."""
+        from services.call_intelligence.integration import handle_vapi_call_ended
+        from unittest.mock import MagicMock
+
+        mock_db = MagicMock()
+
+        call_data = {
+            "messages": [],  # Empty messages
+            "assistant": {
+                "metadata": {
+                    "organization_id": 1,
+                },
+            },
+        }
+
+        result = await handle_vapi_call_ended(
+            db=mock_db,
+            call_id="vapi-no-messages",
+            call_data=call_data,
+        )
+
+        assert result["success"] is False
+        assert result["error"] == "No transcript"
+
+
+# =============================================================================
+# Integration Tests - Error Handling and Edge Cases
+# =============================================================================
+
+class TestErrorHandling:
+    """Integration tests for error handling and edge cases."""
+
+    @pytest.mark.asyncio
+    async def test_processor_handles_agent_failure_gracefully(self):
+        """Test processor continues when individual agent fails."""
+        from services.call_intelligence.processor import CallIntelligenceProcessor
+        from services.call_intelligence.data_contracts import CallIntelligenceRequest
+        from unittest.mock import patch, AsyncMock
+
+        # Mock create_llm_client to prevent any LLM initialization
+        with patch('services.call_intelligence.agents.base_agent.create_llm_client', return_value=None):
+            processor = CallIntelligenceProcessor(llm_client=None)
+
+            # Make identity agent fail
+            with patch.object(
+                processor.identity_agent,
+                'extract',
+                AsyncMock(side_effect=Exception("Identity agent error"))
+            ):
+                request = CallIntelligenceRequest(
+                    call_id="test-agent-failure",
+                    organization_id=1,
+                    transcript="Loan Officer: Hello!\nBorrower: Hi, I'm John.",
+                )
+
+                response = await processor.process_transcript(request)
+
+                # Should still succeed (other agents ran)
+                assert response.success is True
+                # Identity agent result should have error in its errors list
+                identity_result = next(
+                    (r for r in response.agent_results if r.agent_name == "identity"),
+                    None
+                )
+                assert identity_result is not None
+                assert any("Identity agent error" in err for err in identity_result.errors)
+                # Other agents should have run successfully
+                other_agents = [r for r in response.agent_results if r.agent_name != "identity"]
+                assert len(other_agents) > 0
+
+    @pytest.mark.asyncio
+    async def test_processor_handles_all_agents_failing(self):
+        """Test processor when all agents fail."""
+        from services.call_intelligence.processor import CallIntelligenceProcessor
+        from services.call_intelligence.data_contracts import CallIntelligenceRequest
+        from unittest.mock import patch, AsyncMock
+
+        # Mock create_llm_client to prevent any LLM initialization
+        with patch('services.call_intelligence.agents.base_agent.create_llm_client', return_value=None):
+            processor = CallIntelligenceProcessor(llm_client=None)
+
+            # Make _run_agent always raise (this bypasses exception handling in _run_agent)
+            with patch.object(
+                processor,
+                '_run_agent',
+                AsyncMock(side_effect=Exception("Agent error"))
+            ):
+                request = CallIntelligenceRequest(
+                    call_id="test-all-agents-fail",
+                    organization_id=1,
+                    transcript="Loan Officer: Hello!\nBorrower: Hi.",
+                )
+
+                response = await processor.process_transcript(request)
+
+                # Should still return a response (not crash)
+                assert response.call_id == "test-all-agents-fail"
+                # Should have errors recorded (caught by the for loop exception handler)
+                assert len(response.errors) > 0
+
+    @pytest.mark.asyncio
+    async def test_integration_handles_db_session_none(self):
+        """Test integration handles None db session gracefully."""
+        from services.call_intelligence.integration import CallIntelligenceIntegration
+        from unittest.mock import patch, AsyncMock, MagicMock
+
+        integration = CallIntelligenceIntegration(db_session=None)
+
+        # Mock the processor to return success
+        with patch.object(
+            integration.ci_processor,
+            'process_transcript',
+            AsyncMock(return_value=MagicMock(
+                success=True,
+                errors=[],
+                total_extractions=5,
+                high_confidence_count=3,
+                identity_extractions={},
+                address_extractions={},
+                employment_extractions={},
+                income_extractions={},
+                assets_extractions={},
+                liabilities_extractions={},
+                reo_extractions={},
+                declarations_extractions={},
+            ))
+        ):
+            result = await integration.process_completed_call(
+                call_id="test-no-db",
+                loan_id=None,
+                organization_id=1,
+                transcript="Hello world",
+            )
+
+            # Should succeed (db operations would fail but be caught)
+            assert result["success"] is True
+
+    @pytest.mark.asyncio
+    async def test_processor_with_malformed_transcript(self):
+        """Test processor handles malformed transcript formats."""
+        from services.call_intelligence.processor import CallIntelligenceProcessor
+        from services.call_intelligence.data_contracts import CallIntelligenceRequest
+        from unittest.mock import patch
+
+        # Transcript with no clear speaker format
+        malformed_transcript = """
+        Hello there how are you doing today
+        I am fine thank you for asking
+        What is your name?
+        My name is Bob
+        """
+
+        # Mock create_llm_client to prevent any LLM initialization
+        with patch('services.call_intelligence.agents.base_agent.create_llm_client', return_value=None):
+            processor = CallIntelligenceProcessor(llm_client=None)
+
+            request = CallIntelligenceRequest(
+                call_id="test-malformed",
+                organization_id=1,
+                transcript=malformed_transcript,
+            )
+
+            response = await processor.process_transcript(request)
+
+            # Should handle gracefully (may or may not extract data)
+            assert response.call_id == "test-malformed"
+            # Should not crash
+
+    @pytest.mark.asyncio
+    async def test_processor_with_unicode_content(self):
+        """Test processor handles unicode characters."""
+        from services.call_intelligence.processor import CallIntelligenceProcessor
+        from services.call_intelligence.data_contracts import CallIntelligenceRequest
+        from unittest.mock import patch
+
+        unicode_transcript = """Loan Officer: Hello! 你好!
+Borrower: My name is José García. I make €50,000 per year.
+Loan Officer: Great! And your email?
+Borrower: It's josé@example.com"""
+
+        # Mock create_llm_client to prevent any LLM initialization
+        with patch('services.call_intelligence.agents.base_agent.create_llm_client', return_value=None):
+            processor = CallIntelligenceProcessor(llm_client=None)
+
+            request = CallIntelligenceRequest(
+                call_id="test-unicode",
+                organization_id=1,
+                transcript=unicode_transcript,
+            )
+
+            response = await processor.process_transcript(request)
+
+            # Should handle unicode without crashing
+            assert response.call_id == "test-unicode"
+            assert response.success is True
+
+    @pytest.mark.asyncio
+    async def test_processor_with_very_long_transcript(self):
+        """Test processor handles very long transcripts."""
+        from services.call_intelligence.processor import CallIntelligenceProcessor
+        from services.call_intelligence.data_contracts import CallIntelligenceRequest
+        from unittest.mock import patch
+
+        # Generate a long transcript (100KB)
+        long_content = "Borrower: " + "I am interested in buying a house. " * 3000
+
+        # Mock create_llm_client to prevent any LLM initialization
+        with patch('services.call_intelligence.agents.base_agent.create_llm_client', return_value=None):
+            processor = CallIntelligenceProcessor(llm_client=None)
+
+            request = CallIntelligenceRequest(
+                call_id="test-long-transcript",
+                organization_id=1,
+                transcript=long_content,
+            )
+
+            response = await processor.process_transcript(request)
+
+        # Should handle without timeout or memory issues
+        assert response.call_id == "test-long-transcript"
+
+    @pytest.mark.asyncio
+    async def test_confidence_scores_class_available(self):
+        """Test ConfidenceScores constants are accessible."""
+        from services.call_intelligence.agents.base_agent import ConfidenceScores
+
+        # Verify key constants exist and have expected values
+        assert ConfidenceScores.EMAIL == 95.0
+        assert ConfidenceScores.PHONE == 90.0
+        assert ConfidenceScores.NAME == 85.0
+        assert ConfidenceScores.DATE == 75.0
+        assert ConfidenceScores.CURRENCY == 70.0
+        assert ConfidenceScores.LLM_DEFAULT == 75.0
+        assert ConfidenceScores.HIGH_CONFIDENCE_THRESHOLD == 90
+        assert ConfidenceScores.LOW_CONFIDENCE_THRESHOLD == 70
+
+
+# =============================================================================
+# Integration Tests - LLM Timeout Handling
+# =============================================================================
+
+class TestLLMTimeoutHandling:
+    """Test LLM client timeout handling."""
+
+    @pytest.mark.asyncio
+    async def test_anthropic_client_timeout_config(self):
+        """Test Anthropic client respects timeout config."""
+        from services.call_intelligence.llm_client import AnthropicClient, LLMConfig
+
+        config = LLMConfig(timeout=5)  # 5 second timeout
+        client = AnthropicClient(config)
+
+        assert client.config.timeout == 5
+
+    @pytest.mark.asyncio
+    async def test_openai_client_timeout_config(self):
+        """Test OpenAI client respects timeout config."""
+        from services.call_intelligence.llm_client import OpenAIClient, LLMConfig
+
+        config = LLMConfig(timeout=10)  # 10 second timeout
+        client = OpenAIClient(config)
+
+        assert client.config.timeout == 10
+
+    @pytest.mark.asyncio
+    async def test_llm_config_from_env_defaults(self):
+        """Test LLM config has sensible defaults."""
+        from services.call_intelligence.llm_client import LLMConfig
+
+        config = LLMConfig()
+
+        assert config.timeout == 30  # Default 30 seconds
+        assert config.max_retries == 3
+        assert config.temperature == 0.0  # Deterministic
+
+
+# =============================================================================
+# Integration Tests - Data Contract Serialization
+# =============================================================================
+
+class TestDataContractSerialization:
+    """Test data contract serialization methods."""
+
+    def test_extraction_result_to_dict(self):
+        """Test ExtractionResult serialization."""
+        from services.call_intelligence.data_contracts import (
+            ExtractionResult,
+            ExtractedValue,
+        )
+
+        result = ExtractionResult(agent_name="test_agent")
+        result.extractions.append(ExtractedValue(
+            field_name="test_field",
+            value="test_value",
+            confidence=85.0,
+            source_text="test source",
+        ))
+
+        data = result.to_dict()
+
+        # Key is "agent" not "agent_name"
+        assert data["agent"] == "test_agent"
+        assert len(data["extractions"]) == 1
+        assert data["extractions"][0]["field_name"] == "test_field"
+        assert data["extractions"][0]["value"] == "test_value"
+
+    def test_call_intelligence_response_to_dict(self):
+        """Test CallIntelligenceResponse serialization."""
+        from services.call_intelligence.data_contracts import CallIntelligenceResponse
+
+        response = CallIntelligenceResponse(call_id="test-123")
+        response.identity_extractions["first_name"] = "John"
+        response.total_extractions = 5
+
+        data = response.to_dict()
+
+        assert data["call_id"] == "test-123"
+        # to_dict uses "extractions" with application engine format inside
+        assert data["extractions"]["identity"]["first_name"] == "John"
+        assert data["summary"]["total_extractions"] == 5
+
+    def test_response_to_application_engine_format(self):
+        """Test conversion to Application Engine format."""
+        from services.call_intelligence.data_contracts import CallIntelligenceResponse
+
+        response = CallIntelligenceResponse(call_id="test-456")
+        response.identity_extractions = {"first_name": "Jane", "last_name": "Doe"}
+        response.income_extractions = {"annual_salary": 75000}
+
+        ae_format = response.to_application_engine_format()
+
+        assert "identity" in ae_format
+        assert ae_format["identity"]["first_name"] == "Jane"
+        assert "income" in ae_format
+        assert ae_format["income"]["annual_salary"] == 75000
