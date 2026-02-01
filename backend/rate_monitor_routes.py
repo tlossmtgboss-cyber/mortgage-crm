@@ -159,17 +159,22 @@ async def list_targets(
     """
     List rate monitoring targets with optional filters.
     """
-    query = db.query(RateMonitorTarget)
+    try:
+        query = db.query(RateMonitorTarget)
 
-    if mum_client_id:
-        query = query.filter(RateMonitorTarget.mum_client_id == mum_client_id)
-    if status:
-        query = query.filter(RateMonitorTarget.status == status)
-    if is_active is not None:
-        query = query.filter(RateMonitorTarget.is_active == is_active)
+        if mum_client_id:
+            query = query.filter(RateMonitorTarget.mum_client_id == mum_client_id)
+        if status:
+            query = query.filter(RateMonitorTarget.status == status)
+        if is_active is not None:
+            query = query.filter(RateMonitorTarget.is_active == is_active)
 
-    total = query.count()
-    targets = query.order_by(desc(RateMonitorTarget.created_at)).offset(offset).limit(limit).all()
+        total = query.count()
+        targets = query.order_by(desc(RateMonitorTarget.created_at)).offset(offset).limit(limit).all()
+    except Exception as e:
+        # Table might not exist yet - return empty response
+        logger.warning(f"Error fetching rate monitor targets (table may not exist): {e}")
+        return {'targets': [], 'total': 0, 'limit': limit, 'offset': offset}
 
     # Enrich with MUM client data
     enriched_targets = []

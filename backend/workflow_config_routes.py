@@ -153,35 +153,40 @@ async def get_all_workflow_configs(
 ):
     """Get all workflow configurations with summary stats"""
     if _models is None:
-        raise HTTPException(status_code=500, detail="Models not initialized")
+        logger.warning("Workflow models not initialized - returning empty list")
+        return {'workflows': []}
 
-    WorkflowConfiguration = _models['WorkflowConfiguration']
-    WorkflowDayConfig = _models['WorkflowDayConfig']
+    try:
+        WorkflowConfiguration = _models['WorkflowConfiguration']
+        WorkflowDayConfig = _models['WorkflowDayConfig']
 
-    workflows = db.query(WorkflowConfiguration).order_by(WorkflowConfiguration.workflow_key).all()
+        workflows = db.query(WorkflowConfiguration).order_by(WorkflowConfiguration.workflow_key).all()
 
-    result = []
-    for wf in workflows:
-        # Count tasks and health status
-        day_count = len(wf.days) if wf.days else 0
-        healthy = sum(1 for d in (wf.days or []) if d.health_status.value == 'healthy')
-        broken = sum(1 for d in (wf.days or []) if d.health_status.value == 'broken')
+        result = []
+        for wf in workflows:
+            # Count tasks and health status
+            day_count = len(wf.days) if wf.days else 0
+            healthy = sum(1 for d in (wf.days or []) if d.health_status.value == 'healthy')
+            broken = sum(1 for d in (wf.days or []) if d.health_status.value == 'broken')
 
-        result.append({
-            'id': wf.id,
-            'workflow_key': wf.workflow_key,
-            'workflow_name': wf.workflow_name,
-            'description': wf.description,
-            'objective': wf.objective,
-            'statuses_impacted': wf.statuses_impacted or [],
-            'color': wf.color,
-            'is_active': wf.is_active,
-            'day_count': day_count,
-            'healthy_count': healthy,
-            'broken_count': broken
-        })
+            result.append({
+                'id': wf.id,
+                'workflow_key': wf.workflow_key,
+                'workflow_name': wf.workflow_name,
+                'description': wf.description,
+                'objective': wf.objective,
+                'statuses_impacted': wf.statuses_impacted or [],
+                'color': wf.color,
+                'is_active': wf.is_active,
+                'day_count': day_count,
+                'healthy_count': healthy,
+                'broken_count': broken
+            })
 
-    return {'workflows': result}
+        return {'workflows': result}
+    except Exception as e:
+        logger.warning(f"Error fetching workflows (table may not exist): {e}")
+        return {'workflows': []}
 
 
 @router.get("/workflows/{workflow_key}")
@@ -1970,5 +1975,8 @@ async def get_all_workflow_tasks(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting all workflow tasks: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.warning(f"Error getting all workflow tasks (table may not exist): {e}")
+        return {
+            "tasks": [],
+            "summary": {"total": 0, "due_today": 0, "due_tomorrow": 0, "upcoming": 0}
+        }

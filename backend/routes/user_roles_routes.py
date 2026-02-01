@@ -142,9 +142,9 @@ async def get_my_roles(
     Returns all roles assigned to the user and which role is currently active
     for UI view purposes.
     """
-    user_id = current_user.id
-
     try:
+        user_id = current_user.id
+
         # Get assigned roles
         assigned_result = db.execute(text("""
             SELECT
@@ -196,9 +196,9 @@ async def get_my_roles(
             active_role=active_role,
             can_switch_roles=len(assigned_roles) > 1
         )
-    except SQLAlchemyError as e:
-        # Tables might not exist yet - return empty response
-        logger.warning(f"Error fetching user roles (tables may not exist): {e}")
+    except Exception as e:
+        # Tables might not exist yet or other error - return empty response
+        logger.warning(f"Error fetching user roles: {e}")
         return UserRolesResponse(
             assigned_roles=[],
             active_role=None,

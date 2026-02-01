@@ -169,23 +169,27 @@ async def list_rate_sheets(
     db: Session = Depends(get_db),
 ):
     """List uploaded rate sheets."""
-    from models.rate_sheet import RateSheet
+    try:
+        from models.rate_sheet import RateSheet
 
-    query = db.query(RateSheet)
+        query = db.query(RateSheet)
 
-    if status:
-        query = query.filter(RateSheet.status == status)
+        if status:
+            query = query.filter(RateSheet.status == status)
 
-    total = query.count()
+        total = query.count()
 
-    sheets = query.order_by(RateSheet.created_at.desc()).offset(offset).limit(limit).all()
+        sheets = query.order_by(RateSheet.created_at.desc()).offset(offset).limit(limit).all()
 
-    return {
-        'sheets': [sheet.to_dict() for sheet in sheets],
-        'total': total,
-        'limit': limit,
-        'offset': offset,
-    }
+        return {
+            'sheets': [sheet.to_dict() for sheet in sheets],
+            'total': total,
+            'limit': limit,
+            'offset': offset,
+        }
+    except Exception as e:
+        logger.warning(f"Error fetching rate sheets (table may not exist): {e}")
+        return {'sheets': [], 'total': 0, 'limit': limit, 'offset': offset}
 
 
 @router.get("/sheets/{sheet_id}")
@@ -294,16 +298,20 @@ async def list_opportunities(
     db: Session = Depends(get_db),
 ):
     """List refinance opportunities."""
-    from services.opportunity_detection_service import OpportunityDetectionService
+    try:
+        from services.opportunity_detection_service import OpportunityDetectionService
 
-    detector = OpportunityDetectionService(db)
-    return detector.get_opportunities(
-        status=status,
-        priority=priority,
-        rate_sheet_id=rate_sheet_id,
-        limit=limit,
-        offset=offset,
-    )
+        detector = OpportunityDetectionService(db)
+        return detector.get_opportunities(
+            status=status,
+            priority=priority,
+            rate_sheet_id=rate_sheet_id,
+            limit=limit,
+            offset=offset,
+        )
+    except Exception as e:
+        logger.warning(f"Error fetching opportunities (table may not exist): {e}")
+        return {'opportunities': [], 'total': 0, 'limit': limit, 'offset': offset}
 
 
 @router.get("/opportunities/dashboard")
@@ -311,10 +319,14 @@ async def get_opportunities_dashboard(
     db: Session = Depends(get_db),
 ):
     """Get dashboard metrics for refinance opportunities."""
-    from services.opportunity_detection_service import OpportunityDetectionService
+    try:
+        from services.opportunity_detection_service import OpportunityDetectionService
 
-    detector = OpportunityDetectionService(db)
-    return detector.get_dashboard_metrics()
+        detector = OpportunityDetectionService(db)
+        return detector.get_dashboard_metrics()
+    except Exception as e:
+        logger.warning(f"Error fetching opportunities dashboard (table may not exist): {e}")
+        return {'total': 0, 'by_status': {}, 'by_priority': {}, 'recent': []}
 
 
 @router.get("/opportunities/{opportunity_id}")

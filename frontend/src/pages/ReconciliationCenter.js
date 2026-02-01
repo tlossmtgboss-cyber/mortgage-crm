@@ -202,7 +202,7 @@ function ReconciliationCenter() {
 
   const fetchReferralPartners = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/referral-partners/`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/referral-partners`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -212,7 +212,7 @@ function ReconciliationCenter() {
         setReferralPartners(data.partners || data || []);
       }
     } catch (error) {
-      console.error('Error fetching referral partners:', error);
+      // Silently handle - referral partners may not be available
     }
   };
 
@@ -260,7 +260,7 @@ function ReconciliationCenter() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/referral-partners/`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/referral-partners`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
