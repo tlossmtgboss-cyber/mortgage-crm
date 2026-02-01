@@ -2196,14 +2196,14 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
                                 original_loan_amount, current_loan_amount,
                                 interest_rate, appraisal_value_at_closing,
                                 current_property_value, closing_date, first_payment_date,
-                                status, engagement_score, created_at
+                                status, engagement_score, created_at, user_id
                             ) VALUES (
                                 :client_name, :loan_number, :close_date,
                                 :rate, :balance,
                                 :original_loan_amount, :current_loan_amount,
                                 :interest_rate, :appraisal_value,
                                 :property_value, :closing_date, :first_payment_date,
-                                'active', 50, CURRENT_TIMESTAMP
+                                'active', 50, CURRENT_TIMESTAMP, :user_id
                             )
                         """), {
                             'client_name': client_name,
@@ -2218,6 +2218,7 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
                             'property_value': loan_amount * 1.25,
                             'closing_date': close_date,
                             'first_payment_date': close_date,
+                            'user_id': user_id,
                         })
                         mum_results['imported'] += 1
 
@@ -2634,14 +2635,14 @@ async def import_funded_loans_to_mum(
                         original_loan_amount, current_loan_amount,
                         interest_rate, appraisal_value_at_closing,
                         current_property_value, closing_date, first_payment_date,
-                        status, engagement_score, created_at
+                        status, engagement_score, created_at, user_id
                     ) VALUES (
                         :client_name, :loan_number, :close_date,
                         :rate, :balance,
                         :original_loan_amount, :current_loan_amount,
                         :interest_rate, :appraisal_value,
                         :property_value, :closing_date, :first_payment_date,
-                        'active', 50, CURRENT_TIMESTAMP
+                        'active', 50, CURRENT_TIMESTAMP, :user_id
                     )
                 """), {
                     'client_name': client_name,
@@ -2656,6 +2657,7 @@ async def import_funded_loans_to_mum(
                     'property_value': loan_amount * 1.25,
                     'closing_date': close_date,
                     'first_payment_date': close_date,
+                    'user_id': user_id,
                 })
 
                 results['imported'] += 1
@@ -2866,14 +2868,14 @@ async def sync_salesforce_and_import_mum(
                         original_loan_amount, current_loan_amount,
                         interest_rate, appraisal_value_at_closing,
                         current_property_value, closing_date, first_payment_date,
-                        status, engagement_score, created_at
+                        status, engagement_score, created_at, user_id
                     ) VALUES (
                         :client_name, :loan_number, :close_date,
                         :rate, :balance,
                         :original_loan_amount, :current_loan_amount,
                         :interest_rate, :appraisal_value,
                         :property_value, :closing_date, :first_payment_date,
-                        'active', 50, CURRENT_TIMESTAMP
+                        'active', 50, CURRENT_TIMESTAMP, :user_id
                     )
                 """), {
                     'client_name': client_name,
@@ -2888,6 +2890,7 @@ async def sync_salesforce_and_import_mum(
                     'property_value': loan_amount * 1.25,
                     'closing_date': close_date,
                     'first_payment_date': close_date,
+                    'user_id': user_id,
                 })
                 results['mum_import']['imported'] += 1
 
