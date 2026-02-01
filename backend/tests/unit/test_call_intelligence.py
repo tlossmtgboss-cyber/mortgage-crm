@@ -595,3 +595,120 @@ class TestIntegrationSafety:
 
         assert "123-45" not in safe_error
         assert "6789" in safe_error  # Last 4 preserved
+
+
+# =============================================================================
+# Input Validation Tests
+# =============================================================================
+
+class TestInputValidation:
+    """Test input validation in integration module."""
+
+    @pytest.mark.asyncio
+    async def test_empty_call_id_rejected(self):
+        """Test that empty call_id is rejected."""
+        from services.call_intelligence.integration import CallIntelligenceIntegration
+
+        # Create integration with mock db session
+        integration = CallIntelligenceIntegration(db_session=None)
+
+        result = await integration.process_completed_call(
+            call_id="",
+            loan_id=None,
+            organization_id=1,
+            transcript="Hello",
+        )
+
+        assert result["success"] is False
+        assert result["stage"] == "validation"
+        assert "call_id" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_invalid_organization_id_rejected(self):
+        """Test that invalid organization_id is rejected."""
+        from services.call_intelligence.integration import CallIntelligenceIntegration
+
+        integration = CallIntelligenceIntegration(db_session=None)
+
+        result = await integration.process_completed_call(
+            call_id="test-123",
+            loan_id=None,
+            organization_id=0,
+            transcript="Hello",
+        )
+
+        assert result["success"] is False
+        assert result["stage"] == "validation"
+        assert "organization_id" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_negative_organization_id_rejected(self):
+        """Test that negative organization_id is rejected."""
+        from services.call_intelligence.integration import CallIntelligenceIntegration
+
+        integration = CallIntelligenceIntegration(db_session=None)
+
+        result = await integration.process_completed_call(
+            call_id="test-123",
+            loan_id=None,
+            organization_id=-1,
+            transcript="Hello",
+        )
+
+        assert result["success"] is False
+        assert result["stage"] == "validation"
+        assert "organization_id" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_empty_transcript_rejected(self):
+        """Test that empty transcript is rejected."""
+        from services.call_intelligence.integration import CallIntelligenceIntegration
+
+        integration = CallIntelligenceIntegration(db_session=None)
+
+        result = await integration.process_completed_call(
+            call_id="test-123",
+            loan_id=None,
+            organization_id=1,
+            transcript="",
+        )
+
+        assert result["success"] is False
+        assert result["stage"] == "validation"
+        assert "transcript" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_invalid_loan_id_rejected(self):
+        """Test that invalid loan_id is rejected."""
+        from services.call_intelligence.integration import CallIntelligenceIntegration
+
+        integration = CallIntelligenceIntegration(db_session=None)
+
+        result = await integration.process_completed_call(
+            call_id="test-123",
+            loan_id=-5,
+            organization_id=1,
+            transcript="Hello",
+        )
+
+        assert result["success"] is False
+        assert result["stage"] == "validation"
+        assert "loan_id" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_call_id_max_length_enforced(self):
+        """Test that call_id max length is enforced."""
+        from services.call_intelligence.integration import CallIntelligenceIntegration
+
+        integration = CallIntelligenceIntegration(db_session=None)
+
+        result = await integration.process_completed_call(
+            call_id="x" * 256,  # Exceeds 255 char limit
+            loan_id=None,
+            organization_id=1,
+            transcript="Hello",
+        )
+
+        assert result["success"] is False
+        assert result["stage"] == "validation"
+        assert "255" in result["error"]

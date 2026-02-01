@@ -60,16 +60,64 @@ class CallIntelligenceIntegration:
         This is the main entry point called after a call ends.
 
         Args:
-            call_id: Unique call identifier
+            call_id: Unique call identifier (required, max 255 chars)
             loan_id: Associated loan ID (may be None for new leads)
-            organization_id: Organization ID
-            transcript: Full call transcript
+            organization_id: Organization ID (required, must be positive)
+            transcript: Full call transcript (required, max 500KB)
             call_type: Type of call (initial_intake, follow_up, etc.)
             call_metadata: Additional call metadata
 
         Returns:
             Dict with processing results
+
+        Raises:
+            ValueError: If required parameters are invalid
         """
+        # Input validation
+        if not call_id or not isinstance(call_id, str):
+            return {
+                "success": False,
+                "stage": "validation",
+                "error": "call_id is required and must be a non-empty string",
+            }
+
+        if len(call_id) > 255:
+            return {
+                "success": False,
+                "stage": "validation",
+                "error": "call_id exceeds maximum length of 255 characters",
+            }
+
+        if not isinstance(organization_id, int) or organization_id <= 0:
+            return {
+                "success": False,
+                "stage": "validation",
+                "error": "organization_id must be a positive integer",
+            }
+
+        if loan_id is not None and (not isinstance(loan_id, int) or loan_id <= 0):
+            return {
+                "success": False,
+                "stage": "validation",
+                "error": "loan_id must be a positive integer or None",
+            }
+
+        if not transcript or not isinstance(transcript, str):
+            return {
+                "success": False,
+                "stage": "validation",
+                "error": "transcript is required and must be a non-empty string",
+            }
+
+        # Limit transcript size to prevent memory issues (500KB)
+        max_transcript_size = 500 * 1024
+        if len(transcript) > max_transcript_size:
+            return {
+                "success": False,
+                "stage": "validation",
+                "error": f"transcript exceeds maximum size of {max_transcript_size} bytes",
+            }
+
         logger.info(f"Processing completed call: {call_id}")
         metadata = call_metadata or {}
 

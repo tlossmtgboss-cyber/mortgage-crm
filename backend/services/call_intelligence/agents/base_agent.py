@@ -79,7 +79,6 @@ class BaseExtractionAgent(ABC):
             return EXTRACTION_SCHEMAS.get(self.EXTRACTION_SCHEMA_KEY)
         return None
 
-    @abstractmethod
     async def extract(
         self,
         segments: List[TranscriptSegment],
@@ -88,6 +87,10 @@ class BaseExtractionAgent(ABC):
         """
         Extract data from transcript segments.
 
+        Uses LLM extraction as primary method with regex fallback.
+        Subclasses should implement extract_with_regex() for their
+        domain-specific regex patterns.
+
         Args:
             segments: List of transcript segments
             existing_data: Existing borrower data for context
@@ -95,7 +98,14 @@ class BaseExtractionAgent(ABC):
         Returns:
             ExtractionResult with extracted values
         """
-        pass
+        # Try LLM extraction first
+        llm_result = await self.extract_with_llm(segments, existing_data)
+
+        # Always run regex as fallback/validation
+        regex_result = self.extract_with_regex(segments, existing_data)
+
+        # Merge results, preferring LLM when available
+        return self.merge_results(llm_result, regex_result)
 
     @abstractmethod
     def extract_with_regex(
