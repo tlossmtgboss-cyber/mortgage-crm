@@ -2158,7 +2158,7 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
             try:
                 # Get funded loans not already in mum_clients (use flexible ILIKE matching)
                 funded_loans = db.execute(text("""
-                    SELECT l.id, l.loan_number, l.borrower_name, l.borrower_first_name, l.borrower_last_name,
+                    SELECT l.id, l.loan_number, l.borrower_name,
                            l.borrower_email, l.borrower_phone, l.amount, l.interest_rate,
                            l.funded_date, l.closing_date, l.property_address,
                            l.property_city, l.property_state, l.property_zip,
@@ -2178,15 +2178,13 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
 
                 for loan in funded_loans:
                     try:
-                        # Build client name
+                        # Build client name (indices: 0=id, 1=loan_number, 2=borrower_name, 3=email, 4=phone, 5=amount, 6=rate, 7=funded_date, 8=closing_date)
                         client_name = loan[2]  # borrower_name
-                        if not client_name and (loan[3] or loan[4]):  # first/last name
-                            client_name = f"{loan[3] or ''} {loan[4] or ''}".strip()
                         if not client_name:
                             client_name = f"Client - {loan[1]}"  # loan_number
 
                         # Get closing date
-                        close_date = loan[9] or loan[10]  # funded_date or closing_date
+                        close_date = loan[7] or loan[8]  # funded_date or closing_date
 
                         # Insert into mum_clients
                         db.execute(text("""
@@ -2203,8 +2201,8 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
                             'name': client_name,
                             'loan_number': loan[1],
                             'close_date': close_date,
-                            'rate': loan[8],  # interest_rate
-                            'balance': loan[7],  # amount
+                            'rate': loan[6],  # interest_rate
+                            'balance': loan[5],  # amount
                         })
                         mum_results['imported'] += 1
 
@@ -2469,8 +2467,9 @@ async def debug_import_to_mum(db: Session = Depends(get_db)):
         results = {'imported': 0, 'skipped': 0, 'errors': [], 'imported_clients': []}
 
         # Get funded loans not already in mum_clients
+        # Columns: 0=id, 1=loan_number, 2=borrower_name, 3=email, 4=phone, 5=amount, 6=rate, 7=funded_date, 8=closing_date
         funded_loans = db.execute(text("""
-            SELECT l.id, l.loan_number, l.borrower_name, l.borrower_first_name, l.borrower_last_name,
+            SELECT l.id, l.loan_number, l.borrower_name,
                    l.borrower_email, l.borrower_phone, l.amount, l.interest_rate,
                    l.funded_date, l.closing_date, l.property_address,
                    l.property_city, l.property_state, l.property_zip,
@@ -2491,9 +2490,7 @@ async def debug_import_to_mum(db: Session = Depends(get_db)):
         for loan in funded_loans:
             try:
                 # Extract borrower name
-                client_name = loan[2]
-                if not client_name and (loan[3] or loan[4]):
-                    client_name = f"{loan[3] or ''} {loan[4] or ''}".strip()
+                client_name = loan[2]  # borrower_name
 
                 if not client_name:
                     results['skipped'] += 1
@@ -2511,9 +2508,9 @@ async def debug_import_to_mum(db: Session = Depends(get_db)):
                 """), {
                     'name': client_name,
                     'loan_number': loan[1],
-                    'original_close_date': loan[9] or loan[10],  # funded_date or closing_date
-                    'original_rate': float(loan[8]) if loan[8] else 0,
-                    'loan_balance': float(loan[7]) if loan[7] else 0,
+                    'original_close_date': loan[7] or loan[8],  # funded_date or closing_date
+                    'original_rate': float(loan[6]) if loan[6] else 0,
+                    'loan_balance': float(loan[5]) if loan[5] else 0,
                 })
 
                 results['imported'] += 1
@@ -2554,8 +2551,9 @@ async def import_funded_loans_to_mum(
         results = {'imported': 0, 'skipped': 0, 'errors': []}
 
         # Get funded loans not already in mum_clients
+        # Columns: 0=id, 1=loan_number, 2=borrower_name, 3=email, 4=phone, 5=amount, 6=rate, 7=funded_date, 8=closing_date
         funded_loans = db.execute(text("""
-            SELECT l.id, l.loan_number, l.borrower_name, l.borrower_first_name, l.borrower_last_name,
+            SELECT l.id, l.loan_number, l.borrower_name,
                    l.borrower_email, l.borrower_phone, l.amount, l.interest_rate,
                    l.funded_date, l.closing_date, l.property_address,
                    l.property_city, l.property_state, l.property_zip,
@@ -2579,13 +2577,11 @@ async def import_funded_loans_to_mum(
             try:
                 # Build client name
                 client_name = loan[2]  # borrower_name
-                if not client_name and (loan[3] or loan[4]):  # first/last name
-                    client_name = f"{loan[3] or ''} {loan[4] or ''}".strip()
                 if not client_name:
                     client_name = f"Client - {loan[1]}"  # loan_number
 
                 # Get closing date
-                close_date = loan[9] or loan[10]  # funded_date or closing_date
+                close_date = loan[7] or loan[8]  # funded_date or closing_date
 
                 # Insert into mum_clients
                 db.execute(text("""
@@ -2602,8 +2598,8 @@ async def import_funded_loans_to_mum(
                     'name': client_name,
                     'loan_number': loan[1],
                     'close_date': close_date,
-                    'rate': loan[8],  # interest_rate
-                    'balance': loan[7],  # amount
+                    'rate': loan[6],  # interest_rate
+                    'balance': loan[5],  # amount
                 })
 
                 results['imported'] += 1
@@ -2777,9 +2773,10 @@ async def sync_salesforce_and_import_mum(
                 results['salesforce_sync']['errors'].append(str(e))
 
     # Step 2: Import funded loans to MUM clients
+    # Columns: 0=id, 1=loan_number, 2=borrower_name, 3=amount, 4=rate, 5=funded_date, 6=closing_date
     try:
         funded_loans = db.execute(text("""
-            SELECT l.id, l.loan_number, l.borrower_name, l.borrower_first_name, l.borrower_last_name,
+            SELECT l.id, l.loan_number, l.borrower_name,
                    l.amount, l.interest_rate, l.funded_date, l.closing_date
             FROM loans l
             WHERE (LOWER(CAST(l.stage AS TEXT)) LIKE '%fund%'
@@ -2794,13 +2791,11 @@ async def sync_salesforce_and_import_mum(
 
         for loan in funded_loans:
             try:
-                client_name = loan[2]
-                if not client_name and (loan[3] or loan[4]):
-                    client_name = f"{loan[3] or ''} {loan[4] or ''}".strip()
+                client_name = loan[2]  # borrower_name
                 if not client_name:
                     client_name = f"Client - {loan[1]}"
 
-                close_date = loan[7] or loan[8]
+                close_date = loan[5] or loan[6]  # funded_date or closing_date
 
                 db.execute(text("""
                     INSERT INTO mum_clients (
@@ -2816,8 +2811,8 @@ async def sync_salesforce_and_import_mum(
                     'name': client_name,
                     'loan_number': loan[1],
                     'close_date': close_date,
-                    'rate': loan[6],
-                    'balance': loan[5],
+                    'rate': loan[4],  # interest_rate
+                    'balance': loan[3],  # amount
                 })
                 results['mum_import']['imported'] += 1
 
