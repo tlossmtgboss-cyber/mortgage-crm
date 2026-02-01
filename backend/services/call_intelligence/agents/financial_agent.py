@@ -14,6 +14,7 @@ from ..data_contracts import (
     ExtractionResult,
     ExtractedValue,
 )
+from ..pii_utils import sanitize_source_text
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +101,7 @@ class FinancialExtractionAgent(BaseExtractionAgent):
                             field_name="annual_salary",
                             value=value,
                             confidence=80.0,
-                            source_text=full_text[max(0, match.start()-30):match.end()+30],
+                            source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                         ))
                         # Calculate monthly
                         extractions.append(ExtractedValue(
@@ -131,7 +132,7 @@ class FinancialExtractionAgent(BaseExtractionAgent):
                                 field_name="monthly_salary",
                                 value=value,
                                 confidence=80.0,
-                                source_text=full_text[max(0, match.start()-30):match.end()+30],
+                                source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                             ))
                             break
                     except ValueError:
@@ -154,7 +155,7 @@ class FinancialExtractionAgent(BaseExtractionAgent):
                             field_name="hourly_rate",
                             value=value,
                             confidence=80.0,
-                            source_text=full_text[max(0, match.start()-30):match.end()+30],
+                            source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                         ))
                         break
                 except ValueError:
@@ -178,7 +179,7 @@ class FinancialExtractionAgent(BaseExtractionAgent):
                             field_name=income_type,
                             value=value,
                             confidence=70.0,
-                            source_text=full_text[max(0, match.start()-30):match.end()+30],
+                            source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                         ))
                 except ValueError:
                     continue
@@ -210,7 +211,7 @@ class FinancialExtractionAgent(BaseExtractionAgent):
                             field_name="bank_balance",
                             value=value,
                             confidence=70.0,
-                            source_text=full_text[max(0, match.start()-30):match.end()+30],
+                            source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                         ))
                         break
                 except ValueError:
@@ -233,7 +234,7 @@ class FinancialExtractionAgent(BaseExtractionAgent):
                             field_name="retirement_balance",
                             value=value,
                             confidence=70.0,
-                            source_text=full_text[max(0, match.start()-30):match.end()+30],
+                            source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                         ))
                         break
                 except ValueError:
@@ -256,7 +257,7 @@ class FinancialExtractionAgent(BaseExtractionAgent):
                             field_name="gift_amount",
                             value=value,
                             confidence=75.0,
-                            source_text=full_text[max(0, match.start()-30):match.end()+30],
+                            source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                         ))
                         break
                 except ValueError:
@@ -289,7 +290,7 @@ class FinancialExtractionAgent(BaseExtractionAgent):
                             field_name="car_payment",
                             value=value,
                             confidence=75.0,
-                            source_text=full_text[max(0, match.start()-30):match.end()+30],
+                            source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                         ))
                         break
                 except ValueError:
@@ -312,7 +313,7 @@ class FinancialExtractionAgent(BaseExtractionAgent):
                             field_name="student_loan_payment",
                             value=value,
                             confidence=75.0,
-                            source_text=full_text[max(0, match.start()-30):match.end()+30],
+                            source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                         ))
                         break
                 except ValueError:
@@ -335,7 +336,7 @@ class FinancialExtractionAgent(BaseExtractionAgent):
                             field_name="credit_card_payments",
                             value=value,
                             confidence=70.0,
-                            source_text=full_text[max(0, match.start()-30):match.end()+30],
+                            source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                         ))
                         break
                 except ValueError:
@@ -364,7 +365,7 @@ class FinancialExtractionAgent(BaseExtractionAgent):
                             field_name="down_payment_amount",
                             value=value,
                             confidence=80.0,
-                            source_text=full_text[max(0, match.start()-30):match.end()+30],
+                            source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                         ))
                         break
                 except ValueError:
@@ -381,7 +382,7 @@ class FinancialExtractionAgent(BaseExtractionAgent):
                         field_name="down_payment_percentage",
                         value=pct,
                         confidence=80.0,
-                        source_text=full_text[max(0, match.start()-30):match.end()+30],
+                        source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                     ))
             except ValueError:
                 pass
@@ -400,7 +401,7 @@ class FinancialExtractionAgent(BaseExtractionAgent):
                     field_name="down_payment_source",
                     value=source,
                     confidence=75.0,
-                    source_text=full_text[:200],
+                    source_text=sanitize_source_text(full_text[:200]),
                 ))
                 break
 

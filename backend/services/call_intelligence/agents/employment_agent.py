@@ -14,6 +14,7 @@ from ..data_contracts import (
     ExtractionResult,
     ExtractedValue,
 )
+from ..pii_utils import sanitize_source_text
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +111,7 @@ class EmploymentExtractionAgent(BaseExtractionAgent):
                         field_name="employer",
                         value=employer,
                         confidence=80.0,
-                        source_text=full_text[max(0, match.start()-20):match.end()+20],
+                        source_text=sanitize_source_text(full_text[max(0, match.start()-20):match.end()+20]),
                     )
 
         return None
@@ -145,7 +146,7 @@ class EmploymentExtractionAgent(BaseExtractionAgent):
                         field_name="position",
                         value=title.title(),
                         confidence=75.0,
-                        source_text=full_text[max(0, match.start()-20):match.end()+20],
+                        source_text=sanitize_source_text(full_text[max(0, match.start()-20):match.end()+20]),
                     )
 
         return None
@@ -170,7 +171,7 @@ class EmploymentExtractionAgent(BaseExtractionAgent):
                         field_name="employment_type",
                         value=emp_type,
                         confidence=80.0,
-                        source_text=full_text[:200],
+                        source_text=sanitize_source_text(full_text[:200]),
                     )
 
         return None
@@ -194,7 +195,7 @@ class EmploymentExtractionAgent(BaseExtractionAgent):
                     field_name="is_self_employed",
                     value=True,
                     confidence=85.0,
-                    source_text=full_text[:200],
+                    source_text=sanitize_source_text(full_text[:200]),
                 ))
 
                 # Try to extract business name
@@ -210,7 +211,7 @@ class EmploymentExtractionAgent(BaseExtractionAgent):
                             field_name="business_name",
                             value=match.group(1).strip(),
                             confidence=75.0,
-                            source_text=full_text[max(0, match.start()-20):match.end()+20],
+                            source_text=sanitize_source_text(full_text[max(0, match.start()-20):match.end()+20]),
                         ))
                         break
 
@@ -222,7 +223,7 @@ class EmploymentExtractionAgent(BaseExtractionAgent):
                         field_name="ownership_percentage",
                         value=int(match.group(1)),
                         confidence=80.0,
-                        source_text=full_text[max(0, match.start()-20):match.end()+20],
+                        source_text=sanitize_source_text(full_text[max(0, match.start()-20):match.end()+20]),
                     ))
 
                 break
@@ -255,14 +256,14 @@ class EmploymentExtractionAgent(BaseExtractionAgent):
                         field_name="years_employed",
                         value=years,
                         confidence=75.0,
-                        source_text=full_text[max(0, match.start()-20):match.end()+20],
+                        source_text=sanitize_source_text(full_text[max(0, match.start()-20):match.end()+20]),
                     ))
                 else:
                     extractions.append(ExtractedValue(
                         field_name="years_employed",
                         value=int(value),
                         confidence=80.0,
-                        source_text=full_text[max(0, match.start()-20):match.end()+20],
+                        source_text=sanitize_source_text(full_text[max(0, match.start()-20):match.end()+20]),
                     ))
                 break
 
@@ -274,7 +275,7 @@ class EmploymentExtractionAgent(BaseExtractionAgent):
                 field_name="months_employed",
                 value=int(match.group(1)),
                 confidence=75.0,
-                source_text=full_text[max(0, match.start()-20):match.end()+20],
+                source_text=sanitize_source_text(full_text[max(0, match.start()-20):match.end()+20]),
             ))
 
         return extractions
@@ -295,7 +296,7 @@ class EmploymentExtractionAgent(BaseExtractionAgent):
                         field_name="employer_phone",
                         value=phone,
                         confidence=75.0,
-                        source_text=full_text[max(0, match.start()-20):match.end()+30],
+                        source_text=sanitize_source_text(full_text[max(0, match.start()-20):match.end()+30]),
                     )
 
         return None

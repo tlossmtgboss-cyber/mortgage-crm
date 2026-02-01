@@ -14,6 +14,7 @@ from ..data_contracts import (
     ExtractionResult,
     ExtractedValue,
 )
+from ..pii_utils import sanitize_source_text
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +121,7 @@ class PropertyExtractionAgent(BaseExtractionAgent):
                 field_name="street",
                 value=match.group(1).strip(),
                 confidence=80.0,
-                source_text=full_text[max(0, match.start()-20):match.end()+50],
+                source_text=sanitize_source_text(full_text[max(0, match.start()-20):match.end()+50]),
             ))
 
         # City pattern (after street or "in [City]")
@@ -134,7 +135,7 @@ class PropertyExtractionAgent(BaseExtractionAgent):
                     field_name="city",
                     value=city,
                     confidence=75.0,
-                    source_text=full_text[max(0, match.start()-20):match.end()+30],
+                    source_text=sanitize_source_text(full_text[max(0, match.start()-20):match.end()+30]),
                 ))
 
         # State pattern
@@ -157,7 +158,7 @@ class PropertyExtractionAgent(BaseExtractionAgent):
                 field_name="zip",
                 value=match.group(1),
                 confidence=90.0,
-                source_text=full_text[max(0, match.start()-30):match.end()+30],
+                source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
             ))
 
         return extractions
@@ -188,7 +189,7 @@ class PropertyExtractionAgent(BaseExtractionAgent):
                     field_name="ownership_status",
                     value="OWN",
                     confidence=85.0,
-                    source_text=full_text[:200],
+                    source_text=sanitize_source_text(full_text[:200]),
                 )
 
         for pattern in rent_patterns:
@@ -197,7 +198,7 @@ class PropertyExtractionAgent(BaseExtractionAgent):
                     field_name="ownership_status",
                     value="RENT",
                     confidence=85.0,
-                    source_text=full_text[:200],
+                    source_text=sanitize_source_text(full_text[:200]),
                 )
 
         for pattern in free_patterns:
@@ -206,7 +207,7 @@ class PropertyExtractionAgent(BaseExtractionAgent):
                     field_name="ownership_status",
                     value="LIVING_RENT_FREE",
                     confidence=80.0,
-                    source_text=full_text[:200],
+                    source_text=sanitize_source_text(full_text[:200]),
                 )
 
         return None
@@ -234,7 +235,7 @@ class PropertyExtractionAgent(BaseExtractionAgent):
                             field_name="monthly_payment",
                             value=value,
                             confidence=75.0,
-                            source_text=full_text[max(0, match.start()-30):match.end()+30],
+                            source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                         )
                 except ValueError:
                     continue
@@ -259,7 +260,7 @@ class PropertyExtractionAgent(BaseExtractionAgent):
                     field_name="years_at_address",
                     value=years,
                     confidence=80.0,
-                    source_text=full_text[max(0, match.start()-30):match.end()+30],
+                    source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                 ))
 
         # Months pattern
@@ -272,7 +273,7 @@ class PropertyExtractionAgent(BaseExtractionAgent):
                     field_name="months_at_address",
                     value=months,
                     confidence=75.0,
-                    source_text=full_text[max(0, match.start()-30):match.end()+30],
+                    source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                 ))
 
         return extractions
@@ -293,7 +294,7 @@ class PropertyExtractionAgent(BaseExtractionAgent):
                         field_name="property_type",
                         value=prop_type,
                         confidence=80.0,
-                        source_text=full_text[:200],
+                        source_text=sanitize_source_text(full_text[:200]),
                     )
 
         return None
@@ -322,7 +323,7 @@ class PropertyExtractionAgent(BaseExtractionAgent):
                             field_name="purchase_price",
                             value=value,
                             confidence=75.0,
-                            source_text=full_text[max(0, match.start()-30):match.end()+30],
+                            source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                         )
                 except ValueError:
                     continue

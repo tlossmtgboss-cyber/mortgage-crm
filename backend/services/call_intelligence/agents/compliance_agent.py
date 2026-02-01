@@ -14,6 +14,7 @@ from ..data_contracts import (
     ExtractionResult,
     ExtractedValue,
 )
+from ..pii_utils import sanitize_source_text
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +105,7 @@ class ComplianceExtractionAgent(BaseExtractionAgent):
                     field_name="citizenship_status",
                     value="US_CITIZEN",
                     confidence=90.0,
-                    source_text=full_text[:200],
+                    source_text=sanitize_source_text(full_text[:200]),
                 )
 
         # Permanent Resident
@@ -118,7 +119,7 @@ class ComplianceExtractionAgent(BaseExtractionAgent):
                     field_name="citizenship_status",
                     value="PERMANENT_RESIDENT",
                     confidence=85.0,
-                    source_text=full_text[:200],
+                    source_text=sanitize_source_text(full_text[:200]),
                 )
 
         # Non-Permanent Resident
@@ -132,7 +133,7 @@ class ComplianceExtractionAgent(BaseExtractionAgent):
                     field_name="citizenship_status",
                     value="NON_PERMANENT_RESIDENT",
                     confidence=80.0,
-                    source_text=full_text[:200],
+                    source_text=sanitize_source_text(full_text[:200]),
                 )
 
         return None
@@ -174,7 +175,7 @@ class ComplianceExtractionAgent(BaseExtractionAgent):
                 field_name="has_bankruptcy",
                 value=has_bankruptcy,
                 confidence=85.0,
-                source_text=full_text[:200],
+                source_text=sanitize_source_text(full_text[:200]),
             ))
 
         # If yes, try to extract chapter and discharge date
@@ -189,7 +190,7 @@ class ComplianceExtractionAgent(BaseExtractionAgent):
                         field_name="bankruptcy_chapter",
                         value=f"Chapter {chapter}",
                         confidence=85.0,
-                        source_text=full_text[max(0, match.start()-20):match.end()+20],
+                        source_text=sanitize_source_text(full_text[max(0, match.start()-20):match.end()+20]),
                     ))
 
             # Discharge date
@@ -222,7 +223,7 @@ class ComplianceExtractionAgent(BaseExtractionAgent):
                     field_name="has_foreclosure",
                     value=False,
                     confidence=85.0,
-                    source_text=full_text[:200],
+                    source_text=sanitize_source_text(full_text[:200]),
                 )
 
         for pattern in fc_yes_patterns:
@@ -231,7 +232,7 @@ class ComplianceExtractionAgent(BaseExtractionAgent):
                     field_name="has_foreclosure",
                     value=True,
                     confidence=80.0,
-                    source_text=full_text[:200],
+                    source_text=sanitize_source_text(full_text[:200]),
                 )
 
         return None
@@ -258,7 +259,7 @@ class ComplianceExtractionAgent(BaseExtractionAgent):
                     field_name="has_outstanding_judgments",
                     value=False,
                     confidence=80.0,
-                    source_text=full_text[:200],
+                    source_text=sanitize_source_text(full_text[:200]),
                 )
 
         for pattern in jdg_yes_patterns:
@@ -267,7 +268,7 @@ class ComplianceExtractionAgent(BaseExtractionAgent):
                     field_name="has_outstanding_judgments",
                     value=True,
                     confidence=75.0,
-                    source_text=full_text[:200],
+                    source_text=sanitize_source_text(full_text[:200]),
                 )
 
         return None
@@ -301,7 +302,7 @@ class ComplianceExtractionAgent(BaseExtractionAgent):
                     field_name="will_occupy_as_primary",
                     value=True,
                     confidence=85.0,
-                    source_text=full_text[:200],
+                    source_text=sanitize_source_text(full_text[:200]),
                 )
 
         for pattern in investment_patterns:
@@ -310,7 +311,7 @@ class ComplianceExtractionAgent(BaseExtractionAgent):
                     field_name="will_occupy_as_primary",
                     value=False,
                     confidence=85.0,
-                    source_text=full_text[:200],
+                    source_text=sanitize_source_text(full_text[:200]),
                 )
 
         for pattern in second_home_patterns:
@@ -319,7 +320,7 @@ class ComplianceExtractionAgent(BaseExtractionAgent):
                     field_name="property_use",
                     value="SECOND_HOME",
                     confidence=80.0,
-                    source_text=full_text[:200],
+                    source_text=sanitize_source_text(full_text[:200]),
                 )
 
         return None
@@ -348,7 +349,7 @@ class ComplianceExtractionAgent(BaseExtractionAgent):
                     field_name="first_time_buyer",
                     value=True,
                     confidence=85.0,
-                    source_text=full_text[:200],
+                    source_text=sanitize_source_text(full_text[:200]),
                 )
 
         for pattern in ftb_no_patterns:
@@ -357,7 +358,7 @@ class ComplianceExtractionAgent(BaseExtractionAgent):
                     field_name="first_time_buyer",
                     value=False,
                     confidence=85.0,
-                    source_text=full_text[:200],
+                    source_text=sanitize_source_text(full_text[:200]),
                 )
 
         return None

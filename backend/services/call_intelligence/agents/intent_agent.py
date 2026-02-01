@@ -14,6 +14,7 @@ from ..data_contracts import (
     ExtractionResult,
     ExtractedValue,
 )
+from ..pii_utils import sanitize_source_text
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +118,7 @@ class IntentExtractionAgent(BaseExtractionAgent):
                         field_name="loan_purpose",
                         value=purpose,
                         confidence=85.0,
-                        source_text=full_text[:200],
+                        source_text=sanitize_source_text(full_text[:200]),
                     )
 
         return None
@@ -142,7 +143,7 @@ class IntentExtractionAgent(BaseExtractionAgent):
                     field_name="target_timeline",
                     value=value,
                     confidence=75.0,
-                    source_text=full_text[max(0, match.start()-30):match.end()+30],
+                    source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                 ))
                 break
 
@@ -169,7 +170,7 @@ class IntentExtractionAgent(BaseExtractionAgent):
                         field_name="urgency",
                         value=urgency,
                         confidence=75.0,
-                        source_text=full_text[:200],
+                        source_text=sanitize_source_text(full_text[:200]),
                     ))
                     break
 
@@ -192,7 +193,7 @@ class IntentExtractionAgent(BaseExtractionAgent):
                         field_name="loan_type_preference",
                         value=loan_type,
                         confidence=80.0,
-                        source_text=full_text[:200],
+                        source_text=sanitize_source_text(full_text[:200]),
                     )
 
         return None
@@ -215,7 +216,7 @@ class IntentExtractionAgent(BaseExtractionAgent):
                     field_name="rate_type_preference",
                     value="FIXED",
                     confidence=85.0,
-                    source_text=full_text[:200],
+                    source_text=sanitize_source_text(full_text[:200]),
                 )
 
         for pattern in arm_patterns:
@@ -224,7 +225,7 @@ class IntentExtractionAgent(BaseExtractionAgent):
                     field_name="rate_type_preference",
                     value="ARM",
                     confidence=80.0,
-                    source_text=full_text[:200],
+                    source_text=sanitize_source_text(full_text[:200]),
                 )
 
         return None
@@ -248,7 +249,7 @@ class IntentExtractionAgent(BaseExtractionAgent):
                     field_name="has_preapproval",
                     value=True,
                     confidence=85.0,
-                    source_text=full_text[:200],
+                    source_text=sanitize_source_text(full_text[:200]),
                 )
 
         for pattern in needs_preapproval:
@@ -257,7 +258,7 @@ class IntentExtractionAgent(BaseExtractionAgent):
                     field_name="has_preapproval",
                     value=False,
                     confidence=80.0,
-                    source_text=full_text[:200],
+                    source_text=sanitize_source_text(full_text[:200]),
                 )
 
         return None
@@ -281,7 +282,7 @@ class IntentExtractionAgent(BaseExtractionAgent):
                     field_name="has_realtor",
                     value=True,
                     confidence=85.0,
-                    source_text=full_text[:200],
+                    source_text=sanitize_source_text(full_text[:200]),
                 ))
 
                 # Try to extract realtor name
@@ -292,7 +293,7 @@ class IntentExtractionAgent(BaseExtractionAgent):
                         field_name="realtor_name",
                         value=match.group(1).strip(),
                         confidence=70.0,
-                        source_text=full_text[max(0, match.start()-20):match.end()+30],
+                        source_text=sanitize_source_text(full_text[max(0, match.start()-20):match.end()+30]),
                     ))
                 break
 
@@ -302,7 +303,7 @@ class IntentExtractionAgent(BaseExtractionAgent):
                     field_name="has_realtor",
                     value=False,
                     confidence=80.0,
-                    source_text=full_text[:200],
+                    source_text=sanitize_source_text(full_text[:200]),
                 ))
                 break
 

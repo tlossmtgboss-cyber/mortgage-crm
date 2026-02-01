@@ -16,6 +16,7 @@ from ..data_contracts import (
     ExtractedValue,
     SpeakerRole,
 )
+from ..pii_utils import sanitize_source_text
 from ..llm_client import (
     BaseLLMClient,
     ExtractionSchema,
@@ -174,6 +175,7 @@ class BaseExtractionAgent(ABC):
                 'ai_lo': 'Loan Officer',
                 'borrower': 'Borrower',
                 'co_borrower': 'Co-Borrower',
+                'human_lo': 'Human Loan Officer',
                 'unknown': 'Unknown',
             }
             speaker_name = speaker_map.get(speaker.lower(), speaker)
@@ -202,18 +204,18 @@ class BaseExtractionAgent(ABC):
             if isinstance(field_data, dict):
                 value = field_data.get("value")
                 confidence = field_data.get("confidence", 0)
-                source_text = field_data.get("source_text", "")
+                raw_source_text = field_data.get("source_text", "")
 
                 # Skip null values with low confidence
                 if value is None and confidence < 10:
                     continue
 
-                # Create ExtractedValue
+                # Create ExtractedValue with sanitized source text
                 extracted = ExtractedValue(
                     field_name=field_name,
                     value=value,
                     confidence=float(confidence),
-                    source_text=source_text,
+                    source_text=sanitize_source_text(raw_source_text),
                     extraction_method="llm",
                 )
 
@@ -355,11 +357,12 @@ class BaseExtractionAgent(ABC):
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
             value = match.group(1).strip() if match.groups() else match.group(0).strip()
+            raw_source = text[max(0, match.start()-50):match.end()+50]
             return ExtractedValue(
                 field_name=field_name,
                 value=value,
                 confidence=confidence_base,
-                source_text=text[max(0, match.start()-50):match.end()+50],
+                source_text=sanitize_source_text(raw_source),
                 extraction_method="regex",
             )
         return None
@@ -399,11 +402,12 @@ class BaseExtractionAgent(ABC):
                     except ValueError:
                         continue
 
+                raw_source = text[max(0, match.start()-30):match.end()+30]
                 return ExtractedValue(
                     field_name=field_name,
                     value=value,
                     confidence=70.0,
-                    source_text=text[max(0, match.start()-30):match.end()+30],
+                    source_text=sanitize_source_text(raw_source),
                     extraction_method="regex",
                 )
         return None
@@ -426,11 +430,12 @@ class BaseExtractionAgent(ABC):
         for pattern in patterns:
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
+                raw_source = text[max(0, match.start()-20):match.end()+20]
                 return ExtractedValue(
                     field_name=field_name,
                     value=match.group(1),
                     confidence=75.0,
-                    source_text=text[max(0, match.start()-20):match.end()+20],
+                    source_text=sanitize_source_text(raw_source),
                     extraction_method="regex",
                 )
         return None
@@ -451,11 +456,12 @@ class BaseExtractionAgent(ABC):
             if match:
                 phone = re.sub(r'[^\d]', '', match.group(1))
                 if len(phone) == 10:
+                    raw_source = text[max(0, match.start()-20):match.end()+20]
                     return ExtractedValue(
                         field_name=field_name,
                         value=phone,
                         confidence=90.0,
-                        source_text=text[max(0, match.start()-20):match.end()+20],
+                        source_text=sanitize_source_text(raw_source),
                         extraction_method="regex",
                     )
         return None
@@ -469,11 +475,12 @@ class BaseExtractionAgent(ABC):
         pattern = r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})'
         match = re.search(pattern, text)
         if match:
+            raw_source = text[max(0, match.start()-20):match.end()+20]
             return ExtractedValue(
                 field_name=field_name,
                 value=match.group(1).lower(),
                 confidence=95.0,
-                source_text=text[max(0, match.start()-20):match.end()+20],
+                source_text=sanitize_source_text(raw_source),
                 extraction_method="regex",
             )
         return None
@@ -509,7 +516,7 @@ class BaseExtractionAgent(ABC):
                     field_name=field_name,
                     value=True,
                     confidence=80.0,
-                    source_text=text[:200],
+                    source_text=sanitize_source_text(text[:200]),
                     verification_question=question_context,
                     extraction_method="regex",
                 )
@@ -520,7 +527,7 @@ class BaseExtractionAgent(ABC):
                     field_name=field_name,
                     value=False,
                     confidence=80.0,
-                    source_text=text[:200],
+                    source_text=sanitize_source_text(text[:200]),
                     verification_question=question_context,
                     extraction_method="regex",
                 )
