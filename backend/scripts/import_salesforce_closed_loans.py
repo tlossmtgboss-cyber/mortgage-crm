@@ -32,66 +32,94 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
-# Salesforce object to query - MtgPlanner_CRM Transaction Property (Jungo Loan object)
-SALESFORCE_LOAN_OBJECT = 'MtgPlanner_CRM__Transaction_Property__c'
-
-# Salesforce field to CRM field mapping for MtgPlanner_CRM Transaction Property (Jungo Loans)
+# Salesforce field to CRM field mapping for Opportunities (Closed Loans)
 OPPORTUNITY_FIELD_MAPPING = {
-    # Standard fields
+    # Standard Salesforce Opportunity fields
     'Id': 'salesforce_id',
-    'Name': 'borrower_name',  # Format: "Borrower Name - Loan # XXXXXX"
-    'CreatedDate': 'created_at',
-    'LastModifiedDate': 'updated_at',
+    'Name': 'borrower_name',
+    'Amount': 'amount',
+    'StageName': 'stage',
+    'CloseDate': 'closing_date',
+    'Description': 'notes',
+    'AccountId': 'salesforce_account_id',
 
-    # MtgPlanner_CRM Loan fields
-    'MtgPlanner_CRM__Loan_Amount__c': 'amount',
-    'MtgPlanner_CRM__Loan_Type__c': 'loan_type',
-    'MtgPlanner_CRM__Loan_Program__c': 'program',
-    'MtgPlanner_CRM__Interest_Rate__c': 'rate',
-    'MtgPlanner_CRM__Note_Rate__c': 'rate',
-    'MtgPlanner_CRM__Status__c': 'stage',
-    'MtgPlanner_CRM__Stage__c': 'stage',
+    # Contact/Borrower fields (if available)
+    'Contact_Email__c': 'borrower_email',
+    'Borrower_Email__c': 'borrower_email',
+    'Email__c': 'borrower_email',
+    'Contact_Phone__c': 'borrower_phone',
+    'Borrower_Phone__c': 'borrower_phone',
+    'Phone__c': 'borrower_phone',
+    'Co_Borrower_Name__c': 'coborrower_name',
+    'Co_Borrower_Email__c': 'co_borrower_email',
 
-    # Borrower info
-    'MtgPlanner_CRM__Borrower_Name__c': 'borrower_name',
-    'MtgPlanner_CRM__Borrower_Email__c': 'borrower_email',
-    'MtgPlanner_CRM__Borrower_Phone__c': 'borrower_phone',
-    'MtgPlanner_CRM__CoBorrower_Name__c': 'coborrower_name',
+    # Loan details
+    'Loan_Number__c': 'loan_number',
+    'File_Name__c': 'loan_number',
+    'Loan_Amount__c': 'amount',
+    'Interest_Rate__c': 'rate',
+    'Loan_Term__c': 'term',
+    'Loan_Type__c': 'loan_type',
+    'Loan_Program__c': 'program',
+    'Loan_Purpose__c': 'loan_purpose',
+    'Rate_Type__c': 'rate_type',
 
     # Property fields
-    'MtgPlanner_CRM__Property_Address__c': 'property_address',
-    'MtgPlanner_CRM__Property_City__c': 'property_city',
-    'MtgPlanner_CRM__Property_State__c': 'property_state',
-    'MtgPlanner_CRM__Property_Zip__c': 'property_zip',
-    'MtgPlanner_CRM__Property_Type__c': 'property_type',
-    'MtgPlanner_CRM__Occupancy_Type__c': 'occupancy_type',
-    'MtgPlanner_CRM__Purchase_Price__c': 'purchase_price',
+    'Property_Address__c': 'property_address',
+    'Property_Street__c': 'property_address',
+    'Property_City__c': 'property_city',
+    'Property_State__c': 'property_state',
+    'Property_Zip__c': 'property_zip',
+    'Property_County__c': 'property_county',
+    'Property_Type__c': 'property_type',
+    'Property_Value__c': 'purchase_price',
+    'Appraised_Value__c': 'appraisal_value',
+    'Occupancy_Type__c': 'occupancy_type',
+    'Property_Units__c': 'property_units',
 
     # Financial details
-    'MtgPlanner_CRM__Down_Payment__c': 'down_payment',
-    'MtgPlanner_CRM__LTV__c': 'ltv',
-    'MtgPlanner_CRM__CLTV__c': 'cltv',
-    'MtgPlanner_CRM__Monthly_Payment_1st_TD__c': 'monthly_payment',
-    'MtgPlanner_CRM__Property_Tax_1st_TD__c': 'property_tax',
-    'MtgPlanner_CRM__Hazard_Ins_1st_TD__c': 'hazard_insurance',
-    'MtgPlanner_CRM__Mortgage_Ins_1st_TD__c': 'mortgage_insurance',
-    'MtgPlanner_CRM__HOA_1st_TD__c': 'hoa_amount',
+    'Purchase_Price__c': 'purchase_price',
+    'Down_Payment__c': 'down_payment',
+    'LTV__c': 'ltv',
+    'CLTV__c': 'cltv',
+    'Monthly_Payment__c': 'monthly_payment',
+    'Property_Tax__c': 'property_tax',
+    'Hazard_Insurance__c': 'hazard_insurance',
+    'Mortgage_Insurance__c': 'mortgage_insurance',
+    'HOA_Amount__c': 'hoa_amount',
+    'Origination_Fee__c': 'origination_fee',
+
+    # Team members
+    'Loan_Officer__c': 'loan_officer_name',
+    'Loan_Officer_Email__c': 'loan_officer_email',
+    'Processor__c': 'processor',
+    'Processor_Email__c': 'processor_email',
+    'Underwriter__c': 'underwriter',
+    'Underwriter_Email__c': 'underwriter_email',
+    'Closer__c': 'closer',
+    'Closer_Email__c': 'closer_email',
 
     # Dates
-    'MtgPlanner_CRM__Closing_Date__c': 'closing_date',
-    'MtgPlanner_CRM__Application_Date__c': 'application_date',
-    'MtgPlanner_CRM__Lock_Date__c': 'lock_date',
-    'MtgPlanner_CRM__Lock_Expiration__c': 'lock_expiration_date',
-    'MtgPlanner_CRM__Funded_Date__c': 'funded_date',
-    'MtgPlanner_CRM__Clear_To_Close_Date__c': 'clear_to_close_date',
-    'MtgPlanner_CRM__UW_Received_Date__c': 'uw_received_date',
-    'MtgPlanner_CRM__Loan_Approved_Date__c': 'loan_approved_date',
-    'MtgPlanner_CRM__Appraisal_Ordered_Date__c': 'appraisal_ordered_date',
-    'MtgPlanner_CRM__Appraisal_Received_Date__c': 'appraisal_received_date',
-    'MtgPlanner_CRM__CD_Sent_To_Borrower_Date__c': 'cd_sent_to_borrower_date',
-    'MtgPlanner_CRM__Scheduled_Closing_Date__c': 'scheduled_closing_date',
-    'MtgPlanner_CRM__First_Payment_Date__c': 'first_payment_date',
-    'MtgPlanner_CRM__Loan_Purpose__c': 'loan_purpose',
+    'Lock_Date__c': 'lock_date',
+    'Lock_Expiration_Date__c': 'lock_expiration_date',
+    'Application_Date__c': 'application_date',
+    'Approval_Date__c': 'loan_approved_date',
+    'Clear_to_Close_Date__c': 'clear_to_close_date',
+    'Docs_Out_Date__c': 'docs_out_date',
+    'Funding_Date__c': 'funded_date',
+    'Funded_Date__c': 'funded_date',
+
+    # Additional fields
+    'Lender__c': 'lender',
+    'Title_Company__c': 'title_company',
+    'Realtor__c': 'realtor_agent',
+    'Referral_Source__c': 'referral_source',
+    'Credit_Score__c': 'credit_score',
+
+    # 2nd Loan
+    'Second_Loan_Amount__c': 'second_loan_amount',
+    'Second_Loan_Rate__c': 'second_loan_rate',
+    'Second_Loan_Payment__c': 'second_loan_payment',
 }
 
 
@@ -137,10 +165,10 @@ class SalesforceClosedLoansImporter:
         return await salesforce_oauth.get_access_token(db, profile.id)
 
     async def discover_opportunity_fields(self) -> List[str]:
-        """Discover available fields on MtgPlanner_CRM__Transaction_Property__c (Jungo Loan) object"""
+        """Discover available fields on Opportunity object"""
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{self.instance_url}/services/data/v60.0/sobjects/{SALESFORCE_LOAN_OBJECT}/describe",
+                f"{self.instance_url}/services/data/v60.0/sobjects/Opportunity/describe",
                 headers={
                     'Authorization': f'Bearer {self.access_token}',
                     'Content-Type': 'application/json'
@@ -149,38 +177,43 @@ class SalesforceClosedLoansImporter:
             )
 
             if response.status_code != 200:
-                logger.warning(f"Failed to describe {SALESFORCE_LOAN_OBJECT}: {response.text}")
+                logger.warning(f"Failed to describe Opportunity: {response.text}")
                 return list(OPPORTUNITY_FIELD_MAPPING.keys())
 
             data = response.json()
             available_fields = [f['name'] for f in data.get('fields', [])]
 
-            logger.info(f"Discovered {len(available_fields)} fields on {SALESFORCE_LOAN_OBJECT} object")
+            logger.info(f"Discovered {len(available_fields)} fields on Opportunity object")
             return available_fields
 
     def build_soql_query(self, available_fields: List[str]) -> str:
-        """Build SOQL query for closed loans from MtgPlanner_CRM__Transaction_Property__c"""
-        # Get fields that exist in Salesforce - start with basic fields
-        fields_to_query = ['Id', 'Name', 'CreatedDate', 'LastModifiedDate']
+        """Build SOQL query for closed opportunities"""
+        # Get fields that exist in Salesforce
+        fields_to_query = ['Id', 'Name', 'Amount', 'StageName', 'CloseDate', 'Description',
+                          'AccountId', 'CreatedDate', 'LastModifiedDate']
 
-        # Add MtgPlanner_CRM fields that exist
+        # Add custom fields that exist
         for sf_field in OPPORTUNITY_FIELD_MAPPING.keys():
             if sf_field in available_fields and sf_field not in fields_to_query:
                 fields_to_query.append(sf_field)
 
         fields_str = ', '.join(fields_to_query)
 
-        # Query for Closed/Funded/Shipped loans from Transaction_Property
-        # Using MtgPlanner_CRM__Status__c for status filtering
+        # Query for Closed/Won/Funded/Shipped opportunities (broader criteria)
         soql = f"""
             SELECT {fields_str}
-            FROM {SALESFORCE_LOAN_OBJECT}
-            WHERE MtgPlanner_CRM__Status__c IN ('Funded', 'Closed', 'Closed Won', 'Shipped', 'Complete', 'File Complete')
-               OR MtgPlanner_CRM__Status__c LIKE '%Fund%'
-               OR MtgPlanner_CRM__Status__c LIKE '%Ship%'
-               OR MtgPlanner_CRM__Status__c LIKE '%Close%'
-               OR MtgPlanner_CRM__Funded_Date__c != null
-            ORDER BY LastModifiedDate DESC
+            FROM Opportunity
+            WHERE StageName = 'Closed Won'
+               OR StageName LIKE '%Funded%'
+               OR StageName LIKE '%Closed%'
+               OR StageName LIKE '%Won%'
+               OR StageName LIKE '%Complete%'
+               OR StageName LIKE '%Settled%'
+               OR StageName LIKE '%Ship%'
+               OR StageName = 'Funded'
+               OR StageName = 'Shipped'
+               OR IsWon = true
+            ORDER BY CloseDate DESC
             LIMIT 2000
         """
 
@@ -256,47 +289,22 @@ class SalesforceClosedLoansImporter:
                         pass
                 elif crm_field in ['closing_date', 'lock_date', 'lock_expiration_date',
                                   'funded_date', 'application_date', 'loan_approved_date',
-                                  'clear_to_close_date', 'docs_out_date', 'uw_received_date',
-                                  'appraisal_ordered_date', 'appraisal_received_date',
-                                  'cd_sent_to_borrower_date', 'scheduled_closing_date',
-                                  'first_payment_date', 'created_at', 'updated_at']:
+                                  'clear_to_close_date', 'docs_out_date']:
                     # Keep as string for now, database will parse
                     loan_data[crm_field] = str(value)[:10] if value else None
                 else:
                     loan_data[crm_field] = str(value) if value else None
 
-        # Map Salesforce stage to CRM stage (use MtgPlanner status field)
-        sf_stage = opportunity.get('MtgPlanner_CRM__Status__c') or opportunity.get('MtgPlanner_CRM__Stage__c', '')
+        # Map Salesforce stage to CRM stage
+        sf_stage = opportunity.get('StageName', '')
         loan_data['stage'] = self._map_stage(sf_stage)
-
-        # Parse Name field (format: "Borrower Name - Loan # XXXXXX")
-        sf_name = opportunity.get('Name', '')
-        import re
-
-        # Extract loan number from Name field
-        if not loan_data.get('loan_number') and sf_name:
-            if 'Loan #' in sf_name:
-                match = re.search(r'Loan #\s*(\S+)', sf_name)
-                if match:
-                    loan_data['loan_number'] = match.group(1)
-            elif 'RCA' in sf_name:
-                match = re.search(r'(RCA\d+)', sf_name)
-                if match:
-                    loan_data['loan_number'] = match.group(1)
-
-        # Extract borrower name from Name field if not in dedicated field
-        if not loan_data.get('borrower_name') and sf_name:
-            if ' - Loan #' in sf_name:
-                loan_data['borrower_name'] = sf_name.split(' - Loan #')[0].strip()
-            else:
-                loan_data['borrower_name'] = sf_name
 
         # Ensure required fields
         if not loan_data.get('borrower_name'):
-            loan_data['borrower_name'] = 'Unknown Borrower'
+            loan_data['borrower_name'] = opportunity.get('Name', 'Unknown Borrower')
 
         if not loan_data.get('amount'):
-            loan_data['amount'] = float(opportunity.get('MtgPlanner_CRM__Loan_Amount__c', 0) or 0)
+            loan_data['amount'] = float(opportunity.get('Amount', 0) or 0)
 
         # Generate loan number if not present
         if not loan_data.get('loan_number'):
@@ -308,7 +316,7 @@ class SalesforceClosedLoansImporter:
         """Map Salesforce stage to CRM stage"""
         stage_lower = sf_stage.lower() if sf_stage else ''
 
-        if 'funded' in stage_lower or 'closed won' in stage_lower or 'shipped' in stage_lower or 'complete' in stage_lower:
+        if 'funded' in stage_lower or 'closed won' in stage_lower:
             return 'Funded'
         elif 'closing' in stage_lower:
             return 'Closing'
