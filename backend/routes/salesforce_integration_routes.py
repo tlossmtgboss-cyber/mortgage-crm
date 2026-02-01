@@ -936,7 +936,12 @@ def get_current_user_id(request: Request, db: Session) -> Optional[int]:
         if auth_header.startswith("Bearer "):
             token = auth_header[7:]
             secret_key = os.getenv("SECRET_KEY", "")
-            payload = jwt.decode(token, secret_key, algorithms=["HS256"])
+            payload = jwt.decode(
+                token,
+                secret_key,
+                algorithms=["HS256"],
+                options={"verify_aud": False, "verify_iss": False}
+            )
             email = payload.get("sub")
             if email:
                 try:
@@ -1186,19 +1191,15 @@ async def get_connection_status(
         logger.warning("Salesforce status check: User not authenticated")
         raise
     except Exception as e:
-        logger.error(f"Salesforce status check: Error getting user: {e}")
-        raise HTTPException(status_code=500, detail=f"Error getting user: {str(e)}")
+        logger.warning(f"Salesforce status check: Error getting user: {e}")
+        return ConnectionStatus(connected=False)
 
     try:
         profile = get_integration_profile(db, user_id)
         logger.info(f"Found profile for user {user_id}: {profile.id if profile else 'None'}, status: {profile.status if profile else 'N/A'}")
     except Exception as e:
-        logger.error(f"Salesforce status check: Error getting profile: {e}")
-        # If table doesn't exist, return not connected instead of 500
-        if "does not exist" in str(e).lower() or "relation" in str(e).lower():
-            logger.warning(f"Integration profiles table may not exist: {e}")
-            return ConnectionStatus(connected=False)
-        raise HTTPException(status_code=500, detail=f"Error getting profile: {str(e)}")
+        logger.warning(f"Salesforce status check: Error getting profile (may not exist): {e}")
+        return ConnectionStatus(connected=False)
 
     if not profile:
         logger.info(f"No Salesforce profile found for user {user_id}")

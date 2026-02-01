@@ -286,7 +286,12 @@ def get_current_user_id(request: Request, db: Session = None) -> Optional[int]:
         if auth_header.startswith("Bearer "):
             token = auth_header[7:]
             secret_key = os.getenv("SECRET_KEY", "")
-            payload = jwt.decode(token, secret_key, algorithms=["HS256"])
+            payload = jwt.decode(
+                token,
+                secret_key,
+                algorithms=["HS256"],
+                options={"verify_aud": False, "verify_iss": False}
+            )
             email = payload.get("sub")
             if email and db:
                 # Look up user by email
