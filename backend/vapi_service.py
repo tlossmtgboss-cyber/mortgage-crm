@@ -15,6 +15,17 @@ import uuid
 
 logger = logging.getLogger(__name__)
 
+# Call Intelligence Integration
+try:
+    from services.call_intelligence.integration import (
+        handle_vapi_call_ended,
+        CallIntelligenceIntegration,
+    )
+    CALL_INTELLIGENCE_ENABLED = True
+except ImportError:
+    CALL_INTELLIGENCE_ENABLED = False
+    handle_vapi_call_ended = None
+
 
 # =============================================================================
 # AI RECEPTIONIST SMS SERVICE
@@ -738,6 +749,10 @@ class VapiCRMIntegration:
         self.db.commit()
         self.db.refresh(vapi_call)
 
+        # Process through Call Intelligence if enabled and transcript available
+        if CALL_INTELLIGENCE_ENABLED and handle_vapi_call_ended and vapi_call.transcript:
+            await self._process_call_intelligence(vapi_call, call_data)
+
         # Send post-call SMS follow-up
         await self._send_post_call_sms(vapi_call, call_data)
 
@@ -827,6 +842,65 @@ class VapiCRMIntegration:
         except Exception as e:
             # Don't fail the whole process if SMS fails
             logger.error(f"Error sending post-call SMS: {e}")
+
+    async def _process_call_intelligence(self, vapi_call: VapiCall, call_data: Dict[str, Any]) -> None:
+        """
+        Process call through Call Intelligence for structured data extraction.
+
+        Extracts:
+        - Borrower identity information
+        - Property details
+        - Employment/income data
+        - Financial assets/liabilities
+        - Compliance declarations
+        - Loan intent/preferences
+
+        Then runs Application Engine audit if loan_id is associated.
+        """
+        try:
+            logger.info(f"Processing call {vapi_call.vapi_call_id} through Call Intelligence")
+
+            # Build call_data format expected by integration
+            vapi_format_data = {
+                "messages": call_data.get("messages", []),
+                "assistant": {
+                    "id": call_data.get("assistantId"),
+                    "metadata": {
+                        "loan_id": vapi_call.loan_id,
+                        "organization_id": getattr(vapi_call, 'organization_id', None) or 1,
+                    }
+                },
+                "duration": vapi_call.duration,
+            }
+
+            # Call the integration handler
+            ci_result = await handle_vapi_call_ended(
+                db=self.db,
+                call_id=vapi_call.vapi_call_id,
+                call_data=vapi_format_data,
+            )
+
+            if ci_result.get("success"):
+                logger.info(
+                    f"Call Intelligence processed {vapi_call.vapi_call_id}: "
+                    f"{ci_result.get('extractions_count', 0)} extractions, "
+                    f"{ci_result.get('tasks_created', 0)} tasks created"
+                )
+
+                # Update VapiCall with CI processing status
+                vapi_call.ci_processed = True
+                vapi_call.ci_extractions_count = ci_result.get('extractions_count', 0)
+                vapi_call.ci_tasks_created = ci_result.get('tasks_created', 0)
+                self.db.commit()
+            else:
+                logger.warning(
+                    f"Call Intelligence processing failed for {vapi_call.vapi_call_id}: "
+                    f"{ci_result.get('error', 'Unknown error')}"
+                )
+
+        except Exception as e:
+            # Don't fail the whole process if CI fails
+            logger.exception(f"Call Intelligence error for {vapi_call.vapi_call_id}: {e}")
 
     async def _process_status_update(self, data: Dict[str, Any]) -> Optional[VapiCall]:
         """Process real-time status updates"""

@@ -26,6 +26,17 @@ from integrations.retell_service import (
     create_marketing_agent,
 )
 
+# Call Intelligence Integration
+try:
+    from services.call_intelligence.integration import (
+        handle_retell_call_ended,
+        CallIntelligenceIntegration,
+    )
+    CALL_INTELLIGENCE_ENABLED = True
+except ImportError:
+    CALL_INTELLIGENCE_ENABLED = False
+    handle_retell_call_ended = None
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/retell", tags=["Retell AI"])
@@ -852,13 +863,14 @@ async def process_call_completion(
     Process completed call data.
     - Update lead/contact records
     - Log activity
+    - Trigger Call Intelligence processing
     - Trigger follow-up workflows
     """
     try:
         # Get local call record with metadata
         call_record = db.execute(
             text("""
-            SELECT lead_id, loan_id, campaign_id, user_id
+            SELECT lead_id, loan_id, campaign_id, user_id, organization_id
             FROM retell_calls WHERE retell_call_id = :call_id
             """),
             {"call_id": call_id}
@@ -900,6 +912,35 @@ async def process_call_completion(
         )
 
         db.commit()
+
+        # Process through Call Intelligence if enabled and transcript available
+        if CALL_INTELLIGENCE_ENABLED and handle_retell_call_ended:
+            transcript = call_data.get("transcript", "")
+            if transcript:
+                logger.info(f"Processing call {call_id} through Call Intelligence")
+                try:
+                    ci_result = await handle_retell_call_ended(
+                        db=db,
+                        call_id=call_id,
+                        call_data=call_data,
+                    )
+
+                    if ci_result.get("success"):
+                        logger.info(
+                            f"Call Intelligence processed {call_id}: "
+                            f"{ci_result.get('extractions_count', 0)} extractions, "
+                            f"{ci_result.get('tasks_created', 0)} tasks created"
+                        )
+                    else:
+                        logger.warning(
+                            f"Call Intelligence processing failed for {call_id}: "
+                            f"{ci_result.get('error', 'Unknown error')}"
+                        )
+                except Exception as ci_error:
+                    logger.exception(f"Call Intelligence error for {call_id}: {ci_error}")
+            else:
+                logger.debug(f"No transcript available for call {call_id}, skipping Call Intelligence")
+
         logger.info(f"Post-call processing complete for {call_id}")
 
     except Exception as e:
