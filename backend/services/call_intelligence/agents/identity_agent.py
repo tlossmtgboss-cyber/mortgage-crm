@@ -2,6 +2,11 @@
 Identity Extraction Agent
 
 Extracts borrower identity information from call transcripts.
+
+SECURITY NOTE:
+- SSN extraction only returns last 4 digits
+- Full SSNs are never stored, logged, or transmitted
+- All source_text fields are sanitized to remove PII
 """
 
 import re
@@ -13,6 +18,11 @@ from ..data_contracts import (
     TranscriptSegment,
     ExtractionResult,
     ExtractedValue,
+)
+from ..pii_utils import (
+    extract_ssn_last_four,
+    sanitize_source_text,
+    contains_ssn,
 )
 
 logger = logging.getLogger(__name__)
@@ -112,12 +122,17 @@ class IdentityExtractionAgent(BaseExtractionAgent):
                 full_name = match.group(1).strip()
                 parts = full_name.split()
 
+                # Sanitize source text to remove any PII
+                raw_source = borrower_text[max(0, match.start()-20):match.end()+20]
+                safe_source = sanitize_source_text(raw_source)
+
                 if len(parts) >= 1:
                     extractions.append(ExtractedValue(
                         field_name="first_name",
                         value=parts[0].title(),
                         confidence=85.0,
-                        source_text=borrower_text[max(0, match.start()-20):match.end()+20],
+                        source_text=safe_source,
+                        extraction_method="regex",
                     ))
 
                 if len(parts) >= 2:
@@ -125,7 +140,8 @@ class IdentityExtractionAgent(BaseExtractionAgent):
                         field_name="last_name",
                         value=parts[-1].title(),
                         confidence=85.0,
-                        source_text=borrower_text[max(0, match.start()-20):match.end()+20],
+                        source_text=safe_source,
+                        extraction_method="regex",
                     ))
 
                 break
@@ -139,29 +155,35 @@ class IdentityExtractionAgent(BaseExtractionAgent):
         return extractions
 
     def _extract_ssn(self, text: str) -> ExtractedValue:
-        """Extract SSN (last 4 digits only for security)."""
-        patterns = [
-            r"(?:social|ssn|social security).*?(\d{4})",
-            r"(?:last four|last 4).*?(\d{4})",
-            r"(\d{3}[-\s]?\d{2}[-\s]?\d{4})",  # Full SSN
-        ]
+        """
+        Securely extract SSN last 4 digits only.
 
-        for pattern in patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                ssn = match.group(1).replace('-', '').replace(' ', '')
+        SECURITY: This method uses pii_utils to ensure:
+        - Full SSN is NEVER stored in any variable longer than necessary
+        - Only last 4 digits are extracted and returned
+        - Source text is always redacted
+        - If full SSN is detected, a warning is logged (without the SSN)
+        """
+        # Use secure extraction that never exposes full SSN
+        last_four, full_ssn_detected = extract_ssn_last_four(text)
 
-                # Only store last 4
-                if len(ssn) == 9:
-                    ssn = ssn[-4:]
+        if last_four:
+            # Log security warning if full SSN was in transcript
+            # (but do NOT log the actual SSN)
+            if full_ssn_detected:
+                logger.warning(
+                    "Full SSN detected in transcript - only last 4 digits extracted. "
+                    "Consider advising borrowers not to state full SSN."
+                )
 
-                if len(ssn) == 4 and ssn.isdigit():
-                    return ExtractedValue(
-                        field_name="ssn",
-                        value=ssn,
-                        confidence=90.0,
-                        source_text="[SSN redacted]",
-                    )
+            return ExtractedValue(
+                field_name="ssn_last_four",
+                value=last_four,
+                confidence=90.0 if full_ssn_detected else 85.0,
+                source_text="[SSN redacted for security]",
+                extraction_method="regex",
+            )
+
         return None
 
     def _extract_dob(
@@ -178,22 +200,26 @@ class IdentityExtractionAgent(BaseExtractionAgent):
         for pattern in patterns:
             match = re.search(pattern, full_text, re.IGNORECASE)
             if match:
+                raw_source = full_text[max(0, match.start()-30):match.end()+30]
                 return ExtractedValue(
                     field_name="date_of_birth",
                     value=match.group(1),
                     confidence=85.0,
-                    source_text=full_text[max(0, match.start()-30):match.end()+30],
+                    source_text=sanitize_source_text(raw_source),
+                    extraction_method="regex",
                 )
 
         # Also try month name format
         month_pattern = r"(?:born|birthday).*?((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4})"
         match = re.search(month_pattern, full_text, re.IGNORECASE)
         if match:
+            raw_source = full_text[max(0, match.start()-30):match.end()+30]
             return ExtractedValue(
                 field_name="date_of_birth",
                 value=match.group(1),
                 confidence=85.0,
-                source_text=full_text[max(0, match.start()-30):match.end()+30],
+                source_text=sanitize_source_text(raw_source),
+                extraction_method="regex",
             )
 
         return None
@@ -212,12 +238,15 @@ class IdentityExtractionAgent(BaseExtractionAgent):
         ]
 
         for pattern in citizen_patterns:
-            if re.search(pattern, full_text, re.IGNORECASE):
+            match = re.search(pattern, full_text, re.IGNORECASE)
+            if match:
+                raw_source = full_text[max(0, match.start()-20):match.end()+20]
                 return ExtractedValue(
                     field_name="citizenship_status",
                     value="US_CITIZEN",
                     confidence=85.0,
-                    source_text=full_text[:200],
+                    source_text=sanitize_source_text(raw_source),
+                    extraction_method="regex",
                 )
 
         # Permanent Resident
@@ -227,12 +256,15 @@ class IdentityExtractionAgent(BaseExtractionAgent):
         ]
 
         for pattern in pr_patterns:
-            if re.search(pattern, full_text, re.IGNORECASE):
+            match = re.search(pattern, full_text, re.IGNORECASE)
+            if match:
+                raw_source = full_text[max(0, match.start()-20):match.end()+20]
                 return ExtractedValue(
                     field_name="citizenship_status",
                     value="PERMANENT_RESIDENT",
                     confidence=80.0,
-                    source_text=full_text[:200],
+                    source_text=sanitize_source_text(raw_source),
+                    extraction_method="regex",
                 )
 
         return None
@@ -253,12 +285,15 @@ class IdentityExtractionAgent(BaseExtractionAgent):
 
         for status, patterns in status_map.items():
             for pattern in patterns:
-                if re.search(pattern, full_text, re.IGNORECASE):
+                match = re.search(pattern, full_text, re.IGNORECASE)
+                if match:
+                    raw_source = full_text[max(0, match.start()-20):match.end()+20]
                     return ExtractedValue(
                         field_name="marital_status",
                         value=status,
                         confidence=80.0,
-                        source_text=full_text[:200],
+                        source_text=sanitize_source_text(raw_source),
+                        extraction_method="regex",
                     )
 
         return None
