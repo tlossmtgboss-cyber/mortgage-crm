@@ -32,18 +32,52 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
-# Salesforce field to CRM field mapping for Opportunities (Closed Loans)
+# Use MtgPlanner_CRM__Transaction_Property__c (Jungo Loan object) instead of Opportunity
+USE_TRANSACTION_PROPERTY = True
+SALESFORCE_LOAN_OBJECT = 'MtgPlanner_CRM__Transaction_Property__c' if USE_TRANSACTION_PROPERTY else 'Opportunity'
+
+# Salesforce field to CRM field mapping
 OPPORTUNITY_FIELD_MAPPING = {
-    # Standard Salesforce Opportunity fields
+    # Standard fields
     'Id': 'salesforce_id',
     'Name': 'borrower_name',
+    'CreatedDate': 'created_at',
+    'LastModifiedDate': 'updated_at',
+
+    # MtgPlanner_CRM fields (Jungo Transaction Property)
+    'MtgPlanner_CRM__Loan_Amount__c': 'amount',
+    'MtgPlanner_CRM__Loan_Type__c': 'loan_type',
+    'MtgPlanner_CRM__Loan_Program__c': 'program',
+    'MtgPlanner_CRM__Interest_Rate__c': 'rate',
+    'MtgPlanner_CRM__Note_Rate__c': 'rate',
+    'MtgPlanner_CRM__Status__c': 'stage',
+    'MtgPlanner_CRM__Borrower_Name__c': 'borrower_name',
+    'MtgPlanner_CRM__Borrower_Email__c': 'borrower_email',
+    'MtgPlanner_CRM__Borrower_Phone__c': 'borrower_phone',
+    'MtgPlanner_CRM__CoBorrower_Name__c': 'coborrower_name',
+    'MtgPlanner_CRM__Property_Address__c': 'property_address',
+    'MtgPlanner_CRM__Property_City__c': 'property_city',
+    'MtgPlanner_CRM__Property_State__c': 'property_state',
+    'MtgPlanner_CRM__Property_Zip__c': 'property_zip',
+    'MtgPlanner_CRM__Purchase_Price__c': 'purchase_price',
+    'MtgPlanner_CRM__Down_Payment__c': 'down_payment',
+    'MtgPlanner_CRM__LTV__c': 'ltv',
+    'MtgPlanner_CRM__CLTV__c': 'cltv',
+    'MtgPlanner_CRM__Closing_Date__c': 'closing_date',
+    'MtgPlanner_CRM__Funded_Date__c': 'funded_date',
+    'MtgPlanner_CRM__First_Payment_Date__c': 'first_payment_date',
+    'MtgPlanner_CRM__Application_Date__c': 'application_date',
+    'MtgPlanner_CRM__Lock_Date__c': 'lock_date',
+    'MtgPlanner_CRM__Lock_Expiration__c': 'lock_expiration_date',
+
+    # Standard Opportunity fields (fallback)
     'Amount': 'amount',
     'StageName': 'stage',
     'CloseDate': 'closing_date',
     'Description': 'notes',
     'AccountId': 'salesforce_account_id',
 
-    # Contact/Borrower fields (if available)
+    # Generic custom fields
     'Contact_Email__c': 'borrower_email',
     'Borrower_Email__c': 'borrower_email',
     'Email__c': 'borrower_email',
@@ -165,10 +199,10 @@ class SalesforceClosedLoansImporter:
         return await salesforce_oauth.get_access_token(db, profile.id)
 
     async def discover_opportunity_fields(self) -> List[str]:
-        """Discover available fields on Opportunity object"""
+        """Discover available fields on the Salesforce loan object"""
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{self.instance_url}/services/data/v60.0/sobjects/Opportunity/describe",
+                f"{self.instance_url}/services/data/v60.0/sobjects/{SALESFORCE_LOAN_OBJECT}/describe",
                 headers={
                     'Authorization': f'Bearer {self.access_token}',
                     'Content-Type': 'application/json'
@@ -177,20 +211,19 @@ class SalesforceClosedLoansImporter:
             )
 
             if response.status_code != 200:
-                logger.warning(f"Failed to describe Opportunity: {response.text}")
+                logger.warning(f"Failed to describe {SALESFORCE_LOAN_OBJECT}: {response.text}")
                 return list(OPPORTUNITY_FIELD_MAPPING.keys())
 
             data = response.json()
             available_fields = [f['name'] for f in data.get('fields', [])]
 
-            logger.info(f"Discovered {len(available_fields)} fields on Opportunity object")
+            logger.info(f"Discovered {len(available_fields)} fields on {SALESFORCE_LOAN_OBJECT}")
             return available_fields
 
     def build_soql_query(self, available_fields: List[str]) -> str:
-        """Build SOQL query for closed opportunities"""
-        # Get fields that exist in Salesforce
-        fields_to_query = ['Id', 'Name', 'Amount', 'StageName', 'CloseDate', 'Description',
-                          'AccountId', 'CreatedDate', 'LastModifiedDate']
+        """Build SOQL query for closed loans"""
+        # Get fields that exist in Salesforce - start with basic fields
+        fields_to_query = ['Id', 'Name', 'CreatedDate', 'LastModifiedDate']
 
         # Add custom fields that exist
         for sf_field in OPPORTUNITY_FIELD_MAPPING.keys():
@@ -199,23 +232,37 @@ class SalesforceClosedLoansImporter:
 
         fields_str = ', '.join(fields_to_query)
 
-        # Query for Closed/Won/Funded/Shipped opportunities (broader criteria)
-        soql = f"""
-            SELECT {fields_str}
-            FROM Opportunity
-            WHERE StageName = 'Closed Won'
-               OR StageName LIKE '%Funded%'
-               OR StageName LIKE '%Closed%'
-               OR StageName LIKE '%Won%'
-               OR StageName LIKE '%Complete%'
-               OR StageName LIKE '%Settled%'
-               OR StageName LIKE '%Ship%'
-               OR StageName = 'Funded'
-               OR StageName = 'Shipped'
-               OR IsWon = true
-            ORDER BY CloseDate DESC
-            LIMIT 2000
-        """
+        if USE_TRANSACTION_PROPERTY:
+            # Query MtgPlanner_CRM__Transaction_Property__c for closed/funded/shipped loans
+            soql = f"""
+                SELECT {fields_str}
+                FROM {SALESFORCE_LOAN_OBJECT}
+                WHERE MtgPlanner_CRM__Status__c IN ('Funded', 'Closed', 'Closed Won', 'Shipped', 'Complete', 'File Complete')
+                   OR MtgPlanner_CRM__Status__c LIKE '%Fund%'
+                   OR MtgPlanner_CRM__Status__c LIKE '%Ship%'
+                   OR MtgPlanner_CRM__Status__c LIKE '%Close%'
+                   OR MtgPlanner_CRM__Funded_Date__c != null
+                ORDER BY LastModifiedDate DESC
+                LIMIT 2000
+            """
+        else:
+            # Query standard Opportunity object
+            soql = f"""
+                SELECT {fields_str}
+                FROM Opportunity
+                WHERE StageName = 'Closed Won'
+                   OR StageName LIKE '%Funded%'
+                   OR StageName LIKE '%Closed%'
+                   OR StageName LIKE '%Won%'
+                   OR StageName LIKE '%Complete%'
+                   OR StageName LIKE '%Settled%'
+                   OR StageName LIKE '%Ship%'
+                   OR StageName = 'Funded'
+                   OR StageName = 'Shipped'
+                   OR IsWon = true
+                ORDER BY CloseDate DESC
+                LIMIT 2000
+            """
 
         return soql.strip()
 
@@ -289,22 +336,45 @@ class SalesforceClosedLoansImporter:
                         pass
                 elif crm_field in ['closing_date', 'lock_date', 'lock_expiration_date',
                                   'funded_date', 'application_date', 'loan_approved_date',
-                                  'clear_to_close_date', 'docs_out_date']:
+                                  'clear_to_close_date', 'docs_out_date', 'first_payment_date',
+                                  'created_at', 'updated_at']:
                     # Keep as string for now, database will parse
                     loan_data[crm_field] = str(value)[:10] if value else None
                 else:
                     loan_data[crm_field] = str(value) if value else None
 
-        # Map Salesforce stage to CRM stage
-        sf_stage = opportunity.get('StageName', '')
+        # Map Salesforce stage to CRM stage (check both Opportunity and Transaction Property fields)
+        sf_stage = opportunity.get('MtgPlanner_CRM__Status__c') or opportunity.get('StageName', '')
         loan_data['stage'] = self._map_stage(sf_stage)
+
+        # Parse loan number and borrower name from the Name field (format: "Borrower - Loan # XXX")
+        import re
+        sf_name = opportunity.get('Name', '')
+
+        if not loan_data.get('loan_number') and sf_name:
+            if 'Loan #' in sf_name:
+                match = re.search(r'Loan #\s*(\S+)', sf_name)
+                if match:
+                    loan_data['loan_number'] = match.group(1)
+            elif 'RCA' in sf_name:
+                match = re.search(r'(RCA\d+)', sf_name)
+                if match:
+                    loan_data['loan_number'] = match.group(1)
+
+        # Extract borrower name from Name field if not set
+        if not loan_data.get('borrower_name') and sf_name:
+            if ' - Loan #' in sf_name:
+                loan_data['borrower_name'] = sf_name.split(' - Loan #')[0].strip()
+            else:
+                loan_data['borrower_name'] = sf_name
 
         # Ensure required fields
         if not loan_data.get('borrower_name'):
-            loan_data['borrower_name'] = opportunity.get('Name', 'Unknown Borrower')
+            loan_data['borrower_name'] = 'Unknown Borrower'
 
         if not loan_data.get('amount'):
-            loan_data['amount'] = float(opportunity.get('Amount', 0) or 0)
+            amount = opportunity.get('MtgPlanner_CRM__Loan_Amount__c') or opportunity.get('Amount', 0)
+            loan_data['amount'] = float(amount or 0)
 
         # Generate loan number if not present
         if not loan_data.get('loan_number'):
@@ -316,7 +386,7 @@ class SalesforceClosedLoansImporter:
         """Map Salesforce stage to CRM stage"""
         stage_lower = sf_stage.lower() if sf_stage else ''
 
-        if 'funded' in stage_lower or 'closed won' in stage_lower:
+        if 'funded' in stage_lower or 'closed won' in stage_lower or 'shipped' in stage_lower or 'complete' in stage_lower:
             return 'Funded'
         elif 'closing' in stage_lower:
             return 'Closing'
