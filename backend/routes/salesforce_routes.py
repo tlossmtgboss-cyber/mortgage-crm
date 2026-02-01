@@ -3688,3 +3688,392 @@ async def debug_test_salesforce_query(
             "status": "error",
             "error": str(e)
         }
+
+
+@router.get("/debug/transaction-property-closed")
+async def debug_transaction_property_closed(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Debug endpoint to see how many closed/funded/shipped loans exist in
+    MtgPlanner_CRM__Transaction_Property__c (the Jungo Loan object).
+    """
+    user_id = get_current_user_id(request, db)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    try:
+        # Get Salesforce integration
+        integration = db.execute(text("""
+            SELECT access_token, refresh_token, scopes, user_id
+            FROM user_integrations
+            WHERE provider = 'salesforce' AND access_token IS NOT NULL
+            ORDER BY updated_at DESC
+            LIMIT 1
+        """)).fetchone()
+
+        if not integration:
+            return {"status": "error", "message": "No Salesforce integration found"}
+
+        access_token = integration[0]
+        refresh_token = integration[1]
+        scopes = integration[2] or ""
+        integration_user_id = integration[3]
+
+        if "instance_url:" not in scopes:
+            return {"status": "error", "message": "No instance URL in scopes"}
+
+        instance_url = scopes.split("instance_url:")[1].split(",")[0].strip()
+
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+
+        # First, get the fields available on Transaction_Property__c
+        describe_url = f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/sobjects/MtgPlanner_CRM__Transaction_Property__c/describe/"
+        describe_resp = requests.get(describe_url, headers=headers, timeout=30)
+
+        # Handle 401 with token refresh
+        if describe_resp.status_code == 401 and refresh_token:
+            try:
+                from integrations.salesforce_service import salesforce_client
+                new_tokens = salesforce_client.refresh_access_token(refresh_token)
+
+                if new_tokens and new_tokens.get("access_token"):
+                    access_token = new_tokens["access_token"]
+                    db.execute(text("""
+                        UPDATE user_integrations
+                        SET access_token = :access_token, updated_at = CURRENT_TIMESTAMP
+                        WHERE user_id = :user_id AND provider = 'salesforce'
+                    """), {"access_token": access_token, "user_id": integration_user_id})
+                    db.commit()
+                    headers["Authorization"] = f"Bearer {access_token}"
+                    describe_resp = requests.get(describe_url, headers=headers, timeout=30)
+            except Exception as refresh_error:
+                return {"status": "error", "message": "Token refresh failed", "error": str(refresh_error)}
+
+        if describe_resp.status_code != 200:
+            return {"status": "error", "message": f"Describe failed: {describe_resp.text[:200]}"}
+
+        describe_data = describe_resp.json()
+        fields = [f['name'] for f in describe_data.get('fields', []) if f.get('type') not in ['base64', 'address', 'location']]
+
+        # Find status field
+        status_fields = [f for f in fields if 'status' in f.lower() or 'stage' in f.lower()]
+
+        # Query to count closed loans by status
+        soql = """
+            SELECT MtgPlanner_CRM__Status__c, COUNT(Id) cnt
+            FROM MtgPlanner_CRM__Transaction_Property__c
+            GROUP BY MtgPlanner_CRM__Status__c
+        """
+
+        query_url = f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/query/"
+        response = requests.get(query_url, headers=headers, params={"q": soql}, timeout=60)
+
+        if response.status_code != 200:
+            return {"status": "error", "message": f"Query failed: {response.text[:200]}"}
+
+        status_data = response.json()
+        status_counts = {r.get("MtgPlanner_CRM__Status__c", "null"): r.get("cnt", 0) for r in status_data.get("records", [])}
+
+        # Query for closed/funded/shipped with sample records
+        soql_closed = """
+            SELECT Id, Name, MtgPlanner_CRM__Status__c, MtgPlanner_CRM__Loan_Amount__c,
+                   MtgPlanner_CRM__Borrower_Name__c, MtgPlanner_CRM__Funded_Date__c,
+                   MtgPlanner_CRM__Interest_Rate__c, MtgPlanner_CRM__Closing_Date__c
+            FROM MtgPlanner_CRM__Transaction_Property__c
+            WHERE MtgPlanner_CRM__Status__c IN ('Funded', 'Closed', 'Closed Won', 'Shipped', 'Complete', 'File Complete')
+               OR MtgPlanner_CRM__Status__c LIKE '%Fund%'
+               OR MtgPlanner_CRM__Status__c LIKE '%Ship%'
+               OR MtgPlanner_CRM__Status__c LIKE '%Close%'
+               OR MtgPlanner_CRM__Funded_Date__c != null
+            ORDER BY LastModifiedDate DESC
+            LIMIT 2000
+        """
+
+        response_closed = requests.get(query_url, headers=headers, params={"q": soql_closed}, timeout=60)
+
+        if response_closed.status_code != 200:
+            return {"status": "error", "message": f"Closed query failed: {response_closed.text[:200]}"}
+
+        closed_data = response_closed.json()
+        closed_records = closed_data.get("records", [])
+
+        # Count by status
+        closed_by_status = {}
+        for r in closed_records:
+            status = r.get("MtgPlanner_CRM__Status__c", "Unknown")
+            closed_by_status[status] = closed_by_status.get(status, 0) + 1
+
+        return {
+            "status": "success",
+            "instance_url": instance_url,
+            "all_status_counts": status_counts,
+            "closed_records_found": len(closed_records),
+            "closed_by_status": closed_by_status,
+            "status_fields_available": status_fields[:10],
+            "sample_closed_records": [
+                {
+                    "Id": r.get("Id"),
+                    "Name": r.get("Name"),
+                    "Status": r.get("MtgPlanner_CRM__Status__c"),
+                    "Amount": r.get("MtgPlanner_CRM__Loan_Amount__c"),
+                    "Borrower": r.get("MtgPlanner_CRM__Borrower_Name__c"),
+                    "FundedDate": r.get("MtgPlanner_CRM__Funded_Date__c"),
+                    "Rate": r.get("MtgPlanner_CRM__Interest_Rate__c")
+                }
+                for r in closed_records[:10]
+            ]
+        }
+
+    except Exception as e:
+        logger.error(f"Debug transaction property failed: {e}")
+        return {"status": "error", "error": str(e)}
+
+
+@router.post("/import-transaction-property-to-mum")
+async def import_transaction_property_to_mum(
+    request: Request,
+    db: Session = Depends(get_db),
+    limit: int = Query(2000, description="Max records to import")
+):
+    """
+    Import all closed/funded/shipped loans from MtgPlanner_CRM__Transaction_Property__c
+    (Jungo Loan object) directly into MUM Clients.
+
+    This queries the correct Salesforce object where closed loans are stored
+    and imports them into the mum_clients table for portfolio management.
+    """
+    user_id = get_current_user_id(request, db)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    results = {
+        "imported": 0,
+        "skipped": 0,
+        "errors": [],
+        "imported_clients": []
+    }
+
+    try:
+        # Get Salesforce integration
+        integration = db.execute(text("""
+            SELECT access_token, refresh_token, scopes, user_id
+            FROM user_integrations
+            WHERE provider = 'salesforce' AND access_token IS NOT NULL
+            ORDER BY updated_at DESC
+            LIMIT 1
+        """)).fetchone()
+
+        if not integration:
+            raise HTTPException(status_code=400, detail="Salesforce not connected")
+
+        access_token = integration[0]
+        refresh_token = integration[1]
+        scopes = integration[2] or ""
+        integration_user_id = integration[3]
+
+        if "instance_url:" not in scopes:
+            raise HTTPException(status_code=400, detail="No Salesforce instance URL")
+
+        instance_url = scopes.split("instance_url:")[1].split(",")[0].strip()
+
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+
+        # Query closed/funded/shipped loans from Transaction_Property
+        soql = f"""
+            SELECT Id, Name, MtgPlanner_CRM__Status__c, MtgPlanner_CRM__Stage__c,
+                   MtgPlanner_CRM__Loan_Amount__c, MtgPlanner_CRM__Interest_Rate__c,
+                   MtgPlanner_CRM__Note_Rate__c,
+                   MtgPlanner_CRM__Borrower_Name__c, MtgPlanner_CRM__Borrower_Email__c,
+                   MtgPlanner_CRM__Borrower_Phone__c,
+                   MtgPlanner_CRM__Property_Address__c, MtgPlanner_CRM__Property_City__c,
+                   MtgPlanner_CRM__Property_State__c, MtgPlanner_CRM__Property_Zip__c,
+                   MtgPlanner_CRM__Funded_Date__c, MtgPlanner_CRM__Closing_Date__c,
+                   MtgPlanner_CRM__First_Payment_Date__c,
+                   MtgPlanner_CRM__Loan_Type__c, MtgPlanner_CRM__Loan_Program__c,
+                   CreatedDate, LastModifiedDate
+            FROM MtgPlanner_CRM__Transaction_Property__c
+            WHERE MtgPlanner_CRM__Status__c IN ('Funded', 'Closed', 'Closed Won', 'Shipped', 'Complete', 'File Complete')
+               OR MtgPlanner_CRM__Status__c LIKE '%Fund%'
+               OR MtgPlanner_CRM__Status__c LIKE '%Ship%'
+               OR MtgPlanner_CRM__Status__c LIKE '%Close%'
+               OR MtgPlanner_CRM__Funded_Date__c != null
+            ORDER BY LastModifiedDate DESC
+            LIMIT {limit}
+        """
+
+        query_url = f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/query/"
+        response = requests.get(query_url, headers=headers, params={"q": soql}, timeout=120)
+
+        # Handle 401 with token refresh
+        if response.status_code == 401 and refresh_token:
+            try:
+                from integrations.salesforce_service import salesforce_client
+                new_tokens = salesforce_client.refresh_access_token(refresh_token)
+                if new_tokens and new_tokens.get("access_token"):
+                    access_token = new_tokens["access_token"]
+                    db.execute(text("""
+                        UPDATE user_integrations
+                        SET access_token = :access_token, updated_at = CURRENT_TIMESTAMP
+                        WHERE user_id = :user_id AND provider = 'salesforce'
+                    """), {"access_token": access_token, "user_id": integration_user_id})
+                    db.commit()
+                    headers["Authorization"] = f"Bearer {access_token}"
+                    response = requests.get(query_url, headers=headers, params={"q": soql}, timeout=120)
+            except Exception:
+                raise HTTPException(status_code=424, detail="Salesforce token expired. Please reconnect.")
+
+        if response.status_code != 200:
+            raise HTTPException(status_code=500, detail=f"Salesforce query failed: {response.text[:200]}")
+
+        sf_data = response.json()
+        sf_records = sf_data.get("records", [])
+
+        logger.info(f"Found {len(sf_records)} closed loans in Salesforce Transaction_Property")
+
+        # Get existing MUM clients to avoid duplicates
+        existing_clients = db.execute(text("""
+            SELECT loan_number FROM mum_clients WHERE loan_number IS NOT NULL
+        """)).fetchall()
+        existing_loan_numbers = {row[0].strip().lower() for row in existing_clients if row[0]}
+
+        import re
+        for record in sf_records:
+            try:
+                sf_id = record.get("Id")
+                sf_name = record.get("Name", "")
+
+                # Extract loan number from Name field (format: "Borrower - Loan # XXXXXX")
+                loan_number = None
+                if "Loan #" in sf_name:
+                    match = re.search(r'Loan #\s*(\S+)', sf_name)
+                    if match:
+                        loan_number = match.group(1)
+                elif "RCA" in sf_name:
+                    match = re.search(r'(RCA\d+)', sf_name)
+                    if match:
+                        loan_number = match.group(1)
+                else:
+                    # Use SF ID as loan number if no pattern found
+                    loan_number = f"SF-{sf_id[-8:]}"
+
+                # Skip if already exists
+                if loan_number and loan_number.strip().lower() in existing_loan_numbers:
+                    results["skipped"] += 1
+                    continue
+
+                # Get client name
+                client_name = record.get("MtgPlanner_CRM__Borrower_Name__c")
+                if not client_name:
+                    # Try to extract from Name field
+                    if " - Loan #" in sf_name:
+                        client_name = sf_name.split(" - Loan #")[0].strip()
+                    else:
+                        client_name = f"Client - {loan_number}"
+
+                # Get loan details
+                loan_amount = record.get("MtgPlanner_CRM__Loan_Amount__c") or 0
+                interest_rate = record.get("MtgPlanner_CRM__Note_Rate__c") or record.get("MtgPlanner_CRM__Interest_Rate__c") or 0
+
+                # Parse dates
+                def parse_date(date_str):
+                    if date_str:
+                        try:
+                            return date_str[:10]  # YYYY-MM-DD
+                        except:
+                            return None
+                    return None
+
+                funded_date = parse_date(record.get("MtgPlanner_CRM__Funded_Date__c"))
+                closing_date = parse_date(record.get("MtgPlanner_CRM__Closing_Date__c"))
+                first_payment_date = parse_date(record.get("MtgPlanner_CRM__First_Payment_Date__c"))
+
+                close_date = funded_date or closing_date
+
+                # Insert into mum_clients
+                try:
+                    loan_amount_float = float(loan_amount) if loan_amount else 0
+                    rate_float = float(interest_rate) if interest_rate else 0
+
+                    db.execute(text("""
+                        INSERT INTO mum_clients (
+                            client_name, loan_number, original_close_date,
+                            original_rate, loan_balance,
+                            original_loan_amount, current_loan_amount,
+                            interest_rate, appraisal_value_at_closing,
+                            current_property_value, closing_date, first_payment_date,
+                            status, engagement_score, created_at, user_id
+                        ) VALUES (
+                            :client_name, :loan_number, :close_date,
+                            :rate, :balance,
+                            :original_loan_amount, :current_loan_amount,
+                            :interest_rate, :appraisal_value,
+                            :property_value, :closing_date, :first_payment_date,
+                            'active', 50, CURRENT_TIMESTAMP, :user_id
+                        )
+                    """), {
+                        'client_name': client_name,
+                        'loan_number': loan_number,
+                        'close_date': close_date,
+                        'rate': rate_float,
+                        'balance': loan_amount_float,
+                        'original_loan_amount': loan_amount_float,
+                        'current_loan_amount': loan_amount_float,
+                        'interest_rate': rate_float,
+                        'appraisal_value': loan_amount_float * 1.25 if loan_amount_float else 0,
+                        'property_value': loan_amount_float * 1.25 if loan_amount_float else 0,
+                        'closing_date': close_date,
+                        'first_payment_date': first_payment_date or close_date,
+                        'user_id': user_id,
+                    })
+
+                    results["imported"] += 1
+                    existing_loan_numbers.add(loan_number.strip().lower())
+
+                    if results["imported"] <= 20:  # Only show first 20
+                        results["imported_clients"].append({
+                            "name": client_name,
+                            "loan_number": loan_number,
+                            "amount": loan_amount_float,
+                            "rate": rate_float
+                        })
+
+                except Exception as insert_error:
+                    results["errors"].append(f"{loan_number}: {str(insert_error)}")
+                    try:
+                        db.rollback()
+                    except:
+                        pass
+
+            except Exception as e:
+                results["errors"].append(f"Record {record.get('Id')}: {str(e)}")
+                logger.error(f"Error processing record: {e}")
+                try:
+                    db.rollback()
+                except:
+                    pass
+
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": f"Imported {results['imported']} clients from Salesforce Transaction_Property",
+            "salesforce_records_found": len(sf_records),
+            "imported": results["imported"],
+            "skipped_duplicates": results["skipped"],
+            "errors": results["errors"][:20],
+            "sample_imported": results["imported_clients"]
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Import failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
