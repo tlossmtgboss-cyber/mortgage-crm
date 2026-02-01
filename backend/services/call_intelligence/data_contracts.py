@@ -41,6 +41,7 @@ class TranscriptSegment:
     """A segment of the call transcript."""
     speaker: SpeakerRole
     text: str
+    index: int = 0
     start_time: float = 0.0
     end_time: float = 0.0
     confidence: float = 1.0
@@ -49,6 +50,7 @@ class TranscriptSegment:
         return {
             "speaker": self.speaker.value,
             "text": self.text,
+            "index": self.index,
             "start_time": self.start_time,
             "end_time": self.end_time,
         }
@@ -60,18 +62,20 @@ class ExtractedValue:
     field_name: str
     value: Any
     confidence: float  # 0-100
-    source_text: str   # The text it was extracted from
+    source_text: str = ""  # The text it was extracted from
     segment_index: int = 0
     verified: bool = False
     verification_question: Optional[str] = None  # Question asked to verify
+    extraction_method: str = "unknown"  # llm, regex, regex_fallback
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "field_name": self.field_name,
             "value": self.value,
             "confidence": self.confidence,
-            "source_text": self.source_text[:200],  # Truncate for display
+            "source_text": self.source_text[:200] if self.source_text else "",
             "verified": self.verified,
+            "extraction_method": self.extraction_method,
         }
 
 
@@ -81,6 +85,7 @@ class ExtractionResult:
     agent_name: str
     extractions: List[ExtractedValue] = field(default_factory=list)
     errors: List[str] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
     processing_time_ms: int = 0
 
     def get_by_field(self, field_name: str) -> Optional[ExtractedValue]:
@@ -95,6 +100,7 @@ class ExtractionResult:
             "agent": self.agent_name,
             "extractions": [e.to_dict() for e in self.extractions],
             "errors": self.errors,
+            "warnings": self.warnings,
             "processing_time_ms": self.processing_time_ms,
         }
 
