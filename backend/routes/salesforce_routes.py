@@ -2692,6 +2692,46 @@ async def import_funded_loans_to_mum(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/fix-mum-user-ids")
+async def fix_mum_client_user_ids(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Fix MUM clients that were created without user_id.
+    Sets user_id to current user for any records missing it.
+    """
+    user_id = get_current_user_id(request, db)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    try:
+        # Update all MUM clients without user_id to belong to current user
+        result = db.execute(text("""
+            UPDATE mum_clients
+            SET user_id = :user_id
+            WHERE user_id IS NULL
+            RETURNING id, client_name, loan_number
+        """), {'user_id': user_id})
+
+        updated = result.fetchall()
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": f"Updated {len(updated)} MUM clients with user_id",
+            "updated_count": len(updated),
+            "updated_clients": [
+                {"id": r[0], "client_name": r[1], "loan_number": r[2]}
+                for r in updated
+            ]
+        }
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.error(f"Failed to fix MUM user IDs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/sync-and-import-mum")
 async def sync_salesforce_and_import_mum(
     request: Request,
