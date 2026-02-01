@@ -20,6 +20,7 @@ from .data_contracts import (
     SpeakerRole,
 )
 from .process_transcript import parse_transcript as parse_transcript_improved
+from .pii_utils import mask_pii_for_logging
 from .agents import (
     IdentityExtractionAgent,
     PropertyExtractionAgent,
@@ -122,8 +123,9 @@ class CallIntelligenceProcessor:
                     self._map_extractions(response, agent_name, result)
 
                 except Exception as e:
-                    logger.exception(f"Agent {agent_name} failed: {e}")
-                    response.errors.append(f"Agent {agent_name}: {str(e)}")
+                    safe_error = mask_pii_for_logging(str(e))
+                    logger.exception(f"Agent {agent_name} failed: {safe_error}")
+                    response.errors.append(f"Agent {agent_name}: {safe_error}")
 
             # Calculate summary stats
             self._calculate_stats(response)
@@ -143,9 +145,10 @@ class CallIntelligenceProcessor:
             return response
 
         except Exception as e:
-            logger.exception(f"Call processing failed: {e}")
+            safe_error = mask_pii_for_logging(str(e))
+            logger.exception(f"Call processing failed: {safe_error}")
             response.success = False
-            response.errors.append(str(e))
+            response.errors.append(safe_error)
             response.processing_time_ms = int((time.time() - start_time) * 1000)
             return response
 
@@ -284,11 +287,12 @@ class CallIntelligenceProcessor:
             )
             self.db.commit()
         except Exception as e:
-            logger.warning(f"Failed to save call intelligence results: {e}")
+            safe_error = mask_pii_for_logging(str(e))
+            logger.warning(f"Failed to save call intelligence results: {safe_error}")
             try:
                 self.db.rollback()
-            except:
-                pass
+            except Exception:
+                pass  # Rollback failed, but we already logged the original error
 
     def get_supported_agents(self) -> List[Dict[str, Any]]:
         """Get list of supported extraction agents."""

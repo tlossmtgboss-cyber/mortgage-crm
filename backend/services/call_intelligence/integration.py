@@ -225,11 +225,12 @@ class CallIntelligenceIntegration:
             logger.info(f"Created {len(tasks)} tasks for loan {loan_id}")
 
         except Exception as e:
-            logger.exception(f"Error creating tasks: {e}")
+            safe_error = mask_pii_for_logging(str(e))
+            logger.exception(f"Error creating tasks for loan {loan_id}: {safe_error}")
             try:
                 self.db.rollback()
-            except:
-                pass
+            except Exception:
+                pass  # Rollback failed, but we already logged the original error
 
     async def _save_call_results(
         self,
@@ -283,11 +284,12 @@ class CallIntelligenceIntegration:
             self.db.commit()
 
         except Exception as e:
-            logger.warning(f"Error saving call results: {e}")
+            safe_error = mask_pii_for_logging(str(e))
+            logger.warning(f"Error saving call results for {call_id}: {safe_error}")
             try:
                 self.db.rollback()
-            except:
-                pass
+            except Exception:
+                pass  # Rollback failed, but we already logged the original error
 
 
 # =============================================================================
@@ -453,5 +455,5 @@ def create_call_intelligence_tables(db: Session) -> None:
         logger.exception(f"Error creating Call Intelligence tables: {e}")
         try:
             db.rollback()
-        except:
-            pass
+        except Exception:
+            pass  # Rollback failed, but we already logged the original error

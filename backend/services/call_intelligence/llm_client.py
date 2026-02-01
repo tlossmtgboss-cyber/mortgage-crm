@@ -309,7 +309,8 @@ Respond with a JSON object containing the extracted information."""
         except json.JSONDecodeError:
             pass
 
-        logger.warning(f"Could not parse JSON from response: {content[:200]}...")
+        # Don't log response content - could contain PII echoed from transcript
+        logger.warning("Could not parse JSON from LLM response")
         return None
 
 
