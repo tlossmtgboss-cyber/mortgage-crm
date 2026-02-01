@@ -19,6 +19,7 @@ from .data_contracts import (
     CallIntelligenceResponse,
     CallType,
 )
+from .pii_utils import mask_pii_for_logging
 from services.application_engine import (
     ApplicationEngineOrchestrator,
     ApplicationAuditRequest,
@@ -84,7 +85,9 @@ class CallIntelligenceIntegration:
             ci_response = await self.ci_processor.process_transcript(ci_request)
 
             if not ci_response.success:
-                logger.warning(f"Call Intelligence failed for {call_id}: {ci_response.errors}")
+                # Mask PII in error messages before logging
+                safe_errors = [mask_pii_for_logging(str(e)) for e in ci_response.errors]
+                logger.warning(f"Call Intelligence failed for {call_id}: {safe_errors}")
                 return {
                     "success": False,
                     "stage": "call_intelligence",
@@ -148,11 +151,13 @@ class CallIntelligenceIntegration:
             }
 
         except Exception as e:
-            logger.exception(f"Error processing call {call_id}: {e}")
+            # Mask PII in exception message before logging
+            safe_error = mask_pii_for_logging(str(e))
+            logger.exception(f"Error processing call {call_id}: {safe_error}")
             return {
                 "success": False,
                 "stage": "processing",
-                "error": str(e),
+                "error": safe_error,
             }
 
     async def _create_tasks(

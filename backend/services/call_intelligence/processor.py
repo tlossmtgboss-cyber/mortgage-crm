@@ -19,6 +19,7 @@ from .data_contracts import (
     TranscriptSegment,
     SpeakerRole,
 )
+from .process_transcript import parse_transcript as parse_transcript_improved
 from .agents import (
     IdentityExtractionAgent,
     PropertyExtractionAgent,
@@ -179,66 +180,13 @@ class CallIntelligenceProcessor:
         """
         Parse raw transcript text into segments.
 
-        Handles common transcript formats:
-        - "Speaker: text"
-        - "[Speaker] text"
-        - Timestamped formats
+        Uses the improved parser from process_transcript.py which handles:
+        - Role-based keyword detection (Loan Officer, Borrower, etc.)
+        - Speech pattern analysis for role inference
+        - Multiple transcript formats
+        - Automatic role inference for 2-party conversations
         """
-        segments = []
-        lines = transcript.strip().split('\n')
-
-        current_speaker = SpeakerRole.UNKNOWN
-        current_text = []
-
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-
-            # Try to identify speaker
-            speaker, text = self._identify_speaker(line)
-
-            if speaker != current_speaker and current_text:
-                # Save previous segment
-                segments.append(TranscriptSegment(
-                    speaker=current_speaker,
-                    text=' '.join(current_text),
-                ))
-                current_text = []
-
-            current_speaker = speaker
-            if text:
-                current_text.append(text)
-
-        # Save last segment
-        if current_text:
-            segments.append(TranscriptSegment(
-                speaker=current_speaker,
-                text=' '.join(current_text),
-            ))
-
-        return segments
-
-    def _identify_speaker(self, line: str) -> tuple:
-        """Identify speaker from a transcript line."""
-        import re
-
-        # Pattern: "Speaker: text" or "[Speaker] text"
-        patterns = [
-            (r'^(?:AI|Agent|LO|Loan Officer):?\s*(.*)$', SpeakerRole.AI_LO),
-            (r'^\[(?:AI|Agent|LO)\]\s*(.*)$', SpeakerRole.AI_LO),
-            (r'^(?:Borrower|Customer|Client|Applicant):?\s*(.*)$', SpeakerRole.BORROWER),
-            (r'^\[(?:Borrower|Customer|Client)\]\s*(.*)$', SpeakerRole.BORROWER),
-            (r'^(?:Co-?Borrower|Co-?Applicant|Spouse):?\s*(.*)$', SpeakerRole.CO_BORROWER),
-        ]
-
-        for pattern, role in patterns:
-            match = re.match(pattern, line, re.IGNORECASE)
-            if match:
-                return role, match.group(1).strip()
-
-        # No speaker identified
-        return SpeakerRole.UNKNOWN, line
+        return parse_transcript_improved(transcript)
 
     def _map_extractions(
         self,
@@ -347,8 +295,8 @@ class CallIntelligenceProcessor:
         return [
             {
                 "name": "identity",
-                "description": "Extracts borrower identity information (name, SSN, DOB, contact)",
-                "fields": ["first_name", "last_name", "ssn", "date_of_birth", "email", "phone"],
+                "description": "Extracts borrower identity information (name, SSN last 4, DOB, contact)",
+                "fields": ["first_name", "last_name", "ssn_last_four", "date_of_birth", "email", "phone"],
             },
             {
                 "name": "property",
