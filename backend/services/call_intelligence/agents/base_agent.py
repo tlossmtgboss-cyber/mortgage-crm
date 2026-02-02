@@ -41,9 +41,9 @@ class ConfidenceScores:
     """Standardized confidence scores for extraction results."""
 
     # LLM extraction defaults
-    LLM_DEFAULT = 75.0  # Default for simple LLM values without confidence metadata
     LLM_HIGH = 90.0     # High certainty LLM extraction
-    LLM_MEDIUM = 75.0   # Moderate certainty LLM extraction
+    LLM_MEDIUM = 77.0   # Moderate certainty LLM extraction
+    LLM_DEFAULT = 75.0  # Default for simple LLM values without confidence metadata
     LLM_LOW = 50.0      # Low certainty LLM extraction
 
     # Regex extraction defaults

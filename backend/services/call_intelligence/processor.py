@@ -299,8 +299,8 @@ class CallIntelligenceProcessor:
             logger.warning(f"Failed to save call intelligence results: {safe_error}")
             try:
                 self.db.rollback()
-            except Exception:
-                pass  # Rollback failed, but we already logged the original error
+            except Exception as rollback_err:
+                logger.debug(f"Rollback also failed: {rollback_err}")
 
     def get_supported_agents(self) -> List[Dict[str, Any]]:
         """Get list of supported extraction agents."""

@@ -157,10 +157,11 @@ class IdentityExtractionAgent(BaseExtractionAgent):
                     "Consider advising borrowers not to state full SSN."
                 )
 
+            # Higher confidence if we detected a full SSN vs just last 4 digits
             return ExtractedValue(
                 field_name="ssn_last_four",
                 value=last_four,
-                confidence=ConfidenceScores.REGEX_HIGH if full_ssn_detected else ConfidenceScores.REGEX_HIGH,
+                confidence=ConfidenceScores.REGEX_HIGH if full_ssn_detected else ConfidenceScores.REGEX_MEDIUM,
                 source_text="[SSN redacted for security]",
                 extraction_method="regex",
             )

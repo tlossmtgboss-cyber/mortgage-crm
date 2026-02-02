@@ -61,6 +61,9 @@ BORROWER_SPEECH_PATTERNS = [
     r'\b(we\'ve been|we are|we\'re)\b',
 ]
 
+# Default segment duration in seconds when no timestamps are available
+DEFAULT_SEGMENT_DURATION_SECONDS = 10
+
 
 def identify_speaker_role(
     speaker_name: str,
@@ -300,8 +303,8 @@ def parse_transcript(
             index=idx,
             speaker=role,
             text=text,
-            start_time=float(idx * 10),
-            end_time=float((idx + 1) * 10),
+            start_time=float(idx * DEFAULT_SEGMENT_DURATION_SECONDS),
+            end_time=float((idx + 1) * DEFAULT_SEGMENT_DURATION_SECONDS),
         ))
 
     return segments
@@ -309,7 +312,7 @@ def parse_transcript(
 
 async def extract_all(
     segments: List[TranscriptSegment],
-    existing_data: Dict[str, Any] = None,
+    existing_data: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, ExtractionResult]:
     """
     Run all extraction agents on the transcript segments.

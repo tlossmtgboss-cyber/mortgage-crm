@@ -7,7 +7,7 @@ Automatically processes call transcripts when calls end.
 
 import logging
 from datetime import datetime
-from typing import Optional, Dict, Any, TYPE_CHECKING
+from typing import Optional, Dict, Any, List, TYPE_CHECKING
 import asyncio
 
 from sqlalchemy.orm import Session
@@ -236,7 +236,7 @@ class CallIntelligenceIntegration:
         self,
         loan_id: int,
         organization_id: int,
-        tasks: list,
+        tasks: List[Any],
     ) -> None:
         """Create tasks in the task system (synchronous DB operations)."""
         try:
@@ -301,8 +301,8 @@ class CallIntelligenceIntegration:
             logger.exception(f"Error creating tasks for loan {loan_id}: {safe_error}")
             try:
                 self.db.rollback()
-            except Exception:
-                pass  # Rollback failed, but we already logged the original error
+            except Exception as rollback_err:
+                logger.debug(f"Rollback also failed: {rollback_err}")
 
     def _save_call_results(
         self,
@@ -360,8 +360,8 @@ class CallIntelligenceIntegration:
             logger.warning(f"Error saving call results for {call_id}: {safe_error}")
             try:
                 self.db.rollback()
-            except Exception:
-                pass  # Rollback failed, but we already logged the original error
+            except Exception as rollback_err:
+                logger.debug(f"Rollback also failed: {rollback_err}")
 
 
 # =============================================================================
@@ -529,5 +529,5 @@ def create_call_intelligence_tables(db: Session) -> None:
         logger.exception(f"Error creating Call Intelligence tables: {e}")
         try:
             db.rollback()
-        except Exception:
-            pass  # Rollback failed, but we already logged the original error
+        except Exception as rollback_err:
+            logger.debug(f"Rollback also failed: {rollback_err}")

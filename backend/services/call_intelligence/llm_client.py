@@ -9,6 +9,7 @@ import os
 import json
 import logging
 import asyncio
+import re
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
@@ -89,7 +90,7 @@ class BaseLLMClient(ABC):
         Returns:
             Dict with extracted fields and confidence scores
         """
-        pass
+        raise NotImplementedError("Subclasses must implement extract()")
 
     @abstractmethod
     async def extract_with_prompt(
@@ -107,7 +108,7 @@ class BaseLLMClient(ABC):
         Returns:
             Extracted data as dict
         """
-        pass
+        raise NotImplementedError("Subclasses must implement extract_with_prompt()")
 
 
 class AnthropicClient(BaseLLMClient):
@@ -233,7 +234,10 @@ Respond ONLY with the JSON object, no additional text."""
                     timeout=self.config.timeout
                 )
 
-                # Parse response
+                # Parse response - validate content exists
+                if not response.content:
+                    logger.warning("Empty response content from Anthropic API")
+                    continue
                 content = response.content[0].text
 
                 # Extract JSON from response
@@ -289,6 +293,9 @@ Respond with a JSON object containing the extracted information."""
                 timeout=self.config.timeout
             )
 
+            if not response.content:
+                logger.warning("Empty response content from Anthropic API")
+                return {}
             content = response.content[0].text
             return self._parse_json_response(content) or {}
 
@@ -300,21 +307,26 @@ Respond with a JSON object containing the extracted information."""
             return {}
 
     def _parse_json_response(self, content: str) -> Optional[Dict[str, Any]]:
-        """Parse JSON from LLM response."""
+        """Parse JSON from LLM response.
+
+        Attempts multiple parsing strategies:
+        1. Direct JSON parse
+        2. Extract from markdown code blocks
+        3. Find JSON object in text
+        """
         # Try direct JSON parse
         try:
             return json.loads(content)
         except json.JSONDecodeError:
-            pass
+            logger.debug("Direct JSON parse failed, trying code block extraction")
 
         # Try to extract JSON from markdown code blocks
-        import re
         json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', content)
         if json_match:
             try:
                 return json.loads(json_match.group(1))
             except json.JSONDecodeError:
-                pass
+                logger.debug("Code block JSON parse failed, trying object extraction")
 
         # Try to find JSON object in text
         try:
@@ -323,10 +335,10 @@ Respond with a JSON object containing the extracted information."""
             if start >= 0 and end > start:
                 return json.loads(content[start:end])
         except json.JSONDecodeError:
-            pass
+            logger.debug("Object extraction JSON parse failed")
 
         # Don't log response content - could contain PII echoed from transcript
-        logger.warning("Could not parse JSON from LLM response")
+        logger.warning("Could not parse JSON from LLM response after all parsing attempts")
         return None
 
 
@@ -335,7 +347,9 @@ class OpenAIClient(BaseLLMClient):
 
     def __init__(self, config: LLMConfig = None):
         self.config = config or LLMConfig.from_env()
-        self.config.model = os.getenv("CI_LLM_MODEL", "gpt-4o-mini")
+        # Only override model if explicitly using OpenAI and no custom model was set
+        if self.config.model.startswith("claude"):
+            self.config.model = os.getenv("CI_LLM_MODEL", "gpt-4o-mini")
         self._client = None
 
     def _get_client(self):
@@ -380,7 +394,13 @@ class OpenAIClient(BaseLLMClient):
                     timeout=self.config.timeout
                 )
 
+                if not response.choices:
+                    logger.warning("Empty response choices from OpenAI API")
+                    continue
                 content = response.choices[0].message.content
+                if not content:
+                    logger.warning("Empty message content from OpenAI API")
+                    continue
                 result = json.loads(content)
                 return result
 
@@ -422,6 +442,9 @@ class OpenAIClient(BaseLLMClient):
                 timeout=self.config.timeout
             )
 
+            if not response.choices or not response.choices[0].message.content:
+                logger.warning("Empty response from OpenAI API")
+                return {}
             return json.loads(response.choices[0].message.content)
 
         except asyncio.TimeoutError:
