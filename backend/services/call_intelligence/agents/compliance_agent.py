@@ -9,6 +9,11 @@ from typing import List, Dict, Any
 import logging
 
 from .base_agent import BaseExtractionAgent, ConfidenceScores
+from .shared_patterns import (
+    US_CITIZEN_PATTERNS_COMPILED,
+    PERMANENT_RESIDENT_PATTERNS_COMPILED,
+    NON_PERMANENT_RESIDENT_PATTERNS_COMPILED,
+)
 from ..data_contracts import (
     TranscriptSegment,
     ExtractionResult,
@@ -73,48 +78,38 @@ class ComplianceExtractionAgent(BaseExtractionAgent):
         borrower_text: str,
         full_text: str,
     ) -> ExtractedValue:
-        """Extract citizenship status."""
-        # US Citizen
-        citizen_patterns = [
-            r"\b(?:us|u\.s\.|american|united states)\s*citizen\b",
-            r"\bborn (?:in|here in) (?:the\s+)?(?:us|u\.s\.|united states|america)\b",
-        ]
-
-        for pattern in citizen_patterns:
-            if re.search(pattern, full_text, re.IGNORECASE):
+        """Extract citizenship status using shared patterns."""
+        # US Citizen - use shared compiled patterns
+        for pattern in US_CITIZEN_PATTERNS_COMPILED:
+            if pattern.search(full_text):
                 return ExtractedValue(
                     field_name="citizenship_status",
                     value="US_CITIZEN",
                     confidence=ConfidenceScores.REGEX_HIGH,
                     source_text=sanitize_source_text(full_text[:200]),
+                    extraction_method="regex",
                 )
 
         # Permanent Resident
-        pr_patterns = [
-            r"\b(?:permanent resident|green card|legal permanent resident|lpr)\b",
-        ]
-
-        for pattern in pr_patterns:
-            if re.search(pattern, full_text, re.IGNORECASE):
+        for pattern in PERMANENT_RESIDENT_PATTERNS_COMPILED:
+            if pattern.search(full_text):
                 return ExtractedValue(
                     field_name="citizenship_status",
                     value="PERMANENT_RESIDENT",
                     confidence=ConfidenceScores.REGEX_HIGH,
                     source_text=sanitize_source_text(full_text[:200]),
+                    extraction_method="regex",
                 )
 
         # Non-Permanent Resident
-        npr_patterns = [
-            r"\b(?:visa|work permit|h1b|h-1b|l1|l-1|ead|opt)\b",
-        ]
-
-        for pattern in npr_patterns:
-            if re.search(pattern, full_text, re.IGNORECASE):
+        for pattern in NON_PERMANENT_RESIDENT_PATTERNS_COMPILED:
+            if pattern.search(full_text):
                 return ExtractedValue(
                     field_name="citizenship_status",
                     value="NON_PERMANENT_RESIDENT",
                     confidence=ConfidenceScores.REGEX_MEDIUM,
                     source_text=sanitize_source_text(full_text[:200]),
+                    extraction_method="regex",
                 )
 
         return None

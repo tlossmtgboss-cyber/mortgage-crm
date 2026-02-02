@@ -14,6 +14,11 @@ from typing import List, Dict, Any
 import logging
 
 from .base_agent import BaseExtractionAgent, ConfidenceScores
+from .shared_patterns import (
+    US_CITIZEN_PATTERNS_COMPILED,
+    PERMANENT_RESIDENT_PATTERNS_COMPILED,
+    MARITAL_STATUS_PATTERNS,
+)
 from ..data_contracts import (
     TranscriptSegment,
     ExtractionResult,
@@ -211,16 +216,10 @@ class IdentityExtractionAgent(BaseExtractionAgent):
         borrower_text: str,
         full_text: str,
     ) -> ExtractedValue:
-        """Extract citizenship status."""
-        # US Citizen
-        citizen_patterns = [
-            r"(?:i am|i'm|yes,?\s+i'm).*?(?:us|u\.s\.|american|united states)\s*citizen",
-            r"(?:citizen|citizenship).*?(?:yes|us|u\.s\.|united states)",
-            r"born in (?:the\s+)?(?:us|u\.s\.|united states|america)",
-        ]
-
-        for pattern in citizen_patterns:
-            match = re.search(pattern, full_text, re.IGNORECASE)
+        """Extract citizenship status using shared patterns."""
+        # US Citizen - use shared compiled patterns
+        for pattern in US_CITIZEN_PATTERNS_COMPILED:
+            match = pattern.search(full_text)
             if match:
                 raw_source = full_text[max(0, match.start()-20):match.end()+20]
                 return ExtractedValue(
@@ -232,13 +231,8 @@ class IdentityExtractionAgent(BaseExtractionAgent):
                 )
 
         # Permanent Resident
-        pr_patterns = [
-            r"(?:permanent resident|green card|legal resident)",
-            r"(?:i have|i've got).*?green card",
-        ]
-
-        for pattern in pr_patterns:
-            match = re.search(pattern, full_text, re.IGNORECASE)
+        for pattern in PERMANENT_RESIDENT_PATTERNS_COMPILED:
+            match = pattern.search(full_text)
             if match:
                 raw_source = full_text[max(0, match.start()-20):match.end()+20]
                 return ExtractedValue(
@@ -256,18 +250,10 @@ class IdentityExtractionAgent(BaseExtractionAgent):
         borrower_text: str,
         full_text: str,
     ) -> ExtractedValue:
-        """Extract marital status."""
-        status_map = {
-            "MARRIED": [r"\b(?:married|spouse|wife|husband)\b"],
-            "SINGLE": [r"\b(?:single|unmarried|not married)\b"],
-            "DIVORCED": [r"\b(?:divorced|ex-wife|ex-husband)\b"],
-            "SEPARATED": [r"\bseparated\b"],
-            "WIDOWED": [r"\b(?:widowed|widow|widower)\b"],
-        }
-
-        for status, patterns in status_map.items():
+        """Extract marital status using shared patterns."""
+        for status, patterns in MARITAL_STATUS_PATTERNS.items():
             for pattern in patterns:
-                match = re.search(pattern, full_text, re.IGNORECASE)
+                match = pattern.search(full_text)
                 if match:
                     raw_source = full_text[max(0, match.start()-20):match.end()+20]
                     return ExtractedValue(

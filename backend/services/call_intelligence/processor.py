@@ -37,6 +37,25 @@ from .agents import (
 logger = logging.getLogger(__name__)
 
 
+# =============================================================================
+# FIELD CATEGORIZATION
+# =============================================================================
+# These prefixes determine how extracted financial fields are categorized
+# into income, assets, liabilities, or real estate owned (REO) buckets.
+
+INCOME_FIELD_PREFIXES = ("income", "salary", "wage", "bonus", "commission")
+"""Field prefixes that indicate income-related extractions."""
+
+ASSET_FIELD_PREFIXES = ("asset", "bank", "savings", "checking", "retirement", "investment")
+"""Field prefixes that indicate asset-related extractions."""
+
+LIABILITY_FIELD_PREFIXES = ("debt", "loan", "liability", "payment", "owe", "credit_card", "auto_loan", "student_loan")
+"""Field prefixes that indicate liability-related extractions."""
+
+REO_FIELD_PREFIXES = ("property", "real_estate", "rental", "reo")
+"""Field prefixes that indicate real estate owned extractions."""
+
+
 class CallIntelligenceProcessor:
     """
     Main processor for call transcript intelligence extraction.
@@ -219,21 +238,23 @@ class CallIntelligenceProcessor:
         elif agent_name == "employment":
             response.employment_extractions.update(extractions_dict)
         elif agent_name == "financial":
-            # Split financial into income, assets, liabilities
+            # Split financial into income, assets, liabilities, REO based on field prefixes
+            # See INCOME_FIELD_PREFIXES, ASSET_FIELD_PREFIXES, etc. for categorization rules
             for extraction in result.extractions:
-                if extraction.field_name.startswith(("income", "salary", "wage", "bonus", "commission")):
+                if extraction.field_name.startswith(INCOME_FIELD_PREFIXES):
                     response.income_extractions[extraction.field_name] = extraction.value
                     response.income_extractions[f"{extraction.field_name}_confidence"] = extraction.confidence
-                elif extraction.field_name.startswith(("asset", "bank", "savings", "checking", "retirement")):
+                elif extraction.field_name.startswith(ASSET_FIELD_PREFIXES):
                     response.assets_extractions[extraction.field_name] = extraction.value
                     response.assets_extractions[f"{extraction.field_name}_confidence"] = extraction.confidence
-                elif extraction.field_name.startswith(("debt", "loan", "liability", "payment", "owe")):
+                elif extraction.field_name.startswith(LIABILITY_FIELD_PREFIXES):
                     response.liabilities_extractions[extraction.field_name] = extraction.value
                     response.liabilities_extractions[f"{extraction.field_name}_confidence"] = extraction.confidence
-                elif extraction.field_name.startswith(("property", "real_estate", "rental")):
+                elif extraction.field_name.startswith(REO_FIELD_PREFIXES):
                     response.reo_extractions[extraction.field_name] = extraction.value
                     response.reo_extractions[f"{extraction.field_name}_confidence"] = extraction.confidence
                 else:
+                    # Default uncategorized financial fields to income
                     response.income_extractions[extraction.field_name] = extraction.value
         elif agent_name == "compliance":
             response.declarations_extractions.update(extractions_dict)
@@ -241,9 +262,10 @@ class CallIntelligenceProcessor:
             response.intent_extractions.update(extractions_dict)
 
     def _calculate_stats(self, response: CallIntelligenceResponse) -> None:
-        """Calculate summary statistics."""
+        """Calculate summary statistics and log confidence distribution."""
         total = 0
         high_conf = 0
+        medium_conf = 0
         low_conf = 0
 
         for result in response.agent_results:
@@ -251,12 +273,28 @@ class CallIntelligenceProcessor:
                 total += 1
                 if extraction.confidence >= 90:
                     high_conf += 1
-                elif extraction.confidence < 70:
+                elif extraction.confidence >= 70:
+                    medium_conf += 1
+                else:
                     low_conf += 1
 
         response.total_extractions = total
         response.high_confidence_count = high_conf
         response.low_confidence_count = low_conf
+
+        # Log confidence distribution for monitoring extraction quality
+        if total > 0:
+            high_pct = (high_conf / total) * 100
+            low_pct = (low_conf / total) * 100
+            logger.info(
+                f"Confidence distribution: {high_conf}/{total} high ({high_pct:.0f}%), "
+                f"{medium_conf}/{total} medium, {low_conf}/{total} low ({low_pct:.0f}%)"
+            )
+            if low_pct > 30:
+                logger.warning(
+                    f"High proportion of low-confidence extractions ({low_pct:.0f}%) - "
+                    "consider reviewing transcript quality or extraction patterns"
+                )
 
     async def _save_results(
         self,

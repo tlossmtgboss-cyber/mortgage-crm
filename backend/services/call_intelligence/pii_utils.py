@@ -15,7 +15,9 @@ import re
 from typing import Tuple, Optional
 
 
-# SSN Patterns - designed to detect but NOT capture full SSN
+# =============================================================================
+# SSN PATTERNS
+# =============================================================================
 # These patterns identify SSN locations without exposing the full number
 
 # Pattern for full SSN format: XXX-XX-XXXX or XXX XX XXXX or XXXXXXXXX
@@ -31,6 +33,38 @@ SSN_LAST_FOUR_PATTERN = re.compile(
 
 # Redaction placeholder
 SSN_REDACTED = "***-**-"
+
+
+# =============================================================================
+# CREDIT CARD PATTERNS
+# =============================================================================
+# Matches major credit card formats (Visa, MC, Amex, Discover)
+# Preserves last 4 digits for reference
+
+CREDIT_CARD_PATTERN = re.compile(
+    r'\b(?:'
+    r'4\d{3}[-\s]?\d{4}[-\s]?\d{4}[-\s]?(\d{4})|'  # Visa (starts with 4)
+    r'5[1-5]\d{2}[-\s]?\d{4}[-\s]?\d{4}[-\s]?(\d{4})|'  # Mastercard (51-55)
+    r'3[47]\d{2}[-\s]?\d{6}[-\s]?(\d{5})|'  # Amex (34, 37) - 15 digits
+    r'6(?:011|5\d{2})[-\s]?\d{4}[-\s]?\d{4}[-\s]?(\d{4})'  # Discover
+    r')\b'
+)
+
+CREDIT_CARD_REDACTED = "****-****-****-"
+
+
+# =============================================================================
+# BANK ACCOUNT PATTERNS
+# =============================================================================
+# Matches common bank account number formats (8-17 digits)
+# Only matches when preceded by account-related keywords to avoid false positives
+
+BANK_ACCOUNT_PATTERN = re.compile(
+    r'(?:account|acct|routing|aba)[\s#:]*(\d{4,8})[-\s]?(\d{4,9})\b',
+    re.IGNORECASE
+)
+
+BANK_ACCOUNT_REDACTED = "****"
 
 
 def redact_ssn(text: str) -> str:
@@ -122,18 +156,70 @@ def contains_ssn(text: str) -> bool:
     return bool(SSN_FULL_PATTERN.search(text))
 
 
+def redact_credit_card(text: str) -> str:
+    """
+    Redact credit card numbers, preserving only last 4 digits.
+
+    Args:
+        text: Text that may contain credit card numbers
+
+    Returns:
+        Text with credit cards redacted to format "****-****-****-XXXX"
+
+    Example:
+        >>> redact_credit_card("Card is 4111-1111-1111-1234")
+        "Card is ****-****-****-1234"
+    """
+    if not text:
+        return text
+
+    def replace_cc(match):
+        # Find the last 4 digits from whichever group matched
+        last_four = match.group(1) or match.group(2) or match.group(3) or match.group(4)
+        if last_four:
+            return f"{CREDIT_CARD_REDACTED}{last_four}"
+        return match.group(0)
+
+    return CREDIT_CARD_PATTERN.sub(replace_cc, text)
+
+
+def redact_bank_account(text: str) -> str:
+    """
+    Redact bank account numbers, preserving only last 4 digits.
+
+    Args:
+        text: Text that may contain bank account numbers
+
+    Returns:
+        Text with account numbers redacted
+
+    Example:
+        >>> redact_bank_account("Account 123456789")
+        "Account ****6789"
+    """
+    if not text:
+        return text
+
+    def replace_account(match):
+        # Preserve only last 4 digits
+        full_number = match.group(1) + (match.group(2) or "")
+        if len(full_number) >= 4:
+            last_four = full_number[-4:]
+            return f"account {BANK_ACCOUNT_REDACTED}{last_four}"
+        return match.group(0)
+
+    return BANK_ACCOUNT_PATTERN.sub(replace_account, text)
+
+
 def mask_pii_for_logging(text: str) -> str:
     """
     Mask all PII in text for safe logging.
 
     This should be called before logging any text that might contain PII.
-    Currently handles:
+    Handles:
     - SSN (full 9-digit and variations)
-
-    Future enhancements could add:
-    - Credit card numbers
-    - Bank account numbers
-    - Driver's license numbers
+    - Credit card numbers (Visa, MC, Amex, Discover)
+    - Bank account numbers (when preceded by account-related keywords)
 
     Args:
         text: Text to mask
@@ -144,8 +230,10 @@ def mask_pii_for_logging(text: str) -> str:
     if not text:
         return text
 
-    # Redact SSNs
+    # Apply all PII redaction in sequence
     masked = redact_ssn(text)
+    masked = redact_credit_card(masked)
+    masked = redact_bank_account(masked)
 
     return masked
 
