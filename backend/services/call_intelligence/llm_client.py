@@ -245,6 +245,12 @@ Respond ONLY with the JSON object, no additional text."""
 
                 if result:
                     return result
+                else:
+                    # JSON parse failed - log and retry
+                    logger.warning(f"LLM extraction attempt {attempt + 1}: JSON parse failed, retrying...")
+                    if attempt < self.config.max_retries - 1:
+                        await asyncio.sleep(2 ** attempt)
+                    continue
 
             except asyncio.TimeoutError:
                 logger.warning(f"LLM extraction attempt {attempt + 1} timed out after {self.config.timeout}s")
@@ -300,11 +306,14 @@ Respond with a JSON object containing the extracted information."""
             return self._parse_json_response(content) or {}
 
         except asyncio.TimeoutError:
-            logger.error(f"Custom prompt extraction timed out after {self.config.timeout}s")
-            return {}
+            logger.error(f"Anthropic custom prompt extraction timed out after {self.config.timeout}s")
+            raise  # Re-raise to let caller handle timeout consistently
+        except json.JSONDecodeError as e:
+            logger.error(f"Anthropic custom prompt returned invalid JSON: {e}")
+            return {}  # Return empty for parse errors - data may still be usable
         except Exception as e:
-            logger.error(f"Custom prompt extraction failed: {e}")
-            return {}
+            logger.error(f"Anthropic custom prompt extraction failed: {type(e).__name__}: {e}")
+            raise  # Re-raise unexpected errors for caller to handle
 
     def _parse_json_response(self, content: str) -> Optional[Dict[str, Any]]:
         """Parse JSON from LLM response.
@@ -401,8 +410,14 @@ class OpenAIClient(BaseLLMClient):
                 if not content:
                     logger.warning("Empty message content from OpenAI API")
                     continue
-                result = json.loads(content)
-                return result
+                try:
+                    result = json.loads(content)
+                    return result
+                except json.JSONDecodeError:
+                    logger.warning(f"OpenAI extraction attempt {attempt + 1}: JSON parse failed, retrying...")
+                    if attempt < self.config.max_retries - 1:
+                        await asyncio.sleep(2 ** attempt)
+                    continue
 
             except asyncio.TimeoutError:
                 logger.warning(f"OpenAI extraction attempt {attempt + 1} timed out after {self.config.timeout}s")
@@ -449,10 +464,13 @@ class OpenAIClient(BaseLLMClient):
 
         except asyncio.TimeoutError:
             logger.error(f"OpenAI custom prompt extraction timed out after {self.config.timeout}s")
-            return {}
+            raise  # Re-raise to let caller handle timeout consistently
+        except json.JSONDecodeError as e:
+            logger.error(f"OpenAI custom prompt returned invalid JSON: {e}")
+            return {}  # Return empty for parse errors - data may still be usable
         except Exception as e:
-            logger.error(f"Custom prompt extraction failed: {e}")
-            return {}
+            logger.error(f"OpenAI custom prompt extraction failed: {type(e).__name__}: {e}")
+            raise  # Re-raise unexpected errors for caller to handle
 
 
 def create_llm_client(config: LLMConfig = None) -> BaseLLMClient:

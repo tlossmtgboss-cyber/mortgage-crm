@@ -498,9 +498,9 @@ def extractions_to_lead_data(results: Dict[str, ExtractionResult]) -> Dict[str, 
 
 async def process_transcript_and_create_lead(
     transcript_text: str,
-    db_session=None,
-    owner_id: int = None,
-    organization_id: int = None,
+    db_session: Optional[Any] = None,  # SQLAlchemy Session, Optional to avoid import
+    owner_id: Optional[int] = None,
+    organization_id: Optional[int] = None,
     speaker_mapping: Optional[Dict[str, SpeakerRole]] = None,
 ) -> Dict[str, Any]:
     """
