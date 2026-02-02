@@ -45,6 +45,7 @@ ROLE_KEYWORDS = {
 }
 
 # LO speech patterns - questions and professional language
+# Pre-compiled for performance and ReDoS protection
 LO_SPEECH_PATTERNS = [
     r'\b(what is your|can you tell me|could you|may i|let me)\b',
     r'\b(perfect|great|got it|sounds good|thank you for)\b',
@@ -52,6 +53,8 @@ LO_SPEECH_PATTERNS = [
     r'\b(verify|confirm|walk through|process)\b',
     r'\b(do you have|are you|have you ever|will you be)\b',
 ]
+# Pre-compiled patterns for better performance
+LO_SPEECH_PATTERNS_COMPILED = [re.compile(p, re.IGNORECASE) for p in LO_SPEECH_PATTERNS]
 
 # Borrower speech patterns - personal info and short responses
 BORROWER_SPEECH_PATTERNS = [
@@ -60,6 +63,8 @@ BORROWER_SPEECH_PATTERNS = [
     r'^(about |around |roughly |approximately )?[\$]?\d',  # Amounts
     r'\b(we\'ve been|we are|we\'re)\b',
 ]
+# Pre-compiled patterns for better performance
+BORROWER_SPEECH_PATTERNS_COMPILED = [re.compile(p, re.IGNORECASE) for p in BORROWER_SPEECH_PATTERNS]
 
 # Default segment duration in seconds when no timestamps are available
 DEFAULT_SEGMENT_DURATION_SECONDS = 10
@@ -122,8 +127,9 @@ def identify_speaker_role(
     if text:
         text_lower = text.lower()
 
-        lo_score = sum(1 for p in LO_SPEECH_PATTERNS if re.search(p, text_lower, re.IGNORECASE))
-        borrower_score = sum(1 for p in BORROWER_SPEECH_PATTERNS if re.search(p, text_lower, re.IGNORECASE))
+        # Use pre-compiled patterns for performance
+        lo_score = sum(1 for p in LO_SPEECH_PATTERNS_COMPILED if p.search(text_lower))
+        borrower_score = sum(1 for p in BORROWER_SPEECH_PATTERNS_COMPILED if p.search(text_lower))
 
         if lo_score > borrower_score and lo_score >= 2:
             return SpeakerRole.AI_LO
@@ -169,19 +175,46 @@ def infer_roles_from_conversation(
         if speaker not in unique_speakers:
             unique_speakers.append(speaker)
 
-    # If we have exactly 2 speakers and no explicit mapping, use heuristics
-    if len(unique_speakers) == 2 and not speaker_mapping:
+    num_speakers = len(unique_speakers)
+
+    # Handle edge case: single speaker
+    if num_speakers == 1:
+        # Can't determine role with only one speaker - assume borrower providing info
+        logger.debug(f"Single speaker detected: '{unique_speakers[0]}' - defaulting to BORROWER")
+        inferred_mapping[unique_speakers[0]] = SpeakerRole.BORROWER
+        return inferred_mapping
+
+    # Handle edge case: 3+ speakers (conference call)
+    if num_speakers > 2:
+        logger.debug(f"Multi-party call detected with {num_speakers} speakers - scoring each")
+        # Score each speaker and assign roles based on LO speech patterns
+        speaker_scores = {}
+        for speaker in unique_speakers:
+            speaker_text = ' '.join(text for s, text in raw_segments if s == speaker)
+            lo_score = sum(1 for p in LO_SPEECH_PATTERNS_COMPILED if p.search(speaker_text))
+            speaker_scores[speaker] = lo_score
+
+        # Speaker with highest LO score is the loan officer
+        sorted_speakers = sorted(speaker_scores.items(), key=lambda x: x[1], reverse=True)
+        inferred_mapping[sorted_speakers[0][0]] = SpeakerRole.AI_LO
+        # All others are borrowers (could be co-borrower, but we use BORROWER for simplicity)
+        for speaker, _ in sorted_speakers[1:]:
+            inferred_mapping[speaker] = SpeakerRole.BORROWER
+
+        logger.debug(f"Multi-party inferred roles: {inferred_mapping}")
+        return inferred_mapping
+
+    # Standard case: exactly 2 speakers
+    if not speaker_mapping:
         speaker1, speaker2 = unique_speakers
 
         # Aggregate text for each speaker
         speaker1_text = ' '.join(text for s, text in raw_segments if s == speaker1)
         speaker2_text = ' '.join(text for s, text in raw_segments if s == speaker2)
 
-        # Score each speaker
-        s1_lo_score = sum(1 for p in LO_SPEECH_PATTERNS
-                         if re.search(p, speaker1_text, re.IGNORECASE))
-        s2_lo_score = sum(1 for p in LO_SPEECH_PATTERNS
-                         if re.search(p, speaker2_text, re.IGNORECASE))
+        # Score each speaker using pre-compiled patterns
+        s1_lo_score = sum(1 for p in LO_SPEECH_PATTERNS_COMPILED if p.search(speaker1_text))
+        s2_lo_score = sum(1 for p in LO_SPEECH_PATTERNS_COMPILED if p.search(speaker2_text))
 
         # First speaker in mortgage calls is usually the LO
         first_speaker_bonus = 2

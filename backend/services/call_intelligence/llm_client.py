@@ -24,26 +24,48 @@ class LLMProvider(str, Enum):
     OPENAI = "openai"
 
 
+# Default configuration constants
+DEFAULT_ANTHROPIC_MODEL = "claude-3-haiku-20240307"  # Fast and cost-effective for extraction
+DEFAULT_OPENAI_MODEL = "gpt-4o-mini"  # Cost-effective OpenAI model
+DEFAULT_MAX_TOKENS = 4096  # Sufficient for mortgage data extraction
+DEFAULT_TEMPERATURE = 0.0  # Deterministic for structured extraction
+DEFAULT_TIMEOUT_SECONDS = 30
+DEFAULT_MAX_RETRIES = 3
+
+
 @dataclass
 class LLMConfig:
     """Configuration for LLM client."""
     provider: LLMProvider = LLMProvider.ANTHROPIC
-    model: str = "claude-3-haiku-20240307"  # Fast and cost-effective for extraction
-    temperature: float = 0.0  # Deterministic for structured extraction
-    max_tokens: int = 4096
-    timeout: int = 30
-    max_retries: int = 3
+    model: str = DEFAULT_ANTHROPIC_MODEL
+    temperature: float = DEFAULT_TEMPERATURE
+    max_tokens: int = DEFAULT_MAX_TOKENS
+    timeout: int = DEFAULT_TIMEOUT_SECONDS
+    max_retries: int = DEFAULT_MAX_RETRIES
 
     @classmethod
     def from_env(cls) -> "LLMConfig":
-        """Create config from environment variables."""
-        provider = os.getenv("CI_LLM_PROVIDER", "anthropic").lower()
+        """Create config from environment variables.
+
+        Environment variables:
+            CI_LLM_PROVIDER: "anthropic" or "openai" (default: anthropic)
+            CI_LLM_MODEL: Model name (default: claude-3-haiku for Anthropic, gpt-4o-mini for OpenAI)
+            CI_LLM_TEMPERATURE: 0.0-1.0 (default: 0.0 for deterministic extraction)
+            CI_LLM_MAX_TOKENS: Max response tokens (default: 4096)
+            CI_LLM_TIMEOUT: Request timeout in seconds (default: 30)
+        """
+        provider_str = os.getenv("CI_LLM_PROVIDER", "anthropic").lower()
+        provider = LLMProvider(provider_str)
+
+        # Use appropriate default model based on provider
+        default_model = DEFAULT_OPENAI_MODEL if provider == LLMProvider.OPENAI else DEFAULT_ANTHROPIC_MODEL
+
         return cls(
-            provider=LLMProvider(provider),
-            model=os.getenv("CI_LLM_MODEL", "claude-3-haiku-20240307"),
-            temperature=float(os.getenv("CI_LLM_TEMPERATURE", "0.0")),
-            max_tokens=int(os.getenv("CI_LLM_MAX_TOKENS", "4096")),
-            timeout=int(os.getenv("CI_LLM_TIMEOUT", "30")),
+            provider=provider,
+            model=os.getenv("CI_LLM_MODEL", default_model),
+            temperature=float(os.getenv("CI_LLM_TEMPERATURE", str(DEFAULT_TEMPERATURE))),
+            max_tokens=int(os.getenv("CI_LLM_MAX_TOKENS", str(DEFAULT_MAX_TOKENS))),
+            timeout=int(os.getenv("CI_LLM_TIMEOUT", str(DEFAULT_TIMEOUT_SECONDS))),
         )
 
 
@@ -358,7 +380,7 @@ class OpenAIClient(BaseLLMClient):
         self.config = config or LLMConfig.from_env()
         # Only override model if explicitly using OpenAI and no custom model was set
         if self.config.model.startswith("claude"):
-            self.config.model = os.getenv("CI_LLM_MODEL", "gpt-4o-mini")
+            self.config.model = os.getenv("CI_LLM_MODEL", DEFAULT_OPENAI_MODEL)
         self._client = None
 
     def _get_client(self):

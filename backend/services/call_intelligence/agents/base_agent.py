@@ -9,6 +9,7 @@ from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
 import re
 import logging
+import threading
 
 from ..data_contracts import (
     TranscriptSegment,
@@ -150,17 +151,21 @@ class BaseExtractionAgent(ABC):
         """
         self._llm_client = llm_client
         self._llm_initialized = False
+        self._llm_lock = threading.Lock()  # Thread-safe lazy initialization
 
     @property
     def llm_client(self) -> Optional[BaseLLMClient]:
-        """Lazy initialization of LLM client."""
+        """Lazy initialization of LLM client (thread-safe)."""
         if self._llm_client is None and not self._llm_initialized:
-            self._llm_initialized = True
-            try:
-                self._llm_client = create_llm_client()
-                logger.info(f"LLM client initialized for {self.AGENT_NAME} agent")
-            except Exception as e:
-                logger.warning(f"Could not initialize LLM client: {e}. Using regex fallback.")
+            with self._llm_lock:
+                # Double-check after acquiring lock
+                if self._llm_client is None and not self._llm_initialized:
+                    self._llm_initialized = True
+                    try:
+                        self._llm_client = create_llm_client()
+                        logger.info(f"LLM client initialized for {self.AGENT_NAME} agent")
+                    except Exception as e:
+                        logger.warning(f"Could not initialize LLM client: {e}. Using regex fallback.")
         return self._llm_client
 
     def get_extraction_schema(self) -> Optional[ExtractionSchema]:
@@ -378,12 +383,39 @@ class BaseExtractionAgent(ABC):
         regex_result: ExtractionResult,
     ) -> ExtractionResult:
         """
-        Merge LLM and regex results, preferring LLM when available.
+        Merge LLM and regex extraction results intelligently.
 
-        Strategy:
-        - Use LLM values when confidence >= 70
-        - Fall back to regex for fields LLM missed
-        - Use regex to validate/boost LLM confidence when both match
+        This method combines results from LLM-based extraction (primary) and
+        regex-based extraction (fallback) to produce the best possible output.
+
+        Merge Strategy:
+        1. If no LLM result, return regex result as-is
+        2. For each field extracted by LLM:
+           a. If regex also found the same field with matching value:
+              - Boost LLM confidence by LLM_REGEX_MATCH_BOOST (10 points)
+              - Mark as verified=True
+           b. If regex found same field but values differ:
+              - Use whichever has higher confidence
+           c. If only LLM found it: use LLM value
+        3. For fields only found by regex (LLM missed):
+           - Add to results with extraction_method="regex_fallback"
+
+        Confidence Boosting:
+        - When LLM and regex agree on a value, confidence is boosted by
+          ConfidenceScores.LLM_REGEX_MATCH_BOOST (typically 10 points)
+        - Confidence is capped at 100
+
+        Value Matching:
+        - Strings: case-insensitive comparison after stripping whitespace
+        - Numbers: within NUMERIC_MATCH_TOLERANCE (1% by default)
+        - Other types: direct equality comparison
+
+        Args:
+            llm_result: Extraction result from LLM (may be None if LLM failed)
+            regex_result: Extraction result from regex patterns
+
+        Returns:
+            ExtractionResult with merged extractions and combined warnings
         """
         if not llm_result:
             return regex_result

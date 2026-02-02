@@ -4,10 +4,13 @@ Data Contracts for Call Intelligence Service
 Defines input/output formats for call transcript processing.
 """
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Optional, List, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 
 class CallType(str, Enum):
@@ -70,11 +73,18 @@ class ExtractedValue:
 
     def __post_init__(self):
         """Validate field values after initialization."""
-        # Clamp confidence to valid range
+        # Clamp confidence to valid range with logging
+        original_confidence = self.confidence
         if self.confidence < 0:
             self.confidence = 0.0
+            logger.warning(
+                f"Confidence {original_confidence} clamped to 0.0 for field '{self.field_name}'"
+            )
         elif self.confidence > 100:
             self.confidence = 100.0
+            logger.warning(
+                f"Confidence {original_confidence} clamped to 100.0 for field '{self.field_name}'"
+            )
 
     def to_dict(self) -> Dict[str, Any]:
         return {
