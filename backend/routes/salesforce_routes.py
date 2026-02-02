@@ -3688,3 +3688,109 @@ async def debug_test_salesforce_query(
             "status": "error",
             "error": str(e)
         }
+
+
+@router.get("/debug/all-statuses")
+async def debug_all_statuses(
+    db: Session = Depends(get_db)
+):
+    """
+    Debug endpoint to query ALL records and show their statuses.
+    This helps identify what status values actually exist in Salesforce.
+    No auth required for debugging.
+    """
+    try:
+        # Get Salesforce integration
+        integration = db.execute(text("""
+            SELECT access_token, refresh_token, scopes, user_id
+            FROM user_integrations
+            WHERE provider = 'salesforce' AND access_token IS NOT NULL
+            ORDER BY updated_at DESC
+            LIMIT 1
+        """)).fetchone()
+
+        if not integration:
+            return {"status": "error", "message": "No Salesforce integration found"}
+
+        access_token = integration[0]
+        refresh_token = integration[1]
+        scopes = integration[2] or ""
+
+        if "instance_url:" not in scopes:
+            return {"status": "error", "message": "No instance URL in scopes"}
+
+        instance_url = scopes.split("instance_url:")[1].split(",")[0].strip()
+
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+
+        # Query ALL records without any WHERE clause, just get status field
+        soql = """
+            SELECT Id, Name, MtgPlanner_CRM__Status__c, MtgPlanner_CRM__Funded_Date__c,
+                   MtgPlanner_CRM__Borrower_Name__c, LastModifiedDate
+            FROM MtgPlanner_CRM__Transaction_Property__c
+            ORDER BY LastModifiedDate DESC
+            LIMIT 100
+        """
+        query_url = f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/query/"
+
+        response = requests.get(query_url, headers=headers, params={"q": soql}, timeout=60)
+
+        # Handle 401 with token refresh
+        if response.status_code == 401 and refresh_token:
+            try:
+                from integrations.salesforce_service import salesforce_client
+                new_tokens = salesforce_client.refresh_access_token(refresh_token)
+                if new_tokens and new_tokens.get('access_token'):
+                    access_token = new_tokens['access_token']
+                    headers["Authorization"] = f"Bearer {access_token}"
+                    response = requests.get(query_url, headers=headers, params={"q": soql}, timeout=60)
+            except Exception:
+                pass
+
+        if response.status_code == 200:
+            data = response.json()
+            records = data.get('records', [])
+
+            # Count statuses
+            status_counts = {}
+            has_funded_date_count = 0
+            sample_records = []
+
+            for r in records:
+                status = r.get('MtgPlanner_CRM__Status__c', 'NULL/EMPTY')
+                status_counts[status] = status_counts.get(status, 0) + 1
+
+                if r.get('MtgPlanner_CRM__Funded_Date__c'):
+                    has_funded_date_count += 1
+
+                if len(sample_records) < 20:
+                    sample_records.append({
+                        "Id": r.get("Id"),
+                        "Name": r.get("Name"),
+                        "Status": r.get("MtgPlanner_CRM__Status__c"),
+                        "FundedDate": r.get("MtgPlanner_CRM__Funded_Date__c"),
+                        "Borrower": r.get("MtgPlanner_CRM__Borrower_Name__c"),
+                    })
+
+            return {
+                "status": "success",
+                "total_records": data.get('totalSize', len(records)),
+                "records_in_batch": len(records),
+                "status_distribution": status_counts,
+                "has_funded_date_count": has_funded_date_count,
+                "sample_records": sample_records,
+                "query_used": soql
+            }
+        else:
+            return {
+                "status": "error",
+                "http_status": response.status_code,
+                "response": response.text[:1000]
+            }
+
+    except Exception as e:
+        logger.error(f"Debug all-statuses failed: {e}")
+        return {"status": "error", "error": str(e)}
