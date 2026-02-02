@@ -8,7 +8,7 @@ import re
 from typing import List, Dict, Any
 import logging
 
-from .base_agent import BaseExtractionAgent
+from .base_agent import BaseExtractionAgent, ConfidenceScores
 from ..data_contracts import (
     TranscriptSegment,
     ExtractionResult,
@@ -101,7 +101,7 @@ class PropertyExtractionAgent(BaseExtractionAgent):
             extractions.append(ExtractedValue(
                 field_name="street",
                 value=match.group(1).strip(),
-                confidence=80.0,
+                confidence=ConfidenceScores.REGEX_MEDIUM,
                 source_text=sanitize_source_text(full_text[max(0, match.start()-20):match.end()+50]),
             ))
 
@@ -115,7 +115,7 @@ class PropertyExtractionAgent(BaseExtractionAgent):
                 extractions.append(ExtractedValue(
                     field_name="city",
                     value=city,
-                    confidence=75.0,
+                    confidence=ConfidenceScores.REGEX_DEFAULT,
                     source_text=sanitize_source_text(full_text[max(0, match.start()-20):match.end()+30]),
                 ))
 
@@ -126,7 +126,7 @@ class PropertyExtractionAgent(BaseExtractionAgent):
                 extractions.append(ExtractedValue(
                     field_name="state",
                     value=abbrev,
-                    confidence=85.0,
+                    confidence=ConfidenceScores.REGEX_HIGH,
                     source_text=f"Found: {state_name.title()}",
                 ))
                 break
@@ -138,7 +138,7 @@ class PropertyExtractionAgent(BaseExtractionAgent):
             extractions.append(ExtractedValue(
                 field_name="zip",
                 value=match.group(1),
-                confidence=90.0,
+                confidence=ConfidenceScores.REGEX_HIGH,
                 source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
             ))
 
@@ -169,7 +169,7 @@ class PropertyExtractionAgent(BaseExtractionAgent):
                 return ExtractedValue(
                     field_name="ownership_status",
                     value="OWN",
-                    confidence=85.0,
+                    confidence=ConfidenceScores.REGEX_HIGH,
                     source_text=sanitize_source_text(full_text[:200]),
                 )
 
@@ -178,7 +178,7 @@ class PropertyExtractionAgent(BaseExtractionAgent):
                 return ExtractedValue(
                     field_name="ownership_status",
                     value="RENT",
-                    confidence=85.0,
+                    confidence=ConfidenceScores.REGEX_HIGH,
                     source_text=sanitize_source_text(full_text[:200]),
                 )
 
@@ -187,7 +187,7 @@ class PropertyExtractionAgent(BaseExtractionAgent):
                 return ExtractedValue(
                     field_name="ownership_status",
                     value="LIVING_RENT_FREE",
-                    confidence=80.0,
+                    confidence=ConfidenceScores.REGEX_MEDIUM,
                     source_text=sanitize_source_text(full_text[:200]),
                 )
 
@@ -215,7 +215,7 @@ class PropertyExtractionAgent(BaseExtractionAgent):
                         return ExtractedValue(
                             field_name="monthly_payment",
                             value=value,
-                            confidence=75.0,
+                            confidence=ConfidenceScores.REGEX_DEFAULT,
                             source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                         )
                 except ValueError:
@@ -240,7 +240,7 @@ class PropertyExtractionAgent(BaseExtractionAgent):
                 extractions.append(ExtractedValue(
                     field_name="years_at_address",
                     value=years,
-                    confidence=80.0,
+                    confidence=ConfidenceScores.REGEX_MEDIUM,
                     source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                 ))
 
@@ -253,7 +253,7 @@ class PropertyExtractionAgent(BaseExtractionAgent):
                 extractions.append(ExtractedValue(
                     field_name="months_at_address",
                     value=months,
-                    confidence=75.0,
+                    confidence=ConfidenceScores.REGEX_DEFAULT,
                     source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                 ))
 
@@ -274,7 +274,7 @@ class PropertyExtractionAgent(BaseExtractionAgent):
                     return ExtractedValue(
                         field_name="property_type",
                         value=prop_type,
-                        confidence=80.0,
+                        confidence=ConfidenceScores.REGEX_MEDIUM,
                         source_text=sanitize_source_text(full_text[:200]),
                     )
 
@@ -299,11 +299,11 @@ class PropertyExtractionAgent(BaseExtractionAgent):
                         value = float(value_str)
 
                     # Sanity check for home prices
-                    if 50000 <= value <= 10000000:
+                    if 50000 <= value <= 10_000_000:
                         return ExtractedValue(
                             field_name="purchase_price",
                             value=value,
-                            confidence=75.0,
+                            confidence=ConfidenceScores.REGEX_DEFAULT,
                             source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                         )
                 except ValueError:

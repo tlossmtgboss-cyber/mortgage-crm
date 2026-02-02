@@ -8,7 +8,7 @@ import re
 from typing import List, Dict, Any
 import logging
 
-from .base_agent import BaseExtractionAgent
+from .base_agent import BaseExtractionAgent, ConfidenceScores, ValidationRanges
 from ..data_contracts import (
     TranscriptSegment,
     ExtractionResult,
@@ -77,18 +77,18 @@ class FinancialExtractionAgent(BaseExtractionAgent):
                 value_str = match.group(1).replace(',', '')
                 try:
                     value = float(value_str)
-                    if 10000 <= value <= 5000000:  # Reasonable annual salary
+                    if ValidationRanges.MIN_ANNUAL_SALARY <= value <= ValidationRanges.MAX_ANNUAL_SALARY:
                         extractions.append(ExtractedValue(
                             field_name="annual_salary",
                             value=value,
-                            confidence=80.0,
+                            confidence=ConfidenceScores.REGEX_MEDIUM,
                             source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                         ))
                         # Calculate monthly
                         extractions.append(ExtractedValue(
                             field_name="monthly_salary",
                             value=round(value / 12, 2),
-                            confidence=80.0,
+                            confidence=ConfidenceScores.REGEX_MEDIUM,
                             source_text="Calculated from annual",
                         ))
                         break
@@ -108,11 +108,11 @@ class FinancialExtractionAgent(BaseExtractionAgent):
                     value_str = match.group(1).replace(',', '')
                     try:
                         value = float(value_str)
-                        if 1000 <= value <= 500000:  # Reasonable monthly salary
+                        if ValidationRanges.MIN_MONTHLY_SALARY <= value <= ValidationRanges.MAX_MONTHLY_SALARY:
                             extractions.append(ExtractedValue(
                                 field_name="monthly_salary",
                                 value=value,
-                                confidence=80.0,
+                                confidence=ConfidenceScores.REGEX_MEDIUM,
                                 source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                             ))
                             break
@@ -131,11 +131,11 @@ class FinancialExtractionAgent(BaseExtractionAgent):
                 value_str = match.group(1).replace(',', '')
                 try:
                     value = float(value_str)
-                    if 5 <= value <= 500:  # Reasonable hourly rate
+                    if ValidationRanges.MIN_HOURLY_RATE <= value <= ValidationRanges.MAX_HOURLY_RATE:
                         extractions.append(ExtractedValue(
                             field_name="hourly_rate",
                             value=value,
-                            confidence=80.0,
+                            confidence=ConfidenceScores.REGEX_MEDIUM,
                             source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                         ))
                         break
@@ -159,7 +159,7 @@ class FinancialExtractionAgent(BaseExtractionAgent):
                         extractions.append(ExtractedValue(
                             field_name=income_type,
                             value=value,
-                            confidence=70.0,
+                            confidence=ConfidenceScores.REGEX_LOW,
                             source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                         ))
                 except ValueError:
@@ -187,11 +187,11 @@ class FinancialExtractionAgent(BaseExtractionAgent):
                 value_str = match.group(1).replace(',', '')
                 try:
                     value = float(value_str)
-                    if value >= 100:  # Reasonable amount
+                    if value >= ValidationRanges.MIN_ASSET_BALANCE:
                         extractions.append(ExtractedValue(
                             field_name="bank_balance",
                             value=value,
-                            confidence=70.0,
+                            confidence=ConfidenceScores.REGEX_LOW,
                             source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                         ))
                         break
@@ -210,11 +210,11 @@ class FinancialExtractionAgent(BaseExtractionAgent):
                 value_str = match.group(1).replace(',', '')
                 try:
                     value = float(value_str)
-                    if value >= 100:
+                    if value >= ValidationRanges.MIN_ASSET_BALANCE:
                         extractions.append(ExtractedValue(
                             field_name="retirement_balance",
                             value=value,
-                            confidence=70.0,
+                            confidence=ConfidenceScores.REGEX_LOW,
                             source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                         ))
                         break
@@ -233,11 +233,11 @@ class FinancialExtractionAgent(BaseExtractionAgent):
                 value_str = match.group(1).replace(',', '')
                 try:
                     value = float(value_str)
-                    if value >= 100:
+                    if value >= ValidationRanges.MIN_ASSET_BALANCE:
                         extractions.append(ExtractedValue(
                             field_name="gift_amount",
                             value=value,
-                            confidence=75.0,
+                            confidence=ConfidenceScores.REGEX_DEFAULT,
                             source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                         ))
                         break
@@ -266,11 +266,11 @@ class FinancialExtractionAgent(BaseExtractionAgent):
                 value_str = match.group(1).replace(',', '')
                 try:
                     value = float(value_str)
-                    if 50 <= value <= 2000:  # Reasonable car payment
+                    if ValidationRanges.MIN_CAR_PAYMENT <= value <= ValidationRanges.MAX_CAR_PAYMENT:
                         extractions.append(ExtractedValue(
                             field_name="car_payment",
                             value=value,
-                            confidence=75.0,
+                            confidence=ConfidenceScores.REGEX_DEFAULT,
                             source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                         ))
                         break
@@ -293,7 +293,7 @@ class FinancialExtractionAgent(BaseExtractionAgent):
                         extractions.append(ExtractedValue(
                             field_name="student_loan_payment",
                             value=value,
-                            confidence=75.0,
+                            confidence=ConfidenceScores.REGEX_DEFAULT,
                             source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                         ))
                         break
@@ -316,7 +316,7 @@ class FinancialExtractionAgent(BaseExtractionAgent):
                         extractions.append(ExtractedValue(
                             field_name="credit_card_payments",
                             value=value,
-                            confidence=70.0,
+                            confidence=ConfidenceScores.REGEX_LOW,
                             source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                         ))
                         break
@@ -341,11 +341,11 @@ class FinancialExtractionAgent(BaseExtractionAgent):
                 value_str = match.group(1).replace(',', '')
                 try:
                     value = float(value_str)
-                    if value >= 1000:
+                    if value >= ValidationRanges.MIN_DOWN_PAYMENT:
                         extractions.append(ExtractedValue(
                             field_name="down_payment_amount",
                             value=value,
-                            confidence=80.0,
+                            confidence=ConfidenceScores.REGEX_MEDIUM,
                             source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                         ))
                         break
@@ -358,11 +358,11 @@ class FinancialExtractionAgent(BaseExtractionAgent):
         if match:
             try:
                 pct = int(match.group(1))
-                if 1 <= pct <= 100:
+                if ValidationRanges.MIN_DOWN_PAYMENT_PERCENT <= pct <= ValidationRanges.MAX_DOWN_PAYMENT_PERCENT:
                     extractions.append(ExtractedValue(
                         field_name="down_payment_percentage",
                         value=pct,
-                        confidence=80.0,
+                        confidence=ConfidenceScores.REGEX_MEDIUM,
                         source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                     ))
             except ValueError:
@@ -381,7 +381,7 @@ class FinancialExtractionAgent(BaseExtractionAgent):
                 extractions.append(ExtractedValue(
                     field_name="down_payment_source",
                     value=source,
-                    confidence=75.0,
+                    confidence=ConfidenceScores.REGEX_DEFAULT,
                     source_text=sanitize_source_text(full_text[:200]),
                 ))
                 break

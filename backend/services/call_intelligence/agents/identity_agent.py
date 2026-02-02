@@ -13,7 +13,7 @@ import re
 from typing import List, Dict, Any
 import logging
 
-from .base_agent import BaseExtractionAgent
+from .base_agent import BaseExtractionAgent, ConfidenceScores
 from ..data_contracts import (
     TranscriptSegment,
     ExtractionResult,
@@ -111,7 +111,7 @@ class IdentityExtractionAgent(BaseExtractionAgent):
                     extractions.append(ExtractedValue(
                         field_name="first_name",
                         value=parts[0].title(),
-                        confidence=85.0,
+                        confidence=ConfidenceScores.REGEX_HIGH,
                         source_text=safe_source,
                         extraction_method="regex",
                     ))
@@ -120,7 +120,7 @@ class IdentityExtractionAgent(BaseExtractionAgent):
                     extractions.append(ExtractedValue(
                         field_name="last_name",
                         value=parts[-1].title(),
-                        confidence=85.0,
+                        confidence=ConfidenceScores.REGEX_HIGH,
                         source_text=safe_source,
                         extraction_method="regex",
                     ))
@@ -160,7 +160,7 @@ class IdentityExtractionAgent(BaseExtractionAgent):
             return ExtractedValue(
                 field_name="ssn_last_four",
                 value=last_four,
-                confidence=90.0 if full_ssn_detected else 85.0,
+                confidence=ConfidenceScores.REGEX_HIGH if full_ssn_detected else ConfidenceScores.REGEX_HIGH,
                 source_text="[SSN redacted for security]",
                 extraction_method="regex",
             )
@@ -185,7 +185,7 @@ class IdentityExtractionAgent(BaseExtractionAgent):
                 return ExtractedValue(
                     field_name="date_of_birth",
                     value=match.group(1),
-                    confidence=85.0,
+                    confidence=ConfidenceScores.REGEX_HIGH,
                     source_text=sanitize_source_text(raw_source),
                     extraction_method="regex",
                 )
@@ -198,7 +198,7 @@ class IdentityExtractionAgent(BaseExtractionAgent):
             return ExtractedValue(
                 field_name="date_of_birth",
                 value=match.group(1),
-                confidence=85.0,
+                confidence=ConfidenceScores.REGEX_HIGH,
                 source_text=sanitize_source_text(raw_source),
                 extraction_method="regex",
             )
@@ -225,7 +225,7 @@ class IdentityExtractionAgent(BaseExtractionAgent):
                 return ExtractedValue(
                     field_name="citizenship_status",
                     value="US_CITIZEN",
-                    confidence=85.0,
+                    confidence=ConfidenceScores.REGEX_HIGH,
                     source_text=sanitize_source_text(raw_source),
                     extraction_method="regex",
                 )
@@ -243,7 +243,7 @@ class IdentityExtractionAgent(BaseExtractionAgent):
                 return ExtractedValue(
                     field_name="citizenship_status",
                     value="PERMANENT_RESIDENT",
-                    confidence=80.0,
+                    confidence=ConfidenceScores.REGEX_MEDIUM,
                     source_text=sanitize_source_text(raw_source),
                     extraction_method="regex",
                 )
@@ -272,7 +272,7 @@ class IdentityExtractionAgent(BaseExtractionAgent):
                     return ExtractedValue(
                         field_name="marital_status",
                         value=status,
-                        confidence=80.0,
+                        confidence=ConfidenceScores.REGEX_MEDIUM,
                         source_text=sanitize_source_text(raw_source),
                         extraction_method="regex",
                     )

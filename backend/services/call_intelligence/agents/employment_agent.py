@@ -8,7 +8,7 @@ import re
 from typing import List, Dict, Any
 import logging
 
-from .base_agent import BaseExtractionAgent
+from .base_agent import BaseExtractionAgent, ConfidenceScores
 from ..data_contracts import (
     TranscriptSegment,
     ExtractionResult,
@@ -91,7 +91,7 @@ class EmploymentExtractionAgent(BaseExtractionAgent):
                     return ExtractedValue(
                         field_name="employer",
                         value=employer,
-                        confidence=80.0,
+                        confidence=ConfidenceScores.REGEX_MEDIUM,
                         source_text=sanitize_source_text(full_text[max(0, match.start()-20):match.end()+20]),
                     )
 
@@ -126,7 +126,7 @@ class EmploymentExtractionAgent(BaseExtractionAgent):
                     return ExtractedValue(
                         field_name="position",
                         value=title.title(),
-                        confidence=75.0,
+                        confidence=ConfidenceScores.REGEX_DEFAULT,
                         source_text=sanitize_source_text(full_text[max(0, match.start()-20):match.end()+20]),
                     )
 
@@ -151,7 +151,7 @@ class EmploymentExtractionAgent(BaseExtractionAgent):
                     return ExtractedValue(
                         field_name="employment_type",
                         value=emp_type,
-                        confidence=80.0,
+                        confidence=ConfidenceScores.REGEX_MEDIUM,
                         source_text=sanitize_source_text(full_text[:200]),
                     )
 
@@ -175,7 +175,7 @@ class EmploymentExtractionAgent(BaseExtractionAgent):
                 extractions.append(ExtractedValue(
                     field_name="is_self_employed",
                     value=True,
-                    confidence=85.0,
+                    confidence=ConfidenceScores.REGEX_HIGH,
                     source_text=sanitize_source_text(full_text[:200]),
                 ))
 
@@ -191,7 +191,7 @@ class EmploymentExtractionAgent(BaseExtractionAgent):
                         extractions.append(ExtractedValue(
                             field_name="business_name",
                             value=match.group(1).strip(),
-                            confidence=75.0,
+                            confidence=ConfidenceScores.REGEX_DEFAULT,
                             source_text=sanitize_source_text(full_text[max(0, match.start()-20):match.end()+20]),
                         ))
                         break
@@ -203,7 +203,7 @@ class EmploymentExtractionAgent(BaseExtractionAgent):
                     extractions.append(ExtractedValue(
                         field_name="ownership_percentage",
                         value=int(match.group(1)),
-                        confidence=80.0,
+                        confidence=ConfidenceScores.REGEX_MEDIUM,
                         source_text=sanitize_source_text(full_text[max(0, match.start()-20):match.end()+20]),
                     ))
 
@@ -236,14 +236,14 @@ class EmploymentExtractionAgent(BaseExtractionAgent):
                     extractions.append(ExtractedValue(
                         field_name="years_employed",
                         value=years,
-                        confidence=75.0,
+                        confidence=ConfidenceScores.REGEX_DEFAULT,
                         source_text=sanitize_source_text(full_text[max(0, match.start()-20):match.end()+20]),
                     ))
                 else:
                     extractions.append(ExtractedValue(
                         field_name="years_employed",
                         value=int(value),
-                        confidence=80.0,
+                        confidence=ConfidenceScores.REGEX_MEDIUM,
                         source_text=sanitize_source_text(full_text[max(0, match.start()-20):match.end()+20]),
                     ))
                 break
@@ -255,7 +255,7 @@ class EmploymentExtractionAgent(BaseExtractionAgent):
             extractions.append(ExtractedValue(
                 field_name="months_employed",
                 value=int(match.group(1)),
-                confidence=75.0,
+                confidence=ConfidenceScores.REGEX_DEFAULT,
                 source_text=sanitize_source_text(full_text[max(0, match.start()-20):match.end()+20]),
             ))
 
@@ -276,7 +276,7 @@ class EmploymentExtractionAgent(BaseExtractionAgent):
                     return ExtractedValue(
                         field_name="employer_phone",
                         value=phone,
-                        confidence=75.0,
+                        confidence=ConfidenceScores.REGEX_DEFAULT,
                         source_text=sanitize_source_text(full_text[max(0, match.start()-20):match.end()+30]),
                     )
 

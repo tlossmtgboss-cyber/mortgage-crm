@@ -77,6 +77,46 @@ class ConfidenceScores:
     NUMERIC_MATCH_TOLERANCE = 0.01  # 1% tolerance for numeric comparisons
 
 
+class ValidationRanges:
+    """Validation ranges for extracted values.
+
+    These ranges define reasonable bounds for mortgage-related values
+    to filter out obviously incorrect extractions.
+    """
+
+    # Income ranges (annual)
+    MIN_ANNUAL_SALARY = 10_000      # $10K minimum
+    MAX_ANNUAL_SALARY = 5_000_000   # $5M maximum
+
+    # Income ranges (monthly)
+    MIN_MONTHLY_SALARY = 1_000      # $1K minimum
+    MAX_MONTHLY_SALARY = 500_000    # $500K maximum
+
+    # Hourly rate
+    MIN_HOURLY_RATE = 5.0           # $5/hr minimum
+    MAX_HOURLY_RATE = 500.0         # $500/hr maximum
+
+    # Property values
+    MIN_PROPERTY_VALUE = 50_000     # $50K minimum
+    MAX_PROPERTY_VALUE = 50_000_000 # $50M maximum
+
+    # Down payment
+    MIN_DOWN_PAYMENT = 1_000        # $1K minimum
+    MIN_DOWN_PAYMENT_PERCENT = 1    # 1% minimum
+    MAX_DOWN_PAYMENT_PERCENT = 100  # 100% maximum
+
+    # Monthly payments (car, student loan, etc.)
+    MIN_CAR_PAYMENT = 50            # $50/month minimum
+    MAX_CAR_PAYMENT = 2_000         # $2K/month maximum
+
+    # Asset balances
+    MIN_ASSET_BALANCE = 100         # $100 minimum
+
+    # Years of experience/employment
+    MIN_YEARS = 0
+    MAX_YEARS = 50
+
+
 class BaseExtractionAgent(ABC):
     """
     Abstract base class for extraction agents.

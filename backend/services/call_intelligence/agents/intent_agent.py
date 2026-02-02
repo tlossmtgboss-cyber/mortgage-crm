@@ -8,7 +8,7 @@ import re
 from typing import List, Dict, Any
 import logging
 
-from .base_agent import BaseExtractionAgent
+from .base_agent import BaseExtractionAgent, ConfidenceScores
 from ..data_contracts import (
     TranscriptSegment,
     ExtractionResult,
@@ -98,7 +98,7 @@ class IntentExtractionAgent(BaseExtractionAgent):
                     return ExtractedValue(
                         field_name="loan_purpose",
                         value=purpose,
-                        confidence=85.0,
+                        confidence=ConfidenceScores.REGEX_HIGH,
                         source_text=sanitize_source_text(full_text[:200]),
                     )
 
@@ -123,7 +123,7 @@ class IntentExtractionAgent(BaseExtractionAgent):
                 extractions.append(ExtractedValue(
                     field_name="target_timeline",
                     value=value,
-                    confidence=75.0,
+                    confidence=ConfidenceScores.REGEX_DEFAULT,
                     source_text=sanitize_source_text(full_text[max(0, match.start()-30):match.end()+30]),
                 ))
                 break
@@ -150,7 +150,7 @@ class IntentExtractionAgent(BaseExtractionAgent):
                     extractions.append(ExtractedValue(
                         field_name="urgency",
                         value=urgency,
-                        confidence=75.0,
+                        confidence=ConfidenceScores.REGEX_DEFAULT,
                         source_text=sanitize_source_text(full_text[:200]),
                     ))
                     break
@@ -173,7 +173,7 @@ class IntentExtractionAgent(BaseExtractionAgent):
                     return ExtractedValue(
                         field_name="loan_type_preference",
                         value=loan_type,
-                        confidence=80.0,
+                        confidence=ConfidenceScores.REGEX_MEDIUM,
                         source_text=sanitize_source_text(full_text[:200]),
                     )
 
@@ -196,7 +196,7 @@ class IntentExtractionAgent(BaseExtractionAgent):
                 return ExtractedValue(
                     field_name="rate_type_preference",
                     value="FIXED",
-                    confidence=85.0,
+                    confidence=ConfidenceScores.REGEX_HIGH,
                     source_text=sanitize_source_text(full_text[:200]),
                 )
 
@@ -205,7 +205,7 @@ class IntentExtractionAgent(BaseExtractionAgent):
                 return ExtractedValue(
                     field_name="rate_type_preference",
                     value="ARM",
-                    confidence=80.0,
+                    confidence=ConfidenceScores.REGEX_MEDIUM,
                     source_text=sanitize_source_text(full_text[:200]),
                 )
 
@@ -229,7 +229,7 @@ class IntentExtractionAgent(BaseExtractionAgent):
                 return ExtractedValue(
                     field_name="has_preapproval",
                     value=True,
-                    confidence=85.0,
+                    confidence=ConfidenceScores.REGEX_HIGH,
                     source_text=sanitize_source_text(full_text[:200]),
                 )
 
@@ -238,7 +238,7 @@ class IntentExtractionAgent(BaseExtractionAgent):
                 return ExtractedValue(
                     field_name="has_preapproval",
                     value=False,
-                    confidence=80.0,
+                    confidence=ConfidenceScores.REGEX_MEDIUM,
                     source_text=sanitize_source_text(full_text[:200]),
                 )
 
@@ -262,7 +262,7 @@ class IntentExtractionAgent(BaseExtractionAgent):
                 extractions.append(ExtractedValue(
                     field_name="has_realtor",
                     value=True,
-                    confidence=85.0,
+                    confidence=ConfidenceScores.REGEX_HIGH,
                     source_text=sanitize_source_text(full_text[:200]),
                 ))
 
@@ -273,7 +273,7 @@ class IntentExtractionAgent(BaseExtractionAgent):
                     extractions.append(ExtractedValue(
                         field_name="realtor_name",
                         value=match.group(1).strip(),
-                        confidence=70.0,
+                        confidence=ConfidenceScores.REGEX_LOW,
                         source_text=sanitize_source_text(full_text[max(0, match.start()-20):match.end()+30]),
                     ))
                 break
@@ -283,7 +283,7 @@ class IntentExtractionAgent(BaseExtractionAgent):
                 extractions.append(ExtractedValue(
                     field_name="has_realtor",
                     value=False,
-                    confidence=80.0,
+                    confidence=ConfidenceScores.REGEX_MEDIUM,
                     source_text=sanitize_source_text(full_text[:200]),
                 ))
                 break

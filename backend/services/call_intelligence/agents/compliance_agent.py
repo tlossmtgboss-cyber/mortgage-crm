@@ -8,7 +8,7 @@ import re
 from typing import List, Dict, Any
 import logging
 
-from .base_agent import BaseExtractionAgent
+from .base_agent import BaseExtractionAgent, ConfidenceScores
 from ..data_contracts import (
     TranscriptSegment,
     ExtractionResult,
@@ -85,7 +85,7 @@ class ComplianceExtractionAgent(BaseExtractionAgent):
                 return ExtractedValue(
                     field_name="citizenship_status",
                     value="US_CITIZEN",
-                    confidence=90.0,
+                    confidence=ConfidenceScores.REGEX_HIGH,
                     source_text=sanitize_source_text(full_text[:200]),
                 )
 
@@ -99,7 +99,7 @@ class ComplianceExtractionAgent(BaseExtractionAgent):
                 return ExtractedValue(
                     field_name="citizenship_status",
                     value="PERMANENT_RESIDENT",
-                    confidence=85.0,
+                    confidence=ConfidenceScores.REGEX_HIGH,
                     source_text=sanitize_source_text(full_text[:200]),
                 )
 
@@ -113,7 +113,7 @@ class ComplianceExtractionAgent(BaseExtractionAgent):
                 return ExtractedValue(
                     field_name="citizenship_status",
                     value="NON_PERMANENT_RESIDENT",
-                    confidence=80.0,
+                    confidence=ConfidenceScores.REGEX_MEDIUM,
                     source_text=sanitize_source_text(full_text[:200]),
                 )
 
@@ -155,7 +155,7 @@ class ComplianceExtractionAgent(BaseExtractionAgent):
             extractions.append(ExtractedValue(
                 field_name="has_bankruptcy",
                 value=has_bankruptcy,
-                confidence=85.0,
+                confidence=ConfidenceScores.REGEX_HIGH,
                 source_text=sanitize_source_text(full_text[:200]),
             ))
 
@@ -170,7 +170,7 @@ class ComplianceExtractionAgent(BaseExtractionAgent):
                     extractions.append(ExtractedValue(
                         field_name="bankruptcy_chapter",
                         value=f"Chapter {chapter}",
-                        confidence=85.0,
+                        confidence=ConfidenceScores.REGEX_HIGH,
                         source_text=sanitize_source_text(full_text[max(0, match.start()-20):match.end()+20]),
                     ))
 
@@ -203,7 +203,7 @@ class ComplianceExtractionAgent(BaseExtractionAgent):
                 return ExtractedValue(
                     field_name="has_foreclosure",
                     value=False,
-                    confidence=85.0,
+                    confidence=ConfidenceScores.REGEX_HIGH,
                     source_text=sanitize_source_text(full_text[:200]),
                 )
 
@@ -212,7 +212,7 @@ class ComplianceExtractionAgent(BaseExtractionAgent):
                 return ExtractedValue(
                     field_name="has_foreclosure",
                     value=True,
-                    confidence=80.0,
+                    confidence=ConfidenceScores.REGEX_MEDIUM,
                     source_text=sanitize_source_text(full_text[:200]),
                 )
 
@@ -239,7 +239,7 @@ class ComplianceExtractionAgent(BaseExtractionAgent):
                 return ExtractedValue(
                     field_name="has_outstanding_judgments",
                     value=False,
-                    confidence=80.0,
+                    confidence=ConfidenceScores.REGEX_MEDIUM,
                     source_text=sanitize_source_text(full_text[:200]),
                 )
 
@@ -248,7 +248,7 @@ class ComplianceExtractionAgent(BaseExtractionAgent):
                 return ExtractedValue(
                     field_name="has_outstanding_judgments",
                     value=True,
-                    confidence=75.0,
+                    confidence=ConfidenceScores.REGEX_DEFAULT,
                     source_text=sanitize_source_text(full_text[:200]),
                 )
 
@@ -282,7 +282,7 @@ class ComplianceExtractionAgent(BaseExtractionAgent):
                 return ExtractedValue(
                     field_name="will_occupy_as_primary",
                     value=True,
-                    confidence=85.0,
+                    confidence=ConfidenceScores.REGEX_HIGH,
                     source_text=sanitize_source_text(full_text[:200]),
                 )
 
@@ -291,7 +291,7 @@ class ComplianceExtractionAgent(BaseExtractionAgent):
                 return ExtractedValue(
                     field_name="will_occupy_as_primary",
                     value=False,
-                    confidence=85.0,
+                    confidence=ConfidenceScores.REGEX_HIGH,
                     source_text=sanitize_source_text(full_text[:200]),
                 )
 
@@ -300,7 +300,7 @@ class ComplianceExtractionAgent(BaseExtractionAgent):
                 return ExtractedValue(
                     field_name="property_use",
                     value="SECOND_HOME",
-                    confidence=80.0,
+                    confidence=ConfidenceScores.REGEX_MEDIUM,
                     source_text=sanitize_source_text(full_text[:200]),
                 )
 
@@ -329,7 +329,7 @@ class ComplianceExtractionAgent(BaseExtractionAgent):
                 return ExtractedValue(
                     field_name="first_time_buyer",
                     value=True,
-                    confidence=85.0,
+                    confidence=ConfidenceScores.REGEX_HIGH,
                     source_text=sanitize_source_text(full_text[:200]),
                 )
 
@@ -338,7 +338,7 @@ class ComplianceExtractionAgent(BaseExtractionAgent):
                 return ExtractedValue(
                     field_name="first_time_buyer",
                     value=False,
-                    confidence=85.0,
+                    confidence=ConfidenceScores.REGEX_HIGH,
                     source_text=sanitize_source_text(full_text[:200]),
                 )
 
