@@ -1,0 +1,1144 @@
+/* ============================================
+   LIST & LOCK® LANDING PAGE
+   Dark luxury theme with gold accents
+   Typography: Playfair Display + Outfit
+   ============================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
+
+/* ============================================
+   CSS VARIABLES
+   ============================================ */
+:root {
+  --lal-bg-primary: #0a0a0a;
+  --lal-bg-secondary: #111111;
+  --lal-bg-tertiary: #1a1a1a;
+  --lal-gold: #d4a853;
+  --lal-gold-light: #e6c47a;
+  --lal-gold-dark: #b8923f;
+  --lal-text-primary: #ffffff;
+  --lal-text-secondary: #a0a0a0;
+  --lal-text-muted: #666666;
+  --lal-red: #c0152f;
+  --lal-green: #2d8a4e;
+  --lal-border: #2a2a2a;
+  --lal-font-display: 'Playfair Display', Georgia, serif;
+  --lal-font-body: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* ============================================
+   BASE STYLES
+   ============================================ */
+.lal-page {
+  min-height: 100vh;
+  background-color: var(--lal-bg-primary);
+  color: var(--lal-text-primary);
+  font-family: var(--lal-font-body);
+  line-height: 1.6;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Noise Texture Overlay */
+.lal-noise-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1000;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+/* Gold highlight */
+.lal-gold {
+  color: var(--lal-gold);
+}
+
+.lal-red {
+  color: var(--lal-red);
+}
+
+/* ============================================
+   NAVIGATION
+   ============================================ */
+.lal-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: rgba(10, 10, 10, 0.95);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--lal-border);
+}
+
+.lal-nav-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 40px;
+}
+
+.lal-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--lal-font-display);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--lal-text-primary);
+}
+
+.lal-logo-icon {
+  font-size: 24px;
+}
+
+.lal-logo sup {
+  font-size: 10px;
+  color: var(--lal-gold);
+}
+
+.lal-nav-links {
+  display: flex;
+  gap: 32px;
+}
+
+.lal-nav-links button {
+  background: none;
+  border: none;
+  color: var(--lal-text-secondary);
+  font-family: var(--lal-font-body);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.3s ease;
+}
+
+.lal-nav-links button:hover {
+  color: var(--lal-gold);
+}
+
+.lal-nav-cta {
+  background: var(--lal-gold);
+  color: var(--lal-bg-primary);
+  border: none;
+  padding: 10px 24px;
+  font-family: var(--lal-font-body);
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.lal-nav-cta:hover {
+  background: var(--lal-gold-light);
+  transform: translateY(-1px);
+}
+
+/* ============================================
+   HERO SECTION
+   ============================================ */
+.lal-hero {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 120px 40px 60px;
+  position: relative;
+}
+
+.lal-hero-content {
+  max-width: 900px;
+}
+
+.lal-hero-eyebrow {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--lal-gold);
+  margin-bottom: 24px;
+}
+
+.lal-hero-title {
+  font-family: var(--lal-font-display);
+  font-size: 64px;
+  font-weight: 600;
+  line-height: 1.15;
+  margin: 0 0 32px 0;
+  letter-spacing: -1px;
+}
+
+.lal-hero-subtitle {
+  font-size: 20px;
+  font-weight: 300;
+  color: var(--lal-text-secondary);
+  max-width: 700px;
+  margin: 0 auto 48px;
+  line-height: 1.7;
+}
+
+.lal-hero-ctas {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.lal-btn-primary {
+  background: var(--lal-gold);
+  color: var(--lal-bg-primary);
+  border: 2px solid var(--lal-gold);
+  padding: 16px 36px;
+  font-family: var(--lal-font-body);
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.lal-btn-primary:hover {
+  background: var(--lal-gold-light);
+  border-color: var(--lal-gold-light);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(212, 168, 83, 0.3);
+}
+
+.lal-btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.lal-btn-secondary {
+  background: transparent;
+  color: var(--lal-text-primary);
+  border: 2px solid var(--lal-border);
+  padding: 16px 36px;
+  font-family: var(--lal-font-body);
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.lal-btn-secondary:hover {
+  border-color: var(--lal-gold);
+  color: var(--lal-gold);
+}
+
+.lal-btn-full {
+  width: 100%;
+}
+
+.lal-btn-dark {
+  background: var(--lal-bg-primary);
+  color: var(--lal-gold);
+  border: 2px solid var(--lal-bg-primary);
+  padding: 16px 36px;
+  font-family: var(--lal-font-body);
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.lal-btn-dark:hover {
+  background: #000;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.lal-hero-scroll-indicator {
+  position: absolute;
+  bottom: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: var(--lal-text-muted);
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+
+.lal-scroll-arrow {
+  font-size: 20px;
+  animation: lal-bounce 2s infinite;
+}
+
+@keyframes lal-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(8px); }
+}
+
+/* ============================================
+   SECTIONS
+   ============================================ */
+.lal-section {
+  padding: 120px 40px;
+  position: relative;
+}
+
+.lal-section-dark {
+  background: var(--lal-bg-secondary);
+}
+
+.lal-section-gold {
+  background: var(--lal-gold);
+  color: var(--lal-bg-primary);
+}
+
+.lal-section-content {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.lal-content-narrow {
+  max-width: 700px;
+}
+
+.lal-section-title {
+  font-family: var(--lal-font-display);
+  font-size: 48px;
+  font-weight: 600;
+  text-align: center;
+  margin: 0 0 60px 0;
+  letter-spacing: -1px;
+}
+
+.lal-section-emphasis {
+  font-size: 22px;
+  text-align: center;
+  color: var(--lal-text-secondary);
+  margin-top: 48px;
+  line-height: 1.6;
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+.lal-animate {
+  opacity: 0;
+  transform: translateY(40px);
+  transition: opacity 0.8s ease, transform 0.8s ease;
+}
+
+.lal-animate.lal-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ============================================
+   HARD TRUTH / STATS SECTION
+   ============================================ */
+.lal-truth-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+}
+
+.lal-truth-card {
+  background: var(--lal-bg-secondary);
+  border: 1px solid var(--lal-border);
+  border-radius: 8px;
+  padding: 48px 32px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.lal-truth-card:hover {
+  border-color: var(--lal-gold);
+  transform: translateY(-4px);
+}
+
+.lal-truth-stat {
+  font-family: var(--lal-font-display);
+  font-size: 56px;
+  font-weight: 700;
+  color: var(--lal-gold);
+  margin-bottom: 16px;
+}
+
+.lal-truth-text {
+  font-size: 16px;
+  color: var(--lal-text-secondary);
+  margin: 0;
+  line-height: 1.6;
+}
+
+/* ============================================
+   THE MATH SECTION
+   ============================================ */
+.lal-math-breakdown {
+  max-width: 500px;
+  margin: 0 auto;
+  background: var(--lal-bg-tertiary);
+  border: 1px solid var(--lal-border);
+  border-radius: 8px;
+  padding: 40px;
+}
+
+.lal-math-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 16px 0;
+  font-size: 18px;
+}
+
+.lal-math-row:first-child {
+  padding-top: 0;
+}
+
+.lal-math-label {
+  color: var(--lal-text-secondary);
+}
+
+.lal-math-value {
+  font-weight: 600;
+  font-family: var(--lal-font-body);
+}
+
+.lal-math-negative .lal-math-value {
+  color: var(--lal-red);
+}
+
+.lal-math-divider {
+  height: 1px;
+  background: var(--lal-border);
+  margin: 16px 0;
+}
+
+.lal-math-total {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.lal-math-note {
+  text-align: center;
+  color: var(--lal-text-secondary);
+  margin-top: 48px;
+  font-size: 18px;
+}
+
+/* ============================================
+   PSYCHOLOGY SECTION
+   ============================================ */
+.lal-psychology-comparison {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+
+.lal-psychology-card {
+  flex: 1;
+  min-width: 280px;
+  max-width: 400px;
+  padding: 40px;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.lal-psychology-card h3 {
+  font-family: var(--lal-font-display);
+  font-size: 20px;
+  margin: 0 0 16px 0;
+  color: var(--lal-text-secondary);
+}
+
+.lal-psychology-card p {
+  font-size: 22px;
+  font-weight: 500;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.lal-psychology-bad {
+  background: rgba(192, 21, 47, 0.1);
+  border: 1px solid rgba(192, 21, 47, 0.3);
+}
+
+.lal-psychology-reality {
+  background: rgba(212, 168, 83, 0.1);
+  border: 1px solid rgba(212, 168, 83, 0.3);
+}
+
+.lal-psychology-vs {
+  font-family: var(--lal-font-display);
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--lal-text-muted);
+}
+
+/* ============================================
+   MISSED OPPORTUNITY / LARGE TEXT
+   ============================================ */
+.lal-large-text {
+  font-size: 28px;
+  font-weight: 300;
+  line-height: 1.6;
+  margin-bottom: 32px;
+  text-align: center;
+}
+
+.lal-large-text:last-child {
+  margin-bottom: 0;
+}
+
+/* ============================================
+   LIST & LOCK INTRODUCTION
+   ============================================ */
+.lal-intro-label {
+  font-size: 14px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--lal-gold);
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.lal-intro-title {
+  font-family: var(--lal-font-display);
+  font-size: 72px;
+  font-weight: 700;
+  text-align: center;
+  margin: 0 0 16px 0;
+  letter-spacing: -2px;
+}
+
+.lal-intro-title sup {
+  font-size: 24px;
+  color: var(--lal-gold);
+}
+
+.lal-intro-tagline {
+  font-size: 22px;
+  color: var(--lal-text-secondary);
+  text-align: center;
+  margin: 0 0 48px 0;
+}
+
+.lal-intro-explanation {
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.lal-intro-explanation p {
+  font-size: 18px;
+  line-height: 1.8;
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+/* ============================================
+   WHY IT WORKS - PILLARS
+   ============================================ */
+.lal-pillars-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 40px;
+}
+
+.lal-pillar {
+  padding: 40px;
+  background: var(--lal-bg-tertiary);
+  border: 1px solid var(--lal-border);
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.lal-pillar:hover {
+  border-color: var(--lal-gold);
+  transform: translateY(-4px);
+}
+
+.lal-pillar-number {
+  font-family: var(--lal-font-display);
+  font-size: 48px;
+  font-weight: 700;
+  color: var(--lal-gold);
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.lal-pillar-title {
+  font-family: var(--lal-font-display);
+  font-size: 24px;
+  margin: 0 0 12px 0;
+}
+
+.lal-pillar-text {
+  font-size: 16px;
+  color: var(--lal-text-secondary);
+  margin: 0;
+  line-height: 1.6;
+}
+
+/* ============================================
+   YARD SIGN COMPARISON
+   ============================================ */
+.lal-signs-comparison {
+  display: flex;
+  justify-content: center;
+  gap: 80px;
+  flex-wrap: wrap;
+}
+
+.lal-sign {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.lal-sign-post {
+  width: 8px;
+  height: 60px;
+  background: #555;
+  border-radius: 2px;
+}
+
+.lal-sign-post-gold {
+  background: var(--lal-gold);
+}
+
+.lal-sign-board {
+  width: 260px;
+  background: #fff;
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.lal-sign-board-premium {
+  border: 3px solid var(--lal-gold);
+}
+
+.lal-sign-header {
+  background: #c41e3a;
+  color: white;
+  padding: 12px;
+  font-size: 18px;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 2px;
+}
+
+.lal-sign-header-gold {
+  background: var(--lal-gold);
+  color: var(--lal-bg-primary);
+}
+
+.lal-sign-content {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.lal-sign-price {
+  font-size: 28px;
+  font-weight: 700;
+  color: #333;
+}
+
+.lal-sign-reduced {
+  background: #c41e3a;
+  color: white;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 2px;
+}
+
+.lal-sign-locked-rate {
+  background: var(--lal-bg-primary);
+  color: var(--lal-gold);
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 4px;
+}
+
+.lal-sign-footer {
+  background: #333;
+  color: white;
+  padding: 10px;
+  font-size: 14px;
+  text-align: center;
+}
+
+.lal-sign-footer-gold {
+  background: var(--lal-bg-primary);
+  color: var(--lal-gold);
+  font-weight: 600;
+}
+
+.lal-sign-label {
+  margin-top: 24px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.lal-sign-subtext {
+  font-size: 14px;
+  color: var(--lal-text-muted);
+  margin-top: 8px;
+}
+
+/* ============================================
+   COMPARISON TABLE
+   ============================================ */
+.lal-comparison-table {
+  background: var(--lal-bg-tertiary);
+  border: 1px solid var(--lal-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.lal-comparison-header {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  background: var(--lal-bg-primary);
+  font-weight: 600;
+}
+
+.lal-comparison-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  border-top: 1px solid var(--lal-border);
+}
+
+.lal-comparison-cell {
+  padding: 20px 24px;
+  font-size: 16px;
+  text-align: center;
+}
+
+.lal-comparison-label {
+  text-align: left;
+  color: var(--lal-text-secondary);
+}
+
+.lal-comparison-traditional {
+  color: var(--lal-text-muted);
+}
+
+.lal-comparison-locked {
+  color: var(--lal-gold);
+}
+
+.lal-comparison-source {
+  text-align: center;
+  font-size: 13px;
+  color: var(--lal-text-muted);
+  margin-top: 24px;
+}
+
+/* ============================================
+   SUPPORT GRID
+   ============================================ */
+.lal-support-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+  margin-top: 48px;
+}
+
+.lal-support-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 24px;
+  background: var(--lal-bg-secondary);
+  border: 1px solid var(--lal-border);
+  border-radius: 8px;
+  font-size: 16px;
+  transition: all 0.3s ease;
+}
+
+.lal-support-item:hover {
+  border-color: var(--lal-gold);
+}
+
+.lal-support-icon {
+  font-size: 24px;
+}
+
+/* ============================================
+   AUDIENCE CARDS
+   ============================================ */
+.lal-audience-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 40px;
+}
+
+.lal-audience-card {
+  padding: 40px;
+  border-radius: 8px;
+}
+
+.lal-audience-card h3 {
+  font-family: var(--lal-font-display);
+  font-size: 24px;
+  margin: 0 0 24px 0;
+}
+
+.lal-audience-card ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.lal-audience-card li {
+  padding: 12px 0;
+  padding-left: 28px;
+  position: relative;
+  font-size: 16px;
+  color: var(--lal-text-secondary);
+}
+
+.lal-audience-card li::before {
+  position: absolute;
+  left: 0;
+  font-size: 16px;
+}
+
+.lal-audience-yes {
+  background: rgba(45, 138, 78, 0.1);
+  border: 1px solid rgba(45, 138, 78, 0.3);
+}
+
+.lal-audience-yes h3 {
+  color: var(--lal-green);
+}
+
+.lal-audience-yes li::before {
+  content: '✓';
+  color: var(--lal-green);
+}
+
+.lal-audience-no {
+  background: rgba(192, 21, 47, 0.1);
+  border: 1px solid rgba(192, 21, 47, 0.3);
+}
+
+.lal-audience-no h3 {
+  color: var(--lal-red);
+}
+
+.lal-audience-no li::before {
+  content: '✗';
+  color: var(--lal-red);
+}
+
+/* ============================================
+   LEAD CAPTURE FORM
+   ============================================ */
+.lal-form-subtitle {
+  text-align: center;
+  font-size: 18px;
+  color: var(--lal-text-secondary);
+  margin-bottom: 48px;
+  line-height: 1.6;
+}
+
+.lal-form {
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.lal-form-group {
+  margin-bottom: 20px;
+}
+
+.lal-form-group input {
+  width: 100%;
+  padding: 16px 20px;
+  font-family: var(--lal-font-body);
+  font-size: 16px;
+  background: var(--lal-bg-secondary);
+  border: 1px solid var(--lal-border);
+  border-radius: 4px;
+  color: var(--lal-text-primary);
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+}
+
+.lal-form-group input:focus {
+  outline: none;
+  border-color: var(--lal-gold);
+}
+
+.lal-form-group input::placeholder {
+  color: var(--lal-text-muted);
+}
+
+.lal-form-disclaimer {
+  text-align: center;
+  font-size: 13px;
+  color: var(--lal-text-muted);
+  margin-top: 16px;
+}
+
+.lal-success-message {
+  text-align: center;
+  padding: 48px;
+  background: rgba(45, 138, 78, 0.1);
+  border: 1px solid rgba(45, 138, 78, 0.3);
+  border-radius: 8px;
+}
+
+.lal-success-icon {
+  width: 64px;
+  height: 64px;
+  background: var(--lal-green);
+  color: white;
+  font-size: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 24px;
+}
+
+.lal-success-message h3 {
+  font-family: var(--lal-font-display);
+  font-size: 28px;
+  margin: 0 0 12px 0;
+  color: var(--lal-green);
+}
+
+.lal-success-message p {
+  font-size: 16px;
+  color: var(--lal-text-secondary);
+  margin: 0;
+}
+
+/* ============================================
+   STRATEGY CALL CTA
+   ============================================ */
+.lal-cta-title {
+  font-family: var(--lal-font-display);
+  font-size: 48px;
+  font-weight: 600;
+  text-align: center;
+  margin: 0 0 24px 0;
+}
+
+.lal-cta-text {
+  font-size: 20px;
+  text-align: center;
+  margin-bottom: 36px;
+  line-height: 1.6;
+  opacity: 0.9;
+}
+
+.lal-section-gold .lal-btn-dark {
+  display: block;
+  margin: 0 auto;
+}
+
+.lal-cta-note {
+  text-align: center;
+  font-size: 14px;
+  margin-top: 16px;
+  opacity: 0.7;
+}
+
+/* ============================================
+   FINAL THOUGHT
+   ============================================ */
+.lal-final-quote {
+  font-family: var(--lal-font-display);
+  font-size: 32px;
+  font-style: italic;
+  font-weight: 400;
+  text-align: center;
+  line-height: 1.6;
+  margin: 0;
+  padding: 0 20px;
+  color: var(--lal-text-secondary);
+}
+
+.lal-final-attribution {
+  text-align: center;
+  font-size: 14px;
+  color: var(--lal-text-muted);
+  margin-top: 32px;
+  letter-spacing: 2px;
+}
+
+/* ============================================
+   FOOTER
+   ============================================ */
+.lal-footer {
+  background: var(--lal-bg-primary);
+  border-top: 1px solid var(--lal-border);
+  padding: 60px 40px;
+}
+
+.lal-footer-content {
+  max-width: 800px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.lal-footer-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-family: var(--lal-font-display);
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 24px;
+}
+
+.lal-footer-brand sup {
+  font-size: 10px;
+  color: var(--lal-gold);
+}
+
+.lal-footer-legal {
+  font-size: 14px;
+  color: var(--lal-text-muted);
+  margin-bottom: 24px;
+}
+
+.lal-footer-links {
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+  margin-bottom: 24px;
+}
+
+.lal-footer-links a {
+  font-size: 14px;
+  color: var(--lal-text-secondary);
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+
+.lal-footer-links a:hover {
+  color: var(--lal-gold);
+}
+
+.lal-footer-copyright {
+  font-size: 13px;
+  color: var(--lal-text-muted);
+  margin: 0;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+@media (max-width: 1024px) {
+  .lal-hero-title {
+    font-size: 48px;
+  }
+
+  .lal-section-title {
+    font-size: 40px;
+  }
+
+  .lal-truth-grid {
+    grid-template-columns: 1fr;
+    max-width: 400px;
+    margin: 0 auto;
+  }
+
+  .lal-pillars-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .lal-audience-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .lal-nav-links {
+    display: none;
+  }
+
+  .lal-nav-container {
+    padding: 16px 20px;
+  }
+
+  .lal-hero {
+    padding: 100px 20px 60px;
+  }
+
+  .lal-hero-title {
+    font-size: 36px;
+  }
+
+  .lal-hero-subtitle {
+    font-size: 18px;
+  }
+
+  .lal-section {
+    padding: 80px 20px;
+  }
+
+  .lal-section-title {
+    font-size: 32px;
+    margin-bottom: 40px;
+  }
+
+  .lal-intro-title {
+    font-size: 48px;
+  }
+
+  .lal-large-text {
+    font-size: 22px;
+  }
+
+  .lal-signs-comparison {
+    gap: 40px;
+  }
+
+  .lal-comparison-table {
+    font-size: 14px;
+  }
+
+  .lal-comparison-cell {
+    padding: 12px 8px;
+  }
+
+  .lal-support-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .lal-hero-ctas {
+    flex-direction: column;
+  }
+
+  .lal-btn-primary,
+  .lal-btn-secondary {
+    width: 100%;
+  }
+
+  .lal-final-quote {
+    font-size: 24px;
+  }
+
+  .lal-footer-links {
+    flex-direction: column;
+    gap: 16px;
+  }
+}
