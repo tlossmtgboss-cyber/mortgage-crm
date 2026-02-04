@@ -1,0 +1,1397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>List & Lock® | The Rate Lock Strategy That Protects Your Listings</title>
+  <meta name="description" content="Stop losing listings to price reductions. List & Lock® gives your sellers a competitive edge with locked interest rates for up to 90 days.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --lal-bg-primary: #0a0a0a;
+      --lal-bg-secondary: #111111;
+      --lal-bg-tertiary: #1a1a1a;
+      --lal-gold: #d4a853;
+      --lal-gold-light: #e6c47a;
+      --lal-gold-dark: #b8923f;
+      --lal-text-primary: #ffffff;
+      --lal-text-secondary: #a0a0a0;
+      --lal-text-muted: #666666;
+      --lal-red: #c0152f;
+      --lal-green: #2d8a4e;
+      --lal-border: #2a2a2a;
+      --lal-font-display: 'Playfair Display', Georgia, serif;
+      --lal-font-body: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      background-color: var(--lal-bg-primary);
+      color: var(--lal-text-primary);
+      font-family: var(--lal-font-body);
+      line-height: 1.6;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    .lal-noise-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1000;
+      opacity: 0.03;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    }
+
+    .lal-gold { color: var(--lal-gold); }
+    .lal-red { color: var(--lal-red); }
+
+    /* Navigation */
+    .lal-nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      background: rgba(10, 10, 10, 0.95);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--lal-border);
+    }
+
+    .lal-nav-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 40px;
+    }
+
+    .lal-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--lal-font-display);
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--lal-text-primary);
+      text-decoration: none;
+    }
+
+    .lal-logo-icon { font-size: 24px; }
+    .lal-logo sup { font-size: 10px; color: var(--lal-gold); }
+
+    .lal-nav-links {
+      display: flex;
+      gap: 32px;
+    }
+
+    .lal-nav-links a {
+      background: none;
+      border: none;
+      color: var(--lal-text-secondary);
+      font-family: var(--lal-font-body);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: color 0.3s ease;
+      text-decoration: none;
+    }
+
+    .lal-nav-links a:hover { color: var(--lal-gold); }
+
+    .lal-nav-cta {
+      background: var(--lal-gold);
+      color: var(--lal-bg-primary);
+      border: none;
+      padding: 10px 24px;
+      font-family: var(--lal-font-body);
+      font-size: 14px;
+      font-weight: 600;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-decoration: none;
+    }
+
+    .lal-nav-cta:hover {
+      background: var(--lal-gold-light);
+      transform: translateY(-1px);
+    }
+
+    /* Hero */
+    .lal-hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 120px 40px 60px;
+      position: relative;
+    }
+
+    .lal-hero-content { max-width: 900px; }
+
+    .lal-hero-eyebrow {
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--lal-gold);
+      margin-bottom: 24px;
+    }
+
+    .lal-hero-title {
+      font-family: var(--lal-font-display);
+      font-size: 64px;
+      font-weight: 600;
+      line-height: 1.15;
+      margin: 0 0 32px 0;
+      letter-spacing: -1px;
+    }
+
+    .lal-hero-subtitle {
+      font-size: 20px;
+      font-weight: 300;
+      color: var(--lal-text-secondary);
+      max-width: 700px;
+      margin: 0 auto 48px;
+      line-height: 1.7;
+    }
+
+    .lal-hero-ctas {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .lal-btn-primary {
+      background: var(--lal-gold);
+      color: var(--lal-bg-primary);
+      border: 2px solid var(--lal-gold);
+      padding: 16px 36px;
+      font-family: var(--lal-font-body);
+      font-size: 16px;
+      font-weight: 600;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .lal-btn-primary:hover {
+      background: var(--lal-gold-light);
+      border-color: var(--lal-gold-light);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(212, 168, 83, 0.3);
+    }
+
+    .lal-btn-secondary {
+      background: transparent;
+      color: var(--lal-text-primary);
+      border: 2px solid var(--lal-border);
+      padding: 16px 36px;
+      font-family: var(--lal-font-body);
+      font-size: 16px;
+      font-weight: 600;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .lal-btn-secondary:hover {
+      border-color: var(--lal-gold);
+      color: var(--lal-gold);
+    }
+
+    .lal-btn-dark {
+      background: var(--lal-bg-primary);
+      color: var(--lal-gold);
+      border: 2px solid var(--lal-bg-primary);
+      padding: 16px 36px;
+      font-family: var(--lal-font-body);
+      font-size: 16px;
+      font-weight: 600;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .lal-btn-dark:hover {
+      background: #000;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+
+    .lal-hero-scroll-indicator {
+      position: absolute;
+      bottom: 40px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      color: var(--lal-text-muted);
+      font-size: 12px;
+      letter-spacing: 1px;
+    }
+
+    .lal-scroll-arrow {
+      font-size: 20px;
+      animation: lal-bounce 2s infinite;
+    }
+
+    @keyframes lal-bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(8px); }
+    }
+
+    /* Sections */
+    .lal-section {
+      padding: 120px 40px;
+      position: relative;
+      opacity: 0;
+      transform: translateY(40px);
+      transition: opacity 0.8s ease, transform 0.8s ease;
+    }
+
+    .lal-section.lal-visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .lal-section-dark { background: var(--lal-bg-secondary); }
+    .lal-section-gold { background: var(--lal-gold); color: var(--lal-bg-primary); }
+
+    .lal-section-content {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .lal-content-narrow { max-width: 700px; }
+
+    .lal-section-title {
+      font-family: var(--lal-font-display);
+      font-size: 48px;
+      font-weight: 600;
+      text-align: center;
+      margin: 0 0 60px 0;
+      letter-spacing: -1px;
+    }
+
+    .lal-section-emphasis {
+      font-size: 22px;
+      text-align: center;
+      color: var(--lal-text-secondary);
+      margin-top: 48px;
+      line-height: 1.6;
+    }
+
+    /* Stats Grid */
+    .lal-truth-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 32px;
+    }
+
+    .lal-truth-card {
+      background: var(--lal-bg-secondary);
+      border: 1px solid var(--lal-border);
+      border-radius: 8px;
+      padding: 48px 32px;
+      text-align: center;
+      transition: all 0.3s ease;
+    }
+
+    .lal-truth-card:hover {
+      border-color: var(--lal-gold);
+      transform: translateY(-4px);
+    }
+
+    .lal-truth-stat {
+      font-family: var(--lal-font-display);
+      font-size: 56px;
+      font-weight: 700;
+      color: var(--lal-gold);
+      margin-bottom: 16px;
+    }
+
+    .lal-truth-text {
+      font-size: 16px;
+      color: var(--lal-text-secondary);
+      margin: 0;
+      line-height: 1.6;
+    }
+
+    /* Math Breakdown */
+    .lal-math-breakdown {
+      max-width: 500px;
+      margin: 0 auto;
+      background: var(--lal-bg-tertiary);
+      border: 1px solid var(--lal-border);
+      border-radius: 8px;
+      padding: 40px;
+    }
+
+    .lal-math-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 16px 0;
+      font-size: 18px;
+    }
+
+    .lal-math-row:first-child { padding-top: 0; }
+    .lal-math-label { color: var(--lal-text-secondary); }
+    .lal-math-value { font-weight: 600; }
+    .lal-math-negative .lal-math-value { color: var(--lal-red); }
+    .lal-math-divider { height: 1px; background: var(--lal-border); margin: 16px 0; }
+    .lal-math-total { font-size: 22px; font-weight: 700; }
+
+    .lal-math-note {
+      text-align: center;
+      color: var(--lal-text-secondary);
+      margin-top: 48px;
+      font-size: 18px;
+    }
+
+    /* Psychology */
+    .lal-psychology-comparison {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 32px;
+      flex-wrap: wrap;
+    }
+
+    .lal-psychology-card {
+      flex: 1;
+      min-width: 280px;
+      max-width: 400px;
+      padding: 40px;
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .lal-psychology-card h3 {
+      font-family: var(--lal-font-display);
+      font-size: 20px;
+      margin: 0 0 16px 0;
+      color: var(--lal-text-secondary);
+    }
+
+    .lal-psychology-card p {
+      font-size: 22px;
+      font-weight: 500;
+      margin: 0;
+      line-height: 1.5;
+    }
+
+    .lal-psychology-bad {
+      background: rgba(192, 21, 47, 0.1);
+      border: 1px solid rgba(192, 21, 47, 0.3);
+    }
+
+    .lal-psychology-reality {
+      background: rgba(212, 168, 83, 0.1);
+      border: 1px solid rgba(212, 168, 83, 0.3);
+    }
+
+    .lal-psychology-vs {
+      font-family: var(--lal-font-display);
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--lal-text-muted);
+    }
+
+    /* Large Text */
+    .lal-large-text {
+      font-size: 28px;
+      font-weight: 300;
+      line-height: 1.6;
+      margin-bottom: 32px;
+      text-align: center;
+    }
+
+    .lal-large-text:last-child { margin-bottom: 0; }
+
+    /* Introduction */
+    .lal-intro-label {
+      font-size: 14px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--lal-gold);
+      text-align: center;
+      margin-bottom: 16px;
+    }
+
+    .lal-intro-title {
+      font-family: var(--lal-font-display);
+      font-size: 72px;
+      font-weight: 700;
+      text-align: center;
+      margin: 0 0 16px 0;
+      letter-spacing: -2px;
+    }
+
+    .lal-intro-title sup {
+      font-size: 24px;
+      color: var(--lal-gold);
+    }
+
+    .lal-intro-tagline {
+      font-size: 22px;
+      color: var(--lal-text-secondary);
+      text-align: center;
+      margin: 0 0 48px 0;
+    }
+
+    .lal-intro-explanation {
+      max-width: 700px;
+      margin: 0 auto;
+    }
+
+    .lal-intro-explanation p {
+      font-size: 18px;
+      line-height: 1.8;
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    /* Pillars */
+    .lal-pillars-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 40px;
+    }
+
+    .lal-pillar {
+      padding: 40px;
+      background: var(--lal-bg-tertiary);
+      border: 1px solid var(--lal-border);
+      border-radius: 8px;
+      transition: all 0.3s ease;
+    }
+
+    .lal-pillar:hover {
+      border-color: var(--lal-gold);
+      transform: translateY(-4px);
+    }
+
+    .lal-pillar-number {
+      font-family: var(--lal-font-display);
+      font-size: 48px;
+      font-weight: 700;
+      color: var(--lal-gold);
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    .lal-pillar-title {
+      font-family: var(--lal-font-display);
+      font-size: 24px;
+      margin: 0 0 12px 0;
+    }
+
+    .lal-pillar-text {
+      font-size: 16px;
+      color: var(--lal-text-secondary);
+      margin: 0;
+      line-height: 1.6;
+    }
+
+    /* Signs Comparison */
+    .lal-signs-comparison {
+      display: flex;
+      justify-content: center;
+      gap: 80px;
+      flex-wrap: wrap;
+    }
+
+    .lal-sign {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .lal-sign-post {
+      width: 8px;
+      height: 60px;
+      background: #555;
+      border-radius: 2px;
+    }
+
+    .lal-sign-post-gold { background: var(--lal-gold); }
+
+    .lal-sign-board {
+      width: 260px;
+      background: #fff;
+      border-radius: 4px;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .lal-sign-board-premium { border: 3px solid var(--lal-gold); }
+
+    .lal-sign-header {
+      background: #c41e3a;
+      color: white;
+      padding: 12px;
+      font-size: 18px;
+      font-weight: 700;
+      text-align: center;
+      letter-spacing: 2px;
+    }
+
+    .lal-sign-header-gold {
+      background: var(--lal-gold);
+      color: var(--lal-bg-primary);
+    }
+
+    .lal-sign-content {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .lal-sign-price {
+      font-size: 28px;
+      font-weight: 700;
+      color: #333;
+    }
+
+    .lal-sign-reduced {
+      background: #c41e3a;
+      color: white;
+      padding: 4px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      border-radius: 2px;
+    }
+
+    .lal-sign-locked-rate {
+      background: var(--lal-bg-primary);
+      color: var(--lal-gold);
+      padding: 6px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 4px;
+    }
+
+    .lal-sign-footer {
+      background: #333;
+      color: white;
+      padding: 10px;
+      font-size: 14px;
+      text-align: center;
+    }
+
+    .lal-sign-footer-gold {
+      background: var(--lal-bg-primary);
+      color: var(--lal-gold);
+      font-weight: 600;
+    }
+
+    .lal-sign-label {
+      margin-top: 24px;
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .lal-sign-subtext {
+      font-size: 14px;
+      color: var(--lal-text-muted);
+      margin-top: 8px;
+    }
+
+    /* Comparison Table */
+    .lal-comparison-table {
+      background: var(--lal-bg-tertiary);
+      border: 1px solid var(--lal-border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .lal-comparison-header {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      background: var(--lal-bg-primary);
+      font-weight: 600;
+    }
+
+    .lal-comparison-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      border-top: 1px solid var(--lal-border);
+    }
+
+    .lal-comparison-cell {
+      padding: 20px 24px;
+      font-size: 16px;
+      text-align: center;
+    }
+
+    .lal-comparison-label {
+      text-align: left;
+      color: var(--lal-text-secondary);
+    }
+
+    .lal-comparison-traditional { color: var(--lal-text-muted); }
+    .lal-comparison-locked { color: var(--lal-gold); }
+
+    .lal-comparison-source {
+      text-align: center;
+      font-size: 13px;
+      color: var(--lal-text-muted);
+      margin-top: 24px;
+    }
+
+    /* Support Grid */
+    .lal-support-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+      margin-top: 48px;
+    }
+
+    .lal-support-item {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 20px 24px;
+      background: var(--lal-bg-secondary);
+      border: 1px solid var(--lal-border);
+      border-radius: 8px;
+      font-size: 16px;
+      transition: all 0.3s ease;
+    }
+
+    .lal-support-item:hover { border-color: var(--lal-gold); }
+    .lal-support-icon { font-size: 24px; }
+
+    /* Audience Cards */
+    .lal-audience-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 40px;
+    }
+
+    .lal-audience-card {
+      padding: 40px;
+      border-radius: 8px;
+    }
+
+    .lal-audience-card h3 {
+      font-family: var(--lal-font-display);
+      font-size: 24px;
+      margin: 0 0 24px 0;
+    }
+
+    .lal-audience-card ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .lal-audience-card li {
+      padding: 12px 0;
+      padding-left: 28px;
+      position: relative;
+      font-size: 16px;
+      color: var(--lal-text-secondary);
+    }
+
+    .lal-audience-card li::before {
+      position: absolute;
+      left: 0;
+      font-size: 16px;
+    }
+
+    .lal-audience-yes {
+      background: rgba(45, 138, 78, 0.1);
+      border: 1px solid rgba(45, 138, 78, 0.3);
+    }
+
+    .lal-audience-yes h3 { color: var(--lal-green); }
+    .lal-audience-yes li::before { content: '\2713'; color: var(--lal-green); }
+
+    .lal-audience-no {
+      background: rgba(192, 21, 47, 0.1);
+      border: 1px solid rgba(192, 21, 47, 0.3);
+    }
+
+    .lal-audience-no h3 { color: var(--lal-red); }
+    .lal-audience-no li::before { content: '\2717'; color: var(--lal-red); }
+
+    /* Lead Capture Form */
+    .lal-form-subtitle {
+      text-align: center;
+      font-size: 18px;
+      color: var(--lal-text-secondary);
+      margin-bottom: 48px;
+      line-height: 1.6;
+    }
+
+    .lal-form {
+      max-width: 400px;
+      margin: 0 auto;
+    }
+
+    .lal-form-group { margin-bottom: 20px; }
+
+    .lal-form-group input {
+      width: 100%;
+      padding: 16px 20px;
+      font-family: var(--lal-font-body);
+      font-size: 16px;
+      background: var(--lal-bg-secondary);
+      border: 1px solid var(--lal-border);
+      border-radius: 4px;
+      color: var(--lal-text-primary);
+      transition: all 0.3s ease;
+      box-sizing: border-box;
+    }
+
+    .lal-form-group input:focus {
+      outline: none;
+      border-color: var(--lal-gold);
+    }
+
+    .lal-form-group input::placeholder { color: var(--lal-text-muted); }
+
+    .lal-btn-full { width: 100%; }
+
+    .lal-form-disclaimer {
+      text-align: center;
+      font-size: 13px;
+      color: var(--lal-text-muted);
+      margin-top: 16px;
+    }
+
+    .lal-success-message {
+      text-align: center;
+      padding: 48px;
+      background: rgba(45, 138, 78, 0.1);
+      border: 1px solid rgba(45, 138, 78, 0.3);
+      border-radius: 8px;
+      display: none;
+    }
+
+    .lal-success-message.show { display: block; }
+    .lal-form.hide { display: none; }
+
+    .lal-success-icon {
+      width: 64px;
+      height: 64px;
+      background: var(--lal-green);
+      color: white;
+      font-size: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 24px;
+    }
+
+    .lal-success-message h3 {
+      font-family: var(--lal-font-display);
+      font-size: 28px;
+      margin: 0 0 12px 0;
+      color: var(--lal-green);
+    }
+
+    .lal-success-message p {
+      font-size: 16px;
+      color: var(--lal-text-secondary);
+      margin: 0;
+    }
+
+    /* Strategy CTA */
+    .lal-cta-title {
+      font-family: var(--lal-font-display);
+      font-size: 48px;
+      font-weight: 600;
+      text-align: center;
+      margin: 0 0 24px 0;
+    }
+
+    .lal-cta-text {
+      font-size: 20px;
+      text-align: center;
+      margin-bottom: 36px;
+      line-height: 1.6;
+      opacity: 0.9;
+    }
+
+    .lal-section-gold .lal-btn-dark {
+      display: block;
+      margin: 0 auto;
+    }
+
+    .lal-cta-note {
+      text-align: center;
+      font-size: 14px;
+      margin-top: 16px;
+      opacity: 0.7;
+    }
+
+    /* Final Quote */
+    .lal-final-quote {
+      font-family: var(--lal-font-display);
+      font-size: 32px;
+      font-style: italic;
+      font-weight: 400;
+      text-align: center;
+      line-height: 1.6;
+      margin: 0;
+      padding: 0 20px;
+      color: var(--lal-text-secondary);
+    }
+
+    .lal-final-attribution {
+      text-align: center;
+      font-size: 14px;
+      color: var(--lal-text-muted);
+      margin-top: 32px;
+      letter-spacing: 2px;
+    }
+
+    /* Footer */
+    .lal-footer {
+      background: var(--lal-bg-primary);
+      border-top: 1px solid var(--lal-border);
+      padding: 60px 40px;
+    }
+
+    .lal-footer-content {
+      max-width: 800px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    .lal-footer-brand {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      font-family: var(--lal-font-display);
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 24px;
+    }
+
+    .lal-footer-brand sup {
+      font-size: 10px;
+      color: var(--lal-gold);
+    }
+
+    .lal-footer-legal {
+      font-size: 14px;
+      color: var(--lal-text-muted);
+      margin-bottom: 24px;
+    }
+
+    .lal-footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 32px;
+      margin-bottom: 24px;
+    }
+
+    .lal-footer-links a {
+      font-size: 14px;
+      color: var(--lal-text-secondary);
+      text-decoration: none;
+      transition: color 0.3s ease;
+    }
+
+    .lal-footer-links a:hover { color: var(--lal-gold); }
+
+    .lal-footer-copyright {
+      font-size: 13px;
+      color: var(--lal-text-muted);
+      margin: 0;
+    }
+
+    /* Responsive */
+    @media (max-width: 1024px) {
+      .lal-hero-title { font-size: 48px; }
+      .lal-section-title { font-size: 40px; }
+      .lal-truth-grid { grid-template-columns: 1fr; max-width: 400px; margin: 0 auto; }
+      .lal-pillars-grid { grid-template-columns: 1fr; }
+      .lal-audience-grid { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 768px) {
+      .lal-nav-links { display: none; }
+      .lal-nav-container { padding: 16px 20px; }
+      .lal-hero { padding: 100px 20px 60px; }
+      .lal-hero-title { font-size: 36px; }
+      .lal-hero-subtitle { font-size: 18px; }
+      .lal-section { padding: 80px 20px; }
+      .lal-section-title { font-size: 32px; margin-bottom: 40px; }
+      .lal-intro-title { font-size: 48px; }
+      .lal-large-text { font-size: 22px; }
+      .lal-signs-comparison { gap: 40px; }
+      .lal-comparison-table { font-size: 14px; }
+      .lal-comparison-cell { padding: 12px 8px; }
+      .lal-support-grid { grid-template-columns: 1fr; }
+      .lal-hero-ctas { flex-direction: column; }
+      .lal-btn-primary, .lal-btn-secondary { width: 100%; text-align: center; }
+      .lal-final-quote { font-size: 24px; }
+      .lal-footer-links { flex-direction: column; gap: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="lal-noise-overlay"></div>
+
+  <!-- Navigation -->
+  <nav class="lal-nav">
+    <div class="lal-nav-container">
+      <a href="#" class="lal-logo">
+        <span class="lal-logo-icon">&#128274;</span>
+        <span>List & Lock<sup>&reg;</sup></span>
+      </a>
+      <div class="lal-nav-links">
+        <a href="#how-it-works">How It Works</a>
+        <a href="#why-it-works">Why It Works</a>
+        <a href="#who-its-for">Who It's For</a>
+      </div>
+      <a href="#lead-capture" class="lal-nav-cta">Get the Guide</a>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="lal-hero">
+    <div class="lal-hero-content">
+      <p class="lal-hero-eyebrow">For Real Estate Agents Who Refuse to Race to the Bottom</p>
+      <h1 class="lal-hero-title">
+        The Agents Who <span class="lal-gold">Saw It First</span><br>
+        Are Already Using This
+      </h1>
+      <p class="lal-hero-subtitle">
+        While everyone else cuts commissions and chases the bottom,
+        a quiet revolution is happening. List & Lock&reg; isn't just a strategy&mdash;it's
+        the contrarian playbook that protects your listings, your sellers, and your income.
+      </p>
+      <div class="lal-hero-ctas">
+        <a href="#lead-capture" class="lal-btn-primary">Download the Free Guide</a>
+        <a href="#strategy-call" class="lal-btn-secondary">Book Strategy Walkthrough</a>
+      </div>
+    </div>
+    <div class="lal-hero-scroll-indicator">
+      <span>Scroll to discover the truth</span>
+      <div class="lal-scroll-arrow">&darr;</div>
+    </div>
+  </section>
+
+  <!-- Hard Truth -->
+  <section id="hard-truth" class="lal-section">
+    <div class="lal-section-content">
+      <h2 class="lal-section-title">The Hard Truth Nobody's Telling You</h2>
+      <div class="lal-truth-grid">
+        <div class="lal-truth-card">
+          <div class="lal-truth-stat">73%</div>
+          <p class="lal-truth-text">of listings that sit more than 21 days end up with a price reduction</p>
+        </div>
+        <div class="lal-truth-card">
+          <div class="lal-truth-stat">$16,200</div>
+          <p class="lal-truth-text">average seller loss from price reductions on a $400K home</p>
+        </div>
+        <div class="lal-truth-card">
+          <div class="lal-truth-stat">2.3x</div>
+          <p class="lal-truth-text">longer time on market after the first price drop</p>
+        </div>
+      </div>
+      <p class="lal-section-emphasis">
+        Price reductions don't just cost money&mdash;they <span class="lal-gold">signal desperation</span> to every buyer in the market.
+      </p>
+    </div>
+  </section>
+
+  <!-- The Math -->
+  <section id="the-math" class="lal-section lal-section-dark">
+    <div class="lal-section-content">
+      <h2 class="lal-section-title">The $16,000 Problem</h2>
+      <div class="lal-math-breakdown">
+        <div class="lal-math-row">
+          <span class="lal-math-label">Listed Price</span>
+          <span class="lal-math-value">$425,000</span>
+        </div>
+        <div class="lal-math-row lal-math-negative">
+          <span class="lal-math-label">First Price Reduction (3%)</span>
+          <span class="lal-math-value">-$12,750</span>
+        </div>
+        <div class="lal-math-row lal-math-negative">
+          <span class="lal-math-label">Buyer "Reduction Psychology" Offer</span>
+          <span class="lal-math-value">-$8,500</span>
+        </div>
+        <div class="lal-math-row lal-math-negative">
+          <span class="lal-math-label">Extended Carrying Costs (2 months)</span>
+          <span class="lal-math-value">-$4,200</span>
+        </div>
+        <div class="lal-math-divider"></div>
+        <div class="lal-math-row lal-math-total">
+          <span class="lal-math-label">Total Seller Loss</span>
+          <span class="lal-math-value lal-red">-$25,450</span>
+        </div>
+      </div>
+      <p class="lal-math-note">This happens every day. And it's completely preventable.</p>
+    </div>
+  </section>
+
+  <!-- Psychology -->
+  <section id="psychology" class="lal-section">
+    <div class="lal-section-content">
+      <h2 class="lal-section-title">The Psychology of Price Reductions</h2>
+      <div class="lal-psychology-comparison">
+        <div class="lal-psychology-card lal-psychology-bad">
+          <h3>What Sellers Think</h3>
+          <p>"We just need to adjust to meet the market"</p>
+        </div>
+        <div class="lal-psychology-vs">VS</div>
+        <div class="lal-psychology-card lal-psychology-reality">
+          <h3>What Buyers Think</h3>
+          <p>"Something's wrong with this house. Let's lowball them."</p>
+        </div>
+      </div>
+      <p class="lal-section-emphasis">
+        Every price reduction is a <span class="lal-gold">public admission of failure</span>&mdash;and buyers know it.
+      </p>
+    </div>
+  </section>
+
+  <!-- Missed Opportunity -->
+  <section id="missed-opportunity" class="lal-section lal-section-dark">
+    <div class="lal-section-content lal-content-narrow">
+      <h2 class="lal-section-title">The Opportunity You're Missing</h2>
+      <p class="lal-large-text">
+        What if you could <span class="lal-gold">neutralize the need for price reductions</span> before they ever become necessary?
+      </p>
+      <p class="lal-large-text">
+        What if buyers saw your listings as <span class="lal-gold">protected investments</span> rather than commodities to negotiate down?
+      </p>
+      <p class="lal-large-text">
+        What if you had a tool that <span class="lal-gold">pre-qualifies buyer confidence</span> before they even make an offer?
+      </p>
+    </div>
+  </section>
+
+  <!-- List & Lock Introduction -->
+  <section id="how-it-works" class="lal-section">
+    <div class="lal-section-content">
+      <p class="lal-intro-label">Introducing</p>
+      <h2 class="lal-intro-title">List & Lock<sup>&reg;</sup></h2>
+      <p class="lal-intro-tagline">The Rate Lock Strategy That Protects Your Listings from Day One</p>
+      <div class="lal-intro-explanation">
+        <p>
+          List & Lock&reg; is a proprietary program from CMG Financial that lets you offer
+          buyers a <span class="lal-gold">locked interest rate for up to 90 days</span>&mdash;before
+          they even make an offer.
+        </p>
+        <p>
+          The result? Buyers move faster. Sellers get stronger offers. And you close
+          more deals at full price.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Why It Works -->
+  <section id="why-it-works" class="lal-section lal-section-dark">
+    <div class="lal-section-content">
+      <h2 class="lal-section-title">Why List & Lock&reg; Works</h2>
+      <div class="lal-pillars-grid">
+        <div class="lal-pillar">
+          <div class="lal-pillar-number">01</div>
+          <h3 class="lal-pillar-title">Eliminates Buyer Hesitation</h3>
+          <p class="lal-pillar-text">Rate anxiety is the #1 reason buyers wait. Lock it, and they move.</p>
+        </div>
+        <div class="lal-pillar">
+          <div class="lal-pillar-number">02</div>
+          <h3 class="lal-pillar-title">Creates Urgency Without Pressure</h3>
+          <p class="lal-pillar-text">The locked rate has an expiration. Natural motivation, no games.</p>
+        </div>
+        <div class="lal-pillar">
+          <div class="lal-pillar-number">03</div>
+          <h3 class="lal-pillar-title">Signals Seller Confidence</h3>
+          <p class="lal-pillar-text">A rate-lock listing says "we're serious"&mdash;attracting serious buyers.</p>
+        </div>
+        <div class="lal-pillar">
+          <div class="lal-pillar-number">04</div>
+          <h3 class="lal-pillar-title">Protects Against Market Shifts</h3>
+          <p class="lal-pillar-text">If rates rise, your listing is immune. If they fall, buyers can renegotiate down.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- What Buyers See -->
+  <section id="what-buyers-see" class="lal-section">
+    <div class="lal-section-content">
+      <h2 class="lal-section-title">What Buyers See</h2>
+      <div class="lal-signs-comparison">
+        <div class="lal-sign">
+          <div class="lal-sign-post"></div>
+          <div class="lal-sign-board">
+            <div class="lal-sign-header">FOR SALE</div>
+            <div class="lal-sign-content">
+              <span class="lal-sign-price">$425,000</span>
+              <span class="lal-sign-reduced">PRICE REDUCED!</span>
+            </div>
+            <div class="lal-sign-footer">Call Agent</div>
+          </div>
+          <p class="lal-sign-label">Traditional Listing</p>
+          <p class="lal-sign-subtext">Signals: desperation, problems, negotiate hard</p>
+        </div>
+        <div class="lal-sign">
+          <div class="lal-sign-post lal-sign-post-gold"></div>
+          <div class="lal-sign-board lal-sign-board-premium">
+            <div class="lal-sign-header lal-sign-header-gold">FOR SALE</div>
+            <div class="lal-sign-content">
+              <span class="lal-sign-price">$425,000</span>
+              <span class="lal-sign-locked-rate">&#128274; Rate Locked at 6.25%</span>
+            </div>
+            <div class="lal-sign-footer lal-sign-footer-gold">List & Lock&reg;</div>
+          </div>
+          <p class="lal-sign-label lal-gold">List & Lock&reg; Listing</p>
+          <p class="lal-sign-subtext">Signals: confidence, value, act now</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Comparison Table -->
+  <section id="comparison" class="lal-section lal-section-dark">
+    <div class="lal-section-content">
+      <h2 class="lal-section-title">Same Home. Different Outcome.</h2>
+      <div class="lal-comparison-table">
+        <div class="lal-comparison-header">
+          <div class="lal-comparison-cell"></div>
+          <div class="lal-comparison-cell lal-comparison-traditional">Traditional</div>
+          <div class="lal-comparison-cell lal-comparison-locked">List & Lock&reg;</div>
+        </div>
+        <div class="lal-comparison-row">
+          <div class="lal-comparison-cell lal-comparison-label">Avg. Days on Market</div>
+          <div class="lal-comparison-cell">34 days</div>
+          <div class="lal-comparison-cell lal-gold">18 days</div>
+        </div>
+        <div class="lal-comparison-row">
+          <div class="lal-comparison-cell lal-comparison-label">Price Reduction Rate</div>
+          <div class="lal-comparison-cell">73%</div>
+          <div class="lal-comparison-cell lal-gold">12%</div>
+        </div>
+        <div class="lal-comparison-row">
+          <div class="lal-comparison-cell lal-comparison-label">Sale-to-List Ratio</div>
+          <div class="lal-comparison-cell">96.2%</div>
+          <div class="lal-comparison-cell lal-gold">99.1%</div>
+        </div>
+        <div class="lal-comparison-row">
+          <div class="lal-comparison-cell lal-comparison-label">Buyer Confidence</div>
+          <div class="lal-comparison-cell">Uncertain</div>
+          <div class="lal-comparison-cell lal-gold">Protected</div>
+        </div>
+      </div>
+      <p class="lal-comparison-source">*Based on Q4 2024 CMG List & Lock&reg; program data vs. regional MLS averages</p>
+    </div>
+  </section>
+
+  <!-- CMG Support -->
+  <section id="cmg-support" class="lal-section">
+    <div class="lal-section-content lal-content-narrow">
+      <h2 class="lal-section-title">You're Not Alone</h2>
+      <p class="lal-large-text">When you partner with CMG Financial, you get more than a rate lock program.</p>
+      <div class="lal-support-grid">
+        <div class="lal-support-item">
+          <span class="lal-support-icon">&#128203;</span>
+          <span>Co-branded marketing materials</span>
+        </div>
+        <div class="lal-support-item">
+          <span class="lal-support-icon">&#127919;</span>
+          <span>Listing presentation scripts</span>
+        </div>
+        <div class="lal-support-item">
+          <span class="lal-support-icon">&#128241;</span>
+          <span>Social media content kit</span>
+        </div>
+        <div class="lal-support-item">
+          <span class="lal-support-icon">&#129309;</span>
+          <span>Dedicated loan officer partner</span>
+        </div>
+        <div class="lal-support-item">
+          <span class="lal-support-icon">&#128200;</span>
+          <span>Market rate alerts</span>
+        </div>
+        <div class="lal-support-item">
+          <span class="lal-support-icon">&#127891;</span>
+          <span>Agent certification program</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Who It's For -->
+  <section id="who-its-for" class="lal-section lal-section-dark">
+    <div class="lal-section-content">
+      <h2 class="lal-section-title">Who List & Lock&reg; Is For</h2>
+      <div class="lal-audience-grid">
+        <div class="lal-audience-card lal-audience-yes">
+          <h3>This Is For You If:</h3>
+          <ul>
+            <li>You're tired of the "reduce the price" conversation</li>
+            <li>You want a competitive edge that actually works</li>
+            <li>You believe in protecting your sellers' equity</li>
+            <li>You're ready to stand out in a commoditized market</li>
+            <li>You value strategy over tactics</li>
+          </ul>
+        </div>
+        <div class="lal-audience-card lal-audience-no">
+          <h3>This Is NOT For You If:</h3>
+          <ul>
+            <li>You're comfortable racing to the bottom on price</li>
+            <li>You think "the market will figure it out"</li>
+            <li>You're not willing to learn something new</li>
+            <li>You prioritize volume over value</li>
+            <li>You're waiting for the "right time"</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Lead Capture -->
+  <section id="lead-capture" class="lal-section">
+    <div class="lal-section-content lal-content-narrow">
+      <h2 class="lal-section-title">Get the Complete List & Lock&reg; Playbook</h2>
+      <p class="lal-form-subtitle">
+        Free guide includes: listing presentation scripts, objection handlers,
+        marketing templates, and the complete rate lock strategy breakdown.
+      </p>
+      <div id="success-message" class="lal-success-message">
+        <div class="lal-success-icon">&#10003;</div>
+        <h3>You're In!</h3>
+        <p>Check your email for the List & Lock&reg; Playbook. Welcome to the future of real estate.</p>
+      </div>
+      <form id="lead-form" class="lal-form" onsubmit="handleSubmit(event)">
+        <div class="lal-form-group">
+          <input type="text" name="name" placeholder="Your Name" required>
+        </div>
+        <div class="lal-form-group">
+          <input type="email" name="email" placeholder="Email Address" required>
+        </div>
+        <div class="lal-form-group">
+          <input type="text" name="brokerage" placeholder="Brokerage Name (Optional)">
+        </div>
+        <button type="submit" class="lal-btn-primary lal-btn-full">Send Me the Free Guide</button>
+        <p class="lal-form-disclaimer">No spam. Unsubscribe anytime. Your info stays with CMG.</p>
+      </form>
+    </div>
+  </section>
+
+  <!-- Strategy Call CTA -->
+  <section id="strategy-call" class="lal-section lal-section-gold">
+    <div class="lal-section-content lal-content-narrow">
+      <h2 class="lal-cta-title">Ready to See It In Action?</h2>
+      <p class="lal-cta-text">
+        Book a 15-minute strategy walkthrough with a CMG List & Lock&reg; specialist.
+        We'll show you exactly how to implement this on your next listing.
+      </p>
+      <a href="#" class="lal-btn-dark">Schedule Your Strategy Call &rarr;</a>
+      <p class="lal-cta-note">No pitch. No pressure. Just strategy.</p>
+    </div>
+  </section>
+
+  <!-- Final Thought -->
+  <section id="final-thought" class="lal-section">
+    <div class="lal-section-content lal-content-narrow">
+      <blockquote class="lal-final-quote">
+        "In a market where everyone's cutting prices, the agents who
+        <span class="lal-gold">lock in value</span> will be the ones
+        still standing when the dust settles."
+      </blockquote>
+      <p class="lal-final-attribution">&mdash; The List & Lock&reg; Philosophy</p>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="lal-footer">
+    <div class="lal-footer-content">
+      <div class="lal-footer-brand">
+        <span>&#128274;</span>
+        <span>List & Lock<sup>&reg;</sup></span>
+      </div>
+      <p class="lal-footer-legal">
+        List & Lock&reg; is a registered trademark of CMG Financial.
+        NMLS #1820. Equal Housing Lender.
+      </p>
+      <div class="lal-footer-links">
+        <a href="/privacy-policy">Privacy Policy</a>
+        <a href="/terms-of-service">Terms of Service</a>
+        <a href="/licensing">Licensing</a>
+      </div>
+      <p class="lal-footer-copyright">&copy; 2025 CMG Financial. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <script>
+    // Scroll animation observer
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('lal-visible');
+          }
+        });
+      },
+      { threshold: 0.1, rootMargin: '0px 0px -50px 0px' }
+    );
+
+    document.querySelectorAll('.lal-section').forEach((section) => {
+      observer.observe(section);
+    });
+
+    // Form submission
+    function handleSubmit(event) {
+      event.preventDefault();
+      const form = document.getElementById('lead-form');
+      const success = document.getElementById('success-message');
+
+      // Simulate form submission
+      setTimeout(() => {
+        form.classList.add('hide');
+        success.classList.add('show');
+      }, 500);
+    }
+
+    // Smooth scroll for anchor links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function (e) {
+        e.preventDefault();
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth' });
+        }
+      });
+    });
+  </script>
+</body>
+</html>

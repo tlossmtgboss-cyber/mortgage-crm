@@ -43,6 +43,7 @@
     }
   ],
   "rewrites": [
-    { "source": "/", "destination": "/index.html" }
+    { "source": "/", "destination": "/index.html" },
+    { "source": "/list-and-lock", "destination": "/list-and-lock.html" }
   ]
 }
