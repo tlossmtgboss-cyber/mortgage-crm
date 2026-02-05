@@ -50,6 +50,16 @@ from .pii_utils import (
     contains_ssn,
     mask_pii_for_logging,
     sanitize_source_text,
+    redact_transcript_for_llm,
+    redact_dob,
+    redact_phone,
+    redact_email,
+)
+from .extraction_validator import (
+    ExtractionValidator,
+    ValidationReport,
+    AggregateReport,
+    SAMPLE_TRANSCRIPTS,
 )
 
 __all__ = [
@@ -73,4 +83,13 @@ __all__ = [
     "contains_ssn",
     "mask_pii_for_logging",
     "sanitize_source_text",
+    "redact_transcript_for_llm",
+    "redact_dob",
+    "redact_phone",
+    "redact_email",
+    # Validation
+    "ExtractionValidator",
+    "ValidationReport",
+    "AggregateReport",
+    "SAMPLE_TRANSCRIPTS",
 ]
