@@ -7,9 +7,14 @@ structured data for the Application Engine.
 This module provides the central CallIntelligenceProcessor class that:
 - Parses raw transcripts into speaker-attributed segments
 - Runs multiple extraction agents in parallel (identity, property, employment, etc.)
+- Alternatively uses unified extraction engine for 6x efficiency (feature flag)
 - Categorizes extractions into mortgage application domains
 - Tracks confidence scores and processing metrics
 - Optionally persists results to the database
+
+Extraction Modes:
+    - UNIFIED (default): Single LLM call extracts all domains (~6x more efficient)
+    - PARALLEL_AGENTS: Legacy mode with 6 parallel LLM calls per transcript
 
 Example:
     from services.call_intelligence.processor import CallIntelligenceProcessor
@@ -38,6 +43,7 @@ Example:
 """
 
 import logging
+import os
 import time
 import asyncio
 from datetime import datetime
@@ -54,6 +60,7 @@ from .data_contracts import (
     ExtractedValue,
     TranscriptSegment,
     SpeakerRole,
+    ExtractionMethod,
 )
 from .process_transcript import parse_transcript as parse_transcript_improved
 from .pii_utils import mask_pii_for_logging
@@ -65,8 +72,30 @@ from .agents import (
     ComplianceExtractionAgent,
     IntentExtractionAgent,
 )
+from .unified_extractor import UnifiedExtractionEngine, UnifiedExtractionResult
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# FEATURE FLAGS
+# =============================================================================
+# Set USE_UNIFIED_EXTRACTOR=true to use the unified extraction engine (6x more efficient)
+# Set USE_UNIFIED_EXTRACTOR=false to use the legacy parallel agents approach
+
+USE_UNIFIED_EXTRACTOR = os.getenv("USE_UNIFIED_EXTRACTOR", "true").lower() == "true"
+"""
+Feature flag to enable unified extraction engine.
+
+When enabled (default):
+- Single LLM call extracts all domains at once
+- ~6x reduction in API calls and costs
+- Faster processing time
+
+When disabled:
+- Falls back to 6 parallel agent LLM calls
+- Use during migration/validation period
+"""
 
 
 # =============================================================================
@@ -92,16 +121,20 @@ class CallIntelligenceProcessor:
     """
     Main processor for call transcript intelligence extraction.
 
-    Coordinates multiple specialized AI agents to extract structured
-    data from call transcripts.
+    Coordinates extraction using either:
+    - Unified extraction engine (single LLM call, default)
+    - Multiple specialized AI agents (legacy, 6 parallel calls)
+
+    The extraction mode is controlled by the USE_UNIFIED_EXTRACTOR feature flag.
     """
 
-    VERSION = "1.0"
+    VERSION = "2.0"
 
     def __init__(
         self,
         db_session: Optional["Session"] = None,
         llm_client: Optional["BaseLLMClient"] = None,
+        use_unified: Optional[bool] = None,
     ):
         """
         Initialize processor with agents.
@@ -109,11 +142,25 @@ class CallIntelligenceProcessor:
         Args:
             db_session: SQLAlchemy session for database operations
             llm_client: LLM client for AI extractions (OpenAI, Anthropic, etc.)
+            use_unified: Override for unified extraction flag (None = use env var)
         """
         self.db = db_session
         self.llm_client = llm_client
 
-        # Initialize extraction agents
+        # Determine extraction mode
+        self.use_unified = use_unified if use_unified is not None else USE_UNIFIED_EXTRACTOR
+
+        # Initialize unified extractor if LLM client available and flag enabled
+        self._unified_extractor: Optional[UnifiedExtractionEngine] = None
+        if self.use_unified and llm_client:
+            try:
+                self._unified_extractor = UnifiedExtractionEngine(llm_client)
+                logger.info("Unified extraction engine initialized")
+            except Exception as e:
+                logger.warning(f"Failed to initialize unified extractor: {e}. Falling back to agents.")
+                self.use_unified = False
+
+        # Initialize extraction agents (for fallback or when unified is disabled)
         self.identity_agent = IdentityExtractionAgent(llm_client)
         self.property_agent = PropertyExtractionAgent(llm_client)
         self.employment_agent = EmploymentExtractionAgent(llm_client)
@@ -135,7 +182,10 @@ class CallIntelligenceProcessor:
         request: CallIntelligenceRequest,
     ) -> CallIntelligenceResponse:
         """
-        Process a call transcript through all extraction agents.
+        Process a call transcript through extraction.
+
+        Uses unified extraction engine by default (single LLM call),
+        with fallback to parallel agents if unified is disabled or fails.
 
         Args:
             request: CallIntelligenceRequest with transcript and options
@@ -159,32 +209,15 @@ class CallIntelligenceProcessor:
                 response.errors.append("No transcript content to process")
                 return response
 
-            # Determine which agents to run
-            agents_to_run = request.agents_to_run or list(self._agents.keys())
-
-            # Run agents in parallel
-            agent_tasks = []
-            for agent_name in agents_to_run:
-                if agent_name in self._agents:
-                    agent = self._agents[agent_name]
-                    task = asyncio.create_task(
-                        self._run_agent(agent, segments, request.existing_borrower_data)
-                    )
-                    agent_tasks.append((agent_name, task))
-
-            # Gather results
-            for agent_name, task in agent_tasks:
-                try:
-                    result = await task
-                    response.agent_results.append(result)
-
-                    # Map to appropriate extraction category
-                    self._map_extractions(response, agent_name, result)
-
-                except Exception as e:
-                    safe_error = mask_pii_for_logging(str(e))
-                    logger.exception(f"Agent {agent_name} failed: {safe_error}")
-                    response.errors.append(f"Agent {agent_name}: {safe_error}")
+            # Use unified extraction if available
+            if self.use_unified and self._unified_extractor:
+                response = await self._process_with_unified(
+                    request, segments, response
+                )
+            else:
+                response = await self._process_with_agents(
+                    request, segments, response
+                )
 
             # Calculate summary stats
             self._calculate_stats(response)
@@ -198,7 +231,8 @@ class CallIntelligenceProcessor:
             logger.info(
                 f"Call {request.call_id} processed: "
                 f"{response.total_extractions} extractions, "
-                f"{response.processing_time_ms}ms"
+                f"{response.processing_time_ms}ms, "
+                f"method={response.extraction_method}"
             )
 
             return response
@@ -210,6 +244,141 @@ class CallIntelligenceProcessor:
             response.errors.append(safe_error)
             response.processing_time_ms = int((time.time() - start_time) * 1000)
             return response
+
+    async def _process_with_unified(
+        self,
+        request: CallIntelligenceRequest,
+        segments: List[TranscriptSegment],
+        response: CallIntelligenceResponse,
+    ) -> CallIntelligenceResponse:
+        """
+        Process transcript using unified extraction engine.
+
+        Single LLM call extracts all domains at once.
+        """
+        try:
+            unified_result = await self._unified_extractor.extract_all(
+                call_id=request.call_id,
+                segments=segments,
+                existing_data=request.existing_borrower_data,
+            )
+
+            # Convert unified result to response format
+            response = self._convert_unified_to_response(
+                request.call_id, unified_result, response
+            )
+            response.extraction_method = ExtractionMethod.UNIFIED.value
+            response.model_version = unified_result.prompt_hash
+
+            return response
+
+        except Exception as e:
+            safe_error = mask_pii_for_logging(str(e))
+            logger.warning(f"Unified extraction failed, falling back to agents: {safe_error}")
+
+            # Fall back to parallel agents
+            return await self._process_with_agents(request, segments, response)
+
+    async def _process_with_agents(
+        self,
+        request: CallIntelligenceRequest,
+        segments: List[TranscriptSegment],
+        response: CallIntelligenceResponse,
+    ) -> CallIntelligenceResponse:
+        """
+        Process transcript using parallel extraction agents.
+
+        Legacy method with 6 parallel LLM calls.
+        """
+        # Determine which agents to run
+        agents_to_run = request.agents_to_run or list(self._agents.keys())
+
+        # Run agents in parallel
+        agent_tasks = []
+        for agent_name in agents_to_run:
+            if agent_name in self._agents:
+                agent = self._agents[agent_name]
+                task = asyncio.create_task(
+                    self._run_agent(agent, segments, request.existing_borrower_data)
+                )
+                agent_tasks.append((agent_name, task))
+
+        # Gather results
+        for agent_name, task in agent_tasks:
+            try:
+                result = await task
+                response.agent_results.append(result)
+
+                # Map to appropriate extraction category
+                self._map_extractions(response, agent_name, result)
+
+            except Exception as e:
+                safe_error = mask_pii_for_logging(str(e))
+                logger.exception(f"Agent {agent_name} failed: {safe_error}")
+                response.errors.append(f"Agent {agent_name}: {safe_error}")
+
+        response.extraction_method = ExtractionMethod.PARALLEL_AGENTS.value
+        return response
+
+    def _convert_unified_to_response(
+        self,
+        call_id: str,
+        unified_result: UnifiedExtractionResult,
+        response: CallIntelligenceResponse,
+    ) -> CallIntelligenceResponse:
+        """Convert unified extraction result to response format."""
+
+        # Map identity extractions
+        for field_name, extraction in unified_result.identity.items():
+            response.identity_extractions[field_name] = extraction.value
+            response.identity_extractions[f"{field_name}_confidence"] = extraction.confidence
+
+        # Map property/address extractions
+        for field_name, extraction in unified_result.property.items():
+            response.address_extractions[field_name] = extraction.value
+            response.address_extractions[f"{field_name}_confidence"] = extraction.confidence
+
+        # Map employment extractions
+        for field_name, extraction in unified_result.employment.items():
+            response.employment_extractions[field_name] = extraction.value
+            response.employment_extractions[f"{field_name}_confidence"] = extraction.confidence
+
+        # Map financial extractions (split into categories)
+        for field_name, extraction in unified_result.financial.items():
+            if field_name.startswith(INCOME_FIELD_PREFIXES):
+                response.income_extractions[field_name] = extraction.value
+                response.income_extractions[f"{field_name}_confidence"] = extraction.confidence
+            elif field_name.startswith(ASSET_FIELD_PREFIXES):
+                response.assets_extractions[field_name] = extraction.value
+                response.assets_extractions[f"{field_name}_confidence"] = extraction.confidence
+            elif field_name.startswith(LIABILITY_FIELD_PREFIXES):
+                response.liabilities_extractions[field_name] = extraction.value
+                response.liabilities_extractions[f"{field_name}_confidence"] = extraction.confidence
+            elif field_name.startswith(REO_FIELD_PREFIXES):
+                response.reo_extractions[field_name] = extraction.value
+                response.reo_extractions[f"{field_name}_confidence"] = extraction.confidence
+            else:
+                # Default uncategorized financial fields to income
+                response.income_extractions[field_name] = extraction.value
+                response.income_extractions[f"{field_name}_confidence"] = extraction.confidence
+
+        # Map compliance/declarations extractions
+        for field_name, extraction in unified_result.compliance.items():
+            response.declarations_extractions[field_name] = extraction.value
+            response.declarations_extractions[f"{field_name}_confidence"] = extraction.confidence
+
+        # Map intent extractions
+        for field_name, extraction in unified_result.intent.items():
+            response.intent_extractions[field_name] = extraction.value
+            response.intent_extractions[f"{field_name}_confidence"] = extraction.confidence
+
+        # Convert to agent_results for backward compatibility
+        response.agent_results = unified_result.to_agent_results()
+
+        # Copy errors and warnings
+        response.errors.extend(unified_result.errors)
+
+        return response
 
     def process_transcript_sync(
         self,

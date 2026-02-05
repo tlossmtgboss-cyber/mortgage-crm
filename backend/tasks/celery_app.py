@@ -68,6 +68,7 @@ def create_celery_app(app_name: str = "perennia") -> Celery:
             "tasks.usage_aggregation_tasks",
             "tasks.calendar_sync_tasks",
             "tasks.salesforce_sync_tasks",
+            "tasks.call_intelligence_tasks",
         ],
     )
 
@@ -118,6 +119,10 @@ def create_celery_app(app_name: str = "perennia") -> Celery:
             "tasks.agent_tasks.*": {"queue": "ai_tasks"},
             "tasks.usage_aggregation_tasks.*": {"queue": "low_priority"},
             "tasks.sla_tasks.create_risk_alerts_task": {"queue": "high_priority"},
+            "tasks.call_intelligence_tasks.process_transcript_task": {"queue": "ai_tasks"},
+            "tasks.call_intelligence_tasks.process_batch_task": {"queue": "ai_tasks"},
+            "tasks.call_intelligence_tasks.cleanup_old_results_task": {"queue": "low_priority"},
+            "tasks.call_intelligence_tasks.reprocess_failed_task": {"queue": "low_priority"},
         },
     )
 
@@ -199,6 +204,20 @@ celery_app.conf.beat_schedule = {
         "task": "tasks.salesforce_sync_tasks.check_salesforce_sync_health",
         "schedule": crontab(hour="*/4"),  # Every 4 hours
         "options": {"queue": "default"},
+    },
+
+    # Call Intelligence Tasks
+    "cleanup-old-call-intelligence-results": {
+        "task": "tasks.call_intelligence_tasks.cleanup_old_results_task",
+        "schedule": crontab(hour="2", minute="30"),  # 2:30 AM daily
+        "options": {"queue": "low_priority"},
+        "kwargs": {"days": 90},
+    },
+    "reprocess-failed-extractions": {
+        "task": "tasks.call_intelligence_tasks.reprocess_failed_task",
+        "schedule": crontab(hour="4", minute="0"),  # 4 AM daily
+        "options": {"queue": "low_priority"},
+        "kwargs": {"hours": 24, "limit": 50},
     },
 }
 

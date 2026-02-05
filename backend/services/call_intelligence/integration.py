@@ -22,8 +22,12 @@ from .data_contracts import (
     CallIntelligenceRequest,
     CallIntelligenceResponse,
     CallType,
+    BatchJob,
 )
 from .pii_utils import mask_pii_for_logging
+from .batch_processor import BatchProcessor
+from .streaming_extractor import StreamingExtractor, TranscriptChunk, ExtractionEvent
+from .review_service import HumanReviewService
 from services.application_engine import (
     ApplicationEngineOrchestrator,
     ApplicationAuditRequest,
@@ -188,15 +192,45 @@ class CallIntelligenceIntegration:
 
     Handles:
     - Processing call transcripts after calls end
+    - Batch processing multiple transcripts
+    - Streaming extraction during active calls
+    - Human review queue management
     - Triggering Application Engine audits
     - Saving results to database
     - Creating tasks in the task system
     """
 
-    def __init__(self, db_session: Session):
+    def __init__(self, db_session: Session, llm_client=None):
         self.db = db_session
-        self.ci_processor = CallIntelligenceProcessor(db_session)
+        self.llm_client = llm_client
+        self.ci_processor = CallIntelligenceProcessor(db_session, llm_client)
         self.app_engine = ApplicationEngineOrchestrator(db_session)
+
+        # Lazy-initialized services
+        self._batch_processor: Optional[BatchProcessor] = None
+        self._streaming_extractor: Optional[StreamingExtractor] = None
+        self._review_service: Optional[HumanReviewService] = None
+
+    @property
+    def batch_processor(self) -> BatchProcessor:
+        """Lazy-initialize batch processor."""
+        if self._batch_processor is None:
+            self._batch_processor = BatchProcessor(self.db, self.llm_client)
+        return self._batch_processor
+
+    @property
+    def streaming_extractor(self) -> Optional[StreamingExtractor]:
+        """Lazy-initialize streaming extractor (requires LLM client)."""
+        if self._streaming_extractor is None and self.llm_client:
+            self._streaming_extractor = StreamingExtractor(self.llm_client)
+        return self._streaming_extractor
+
+    @property
+    def review_service(self) -> HumanReviewService:
+        """Lazy-initialize review service."""
+        if self._review_service is None:
+            self._review_service = HumanReviewService(self.db)
+        return self._review_service
 
     async def process_completed_call(
         self,
@@ -544,6 +578,268 @@ class CallIntelligenceIntegration:
             # Already logged by db_transaction context manager
             logger.warning(f"Failed to save call results for {call_id} - results not persisted")
             return False
+
+    # =========================================================================
+    # Batch Processing Methods
+    # =========================================================================
+
+    async def process_batch(
+        self,
+        requests: List[CallIntelligenceRequest],
+        max_concurrent: int = 10,
+    ) -> List[CallIntelligenceResponse]:
+        """
+        Process multiple transcripts in batch.
+
+        Args:
+            requests: List of CallIntelligenceRequest objects
+            max_concurrent: Max concurrent processing
+
+        Returns:
+            List of CallIntelligenceResponse objects
+        """
+        return await self.batch_processor.process_batch(requests, max_concurrent)
+
+    def create_batch_job(
+        self,
+        call_ids: List[str],
+        organization_id: Optional[int] = None,
+    ) -> BatchJob:
+        """
+        Create a batch job for background processing.
+
+        Args:
+            call_ids: List of call IDs to process
+            organization_id: Organization filter
+
+        Returns:
+            BatchJob with tracking ID
+        """
+        return self.batch_processor.create_batch_job(call_ids, organization_id)
+
+    def get_batch_job_status(self, batch_id: str) -> Optional[Dict[str, Any]]:
+        """Get batch job status."""
+        job = self.batch_processor.get_batch_job(batch_id)
+        return job.to_dict() if job else None
+
+    async def submit_batch_job_async(
+        self,
+        call_ids: List[str],
+        organization_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        Submit batch job for async processing via Celery.
+
+        Args:
+            call_ids: List of call IDs
+            organization_id: Organization ID
+
+        Returns:
+            Dict with batch_id and task info
+        """
+        from tasks.call_intelligence_tasks import process_batch_task
+
+        # Create batch job
+        job = self.create_batch_job(call_ids, organization_id)
+
+        # Submit to Celery
+        task = process_batch_task.delay(
+            batch_id=job.batch_id,
+            request_ids=call_ids,
+            organization_id=organization_id,
+        )
+
+        return {
+            "batch_id": job.batch_id,
+            "task_id": task.id,
+            "total_requests": job.total_requests,
+            "status": "submitted",
+        }
+
+    # =========================================================================
+    # Streaming Methods
+    # =========================================================================
+
+    async def start_streaming_session(
+        self,
+        call_id: str,
+        loan_id: Optional[int] = None,
+        organization_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        Start a streaming extraction session for a live call.
+
+        Args:
+            call_id: Call identifier
+            loan_id: Associated loan ID
+            organization_id: Organization ID
+
+        Returns:
+            Dict with session info
+        """
+        if not self.streaming_extractor:
+            return {
+                "success": False,
+                "error": "Streaming not available (no LLM client)",
+            }
+
+        session = await self.streaming_extractor.start_session(
+            call_id, loan_id, organization_id
+        )
+
+        return {
+            "success": True,
+            "call_id": call_id,
+            "session_started": session.created_at.isoformat(),
+        }
+
+    async def process_streaming_chunk(
+        self,
+        call_id: str,
+        speaker: str,
+        text: str,
+        timestamp: float,
+        chunk_index: int,
+    ) -> List[Dict[str, Any]]:
+        """
+        Process a chunk of transcript during streaming.
+
+        Args:
+            call_id: Call identifier
+            speaker: Speaker role (borrower, ai_lo, etc.)
+            text: Transcript text
+            timestamp: Timestamp
+            chunk_index: Chunk sequence number
+
+        Returns:
+            List of extraction events
+        """
+        if not self.streaming_extractor:
+            return [{"event": "error", "data": {"error": "Streaming not available"}}]
+
+        from .data_contracts import SpeakerRole
+
+        # Map speaker string to enum
+        speaker_map = {
+            "borrower": SpeakerRole.BORROWER,
+            "ai_lo": SpeakerRole.AI_LO,
+            "human_lo": SpeakerRole.HUMAN_LO,
+            "co_borrower": SpeakerRole.CO_BORROWER,
+        }
+        speaker_role = speaker_map.get(speaker.lower(), SpeakerRole.UNKNOWN)
+
+        chunk = TranscriptChunk(
+            speaker=speaker_role,
+            text=text,
+            timestamp=timestamp,
+            chunk_index=chunk_index,
+        )
+
+        events = []
+        async for event in self.streaming_extractor.process_chunk(call_id, chunk):
+            events.append({
+                "event": event.event_type.value,
+                "data": event.data,
+                "timestamp": event.timestamp.isoformat(),
+            })
+
+        return events
+
+    async def end_streaming_session(self, call_id: str) -> Optional[Dict[str, Any]]:
+        """
+        End streaming session and get final results.
+
+        Args:
+            call_id: Call identifier
+
+        Returns:
+            Final extraction results
+        """
+        if not self.streaming_extractor:
+            return None
+
+        return await self.streaming_extractor.end_session(call_id)
+
+    def get_streaming_session_status(self, call_id: str) -> Optional[Dict[str, Any]]:
+        """Get streaming session status."""
+        if not self.streaming_extractor:
+            return None
+
+        return self.streaming_extractor.get_session_status(call_id)
+
+    # =========================================================================
+    # Human Review Methods
+    # =========================================================================
+
+    async def get_pending_reviews(
+        self,
+        loan_id: Optional[int] = None,
+        organization_id: Optional[int] = None,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get pending human reviews.
+
+        Args:
+            loan_id: Filter by loan
+            organization_id: Filter by organization
+            limit: Max items to return
+
+        Returns:
+            List of pending review items
+        """
+        items = await self.review_service.get_pending_reviews(
+            loan_id=loan_id,
+            organization_id=organization_id,
+            limit=limit,
+        )
+        return [item.to_dict() for item in items]
+
+    async def submit_review(
+        self,
+        review_id: str,
+        decision: str,
+        reviewer_id: int,
+        final_value: Optional[Any] = None,
+        notes: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Submit human review decision.
+
+        Args:
+            review_id: Review item ID
+            decision: "approved", "rejected", or "modified"
+            reviewer_id: User ID of reviewer
+            final_value: Modified value if decision is "modified"
+            notes: Optional reviewer notes
+
+        Returns:
+            Result dict
+        """
+        from .data_contracts import ReviewDecision
+
+        review_decision = ReviewDecision(
+            review_id=review_id,
+            decision=decision,
+            reviewer_id=reviewer_id,
+            final_value=final_value,
+            notes=notes,
+        )
+
+        return await self.review_service.submit_review(review_id, review_decision)
+
+    async def get_review_stats(
+        self,
+        loan_id: Optional[int] = None,
+        organization_id: Optional[int] = None,
+        days: int = 30,
+    ) -> Dict[str, Any]:
+        """Get review queue statistics."""
+        return await self.review_service.get_review_stats(
+            loan_id=loan_id,
+            organization_id=organization_id,
+            days=days,
+        )
 
 
 # =============================================================================

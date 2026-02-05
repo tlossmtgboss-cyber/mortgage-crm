@@ -39,6 +39,31 @@ class ExtractionConfidence(str, Enum):
     LOW = "low"         # <70% - Uncertain
 
 
+class ExtractionMethod(str, Enum):
+    """Method used for extraction."""
+    UNIFIED = "unified"              # Single unified LLM call (6x efficient)
+    PARALLEL_AGENTS = "parallel_agents"  # Legacy 6 parallel agent calls
+    STREAMING = "streaming"          # Real-time streaming extraction
+    REGEX_ONLY = "regex_only"        # Regex fallback (no LLM)
+
+
+class BatchJobStatus(str, Enum):
+    """Status of a batch processing job."""
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    PARTIAL = "partial"  # Some requests succeeded, some failed
+
+
+class ReviewStatus(str, Enum):
+    """Status of a human review item."""
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    MODIFIED = "modified"
+
+
 @dataclass
 class TranscriptSegment:
     """A segment of the call transcript."""
@@ -208,6 +233,12 @@ class CallIntelligenceResponse:
     processing_time_ms: int = 0
     processed_at: datetime = field(default_factory=datetime.utcnow)
 
+    # Scalability fields (new)
+    model_version: Optional[str] = None  # Model/prompt version for reproducibility
+    pending_review_count: int = 0  # Count of extractions sent to human review
+    batch_job_id: Optional[str] = None  # Batch job ID if processed as part of batch
+    extraction_method: str = "unified"  # "unified", "parallel_agents", "streaming"
+
     # Errors
     errors: List[str] = field(default_factory=list)
 
@@ -237,5 +268,83 @@ class CallIntelligenceResponse:
             },
             "processing_time_ms": self.processing_time_ms,
             "processed_at": self.processed_at.isoformat(),
+            "model_version": self.model_version,
+            "pending_review_count": self.pending_review_count,
+            "batch_job_id": self.batch_job_id,
+            "extraction_method": self.extraction_method,
             "errors": self.errors,
         }
+
+
+@dataclass
+class BatchJob:
+    """Represents a batch processing job."""
+    batch_id: str
+    total_requests: int
+    completed: int = 0
+    failed: int = 0
+    status: str = "pending"  # pending, processing, completed, failed, partial
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    completed_at: Optional[datetime] = None
+    error_message: Optional[str] = None
+    request_ids: List[str] = field(default_factory=list)
+    results: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "batch_id": self.batch_id,
+            "total_requests": self.total_requests,
+            "completed": self.completed,
+            "failed": self.failed,
+            "status": self.status,
+            "created_at": self.created_at.isoformat(),
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "error_message": self.error_message,
+            "progress_percent": round((self.completed + self.failed) / self.total_requests * 100, 1) if self.total_requests > 0 else 0,
+        }
+
+
+@dataclass
+class ReviewQueueItem:
+    """An extraction item in the human review queue."""
+    review_id: str
+    call_id: str
+    loan_id: Optional[int]
+    extraction_type: str  # identity, property, employment, etc.
+    field_name: str
+    extracted_value: Any
+    confidence_score: float
+    source_text: str
+    status: str = "pending"  # pending, approved, rejected, modified
+    reviewed_by: Optional[int] = None
+    reviewed_at: Optional[datetime] = None
+    reviewer_notes: Optional[str] = None
+    final_value: Optional[Any] = None
+    created_at: datetime = field(default_factory=datetime.utcnow)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "review_id": self.review_id,
+            "call_id": self.call_id,
+            "loan_id": self.loan_id,
+            "extraction_type": self.extraction_type,
+            "field_name": self.field_name,
+            "extracted_value": self.extracted_value,
+            "confidence_score": self.confidence_score,
+            "source_text": self.source_text[:200] if self.source_text else "",
+            "status": self.status,
+            "reviewed_by": self.reviewed_by,
+            "reviewed_at": self.reviewed_at.isoformat() if self.reviewed_at else None,
+            "final_value": self.final_value,
+            "created_at": self.created_at.isoformat(),
+        }
+
+
+@dataclass
+class ReviewDecision:
+    """Human review decision for an extraction."""
+    review_id: str
+    decision: str  # approved, rejected, modified
+    reviewer_id: int
+    final_value: Optional[Any] = None
+    notes: Optional[str] = None

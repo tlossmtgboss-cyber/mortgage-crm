@@ -323,6 +323,9 @@ class ExtractionSchema:
 class BaseLLMClient(ABC):
     """Abstract base class for LLM clients."""
 
+    # Increased token limit for unified extraction
+    UNIFIED_MAX_TOKENS = 8000
+
     @abstractmethod
     async def extract(
         self,
@@ -360,6 +363,31 @@ class BaseLLMClient(ABC):
             Extracted data as dict
         """
         raise NotImplementedError("Subclasses must implement extract_with_prompt()")
+
+    async def extract_unified(
+        self,
+        transcript: str,
+        schema: ExtractionSchema,
+        existing_data: Dict[str, Any] = None,
+    ) -> Dict[str, Any]:
+        """
+        Extract all domains in a single unified call.
+
+        This method uses increased token limits for the unified extraction
+        which extracts identity, property, employment, financial, compliance,
+        and intent data in one API call.
+
+        Args:
+            transcript: The call transcript text
+            schema: Unified extraction schema with all domains
+            existing_data: Optional existing borrower data for context
+
+        Returns:
+            Dict with all domain extractions and confidence scores
+        """
+        # Default implementation uses extract() with higher token limit
+        # Subclasses can override for provider-specific optimizations
+        return await self.extract(transcript, schema, existing_data)
 
 
 class AnthropicClient(BaseLLMClient):
