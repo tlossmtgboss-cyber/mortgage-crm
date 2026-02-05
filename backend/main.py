@@ -18671,6 +18671,22 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Calendar sync routes not loaded: {e}")
 
+# Calendar Events routes (CRUD for user calendar events)
+try:
+    from routes.calendar_routes import router as calendar_events_router
+    app.include_router(calendar_events_router, tags=["Calendar Events"])
+    logger.info("✅ Calendar events routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Calendar events routes not loaded: {e}")
+
+# Unified Calendar routes (merges calendar, scheduler, and CRM events)
+try:
+    from routes.unified_calendar_routes import router as unified_calendar_router
+    app.include_router(unified_calendar_router, tags=["Unified Calendar"])
+    logger.info("✅ Unified calendar routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Unified calendar routes not loaded: {e}")
+
 # HubSpot Integration routes (OAuth, CRM Sync)
 try:
     from routes.hubspot_routes import router as hubspot_router, set_dependencies as set_hubspot_deps
