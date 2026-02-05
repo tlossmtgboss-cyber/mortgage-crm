@@ -4,9 +4,9 @@ Compliance Extraction Agent
 Extracts declaration and compliance information from call transcripts.
 """
 
-import re
-from typing import List, Dict, Any
 import logging
+import re
+from typing import Any, Dict, List
 
 from .base_agent import BaseExtractionAgent, ConfidenceScores
 from .shared_patterns import (

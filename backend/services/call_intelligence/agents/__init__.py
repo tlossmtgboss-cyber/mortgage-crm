@@ -23,6 +23,16 @@ Shared Patterns:
     Common regex patterns for citizenship, marital status, etc. are consolidated
     in shared_patterns.py to ensure consistency across agents.
 
+Logging Guidelines:
+    - DEBUG: Internal processing details (pattern matching attempts, parse steps)
+    - INFO: Successful extractions, LLM client initialization, processing summaries
+    - WARNING: Recoverable errors, low confidence extractions, PII detected in input
+    - ERROR: Failed extractions, API errors, invalid configurations
+
+Testing:
+    Unit tests are located in: backend/tests/unit/test_call_intelligence.py
+    Run tests with: pytest tests/unit/test_call_intelligence.py -v
+
 Example:
     from services.call_intelligence.agents import IdentityExtractionAgent
 

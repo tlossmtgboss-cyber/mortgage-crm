@@ -169,7 +169,7 @@ class TokenBucketRateLimiter:
                     (1.0 - self.tokens) / (self.requests_per_minute / 60.0),
                     timeout - (now - start_time)
                 )
-                await asyncio.sleep(max(0.1, wait_time))
+                await asyncio.sleep(max(MIN_WAIT_TIME_SECONDS, wait_time))
 
 
 # Global rate limiters (one per provider)
@@ -179,16 +179,16 @@ _rate_limiters: Dict[str, TokenBucketRateLimiter] = {}
 def get_rate_limiter(provider: str) -> TokenBucketRateLimiter:
     """Get or create a rate limiter for a provider."""
     if provider not in _rate_limiters:
-        # Default limits (can be tuned per provider)
+        # Use provider-specific rate limits from constants
         if provider == "anthropic":
             _rate_limiters[provider] = TokenBucketRateLimiter(
-                requests_per_minute=50,  # Conservative for Anthropic
-                burst_size=5,
+                requests_per_minute=ANTHROPIC_REQUESTS_PER_MINUTE,
+                burst_size=ANTHROPIC_BURST_SIZE,
             )
         else:
             _rate_limiters[provider] = TokenBucketRateLimiter(
-                requests_per_minute=60,  # OpenAI default tier
-                burst_size=10,
+                requests_per_minute=OPENAI_REQUESTS_PER_MINUTE,
+                burst_size=OPENAI_BURST_SIZE,
             )
     return _rate_limiters[provider]
 
@@ -207,6 +207,23 @@ DEFAULT_TEMPERATURE = 0.0  # Deterministic for structured extraction
 DEFAULT_TIMEOUT_SECONDS = 30
 DEFAULT_MAX_RETRIES = 3
 
+# Rate limiter constants
+MIN_WAIT_TIME_SECONDS = 0.1  # Minimum wait between rate limit checks
+ANTHROPIC_REQUESTS_PER_MINUTE = 50  # Conservative limit for Anthropic API
+OPENAI_REQUESTS_PER_MINUTE = 60  # OpenAI default tier limit
+ANTHROPIC_BURST_SIZE = 5
+OPENAI_BURST_SIZE = 10
+
+# Validation bounds
+MIN_TEMPERATURE = 0.0
+MAX_TEMPERATURE = 2.0  # OpenAI allows up to 2.0
+MIN_MAX_TOKENS = 1
+MAX_MAX_TOKENS = 128_000  # Claude 3 supports up to 200K but we cap lower
+MIN_TIMEOUT_SECONDS = 1
+MAX_TIMEOUT_SECONDS = 300  # 5 minute max
+MIN_RETRIES = 0
+MAX_RETRIES = 10
+
 
 @dataclass
 class LLMConfig:
@@ -217,6 +234,29 @@ class LLMConfig:
     max_tokens: int = DEFAULT_MAX_TOKENS
     timeout: int = DEFAULT_TIMEOUT_SECONDS
     max_retries: int = DEFAULT_MAX_RETRIES
+
+    def __post_init__(self):
+        """Validate configuration values are within acceptable bounds."""
+        if not MIN_TEMPERATURE <= self.temperature <= MAX_TEMPERATURE:
+            raise ValueError(
+                f"temperature must be between {MIN_TEMPERATURE} and {MAX_TEMPERATURE}, "
+                f"got {self.temperature}"
+            )
+        if not MIN_MAX_TOKENS <= self.max_tokens <= MAX_MAX_TOKENS:
+            raise ValueError(
+                f"max_tokens must be between {MIN_MAX_TOKENS} and {MAX_MAX_TOKENS}, "
+                f"got {self.max_tokens}"
+            )
+        if not MIN_TIMEOUT_SECONDS <= self.timeout <= MAX_TIMEOUT_SECONDS:
+            raise ValueError(
+                f"timeout must be between {MIN_TIMEOUT_SECONDS} and {MAX_TIMEOUT_SECONDS}, "
+                f"got {self.timeout}"
+            )
+        if not MIN_RETRIES <= self.max_retries <= MAX_RETRIES:
+            raise ValueError(
+                f"max_retries must be between {MIN_RETRIES} and {MAX_RETRIES}, "
+                f"got {self.max_retries}"
+            )
 
     @classmethod
     def from_env(cls) -> "LLMConfig":
@@ -577,9 +617,19 @@ class OpenAIClient(BaseLLMClient):
 
     def __init__(self, config: LLMConfig = None):
         self.config = config or LLMConfig.from_env()
-        # Only override model if explicitly using OpenAI and no custom model was set
+        # Ensure we're using an OpenAI-compatible model, not a Claude model
         if self.config.model.startswith("claude"):
-            self.config.model = os.getenv("CI_LLM_MODEL", DEFAULT_OPENAI_MODEL)
+            # Check if env var specifies a non-Claude model
+            env_model = os.getenv("CI_LLM_MODEL")
+            if env_model and not env_model.startswith("claude"):
+                self.config.model = env_model
+            else:
+                # Fall back to default OpenAI model
+                self.config.model = DEFAULT_OPENAI_MODEL
+                logger.debug(
+                    f"OpenAIClient initialized with Claude model in config, "
+                    f"using {DEFAULT_OPENAI_MODEL} instead"
+                )
         self._client = None
 
     def _get_client(self):

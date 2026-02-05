@@ -6,10 +6,10 @@ and regex fallback.
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional
-import re
 import logging
+import re
 import threading
+from typing import Any, Dict, List, Optional
 
 from ..data_contracts import (
     TranscriptSegment,
@@ -116,6 +116,30 @@ class ValidationRanges:
     # Years of experience/employment
     MIN_YEARS = 0
     MAX_YEARS = 50
+
+
+# =============================================================================
+# Speaker Role Display Names
+# =============================================================================
+# Maps internal speaker role values to human-readable names for LLM prompts.
+# Used in _format_transcript_for_llm() for clearer context.
+
+SPEAKER_ROLE_DISPLAY_NAMES: Dict[str, str] = {
+    'ai_lo': 'Loan Officer',
+    'borrower': 'Borrower',
+    'co_borrower': 'Co-Borrower',
+    'human_lo': 'Human Loan Officer',
+    'unknown': 'Unknown',
+}
+"""Maps SpeakerRole values to human-readable display names."""
+
+
+# =============================================================================
+# Numeric Comparison Constants
+# =============================================================================
+
+EPSILON = 1e-10
+"""Small value for floating-point comparisons near zero."""
 
 
 class BaseExtractionAgent(ABC):
@@ -275,15 +299,8 @@ class BaseExtractionAgent(ABC):
         lines = []
         for segment in segments:
             speaker = segment.speaker.value if hasattr(segment.speaker, 'value') else str(segment.speaker)
-            # Map speaker roles to readable names
-            speaker_map = {
-                'ai_lo': 'Loan Officer',
-                'borrower': 'Borrower',
-                'co_borrower': 'Co-Borrower',
-                'human_lo': 'Human Loan Officer',
-                'unknown': 'Unknown',
-            }
-            speaker_name = speaker_map.get(speaker.lower(), speaker)
+            # Map speaker roles to readable names using module constant
+            speaker_name = SPEAKER_ROLE_DISPLAY_NAMES.get(speaker.lower(), speaker)
             lines.append(f"{speaker_name}: {segment.text}")
         return "\n".join(lines)
 
@@ -468,8 +485,9 @@ class BaseExtractionAgent(ABC):
         # Normalize numbers (within tolerance defined by NUMERIC_MATCH_TOLERANCE)
         if isinstance(val1, (int, float)) and isinstance(val2, (int, float)):
             max_abs = max(abs(val1), abs(val2))
-            if max_abs == 0:
-                return True  # Both are zero
+            # Handle near-zero values with epsilon comparison
+            if max_abs < EPSILON:
+                return abs(val1 - val2) < EPSILON
             return abs(val1 - val2) / max_abs < ConfidenceScores.NUMERIC_MATCH_TOLERANCE
 
         # Direct comparison
