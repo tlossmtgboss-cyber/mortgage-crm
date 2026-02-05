@@ -61,10 +61,12 @@ import logging
 import asyncio
 import re
 import time
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
 from enum import Enum
+
+from .pii_utils import redact_transcript_for_llm, get_redaction_warning_for_llm
 
 logger = logging.getLogger(__name__)
 
@@ -415,8 +417,18 @@ class AnthropicClient(BaseLLMClient):
         schema: ExtractionSchema,
         transcript: str,
         existing_data: Dict[str, Any] = None,
-    ) -> str:
-        """Build the extraction prompt."""
+    ) -> Tuple[str, Dict[str, Any]]:
+        """
+        Build the extraction prompt with PII-redacted transcript.
+
+        SECURITY: This method redacts PII from the transcript before
+        including it in the prompt sent to external LLM APIs.
+
+        Returns:
+            Tuple of (prompt_string, redaction_stats)
+        """
+        # CRITICAL: Redact PII before sending to external LLM
+        redacted_transcript, redaction_stats = redact_transcript_for_llm(transcript)
 
         # Build field descriptions
         field_descriptions = []
@@ -440,7 +452,13 @@ class AnthropicClient(BaseLLMClient):
 ```
 """
 
+        # Add redaction warning if PII was redacted
+        redaction_notice = ""
+        if redaction_stats.get("total", 0) > 0:
+            redaction_notice = get_redaction_warning_for_llm()
+
         prompt = f"""You are an expert mortgage data extraction assistant. Your task is to extract structured information from a call transcript between a loan officer/AI assistant and a borrower.
+{redaction_notice}
 
 ## Instructions
 {schema.instructions or "Extract the following fields from the transcript. Only extract information that is explicitly stated by the borrower. Do not infer or guess values."}
@@ -452,7 +470,7 @@ class AnthropicClient(BaseLLMClient):
 
 ## Call Transcript
 ```
-{transcript}
+{redacted_transcript}
 ```
 
 ## Response Format
@@ -487,7 +505,7 @@ Important rules:
 
 Respond ONLY with the JSON object, no additional text."""
 
-        return prompt
+        return prompt, redaction_stats
 
     async def extract(
         self,
@@ -497,8 +515,12 @@ Respond ONLY with the JSON object, no additional text."""
     ) -> Dict[str, Any]:
         """Extract structured data using Claude."""
         client = self._get_client()
-        prompt = self._build_extraction_prompt(schema, transcript, existing_data)
+        prompt, redaction_stats = self._build_extraction_prompt(schema, transcript, existing_data)
         rate_limiter = get_rate_limiter("anthropic")
+
+        # Log if significant PII was redacted
+        if redaction_stats.get("total", 0) > 0:
+            logger.info(f"PII redacted before LLM call: {redaction_stats}")
 
         for attempt in range(self.config.max_retries):
             try:
@@ -582,11 +604,22 @@ Respond ONLY with the JSON object, no additional text."""
         """Extract using custom prompt."""
         client = self._get_client()
 
-        full_prompt = f"""{prompt}
+        # CRITICAL: Redact PII before sending to external LLM
+        redacted_transcript, redaction_stats = redact_transcript_for_llm(transcript)
 
+        if redaction_stats.get("total", 0) > 0:
+            logger.info(f"PII redacted before custom prompt LLM call: {redaction_stats}")
+
+        # Add redaction notice if needed
+        redaction_notice = ""
+        if redaction_stats.get("total", 0) > 0:
+            redaction_notice = get_redaction_warning_for_llm()
+
+        full_prompt = f"""{prompt}
+{redaction_notice}
 ## Transcript
 ```
-{transcript}
+{redacted_transcript}
 ```
 
 Respond with a JSON object containing the extracted information."""
@@ -700,8 +733,13 @@ class OpenAIClient(BaseLLMClient):
         rate_limiter = get_rate_limiter("openai")
 
         # Build the prompt (reuse Anthropic's prompt builder logic)
+        # Note: This also handles PII redaction
         anthropic_client = AnthropicClient(self.config)
-        prompt = anthropic_client._build_extraction_prompt(schema, transcript, existing_data)
+        prompt, redaction_stats = anthropic_client._build_extraction_prompt(schema, transcript, existing_data)
+
+        # Log if significant PII was redacted
+        if redaction_stats.get("total", 0) > 0:
+            logger.info(f"PII redacted before OpenAI LLM call: {redaction_stats}")
 
         for attempt in range(self.config.max_retries):
             try:
@@ -775,6 +813,17 @@ class OpenAIClient(BaseLLMClient):
         """Extract using custom prompt."""
         client = self._get_client()
 
+        # CRITICAL: Redact PII before sending to external LLM
+        redacted_transcript, redaction_stats = redact_transcript_for_llm(transcript)
+
+        if redaction_stats.get("total", 0) > 0:
+            logger.info(f"PII redacted before OpenAI custom prompt call: {redaction_stats}")
+
+        # Add redaction notice if needed
+        redaction_notice = ""
+        if redaction_stats.get("total", 0) > 0:
+            redaction_notice = get_redaction_warning_for_llm()
+
         try:
             response = await asyncio.wait_for(
                 client.chat.completions.create(
@@ -783,7 +832,7 @@ class OpenAIClient(BaseLLMClient):
                     max_tokens=self.config.max_tokens,
                     messages=[
                         {"role": "system", "content": "You are an expert mortgage data extraction assistant. Always respond with valid JSON."},
-                        {"role": "user", "content": f"{prompt}\n\nTranscript:\n{transcript}"}
+                        {"role": "user", "content": f"{prompt}\n{redaction_notice}\nTranscript:\n{redacted_transcript}"}
                     ],
                     response_format={"type": "json_object"}
                 ),

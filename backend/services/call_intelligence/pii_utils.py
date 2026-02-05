@@ -9,10 +9,16 @@ SECURITY NOTES:
 - Only the last 4 digits may be stored for verification purposes
 - All SSN redaction happens at the earliest possible point
 - This module should be used anywhere PII might appear in text
+
+IMPORTANT: redact_transcript_for_llm() MUST be called before sending
+any transcript text to external LLM APIs (Anthropic, OpenAI, etc.)
 """
 
 import re
-from typing import Tuple, Optional
+import logging
+from typing import Tuple, Optional, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -65,6 +71,99 @@ BANK_ACCOUNT_PATTERN = re.compile(
 )
 
 BANK_ACCOUNT_REDACTED = "****"
+
+
+# =============================================================================
+# DATE OF BIRTH PATTERNS
+# =============================================================================
+# Matches common DOB formats in transcripts
+
+# Written dates: "March 15, 1985", "03/15/1985", "1985-03-15"
+DOB_WRITTEN_PATTERN = re.compile(
+    r'(?:born|birthday|birth\s*date|date\s*of\s*birth|dob)[^0-9]*'
+    r'('
+    r'(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}(?:st|nd|rd|th)?,?\s*\d{4}|'
+    r'\d{1,2}[-/]\d{1,2}[-/]\d{2,4}|'
+    r'\d{4}[-/]\d{1,2}[-/]\d{1,2}'
+    r')',
+    re.IGNORECASE
+)
+
+# Numeric date formats anywhere (more aggressive)
+DOB_NUMERIC_PATTERN = re.compile(
+    r'\b(\d{1,2})[-/](\d{1,2})[-/](19\d{2}|20[0-2]\d)\b'
+)
+
+DOB_REDACTED = "[DOB REDACTED]"
+
+
+# =============================================================================
+# PHONE NUMBER PATTERNS
+# =============================================================================
+# Matches phone numbers in various formats
+
+PHONE_PATTERN = re.compile(
+    r'(?:'
+    r'\+?1?[-.\s]?'  # Optional country code
+    r')?'
+    r'\(?([2-9]\d{2})\)?'  # Area code (2-9 start)
+    r'[-.\s]?'
+    r'(\d{3})'  # Exchange
+    r'[-.\s]?'
+    r'(\d{4})'  # Subscriber
+    r'\b'
+)
+
+PHONE_REDACTED = "[PHONE]"
+
+
+# =============================================================================
+# EMAIL PATTERNS
+# =============================================================================
+
+EMAIL_PATTERN = re.compile(
+    r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+)
+
+EMAIL_REDACTED = "[EMAIL]"
+
+
+# =============================================================================
+# ADDRESS PATTERNS (for full street addresses)
+# =============================================================================
+
+# Full street address pattern
+ADDRESS_PATTERN = re.compile(
+    r'\b(\d{1,5})\s+'
+    r'((?:North|South|East|West|N\.?|S\.?|E\.?|W\.?)\s+)?'
+    r'([A-Za-z]+(?:\s+[A-Za-z]+)*)\s+'
+    r'(Street|St\.?|Avenue|Ave\.?|Road|Rd\.?|Boulevard|Blvd\.?|Drive|Dr\.?|Lane|Ln\.?|Court|Ct\.?|Way|Circle|Cir\.?|Place|Pl\.?)'
+    r'(?:\s*(?:#|Apt\.?|Suite|Ste\.?|Unit)\s*\d+[A-Za-z]?)?',
+    re.IGNORECASE
+)
+
+ADDRESS_REDACTED = "[ADDRESS]"
+
+
+# =============================================================================
+# SPOKEN NUMBER PATTERNS
+# =============================================================================
+# Patterns for numbers spoken as words in transcripts
+
+SPOKEN_SSN_PATTERN = re.compile(
+    r'(?:social|ssn|social\s*security)[^.]*?'
+    r'(?:'
+    r'(\b(?:zero|one|two|three|four|five|six|seven|eight|nine)\b[,\s]*){9,}'
+    r')',
+    re.IGNORECASE
+)
+
+# Common spoken number words
+SPOKEN_NUMBERS = {
+    'zero': '0', 'one': '1', 'two': '2', 'three': '3', 'four': '4',
+    'five': '5', 'six': '6', 'seven': '7', 'eight': '8', 'nine': '9',
+    'oh': '0', 'o': '0',
+}
 
 
 def redact_ssn(text: str) -> str:
@@ -279,3 +378,252 @@ def sanitize_source_text(text: str, max_length: int = 200) -> str:
         sanitized = sanitized[:max_length - 3] + "..."
 
     return sanitized
+
+
+# =============================================================================
+# ADDITIONAL REDACTION FUNCTIONS
+# =============================================================================
+
+def redact_dob(text: str) -> str:
+    """
+    Redact dates of birth from text.
+
+    Args:
+        text: Text that may contain DOB
+
+    Returns:
+        Text with DOB redacted
+
+    Example:
+        >>> redact_dob("I was born March 15, 1985")
+        "I was born [DOB REDACTED]"
+    """
+    if not text:
+        return text
+
+    # First redact DOB with context words
+    redacted = DOB_WRITTEN_PATTERN.sub(
+        lambda m: m.group(0).replace(m.group(1), DOB_REDACTED) if m.group(1) else m.group(0),
+        text
+    )
+
+    # Then redact standalone date patterns that look like birth dates (1950-2010 range)
+    def replace_dob(match):
+        year = int(match.group(3))
+        # Only redact if year suggests a birth date (not a recent transaction date)
+        if 1940 <= year <= 2010:
+            return DOB_REDACTED
+        return match.group(0)
+
+    redacted = DOB_NUMERIC_PATTERN.sub(replace_dob, redacted)
+
+    return redacted
+
+
+def redact_phone(text: str) -> str:
+    """
+    Redact phone numbers from text.
+
+    Args:
+        text: Text that may contain phone numbers
+
+    Returns:
+        Text with phone numbers redacted
+
+    Example:
+        >>> redact_phone("Call me at 555-123-4567")
+        "Call me at [PHONE]"
+    """
+    if not text:
+        return text
+
+    return PHONE_PATTERN.sub(PHONE_REDACTED, text)
+
+
+def redact_email(text: str) -> str:
+    """
+    Redact email addresses from text.
+
+    Args:
+        text: Text that may contain email addresses
+
+    Returns:
+        Text with emails redacted
+
+    Example:
+        >>> redact_email("Email me at john@example.com")
+        "Email me at [EMAIL]"
+    """
+    if not text:
+        return text
+
+    return EMAIL_PATTERN.sub(EMAIL_REDACTED, text)
+
+
+def redact_address(text: str) -> str:
+    """
+    Redact full street addresses from text.
+
+    Note: This is aggressive and may have false positives.
+    Property addresses may need to be preserved in some contexts.
+
+    Args:
+        text: Text that may contain addresses
+
+    Returns:
+        Text with addresses redacted
+    """
+    if not text:
+        return text
+
+    return ADDRESS_PATTERN.sub(ADDRESS_REDACTED, text)
+
+
+def redact_spoken_ssn(text: str) -> str:
+    """
+    Redact SSNs spoken as words (e.g., "one two three four five six seven eight nine").
+
+    Args:
+        text: Text that may contain spoken SSN
+
+    Returns:
+        Text with spoken SSN redacted
+    """
+    if not text:
+        return text
+
+    def replace_spoken(match):
+        return match.group(0).split()[0] + " " + SSN_REDACTED + "XXXX"
+
+    return SPOKEN_SSN_PATTERN.sub(replace_spoken, text)
+
+
+# =============================================================================
+# TRANSCRIPT REDACTION FOR LLM
+# =============================================================================
+
+def redact_transcript_for_llm(
+    transcript: str,
+    redact_addresses: bool = False,
+    preserve_names: bool = True,
+) -> Tuple[str, Dict[str, Any]]:
+    """
+    Redact PII from transcript before sending to external LLM APIs.
+
+    IMPORTANT: This function MUST be called before sending any transcript
+    to Anthropic, OpenAI, or other external LLM providers. This prevents
+    sensitive borrower data from being transmitted to third parties.
+
+    Redacts:
+    - SSN (full and spoken as words)
+    - Date of birth
+    - Phone numbers
+    - Email addresses
+    - Credit card numbers
+    - Bank account numbers
+    - Optionally: Street addresses
+
+    Does NOT redact (needed for extraction):
+    - Names (needed for identity extraction)
+    - Employer names
+    - Property details (unless redact_addresses=True)
+
+    Args:
+        transcript: Raw transcript text
+        redact_addresses: If True, also redact street addresses
+        preserve_names: If True, preserve names (default for extraction)
+
+    Returns:
+        Tuple of (redacted_transcript, redaction_stats)
+        - redacted_transcript: Safe for LLM transmission
+        - redaction_stats: Dict with counts of each redaction type
+
+    Example:
+        >>> text = "My SSN is 123-45-6789 and I was born 03/15/1985"
+        >>> redacted, stats = redact_transcript_for_llm(text)
+        >>> print(redacted)
+        "My SSN is ***-**-6789 and I was born [DOB REDACTED]"
+        >>> print(stats)
+        {"ssn": 1, "dob": 1, "phone": 0, ...}
+    """
+    if not transcript:
+        return "", {"total": 0}
+
+    stats = {
+        "ssn": 0,
+        "ssn_spoken": 0,
+        "dob": 0,
+        "phone": 0,
+        "email": 0,
+        "credit_card": 0,
+        "bank_account": 0,
+        "address": 0,
+    }
+
+    redacted = transcript
+
+    # Count and redact SSN
+    stats["ssn"] = len(SSN_FULL_PATTERN.findall(redacted))
+    redacted = redact_ssn(redacted)
+
+    # Count and redact spoken SSN
+    stats["ssn_spoken"] = len(SPOKEN_SSN_PATTERN.findall(redacted))
+    redacted = redact_spoken_ssn(redacted)
+
+    # Count and redact DOB
+    stats["dob"] = len(DOB_WRITTEN_PATTERN.findall(redacted)) + len(DOB_NUMERIC_PATTERN.findall(redacted))
+    redacted = redact_dob(redacted)
+
+    # Count and redact phone
+    stats["phone"] = len(PHONE_PATTERN.findall(redacted))
+    redacted = redact_phone(redacted)
+
+    # Count and redact email
+    stats["email"] = len(EMAIL_PATTERN.findall(redacted))
+    redacted = redact_email(redacted)
+
+    # Count and redact credit card
+    stats["credit_card"] = len(CREDIT_CARD_PATTERN.findall(redacted))
+    redacted = redact_credit_card(redacted)
+
+    # Count and redact bank account
+    stats["bank_account"] = len(BANK_ACCOUNT_PATTERN.findall(redacted))
+    redacted = redact_bank_account(redacted)
+
+    # Optionally redact addresses
+    if redact_addresses:
+        stats["address"] = len(ADDRESS_PATTERN.findall(redacted))
+        redacted = redact_address(redacted)
+
+    stats["total"] = sum(stats.values())
+
+    if stats["total"] > 0:
+        logger.info(
+            f"Redacted {stats['total']} PII items from transcript: "
+            f"SSN={stats['ssn']}, DOB={stats['dob']}, Phone={stats['phone']}, "
+            f"Email={stats['email']}"
+        )
+
+    return redacted, stats
+
+
+def get_redaction_warning_for_llm() -> str:
+    """
+    Get a warning message to include in LLM prompts about redacted content.
+
+    This helps the LLM understand that some fields may show redaction placeholders
+    instead of actual values.
+
+    Returns:
+        Warning text to append to extraction prompts
+    """
+    return """
+NOTE: Some sensitive information has been redacted from this transcript for privacy:
+- SSN appears as "***-**-XXXX" (last 4 preserved)
+- Dates of birth appear as "[DOB REDACTED]"
+- Phone numbers appear as "[PHONE]"
+- Email addresses appear as "[EMAIL]"
+
+When you see these placeholders, note that the information was present but redacted.
+Set confidence to 50 for fields where you can only see a redaction placeholder.
+"""
