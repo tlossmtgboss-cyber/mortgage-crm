@@ -116,7 +116,7 @@ class UnifiedExtractionResult:
 
     # Domain-specific extractions
     identity: Dict[str, ExtractedValue] = field(default_factory=dict)
-    property: Dict[str, ExtractedValue] = field(default_factory=dict)
+    property_info: Dict[str, ExtractedValue] = field(default_factory=dict)  # Renamed from 'property' to avoid shadowing @property
     employment: Dict[str, ExtractedValue] = field(default_factory=dict)
     financial: Dict[str, ExtractedValue] = field(default_factory=dict)
     compliance: Dict[str, ExtractedValue] = field(default_factory=dict)
@@ -135,7 +135,7 @@ class UnifiedExtractionResult:
         """Count total extractions across all domains."""
         return sum([
             len(self.identity),
-            len(self.property),
+            len(self.property_info),
             len(self.employment),
             len(self.financial),
             len(self.compliance),
@@ -146,7 +146,7 @@ class UnifiedExtractionResult:
     def high_confidence_count(self) -> int:
         """Count extractions with confidence >= 90."""
         count = 0
-        for domain in [self.identity, self.property, self.employment,
+        for domain in [self.identity, self.property_info, self.employment,
                        self.financial, self.compliance, self.intent]:
             for extraction in domain.values():
                 if extraction.confidence >= 90:
@@ -157,7 +157,7 @@ class UnifiedExtractionResult:
     def low_confidence_count(self) -> int:
         """Count extractions with confidence < 70."""
         count = 0
-        for domain in [self.identity, self.property, self.employment,
+        for domain in [self.identity, self.property_info, self.employment,
                        self.financial, self.compliance, self.intent]:
             for extraction in domain.values():
                 if extraction.confidence < 70:
@@ -170,7 +170,7 @@ class UnifiedExtractionResult:
 
         domain_mapping = [
             ("identity", self.identity),
-            ("property", self.property),
+            ("property", self.property_info),
             ("employment", self.employment),
             ("financial", self.financial),
             ("compliance", self.compliance),

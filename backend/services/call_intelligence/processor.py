@@ -334,7 +334,7 @@ class CallIntelligenceProcessor:
             response.identity_extractions[f"{field_name}_confidence"] = extraction.confidence
 
         # Map property/address extractions
-        for field_name, extraction in unified_result.property.items():
+        for field_name, extraction in unified_result.property_info.items():
             response.address_extractions[field_name] = extraction.value
             response.address_extractions[f"{field_name}_confidence"] = extraction.confidence
 

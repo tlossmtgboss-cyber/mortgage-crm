@@ -328,7 +328,7 @@ class StreamingExtractor:
                     "total_extractions": unified_result.total_extractions,
                     "high_confidence_count": unified_result.high_confidence_count,
                     "identity": {k: v.value for k, v in unified_result.identity.items()},
-                    "property": {k: v.value for k, v in unified_result.property.items()},
+                    "property": {k: v.value for k, v in unified_result.property_info.items()},
                     "employment": {k: v.value for k, v in unified_result.employment.items()},
                     "financial": {k: v.value for k, v in unified_result.financial.items()},
                     "compliance": {k: v.value for k, v in unified_result.compliance.items()},
@@ -411,7 +411,7 @@ class StreamingExtractor:
             # Process each domain
             for domain_name, domain_extractions in [
                 ("identity", result.identity),
-                ("property", result.property),
+                ("property", result.property_info),
                 ("employment", result.employment),
                 ("financial", result.financial),
                 ("compliance", result.compliance),
