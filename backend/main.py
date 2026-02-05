@@ -16946,6 +16946,16 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Secure auth routes not loaded: {e}")
 
+# Include main authentication routes (/token, /token/refresh, password reset, registration)
+try:
+    from routes.auth_routes import router as auth_routes_router, setup_auth_routes
+    app.include_router(auth_routes_router, tags=["Authentication"])
+    # Set up routes that need authentication dependencies (logout, admin routes, etc.)
+    setup_auth_routes(app, oauth2_scheme, get_current_user)
+    logger.info("✅ Authentication routes loaded (/token, password reset, registration)")
+except Exception as e:
+    logger.warning(f"⚠️ Authentication routes not loaded: {e}")
+
 # Include borrower portal routes (applications, documents, scheduling)
 try:
     from routes.borrower_routes import router as borrower_portal_router
