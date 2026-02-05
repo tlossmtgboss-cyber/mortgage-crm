@@ -5,11 +5,13 @@ Integrates Call Intelligence with existing call infrastructure (Retell, Vapi, Tw
 Automatically processes call transcripts when calls end.
 """
 
+import asyncio
+import json
 import logging
 from contextlib import contextmanager
-from datetime import datetime
-from typing import Optional, Dict, Any, List, TYPE_CHECKING, Generator
-import asyncio
+from datetime import datetime, date
+from decimal import Decimal
+from typing import Any, Dict, Generator, List, Optional, TYPE_CHECKING
 
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -32,6 +34,45 @@ if TYPE_CHECKING:
     from services.application_engine import ApplicationAuditResponse
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# JSON SERIALIZATION
+# =============================================================================
+
+class SafeJSONEncoder(json.JSONEncoder):
+    """
+    JSON encoder that handles non-standard types safely.
+
+    Converts:
+    - datetime/date -> ISO format string
+    - Decimal -> float
+    - bytes -> base64 string
+    - Other non-serializable -> string representation
+    """
+
+    def default(self, obj: Any) -> Any:
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        if isinstance(obj, date):
+            return obj.isoformat()
+        if isinstance(obj, Decimal):
+            return float(obj)
+        if isinstance(obj, bytes):
+            import base64
+            return base64.b64encode(obj).decode('utf-8')
+        if hasattr(obj, '__dict__'):
+            return obj.__dict__
+        # Last resort - convert to string
+        try:
+            return str(obj)
+        except Exception:
+            return f"<non-serializable: {type(obj).__name__}>"
+
+
+def safe_json_dumps(obj: Any) -> str:
+    """Serialize object to JSON string, handling non-standard types."""
+    return json.dumps(obj, cls=SafeJSONEncoder)
 
 
 # =============================================================================
@@ -455,8 +496,6 @@ class CallIntelligenceIntegration:
             entire call processing pipeline. Check return value if persistence
             is critical for your use case.
         """
-        import json
-
         if not self.db:
             logger.debug("No database session available, skipping result save")
             return False
@@ -489,7 +528,7 @@ class CallIntelligenceIntegration:
                         "call_id": call_id,
                         "loan_id": loan_id,
                         "org_id": organization_id,
-                        "extractions": json.dumps(ci_response.to_application_engine_format()),
+                        "extractions": safe_json_dumps(ci_response.to_application_engine_format()),
                         "total": ci_response.total_extractions,
                         "high_conf": ci_response.high_confidence_count,
                         "low_conf": ci_response.low_confidence_count,
@@ -602,71 +641,80 @@ async def handle_vapi_call_ended(
     )
 
 
-def create_call_intelligence_tables(db: Session) -> None:
+def create_call_intelligence_tables(db: Session) -> bool:
     """
     Create database tables for Call Intelligence if they don't exist.
 
+    Uses CREATE TABLE IF NOT EXISTS for idempotency and race condition safety.
     This should be called during application startup or migration.
+
+    Args:
+        db: SQLAlchemy session
+
+    Returns:
+        True if tables exist/were created successfully, False on error
     """
     try:
-        # Check if table exists
-        result = db.execute(text("""
-            SELECT table_name FROM information_schema.tables
-            WHERE table_schema = 'public' AND table_name = 'call_intelligence_results'
+        # Create call_intelligence_results table (idempotent)
+        logger.info("Ensuring call_intelligence_results table exists...")
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS call_intelligence_results (
+                id SERIAL PRIMARY KEY,
+                call_id VARCHAR(255) UNIQUE NOT NULL,
+                loan_id INTEGER REFERENCES loans(id),
+                organization_id INTEGER REFERENCES organizations(id),
+                extractions JSONB,
+                total_extractions INTEGER DEFAULT 0,
+                high_confidence_count INTEGER DEFAULT 0,
+                low_confidence_count INTEGER DEFAULT 0,
+                processing_time_ms INTEGER DEFAULT 0,
+                application_status VARCHAR(50),
+                application_completion FLOAT,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
         """))
 
-        if not result.fetchone():
-            logger.info("Creating call_intelligence_results table...")
-            db.execute(text("""
-                CREATE TABLE call_intelligence_results (
-                    id SERIAL PRIMARY KEY,
-                    call_id VARCHAR(255) UNIQUE NOT NULL,
-                    loan_id INTEGER REFERENCES loans(id),
-                    organization_id INTEGER REFERENCES organizations(id),
-                    extractions JSONB,
-                    total_extractions INTEGER DEFAULT 0,
-                    high_confidence_count INTEGER DEFAULT 0,
-                    low_confidence_count INTEGER DEFAULT 0,
-                    processing_time_ms INTEGER DEFAULT 0,
-                    application_status VARCHAR(50),
-                    application_completion FLOAT,
-                    created_at TIMESTAMP DEFAULT NOW(),
-                    updated_at TIMESTAMP DEFAULT NOW()
-                );
+        # Create indexes (use IF NOT EXISTS for idempotency)
+        db.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_ci_results_loan_id ON call_intelligence_results(loan_id)
+        """))
+        db.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_ci_results_org_id ON call_intelligence_results(organization_id)
+        """))
+        db.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_ci_results_created_at ON call_intelligence_results(created_at)
+        """))
+        db.commit()
+        logger.info("call_intelligence_results table ready")
 
-                CREATE INDEX idx_ci_results_loan_id ON call_intelligence_results(loan_id);
-                CREATE INDEX idx_ci_results_org_id ON call_intelligence_results(organization_id);
-                CREATE INDEX idx_ci_results_created_at ON call_intelligence_results(created_at);
-            """))
-            db.commit()
-            logger.info("call_intelligence_results table created")
-
-        # Check for application_audit_logs table
-        result = db.execute(text("""
-            SELECT table_name FROM information_schema.tables
-            WHERE table_schema = 'public' AND table_name = 'application_audit_logs'
+        # Create application_audit_logs table (idempotent)
+        logger.info("Ensuring application_audit_logs table exists...")
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS application_audit_logs (
+                id SERIAL PRIMARY KEY,
+                loan_id INTEGER REFERENCES loans(id),
+                overall_status VARCHAR(50),
+                overall_completion FLOAT,
+                total_fields INTEGER DEFAULT 0,
+                complete_fields INTEGER DEFAULT 0,
+                missing_fields INTEGER DEFAULT 0,
+                tasks_generated INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
         """))
 
-        if not result.fetchone():
-            logger.info("Creating application_audit_logs table...")
-            db.execute(text("""
-                CREATE TABLE application_audit_logs (
-                    id SERIAL PRIMARY KEY,
-                    loan_id INTEGER REFERENCES loans(id),
-                    overall_status VARCHAR(50),
-                    overall_completion FLOAT,
-                    total_fields INTEGER DEFAULT 0,
-                    complete_fields INTEGER DEFAULT 0,
-                    missing_fields INTEGER DEFAULT 0,
-                    tasks_generated INTEGER DEFAULT 0,
-                    created_at TIMESTAMP DEFAULT NOW()
-                );
+        # Create indexes
+        db.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_audit_logs_loan_id ON application_audit_logs(loan_id)
+        """))
+        db.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON application_audit_logs(created_at)
+        """))
+        db.commit()
+        logger.info("application_audit_logs table ready")
 
-                CREATE INDEX idx_audit_logs_loan_id ON application_audit_logs(loan_id);
-                CREATE INDEX idx_audit_logs_created_at ON application_audit_logs(created_at);
-            """))
-            db.commit()
-            logger.info("application_audit_logs table created")
+        return True
 
     except Exception as e:
         logger.exception(f"Error creating Call Intelligence tables: {e}")
@@ -674,3 +722,4 @@ def create_call_intelligence_tables(db: Session) -> None:
             db.rollback()
         except Exception as rollback_err:
             logger.debug(f"Rollback also failed: {rollback_err}")
+        return False

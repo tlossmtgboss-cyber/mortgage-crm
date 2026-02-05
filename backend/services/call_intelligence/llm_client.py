@@ -142,9 +142,11 @@ class TokenBucketRateLimiter:
             LLMRateLimitError if rate limit exceeded and timeout
         """
         start_time = time.monotonic()
+        iterations = 0
 
         async with self._lock:
-            while True:
+            while iterations < MAX_RATE_LIMIT_ITERATIONS:
+                iterations += 1
                 now = time.monotonic()
                 # Replenish tokens based on time elapsed
                 elapsed = now - self.last_update
@@ -169,7 +171,15 @@ class TokenBucketRateLimiter:
                     (1.0 - self.tokens) / (self.requests_per_minute / 60.0),
                     timeout - (now - start_time)
                 )
+                # Ensure wait_time is positive to prevent potential issues
+                if wait_time <= 0:
+                    wait_time = MIN_WAIT_TIME_SECONDS
                 await asyncio.sleep(max(MIN_WAIT_TIME_SECONDS, wait_time))
+
+            # Safety limit reached - this shouldn't happen under normal conditions
+            raise LLMRateLimitError(
+                f"Rate limiter safety limit reached ({MAX_RATE_LIMIT_ITERATIONS} iterations)"
+            )
 
 
 # Global rate limiters (one per provider)
@@ -209,10 +219,14 @@ DEFAULT_MAX_RETRIES = 3
 
 # Rate limiter constants
 MIN_WAIT_TIME_SECONDS = 0.1  # Minimum wait between rate limit checks
+MAX_RATE_LIMIT_ITERATIONS = 1000  # Safety limit to prevent infinite loops
 ANTHROPIC_REQUESTS_PER_MINUTE = 50  # Conservative limit for Anthropic API
 OPENAI_REQUESTS_PER_MINUTE = 60  # OpenAI default tier limit
 ANTHROPIC_BURST_SIZE = 5
 OPENAI_BURST_SIZE = 10
+
+# Retry/backoff constants
+MAX_BACKOFF_SECONDS = 30.0  # Cap exponential backoff to prevent excessive waits
 
 # Validation bounds
 MIN_TEMPERATURE = 0.0
@@ -490,40 +504,42 @@ Respond ONLY with the JSON object, no additional text."""
                     # JSON parse failed - log and retry
                     logger.warning(f"LLM extraction attempt {attempt + 1}: JSON parse failed, retrying...")
                     if attempt < self.config.max_retries - 1:
-                        await asyncio.sleep(2 ** attempt)
+                        await asyncio.sleep(min(2 ** attempt, MAX_BACKOFF_SECONDS))
                     continue
 
             except asyncio.TimeoutError:
                 logger.warning(f"LLM extraction attempt {attempt + 1} timed out after {self.config.timeout}s")
                 if attempt < self.config.max_retries - 1:
-                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                    # Capped exponential backoff to prevent excessive waits
+                    await asyncio.sleep(min(2 ** attempt, MAX_BACKOFF_SECONDS))
                 else:
                     logger.error(f"LLM extraction failed after {self.config.max_retries} attempts (timeout)")
                     raise LLMTimeoutError(f"Anthropic extraction timed out after {self.config.max_retries} attempts")
             except LLMRateLimitError:
                 logger.warning(f"Rate limit hit on attempt {attempt + 1}")
                 if attempt < self.config.max_retries - 1:
-                    await asyncio.sleep(2 ** attempt)
+                    await asyncio.sleep(min(2 ** attempt, MAX_BACKOFF_SECONDS))
                 else:
                     raise
             except json.JSONDecodeError as e:
                 logger.warning(f"JSON decode error on attempt {attempt + 1}: {e}")
                 if attempt < self.config.max_retries - 1:
-                    await asyncio.sleep(2 ** attempt)
+                    await asyncio.sleep(min(2 ** attempt, MAX_BACKOFF_SECONDS))
                 else:
                     raise LLMParseError(f"Failed to parse Anthropic response as JSON: {e}")
             except (ConnectionError, OSError) as e:
                 # Network-related errors
                 logger.warning(f"Network error on attempt {attempt + 1}: {e}")
                 if attempt < self.config.max_retries - 1:
-                    await asyncio.sleep(2 ** attempt)
+                    await asyncio.sleep(min(2 ** attempt, MAX_BACKOFF_SECONDS))
                 else:
                     raise LLMAPIError(f"Network error calling Anthropic API: {e}")
             except Exception as e:
                 # Log the exception type for debugging
                 logger.warning(f"LLM extraction attempt {attempt + 1} failed ({type(e).__name__}): {e}")
                 if attempt < self.config.max_retries - 1:
-                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                    # Capped exponential backoff to prevent excessive waits
+                    await asyncio.sleep(min(2 ** attempt, MAX_BACKOFF_SECONDS))
                 else:
                     logger.error(f"LLM extraction failed after {self.config.max_retries} attempts")
                     raise LLMAPIError(f"Anthropic API error: {e}")

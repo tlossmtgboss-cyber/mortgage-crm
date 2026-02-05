@@ -215,8 +215,30 @@ class CallIntelligenceProcessor:
         self,
         request: CallIntelligenceRequest,
     ) -> CallIntelligenceResponse:
-        """Synchronous version of process_transcript."""
-        return asyncio.run(self.process_transcript(request))
+        """
+        Synchronous version of process_transcript.
+
+        Handles both sync and async contexts safely:
+        - If called from sync code: creates new event loop
+        - If called from async code: runs in existing loop
+
+        Note: Prefer using process_transcript() directly in async code.
+        """
+        try:
+            # Check if we're already in an async context
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # No running loop - safe to use asyncio.run()
+            return asyncio.run(self.process_transcript(request))
+
+        # Already in async context - need different approach
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(
+                asyncio.run,
+                self.process_transcript(request)
+            )
+            return future.result()
 
     async def _run_agent(
         self,
