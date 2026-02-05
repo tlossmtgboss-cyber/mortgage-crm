@@ -86,6 +86,116 @@ def get_table_columns(db, table_name: str) -> set:
         return set()
 
 
+# Whitelist of valid column names for each importable table
+# This prevents SQL injection via malicious CSV column headers
+VALID_IMPORT_COLUMNS = {
+    'leads': {
+        'id', 'first_name', 'last_name', 'name', 'email', 'phone', 'address',
+        'city', 'state', 'zip_code', 'loan_amount', 'property_value', 'loan_type',
+        'loan_officer', 'processor', 'credit_score', 'source', 'stage', 'loan_number',
+        'ltv', 'cltv', 'dti_front', 'dti_back', 'organization_code', 'created_at',
+        'updated_at', 'status_date', 'program', 'notes', 'organization_id', 'user_id',
+        'lead_score', 'status', 'property_type', 'loan_purpose',
+    },
+    'loans': {
+        'id', 'loan_number', 'organization_code', 'borrower_name', 'borrower_email',
+        'borrower_phone', 'co_borrower_email', 'property_address', 'property_city',
+        'property_state', 'property_zip', 'property_type', 'occupancy_type',
+        'appraisal_value', 'purchase_price', 'amount', 'rate', 'stage', 'loan_purpose',
+        'program', 'loan_program_code', 'lender', 'ltv', 'cltv', 'first_ratio',
+        'second_ratio', 'credit_score', 'cash_to_borrower', 'lender_credit',
+        'loan_officer_name', 'processor', 'processor_email', 'underwriter', 'closer',
+        'realtor_agent', 'title_company', 'created_at', 'updated_at', 'loan_officer_id',
+        'organization_id', 'status', 'notes', 'closing_date', 'lock_date', 'lock_expiration',
+    },
+    'mum_clients': {
+        'id', 'client_name', 'email', 'phone', 'address', 'city', 'state', 'zip_code',
+        'loan_number', 'original_loan_amount', 'current_loan_amount', 'interest_rate',
+        'appraisal_value_at_closing', 'current_property_value', 'closing_date',
+        'first_payment_date', 'created_at', 'updated_at', 'user_id', 'organization_id',
+        'status', 'notes', 'loan_type', 'property_type', 'lender', 'servicer',
+    },
+}
+
+
+def sanitize_column_name(column: str) -> str:
+    """
+    Sanitize a column name for safe SQL use.
+
+    Only allows alphanumeric characters and underscores.
+    Returns empty string if column contains invalid characters.
+    """
+    import re
+    # Only allow alphanumeric and underscore, must start with letter or underscore
+    if re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', column):
+        return column
+    return ''
+
+
+def validate_columns_for_table(columns: list, table_name: str) -> list:
+    """
+    Validate and filter column names against the whitelist for a table.
+
+    Returns only columns that are in the whitelist and pass sanitization.
+    Raises ValueError if no valid columns remain.
+    """
+    valid_columns = VALID_IMPORT_COLUMNS.get(table_name, set())
+    if not valid_columns:
+        raise ValueError(f"Unknown table for import: {table_name}")
+
+    sanitized = []
+    for col in columns:
+        clean_col = sanitize_column_name(col)
+        if clean_col and clean_col.lower() in {c.lower() for c in valid_columns}:
+            # Use the original case if it matches whitelist
+            matching = [c for c in valid_columns if c.lower() == clean_col.lower()]
+            sanitized.append(matching[0] if matching else clean_col)
+        else:
+            logger.warning(f"Ignoring invalid/disallowed column '{col}' for table '{table_name}'")
+
+    if not sanitized:
+        raise ValueError(f"No valid columns found for table {table_name}")
+
+    return sanitized
+
+
+def build_safe_update_sql(table_name: str, update_data: dict) -> tuple:
+    """
+    Build a safe UPDATE SQL statement with validated column names.
+
+    Returns (sql_string, params_dict) tuple.
+    Raises ValueError if columns are invalid.
+    """
+    validated_columns = validate_columns_for_table(list(update_data.keys()), table_name)
+
+    # Filter update_data to only include validated columns
+    safe_data = {k: v for k, v in update_data.items() if k in validated_columns}
+
+    set_clause = ', '.join([f"{col} = :{col}" for col in safe_data.keys()])
+    sql = f"UPDATE {table_name} SET {set_clause} WHERE id = :id"
+
+    return sql, safe_data
+
+
+def build_safe_insert_sql(table_name: str, row_data: dict) -> tuple:
+    """
+    Build a safe INSERT SQL statement with validated column names.
+
+    Returns (sql_string, params_dict) tuple.
+    Raises ValueError if columns are invalid.
+    """
+    validated_columns = validate_columns_for_table(list(row_data.keys()), table_name)
+
+    # Filter row_data to only include validated columns
+    safe_data = {k: v for k, v in row_data.items() if k in validated_columns}
+
+    columns_str = ', '.join(safe_data.keys())
+    placeholders = ', '.join([f":{col}" for col in safe_data.keys()])
+    sql = f"INSERT INTO {table_name} ({columns_str}) VALUES ({placeholders})"
+
+    return sql, safe_data
+
+
 def map_to_existing_columns(row_data: dict, destination: str) -> dict:
     """
     Map the auto-imported fields to existing database columns.
@@ -517,26 +627,20 @@ async def auto_import(
                             existing = result.fetchone()
                             if existing:
                                 logger.info(f"✅ Matched lead email '{email_normalized}' to existing lead ID {existing[0]}")
-                                # Update existing
+                                # Update existing - use safe SQL builder
                                 update_data = {k: v for k, v in row_data.items() if k not in ['created_at']}
                                 update_data['updated_at'] = datetime.utcnow()
-                                set_clause = ', '.join([f"{k} = :{k}" for k in update_data.keys()])
                                 update_data['id'] = existing[0]
-                                db.execute(
-                                    text(f"UPDATE leads SET {set_clause} WHERE id = :id"),
-                                    update_data
-                                )
+                                sql, safe_data = build_safe_update_sql('leads', update_data)
+                                safe_data['id'] = existing[0]
+                                db.execute(text(sql), safe_data)
                                 db.commit()
                                 imported += 1
                                 continue
 
-                        # Insert new
-                        columns = list(row_data.keys())
-                        placeholders = ', '.join([f":{k}" for k in columns])
-                        db.execute(
-                            text(f"INSERT INTO leads ({', '.join(columns)}) VALUES ({placeholders})"),
-                            row_data
-                        )
+                        # Insert new - use safe SQL builder
+                        sql, safe_data = build_safe_insert_sql('leads', row_data)
+                        db.execute(text(sql), safe_data)
 
                     elif destination == 'loans':
                         # Ensure required fields
@@ -576,26 +680,20 @@ async def auto_import(
                             else:
                                 logger.info(f"ℹ️ No existing loan found for loan_number '{loan_number_normalized}' - will create new")
                             if existing:
-                                # Update existing
+                                # Update existing - use safe SQL builder
                                 update_data = {k: v for k, v in row_data.items() if k not in ['loan_number', 'created_at']}
                                 update_data['updated_at'] = datetime.utcnow()
-                                set_clause = ', '.join([f"{k} = :{k}" for k in update_data.keys()])
                                 update_data['id'] = existing[0]
-                                db.execute(
-                                    text(f"UPDATE loans SET {set_clause} WHERE id = :id"),
-                                    update_data
-                                )
+                                sql, safe_data = build_safe_update_sql('loans', update_data)
+                                safe_data['id'] = existing[0]
+                                db.execute(text(sql), safe_data)
                                 db.commit()
                                 imported += 1
                                 continue
 
-                        # Insert new
-                        columns = list(row_data.keys())
-                        placeholders = ', '.join([f":{k}" for k in columns])
-                        db.execute(
-                            text(f"INSERT INTO loans ({', '.join(columns)}) VALUES ({placeholders})"),
-                            row_data
-                        )
+                        # Insert new - use safe SQL builder
+                        sql, safe_data = build_safe_insert_sql('loans', row_data)
+                        db.execute(text(sql), safe_data)
 
                     elif destination == 'mum_clients':
                         # Ensure client_name is set from various sources
@@ -665,27 +763,21 @@ async def auto_import(
                             existing = result.fetchone()
                             if existing:
                                 logger.info(f"✅ Matched MUM client loan_number '{loan_number_normalized}' to ID {existing[0]}")
-                                # Update existing
+                                # Update existing - use safe SQL builder
                                 update_data = {k: v for k, v in row_data.items() if k not in ['created_at', 'loan_number']}
                                 update_data['updated_at'] = datetime.utcnow()
                                 if update_data:
-                                    set_clause = ', '.join([f"{k} = :{k}" for k in update_data.keys()])
                                     update_data['id'] = existing[0]
-                                    db.execute(
-                                        text(f"UPDATE mum_clients SET {set_clause} WHERE id = :id"),
-                                        update_data
-                                    )
+                                    sql, safe_data = build_safe_update_sql('mum_clients', update_data)
+                                    safe_data['id'] = existing[0]
+                                    db.execute(text(sql), safe_data)
                                     db.commit()
                                     imported += 1
                                     continue
 
-                        # Insert new
-                        columns = list(row_data.keys())
-                        placeholders = ', '.join([f":{k}" for k in columns])
-                        db.execute(
-                            text(f"INSERT INTO mum_clients ({', '.join(columns)}) VALUES ({placeholders})"),
-                            row_data
-                        )
+                        # Insert new - use safe SQL builder
+                        sql, safe_data = build_safe_insert_sql('mum_clients', row_data)
+                        db.execute(text(sql), safe_data)
 
                     imported += 1
                     db.commit()

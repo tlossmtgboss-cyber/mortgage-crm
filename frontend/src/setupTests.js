@@ -4,12 +4,15 @@
 // learn more: https://github.com/testing-library/jest-dom
 import '@testing-library/jest-dom';
 
+// Vitest compatibility - use vi for mocks when available, fall back to jest
+const mockFn = typeof vi !== 'undefined' ? vi.fn : jest.fn;
+
 // Mock URL APIs
-global.URL.createObjectURL = jest.fn(() => 'mock-url');
-global.URL.revokeObjectURL = jest.fn();
+global.URL.createObjectURL = mockFn(() => 'mock-url');
+global.URL.revokeObjectURL = mockFn();
 
 // Mock window.open
-global.open = jest.fn();
+global.open = mockFn();
 
 // Suppress React Router deprecation warnings in tests
 const originalWarn = console.warn;

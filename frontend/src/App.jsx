@@ -95,7 +95,6 @@ const VoiceCallAnalyticsDashboard = lazy(() => import('./components/voice/CallAn
 const CallIntelligencePage = lazy(() => import('./pages/CallIntelligencePage'));
 const MobileCallIntelligencePage = lazy(() => import('./pages/MobileCallIntelligencePage'));
 const AILandingPage = lazy(() => import('./pages/AILandingPage'));
-const ListAndLockLandingPage = lazy(() => import('./pages/ListAndLockLandingPage'));
 const WorkflowDashboard = lazy(() => import('./pages/WorkflowDashboard'));
 const WorkflowStagePage = lazy(() => import('./pages/WorkflowStagePage'));
 const MarketDashboard = lazy(() => import('./pages/MarketDashboard'));
@@ -480,7 +479,6 @@ function App() {
           <Route path="/application-submitted" element={<ApplicationSubmitted />} />
           <Route path="/privacy-policy" element={<LazyPage><PrivacyPolicy /></LazyPage>} />
           <Route path="/terms-of-service" element={<LazyPage><TermsOfService /></LazyPage>} />
-          <Route path="/list-and-lock" element={<LazyPage><ListAndLockLandingPage /></LazyPage>} />
 
           {/* Realtor Portal (public - token-based auth) */}
           <Route path="/realtor-portal" element={<LazyPage><RealtorPortal /></LazyPage>} />

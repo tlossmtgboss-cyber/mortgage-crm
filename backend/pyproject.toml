@@ -46,13 +46,15 @@ filterwarnings = [
 timeout = 30
 
 [tool.coverage.run]
-source = ["agents", "services", "routes"]
+source = ["agents", "services", "routes", "auth", "core", "middleware", "database"]
 branch = true
 omit = [
     "*/tests/*",
     "*/__pycache__/*",
     "*/migrations/*",
     "*/venv/*",
+    "*/.venv/*",
+    "*/alembic/*",
 ]
 
 [tool.coverage.report]
@@ -62,9 +64,29 @@ exclude_lines = [
     "raise NotImplementedError",
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "@abstractmethod",
 ]
 show_missing = true
-fail_under = 70
+# Overall 85% coverage threshold
+fail_under = 85
+precision = 2
 
 [tool.coverage.html]
 directory = "htmlcov"
+title = "Perennia CRM Coverage Report"
+
+# Per-module coverage thresholds (enforced via CI)
+# Security modules: 95%
+# Financial calculations: 95%
+# API endpoints: 90%
+# Services: 85%
+# Note: pytest-cov doesn't support per-module fail_under natively
+# Use a custom script or CI step to enforce these
+
+[tool.coverage.paths]
+source = [
+    ".",
+    "/app",
+]

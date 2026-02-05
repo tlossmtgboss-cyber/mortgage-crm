@@ -2,13 +2,33 @@
 Background tasks package for the Perennia CRM backend.
 
 Provides:
+- celery_app: Celery application for distributed task processing
 - agent_tasks: AI agent background tasks
 - sla_tasks: SLA monitoring and alerting
 - outreach_tasks: Automated outreach tasks
 - usage_aggregation_tasks: Daily usage cost aggregation
 - calendar_sync_tasks: CRM ↔ Salesforce calendar synchronization
 - salesforce_sync_tasks: Salesforce email, calendar, and data sync
+
+Redis is REQUIRED in production for:
+- Celery task broker and result backend
+- Rate limiting
+- Session caching
+- Token blacklist
+
+To start Celery worker:
+    celery -A tasks.celery_app worker -l info
+
+To start Celery beat (scheduler):
+    celery -A tasks.celery_app beat -l info
 """
+
+from .celery_app import (
+    celery_app,
+    check_celery_health,
+    check_redis_health,
+    get_redis_url,
+)
 
 from .usage_aggregation_tasks import (
     run_daily_aggregation,
@@ -60,6 +80,11 @@ from .salesforce_sync_tasks import (
 )
 
 __all__ = [
+    # Celery app
+    "celery_app",
+    "check_celery_health",
+    "check_redis_health",
+    "get_redis_url",
     # Usage aggregation
     "run_daily_aggregation",
     "aggregate_daily_user_usage",

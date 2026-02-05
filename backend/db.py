@@ -2,6 +2,10 @@
 Database configuration and session management
 Shared by main.py and other modules to avoid circular imports
 
+NOTE: This file was renamed from database.py to db.py to avoid naming
+conflict with the database/ package. All existing imports continue to work:
+    from database import Base, SessionLocal, get_db  # Uses database/__init__.py
+
 Production settings (Railway PostgreSQL):
 - PgBouncer support: Use DATABASE_POOLED_URL for connection pooling
 - Direct connection fallback: 3 permanent + 5 overflow (max 8 total)

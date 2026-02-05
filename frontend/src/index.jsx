@@ -2,7 +2,8 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './setupConsole'; // Disable console.log in production
 import './index.css';
-import App from './App';
+// Import from modular App.jsx (routes, layouts, and providers are now separate modules)
+import App from './App.jsx';
 import ErrorBoundary from './ErrorBoundary';
 
 // Global handler for chunk load errors (stale cache after deployment)

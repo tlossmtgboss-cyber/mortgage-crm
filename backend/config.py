@@ -286,6 +286,10 @@ def validate_config():
         if "localhost" in settings.BASE_URL:
             errors.append("BASE_URL should not be localhost in production")
 
+        # Redis is required in production for Celery, caching, and rate limiting
+        if not settings.REDIS_URL or "localhost" in settings.REDIS_URL:
+            errors.append("REDIS_URL must be set to a production Redis instance")
+
     if errors:
         raise ValueError(f"Configuration errors: {'; '.join(errors)}")
 

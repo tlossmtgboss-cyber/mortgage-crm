@@ -28,6 +28,113 @@ from sqlalchemy.exc import SQLAlchemyError
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/admin/account-management", tags=["Account Management"])
 
+
+# =============================================================================
+# SQL Safety: Whitelist-validated table/column operations
+# =============================================================================
+
+# Whitelist of tables allowed for DELETE operations in admin cleanup
+ALLOWED_CLEANUP_TABLES = frozenset({
+    'tasks', 'task_instances', 'purl_tasks',
+    'team_members', 'team_member_profiles',
+    'extracted_data', 'referral_partners',
+    'user_settings', 'user_notifications', 'user_invitations',
+    'loan_officer_profiles', 'conversations', 'ai_conversation_messages',
+    'onboarding_user_profiles', 'onboarding_user_categories',
+    'onboarding_user_responsibilities', 'onboarding_user_permissions',
+    'subscription_events', 'account_subscriptions', 'account_invoices',
+    'cost_ledger_monthly', 'usage_events', 'login_events',
+    'admin_audit_log', 'impersonation_sessions', 'user_activity_stats',
+    'account_kpi_snapshots', 'account_user_roles', 'subscriber_invitations',
+    'tenant_accounts', 'users'
+})
+
+# Whitelist of columns allowed for WHERE clauses
+ALLOWED_CLEANUP_COLUMNS = frozenset({
+    'user_id', 'invited_by', 'accepted_by_user_id', 'revoked_by',
+    'actor_admin_id', 'id', 'email', 'status'
+})
+
+
+def validate_table_name(table: str) -> str:
+    """Validate table name against whitelist. Raises ValueError if invalid."""
+    if table not in ALLOWED_CLEANUP_TABLES:
+        raise ValueError(f"Table '{table}' is not in the allowed cleanup tables whitelist")
+    return table
+
+
+def validate_column_name(column: str) -> str:
+    """Validate column name against whitelist. Raises ValueError if invalid."""
+    if column not in ALLOWED_CLEANUP_COLUMNS:
+        raise ValueError(f"Column '{column}' is not in the allowed columns whitelist")
+    return column
+
+
+def safe_delete_from_table(db: Session, table: str, where_clause: str = None, params: dict = None) -> int:
+    """
+    Safely execute DELETE on a whitelisted table.
+
+    Args:
+        db: Database session
+        table: Table name (must be in whitelist)
+        where_clause: Optional WHERE clause (e.g., "user_id != :admin_id")
+        params: Parameters for the WHERE clause
+
+    Returns:
+        Number of rows deleted
+
+    Raises:
+        ValueError: If table is not in whitelist
+    """
+    validated_table = validate_table_name(table)
+
+    if where_clause:
+        sql = f"DELETE FROM {validated_table} WHERE {where_clause}"
+    else:
+        sql = f"DELETE FROM {validated_table}"
+
+    result = db.execute(text(sql), params or {})
+    return result.rowcount
+
+
+def safe_delete_with_column_condition(
+    db: Session,
+    table: str,
+    column: str,
+    operator: str,
+    param_name: str,
+    params: dict
+) -> int:
+    """
+    Safely execute DELETE with a column-based WHERE condition.
+
+    Args:
+        db: Database session
+        table: Table name (must be in whitelist)
+        column: Column name (must be in whitelist)
+        operator: SQL operator (=, !=, IS NOT NULL, etc.)
+        param_name: Parameter name for the value (e.g., "admin_id")
+        params: Parameters dict containing the param_name
+
+    Returns:
+        Number of rows deleted
+    """
+    validated_table = validate_table_name(table)
+    validated_column = validate_column_name(column)
+
+    # Validate operator to prevent injection through operator
+    allowed_operators = {'=', '!=', '<>', 'IS NULL', 'IS NOT NULL', '<', '>', '<=', '>='}
+    if operator.upper() not in allowed_operators:
+        raise ValueError(f"Operator '{operator}' is not allowed")
+
+    if 'IS' in operator.upper():
+        sql = f"DELETE FROM {validated_table} WHERE {validated_column} {operator}"
+    else:
+        sql = f"DELETE FROM {validated_table} WHERE {validated_column} {operator} :{param_name}"
+
+    result = db.execute(text(sql), params)
+    return result.rowcount
+
 # Will be set by main.py
 User = None
 get_current_user = None
@@ -500,18 +607,20 @@ async def run_account_management_migration(
 
             # Use autocommit to avoid transaction issues
             with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
-                # Delete all tasks
+                # Delete all tasks (whitelist-validated)
                 for table in ['tasks', 'task_instances', 'purl_tasks']:
                     try:
-                        result = conn.execute(text(f"DELETE FROM {table}"))
+                        validated_table = validate_table_name(table)
+                        result = conn.execute(text(f"DELETE FROM {validated_table}"))
                         results['deleted'][table] = result.rowcount
                     except SQLAlchemyError as e:
                         results['errors'].append(f"{table}: {str(e)[:50]}")
 
-                # Delete team members/profiles
+                # Delete team members/profiles (whitelist-validated)
                 for table in ['team_members', 'team_member_profiles', 'extracted_data', 'referral_partners']:
                     try:
-                        result = conn.execute(text(f"DELETE FROM {table}"))
+                        validated_table = validate_table_name(table)
+                        result = conn.execute(text(f"DELETE FROM {validated_table}"))
                         results['deleted'][table] = result.rowcount
                     except Exception:
                         pass
@@ -728,22 +837,22 @@ async def run_cleanup_migration(
             'preserved_admin': keep_admin_email
         }
 
-        # 1. Delete all tasks
+        # 1. Delete all tasks (whitelist-validated)
         task_tables = ['tasks', 'task_instances', 'purl_tasks']
         for table in task_tables:
             try:
-                result = db.execute(text(f"DELETE FROM {table}"))
-                results['deleted'][table] = result.rowcount
-                logger.info(f"Cleanup: Deleted {result.rowcount} rows from {table}")
+                rowcount = safe_delete_from_table(db, table)
+                results['deleted'][table] = rowcount
+                logger.info(f"Cleanup: Deleted {rowcount} rows from {table}")
             except SQLAlchemyError as e:
                 results['errors'].append(f"{table}: {str(e)[:100]}")
 
-        # 2. Delete team members and profiles
+        # 2. Delete team members and profiles (whitelist-validated)
         team_tables = ['team_members', 'team_member_profiles']
         for table in team_tables:
             try:
-                result = db.execute(text(f"DELETE FROM {table}"))
-                results['deleted'][table] = result.rowcount
+                rowcount = safe_delete_from_table(db, table)
+                results['deleted'][table] = rowcount
             except SQLAlchemyError as e:
                 results['errors'].append(f"{table}: {str(e)[:100]}")
 
@@ -787,10 +896,11 @@ async def run_cleanup_migration(
 
         for table, column in user_related_tables:
             try:
-                result = db.execute(text(f"""
-                    DELETE FROM {table} WHERE {column} != :admin_id
-                """), {'admin_id': admin_id})
-                results['deleted'][table] = result.rowcount
+                # Whitelist-validated table and column names
+                rowcount = safe_delete_with_column_condition(
+                    db, table, column, '!=', 'admin_id', {'admin_id': admin_id}
+                )
+                results['deleted'][table] = rowcount
             except Exception:
                 pass  # Skip missing tables
 
@@ -817,7 +927,7 @@ async def run_cleanup_migration(
         except SQLAlchemyError as e:
             results['errors'].append(f"tenant_accounts: {str(e)[:100]}")
 
-        # 9. Clean up account management tables
+        # 9. Clean up account management tables (whitelist-validated)
         account_tables = [
             'subscription_events',
             'account_subscriptions',
@@ -834,9 +944,9 @@ async def run_cleanup_migration(
 
         for table in account_tables:
             try:
-                result = db.execute(text(f"DELETE FROM {table}"))
-                if result.rowcount > 0:
-                    results['deleted'][table] = result.rowcount
+                rowcount = safe_delete_from_table(db, table)
+                if rowcount > 0:
+                    results['deleted'][table] = rowcount
             except Exception:
                 pass
 
@@ -3286,14 +3396,14 @@ async def cleanup_sample_data(
             db.rollback()
             logger.warning(f"CASCADE truncate failed, trying individual deletes: {e}")
 
-            # Fall back to individual table deletes
+            # Fall back to individual table deletes (whitelist-validated)
             for table in tables_to_clean:
                 try:
-                    # Start fresh for each table
-                    result = db.execute(text(f"DELETE FROM {table}"))
+                    # Start fresh for each table - use safe delete
+                    rowcount = safe_delete_from_table(db, table)
                     db.commit()
-                    deleted_counts[table] = result.rowcount
-                    logger.info(f"Deleted {result.rowcount} rows from {table}")
+                    deleted_counts[table] = rowcount
+                    logger.info(f"Deleted {rowcount} rows from {table}")
                 except Exception as table_e:
                     db.rollback()
                     logger.warning(f"Could not delete from {table}: {table_e}")
@@ -3372,28 +3482,31 @@ async def cleanup_users(
 
         for table, column in related_tables:
             try:
+                # Whitelist-validated table and column names
+                validated_table = validate_table_name(table)
+                validated_column = validate_column_name(column)
                 result = db.execute(text(f"""
-                    DELETE FROM {table}
-                    WHERE {column} IS NOT NULL AND {column} != :admin_id
+                    DELETE FROM {validated_table}
+                    WHERE {validated_column} IS NOT NULL AND {validated_column} != :admin_id
                 """), {'admin_id': admin_id})
                 deleted_counts[f"{table}.{column}"] = result.rowcount
             except SQLAlchemyError as e:
                 logger.warning(f"Could not clean {table}.{column}: {e}")
                 deleted_counts[f"{table}.{column}"] = f"skipped: {str(e)[:50]}"
 
-        # Also delete team_members and team_member_profiles
+        # Also delete team_members and team_member_profiles (whitelist-validated)
         for table in ['team_members', 'team_member_profiles']:
             try:
-                result = db.execute(text(f"DELETE FROM {table}"))
-                deleted_counts[table] = result.rowcount
+                rowcount = safe_delete_from_table(db, table)
+                deleted_counts[table] = rowcount
             except SQLAlchemyError as e:
                 logger.warning(f"Could not delete from {table}: {e}")
 
-        # Delete all tasks
+        # Delete all tasks (whitelist-validated)
         for table in ['tasks', 'task_instances', 'purl_tasks']:
             try:
-                result = db.execute(text(f"DELETE FROM {table}"))
-                deleted_counts[table] = result.rowcount
+                rowcount = safe_delete_from_table(db, table)
+                deleted_counts[table] = rowcount
             except SQLAlchemyError as e:
                 logger.warning(f"Could not delete from {table}: {e}")
 
@@ -3466,23 +3579,23 @@ async def cleanup_all_sample_data(
             'preserved_admin': keep_admin_email
         }
 
-        # 1. Delete all tasks
+        # 1. Delete all tasks (whitelist-validated)
         task_tables = ['tasks', 'task_instances', 'purl_tasks']
         for table in task_tables:
             try:
-                result = db.execute(text(f"DELETE FROM {table}"))
-                results['deleted'][table] = result.rowcount
-                logger.info(f"Deleted {result.rowcount} rows from {table}")
+                rowcount = safe_delete_from_table(db, table)
+                results['deleted'][table] = rowcount
+                logger.info(f"Deleted {rowcount} rows from {table}")
             except SQLAlchemyError as e:
                 results['errors'].append(f"{table}: {str(e)[:100]}")
                 logger.warning(f"Could not delete from {table}: {e}")
 
-        # 2. Delete team members and profiles
+        # 2. Delete team members and profiles (whitelist-validated)
         team_tables = ['team_members', 'team_member_profiles']
         for table in team_tables:
             try:
-                result = db.execute(text(f"DELETE FROM {table}"))
-                results['deleted'][table] = result.rowcount
+                rowcount = safe_delete_from_table(db, table)
+                results['deleted'][table] = rowcount
             except SQLAlchemyError as e:
                 results['errors'].append(f"{table}: {str(e)[:100]}")
 
@@ -3536,10 +3649,11 @@ async def cleanup_all_sample_data(
 
         for table, column in user_related_tables:
             try:
-                result = db.execute(text(f"""
-                    DELETE FROM {table} WHERE {column} != :admin_id
-                """), {'admin_id': admin_id})
-                results['deleted'][f'{table}'] = result.rowcount
+                # Whitelist-validated table and column names
+                rowcount = safe_delete_with_column_condition(
+                    db, table, column, '!=', 'admin_id', {'admin_id': admin_id}
+                )
+                results['deleted'][f'{table}'] = rowcount
             except SQLAlchemyError as e:
                 pass  # Silently skip missing tables
 
@@ -3570,7 +3684,7 @@ async def cleanup_all_sample_data(
         except SQLAlchemyError as e:
             results['errors'].append(f"tenant_accounts: {str(e)[:100]}")
 
-        # 10. Clean up account management tables
+        # 10. Clean up account management tables (whitelist-validated)
         account_tables = [
             'subscription_events',
             'account_subscriptions',
@@ -3587,9 +3701,9 @@ async def cleanup_all_sample_data(
 
         for table in account_tables:
             try:
-                result = db.execute(text(f"DELETE FROM {table}"))
-                if result.rowcount > 0:
-                    results['deleted'][table] = result.rowcount
+                rowcount = safe_delete_from_table(db, table)
+                if rowcount > 0:
+                    results['deleted'][table] = rowcount
             except Exception:
                 pass
 

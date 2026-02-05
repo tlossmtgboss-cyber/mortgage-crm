@@ -2,6 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
+import { rest } from 'msw';
 import EstimateComparison from '../pages/EstimateComparison';
 import { server } from '../mocks/server';
 
@@ -71,7 +72,7 @@ describe('EstimateComparison - Full User Flow', () => {
 describe('EstimateComparison - Error Handling', () => {
   test('handles network errors gracefully', async () => {
     server.use(
-      require('msw').rest.post(
+      rest.post(
         'http://localhost:8000/api/v1/estimate-parser/parse',
         (req, res) => {
           return res.networkError('Failed to connect');

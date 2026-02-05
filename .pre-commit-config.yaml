@@ -1,0 +1,60 @@
+# Pre-commit hooks for Mortgage CRM
+# Install: pip install pre-commit && pre-commit install
+
+repos:
+  # SQL Safety - Block potential SQL injection patterns
+  - repo: local
+    hooks:
+      - id: sql-safety-check
+        name: SQL Injection Safety Check
+        entry: python backend/scripts/check_sql_safety.py
+        language: python
+        types: [python]
+        pass_filenames: true
+        description: >
+          Blocks commits with potential SQL injection vulnerabilities:
+          - Table/column name interpolation without whitelist validation
+          - .format() usage near SQL keywords
+          Use parameterized queries with :param syntax instead.
+
+  # Standard pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: detect-private-key
+      - id: check-merge-conflict
+
+  # Python code quality
+  - repo: https://github.com/psf/black
+    rev: 24.1.1
+    hooks:
+      - id: black
+        args: ['--line-length=120']
+        exclude: ^backend/migrations/
+
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        args: ['--profile=black', '--line-length=120']
+        exclude: ^backend/migrations/
+
+  # Security scanning
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.7
+    hooks:
+      - id: bandit
+        args: ['-c', 'pyproject.toml', '-ll']
+        additional_dependencies: ['bandit[toml]']
+        exclude: ^backend/(tests|migrations|scripts)/
+
+# Configuration for bandit (in pyproject.toml, add):
+# [tool.bandit]
+# exclude_dirs = ["tests", "migrations"]
+# skips = ["B101"]  # Skip assert statements

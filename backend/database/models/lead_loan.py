@@ -1,0 +1,433 @@
+"""
+Lead and Loan Models
+
+Core CRM pipeline models for tracking leads and loans.
+Extracted from main.py as part of the architecture decomposition.
+
+NOTE: During migration, these models are duplicated in main.py.
+Once main.py is updated to import from here, remove duplicates.
+
+Usage:
+    from database.models.lead_loan import Lead, Loan
+
+    # Query leads
+    leads = db.query(Lead).filter(Lead.stage == LeadStage.NEW).all()
+"""
+
+from datetime import datetime, timezone
+from sqlalchemy import (
+    Column, Integer, String, Float, Boolean, DateTime, Date,
+    Text, ForeignKey, JSON, Enum as SQLEnum, Index
+)
+from sqlalchemy.orm import relationship, validates
+
+# Import Base from the db module
+from db import Base
+
+# Import enums from the database package
+from database.enums import (
+    LeadStage,
+    LoanStage,
+    RateLockStatus,
+    RateLockRecommendation,
+    BuyingTimelineCategory,
+    BorrowerRiskProfile,
+)
+
+
+# ============================================================================
+# LEAD MODEL
+# ============================================================================
+
+class Lead(Base):
+    """Lead/prospect in the CRM pipeline"""
+    __tablename__ = "leads"
+    __table_args__ = (
+        Index('ix_leads_owner_id', 'owner_id'),
+        Index('ix_leads_stage', 'stage'),
+        Index('ix_leads_created_at', 'created_at'),
+        Index('ix_leads_referral_partner_id', 'referral_partner_id'),
+        Index('ix_leads_owner_stage', 'owner_id', 'stage'),
+        Index('ix_leads_organization_id', 'organization_id'),
+        Index('ix_leads_org_stage', 'organization_id', 'stage'),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
+    name = Column(String, nullable=False, index=True)
+    first_name = Column(String)
+    last_name = Column(String)
+    email = Column(String, index=True)
+    phone = Column(String)
+
+    # Co-applicant
+    co_applicant_name = Column(String)
+    co_applicant_email = Column(String)
+    co_applicant_phone = Column(String)
+
+    # Communication
+    preferred_communication = Column(String)  # email, phone, text, voicemail
+
+    # Pipeline status
+    stage = Column(SQLEnum(LeadStage), default=LeadStage.NEW)
+    source = Column(String)
+    organization_code = Column(String)  # Branch/organization identifier
+    referral_partner_id = Column(Integer, ForeignKey("referral_partners.id"))
+
+    # AI scoring
+    ai_score = Column(Integer, default=50)
+    sentiment = Column(String, default="neutral")
+    next_action = Column(Text)
+
+    # Loan qualification
+    loan_type = Column(String)
+    preapproval_amount = Column(Float)
+    credit_score = Column(Integer)
+    debt_to_income = Column(Float)
+
+    # Assignment
+    owner_id = Column(Integer, ForeignKey("users.id"))
+    last_contact = Column(DateTime)
+    loan_number = Column(String)
+    notes = Column(Text)
+
+    # Property Information
+    address = Column(String)
+    city = Column(String)
+    state = Column(String)
+    zip_code = Column(String)
+    property_type = Column(String)
+    property_value = Column(Float)
+    down_payment = Column(Float)
+
+    # Financial Information
+    employment_status = Column(String)
+    annual_income = Column(Float)
+    monthly_debts = Column(Float)
+    first_time_buyer = Column(Boolean, default=False)
+
+    # Loan Details
+    loan_amount = Column(Float)
+    interest_rate = Column(Float)
+    loan_term = Column(Integer)
+    apr = Column(Float)
+    points = Column(Float)
+    lock_date = Column(DateTime)
+    lock_expiration = Column(DateTime)
+    closing_date = Column(DateTime)
+    lender = Column(String)
+    loan_officer = Column(String)
+    processor = Column(String)
+    underwriter = Column(String)
+    appraisal_value = Column(Float)
+    ltv = Column(Float)
+    cltv = Column(Float)
+    dti = Column(Float)
+    dti_front = Column(Float)
+    dti_back = Column(Float)
+    program = Column(String)
+    status_date = Column(DateTime)
+
+    # SLA Milestone Dates
+    lead_received_date = Column(DateTime)
+    first_contact_attempt_date = Column(DateTime)
+    first_contact_successful_date = Column(DateTime)
+    lead_qualification_date = Column(DateTime)
+    application_link_sent_date = Column(DateTime)
+    application_started_date = Column(DateTime)
+    application_completed_date = Column(DateTime)
+    credit_pulled_date = Column(DateTime)
+    preapproval_submission_date = Column(DateTime)
+    preapproval_issued_date = Column(DateTime)
+    preapproval_expiration_date = Column(DateTime)
+    realtor_referral_date = Column(DateTime)
+    rate_watch_enrollment_date = Column(DateTime)
+    property_address = Column(String)
+
+    # PRD Section 4.1 - Rate Lock Intelligence
+    buying_timeline_category = Column(SQLEnum(BuyingTimelineCategory))
+    borrower_risk_profile = Column(SQLEnum(BorrowerRiskProfile))
+    target_payment = Column(Float)
+    expected_purchase_date = Column(DateTime)
+
+    # PRD Section 4.3 - Referral Fields
+    referral_score = Column(Integer, default=0)
+    referral_source_score = Column(Integer, default=0)
+    employment_referral_flag = Column(Boolean, default=False)
+    manager_flag = Column(Boolean, default=False)
+    employees_managed = Column(Integer, default=0)
+    leadership_level = Column(String)
+    company_size = Column(Integer)
+    employer_name = Column(String)
+    industry = Column(String)
+    circle_of_cash_flow_map = Column(JSON)
+
+    # Workflow tracking
+    current_workflow_id = Column(String)
+    workflow_day = Column(Integer, default=0)
+    last_workflow_action = Column(DateTime)
+    nurture_month = Column(Integer, default=0)
+    stage_changed_at = Column(DateTime)
+
+    # Salesforce Sync - Property Details
+    occupancy_type = Column(String)
+    property_county = Column(String)
+    property_ownership_type = Column(String)
+    property_units = Column(Integer)
+
+    # Salesforce Sync - Financial Details
+    rate_type = Column(String)
+    monthly_payment = Column(Float)
+    property_tax = Column(Float)
+    hazard_insurance = Column(Float)
+    mortgage_insurance = Column(Float)
+    hoa_amount = Column(Float)
+    origination_fee = Column(Float)
+    estimated_prepaid_interest = Column(Float)
+    index_rate = Column(Float)
+    margin = Column(Float)
+
+    # Salesforce Sync - LTV/Purpose
+    loan_purpose = Column(String)
+    file_state = Column(String)
+
+    # Salesforce Sync - 2nd Loan
+    second_loan_amount = Column(Float)
+    second_loan_rate = Column(Float)
+    second_loan_payment = Column(Float)
+
+    # Salesforce Sync - Housing Expenses
+    present_housing_expense = Column(Float)
+    proposed_housing_expense = Column(Float)
+    present_monthly_payment = Column(Float)
+    proposed_monthly_payment = Column(Float)
+
+    # Salesforce Integration
+    salesforce_id = Column(String)
+    meta_data = Column(JSON)
+
+    # Metadata
+    user_metadata = Column(JSON)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    organization = relationship("Organization", backref="leads")
+    owner = relationship("User", back_populates="leads")
+    referral_partner = relationship("ReferralPartner", back_populates="leads")
+    activities = relationship("Activity", back_populates="lead")
+    stage_history = relationship("StageHistory", back_populates="lead", foreign_keys="StageHistory.lead_id")
+
+
+# ============================================================================
+# LOAN MODEL
+# ============================================================================
+
+class Loan(Base):
+    """Loan/application in the processing pipeline"""
+    __tablename__ = "loans"
+    __table_args__ = (
+        Index('ix_loans_loan_officer_id', 'loan_officer_id'),
+        Index('ix_loans_stage', 'stage'),
+        Index('ix_loans_funded_date', 'funded_date'),
+        Index('ix_loans_created_at', 'created_at'),
+        Index('ix_loans_officer_stage', 'loan_officer_id', 'stage'),
+        Index('ix_loans_organization_id', 'organization_id'),
+        Index('ix_loans_org_stage', 'organization_id', 'stage'),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)
+    loan_number = Column(String, unique=True, index=True, nullable=False)
+
+    # Borrower info
+    borrower_name = Column(String, nullable=False)
+    borrower_email = Column(String)
+    borrower_phone = Column(String)
+    preferred_communication = Column(String)
+    coborrower_name = Column(String)
+    co_borrower_email = Column(String)
+
+    # Pipeline status
+    stage = Column(String, default="DISCLOSED")
+    program = Column(String)
+    loan_type = Column(String)
+
+    # Financials
+    amount = Column(Float, nullable=False)
+    purchase_price = Column(Float)
+    down_payment = Column(Float)
+    rate = Column(Float)
+    term = Column(Integer, default=360)
+
+    # Property
+    property_address = Column(String)
+    property_city = Column(String)
+    property_state = Column(String)
+    property_zip = Column(String)
+
+    # Key dates
+    lock_date = Column(DateTime)
+    closing_date = Column(DateTime)
+    funded_date = Column(DateTime)
+
+    # Team
+    loan_officer_id = Column(Integer, ForeignKey("users.id"))
+    processor = Column(String)
+    underwriter = Column(String)
+    realtor_agent = Column(String)
+    title_company = Column(String)
+    lender = Column(String)
+    loan_officer_name = Column(String)
+    loan_officer_email = Column(String)
+    processor_email = Column(String)
+    underwriter_email = Column(String)
+    closer = Column(String)
+    closer_email = Column(String)
+
+    # SLA tracking
+    days_in_stage = Column(Integer, default=0)
+    sla_status = Column(String, default="on-track")
+    milestones = Column(JSON)
+    ai_insights = Column(Text)
+    predicted_close_date = Column(DateTime)
+    risk_score = Column(Integer, default=0)
+    user_metadata = Column(JSON)
+
+    # Appraisal tracking
+    appraisal_ordered_date = Column(DateTime)
+    appraisal_scheduled_date = Column(DateTime)
+    appraisal_completed_date = Column(DateTime)
+    appraisal_value = Column(Float)
+    appraisal_received_date = Column(DateTime)
+    appraisal_docs_expire_date = Column(DateTime)
+
+    # Rate lock fields
+    lock_expiration_date = Column(DateTime)
+    rate_lock_status = Column(SQLEnum(RateLockStatus), default=RateLockStatus.NOT_ELIGIBLE)
+    rate_lock_recommendation = Column(SQLEnum(RateLockRecommendation))
+    lock_term_days = Column(Integer)
+    float_down_available = Column(Boolean, default=False)
+    float_down_terms = Column(String)
+    extension_cost_estimate = Column(Float)
+    volatility_score = Column(Integer, default=50)
+    borrower_risk_profile = Column(SQLEnum(BorrowerRiskProfile))
+    lock_score = Column(Integer)
+    lock_decision_date = Column(DateTime)
+    lock_decision_notes = Column(Text)
+    last_rate_check = Column(DateTime)
+    rate_lock_history = Column(JSON)
+
+    # Disclosure milestone dates
+    initial_disclosures_sent_date = Column(DateTime)
+    initial_disclosures_signed_date = Column(DateTime)
+    cd_received_signed_date = Column(DateTime)
+    final_closing_package_sent_date = Column(DateTime)
+
+    # Under Contract Workflow Fields
+    contract_received_date = Column(DateTime)
+    loan_estimate_sent_date = Column(DateTime)
+    conditional_approval_date = Column(DateTime)
+
+    # AMR tracking
+    last_amr_date = Column(DateTime)
+    next_amr_date = Column(DateTime)
+    refi_opportunity_score = Column(Integer, default=0)
+
+    # Workflow tracking
+    current_workflow_id = Column(String)
+    last_workflow_action = Column(DateTime)
+    stage_changed_at = Column(DateTime)
+
+    # SLA Date Fields - Jungo Custom Byte Mappings
+    prospect_date = Column(DateTime)
+    application_date = Column(DateTime)
+    le_pending_date = Column(DateTime)
+    credit_only_date = Column(DateTime)
+    file_received_date = Column(DateTime)
+    preapproval_date = Column(DateTime)
+    uw_received_date = Column(DateTime)
+    conditions_for_review_date = Column(DateTime)
+    suspended_date = Column(DateTime)
+    loan_approved_date = Column(DateTime)
+    approved_not_accepted_date = Column(DateTime)
+    approval_expires_date = Column(DateTime)
+    cd_requested_date = Column(DateTime)
+    cd_sent_to_borrower_date = Column(DateTime)
+    cd_acknowledged_date = Column(DateTime)
+    clear_to_close_date = Column(DateTime)
+    docs_ordered_date = Column(DateTime)
+    docs_out_date = Column(DateTime)
+    credit_docs_expire_date = Column(DateTime)
+    scheduled_closing_date = Column(DateTime)
+    scheduled_funding_date = Column(DateTime)
+    funds_ordered_date = Column(DateTime)
+    funds_sent_date = Column(DateTime)
+    first_payment_date = Column(DateTime)
+    investor_purchased_date = Column(DateTime)
+    withdrawn_date = Column(DateTime)
+
+    # Salesforce Sync - Property
+    property_type = Column(String)
+    occupancy_type = Column(String)
+    property_county = Column(String)
+    property_ownership_type = Column(String)
+    property_units = Column(Integer)
+
+    # Salesforce Sync - Financials
+    rate_type = Column(String)
+    monthly_payment = Column(Float)
+    property_tax = Column(Float)
+    hazard_insurance = Column(Float)
+    mortgage_insurance = Column(Float)
+    hoa_amount = Column(Float)
+    origination_fee = Column(Float)
+    estimated_prepaid_interest = Column(Float)
+    points = Column(Float)
+    index_rate = Column(Float)
+    margin = Column(Float)
+    ltv = Column(Float)
+    cltv = Column(Float)
+    loan_purpose = Column(String)
+    file_state = Column(String)
+
+    # Salesforce Sync - 2nd Loan
+    second_loan_amount = Column(Float)
+    second_loan_rate = Column(Float)
+    second_loan_payment = Column(Float)
+
+    # Salesforce Sync - Housing Expenses
+    present_housing_expense = Column(Float)
+    proposed_housing_expense = Column(Float)
+    present_monthly_payment = Column(Float)
+    proposed_monthly_payment = Column(Float)
+
+    # Timestamps
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    @validates('stage')
+    def validate_stage(self, key, value):
+        """Convert enum values to plain strings for the String column."""
+        if value is None:
+            return value
+        if hasattr(value, 'value'):
+            return value.value
+        return str(value)
+
+    # Relationships
+    organization = relationship("Organization", backref="loans")
+    loan_officer = relationship("User", back_populates="loans")
+    tasks = relationship("AITask", back_populates="loan")
+    activities = relationship("Activity", back_populates="loan")
+    stage_history = relationship("StageHistory", back_populates="loan", foreign_keys="StageHistory.loan_id")
+
+
+# ============================================================================
+# EXPORTS
+# ============================================================================
+
+__all__ = [
+    "Lead",
+    "Loan",
+]
