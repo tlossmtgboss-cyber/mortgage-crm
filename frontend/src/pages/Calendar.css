@@ -879,3 +879,31 @@
 .appointment-item.clickable:hover .appointment-edit-hint {
   opacity: 1;
 }
+
+/* Error Banner */
+.calendar-error-banner {
+  background-color: #fee2e2;
+  border: 1px solid #ef4444;
+  color: #b91c1c;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.calendar-error-banner button {
+  background: #ef4444;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s ease;
+}
+
+.calendar-error-banner button:hover {
+  background: #dc2626;
+}
