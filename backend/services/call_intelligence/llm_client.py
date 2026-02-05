@@ -10,12 +10,137 @@ import json
 import logging
 import asyncio
 import re
+import time
 from typing import Dict, Any, Optional, List
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
 from enum import Enum
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# CUSTOM EXCEPTIONS
+# =============================================================================
+
+class LLMError(Exception):
+    """Base exception for LLM-related errors."""
+    pass
+
+
+class LLMTimeoutError(LLMError):
+    """Raised when an LLM request times out."""
+    pass
+
+
+class LLMRateLimitError(LLMError):
+    """Raised when rate limit is exceeded."""
+    pass
+
+
+class LLMAPIError(LLMError):
+    """Raised for API-specific errors (auth, invalid request, etc.)."""
+    pass
+
+
+class LLMParseError(LLMError):
+    """Raised when LLM response cannot be parsed."""
+    pass
+
+
+# =============================================================================
+# RATE LIMITER
+# =============================================================================
+
+class TokenBucketRateLimiter:
+    """
+    Simple token bucket rate limiter for LLM API calls.
+
+    Limits requests to prevent hitting API rate limits and avoid
+    thundering herd problems during retries.
+    """
+
+    def __init__(
+        self,
+        requests_per_minute: int = 60,
+        burst_size: int = 10,
+    ):
+        """
+        Initialize rate limiter.
+
+        Args:
+            requests_per_minute: Sustained request rate limit
+            burst_size: Maximum burst of requests allowed
+        """
+        self.requests_per_minute = requests_per_minute
+        self.burst_size = burst_size
+        self.tokens = float(burst_size)
+        self.last_update = time.monotonic()
+        self._lock = asyncio.Lock()
+
+    async def acquire(self, timeout: float = 30.0) -> bool:
+        """
+        Acquire a token to make a request.
+
+        Args:
+            timeout: Maximum time to wait for a token
+
+        Returns:
+            True if token acquired, False if timed out
+
+        Raises:
+            LLMRateLimitError if rate limit exceeded and timeout
+        """
+        start_time = time.monotonic()
+
+        async with self._lock:
+            while True:
+                now = time.monotonic()
+                # Replenish tokens based on time elapsed
+                elapsed = now - self.last_update
+                self.tokens = min(
+                    self.burst_size,
+                    self.tokens + elapsed * (self.requests_per_minute / 60.0)
+                )
+                self.last_update = now
+
+                if self.tokens >= 1.0:
+                    self.tokens -= 1.0
+                    return True
+
+                # Check timeout
+                if now - start_time >= timeout:
+                    raise LLMRateLimitError(
+                        f"Rate limit exceeded, waited {timeout}s for token"
+                    )
+
+                # Wait for token replenishment
+                wait_time = min(
+                    (1.0 - self.tokens) / (self.requests_per_minute / 60.0),
+                    timeout - (now - start_time)
+                )
+                await asyncio.sleep(max(0.1, wait_time))
+
+
+# Global rate limiters (one per provider)
+_rate_limiters: Dict[str, TokenBucketRateLimiter] = {}
+
+
+def get_rate_limiter(provider: str) -> TokenBucketRateLimiter:
+    """Get or create a rate limiter for a provider."""
+    if provider not in _rate_limiters:
+        # Default limits (can be tuned per provider)
+        if provider == "anthropic":
+            _rate_limiters[provider] = TokenBucketRateLimiter(
+                requests_per_minute=50,  # Conservative for Anthropic
+                burst_size=5,
+            )
+        else:
+            _rate_limiters[provider] = TokenBucketRateLimiter(
+                requests_per_minute=60,  # OpenAI default tier
+                burst_size=10,
+            )
+    return _rate_limiters[provider]
 
 
 class LLMProvider(str, Enum):
@@ -241,9 +366,13 @@ Respond ONLY with the JSON object, no additional text."""
         """Extract structured data using Claude."""
         client = self._get_client()
         prompt = self._build_extraction_prompt(schema, transcript, existing_data)
+        rate_limiter = get_rate_limiter("anthropic")
 
         for attempt in range(self.config.max_retries):
             try:
+                # Acquire rate limit token before making request
+                await rate_limiter.acquire(timeout=self.config.timeout)
+
                 response = await asyncio.wait_for(
                     client.messages.create(
                         model=self.config.model,
@@ -280,14 +409,34 @@ Respond ONLY with the JSON object, no additional text."""
                     await asyncio.sleep(2 ** attempt)  # Exponential backoff
                 else:
                     logger.error(f"LLM extraction failed after {self.config.max_retries} attempts (timeout)")
+                    raise LLMTimeoutError(f"Anthropic extraction timed out after {self.config.max_retries} attempts")
+            except LLMRateLimitError:
+                logger.warning(f"Rate limit hit on attempt {attempt + 1}")
+                if attempt < self.config.max_retries - 1:
+                    await asyncio.sleep(2 ** attempt)
+                else:
                     raise
+            except json.JSONDecodeError as e:
+                logger.warning(f"JSON decode error on attempt {attempt + 1}: {e}")
+                if attempt < self.config.max_retries - 1:
+                    await asyncio.sleep(2 ** attempt)
+                else:
+                    raise LLMParseError(f"Failed to parse Anthropic response as JSON: {e}")
+            except (ConnectionError, OSError) as e:
+                # Network-related errors
+                logger.warning(f"Network error on attempt {attempt + 1}: {e}")
+                if attempt < self.config.max_retries - 1:
+                    await asyncio.sleep(2 ** attempt)
+                else:
+                    raise LLMAPIError(f"Network error calling Anthropic API: {e}")
             except Exception as e:
-                logger.warning(f"LLM extraction attempt {attempt + 1} failed: {e}")
+                # Log the exception type for debugging
+                logger.warning(f"LLM extraction attempt {attempt + 1} failed ({type(e).__name__}): {e}")
                 if attempt < self.config.max_retries - 1:
                     await asyncio.sleep(2 ** attempt)  # Exponential backoff
                 else:
                     logger.error(f"LLM extraction failed after {self.config.max_retries} attempts")
-                    raise
+                    raise LLMAPIError(f"Anthropic API error: {e}")
 
         return {"extractions": {}, "notes": "Extraction failed"}
 
@@ -404,6 +553,7 @@ class OpenAIClient(BaseLLMClient):
     ) -> Dict[str, Any]:
         """Extract structured data using GPT."""
         client = self._get_client()
+        rate_limiter = get_rate_limiter("openai")
 
         # Build the prompt (reuse Anthropic's prompt builder logic)
         anthropic_client = AnthropicClient(self.config)
@@ -411,6 +561,9 @@ class OpenAIClient(BaseLLMClient):
 
         for attempt in range(self.config.max_retries):
             try:
+                # Acquire rate limit token before making request
+                await rate_limiter.acquire(timeout=self.config.timeout)
+
                 response = await asyncio.wait_for(
                     client.chat.completions.create(
                         model=self.config.model,
@@ -446,13 +599,27 @@ class OpenAIClient(BaseLLMClient):
                 if attempt < self.config.max_retries - 1:
                     await asyncio.sleep(2 ** attempt)
                 else:
-                    raise
-            except Exception as e:
-                logger.warning(f"OpenAI extraction attempt {attempt + 1} failed: {e}")
+                    raise LLMTimeoutError(f"OpenAI extraction timed out after {self.config.max_retries} attempts")
+            except LLMRateLimitError:
+                logger.warning(f"Rate limit hit on attempt {attempt + 1}")
                 if attempt < self.config.max_retries - 1:
                     await asyncio.sleep(2 ** attempt)
                 else:
                     raise
+            except (ConnectionError, OSError) as e:
+                # Network-related errors
+                logger.warning(f"Network error on attempt {attempt + 1}: {e}")
+                if attempt < self.config.max_retries - 1:
+                    await asyncio.sleep(2 ** attempt)
+                else:
+                    raise LLMAPIError(f"Network error calling OpenAI API: {e}")
+            except Exception as e:
+                # Log the exception type for debugging
+                logger.warning(f"OpenAI extraction attempt {attempt + 1} failed ({type(e).__name__}): {e}")
+                if attempt < self.config.max_retries - 1:
+                    await asyncio.sleep(2 ** attempt)
+                else:
+                    raise LLMAPIError(f"OpenAI API error: {e}")
 
         return {"extractions": {}, "notes": "Extraction failed"}
 

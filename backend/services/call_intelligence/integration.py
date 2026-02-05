@@ -6,12 +6,14 @@ Automatically processes call transcripts when calls end.
 """
 
 import logging
+from contextlib import contextmanager
 from datetime import datetime
-from typing import Optional, Dict, Any, List, TYPE_CHECKING
+from typing import Optional, Dict, Any, List, TYPE_CHECKING, Generator
 import asyncio
 
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError, OperationalError
 
 from .processor import CallIntelligenceProcessor
 from .data_contracts import (
@@ -30,6 +32,92 @@ if TYPE_CHECKING:
     from services.application_engine import ApplicationAuditResponse
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# CUSTOM EXCEPTIONS
+# =============================================================================
+
+class DatabaseError(Exception):
+    """Base exception for database-related errors in Call Intelligence."""
+    pass
+
+
+class DatabaseConnectionError(DatabaseError):
+    """Raised when database connection fails."""
+    pass
+
+
+class DatabaseTransactionError(DatabaseError):
+    """Raised when a transaction fails."""
+    pass
+
+
+# =============================================================================
+# TRANSACTION MANAGEMENT
+# =============================================================================
+
+@contextmanager
+def db_transaction(db: Session, operation_name: str = "database operation") -> Generator[Session, None, None]:
+    """
+    Context manager for consistent database transaction handling.
+
+    Provides:
+    - Automatic commit on success
+    - Automatic rollback on failure
+    - Consistent error logging with PII masking
+    - Specific exception types for different failure modes
+
+    Usage:
+        with db_transaction(session, "save call results") as db:
+            db.execute(...)
+            # Auto-commits on success, auto-rollbacks on failure
+
+    Args:
+        db: SQLAlchemy session
+        operation_name: Human-readable operation name for logging
+
+    Yields:
+        The database session
+
+    Raises:
+        DatabaseConnectionError: For connection/operational errors
+        DatabaseTransactionError: For integrity/transaction errors
+        DatabaseError: For other database errors
+    """
+    try:
+        yield db
+        db.commit()
+    except OperationalError as e:
+        # Connection issues, deadlocks, etc.
+        _safe_rollback(db)
+        safe_error = mask_pii_for_logging(str(e))
+        logger.error(f"Database connection error during {operation_name}: {safe_error}")
+        raise DatabaseConnectionError(f"Connection error during {operation_name}: {safe_error}")
+    except IntegrityError as e:
+        # Constraint violations, duplicate keys, etc.
+        _safe_rollback(db)
+        safe_error = mask_pii_for_logging(str(e))
+        logger.error(f"Database integrity error during {operation_name}: {safe_error}")
+        raise DatabaseTransactionError(f"Integrity error during {operation_name}: {safe_error}")
+    except SQLAlchemyError as e:
+        # Other SQLAlchemy errors
+        _safe_rollback(db)
+        safe_error = mask_pii_for_logging(str(e))
+        logger.error(f"Database error during {operation_name}: {safe_error}")
+        raise DatabaseError(f"Database error during {operation_name}: {safe_error}")
+    except Exception as e:
+        # Non-database errors - still rollback but re-raise original
+        _safe_rollback(db)
+        raise
+
+
+def _safe_rollback(db: Session) -> None:
+    """Safely rollback a database session, logging any rollback errors."""
+    try:
+        db.rollback()
+    except Exception as rollback_err:
+        logger.debug(f"Rollback also failed: {rollback_err}")
 
 
 def _safe_get_nested(data: Dict[str, Any], *keys: str, default: Any = None) -> Any:
@@ -239,70 +327,70 @@ class CallIntelligenceIntegration:
         tasks: List[Any],
     ) -> None:
         """Create tasks in the task system (synchronous DB operations)."""
+        from datetime import timedelta
+
+        if not self.db:
+            logger.debug("No database session available, skipping task creation")
+            return
+
         try:
-            from datetime import timedelta
+            with db_transaction(self.db, f"create tasks for loan {loan_id}"):
+                for task in tasks:
+                    # Calculate due date
+                    due_date = datetime.utcnow() + timedelta(days=task.days_until_due)
 
-            for task in tasks:
-                # Calculate due date
-                due_date = datetime.utcnow() + timedelta(days=task.days_until_due)
+                    # Map assignee to user
+                    assigned_to_id = None
+                    if task.assignee.value == "pa":
+                        # Get production assistant for the loan
+                        result = self.db.execute(
+                            text("""
+                                SELECT processor_id FROM loans WHERE id = :loan_id
+                            """),
+                            {"loan_id": loan_id}
+                        ).fetchone()
+                        if result:
+                            assigned_to_id = result[0]
+                    elif task.assignee.value == "lo":
+                        # Get loan officer for the loan
+                        result = self.db.execute(
+                            text("""
+                                SELECT loan_officer_id FROM loans WHERE id = :loan_id
+                            """),
+                            {"loan_id": loan_id}
+                        ).fetchone()
+                        if result:
+                            assigned_to_id = result[0]
 
-                # Map assignee to user
-                assigned_to_id = None
-                if task.assignee.value == "pa":
-                    # Get production assistant for the loan
-                    result = self.db.execute(
+                    # Create task
+                    self.db.execute(
                         text("""
-                            SELECT processor_id FROM loans WHERE id = :loan_id
+                            INSERT INTO tasks
+                            (organization_id, title, description, status, priority,
+                             due_date, loan_id, owner_id, related_type, created_at, updated_at)
+                            VALUES
+                            (:org_id, :title, :description, 'pending', :priority,
+                             :due_date, :loan_id, :owner_id, :related_type, :created_at, :updated_at)
                         """),
-                        {"loan_id": loan_id}
-                    ).fetchone()
-                    if result:
-                        assigned_to_id = result[0]
-                elif task.assignee.value == "lo":
-                    # Get loan officer for the loan
-                    result = self.db.execute(
-                        text("""
-                            SELECT loan_officer_id FROM loans WHERE id = :loan_id
-                        """),
-                        {"loan_id": loan_id}
-                    ).fetchone()
-                    if result:
-                        assigned_to_id = result[0]
+                        {
+                            "org_id": organization_id,
+                            "title": task.title,
+                            "description": task.description,
+                            "priority": task.priority.value,
+                            "due_date": due_date,
+                            "loan_id": loan_id,
+                            "owner_id": assigned_to_id,
+                            "related_type": f"application_engine_{task.module.value}",
+                            "created_at": datetime.utcnow(),
+                            "updated_at": datetime.utcnow(),
+                        }
+                    )
 
-                # Create task
-                self.db.execute(
-                    text("""
-                        INSERT INTO tasks
-                        (organization_id, title, description, status, priority,
-                         due_date, loan_id, owner_id, related_type, created_at, updated_at)
-                        VALUES
-                        (:org_id, :title, :description, 'pending', :priority,
-                         :due_date, :loan_id, :owner_id, :related_type, :created_at, :updated_at)
-                    """),
-                    {
-                        "org_id": organization_id,
-                        "title": task.title,
-                        "description": task.description,
-                        "priority": task.priority.value,
-                        "due_date": due_date,
-                        "loan_id": loan_id,
-                        "owner_id": assigned_to_id,
-                        "related_type": f"application_engine_{task.module.value}",
-                        "created_at": datetime.utcnow(),
-                        "updated_at": datetime.utcnow(),
-                    }
-                )
+                logger.info(f"Created {len(tasks)} tasks for loan {loan_id}")
 
-            self.db.commit()
-            logger.info(f"Created {len(tasks)} tasks for loan {loan_id}")
-
-        except Exception as e:
-            safe_error = mask_pii_for_logging(str(e))
-            logger.exception(f"Error creating tasks for loan {loan_id}: {safe_error}")
-            try:
-                self.db.rollback()
-            except Exception as rollback_err:
-                logger.debug(f"Rollback also failed: {rollback_err}")
+        except DatabaseError as e:
+            # Already logged by db_transaction context manager
+            pass
 
     def _save_call_results(
         self,
@@ -314,54 +402,54 @@ class CallIntelligenceIntegration:
         metadata: Dict[str, Any],
     ) -> None:
         """Save call processing results to database (synchronous DB operations)."""
+        import json
+
+        if not self.db:
+            logger.debug("No database session available, skipping result save")
+            return
+
         try:
-            import json
+            with db_transaction(self.db, f"save call results for {call_id}"):
+                # Save to call_intelligence_results table
+                self.db.execute(
+                    text("""
+                        INSERT INTO call_intelligence_results
+                        (call_id, loan_id, organization_id, extractions,
+                         total_extractions, high_confidence_count, low_confidence_count,
+                         processing_time_ms, application_status, application_completion,
+                         created_at)
+                        VALUES
+                        (:call_id, :loan_id, :org_id, :extractions,
+                         :total, :high_conf, :low_conf,
+                         :processing_time, :app_status, :app_completion,
+                         :created_at)
+                        ON CONFLICT (call_id) DO UPDATE SET
+                            extractions = :extractions,
+                            total_extractions = :total,
+                            high_confidence_count = :high_conf,
+                            low_confidence_count = :low_conf,
+                            application_status = :app_status,
+                            application_completion = :app_completion,
+                            updated_at = :created_at
+                    """),
+                    {
+                        "call_id": call_id,
+                        "loan_id": loan_id,
+                        "org_id": organization_id,
+                        "extractions": json.dumps(ci_response.to_application_engine_format()),
+                        "total": ci_response.total_extractions,
+                        "high_conf": ci_response.high_confidence_count,
+                        "low_conf": ci_response.low_confidence_count,
+                        "processing_time": ci_response.processing_time_ms,
+                        "app_status": audit_response.overall_status.value if audit_response else None,
+                        "app_completion": audit_response.overall_completion if audit_response else None,
+                        "created_at": datetime.utcnow(),
+                    }
+                )
 
-            # Save to call_intelligence_results table
-            self.db.execute(
-                text("""
-                    INSERT INTO call_intelligence_results
-                    (call_id, loan_id, organization_id, extractions,
-                     total_extractions, high_confidence_count, low_confidence_count,
-                     processing_time_ms, application_status, application_completion,
-                     created_at)
-                    VALUES
-                    (:call_id, :loan_id, :org_id, :extractions,
-                     :total, :high_conf, :low_conf,
-                     :processing_time, :app_status, :app_completion,
-                     :created_at)
-                    ON CONFLICT (call_id) DO UPDATE SET
-                        extractions = :extractions,
-                        total_extractions = :total,
-                        high_confidence_count = :high_conf,
-                        low_confidence_count = :low_conf,
-                        application_status = :app_status,
-                        application_completion = :app_completion,
-                        updated_at = :created_at
-                """),
-                {
-                    "call_id": call_id,
-                    "loan_id": loan_id,
-                    "org_id": organization_id,
-                    "extractions": json.dumps(ci_response.to_application_engine_format()),
-                    "total": ci_response.total_extractions,
-                    "high_conf": ci_response.high_confidence_count,
-                    "low_conf": ci_response.low_confidence_count,
-                    "processing_time": ci_response.processing_time_ms,
-                    "app_status": audit_response.overall_status.value if audit_response else None,
-                    "app_completion": audit_response.overall_completion if audit_response else None,
-                    "created_at": datetime.utcnow(),
-                }
-            )
-            self.db.commit()
-
-        except Exception as e:
-            safe_error = mask_pii_for_logging(str(e))
-            logger.warning(f"Error saving call results for {call_id}: {safe_error}")
-            try:
-                self.db.rollback()
-            except Exception as rollback_err:
-                logger.debug(f"Rollback also failed: {rollback_err}")
+        except DatabaseError as e:
+            # Already logged by db_transaction context manager
+            pass
 
 
 # =============================================================================
