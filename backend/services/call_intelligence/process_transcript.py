@@ -623,33 +623,48 @@ async def process_transcript_and_create_lead(
     }
 
 
-def print_extraction_report(result: Dict[str, Any]):
-    """Print a formatted extraction report."""
-    print("\n" + "=" * 70)
-    print("CALL INTELLIGENCE EXTRACTION REPORT")
-    print("=" * 70)
+def format_extraction_report(result: Dict[str, Any]) -> str:
+    """
+    Format extraction results as a human-readable report string.
 
-    print(f"\nSegments Processed: {result['segments_processed']}")
+    Args:
+        result: Dict from process_transcript_and_create_lead() containing:
+            - segments_processed: Number of transcript segments
+            - speaker_distribution: Dict of role -> segment count
+            - lead_id: Created lead ID (optional)
+            - extraction_summary: Dict of agent -> extraction details
+            - lead_data: Mapped lead fields
+
+    Returns:
+        Formatted multi-line string report suitable for logging or display
+    """
+    lines = []
+    lines.append("")
+    lines.append("=" * 70)
+    lines.append("CALL INTELLIGENCE EXTRACTION REPORT")
+    lines.append("=" * 70)
+
+    lines.append(f"\nSegments Processed: {result['segments_processed']}")
 
     # Show speaker distribution
     if result.get('speaker_distribution'):
-        print("\nSpeaker Roles Detected:")
+        lines.append("\nSpeaker Roles Detected:")
         for role, count in result['speaker_distribution'].items():
-            print(f"  - {role}: {count} segments")
+            lines.append(f"  - {role}: {count} segments")
 
     if result.get('lead_id'):
-        print(f"\nLead Created: ID {result['lead_id']}")
+        lines.append(f"\nLead Created: ID {result['lead_id']}")
 
-    print("\n" + "-" * 70)
-    print("EXTRACTION RESULTS BY AGENT")
-    print("-" * 70)
+    lines.append("\n" + "-" * 70)
+    lines.append("EXTRACTION RESULTS BY AGENT")
+    lines.append("-" * 70)
 
     for agent_name, summary in result['extraction_summary'].items():
-        print(f"\n### {agent_name.upper()} ({summary['fields_extracted']} fields)")
+        lines.append(f"\n### {agent_name.upper()} ({summary['fields_extracted']} fields)")
 
         for ext in summary['extractions']:
             conf = ext['confidence']
-            conf_indicator = "✓" if conf >= 80 else "?" if conf >= 60 else "⚠"
+            conf_indicator = "[OK]" if conf >= 80 else "[??]" if conf >= 60 else "[!!]"
             method = ext.get('method', 'unknown')
             method_tag = f"[{method}]" if method else ""
 
@@ -658,14 +673,14 @@ def print_extraction_report(result: Dict[str, Any]):
             if isinstance(value, str) and len(value) > 50:
                 value = value[:47] + "..."
 
-            print(f"  {conf_indicator} {ext['field']}: {value} (conf: {conf}) {method_tag}")
+            lines.append(f"  {conf_indicator} {ext['field']}: {value} (conf: {conf}) {method_tag}")
 
         if summary['warnings']:
-            print(f"  Warnings: {summary['warnings']}")
+            lines.append(f"  Warnings: {summary['warnings']}")
 
-    print("\n" + "-" * 70)
-    print("LEAD DATA (Mapped Fields)")
-    print("-" * 70)
+    lines.append("\n" + "-" * 70)
+    lines.append("LEAD DATA (Mapped Fields)")
+    lines.append("-" * 70)
 
     lead_data = result['lead_data']
 
@@ -682,14 +697,47 @@ def print_extraction_report(result: Dict[str, Any]):
     for group_name, fields in groups.items():
         group_data = {f: lead_data.get(f) for f in fields if f in lead_data}
         if group_data:
-            print(f"\n{group_name}:")
+            lines.append(f"\n{group_name}:")
             for field, value in group_data.items():
                 if isinstance(value, float):
-                    print(f"  {field}: ${value:,.2f}" if 'payment' in field or 'income' in field or 'value' in field or 'amount' in field else f"  {field}: {value}")
+                    if 'payment' in field or 'income' in field or 'value' in field or 'amount' in field:
+                        lines.append(f"  {field}: ${value:,.2f}")
+                    else:
+                        lines.append(f"  {field}: {value}")
                 else:
-                    print(f"  {field}: {value}")
+                    lines.append(f"  {field}: {value}")
 
-    print("\n" + "=" * 70)
+    lines.append("\n" + "=" * 70)
+    return "\n".join(lines)
+
+
+def log_extraction_report(result: Dict[str, Any]) -> None:
+    """
+    Log extraction results using the logging infrastructure.
+
+    Use this instead of print_extraction_report() in production code.
+    Logs each section at INFO level for proper log capture.
+
+    Args:
+        result: Dict from process_transcript_and_create_lead()
+    """
+    report = format_extraction_report(result)
+    for line in report.split("\n"):
+        if line.strip():  # Skip empty lines
+            logger.info(line)
+
+
+def print_extraction_report(result: Dict[str, Any]) -> None:
+    """
+    Print a formatted extraction report to stdout.
+
+    Note: For production use, prefer log_extraction_report() which uses
+    the logging infrastructure. This function is provided for CLI/debugging.
+
+    Args:
+        result: Dict from process_transcript_and_create_lead()
+    """
+    print(format_extraction_report(result))
 
 
 # CLI entry point

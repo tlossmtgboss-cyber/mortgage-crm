@@ -3,6 +3,56 @@ LLM Client for Call Intelligence
 
 Provides structured extraction using Claude or OpenAI models.
 Handles retries, rate limiting, and response parsing.
+
+This module provides LLM client implementations for intelligent data extraction
+from mortgage call transcripts. Features include:
+- Token bucket rate limiting to prevent API throttling
+- Automatic retries with exponential backoff
+- JSON response parsing with validation
+- Support for both Anthropic Claude and OpenAI GPT models
+
+Clients:
+    AnthropicClient: Uses Claude models (claude-3-sonnet, claude-3-haiku, etc.)
+    OpenAIClient: Uses GPT models (gpt-4o, gpt-4o-mini, etc.)
+
+Configuration:
+    Set environment variables or pass LLMConfig directly:
+    - ANTHROPIC_API_KEY / OPENAI_API_KEY: API credentials
+    - CI_LLM_MODEL: Model name override
+    - CI_LLM_TEMPERATURE: Temperature (0.0-1.0)
+    - CI_LLM_MAX_TOKENS: Max response tokens
+    - CI_LLM_TIMEOUT: Request timeout in seconds
+
+Example:
+    from services.call_intelligence.llm_client import AnthropicClient, LLMConfig
+
+    # Using environment variables
+    client = AnthropicClient()
+
+    # Or with explicit config
+    config = LLMConfig(
+        model="claude-3-haiku-20240307",
+        temperature=0.1,
+        max_tokens=2000,
+    )
+    client = AnthropicClient(config)
+
+    # Extract data from transcript
+    result = await client.extract(
+        transcript="Jack: My name is Jack Daniels and I work at Tech Corp.",
+        schema_key="identity",
+        context={"loan_purpose": "purchase"},
+    )
+
+    # Result contains structured extractions
+    print(result)  # {"extractions": {"first_name": "Jack", ...}, "notes": "..."}
+
+Exceptions:
+    LLMError: Base exception for all LLM errors
+    LLMTimeoutError: Request timed out
+    LLMRateLimitError: Rate limit exceeded
+    LLMAPIError: API returned an error
+    LLMParseError: Failed to parse response JSON
 """
 
 import os

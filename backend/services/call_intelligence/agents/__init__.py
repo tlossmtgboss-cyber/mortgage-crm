@@ -1,7 +1,36 @@
 """
 Call Intelligence Extraction Agents
 
-Specialized AI agents for extracting structured data from call transcripts.
+Specialized AI agents for extracting structured data from mortgage call transcripts.
+
+This module provides a suite of extraction agents, each focused on a specific
+domain of mortgage application data:
+
+Agents:
+    IdentityExtractionAgent: Extracts borrower identity (name, SSN last 4, DOB, contact info)
+    PropertyExtractionAgent: Extracts property details (address, type, purchase price)
+    EmploymentExtractionAgent: Extracts employment info (employer, title, income)
+    FinancialExtractionAgent: Extracts financial data (assets, liabilities, income sources)
+    ComplianceExtractionAgent: Extracts compliance declarations (bankruptcy, foreclosure, citizenship)
+    IntentExtractionAgent: Extracts loan intent (purpose, timeline, preferences)
+
+Architecture:
+    All agents inherit from BaseExtractionAgent and implement a two-phase extraction:
+    1. LLM-first: Uses Claude/OpenAI for intelligent extraction with context
+    2. Regex fallback: Pattern matching when LLM is unavailable or for validation
+
+Shared Patterns:
+    Common regex patterns for citizenship, marital status, etc. are consolidated
+    in shared_patterns.py to ensure consistency across agents.
+
+Example:
+    from services.call_intelligence.agents import IdentityExtractionAgent
+
+    agent = IdentityExtractionAgent(llm_client)
+    result = await agent.extract(transcript_segments, existing_data={})
+
+    for extraction in result.extractions:
+        print(f"{extraction.field_name}: {extraction.value} (confidence: {extraction.confidence})")
 """
 
 from .base_agent import BaseExtractionAgent

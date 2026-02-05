@@ -3,6 +3,38 @@ Call Intelligence Processor
 
 Main processor that coordinates extraction agents and produces
 structured data for the Application Engine.
+
+This module provides the central CallIntelligenceProcessor class that:
+- Parses raw transcripts into speaker-attributed segments
+- Runs multiple extraction agents in parallel (identity, property, employment, etc.)
+- Categorizes extractions into mortgage application domains
+- Tracks confidence scores and processing metrics
+- Optionally persists results to the database
+
+Example:
+    from services.call_intelligence.processor import CallIntelligenceProcessor
+    from services.call_intelligence.data_contracts import CallIntelligenceRequest
+
+    # Initialize processor (llm_client optional for regex-only extraction)
+    processor = CallIntelligenceProcessor(db_session=session, llm_client=llm)
+
+    # Create request
+    request = CallIntelligenceRequest(
+        call_id="call-123",
+        loan_id=456,
+        organization_id=1,
+        transcript="Tim: Hello, how can I help?\\nJack: I want to buy a house.",
+    )
+
+    # Process (async)
+    response = await processor.process_transcript(request)
+
+    # Access results
+    print(f"Total extractions: {response.total_extractions}")
+    print(f"High confidence: {response.high_confidence_count}")
+    for agent_result in response.agent_results:
+        for extraction in agent_result.extractions:
+            print(f"  {extraction.field_name}: {extraction.value}")
 """
 
 import logging

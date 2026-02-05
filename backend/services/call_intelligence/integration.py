@@ -325,13 +325,41 @@ class CallIntelligenceIntegration:
         loan_id: int,
         organization_id: int,
         tasks: List[Any],
-    ) -> None:
-        """Create tasks in the task system (synchronous DB operations)."""
+    ) -> bool:
+        """
+        Create tasks in the task system from Application Engine audit results.
+
+        Inserts task records into the database for follow-up actions identified
+        during the application audit (e.g., missing documents, verification needs).
+
+        Args:
+            loan_id: The loan ID to associate tasks with
+            organization_id: The organization/tenant ID for multi-tenancy
+            tasks: List of ApplicationEngineTask objects with fields:
+                - title: Task title
+                - description: Task details
+                - priority: TaskPriority enum (high, medium, low)
+                - assignee: TaskAssignee enum (lo, pa)
+                - days_until_due: Days from now for due date
+                - module: ApplicationModule enum (identity, income, etc.)
+
+        Returns:
+            True if tasks were created successfully, False if creation failed
+            or was skipped (no db session, no tasks to create)
+
+        Note:
+            Database errors are logged but not raised to avoid failing the
+            entire call processing pipeline. Check return value if task
+            creation is critical.
+        """
         from datetime import timedelta
 
         if not self.db:
             logger.debug("No database session available, skipping task creation")
-            return
+            return False
+
+        if not tasks:
+            return True  # Nothing to create is still "success"
 
         try:
             with db_transaction(self.db, f"create tasks for loan {loan_id}"):
@@ -387,10 +415,12 @@ class CallIntelligenceIntegration:
                     )
 
                 logger.info(f"Created {len(tasks)} tasks for loan {loan_id}")
+                return True
 
-        except DatabaseError as e:
+        except DatabaseError:
             # Already logged by db_transaction context manager
-            pass
+            logger.warning(f"Task creation failed for loan {loan_id} - tasks not saved")
+            return False
 
     def _save_call_results(
         self,
@@ -400,13 +430,36 @@ class CallIntelligenceIntegration:
         ci_response: CallIntelligenceResponse,
         audit_response: Optional["ApplicationAuditResponse"],
         metadata: Dict[str, Any],
-    ) -> None:
-        """Save call processing results to database (synchronous DB operations)."""
+    ) -> bool:
+        """
+        Save call processing results to the database.
+
+        Persists extraction results and application audit status for historical
+        tracking and analytics. Uses upsert (INSERT...ON CONFLICT) to handle
+        reprocessing of the same call.
+
+        Args:
+            call_id: Unique identifier for the call
+            loan_id: Associated loan ID (may be None for new leads)
+            organization_id: Organization/tenant ID for multi-tenancy
+            ci_response: CallIntelligenceResponse with extraction results
+            audit_response: Optional ApplicationAuditResponse with completeness data
+            metadata: Additional call metadata (currently unused, reserved for future)
+
+        Returns:
+            True if results were saved successfully, False if save failed
+            or was skipped (no db session)
+
+        Note:
+            Database errors are logged but not raised to avoid failing the
+            entire call processing pipeline. Check return value if persistence
+            is critical for your use case.
+        """
         import json
 
         if not self.db:
             logger.debug("No database session available, skipping result save")
-            return
+            return False
 
         try:
             with db_transaction(self.db, f"save call results for {call_id}"):
@@ -446,10 +499,12 @@ class CallIntelligenceIntegration:
                         "created_at": datetime.utcnow(),
                     }
                 )
+                return True
 
-        except DatabaseError as e:
+        except DatabaseError:
             # Already logged by db_transaction context manager
-            pass
+            logger.warning(f"Failed to save call results for {call_id} - results not persisted")
+            return False
 
 
 # =============================================================================
