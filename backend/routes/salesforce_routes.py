@@ -2677,8 +2677,8 @@ async def debug_import_closed_loans_from_sf(
         user_id = profile[4]
 
         # Get access token with automatic refresh
-        from services.salesforce.oauth_service import SalesforceOAuth
-        oauth = SalesforceOAuth()
+        from services.salesforce.oauth_service import SalesforceOAuthService
+        oauth = SalesforceOAuthService()
         try:
             access_token, _ = await oauth.get_access_token(db, profile_id)
         except Exception as oauth_err:
