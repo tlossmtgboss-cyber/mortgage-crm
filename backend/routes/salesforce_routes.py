@@ -40,12 +40,12 @@ from requests.exceptions import RequestException
 try:
     from main import encrypt_token, decrypt_token
 except ImportError:
-    # Fallback if main.py encryption not available
-    logger.warning("Token encryption not available - using plaintext (INSECURE)")
+    # SECURITY: Fail hard if encryption not available - never store tokens in plaintext
+    logger.error("CRITICAL: Token encryption not available - refusing to handle tokens insecurely")
     def encrypt_token(token: str) -> str:
-        return token
+        raise RuntimeError("Token encryption not available - cannot store tokens securely")
     def decrypt_token(token: str) -> str:
-        return token
+        raise RuntimeError("Token decryption not available - cannot retrieve tokens securely")
 
 router = APIRouter()
 
@@ -1088,7 +1088,8 @@ async def explore_salesforce_objects(
 
         response = requests.get(
             f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/sobjects/",
-            headers=headers
+            headers=headers,
+            timeout=30
         )
         response.raise_for_status()
 

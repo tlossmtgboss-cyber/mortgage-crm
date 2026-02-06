@@ -3,6 +3,7 @@ Salesforce Sync Service
 Handles synchronization of data from Salesforce to the CRM
 """
 import os
+import re
 import logging
 import hashlib
 import hmac
@@ -17,6 +18,70 @@ from sqlalchemy.exc import SQLAlchemyError
 from requests.exceptions import RequestException
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# SECURITY: Salesforce ID Validation
+# =============================================================================
+
+# Salesforce IDs are either 15 or 18 characters, alphanumeric only
+SALESFORCE_ID_PATTERN = re.compile(r'^[a-zA-Z0-9]{15}(?:[a-zA-Z0-9]{3})?$')
+
+
+def validate_salesforce_id(salesforce_id: str) -> str:
+    """
+    Validate and sanitize a Salesforce ID to prevent SOQL injection.
+
+    Salesforce IDs are always 15 or 18 characters, alphanumeric only.
+
+    Args:
+        salesforce_id: The ID to validate
+
+    Returns:
+        The validated ID (unchanged if valid)
+
+    Raises:
+        ValueError: If the ID format is invalid
+    """
+    if not salesforce_id:
+        raise ValueError("Salesforce ID cannot be empty")
+
+    # Strip whitespace
+    clean_id = salesforce_id.strip()
+
+    # Validate format
+    if not SALESFORCE_ID_PATTERN.match(clean_id):
+        raise ValueError(
+            f"Invalid Salesforce ID format: '{salesforce_id[:20]}...' - "
+            "must be 15 or 18 alphanumeric characters"
+        )
+
+    return clean_id
+
+
+def validate_salesforce_object_name(object_name: str) -> str:
+    """
+    Validate Salesforce object name to prevent SOQL injection.
+
+    Object names contain only alphanumeric, underscores, and must end with __c for custom.
+
+    Args:
+        object_name: The object name to validate
+
+    Returns:
+        The validated object name
+
+    Raises:
+        ValueError: If the object name format is invalid
+    """
+    if not object_name:
+        raise ValueError("Salesforce object name cannot be empty")
+
+    # Object names: alphanumeric and underscores only
+    if not re.match(r'^[a-zA-Z][a-zA-Z0-9_]*$', object_name):
+        raise ValueError(f"Invalid Salesforce object name: '{object_name}'")
+
+    return object_name
 
 # Import SLA trigger service (lazy loaded to avoid circular imports)
 _sla_trigger_service = None
@@ -304,9 +369,15 @@ class SalesforceSyncService:
     def verify_webhook_signature(self, payload: bytes, signature: str) -> bool:
         """Verify HMAC signature from Salesforce webhook."""
         if not self.webhook_secret:
-            # In development, allow without signature verification
-            logger.warning("SALESFORCE_WEBHOOK_SECRET not set - skipping signature verification")
-            return True
+            # SECURITY: Only skip verification in explicit development mode
+            environment = os.getenv("ENVIRONMENT", "production").lower()
+            if environment in ("development", "dev", "local", "test"):
+                logger.warning("SALESFORCE_WEBHOOK_SECRET not set - skipping signature verification (dev mode)")
+                return True
+            else:
+                # In production, reject unverified webhooks
+                logger.error("SECURITY: SALESFORCE_WEBHOOK_SECRET not set in production - rejecting webhook")
+                return False
 
         expected_signature = hmac.new(
             self.webhook_secret.encode(),
@@ -1178,6 +1249,14 @@ class SalesforceSyncService:
             if not salesforce_id:
                 return False, "Loan has no Salesforce ID - cannot pull", None
 
+            # SECURITY: Validate inputs to prevent SOQL injection
+            try:
+                salesforce_id = validate_salesforce_id(salesforce_id)
+                sf_object = validate_salesforce_object_name(sf_object)
+            except ValueError as e:
+                logger.error(f"SOQL injection attempt blocked: {e}")
+                return False, f"Invalid Salesforce ID or object name: {e}", None
+
             # Build SOQL query to fetch the record
             field_mappings = self.get_field_mappings()
             sf_fields = list(field_mappings.keys())
@@ -1242,6 +1321,14 @@ class SalesforceSyncService:
         import requests
 
         try:
+            # SECURITY: Validate inputs to prevent SOQL injection
+            try:
+                salesforce_id = validate_salesforce_id(salesforce_id)
+                sf_object = validate_salesforce_object_name(sf_object)
+            except ValueError as e:
+                logger.error(f"SOQL injection attempt blocked: {e}")
+                return False, f"Invalid Salesforce ID or object name: {e}", None
+
             # Build SOQL query to fetch the record
             field_mappings = self.get_field_mappings()
             sf_fields = list(field_mappings.keys())
