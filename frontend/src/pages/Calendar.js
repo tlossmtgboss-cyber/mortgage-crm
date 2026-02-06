@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { calendarAPI, schedulerAPI, crmCalendarAPI } from '../services/api';
+import { calendarAPI, schedulerAPI, unifiedCalendarAPI } from '../services/api';
 import './Calendar.css';
 
 function Calendar() {
@@ -24,50 +24,6 @@ function Calendar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentDate]);
 
-  // Convert scheduler appointment to calendar event format
-  const appointmentToEvent = (appt) => ({
-    id: `appt-${appt.id}`,
-    title: appt.title || `Appointment with ${appt.contact_name || appt.attendee_name || 'Client'}`,
-    description: appt.description || appt.notes || appt.attendee_notes || '',
-    start_time: appt.start_time || appt.scheduled_start,
-    end_time: appt.end_time || appt.scheduled_end,
-    event_type: appt.appointment_type === 'consultation' ? 'consultation' :
-                appt.meeting_mode === 'VIDEO' ? 'video_call' :
-                appt.meeting_mode === 'PHONE' ? 'phone_call' : 'meeting',
-    location: appt.meeting_mode === 'VIDEO' ? 'Video Call' :
-              appt.meeting_mode === 'PHONE' ? 'Phone Call' :
-              appt.meeting_mode === 'IN_PERSON' ? 'In Person' :
-              appt.booked_via === 'ai_assistant' ? 'Phone Call' : '',
-    related_lead_id: appt.lead_id || appt.contact_id,
-    isAppointment: true,
-    appointmentId: appt.appointment_id || appt.id,
-    attendee_name: appt.contact_name || appt.attendee_name,
-    attendee_email: appt.contact_email || appt.attendee_email,
-    status: appt.status,
-    booked_via: appt.booked_via
-  });
-
-  // Convert CRM calendar event (synced with Salesforce) to display format
-  // API returns start_at/end_at, we convert to start_time/end_time for display
-  const crmEventToEvent = (event) => ({
-    id: `crm-${event.id}`,
-    title: event.title || event.subject || 'CRM Event',
-    description: event.description || event.notes || '',
-    start_time: event.start_at || event.start_time,
-    end_time: event.end_at || event.end_time,
-    event_type: event.event_type || 'meeting',
-    location: event.location || '',
-    related_lead_id: event.related_lead_id || event.related_entity_id,
-    related_loan_id: event.related_loan_id,
-    related_contact_id: event.related_contact_id,
-    isCrmEvent: true,
-    crmEventId: event.id,
-    attendees: event.attendees || [],
-    sync_status: event.sync_status,
-    salesforce_event_id: event.salesforce_event_id,
-    source: 'crm_calendar'
-  });
-
   const loadEvents = async () => {
     try {
       setLoading(true);
@@ -75,33 +31,29 @@ function Calendar() {
       const startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
       const endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59);
 
-      // Fetch calendar events, scheduler appointments, and CRM calendar events
-      const [calendarData, appointmentsData, crmEventsData] = await Promise.all([
-        calendarAPI.getAll({
-          start_date: startDate.toISOString(),
-          end_date: endDate.toISOString(),
-        }).catch(() => []),
-        schedulerAPI.getAppointments({
-          start_date: startDate.toISOString(),
-          end_date: endDate.toISOString(),
-        }).catch(() => []),
-        crmCalendarAPI.getAll({
-          start_date: startDate.toISOString(),
-          end_date: endDate.toISOString(),
-        }).catch(() => [])
-      ]);
+      // Fetch all events from unified endpoint (merges calendar, scheduler, and CRM)
+      const response = await unifiedCalendarAPI.getAll({
+        start_date: startDate.toISOString().split('T')[0],
+        end_date: endDate.toISOString().split('T')[0],
+      });
 
-      // Convert appointments to event format
-      const appointmentEvents = (appointmentsData || [])
-        .filter(appt => appt.status !== 'CANCELLED')
-        .map(appointmentToEvent);
+      // Map unified response to frontend format
+      const unifiedEvents = (response.events || []).map(event => ({
+        ...event,
+        isAppointment: event.is_appointment,
+        isCrmEvent: event.is_crm_event,
+        // Extract original IDs for API operations
+        appointmentId: event.is_appointment ? event.id.replace('appt-', '') : undefined,
+        crmEventId: event.is_crm_event ? event.id.replace('crm-', '') : undefined,
+        calendarEventId: event.source === 'calendar' ? event.id.replace('event-', '') : undefined,
+      }));
 
-      // Convert CRM calendar events to event format
-      const crmEvents = (crmEventsData || [])
-        .filter(event => event.status !== 'cancelled')
-        .map(crmEventToEvent);
+      // Log any warnings from partial failures
+      if (response.warnings && response.warnings.length > 0) {
+        console.warn('Calendar load warnings:', response.warnings);
+      }
 
-      setEvents([...(calendarData || []), ...appointmentEvents, ...crmEvents]);
+      setEvents(unifiedEvents);
       setError(null);
     } catch (err) {
       console.error('Failed to load events:', err);
@@ -120,33 +72,29 @@ function Calendar() {
       const endDate = new Date();
       endDate.setMonth(endDate.getMonth() + 6);
 
-      // Fetch calendar events, scheduler appointments, and CRM calendar events
-      const [calendarData, appointmentsData, crmEventsData] = await Promise.all([
-        calendarAPI.getAll({
-          start_date: startDate.toISOString(),
-          end_date: endDate.toISOString(),
-        }).catch(() => []),
-        schedulerAPI.getAppointments({
-          start_date: startDate.toISOString(),
-          end_date: endDate.toISOString(),
-        }).catch(() => []),
-        crmCalendarAPI.getAll({
-          start_date: startDate.toISOString(),
-          end_date: endDate.toISOString(),
-        }).catch(() => [])
-      ]);
+      // Fetch all events from unified endpoint (merges calendar, scheduler, and CRM)
+      const response = await unifiedCalendarAPI.getAll({
+        start_date: startDate.toISOString().split('T')[0],
+        end_date: endDate.toISOString().split('T')[0],
+      });
 
-      // Convert appointments to event format
-      const appointmentEvents = (appointmentsData || [])
-        .filter(appt => appt.status !== 'CANCELLED')
-        .map(appointmentToEvent);
+      // Map unified response to frontend format
+      const unifiedEvents = (response.events || []).map(event => ({
+        ...event,
+        isAppointment: event.is_appointment,
+        isCrmEvent: event.is_crm_event,
+        // Extract original IDs for API operations
+        appointmentId: event.is_appointment ? event.id.replace('appt-', '') : undefined,
+        crmEventId: event.is_crm_event ? event.id.replace('crm-', '') : undefined,
+        calendarEventId: event.source === 'calendar' ? event.id.replace('event-', '') : undefined,
+      }));
 
-      // Convert CRM calendar events to event format
-      const crmEvents = (crmEventsData || [])
-        .filter(event => event.status !== 'cancelled')
-        .map(crmEventToEvent);
+      // Log any warnings from partial failures
+      if (response.warnings && response.warnings.length > 0) {
+        console.warn('Calendar load warnings:', response.warnings);
+      }
 
-      setAllEvents([...(calendarData || []), ...appointmentEvents, ...crmEvents]);
+      setAllEvents(unifiedEvents);
       setError(null);
     } catch (err) {
       console.error('Failed to load all events:', err);
@@ -180,7 +128,9 @@ function Calendar() {
         if (!window.confirm('Are you sure you want to delete this event?')) {
           return;
         }
-        await calendarAPI.delete(event.id);
+        // Use original calendar event ID (without 'event-' prefix)
+        const eventId = event.calendarEventId || event.id.replace('event-', '');
+        await calendarAPI.delete(eventId);
       }
       loadEvents();
       loadAllEvents();
