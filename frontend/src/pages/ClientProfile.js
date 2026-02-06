@@ -102,8 +102,8 @@ function ClientProfile() {
   useEffect(() => {
     const tabParam = searchParams.get('tab');
     if (tabParam) {
-      // Valid tabs: personal, loan-details, employment, income, circle-of-trust, documents, important-dates, communications
-      const validTabs = ['personal', 'loan-details', 'employment', 'income', 'circle-of-trust', 'documents', 'important-dates', 'communications'];
+      // Valid tabs: personal, loan-details, employment, income, circle-of-trust, documents, important-dates, communications, call-intelligence
+      const validTabs = ['personal', 'loan-details', 'employment', 'income', 'circle-of-trust', 'documents', 'important-dates', 'communications', 'call-intelligence'];
       if (validTabs.includes(tabParam)) {
         setActiveTab(tabParam);
       }

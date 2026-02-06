@@ -26,6 +26,7 @@ import CalculatorResults from './sections/CalculatorResults';
 import MarketingTab from './sections/MarketingTab';
 import SchedulingTab from './sections/SchedulingTab';
 import StackedNotes from './sections/StackedNotes';
+import ExtractionsSection from './sections/ExtractionsSection';
 import ReviewApproveModal from './ReviewApproveModal';
 import ShareCalculatorModal from './ShareCalculatorModal';
 import './CallIntelligenceTab.css';
@@ -236,6 +237,27 @@ const CallIntelligenceTab = ({ clientId, loanId, leadId }) => {
   const calendarActions = groupedArtifacts.calendar_action || [];
   const meetingSummaries = groupedArtifacts.meeting_summary || [];
 
+  // Get Call Intelligence extraction artifacts
+  const extractedIdentity = groupedArtifacts.extracted_identity?.[0]?.structured_data || {};
+  const extractedProperty = groupedArtifacts.extracted_property?.[0]?.structured_data || {};
+  const extractedEmployment = groupedArtifacts.extracted_employment?.[0]?.structured_data || {};
+  const extractedFinancial = groupedArtifacts.extracted_financial?.[0]?.structured_data || {};
+  const extractedCompliance = groupedArtifacts.extracted_compliance?.[0]?.structured_data || {};
+  const extractedIntent = groupedArtifacts.extracted_intent?.[0]?.structured_data || {};
+  const callOutcomeData = groupedArtifacts.call_outcome?.[0]?.structured_data || null;
+
+  // Combine extractions
+  const extractions = {
+    identity: extractedIdentity,
+    property: extractedProperty,
+    employment: extractedEmployment,
+    financial: extractedFinancial,
+    compliance: extractedCompliance,
+    intent: extractedIntent,
+  };
+
+  const hasExtractions = Object.values(extractions).some(e => Object.keys(e).length > 0) || callOutcomeData;
+
   // Count pending approvals
   const pendingCount = reviewData?.artifacts?.filter(a => a.approval_status === 'pending').length || 0;
 
@@ -248,6 +270,8 @@ const CallIntelligenceTab = ({ clientId, loanId, leadId }) => {
   const marketingCount = storyNotes.length + storyThemes.length + borrowerQuotes.length +
     contentIdeas.length + marketingMilestones.length;
   const schedulingCount = scheduledAppointments.length + followUpCalls.length + calendarActions.length;
+  const extractionCount = Object.values(extractions).filter(e => Object.keys(e).length > 0).length +
+    (callOutcomeData ? 1 : 0);
 
   if (loading && calls.length === 0) {
     return (
@@ -313,6 +337,12 @@ const CallIntelligenceTab = ({ clientId, loanId, leadId }) => {
                   Scribe
                 </button>
                 <button
+                  className={activeSection === 'extractions' ? 'active' : ''}
+                  onClick={() => setActiveSection('extractions')}
+                >
+                  Data {extractionCount > 0 && `(${extractionCount})`}
+                </button>
+                <button
                   className={activeSection === 'jrlo' ? 'active' : ''}
                   onClick={() => setActiveSection('jrlo')}
                 >
@@ -369,6 +399,14 @@ const CallIntelligenceTab = ({ clientId, loanId, leadId }) => {
                     scribeRecap={scribeRecap}
                     actionItems={groupedArtifacts.action_item || []}
                     summary={summary}
+                  />
+                )}
+
+                {activeSection === 'extractions' && (
+                  <ExtractionsSection
+                    extractions={extractions}
+                    callOutcome={callOutcomeData}
+                    sessionId={selectedCall?.id}
                   />
                 )}
 

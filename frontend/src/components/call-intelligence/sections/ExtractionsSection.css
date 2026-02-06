@@ -1,0 +1,258 @@
+/**
+ * ExtractionsSection Styles
+ * Displays extracted data from call intelligence processing
+ */
+
+.extractions-section {
+  padding: 20px;
+}
+
+.extractions-section.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+}
+
+.extractions-section .empty-state {
+  text-align: center;
+  color: #6b7280;
+}
+
+.extractions-section .empty-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 16px;
+  color: #9ca3af;
+}
+
+.extractions-section .empty-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.extractions-section .empty-state h3 {
+  margin: 0 0 8px;
+  color: #374151;
+  font-size: 18px;
+}
+
+.extractions-section .empty-state p {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* Section header */
+.extractions-section .section-header {
+  margin-bottom: 24px;
+}
+
+.extractions-section .section-header h3 {
+  margin: 0 0 4px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.extractions-section .section-subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+/* Extractions grid */
+.extractions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 20px;
+}
+
+/* Extraction card */
+.extraction-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: box-shadow 0.2s;
+}
+
+.extraction-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.extraction-card .card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+  cursor: pointer;
+  user-select: none;
+}
+
+.extraction-card .card-header:hover {
+  background: #f3f4f6;
+}
+
+.extraction-card .card-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.extraction-card .card-icon {
+  font-size: 20px;
+}
+
+.extraction-card .card-title h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.extraction-card .expand-icon {
+  font-size: 18px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.extraction-card .card-content {
+  padding: 16px;
+}
+
+.extraction-card.collapsed .card-content {
+  display: none;
+}
+
+/* Extraction field */
+.extraction-field {
+  padding: 10px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.extraction-field:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.extraction-field:first-child {
+  padding-top: 0;
+}
+
+.extraction-field .field-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.extraction-field .field-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.extraction-field .field-value {
+  font-size: 15px;
+  color: #111827;
+  font-weight: 500;
+}
+
+/* Confidence badge */
+.confidence-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.confidence-badge.high {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.confidence-badge.medium {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.confidence-badge.low {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* Source text toggle */
+.source-toggle {
+  margin-top: 6px;
+  padding: 0;
+  background: none;
+  border: none;
+  font-size: 12px;
+  color: #3b82f6;
+  cursor: pointer;
+}
+
+.source-toggle:hover {
+  text-decoration: underline;
+}
+
+.source-text {
+  margin-top: 8px;
+  padding: 10px;
+  background: #f9fafb;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #4b5563;
+  line-height: 1.5;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .extractions-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .extractions-section .section-header h3 {
+    color: #f9fafb;
+  }
+
+  .extraction-card {
+    background: #1f2937;
+    border-color: #374151;
+  }
+
+  .extraction-card .card-header {
+    background: #111827;
+    border-color: #374151;
+  }
+
+  .extraction-card .card-header:hover {
+    background: #1f2937;
+  }
+
+  .extraction-card .card-title h4 {
+    color: #f9fafb;
+  }
+
+  .extraction-field {
+    border-color: #374151;
+  }
+
+  .extraction-field .field-value {
+    color: #f9fafb;
+  }
+
+  .source-text {
+    background: #111827;
+    color: #d1d5db;
+  }
+}
