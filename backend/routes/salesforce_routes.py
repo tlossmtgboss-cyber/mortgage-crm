@@ -3434,8 +3434,36 @@ async def debug_salesforce_connection(
     Debug endpoint to check Salesforce connection status.
     No auth required for debugging.
     """
+    result = {"sources_checked": []}
+
     try:
-        # Check for any Salesforce integration
+        # Check new integration_profiles table first (OAuth flow stores here)
+        profile = db.execute(text("""
+            SELECT user_id, status, instance_url, sf_username,
+                   CASE WHEN access_token_encrypted IS NOT NULL THEN 'has_token' ELSE 'no_token' END as token_status,
+                   updated_at, connected_at
+            FROM integration_profiles
+            WHERE provider = 'salesforce'
+            ORDER BY updated_at DESC
+            LIMIT 1
+        """)).fetchone()
+
+        if profile:
+            result["integration_profiles"] = {
+                "status": "found",
+                "user_id": profile[0],
+                "connection_status": profile[1],
+                "instance_url": profile[2][:50] if profile[2] else None,
+                "sf_username": profile[3],
+                "token_status": profile[4],
+                "updated_at": str(profile[5]) if profile[5] else None,
+                "connected_at": str(profile[6]) if profile[6] else None
+            }
+            result["sources_checked"].append("integration_profiles")
+        else:
+            result["integration_profiles"] = {"status": "not_found"}
+
+        # Also check old user_integrations table
         integration = db.execute(text("""
             SELECT user_id,
                    CASE WHEN access_token IS NOT NULL THEN 'has_token' ELSE 'no_token' END as token_status,
@@ -3447,27 +3475,34 @@ async def debug_salesforce_connection(
             LIMIT 1
         """)).fetchone()
 
-        if not integration:
-            return {
-                "status": "no_integration",
-                "message": "No Salesforce integration found in database"
+        if integration:
+            scopes = integration[2] or ""
+            instance_url = None
+            if "instance_url:" in scopes:
+                instance_url = scopes.split("instance_url:")[1].split(",")[0].strip()
+
+            result["user_integrations"] = {
+                "status": "found",
+                "user_id": integration[0],
+                "token_status": integration[1],
+                "instance_url": instance_url[:50] if instance_url else None,
+                "updated_at": str(integration[3]) if integration[3] else None
             }
+            result["sources_checked"].append("user_integrations")
+        else:
+            result["user_integrations"] = {"status": "not_found"}
 
-        # Parse instance_url
-        scopes = integration[2] or ""
-        instance_url = None
-        if "instance_url:" in scopes:
-            instance_url = scopes.split("instance_url:")[1].split(",")[0].strip()
+        # Determine overall status
+        if profile and profile[4] == "has_token":
+            result["recommended_source"] = "integration_profiles"
+            result["overall_status"] = "connected"
+        elif integration and integration[1] == "has_token":
+            result["recommended_source"] = "user_integrations"
+            result["overall_status"] = "connected"
+        else:
+            result["overall_status"] = "disconnected"
 
-        return {
-            "status": "found",
-            "user_id": integration[0],
-            "token_status": integration[1],
-            "has_instance_url": instance_url is not None,
-            "instance_url_preview": instance_url[:50] if instance_url else None,
-            "scopes_preview": scopes[:100] if scopes else None,
-            "updated_at": str(integration[3]) if integration[3] else None
-        }
+        return result
 
     except Exception as e:
         return {
@@ -3700,26 +3735,53 @@ async def debug_all_statuses(
     No auth required for debugging.
     """
     try:
-        # Get Salesforce integration
-        integration = db.execute(text("""
-            SELECT access_token, refresh_token, scopes, user_id
-            FROM user_integrations
-            WHERE provider = 'salesforce' AND access_token IS NOT NULL
-            ORDER BY updated_at DESC
-            LIMIT 1
-        """)).fetchone()
+        access_token = None
+        refresh_token = None
+        instance_url = None
+        token_source = None
 
-        if not integration:
-            return {"status": "error", "message": "No Salesforce integration found"}
+        # First try the new integration_profiles table (OAuth flow stores here)
+        try:
+            from services.salesforce.oauth_service import decrypt_value
+            profile = db.execute(text("""
+                SELECT access_token_encrypted, refresh_token_encrypted, instance_url, user_id
+                FROM integration_profiles
+                WHERE provider = 'salesforce' AND access_token_encrypted IS NOT NULL
+                ORDER BY updated_at DESC
+                LIMIT 1
+            """)).fetchone()
 
-        access_token = integration[0]
-        refresh_token = integration[1]
-        scopes = integration[2] or ""
+            if profile and profile[0]:
+                access_token = decrypt_value(profile[0])
+                refresh_token = decrypt_value(profile[1]) if profile[1] else None
+                instance_url = profile[2]
+                token_source = "integration_profiles"
+        except Exception as e:
+            logger.warning(f"Could not check integration_profiles: {e}")
 
-        if "instance_url:" not in scopes:
-            return {"status": "error", "message": "No instance URL in scopes"}
+        # Fallback to old user_integrations table
+        if not access_token:
+            integration = db.execute(text("""
+                SELECT access_token, refresh_token, scopes, user_id
+                FROM user_integrations
+                WHERE provider = 'salesforce' AND access_token IS NOT NULL
+                ORDER BY updated_at DESC
+                LIMIT 1
+            """)).fetchone()
 
-        instance_url = scopes.split("instance_url:")[1].split(",")[0].strip()
+            if integration:
+                access_token = integration[0]
+                refresh_token = integration[1]
+                scopes = integration[2] or ""
+                if "instance_url:" in scopes:
+                    instance_url = scopes.split("instance_url:")[1].split(",")[0].strip()
+                token_source = "user_integrations"
+
+        if not access_token:
+            return {"status": "error", "message": "No Salesforce integration found in either table"}
+
+        if not instance_url:
+            return {"status": "error", "message": "No instance URL found"}
 
         headers = {
             "Authorization": f"Bearer {access_token}",
@@ -3777,6 +3839,7 @@ async def debug_all_statuses(
 
             return {
                 "status": "success",
+                "token_source": token_source,
                 "total_records": data.get('totalSize', len(records)),
                 "records_in_batch": len(records),
                 "status_distribution": status_counts,
@@ -3787,6 +3850,7 @@ async def debug_all_statuses(
         else:
             return {
                 "status": "error",
+                "token_source": token_source,
                 "http_status": response.status_code,
                 "response": response.text[:1000]
             }
