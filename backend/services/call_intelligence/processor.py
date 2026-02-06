@@ -56,6 +56,7 @@ if TYPE_CHECKING:
 from .data_contracts import (
     CallIntelligenceRequest,
     CallIntelligenceResponse,
+    CallOutcomeData,
     ExtractionResult,
     ExtractedValue,
     TranscriptSegment,
@@ -73,6 +74,12 @@ from .agents import (
     IntentExtractionAgent,
 )
 from .unified_extractor import UnifiedExtractionEngine, UnifiedExtractionResult
+from .metrics import (
+    track_extraction,
+    track_error,
+    track_confidence,
+    ACTIVE_EXTRACTIONS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -219,6 +226,9 @@ class CallIntelligenceProcessor:
                     request, segments, response
                 )
 
+            # Extract call outcome from intent extractions
+            self._populate_call_outcome(response)
+
             # Calculate summary stats
             self._calculate_stats(response)
 
@@ -227,6 +237,16 @@ class CallIntelligenceProcessor:
                 await self._save_results(request, response)
 
             response.processing_time_ms = int((time.time() - start_time) * 1000)
+
+            # Track metrics
+            track_extraction(
+                method=response.extraction_method,
+                duration_ms=response.processing_time_ms,
+                field_count=response.total_extractions,
+                high_confidence_count=response.high_confidence_count,
+                low_confidence_count=response.low_confidence_count,
+                success=True,
+            )
 
             logger.info(
                 f"Call {request.call_id} processed: "
@@ -243,6 +263,23 @@ class CallIntelligenceProcessor:
             response.success = False
             response.errors.append(safe_error)
             response.processing_time_ms = int((time.time() - start_time) * 1000)
+
+            # Track error metrics
+            error_type = "unknown"
+            if "timeout" in str(e).lower():
+                error_type = "timeout"
+            elif "rate" in str(e).lower():
+                error_type = "rate_limit"
+            elif "parse" in str(e).lower() or "json" in str(e).lower():
+                error_type = "parse_error"
+
+            track_error(error_type, method=response.extraction_method or "unknown")
+            track_extraction(
+                method=response.extraction_method or "unknown",
+                duration_ms=response.processing_time_ms,
+                success=False,
+            )
+
             return response
 
     async def _process_with_unified(
@@ -483,6 +520,51 @@ class CallIntelligenceProcessor:
             response.declarations_extractions.update(extractions_dict)
         elif agent_name == "intent":
             response.intent_extractions.update(extractions_dict)
+
+    def _populate_call_outcome(self, response: CallIntelligenceResponse) -> None:
+        """
+        Extract call outcome data from intent extractions.
+
+        Call outcome fields are extracted by the intent agent and then
+        consolidated into a CallOutcomeData object for easy access.
+        """
+        if not response.intent_extractions:
+            return
+
+        try:
+            # Build extractions dict in the format CallOutcomeData.from_extractions expects
+            # The intent extractions may have flat values or nested {value, confidence} dicts
+            extractions = {}
+            for key, value in response.intent_extractions.items():
+                # Skip confidence fields - they're paired with main fields
+                if key.endswith("_confidence"):
+                    continue
+
+                # Check if there's a paired confidence value
+                confidence_key = f"{key}_confidence"
+                confidence = response.intent_extractions.get(confidence_key, 0)
+
+                extractions[key] = {
+                    "value": value,
+                    "confidence": confidence,
+                }
+
+            response.call_outcome = CallOutcomeData.from_extractions(extractions)
+
+            # Log if significant call outcome detected
+            if response.call_outcome.outcome != "unknown":
+                logger.info(
+                    f"Call outcome detected: {response.call_outcome.outcome} "
+                    f"(confidence: {response.call_outcome.outcome_confidence:.0f}%)"
+                )
+            if response.call_outcome.callback_scheduled:
+                logger.info(f"Callback scheduled: {response.call_outcome.callback_datetime or 'time TBD'}")
+            if response.call_outcome.application_started:
+                logger.info("Application started during call")
+
+        except Exception as e:
+            logger.warning(f"Failed to populate call outcome: {e}")
+            # Don't fail processing - call outcome is supplementary data
 
     def _calculate_stats(self, response: CallIntelligenceResponse) -> None:
         """Calculate summary statistics and log confidence distribution."""

@@ -988,10 +988,42 @@ INTENT_SCHEMA = ExtractionSchema(
         ExtractionField("realtor_name", "Realtor's name", "string"),
         ExtractionField("has_property_identified", "Has identified a specific property", "boolean"),
         ExtractionField("competing_with_other_lenders", "Shopping with other lenders", "boolean"),
+        # Call outcome detection fields
+        ExtractionField(
+            "call_outcome",
+            "Primary outcome of the call",
+            "string",
+            examples=["APPLICATION_STARTED", "CALLBACK_SCHEDULED", "DOCUMENTS_REQUESTED", "QUOTE_PROVIDED", "NOT_INTERESTED", "NEEDS_MORE_INFO", "REFERRED_OUT", "DISCONNECTED"]
+        ),
+        ExtractionField("callback_scheduled", "Whether a follow-up call was scheduled", "boolean"),
+        ExtractionField("callback_datetime", "Scheduled callback date/time if mentioned", "string"),
+        ExtractionField("application_started", "Whether borrower agreed to start an application", "boolean"),
+        ExtractionField("documents_requested", "Whether specific documents were requested", "boolean"),
+        ExtractionField("documents_list", "List of documents requested from borrower", "string"),
+        ExtractionField(
+            "next_action",
+            "Agreed next action or step",
+            "string",
+            examples=["SEND_APPLICATION_LINK", "SCHEDULE_CALLBACK", "SEND_RATE_QUOTE", "WAIT_FOR_DOCUMENTS", "FOLLOW_UP_EMAIL", "NO_ACTION"]
+        ),
+        ExtractionField("objections_raised", "Key objections or concerns raised by borrower", "string"),
+        ExtractionField("competitor_mentioned", "Name of competitor lender mentioned", "string"),
+        ExtractionField("referral_source_mentioned", "How borrower heard about us", "string"),
+        ExtractionField("borrower_sentiment", "Overall borrower sentiment at end of call", "string", examples=["POSITIVE", "NEUTRAL", "HESITANT", "NEGATIVE"]),
     ],
-    instructions="""Extract the borrower's loan intent and preferences.
-Look for signals about urgency, timeline, and how far along they are in the process.
-Note any mentions of competing lenders or existing pre-approvals."""
+    instructions="""Extract the borrower's loan intent, preferences, AND call outcome information.
+
+For intent:
+- Look for signals about urgency, timeline, and how far along they are in the process
+- Note any mentions of competing lenders or existing pre-approvals
+
+For call outcome detection:
+- Determine the primary outcome: Did they start an application? Schedule a callback? Request information?
+- Identify any scheduled follow-up actions or callbacks
+- Note any objections, concerns, or hesitations expressed
+- Capture the agreed-upon next steps
+- Assess the borrower's sentiment at the end of the call
+- Record any competitor mentions or referral sources"""
 )
 
 # Export schemas

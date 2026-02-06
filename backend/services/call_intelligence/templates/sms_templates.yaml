@@ -1,0 +1,101 @@
+# SMS Templates for Call Intelligence Service
+#
+# Keep messages under 160 characters when possible for single SMS.
+# Always include opt-out language for initial messages.
+
+version: "1.0"
+updated_at: "2025-02-05"
+
+templates:
+  - id: welcome
+    name: Welcome SMS
+    category: welcome
+    description: Initial welcome text message after call
+    version: "1.0"
+    active: true
+    message: "Hi {first_name}, thanks for speaking with {company_name} about your mortgage! We'll be in touch soon with next steps. Reply STOP to opt out."
+    required_variables:
+      - first_name
+      - company_name
+
+  - id: document_reminder
+    name: Document Reminder
+    category: documents
+    description: Remind borrower about pending documents
+    version: "1.0"
+    active: true
+    message: "Hi {first_name}, friendly reminder: we're still waiting on some documents for your mortgage application. Check your email or call {phone_number}."
+    required_variables:
+      - first_name
+    default_values:
+      phone_number: "us"
+
+  - id: appointment_reminder
+    name: Appointment Reminder
+    category: appointment
+    description: Remind about upcoming appointment (send day before)
+    version: "1.0"
+    active: true
+    message: "Reminder: Your {appointment_type} is {time_until} at {appointment_time}. Reply YES to confirm or call to reschedule."
+    required_variables:
+      - appointment_type
+      - appointment_time
+    default_values:
+      time_until: "tomorrow"
+
+  - id: callback_reminder
+    name: Callback Reminder
+    category: appointment
+    description: Remind about scheduled callback
+    version: "1.0"
+    active: true
+    message: "Hi {first_name}, reminder that we have a callback scheduled for {callback_time}. Looking forward to speaking with you! - {lo_name}"
+    required_variables:
+      - first_name
+      - callback_time
+      - lo_name
+
+  - id: application_link
+    name: Application Link
+    category: welcome
+    description: Send secure application link
+    version: "1.0"
+    active: true
+    message: "Hi {first_name}, here's your secure application link: {application_link} - Complete at your convenience. Questions? Reply to this text."
+    required_variables:
+      - first_name
+      - application_link
+
+  - id: rate_alert
+    name: Rate Alert
+    category: followup
+    description: Alert about favorable rate change
+    version: "1.0"
+    active: true
+    message: "Hi {first_name}, rates have moved! Current rates around {current_rate}%. Want to discuss your options? Reply YES or call {phone_number}."
+    required_variables:
+      - first_name
+      - current_rate
+    default_values:
+      phone_number: "us"
+
+  - id: prequal_ready
+    name: Pre-Qualification Ready
+    category: prequal
+    description: Notify that prequal results are ready
+    version: "1.0"
+    active: true
+    message: "Great news, {first_name}! Your pre-qualification results are ready. Check your email for details or call us to discuss."
+    required_variables:
+      - first_name
+
+  - id: closing_reminder
+    name: Closing Reminder
+    category: appointment
+    description: Remind about upcoming closing date
+    version: "1.0"
+    active: true
+    message: "Hi {first_name}, your closing is scheduled for {closing_date}. Please bring valid ID and any outstanding documents. Questions? Call us!"
+    required_variables:
+      - first_name
+      - closing_date

@@ -64,6 +64,38 @@ class ReviewStatus(str, Enum):
     MODIFIED = "modified"
 
 
+class CallOutcome(str, Enum):
+    """Primary outcome of a call."""
+    APPLICATION_STARTED = "application_started"
+    CALLBACK_SCHEDULED = "callback_scheduled"
+    DOCUMENTS_REQUESTED = "documents_requested"
+    QUOTE_PROVIDED = "quote_provided"
+    NOT_INTERESTED = "not_interested"
+    NEEDS_MORE_INFO = "needs_more_info"
+    REFERRED_OUT = "referred_out"
+    DISCONNECTED = "disconnected"
+    UNKNOWN = "unknown"
+
+
+class NextAction(str, Enum):
+    """Agreed next action after a call."""
+    SEND_APPLICATION_LINK = "send_application_link"
+    SCHEDULE_CALLBACK = "schedule_callback"
+    SEND_RATE_QUOTE = "send_rate_quote"
+    WAIT_FOR_DOCUMENTS = "wait_for_documents"
+    FOLLOW_UP_EMAIL = "follow_up_email"
+    TRANSFER_TO_LO = "transfer_to_lo"
+    NO_ACTION = "no_action"
+
+
+class BorrowerSentiment(str, Enum):
+    """Borrower sentiment at end of call."""
+    POSITIVE = "positive"
+    NEUTRAL = "neutral"
+    HESITANT = "hesitant"
+    NEGATIVE = "negative"
+
+
 @dataclass
 class TranscriptSegment:
     """A segment of the call transcript."""
@@ -223,6 +255,9 @@ class CallIntelligenceResponse:
     # Loan intent/preferences
     intent_extractions: Dict[str, Any] = field(default_factory=dict)
 
+    # Call outcome data (extracted from intent)
+    call_outcome: Optional["CallOutcomeData"] = None
+
     # Raw agent results
     agent_results: List[ExtractionResult] = field(default_factory=list)
 
@@ -261,6 +296,7 @@ class CallIntelligenceResponse:
             "success": self.success,
             "extractions": self.to_application_engine_format(),
             "intent": self.intent_extractions,
+            "call_outcome": self.call_outcome.to_dict() if self.call_outcome else None,
             "summary": {
                 "total_extractions": self.total_extractions,
                 "high_confidence": self.high_confidence_count,
@@ -348,3 +384,97 @@ class ReviewDecision:
     reviewer_id: int
     final_value: Optional[Any] = None
     notes: Optional[str] = None
+
+
+@dataclass
+class CallOutcomeData:
+    """
+    Extracted call outcome information.
+
+    Captures the primary outcome of the call, agreed next steps,
+    and borrower sentiment to help prioritize follow-ups.
+    """
+    # Primary outcome
+    outcome: str = "unknown"  # CallOutcome value
+    outcome_confidence: float = 0.0
+
+    # Follow-up information
+    callback_scheduled: bool = False
+    callback_datetime: Optional[str] = None
+    application_started: bool = False
+    documents_requested: bool = False
+    documents_list: Optional[str] = None  # Comma-separated list
+
+    # Next steps
+    next_action: str = "no_action"  # NextAction value
+    next_action_confidence: float = 0.0
+
+    # Sentiment and objections
+    borrower_sentiment: str = "neutral"  # BorrowerSentiment value
+    objections_raised: Optional[str] = None
+
+    # Competitive intelligence
+    competitor_mentioned: Optional[str] = None
+    referral_source: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "outcome": self.outcome,
+            "outcome_confidence": self.outcome_confidence,
+            "callback_scheduled": self.callback_scheduled,
+            "callback_datetime": self.callback_datetime,
+            "application_started": self.application_started,
+            "documents_requested": self.documents_requested,
+            "documents_list": self.documents_list,
+            "next_action": self.next_action,
+            "next_action_confidence": self.next_action_confidence,
+            "borrower_sentiment": self.borrower_sentiment,
+            "objections_raised": self.objections_raised,
+            "competitor_mentioned": self.competitor_mentioned,
+            "referral_source": self.referral_source,
+        }
+
+    @classmethod
+    def from_extractions(cls, extractions: Dict[str, Any]) -> "CallOutcomeData":
+        """
+        Create CallOutcomeData from LLM extraction results.
+
+        Args:
+            extractions: Dict with extraction values from intent agent
+
+        Returns:
+            Populated CallOutcomeData instance
+        """
+        def get_value(key: str, default: Any = None) -> Any:
+            """Safely get value from extraction dict."""
+            if key not in extractions:
+                return default
+            item = extractions[key]
+            if isinstance(item, dict):
+                return item.get("value", default)
+            return item
+
+        def get_confidence(key: str) -> float:
+            """Get confidence score for a field."""
+            if key not in extractions:
+                return 0.0
+            item = extractions[key]
+            if isinstance(item, dict):
+                return float(item.get("confidence", 0))
+            return 0.0
+
+        return cls(
+            outcome=get_value("call_outcome", "unknown"),
+            outcome_confidence=get_confidence("call_outcome"),
+            callback_scheduled=bool(get_value("callback_scheduled", False)),
+            callback_datetime=get_value("callback_datetime"),
+            application_started=bool(get_value("application_started", False)),
+            documents_requested=bool(get_value("documents_requested", False)),
+            documents_list=get_value("documents_list"),
+            next_action=get_value("next_action", "no_action"),
+            next_action_confidence=get_confidence("next_action"),
+            borrower_sentiment=get_value("borrower_sentiment", "neutral"),
+            objections_raised=get_value("objections_raised"),
+            competitor_mentioned=get_value("competitor_mentioned"),
+            referral_source=get_value("referral_source_mentioned"),
+        )

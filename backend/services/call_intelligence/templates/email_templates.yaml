@@ -1,0 +1,282 @@
+# Email Templates for Call Intelligence Service
+#
+# Variables use {variable_name} format.
+# Format specifiers supported: {amount:,.0f} for currency formatting
+#
+# Required variables must be provided when rendering.
+# Optional variables have defaults or are excluded if not provided.
+
+version: "1.0"
+updated_at: "2025-02-05"
+
+templates:
+  - id: welcome
+    name: Welcome Email
+    category: welcome
+    description: Sent after initial call to welcome borrower and summarize conversation
+    version: "1.0"
+    active: true
+    subject: "Welcome to {company_name} - Your Mortgage Journey Starts Here"
+    body: |
+      Hi {first_name},
+
+      Thank you for speaking with us about your mortgage needs. We're excited to help you with your {loan_purpose} goals.
+
+      Based on our conversation, here's a quick summary:
+      - Loan Purpose: {loan_purpose}
+      - Estimated Amount: ${estimated_amount}
+      - Target Timeline: {target_timeline}
+
+      Your next steps:
+      {next_steps}
+
+      If you have any questions, please don't hesitate to reach out.
+
+      Best regards,
+      {lo_name}
+      {company_name}
+    required_variables:
+      - first_name
+      - company_name
+      - lo_name
+    optional_variables:
+      - loan_purpose
+      - estimated_amount
+      - target_timeline
+      - next_steps
+    default_values:
+      loan_purpose: "home financing"
+      estimated_amount: "TBD"
+      target_timeline: "As soon as possible"
+      next_steps: "• Complete your full application online\n• Gather required documents\n• Schedule a follow-up call"
+
+  - id: document_request
+    name: Document Request
+    category: documents
+    description: Request required documents from borrower
+    version: "1.0"
+    active: true
+    subject: "Documents Needed for Your Mortgage Application"
+    body: |
+      Hi {first_name},
+
+      To move forward with your mortgage application, we'll need the following documents:
+
+      Required Documents:
+      {required_documents}
+
+      You can securely upload your documents through our portal at: {upload_link}
+
+      Please try to submit these within the next {deadline_days} days to keep your application on track.
+
+      If you have any questions about what's needed, just reply to this email.
+
+      Best regards,
+      {lo_name}
+      {company_name}
+    required_variables:
+      - first_name
+      - required_documents
+      - lo_name
+      - company_name
+    optional_variables:
+      - upload_link
+      - deadline_days
+    default_values:
+      upload_link: "your secure portal"
+      deadline_days: "5"
+
+  - id: prequal_results
+    name: Pre-Qualification Results
+    category: prequal
+    description: Send pre-qualification calculation results
+    version: "1.0"
+    active: true
+    subject: "Your Pre-Qualification Results Are Ready"
+    body: |
+      Hi {first_name},
+
+      Great news! Based on the information you provided, here are your pre-qualification results:
+
+      Qualification Status: {qualification_status}
+      Maximum Purchase Price: ${max_purchase_price}
+      Estimated Monthly Payment: ${monthly_payment}
+      Estimated Rate: {estimated_rate}%
+
+      Loan Programs You Qualify For:
+      {qualified_programs}
+
+      {recommendations}
+
+      Ready to take the next step? {next_step_cta}
+
+      Best regards,
+      {lo_name}
+      {company_name}
+    required_variables:
+      - first_name
+      - qualification_status
+      - lo_name
+      - company_name
+    optional_variables:
+      - max_purchase_price
+      - monthly_payment
+      - estimated_rate
+      - qualified_programs
+      - recommendations
+      - next_step_cta
+    default_values:
+      max_purchase_price: "Contact us for details"
+      monthly_payment: "Contact us for details"
+      estimated_rate: "Current market rate"
+      qualified_programs: "Multiple options available"
+      recommendations: ""
+      next_step_cta: "Schedule a call to discuss your options."
+
+  - id: appointment_confirmation
+    name: Appointment Confirmation
+    category: appointment
+    description: Confirm scheduled appointment with borrower
+    version: "1.0"
+    active: true
+    subject: "Appointment Confirmed: {appointment_type} on {appointment_date}"
+    body: |
+      Hi {first_name},
+
+      Your appointment has been confirmed:
+
+      Date: {appointment_date}
+      Time: {appointment_time}
+      Type: {appointment_type}
+      {meeting_link_section}
+
+      What to prepare:
+      {preparation_items}
+
+      Need to reschedule? {reschedule_link}
+
+      We look forward to speaking with you!
+
+      Best regards,
+      {lo_name}
+      {company_name}
+    required_variables:
+      - first_name
+      - appointment_date
+      - appointment_time
+      - appointment_type
+      - lo_name
+      - company_name
+    optional_variables:
+      - meeting_link_section
+      - preparation_items
+      - reschedule_link
+    default_values:
+      meeting_link_section: ""
+      preparation_items: "• Have your ID ready\n• Prepare any questions\n• Have recent financial documents accessible"
+      reschedule_link: "Reply to this email to reschedule"
+
+  - id: followup
+    name: Follow-up Email
+    category: followup
+    description: Follow up after initial contact when no next step was scheduled
+    version: "1.0"
+    active: true
+    subject: "Following Up on Your Mortgage Inquiry"
+    body: |
+      Hi {first_name},
+
+      I wanted to follow up on our recent conversation about your {loan_purpose}.
+
+      {personalized_message}
+
+      Is there anything I can help clarify or any questions you have?
+
+      Best regards,
+      {lo_name}
+      {company_name}
+    required_variables:
+      - first_name
+      - lo_name
+      - company_name
+    optional_variables:
+      - loan_purpose
+      - personalized_message
+    default_values:
+      loan_purpose: "mortgage needs"
+      personalized_message: "I'm here to help whenever you're ready to move forward."
+
+  - id: callback_scheduled
+    name: Callback Scheduled Confirmation
+    category: appointment
+    description: Confirm a callback was scheduled during the call
+    version: "1.0"
+    active: true
+    subject: "Your Callback is Scheduled for {callback_date}"
+    body: |
+      Hi {first_name},
+
+      As discussed, I've scheduled a callback for:
+
+      Date: {callback_date}
+      Time: {callback_time}
+
+      During this call, we'll {callback_purpose}.
+
+      If this time no longer works, please reply to this email to reschedule.
+
+      Talk soon!
+
+      Best regards,
+      {lo_name}
+      {company_name}
+    required_variables:
+      - first_name
+      - callback_date
+      - callback_time
+      - lo_name
+      - company_name
+    optional_variables:
+      - callback_purpose
+    default_values:
+      callback_purpose: "continue our discussion about your mortgage options"
+
+  - id: application_started
+    name: Application Started Confirmation
+    category: welcome
+    description: Sent when borrower agrees to start an application
+    version: "1.0"
+    active: true
+    subject: "Your Mortgage Application Has Been Started"
+    body: |
+      Hi {first_name},
+
+      Great news! Your mortgage application has been initiated. Here's what happens next:
+
+      Application ID: {application_id}
+      Started: {start_date}
+
+      Next Steps:
+      1. Complete any remaining application questions
+      2. Upload required documents (we'll send a detailed list shortly)
+      3. Review and sign disclosures
+
+      You can access your application anytime at: {application_link}
+
+      If you have any questions during the process, don't hesitate to reach out.
+
+      Best regards,
+      {lo_name}
+      {company_name}
+    required_variables:
+      - first_name
+      - lo_name
+      - company_name
+    optional_variables:
+      - application_id
+      - start_date
+      - application_link
+    default_values:
+      application_id: "Pending"
+      start_date: "Today"
+      application_link: "your secure portal"

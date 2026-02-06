@@ -43,6 +43,10 @@ from .data_contracts import (
     ExtractionResult,
     CallIntelligenceRequest,
     CallIntelligenceResponse,
+    CallOutcomeData,
+    CallOutcome,
+    NextAction,
+    BorrowerSentiment,
 )
 from .pii_utils import (
     redact_ssn,
@@ -61,6 +65,40 @@ from .extraction_validator import (
     AggregateReport,
     SAMPLE_TRANSCRIPTS,
 )
+from .metrics import (
+    track_extraction,
+    track_error,
+    track_pii_redaction,
+    collect_metrics,
+    format_prometheus,
+    get_metrics_handler,
+    get_metrics_summary,
+)
+from .input_formats import (
+    AudioSource,
+    AudioProvider,
+    TranscriptionConfig,
+    TranscriptionProvider,
+    TranscriptionResult,
+    DocumentInput,
+    DocumentType,
+    parse_twilio_webhook,
+    parse_vonage_webhook,
+)
+from .email_templates import (
+    TemplateManager,
+    get_template_manager,
+    EmailTemplate,
+    SMSTemplate,
+)
+from .webhooks import (
+    WebhookHandler,
+    WebhookConfig,
+    WebhookEventType,
+    WebhookResult,
+    create_webhook_handler,
+)
+from .review_service import HumanReviewService
 
 __all__ = [
     # Processor
@@ -77,6 +115,10 @@ __all__ = [
     "ExtractionResult",
     "CallIntelligenceRequest",
     "CallIntelligenceResponse",
+    "CallOutcomeData",
+    "CallOutcome",
+    "NextAction",
+    "BorrowerSentiment",
     # PII utilities
     "redact_ssn",
     "extract_ssn_last_four",
@@ -92,4 +134,35 @@ __all__ = [
     "ValidationReport",
     "AggregateReport",
     "SAMPLE_TRANSCRIPTS",
+    # Metrics
+    "track_extraction",
+    "track_error",
+    "track_pii_redaction",
+    "collect_metrics",
+    "format_prometheus",
+    "get_metrics_handler",
+    "get_metrics_summary",
+    # Input formats
+    "AudioSource",
+    "AudioProvider",
+    "TranscriptionConfig",
+    "TranscriptionProvider",
+    "TranscriptionResult",
+    "DocumentInput",
+    "DocumentType",
+    "parse_twilio_webhook",
+    "parse_vonage_webhook",
+    # Email templates
+    "TemplateManager",
+    "get_template_manager",
+    "EmailTemplate",
+    "SMSTemplate",
+    # Webhooks
+    "WebhookHandler",
+    "WebhookConfig",
+    "WebhookEventType",
+    "WebhookResult",
+    "create_webhook_handler",
+    # Review service
+    "HumanReviewService",
 ]
