@@ -22,6 +22,28 @@ SALESFORCE_API_VERSION = "v58.0"
 # Falls back to in-memory if database not available
 _pkce_store_memory: Dict[str, Tuple[str, datetime]] = {}  # state -> (verifier, expires_at)
 PKCE_TTL_MINUTES = 10  # PKCE verifiers expire after 10 minutes
+PKCE_CLEANUP_INTERVAL_MINUTES = 5  # Run cleanup every 5 minutes
+_last_pkce_cleanup: Optional[datetime] = None  # Track last cleanup time
+
+
+def _should_run_pkce_cleanup() -> bool:
+    """
+    Determine if PKCE cleanup should run based on time elapsed.
+    Uses deterministic time-based check instead of random probability.
+    """
+    global _last_pkce_cleanup
+    now = datetime.utcnow()
+
+    if _last_pkce_cleanup is None:
+        _last_pkce_cleanup = now
+        return True  # First time, run cleanup
+
+    elapsed = (now - _last_pkce_cleanup).total_seconds() / 60
+    if elapsed >= PKCE_CLEANUP_INTERVAL_MINUTES:
+        _last_pkce_cleanup = now
+        return True
+
+    return False
 
 
 def _get_db_session():
@@ -42,11 +64,12 @@ def _store_pkce_verifier(state: str, verifier: str) -> None:
     if db:
         try:
             from sqlalchemy import text
-            # Clean up expired entries first (do this occasionally)
-            if secrets.randbelow(10) == 0:  # 10% chance to clean up
+            # Clean up expired entries periodically (time-based, not random)
+            if _should_run_pkce_cleanup():
                 db.execute(text("""
                     DELETE FROM oauth_pkce_store WHERE expires_at < :now
                 """), {"now": datetime.utcnow()})
+                logger.debug("PKCE cleanup: removed expired entries")
 
             # Store the verifier
             db.execute(text("""
@@ -64,11 +87,20 @@ def _store_pkce_verifier(state: str, verifier: str) -> None:
             db.commit()
             logger.info(f"Stored PKCE verifier in database for state: {state[:20]}...")
             return
+        except (ImportError, AttributeError) as e:
+            logger.warning(f"SQLAlchemy not available for PKCE storage: {e}")
         except Exception as e:
-            logger.warning(f"Failed to store PKCE in database, using memory: {e}")
-            db.rollback()
+            # Catch database errors specifically but allow fallback to memory
+            logger.warning(f"Database error storing PKCE, using memory fallback: {type(e).__name__}: {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass  # Rollback may fail if connection is broken
         finally:
-            db.close()
+            try:
+                db.close()
+            except Exception:
+                pass  # Close may fail if connection is broken
 
     # Fallback to memory storage
     _pkce_store_memory[state] = (verifier, expires_at)
@@ -94,11 +126,20 @@ def _get_pkce_verifier(state: str) -> Optional[str]:
             else:
                 logger.warning(f"No valid PKCE verifier found in database for state: {state[:20]}...")
                 return None
+        except (ImportError, AttributeError) as e:
+            logger.warning(f"SQLAlchemy not available for PKCE retrieval: {e}")
         except Exception as e:
-            logger.warning(f"Failed to retrieve PKCE from database, checking memory: {e}")
-            db.rollback()
+            # Catch database errors specifically but allow fallback to memory
+            logger.warning(f"Database error retrieving PKCE, checking memory: {type(e).__name__}: {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
         finally:
-            db.close()
+            try:
+                db.close()
+            except Exception:
+                pass
 
     # Fallback to memory storage
     stored = _pkce_store_memory.pop(state, None)

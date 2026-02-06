@@ -455,8 +455,10 @@ class SalesforceSyncService:
                 self._field_mappings = custom_mappings
                 logger.info(f"Loaded {len(custom_mappings)} custom field mappings")
                 return self._field_mappings
-        except Exception as e:
-            logger.warning(f"Could not load custom field mappings: {e}")
+        except SQLAlchemyError as e:
+            logger.warning(f"Database error loading custom field mappings: {e}")
+        except (ValueError, TypeError) as e:
+            logger.warning(f"Data error in custom field mappings: {e}")
 
         # Fall back to default mappings
         self._field_mappings = DEFAULT_FIELD_MAPPING
@@ -679,9 +681,15 @@ class SalesforceSyncService:
             for update in updates:
                 service.process_date_update(update, loan_id, loan_stage)
 
+        except (ImportError, AttributeError) as e:
+            # Service not available - this is expected in some environments
+            logger.debug(f"Date reconciliation service not available: {e}")
+        except (SQLAlchemyError, ValueError) as e:
+            # Database or data errors in date tracking - log but don't fail sync
+            logger.warning(f"Date reconciliation error for loan {loan_id}: {type(e).__name__}: {e}")
         except Exception as e:
-            # Don't fail the sync if date tracking fails
-            logger.warning(f"Date reconciliation tracking error for loan {loan_id}: {e}")
+            # Unexpected error - log with full context but don't fail sync
+            logger.warning(f"Unexpected date reconciliation error for loan {loan_id}: {type(e).__name__}: {e}")
 
         try:
             sla_service = get_sla_trigger_service(self.db)
@@ -706,9 +714,15 @@ class SalesforceSyncService:
                 for error in result["errors"]:
                     logger.warning(f"SLA trigger warning for loan {loan_id}: {error}")
 
+        except (ImportError, AttributeError) as e:
+            # SLA service not available - this is expected in some environments
+            logger.debug(f"SLA trigger service not available: {e}")
+        except SQLAlchemyError as e:
+            # Database error in SLA trigger - log but don't fail sync
+            logger.error(f"Database error in SLA workflows for loan {loan_id}: {e}")
         except Exception as e:
-            # Don't fail the sync if SLA trigger fails
-            logger.error(f"Error triggering SLA workflows for loan {loan_id}: {e}")
+            # Unexpected error - log with type but don't fail sync
+            logger.error(f"Error triggering SLA workflows for loan {loan_id}: {type(e).__name__}: {e}")
 
         # Also create SLA tasks in the main tasks table (single source of truth)
         try:
