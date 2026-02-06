@@ -2662,7 +2662,7 @@ async def debug_import_closed_loans_from_sf(
 
         # Get Salesforce credentials from integration_profiles (new OAuth)
         profile = db.execute(text("""
-            SELECT access_token_encrypted, refresh_token_encrypted, instance_url, user_id
+            SELECT id, access_token_encrypted, refresh_token_encrypted, instance_url, user_id
             FROM integration_profiles
             WHERE provider = 'salesforce' AND access_token_encrypted IS NOT NULL
             ORDER BY updated_at DESC
@@ -2672,11 +2672,21 @@ async def debug_import_closed_loans_from_sf(
         if not profile:
             return {"status": "error", "message": "No Salesforce integration found"}
 
-        # Decrypt tokens
-        from services.salesforce.oauth_service import decrypt_value
-        access_token = decrypt_value(profile[0])
-        instance_url = profile[2]
-        user_id = profile[3]
+        profile_id = profile[0]
+        instance_url = profile[3]
+        user_id = profile[4]
+
+        # Get access token with automatic refresh
+        from services.salesforce.oauth_service import SalesforceOAuth
+        oauth = SalesforceOAuth()
+        try:
+            access_token, _ = await oauth.get_access_token(db, profile_id)
+        except Exception as oauth_err:
+            return {
+                "status": "error",
+                "message": f"Failed to get Salesforce access token: {oauth_err}",
+                "hint": "Try reconnecting Salesforce in Settings > Integrations"
+            }
 
         # Query closed loans from Salesforce
         sf_object = "MtgPlanner_CRM__Transaction_Property__c"
@@ -2709,7 +2719,8 @@ async def debug_import_closed_loans_from_sf(
             return {
                 "status": "error",
                 "message": f"Salesforce query failed: {response.status_code}",
-                "details": response.text[:500]
+                "details": response.text[:500],
+                "hint": "Token may have expired. Try reconnecting Salesforce."
             }
 
         sf_data = response.json()
