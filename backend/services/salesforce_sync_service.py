@@ -19,6 +19,14 @@ from requests.exceptions import RequestException
 
 logger = logging.getLogger(__name__)
 
+# =============================================================================
+# API VERSION: Use consistent version across all Salesforce API calls
+# =============================================================================
+try:
+    from integrations.salesforce_service import SALESFORCE_API_VERSION
+except ImportError:
+    SALESFORCE_API_VERSION = "v58.0"  # Fallback to stable version
+
 
 # =============================================================================
 # SECURITY: Salesforce ID Validation
@@ -276,6 +284,43 @@ DEFAULT_FIELD_MAPPING = {
     "CreatedDate": ("created_at", "datetime"),
     "LastModifiedDate": ("updated_at", "datetime"),
 }
+
+# =============================================================================
+# SECURITY: Allowed loan fields whitelist for dynamic SQL
+# Generated from DEFAULT_FIELD_MAPPING to prevent SQL injection via field names
+# =============================================================================
+ALLOWED_LOAN_FIELDS = frozenset(
+    crm_field for crm_field, _ in DEFAULT_FIELD_MAPPING.values()
+) | {
+    # Additional fields that may be set programmatically
+    "organization_id",
+    "loan_officer_id",
+    "salesforce_id",
+    "salesforce_last_synced_at",
+    "salesforce_sync_status",
+    "sla_status",
+    "created_at",
+    "updated_at",
+}
+
+
+def validate_loan_field_name(field_name: str) -> str:
+    """
+    Validate a loan field name against the whitelist.
+
+    Args:
+        field_name: The field name to validate
+
+    Returns:
+        The validated field name
+
+    Raises:
+        ValueError: If the field name is not in the whitelist
+    """
+    if field_name not in ALLOWED_LOAN_FIELDS:
+        raise ValueError(f"Invalid loan field name: '{field_name}' - not in allowed fields")
+    return field_name
+
 
 # Stage mapping from Salesforce values to CRM LoanStage enum
 STAGE_MAPPING = {
@@ -535,8 +580,14 @@ class SalesforceSyncService:
 
                 for field, value in loan_data.items():
                     if field != "salesforce_id":  # Don't update the ID
-                        update_fields.append(f"{field} = :{field}")
-                        params[field] = value
+                        # SECURITY: Validate field name against whitelist to prevent SQL injection
+                        try:
+                            validate_loan_field_name(field)
+                            update_fields.append(f"{field} = :{field}")
+                            params[field] = value
+                        except ValueError as e:
+                            logger.warning(f"Skipping invalid field in loan update: {e}")
+                            continue
 
                 if update_fields:
                     self.db.execute(text(f"""
@@ -554,26 +605,35 @@ class SalesforceSyncService:
                 return loan_id, "updated"
             else:
                 # Create new loan
-                # Build insert statement dynamically based on available fields
-                fields = list(loan_data.keys())
+                # SECURITY: Validate all field names against whitelist before INSERT
+                validated_data = {}
+                for field, value in loan_data.items():
+                    try:
+                        validate_loan_field_name(field)
+                        validated_data[field] = value
+                    except ValueError as e:
+                        logger.warning(f"Skipping invalid field in loan insert: {e}")
+                        continue
+
+                fields = list(validated_data.keys())
                 placeholders = [f":{f}" for f in fields]
 
                 # Add organization and owner
                 if self.organization_id:
                     fields.append("organization_id")
                     placeholders.append(":organization_id")
-                    loan_data["organization_id"] = self.organization_id
+                    validated_data["organization_id"] = self.organization_id
 
                 if self.user_id:
                     fields.append("loan_officer_id")
                     placeholders.append(":loan_officer_id")
-                    loan_data["loan_officer_id"] = self.user_id
+                    validated_data["loan_officer_id"] = self.user_id
 
                 result = self.db.execute(text(f"""
                     INSERT INTO loans ({", ".join(fields)})
                     VALUES ({", ".join(placeholders)})
                     RETURNING id
-                """), loan_data)
+                """), validated_data)
                 self.db.commit()
 
                 loan_id = result.fetchone()[0]
@@ -1063,7 +1123,7 @@ class SalesforceSyncService:
 
             if salesforce_id:
                 # Update existing record
-                url = f"{instance_url}/services/data/v59.0/sobjects/{sf_object}/{salesforce_id}"
+                url = f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/sobjects/{sf_object}/{salesforce_id}"
                 response = requests.patch(url, headers=headers, json=sf_record, timeout=30)
 
                 if response.status_code == 204:
@@ -1077,7 +1137,7 @@ class SalesforceSyncService:
                     return False, "error", error_msg
             else:
                 # Create new record
-                url = f"{instance_url}/services/data/v59.0/sobjects/{sf_object}"
+                url = f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/sobjects/{sf_object}"
                 response = requests.post(url, headers=headers, json=sf_record, timeout=30)
 
                 if response.status_code == 201:
@@ -1272,7 +1332,7 @@ class SalesforceSyncService:
             # Execute SOQL query
             import urllib.parse
             encoded_soql = urllib.parse.quote(soql)
-            url = f"{instance_url}/services/data/v59.0/query/?q={encoded_soql}"
+            url = f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/query/?q={encoded_soql}"
 
             response = requests.get(url, headers=headers, timeout=30)
 
@@ -1344,7 +1404,7 @@ class SalesforceSyncService:
             # Execute SOQL query
             import urllib.parse
             encoded_soql = urllib.parse.quote(soql)
-            url = f"{instance_url}/services/data/v59.0/query/?q={encoded_soql}"
+            url = f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/query/?q={encoded_soql}"
 
             response = requests.get(url, headers=headers, timeout=30)
 

@@ -49,6 +49,49 @@ except ImportError:
 
 router = APIRouter()
 
+
+# =============================================================================
+# UTILITY: Instance URL Parsing (replaces fragile string splitting)
+# =============================================================================
+
+def parse_instance_url_from_scopes(scopes: str) -> Optional[str]:
+    """
+    Safely parse instance_url from scopes string.
+
+    The scopes field sometimes contains 'instance_url:https://...' format
+    from legacy OAuth flows. This function safely extracts it.
+
+    Args:
+        scopes: The scopes string that may contain instance_url
+
+    Returns:
+        The instance URL if found, None otherwise
+    """
+    if not scopes:
+        return None
+
+    try:
+        if "instance_url:" not in scopes:
+            return None
+
+        # Extract the URL after 'instance_url:'
+        after_prefix = scopes.split("instance_url:")[1]
+
+        # The URL ends at comma or end of string
+        instance_url = after_prefix.split(",")[0].strip()
+
+        # Validate it looks like a URL
+        if instance_url.startswith("https://") and ".salesforce.com" in instance_url:
+            return instance_url
+
+        logger.warning(f"Invalid instance URL format in scopes: {instance_url[:50]}")
+        return None
+
+    except (IndexError, AttributeError) as e:
+        logger.warning(f"Failed to parse instance_url from scopes: {e}")
+        return None
+
+
 # Deprecation configuration
 DEPRECATION_DATE = "2025-06-01"  # Date when these endpoints will be removed
 SUNSET_LINK = "/api/integrations/salesforce"  # New endpoint location
@@ -642,7 +685,7 @@ async def salesforce_status(
     # Get instance_url from dedicated column, fall back to parsing from scopes for legacy data
     instance_url = integration[5] if len(integration) > 5 and integration[5] else None
     if not instance_url and integration[1] and "instance_url:" in str(integration[1]):
-        instance_url = str(integration[1]).split("instance_url:")[1].split(",")[0]
+        instance_url = parse_instance_url_from_scopes(str(integration[1]))
 
     # Get last sync time (table may not exist yet)
     last_sync_time = None
@@ -830,7 +873,7 @@ async def salesforce_full_sync(
     # Parse instance_url from scopes
     instance_url = None
     if integration[2] and "instance_url:" in integration[2]:
-        instance_url = integration[2].split("instance_url:")[1].split(",")[0]
+        instance_url = parse_instance_url_from_scopes(integration[2])
 
     if not instance_url:
         raise HTTPException(
@@ -1018,7 +1061,7 @@ async def test_salesforce_connection(
     access_token = decrypt_token(integration[0])
     instance_url = None
     if integration[1] and "instance_url:" in integration[1]:
-        instance_url = integration[1].split("instance_url:")[1].split(",")[0]
+        instance_url = parse_instance_url_from_scopes(integration[1])
 
     if not instance_url:
         return {"connected": False, "error": "Instance URL not found"}
@@ -1072,7 +1115,7 @@ async def explore_salesforce_objects(
     access_token = decrypt_token(integration[0])
     instance_url = None
     if integration[1] and "instance_url:" in integration[1]:
-        instance_url = integration[1].split("instance_url:")[1].split(",")[0]
+        instance_url = parse_instance_url_from_scopes(integration[1])
 
     if not instance_url:
         raise HTTPException(status_code=400, detail="Instance URL not found")
@@ -1152,7 +1195,7 @@ async def explore_salesforce_object_fields(
     access_token = decrypt_token(integration[0])
     instance_url = None
     if integration[1] and "instance_url:" in integration[1]:
-        instance_url = integration[1].split("instance_url:")[1].split(",")[0]
+        instance_url = parse_instance_url_from_scopes(integration[1])
 
     if not instance_url:
         raise HTTPException(status_code=400, detail="Instance URL not found")
@@ -1228,7 +1271,7 @@ async def explore_salesforce_query(
     access_token = decrypt_token(integration[0])
     instance_url = None
     if integration[1] and "instance_url:" in integration[1]:
-        instance_url = integration[1].split("instance_url:")[1].split(",")[0]
+        instance_url = parse_instance_url_from_scopes(integration[1])
 
     if not instance_url:
         raise HTTPException(status_code=400, detail="Instance URL not found")
@@ -1315,7 +1358,7 @@ async def import_closed_loans(
     access_token = decrypt_token(integration[0])
     instance_url = None
     if integration[1] and "instance_url:" in integration[1]:
-        instance_url = integration[1].split("instance_url:")[1].split(",")[0]
+        instance_url = parse_instance_url_from_scopes(integration[1])
 
     if not instance_url:
         raise HTTPException(status_code=400, detail="Instance URL not found")
@@ -1572,7 +1615,7 @@ async def push_loan_to_salesforce(
     # Parse instance_url from scopes
     instance_url = None
     if integration[2] and "instance_url:" in integration[2]:
-        instance_url = integration[2].split("instance_url:")[1].split(",")[0]
+        instance_url = parse_instance_url_from_scopes(integration[2])
 
     if not instance_url:
         raise HTTPException(
@@ -1642,7 +1685,7 @@ async def push_loans_batch_to_salesforce(
     # Parse instance_url from scopes
     instance_url = None
     if integration[2] and "instance_url:" in integration[2]:
-        instance_url = integration[2].split("instance_url:")[1].split(",")[0]
+        instance_url = parse_instance_url_from_scopes(integration[2])
 
     if not instance_url:
         raise HTTPException(
@@ -1780,7 +1823,7 @@ async def pull_loan_from_salesforce(
     # Parse instance_url from scopes
     instance_url = None
     if integration[2] and "instance_url:" in integration[2]:
-        instance_url = integration[2].split("instance_url:")[1].split(",")[0]
+        instance_url = parse_instance_url_from_scopes(integration[2])
 
     if not instance_url:
         raise HTTPException(
@@ -1942,7 +1985,7 @@ async def admin_pull_recent_loans(
     # Parse instance_url from scopes
     instance_url = None
     if integration[3] and "instance_url:" in integration[3]:
-        instance_url = integration[3].split("instance_url:")[1].split(",")[0]
+        instance_url = parse_instance_url_from_scopes(integration[3])
 
     if not instance_url:
         return {
@@ -2890,7 +2933,7 @@ async def sync_salesforce_and_import_mum(
         instance_url = None
         scopes = integration[3] or ""
         if "instance_url:" in scopes:
-            instance_url = scopes.split("instance_url:")[1].split(",")[0]
+            instance_url = parse_instance_url_from_scopes(scopes)
 
         if instance_url:
             try:
@@ -3146,7 +3189,7 @@ async def sync_all_loans_from_salesforce(
     logger.info(f"Scopes string: {scopes_str[:100]}...")
 
     if "instance_url:" in scopes_str:
-        instance_url = scopes_str.split("instance_url:")[1].split(",")[0].strip()
+        instance_url = parse_instance_url_from_scopes(scopes_str)
         logger.info(f"Parsed instance URL: {instance_url}")
 
     if not instance_url:
@@ -3480,7 +3523,7 @@ async def debug_salesforce_connection(
             scopes = integration[2] or ""
             instance_url = None
             if "instance_url:" in scopes:
-                instance_url = scopes.split("instance_url:")[1].split(",")[0].strip()
+                instance_url = parse_instance_url_from_scopes(scopes).strip()
 
             result["user_integrations"] = {
                 "status": "found",
@@ -3656,7 +3699,7 @@ async def debug_test_salesforce_query(
         if "instance_url:" not in scopes:
             return {"status": "error", "message": "No instance URL in scopes"}
 
-        instance_url = scopes.split("instance_url:")[1].split(",")[0].strip()
+        instance_url = parse_instance_url_from_scopes(scopes).strip()
 
         # Try a simple query
         headers = {
@@ -3775,7 +3818,7 @@ async def debug_all_statuses(
                 refresh_token = integration[1]
                 scopes = integration[2] or ""
                 if "instance_url:" in scopes:
-                    instance_url = scopes.split("instance_url:")[1].split(",")[0].strip()
+                    instance_url = parse_instance_url_from_scopes(scopes).strip()
                 token_source = "user_integrations"
 
         if not access_token:
