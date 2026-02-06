@@ -3789,8 +3789,9 @@ async def debug_all_statuses(
         }
 
         # Query ALL records without any WHERE clause, just get status field
+        # Note: Some fields may not exist in all orgs, use simple query
         soql = """
-            SELECT Id, Name, MtgPlanner_CRM__Status__c, MtgPlanner_CRM__Funded_Date__c,
+            SELECT Id, Name, MtgPlanner_CRM__Status__c,
                    MtgPlanner_CRM__Borrower_Name__c, LastModifiedDate
             FROM MtgPlanner_CRM__Transaction_Property__c
             ORDER BY LastModifiedDate DESC
@@ -3818,23 +3819,19 @@ async def debug_all_statuses(
 
             # Count statuses
             status_counts = {}
-            has_funded_date_count = 0
             sample_records = []
 
             for r in records:
                 status = r.get('MtgPlanner_CRM__Status__c', 'NULL/EMPTY')
                 status_counts[status] = status_counts.get(status, 0) + 1
 
-                if r.get('MtgPlanner_CRM__Funded_Date__c'):
-                    has_funded_date_count += 1
-
                 if len(sample_records) < 20:
                     sample_records.append({
                         "Id": r.get("Id"),
                         "Name": r.get("Name"),
                         "Status": r.get("MtgPlanner_CRM__Status__c"),
-                        "FundedDate": r.get("MtgPlanner_CRM__Funded_Date__c"),
                         "Borrower": r.get("MtgPlanner_CRM__Borrower_Name__c"),
+                        "LastModified": r.get("LastModifiedDate"),
                     })
 
             return {
@@ -3843,7 +3840,6 @@ async def debug_all_statuses(
                 "total_records": data.get('totalSize', len(records)),
                 "records_in_batch": len(records),
                 "status_distribution": status_counts,
-                "has_funded_date_count": has_funded_date_count,
                 "sample_records": sample_records,
                 "query_used": soql
             }
