@@ -69,6 +69,7 @@ def create_celery_app(app_name: str = "perennia") -> Celery:
             "tasks.calendar_sync_tasks",
             "tasks.salesforce_sync_tasks",
             "tasks.call_intelligence_tasks",
+            "tasks.video_render_tasks",
         ],
     )
 
@@ -109,6 +110,7 @@ def create_celery_app(app_name: str = "perennia") -> Celery:
             Queue("high_priority", Exchange("high_priority"), routing_key="high_priority"),
             Queue("low_priority", Exchange("low_priority"), routing_key="low_priority"),
             Queue("ai_tasks", Exchange("ai_tasks"), routing_key="ai_tasks"),
+            Queue("video_render", Exchange("video_render"), routing_key="video_render"),
         ),
         task_default_queue="default",
         task_default_exchange="default",
@@ -123,6 +125,8 @@ def create_celery_app(app_name: str = "perennia") -> Celery:
             "tasks.call_intelligence_tasks.process_batch_task": {"queue": "ai_tasks"},
             "tasks.call_intelligence_tasks.cleanup_old_results_task": {"queue": "low_priority"},
             "tasks.call_intelligence_tasks.reprocess_failed_task": {"queue": "low_priority"},
+            "tasks.video_render_tasks.process_render_job": {"queue": "video_render"},
+            "tasks.video_render_tasks.queue_pending_jobs": {"queue": "video_render"},
         },
     )
 
@@ -218,6 +222,13 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(hour="4", minute="0"),  # 4 AM daily
         "options": {"queue": "low_priority"},
         "kwargs": {"hours": 24, "limit": 50},
+    },
+
+    # Video Render Tasks
+    "queue-pending-video-render-jobs": {
+        "task": "tasks.video_render_tasks.queue_pending_jobs",
+        "schedule": crontab(minute="*/2"),  # Every 2 minutes
+        "options": {"queue": "video_render"},
     },
 }
 

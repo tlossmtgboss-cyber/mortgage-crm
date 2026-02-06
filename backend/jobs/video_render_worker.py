@@ -856,24 +856,23 @@ class VideoRenderWorker:
         )
 
     def _upload_to_s3(self, video_path: Path, ctx: RenderContext) -> str:
-        """Upload video to S3."""
-        import boto3
+        """Upload video to S3 using VideoS3Service."""
+        from services.video_hosting_service import get_video_s3_service
 
-        s3 = boto3.client("s3")
-        key = f"videos/{ctx.job_id}/final.mp4"
-
-        s3.upload_file(
-            str(video_path),
-            S3_BUCKET,
-            key,
-            ExtraArgs={"ContentType": "video/mp4"}
+        video_s3 = get_video_s3_service()
+        result = video_s3.upload_video(
+            file_path=str(video_path),
+            job_id=ctx.job_id,
+            artifact_type="final",
+            content_type="video/mp4"
         )
 
-        cdn_url = os.getenv("VIDEO_CDN_URL", "")
-        if cdn_url:
-            return f"{cdn_url}/{key}"
+        if result.get("success"):
+            return result["url"]
         else:
-            return f"https://{S3_BUCKET}.s3.amazonaws.com/{key}"
+            # Fallback to local path if upload fails
+            logger.warning(f"S3 upload failed: {result.get('error')}, using local path")
+            return f"/videos/{ctx.job_id}/final.mp4"
 
 
 # Entry point for running as standalone worker

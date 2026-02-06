@@ -577,7 +577,8 @@ async def publish_video(
         )
 
         # Update render job state to published
-        render_service.transition_state(db, job["job_id"], RenderJobState.PUBLISHED)
+        from services.video_render_service import RenderState
+        render_service.transition_state(db, job["id"], RenderState.PUBLISHED)
 
         return success_response(data=video, message="Video published to library")
     except HTTPException:

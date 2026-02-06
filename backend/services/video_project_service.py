@@ -8,7 +8,7 @@ import json
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -137,10 +137,12 @@ class VideoProjectService:
         organization_id: Optional[int] = None,
         user_id: Optional[int] = None,
         status: Optional[str] = None,
+        category: Optional[str] = None,
+        search: Optional[str] = None,
         limit: int = 50,
         offset: int = 0
-    ) -> List[Dict[str, Any]]:
-        """List video projects with filters."""
+    ) -> Tuple[List[Dict[str, Any]], int]:
+        """List video projects with filters. Returns (projects, total_count)."""
         params = {"limit": limit, "offset": offset}
         filters = []
 
@@ -153,8 +155,20 @@ class VideoProjectService:
         if status:
             filters.append("p.status = :status")
             params["status"] = status
+        if category:
+            filters.append("p.category = :category")
+            params["category"] = category
+        if search:
+            filters.append("(p.title ILIKE :search OR p.source_text ILIKE :search)")
+            params["search"] = f"%{search}%"
 
         where_clause = " AND ".join(filters) if filters else "1=1"
+
+        # Get total count
+        count_result = db.execute(text(f"""
+            SELECT COUNT(*) FROM video_projects p WHERE {where_clause}
+        """), params)
+        total = count_result.scalar() or 0
 
         results = db.execute(text(f"""
             SELECT
@@ -169,7 +183,7 @@ class VideoProjectService:
             LIMIT :limit OFFSET :offset
         """), params).fetchall()
 
-        return [self._row_to_dict(r) for r in results]
+        return [self._row_to_dict(r) for r in results], total
 
     def update_project(
         self,

@@ -9,6 +9,7 @@ import hashlib
 import logging
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any, Tuple
+from pathlib import Path
 from sqlalchemy import text, func
 from sqlalchemy.orm import Session
 
@@ -18,6 +19,285 @@ logger = logging.getLogger(__name__)
 S3_BUCKET = os.getenv("VIDEO_S3_BUCKET", "perennia-videos")
 S3_REGION = os.getenv("VIDEO_S3_REGION", "us-east-1")
 CDN_BASE_URL = os.getenv("VIDEO_CDN_URL", "")
+
+
+class VideoS3Service:
+    """
+    S3 service specialized for video storage.
+
+    Features:
+    - 500MB file size limit for video files
+    - Video-specific content types (mp4, webm, mov, etc.)
+    - CDN URL generation
+    - Thumbnail and preview support
+    """
+
+    # Maximum file size: 500MB
+    MAX_VIDEO_SIZE = 500 * 1024 * 1024
+
+    # Allowed video content types
+    ALLOWED_VIDEO_TYPES = [
+        'video/mp4',
+        'video/webm',
+        'video/quicktime',  # .mov
+        'video/x-msvideo',  # .avi
+        'video/x-matroska',  # .mkv
+        'video/mpeg',
+        'audio/mpeg',  # mp3 for audio tracks
+        'audio/wav',
+        'audio/x-wav',
+        'image/jpeg',
+        'image/png',
+        'image/webp',  # for thumbnails
+    ]
+
+    def __init__(
+        self,
+        bucket_name: Optional[str] = None,
+        region: Optional[str] = None,
+        cdn_url: Optional[str] = None
+    ):
+        """Initialize video S3 service."""
+        self.bucket_name = bucket_name or os.getenv("VIDEO_S3_BUCKET", "perennia-videos")
+        self.region = region or os.getenv("VIDEO_S3_REGION", "us-east-1")
+        self.cdn_url = cdn_url or os.getenv("VIDEO_CDN_URL", "")
+
+        self._client = None
+
+    @property
+    def client(self):
+        """Lazy-load boto3 client."""
+        if self._client is None:
+            import boto3
+            from botocore.config import Config
+
+            config = Config(
+                signature_version='s3v4',
+                s3={'addressing_style': 'virtual'}
+            )
+
+            self._client = boto3.client(
+                's3',
+                region_name=self.region,
+                config=config
+            )
+        return self._client
+
+    def generate_video_key(
+        self,
+        job_id: str,
+        artifact_type: str = "final",
+        extension: str = "mp4"
+    ) -> str:
+        """
+        Generate a storage key for a video file.
+
+        Format: videos/{job_id}/{artifact_type}.{extension}
+
+        Args:
+            job_id: The render job ID
+            artifact_type: Type of artifact (final, preview, thumbnail, audio)
+            extension: File extension
+
+        Returns:
+            S3 storage key
+        """
+        return f"videos/{job_id}/{artifact_type}.{extension}"
+
+    def generate_thumbnail_key(self, job_id: str, index: int = 0) -> str:
+        """Generate storage key for a video thumbnail."""
+        return f"videos/{job_id}/thumbnails/thumb_{index:03d}.jpg"
+
+    def generate_scene_key(self, job_id: str, scene_index: int, asset_type: str = "visual") -> str:
+        """Generate storage key for a scene asset."""
+        ext = "png" if asset_type == "visual" else "wav"
+        return f"videos/{job_id}/scenes/{scene_index:03d}_{asset_type}.{ext}"
+
+    def upload_video(
+        self,
+        file_path: str,
+        job_id: str,
+        artifact_type: str = "final",
+        content_type: str = "video/mp4"
+    ) -> Dict[str, Any]:
+        """
+        Upload a video file to S3.
+
+        Args:
+            file_path: Local path to the video file
+            job_id: Render job ID
+            artifact_type: Type of artifact
+            content_type: MIME type
+
+        Returns:
+            Dict with upload result and URLs
+        """
+        from botocore.exceptions import ClientError
+
+        path = Path(file_path)
+        if not path.exists():
+            return {"success": False, "error": "File not found"}
+
+        file_size = path.stat().st_size
+        if file_size > self.MAX_VIDEO_SIZE:
+            return {
+                "success": False,
+                "error": f"File size {file_size} exceeds maximum {self.MAX_VIDEO_SIZE} bytes"
+            }
+
+        extension = path.suffix.lstrip('.') or 'mp4'
+        storage_key = self.generate_video_key(job_id, artifact_type, extension)
+
+        try:
+            self.client.upload_file(
+                str(path),
+                self.bucket_name,
+                storage_key,
+                ExtraArgs={
+                    'ContentType': content_type,
+                    'CacheControl': 'max-age=31536000'  # 1 year cache
+                }
+            )
+
+            # Generate URL
+            if self.cdn_url:
+                url = f"{self.cdn_url}/{storage_key}"
+            else:
+                url = f"https://{self.bucket_name}.s3.amazonaws.com/{storage_key}"
+
+            logger.info(f"Uploaded video to s3://{self.bucket_name}/{storage_key}")
+
+            return {
+                "success": True,
+                "storage_key": storage_key,
+                "url": url,
+                "file_size": file_size,
+                "content_type": content_type
+            }
+
+        except ClientError as e:
+            logger.error(f"Error uploading video: {e}")
+            return {"success": False, "error": str(e)}
+
+    def upload_file_content(
+        self,
+        content: bytes,
+        storage_key: str,
+        content_type: str
+    ) -> Dict[str, Any]:
+        """
+        Upload file content directly to S3.
+
+        Args:
+            content: File bytes
+            storage_key: S3 key
+            content_type: MIME type
+
+        Returns:
+            Dict with upload result
+        """
+        from io import BytesIO
+        from botocore.exceptions import ClientError
+
+        if len(content) > self.MAX_VIDEO_SIZE:
+            return {
+                "success": False,
+                "error": f"Content size exceeds maximum {self.MAX_VIDEO_SIZE} bytes"
+            }
+
+        try:
+            self.client.upload_fileobj(
+                BytesIO(content),
+                self.bucket_name,
+                storage_key,
+                ExtraArgs={'ContentType': content_type}
+            )
+
+            if self.cdn_url:
+                url = f"{self.cdn_url}/{storage_key}"
+            else:
+                url = f"https://{self.bucket_name}.s3.amazonaws.com/{storage_key}"
+
+            return {
+                "success": True,
+                "storage_key": storage_key,
+                "url": url,
+                "file_size": len(content)
+            }
+
+        except ClientError as e:
+            logger.error(f"Error uploading content: {e}")
+            return {"success": False, "error": str(e)}
+
+    def get_presigned_url(
+        self,
+        storage_key: str,
+        expires_in: int = 3600
+    ) -> Dict[str, Any]:
+        """
+        Generate a presigned download URL.
+
+        Args:
+            storage_key: S3 key
+            expires_in: URL expiry in seconds
+
+        Returns:
+            Dict with presigned URL
+        """
+        from botocore.exceptions import ClientError
+
+        try:
+            url = self.client.generate_presigned_url(
+                'get_object',
+                Params={
+                    'Bucket': self.bucket_name,
+                    'Key': storage_key
+                },
+                ExpiresIn=expires_in
+            )
+
+            return {
+                "success": True,
+                "url": url,
+                "expires_in": expires_in
+            }
+
+        except ClientError as e:
+            logger.error(f"Error generating presigned URL: {e}")
+            return {"success": False, "error": str(e)}
+
+    def delete_video(self, storage_key: str) -> Dict[str, Any]:
+        """Delete a video from S3."""
+        from botocore.exceptions import ClientError
+
+        try:
+            self.client.delete_object(
+                Bucket=self.bucket_name,
+                Key=storage_key
+            )
+            return {"success": True, "deleted": storage_key}
+
+        except ClientError as e:
+            logger.error(f"Error deleting video: {e}")
+            return {"success": False, "error": str(e)}
+
+    def get_public_url(self, storage_key: str) -> str:
+        """Get the public URL for a video (CDN or S3 direct)."""
+        if self.cdn_url:
+            return f"{self.cdn_url}/{storage_key}"
+        return f"https://{self.bucket_name}.s3.amazonaws.com/{storage_key}"
+
+
+# Singleton instance
+_video_s3_service: Optional[VideoS3Service] = None
+
+
+def get_video_s3_service() -> VideoS3Service:
+    """Get or create the video S3 service singleton."""
+    global _video_s3_service
+    if _video_s3_service is None:
+        _video_s3_service = VideoS3Service()
+    return _video_s3_service
 
 
 class VideoHostingService:

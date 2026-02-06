@@ -157,15 +157,19 @@ class VideoRenderService:
     def list_render_jobs(
         self,
         db: Session,
+        organization_id: Optional[int] = None,
         project_id: Optional[int] = None,
         state: Optional[str] = None,
         limit: int = 50,
         offset: int = 0
-    ) -> List[Dict[str, Any]]:
-        """List render jobs with filters."""
+    ) -> Tuple[List[Dict[str, Any]], int]:
+        """List render jobs with filters. Returns (jobs, total_count)."""
         params = {"limit": limit, "offset": offset}
         filters = []
 
+        if organization_id:
+            filters.append("p.organization_id = :org_id")
+            params["org_id"] = organization_id
         if project_id:
             filters.append("rj.project_id = :project_id")
             params["project_id"] = project_id
@@ -174,6 +178,14 @@ class VideoRenderService:
             params["state"] = state
 
         where_clause = " AND ".join(filters) if filters else "1=1"
+
+        # Get total count
+        count_result = db.execute(text(f"""
+            SELECT COUNT(*) FROM video_render_jobs rj
+            JOIN video_projects p ON p.id = rj.project_id
+            WHERE {where_clause}
+        """), params)
+        total = count_result.scalar() or 0
 
         results = db.execute(text(f"""
             SELECT
@@ -186,7 +198,7 @@ class VideoRenderService:
             LIMIT :limit OFFSET :offset
         """), params).fetchall()
 
-        return [self._row_to_dict(r) for r in results]
+        return [self._row_to_dict(r) for r in results], total
 
     def get_pending_jobs(self, db: Session, limit: int = 10) -> List[Dict[str, Any]]:
         """Get jobs waiting to be processed."""
@@ -625,6 +637,14 @@ class VideoRenderService:
     ) -> Optional[Dict[str, Any]]:
         """Claim the next available job for a worker (alias for claim_job)."""
         return self.claim_job(db, worker_id)
+
+    def get_render_job_by_id(self, db: Session, job_id: int) -> Optional[Dict[str, Any]]:
+        """Get a render job by its integer database ID (alias for get_render_job)."""
+        return self.get_render_job(db, job_id)
+
+    def retry_job(self, db: Session, job_id: int) -> Tuple[bool, str]:
+        """Retry a failed render job (alias for retry_failed_job)."""
+        return self.retry_failed_job(db, job_id)
 
     def fail_job(
         self,
