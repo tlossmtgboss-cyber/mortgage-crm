@@ -16,7 +16,7 @@ from functools import lru_cache
 logger = logging.getLogger(__name__)
 
 # FRED API configuration
-FRED_API_KEY = os.getenv('FRED_API_KEY', '1dc7b79a0de274ac6198c520405425a0')
+FRED_API_KEY = os.getenv('FRED_API_KEY', '')
 FRED_BASE_URL = 'https://api.stlouisfed.org/fred'
 
 # Treasury series IDs in FRED

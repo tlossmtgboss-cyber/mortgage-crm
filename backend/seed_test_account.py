@@ -34,8 +34,8 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # =============================================================================
 # TEST ACCOUNT CREDENTIALS
 # =============================================================================
-TEST_EMAIL = "testuser@perenniaai.com"
-TEST_PASSWORD = "TestAccount2026!"
+TEST_EMAIL = os.environ.get("TEST_EMAIL", "testuser@perenniaai.com")
+TEST_PASSWORD = os.environ.get("TEST_PASSWORD", "TestAccount2026!")
 TEST_FULL_NAME = "Test User"
 TEST_COMPANY = "Perennia Test Corp"
 

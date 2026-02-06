@@ -574,7 +574,7 @@ function AIRateLockCommentary({ marketData }) {
   );
 }
 
-const FRED_API_KEY = '1dc7b79a0de274ac6198c520405425a0';
+const FRED_API_KEY = process.env.REACT_APP_FRED_API_KEY || '';
 
 // Fetch Treasury yields from FRED API
 async function fetchTreasuryYields() {

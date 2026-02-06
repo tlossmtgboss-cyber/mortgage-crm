@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Test login to mortgage guidelines to debug form fields"""
+import os
 import requests
 from bs4 import BeautifulSoup
 
 URL = "https://my.mortgageguidelines.com/account-login/"
-USERNAME = "tloss@cmghomeloans.com"
-PASSWORD = "Woodwindow00!"
+USERNAME = os.environ.get("MG_USERNAME", "")
+PASSWORD = os.environ.get("MG_PASSWORD", "")
 
 def test_login():
     session = requests.Session()

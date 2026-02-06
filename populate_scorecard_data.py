@@ -2,18 +2,19 @@
 """
 Script to populate the CRM with dummy data for scorecard testing
 """
+import os
 import requests
 import json
 from datetime import datetime, timedelta
 import random
 
-# API Configuration
-API_BASE_URL = "https://app.perenniaai.com"
-API_KEY = "185b7101-9435-44da-87ab-b7582c4e4607"
+# API Configuration - set via environment variables
+API_BASE_URL = os.environ.get("API_BASE_URL", "https://app.perenniaai.com")
+API_KEY = os.environ.get("API_KEY", "")
 
-# User credentials - using Quick Login demo account
-USER_EMAIL = "admin@perenniaai.com"
-USER_PASSWORD = "demo123"
+# User credentials - set via environment variables
+USER_EMAIL = os.environ.get("USER_EMAIL", "")
+USER_PASSWORD = os.environ.get("USER_PASSWORD", "")
 
 # Global token storage
 AUTH_TOKEN = None

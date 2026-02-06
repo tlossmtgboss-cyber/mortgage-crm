@@ -68,7 +68,7 @@ with engine.connect() as conn:
     print(f"   Run with --reset flag to change password")
 
     if "--reset" in sys.argv:
-        new_password = "NewPassword123!"
+        new_password = os.environ.get("NEW_PASSWORD", "NewPassword123!")
         new_hash = pwd_context.hash(new_password)
 
         conn.execute(text("""

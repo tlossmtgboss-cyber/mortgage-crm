@@ -12,7 +12,10 @@ if not database_url:
     exit(1)
 
 email = "tloss@cmgfi.com"
-new_password = "Woodwindow00!"
+new_password = os.environ.get("NEW_PASSWORD")
+if not new_password:
+    print("ERROR: Set NEW_PASSWORD environment variable")
+    exit(1)
 new_hash = pwd_context.hash(new_password)
 
 engine = create_engine(database_url)

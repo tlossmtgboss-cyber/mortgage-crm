@@ -1,17 +1,24 @@
 #!/usr/bin/env python3
 """Clear all dummy data from the CRM"""
+import os
 import urllib.request
 import urllib.parse
 import json
 import sys
 
-API_URL = "https://app.perenniaai.com"
+API_URL = os.environ.get("API_URL", "https://app.perenniaai.com")
 
-# Login
+# Login - set credentials via environment variables
+username = os.environ.get("CRM_USERNAME", "")
+password = os.environ.get("CRM_PASSWORD", "")
+if not username or not password:
+    print("ERROR: Set CRM_USERNAME and CRM_PASSWORD environment variables")
+    sys.exit(1)
+
 print("Logging in...")
 login_data = urllib.parse.urlencode({
-    "username": "tloss@cmgfi.com",
-    "password": "Woodwindow00!"
+    "username": username,
+    "password": password
 }).encode()
 
 login_req = urllib.request.Request(

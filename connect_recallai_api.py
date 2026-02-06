@@ -2,14 +2,14 @@
 """
 Connect Recall.ai via API endpoint
 """
+import os
 import requests
 import json
 
-# Configuration
-BACKEND_URL = "https://app.perenniaai.com"
-# Use the demo token from earlier tests
-AUTH_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZW1vQGV4YW1wbGUuY29tIiwiZXhwIjoxNzYyNzM4NDI0fQ.tVE9h1OpPxWF0ELj2-nwFkS1UiT5ILrctE7SRZ6wd5I"
-API_KEY = "2710d1a040a03295045e0ad6bb2535997da8acd0"
+# Configuration - set via environment variables
+BACKEND_URL = os.environ.get("BACKEND_URL", "https://app.perenniaai.com")
+AUTH_TOKEN = os.environ.get("AUTH_TOKEN", "")
+API_KEY = os.environ.get("RECALLAI_API_KEY", "")
 
 def connect_recallai():
     """Connect Recall.ai using the API endpoint"""
@@ -94,7 +94,7 @@ if __name__ == "__main__":
         print("2. Add webhook URL:")
         print(f"   {BACKEND_URL}/api/v1/recallai/webhook")
         print("3. Use webhook secret:")
-        print("   whsec_suIiYYXb7fgjFjOtVWT0spOfalxNKtldS/MI13wAGV3thi5JbpPjpCUYU2Y0BcxN")
+        print(f"   {os.environ.get('RECALLAI_WEBHOOK_SECRET', '<set RECALLAI_WEBHOOK_SECRET env var>')}")
         print("\n" + "=" * 70)
         print("Testing Instructions:")
         print("=" * 70)

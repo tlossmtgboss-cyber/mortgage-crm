@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """Test sending daily priorities email"""
 
+import os
 import requests
 import json
 import sys
 
-# API endpoint
-API_URL = "https://app.perenniaai.com/api/v1/ai/send-daily-priorities-email"
-TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZW1vQGV4YW1wbGUuY29tIiwiZXhwIjoxNzY0MDE2OTcxfQ.DvKjpG2FOrpR_g8XHZ1ETk7bEFKRaABHW0D25csrdxA"
+# API endpoint - set AUTH_TOKEN and TARGET_EMAIL via environment variables
+API_URL = os.environ.get("API_URL", "https://app.perenniaai.com/api/v1/ai/send-daily-priorities-email")
+TOKEN = os.environ.get("AUTH_TOKEN", "")
 
 # Target email
-TARGET_EMAIL = "tloss@cmgfi.com"
+TARGET_EMAIL = os.environ.get("TARGET_EMAIL", "")
 
 print("="* 80)
 print("Testing Daily Priorities Email Functionality")

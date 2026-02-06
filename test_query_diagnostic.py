@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Diagnostic script to check what data exists for the daily priorities query"""
 
+import os
 import requests
 import json
 
-API_URL = "https://app.perenniaai.com/api/v1/ai/orchestrator-chat"
-TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZW1vQGV4YW1wbGUuY29tIiwiZXhwIjoxNzY0MDE2OTcxfQ.DvKjpG2FOrpR_g8XHZ1ETk7bEFKRaABHW0D25csrdxA"
+API_URL = os.environ.get("API_URL", "https://app.perenniaai.com/api/v1/ai/orchestrator-chat")
+TOKEN = os.environ.get("AUTH_TOKEN", "")
 
 print("="*80)
 print("DIAGNOSTIC: Checking data in database")

@@ -2,12 +2,13 @@
 """
 Test script for Recall.ai integration
 """
+import os
 import requests
 import json
 
-# Recall.ai credentials
-API_KEY = "2710d1a040a03295045e0ad6bb2535997da8acd0"
-WEBHOOK_SECRET = "whsec_suIiYYXb7fgjFjOtVWT0spOfalxNKtldS/MI13wAGV3thi5JbpPjpCUYU2Y0BcxN"
+# Recall.ai credentials - set via environment variables
+API_KEY = os.environ.get("RECALLAI_API_KEY", "")
+WEBHOOK_SECRET = os.environ.get("RECALLAI_WEBHOOK_SECRET", "")
 
 def test_api_connection():
     """Test if the API key is valid by making a simple request"""

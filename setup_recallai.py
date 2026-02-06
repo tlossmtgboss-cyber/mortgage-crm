@@ -17,8 +17,8 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv('/Users/timothyloss/my-project/mortgage-crm/backend/.env')
 
-# Recall.ai credentials
-API_KEY = "2710d1a040a03295045e0ad6bb2535997da8acd0"
+# Recall.ai credentials - set via environment variable
+API_KEY = os.environ.get("RECALLAI_API_KEY", "")
 
 def setup_recallai():
     """Store Recall.ai API key for the first user"""
@@ -72,7 +72,7 @@ def setup_recallai():
         print("\nNext steps:")
         print("1. Configure webhook in Recall.ai dashboard:")
         print("   URL: https://app.perenniaai.com/api/v1/recallai/webhook")
-        print("   Secret: whsec_suIiYYXb7fgjFjOtVWT0spOfalxNKtldS/MI13wAGV3thi5JbpPjpCUYU2Y0BcxN")
+        print(f"   Secret: {os.environ.get('RECALLAI_WEBHOOK_SECRET', '<set RECALLAI_WEBHOOK_SECRET env var>')}")
         print("\n2. Test the integration:")
         print("   - Open any lead profile in the frontend")
         print("   - Click 'Start Recording' button")
