@@ -2636,6 +2636,150 @@ async def get_db_stats(db: Session = Depends(get_db)):
         return {"error": str(e)}
 
 
+# ============ Debug: Import Closed Loans from Salesforce (No Auth) ============
+
+@router.post("/debug/import-closed-loans")
+async def debug_import_closed_loans_from_sf(
+    limit: int = Query(10, description="Max records to import"),
+    db: Session = Depends(get_db)
+):
+    """
+    Debug endpoint to import closed loans from Salesforce to CRM (no auth required).
+    Limited to 10 records by default for testing.
+    """
+    from services.salesforce_sync_service import SalesforceSyncService, SALESFORCE_API_VERSION
+
+    try:
+        results = {
+            'status': 'running',
+            'sf_records_found': 0,
+            'imported': 0,
+            'updated': 0,
+            'skipped': 0,
+            'errors': [],
+            'imported_loans': []
+        }
+
+        # Get Salesforce credentials from integration_profiles (new OAuth)
+        profile = db.execute(text("""
+            SELECT access_token_encrypted, refresh_token_encrypted, instance_url, user_id
+            FROM integration_profiles
+            WHERE provider = 'salesforce' AND access_token_encrypted IS NOT NULL
+            ORDER BY updated_at DESC
+            LIMIT 1
+        """)).fetchone()
+
+        if not profile:
+            return {"status": "error", "message": "No Salesforce integration found"}
+
+        # Decrypt tokens
+        from services.salesforce.oauth_service import decrypt_value
+        access_token = decrypt_value(profile[0])
+        instance_url = profile[2]
+        user_id = profile[3]
+
+        # Query closed loans from Salesforce
+        sf_object = "MtgPlanner_CRM__Transaction_Property__c"
+        soql = f"""
+            SELECT Id, Name, MtgPlanner_CRM__Status__c, MtgPlanner_CRM__Borrower_Name__c,
+                   MtgPlanner_CRM__Loan_Amount__c, MtgPlanner_CRM__Interest_Rate__c,
+                   MtgPlanner_CRM__Property_Address__c, MtgPlanner_CRM__Property_City__c,
+                   MtgPlanner_CRM__Property_State__c, MtgPlanner_CRM__Property_Zip__c,
+                   MtgPlanner_CRM__Closing_Date__c, MtgPlanner_CRM__Funded_Date__c,
+                   MtgPlanner_CRM__Borrower_Email__c, MtgPlanner_CRM__Borrower_Phone__c,
+                   MtgPlanner_CRM__Loan_Type__c, LastModifiedDate
+            FROM {sf_object}
+            WHERE MtgPlanner_CRM__Status__c = 'Closed'
+            ORDER BY LastModifiedDate DESC
+            LIMIT {limit}
+        """
+
+        import urllib.parse
+        encoded_soql = urllib.parse.quote(soql)
+        url = f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/query/?q={encoded_soql}"
+
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+
+        response = requests.get(url, headers=headers, timeout=60)
+
+        if response.status_code != 200:
+            return {
+                "status": "error",
+                "message": f"Salesforce query failed: {response.status_code}",
+                "details": response.text[:500]
+            }
+
+        sf_data = response.json()
+        records = sf_data.get('records', [])
+        results['sf_records_found'] = len(records)
+
+        # Import each record
+        sync_service = SalesforceSyncService(db, user_id=user_id)
+
+        for record in records:
+            try:
+                sf_id = record.get('Id')
+                borrower_name = record.get('MtgPlanner_CRM__Borrower_Name__c') or record.get('Name', 'Unknown')
+
+                # Map Salesforce record to loan data
+                loan_data = {
+                    'salesforce_id': sf_id,
+                    'borrower_name': borrower_name,
+                    'loan_number': record.get('Name'),
+                    'amount': record.get('MtgPlanner_CRM__Loan_Amount__c'),
+                    'interest_rate': record.get('MtgPlanner_CRM__Interest_Rate__c'),
+                    'property_address': record.get('MtgPlanner_CRM__Property_Address__c'),
+                    'property_city': record.get('MtgPlanner_CRM__Property_City__c'),
+                    'property_state': record.get('MtgPlanner_CRM__Property_State__c'),
+                    'property_zip': record.get('MtgPlanner_CRM__Property_Zip__c'),
+                    'closing_date': record.get('MtgPlanner_CRM__Closing_Date__c'),
+                    'funded_date': record.get('MtgPlanner_CRM__Funded_Date__c'),
+                    'borrower_email': record.get('MtgPlanner_CRM__Borrower_Email__c'),
+                    'borrower_phone': record.get('MtgPlanner_CRM__Borrower_Phone__c'),
+                    'loan_type': record.get('MtgPlanner_CRM__Loan_Type__c'),
+                    'stage': 'FUNDED',  # Closed = Funded
+                    'salesforce_sync_status': 'synced',
+                    'salesforce_last_synced_at': datetime.utcnow(),
+                }
+
+                # Remove None values
+                loan_data = {k: v for k, v in loan_data.items() if v is not None}
+
+                # Upsert the loan
+                loan_id, action = sync_service.upsert_loan(loan_data)
+
+                if action == 'created':
+                    results['imported'] += 1
+                    results['imported_loans'].append({
+                        'loan_id': loan_id,
+                        'borrower': borrower_name,
+                        'sf_id': sf_id
+                    })
+                elif action == 'updated':
+                    results['updated'] += 1
+                else:
+                    results['skipped'] += 1
+
+            except Exception as e:
+                results['errors'].append(f"{record.get('Name', 'Unknown')}: {str(e)}")
+                results['skipped'] += 1
+
+        results['status'] = 'success'
+        return results
+
+    except Exception as e:
+        logger.error(f"Debug import failed: {e}")
+        import traceback
+        return {
+            "status": "error",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+
 # ============ Debug: Import to MUM (No Auth) ============
 
 @router.post("/debug/import-to-mum")
