@@ -966,7 +966,10 @@ try:
     import sys as _sys
     _this = _sys.modules[__name__]
     for _fname in ('process_microsoft_email_to_dre', 'fetch_microsoft_emails',
-                    'generate_email_signature_html', 'calculate_lead_score'):
+                    'generate_email_signature_html', 'calculate_lead_score',
+                    'get_entity_name', 'classify_email_intent', 'generate_recommended_action',
+                    'classify_email_content', 'extract_loan_fields', 'extract_borrower_from_subject',
+                    'match_entity', 'apply_extracted_data', 'delete_microsoft_email'):
         _fn = _gef(_fname)
         if _fn:
             setattr(_this, _fname, _fn)

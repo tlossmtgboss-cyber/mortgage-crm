@@ -147,6 +147,9 @@ from schemas.core import (
 # Import database infrastructure
 from database import engine, SessionLocal, Base
 
+# Import permission filter functions (extracted to permission_core_routes.py)
+from routes.permission_core_routes import filter_leads_by_permissions
+
 
 # Module-level dict for functions that need to be importable from outside
 # Populated by register_inline_routes() at startup
@@ -15516,4 +15519,13 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         'fetch_microsoft_emails': fetch_microsoft_emails,
         # generate_email_signature_html is now exported via email_management_routes
         'calculate_lead_score': calculate_lead_score,
+        'get_entity_name': get_entity_name,
+        'classify_email_intent': classify_email_intent,
+        'generate_recommended_action': generate_recommended_action,
+        'classify_email_content': classify_email_content,
+        'extract_loan_fields': extract_loan_fields,
+        'extract_borrower_from_subject': extract_borrower_from_subject,
+        'match_entity': match_entity,
+        'apply_extracted_data': apply_extracted_data,
+        'delete_microsoft_email': delete_microsoft_email,
     })
