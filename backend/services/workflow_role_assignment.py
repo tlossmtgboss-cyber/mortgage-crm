@@ -410,6 +410,27 @@ class RoleAssignmentService:
                 if loan and loan.loan_officer_id:
                     return loan.loan_officer_id
 
+        # RL-004: Org-level fallback — find any active user with this role,
+        # ordered by pending task count (least loaded first)
+        try:
+            org_fallback = self.db.execute(text("""
+                SELECT u.id
+                FROM users u
+                JOIN user_roles ur ON ur.user_id = u.id
+                WHERE ur.role_id = :role_id
+                AND u.is_active = true
+                ORDER BY (
+                    SELECT COUNT(*) FROM tasks t
+                    WHERE t.owner_id = u.id AND t.status IN ('pending', 'in_progress')
+                ) ASC
+                LIMIT 1
+            """), {"role_id": role_id}).fetchone()
+            if org_fallback:
+                logger.info(f"RL-004 fallback: assigned role {role_id} to least-loaded user {org_fallback[0]}")
+                return org_fallback[0]
+        except Exception as e:
+            logger.debug(f"Org-level fallback lookup failed (user_roles table may not exist): {e}")
+
         return None
 
     def resolve_role_by_name(

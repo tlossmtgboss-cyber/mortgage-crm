@@ -415,16 +415,38 @@ class TaskGeneratorService:
                 if role and role.id not in responsible_role_ids:
                     responsible_role_ids.append(role.id)
 
-        # Find first role with an assigned user
+        # RL-003: Find first role with an assigned user under capacity
+        first_available = None
         for role_id in responsible_role_ids:
             if role_id in role_assignments:
-                return role_assignments[role_id], role_id
+                user_id = role_assignments[role_id]
+                if first_available is None:
+                    first_available = (user_id, role_id)
+                # Check capacity
+                try:
+                    pending_count = self.db.execute(text("""
+                        SELECT COUNT(*) FROM tasks
+                        WHERE owner_id = :uid AND status IN ('pending', 'in_progress')
+                    """), {"uid": user_id}).scalar() or 0
+                    if pending_count < self.MAX_PENDING_TASKS_PER_USER:
+                        return user_id, role_id
+                except Exception:
+                    # On error, allow assignment anyway
+                    return user_id, role_id
+
+        # All users over capacity — assign to the first one anyway (better overloaded than unassigned)
+        if first_available:
+            logger.warning(f"All assigned users over capacity ({self.MAX_PENDING_TASKS_PER_USER}), assigning to first available")
+            return first_available
 
         # If no specific assignment, return first responsible role without user
         if responsible_role_ids:
             return None, responsible_role_ids[0]
 
         return None, None
+
+    # Maximum pending tasks per user before capacity overflow
+    MAX_PENDING_TASKS_PER_USER = 50
 
     def _create_task_instance(
         self,
@@ -442,6 +464,23 @@ class TaskGeneratorService:
     ) -> Optional[int]:
         """Create a workflow task instance."""
         try:
+            # AT-005: Dedup check - skip if identical active task already exists
+            existing = self.db.execute(text("""
+                SELECT id FROM workflow_task_instances
+                WHERE workflow_instance_id = :iid
+                AND day_config_id = :did
+                AND task_type = :type
+                AND status NOT IN ('cancelled', 'failed')
+                LIMIT 1
+            """), {
+                "iid": instance['id'],
+                "did": day_config['id'],
+                "type": task_type
+            }).fetchone()
+            if existing:
+                logger.info(f"Dedup: task already exists (id={existing[0]}) for instance {instance['id']}, day {day_config['id']}, type {task_type}")
+                return existing[0]
+
             # Build task name
             contact_name = contact_info.get('name', 'Contact')
             task_name = f"{task_type.replace('_', ' ').title()} - {contact_name} ({day_config['day_label']})"
@@ -524,6 +563,17 @@ class TaskGeneratorService:
         """Create a linked task in the main tasks table."""
         try:
             logger.info(f"_create_linked_task called: task_instance_id={task_instance_id}, task_type={task_type}")
+
+            # AT-005: Dedup check - skip if linked task already exists for this instance
+            existing_linked = self.db.execute(text("""
+                SELECT id FROM tasks
+                WHERE workflow_task_instance_id = :tid
+                AND status NOT IN ('cancelled', 'deleted')
+                LIMIT 1
+            """), {"tid": task_instance_id}).fetchone()
+            if existing_linked:
+                logger.info(f"Dedup: linked task already exists (id={existing_linked[0]}) for task instance {task_instance_id}")
+                return existing_linked[0]
 
             # If no assigned user, get the owner from the lead or loan
             owner_id = assigned_user_id

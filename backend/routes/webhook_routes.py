@@ -309,3 +309,245 @@ async def retr_webhook_health():
             "import": "/webhooks/retr/import"
         }
     }
+
+
+# =============================================================================
+# AT-001: Inbound Webhook Endpoint for External Event Processing
+# =============================================================================
+
+INBOUND_WEBHOOK_SECRET = os.getenv("INBOUND_WEBHOOK_SECRET", "")
+
+# Supported inbound event types and their handlers
+INBOUND_EVENT_TYPES = {
+    "lead.status_changed",
+    "loan.stage_changed",
+    "document.received",
+    "task.completed",
+}
+
+
+def _verify_inbound_signature(payload: bytes, signature: str, secret: str) -> bool:
+    """Verify HMAC-SHA256 signature for inbound webhooks."""
+    if not secret:
+        return True  # No secret configured, skip verification
+    expected = hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(signature, expected)
+
+
+def _ensure_webhook_log_table(db: Session):
+    """Ensure webhook_delivery_log table exists (checkfirst pattern)."""
+    try:
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS webhook_delivery_log (
+                id SERIAL PRIMARY KEY,
+                event_type VARCHAR(100) NOT NULL,
+                source_system VARCHAR(100),
+                payload JSONB,
+                processing_status VARCHAR(50) DEFAULT 'received',
+                error_message TEXT,
+                received_at TIMESTAMP DEFAULT NOW(),
+                processed_at TIMESTAMP
+            )
+        """))
+        db.commit()
+    except Exception:
+        db.rollback()
+
+
+@router.post("/inbound/{event_type}")
+async def inbound_webhook(
+    event_type: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    x_api_key: Optional[str] = Header(None, alias="X-Api-Key"),
+    x_webhook_signature: Optional[str] = Header(None, alias="X-Webhook-Signature"),
+):
+    """
+    AT-001: Generic inbound webhook endpoint for external event processing.
+
+    Accepts events from external systems and dispatches to appropriate handlers.
+    Events update entities and let existing schedulers detect changes.
+
+    Supported event_types:
+    - lead.status_changed: Update lead stage, triggers workflow enrollment
+    - loan.stage_changed: Update loan stage, triggers workflow enrollment
+    - document.received: Mark document as received on a loan
+    - task.completed: Mark a task as completed
+
+    Authentication: X-Api-Key header (required if INBOUND_WEBHOOK_SECRET is set)
+    Optional HMAC: X-Webhook-Signature header for payload integrity
+    """
+    # Validate event type
+    if event_type not in INBOUND_EVENT_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown event type: {event_type}. Supported: {sorted(INBOUND_EVENT_TYPES)}"
+        )
+
+    # Verify API key
+    if INBOUND_WEBHOOK_SECRET:
+        if not x_api_key or not hmac.compare_digest(x_api_key, INBOUND_WEBHOOK_SECRET):
+            logger.warning(f"Invalid API key for inbound webhook: {event_type}")
+            raise HTTPException(status_code=401, detail="Invalid API key")
+
+    # Get raw body and verify optional HMAC signature
+    body = await request.body()
+    if x_webhook_signature and INBOUND_WEBHOOK_SECRET:
+        if not _verify_inbound_signature(body, x_webhook_signature, INBOUND_WEBHOOK_SECRET):
+            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
+    # Parse payload
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
+    # Ensure log table exists
+    _ensure_webhook_log_table(db)
+
+    # Log the webhook delivery
+    log_id = None
+    try:
+        db.execute(text("""
+            INSERT INTO webhook_delivery_log (event_type, source_system, payload, processing_status)
+            VALUES (:event_type, :source, CAST(:payload AS jsonb), 'processing')
+        """), {
+            "event_type": event_type,
+            "source": payload.get("source_system", "unknown"),
+            "payload": json.dumps(payload),
+        })
+        db.flush()
+        result = db.execute(text("SELECT currval(pg_get_serial_sequence('webhook_delivery_log', 'id'))")).fetchone()
+        log_id = result[0] if result else None
+    except Exception as e:
+        logger.warning(f"Could not log webhook delivery: {e}")
+        db.rollback()
+
+    # Dispatch to handler
+    try:
+        if event_type == "lead.status_changed":
+            result = await _handle_lead_status_changed(payload, db)
+        elif event_type == "loan.stage_changed":
+            result = await _handle_loan_stage_changed(payload, db)
+        elif event_type == "document.received":
+            result = await _handle_document_received(payload, db)
+        elif event_type == "task.completed":
+            result = await _handle_task_completed(payload, db)
+        else:
+            result = {"processed": False, "reason": "No handler"}
+
+        # Update log
+        if log_id:
+            try:
+                db.execute(text("""
+                    UPDATE webhook_delivery_log
+                    SET processing_status = 'completed', processed_at = NOW()
+                    WHERE id = :id
+                """), {"id": log_id})
+                db.commit()
+            except Exception:
+                db.rollback()
+
+        return {"success": True, "event_type": event_type, "result": result}
+
+    except Exception as e:
+        logger.error(f"Inbound webhook handler error for {event_type}: {e}")
+        if log_id:
+            try:
+                db.execute(text("""
+                    UPDATE webhook_delivery_log
+                    SET processing_status = 'failed', error_message = :err, processed_at = NOW()
+                    WHERE id = :id
+                """), {"id": log_id, "err": str(e)[:500]})
+                db.commit()
+            except Exception:
+                db.rollback()
+        raise HTTPException(status_code=500, detail=f"Webhook processing failed: {str(e)[:200]}")
+
+
+async def _handle_lead_status_changed(payload: Dict, db: Session) -> Dict:
+    """Handle lead.status_changed event — update lead stage."""
+    lead_id = payload.get("lead_id")
+    new_status = payload.get("new_status")
+
+    if not lead_id or not new_status:
+        raise HTTPException(status_code=400, detail="lead_id and new_status required")
+
+    db.execute(text("""
+        UPDATE leads SET stage = CAST(:status AS leadstage),
+        stage_changed_at = NOW(), updated_at = NOW()
+        WHERE id = :lead_id
+    """), {"lead_id": lead_id, "status": new_status})
+    db.commit()
+
+    logger.info(f"Webhook: lead {lead_id} status updated to {new_status}")
+    return {"lead_id": lead_id, "new_status": new_status}
+
+
+async def _handle_loan_stage_changed(payload: Dict, db: Session) -> Dict:
+    """Handle loan.stage_changed event — update loan stage."""
+    loan_id = payload.get("loan_id")
+    new_stage = payload.get("new_stage")
+
+    if not loan_id or not new_stage:
+        raise HTTPException(status_code=400, detail="loan_id and new_stage required")
+
+    db.execute(text("""
+        UPDATE loans SET stage = CAST(:stage AS loanstage),
+        stage_changed_at = NOW(), updated_at = NOW()
+        WHERE id = :loan_id
+    """), {"loan_id": loan_id, "stage": new_stage})
+    db.commit()
+
+    logger.info(f"Webhook: loan {loan_id} stage updated to {new_stage}")
+    return {"loan_id": loan_id, "new_stage": new_stage}
+
+
+async def _handle_document_received(payload: Dict, db: Session) -> Dict:
+    """Handle document.received event — mark document as received."""
+    loan_id = payload.get("loan_id")
+    document_type = payload.get("document_type")
+
+    if not loan_id or not document_type:
+        raise HTTPException(status_code=400, detail="loan_id and document_type required")
+
+    # Update the document tracking field on the loan if it exists
+    field_map = {
+        "appraisal": "appraisal_received_date",
+        "title": "title_received_date",
+        "survey": "survey_received_date",
+        "hoi": "hoi_received_date",
+        "conditions": "conditions_received_date",
+    }
+
+    field = field_map.get(document_type.lower())
+    if field:
+        try:
+            db.execute(text(f"""
+                UPDATE loans SET {field} = NOW(), updated_at = NOW()
+                WHERE id = :loan_id AND {field} IS NULL
+            """), {"loan_id": loan_id})
+            db.commit()
+        except Exception as e:
+            logger.warning(f"Could not update loan document field {field}: {e}")
+            db.rollback()
+
+    logger.info(f"Webhook: document {document_type} received for loan {loan_id}")
+    return {"loan_id": loan_id, "document_type": document_type, "field_updated": field}
+
+
+async def _handle_task_completed(payload: Dict, db: Session) -> Dict:
+    """Handle task.completed event — mark task as completed."""
+    task_id = payload.get("task_id")
+
+    if not task_id:
+        raise HTTPException(status_code=400, detail="task_id required")
+
+    db.execute(text("""
+        UPDATE tasks SET status = 'completed', completed_at = NOW(), updated_at = NOW()
+        WHERE id = :task_id AND status != 'completed'
+    """), {"task_id": task_id})
+    db.commit()
+
+    logger.info(f"Webhook: task {task_id} marked as completed")
+    return {"task_id": task_id}

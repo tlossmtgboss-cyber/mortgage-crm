@@ -728,7 +728,23 @@ class TaskSLABridgeService:
             return "on_track"
 
     def _add_business_days(self, start_date: datetime, days: int) -> datetime:
-        """Add business days to a date, handling negative days."""
+        """Add business days to a date, handling negative days.
+
+        SLA-006: Delegates to PortalCloseOnTimeService for holiday-aware
+        calculation when available, falls back to weekend-only skip.
+        """
+        try:
+            from services.portal_close_on_time_service import PortalCloseOnTimeService
+            portal_service = PortalCloseOnTimeService(self.db)
+            result_date = portal_service.add_business_days(start_date.date() if isinstance(start_date, datetime) else start_date, days)
+            # Preserve time component from original datetime
+            if isinstance(start_date, datetime):
+                return datetime.combine(result_date, start_date.time(), tzinfo=start_date.tzinfo)
+            return datetime.combine(result_date, datetime.min.time(), tzinfo=timezone.utc)
+        except Exception as e:
+            logger.debug(f"Holiday calendar unavailable, using weekend-only fallback: {e}")
+
+        # Fallback: weekend-only skip
         current = start_date
         remaining = abs(days)
         direction = 1 if days >= 0 else -1

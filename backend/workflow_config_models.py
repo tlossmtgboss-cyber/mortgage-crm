@@ -342,7 +342,20 @@ DEFAULT_WORKFLOW_CONFIGS = {
         'objective': 'Support the borrower through house hunting to contract',
         'statuses_impacted': ['Pre-Approved'],
         'color': '#10b981',
-        'days': []
+        'days': [
+            {'label': 'Day 1', 'order': 1, 'value': 1, 'phone': True, 'text': True, 'email': True, 'partner': True, 'lo': True, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': False},
+            {'label': 'Day 3', 'order': 2, 'value': 3, 'phone': True, 'text': False, 'email': False, 'partner': True, 'lo': True, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': False},
+            {'label': 'Week 1', 'order': 3, 'value': 7, 'phone': False, 'text': True, 'email': True, 'partner': True, 'lo': False, 'jr_lo': True, 'pa': False, 'concierge': False, 'ai': False},
+            {'label': 'Week 2', 'order': 4, 'value': 14, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': True, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': False},
+            {'label': 'Week 3', 'order': 5, 'value': 21, 'phone': False, 'text': True, 'email': False, 'partner': True, 'lo': False, 'jr_lo': True, 'pa': False, 'concierge': False, 'ai': False},
+            {'label': 'Month 1', 'order': 6, 'value': 30, 'phone': True, 'text': True, 'email': True, 'partner': True, 'lo': True, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': False},
+            {'label': 'Month 2', 'order': 7, 'value': 60, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': True, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': True},
+            {'label': 'Month 3', 'order': 8, 'value': 90, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': True, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': True},
+            {'label': 'Month 4', 'order': 9, 'value': 120, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': True},
+            {'label': 'Month 5', 'order': 10, 'value': 150, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': True},
+            {'label': 'Month 6', 'order': 11, 'value': 180, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': True, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': True},
+            {'label': 'Month 9', 'order': 12, 'value': 270, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': True},
+        ]
     },
     'under_contract': {
         'name': 'Under Contract Workflow',
@@ -350,7 +363,18 @@ DEFAULT_WORKFLOW_CONFIGS = {
         'objective': 'Guide the loan from contract to closing',
         'statuses_impacted': ['Under Contract'],
         'color': '#f59e0b',
-        'days': []
+        'days': [
+            {'label': 'Day 1', 'order': 1, 'value': 1, 'phone': True, 'text': True, 'email': True, 'partner': True, 'lo': True, 'jr_lo': False, 'pa': True, 'concierge': False, 'ai': False},
+            {'label': 'Day 2', 'order': 2, 'value': 2, 'phone': True, 'text': True, 'email': False, 'partner': False, 'lo': False, 'jr_lo': False, 'pa': True, 'concierge': False, 'ai': False},
+            {'label': 'Day 3', 'order': 3, 'value': 3, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': True, 'jr_lo': False, 'pa': True, 'concierge': False, 'ai': False},
+            {'label': 'Day 5', 'order': 4, 'value': 5, 'phone': True, 'text': True, 'email': False, 'partner': False, 'lo': False, 'jr_lo': False, 'pa': True, 'concierge': False, 'ai': False},
+            {'label': 'Week 1', 'order': 5, 'value': 7, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': True, 'jr_lo': False, 'pa': True, 'concierge': False, 'ai': False},
+            {'label': 'Day 10', 'order': 6, 'value': 10, 'phone': False, 'text': True, 'email': True, 'partner': False, 'lo': False, 'jr_lo': False, 'pa': True, 'concierge': False, 'ai': False},
+            {'label': 'Week 2', 'order': 7, 'value': 14, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': True, 'jr_lo': False, 'pa': True, 'concierge': False, 'ai': False},
+            {'label': 'Week 3', 'order': 8, 'value': 21, 'phone': True, 'text': True, 'email': True, 'partner': True, 'lo': True, 'jr_lo': False, 'pa': True, 'concierge': False, 'ai': False},
+            {'label': 'Week 4', 'order': 9, 'value': 28, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': True, 'jr_lo': False, 'pa': True, 'concierge': False, 'ai': False},
+            {'label': 'Week 5', 'order': 10, 'value': 35, 'phone': True, 'text': True, 'email': True, 'partner': True, 'lo': True, 'jr_lo': False, 'pa': True, 'concierge': False, 'ai': False},
+        ]
     },
     'lead_purchase': {
         'name': 'Lead Purchase Workflow',
@@ -358,7 +382,22 @@ DEFAULT_WORKFLOW_CONFIGS = {
         'objective': 'Convert purchased leads to applications',
         'statuses_impacted': ['New'],
         'color': '#ec4899',
-        'days': []
+        'days': [
+            {'label': 'Day 1 AM', 'order': 1, 'value': 1, 'phone': True, 'phone_am': True, 'text': True, 'text_am': True, 'email': True, 'partner': False, 'lo': True, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': False},
+            {'label': 'Day 1 PM', 'order': 2, 'value': 1, 'phone': True, 'phone_pm': True, 'text': True, 'text_pm': True, 'email': False, 'partner': False, 'lo': True, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': False},
+            {'label': 'Day 2', 'order': 3, 'value': 2, 'phone': True, 'text': True, 'email': False, 'partner': False, 'lo': True, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': False},
+            {'label': 'Day 3', 'order': 4, 'value': 3, 'phone': True, 'text': True, 'email': True, 'partner': False, 'lo': False, 'jr_lo': True, 'pa': False, 'concierge': False, 'ai': False},
+            {'label': 'Day 4', 'order': 5, 'value': 4, 'phone': True, 'text': False, 'email': False, 'partner': False, 'lo': False, 'jr_lo': True, 'pa': False, 'concierge': False, 'ai': False},
+            {'label': 'Day 5', 'order': 6, 'value': 5, 'phone': True, 'text': True, 'email': True, 'partner': False, 'lo': True, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': False},
+            {'label': 'Week 1', 'order': 7, 'value': 7, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': False, 'jr_lo': True, 'pa': False, 'concierge': False, 'ai': True},
+            {'label': 'Day 10', 'order': 8, 'value': 10, 'phone': False, 'text': True, 'email': True, 'partner': False, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': True},
+            {'label': 'Week 2', 'order': 9, 'value': 14, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': True},
+            {'label': 'Week 3', 'order': 10, 'value': 21, 'phone': True, 'text': True, 'email': False, 'partner': False, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': True},
+            {'label': 'Month 1', 'order': 11, 'value': 30, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': True},
+            {'label': 'Month 2', 'order': 12, 'value': 60, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': True},
+            {'label': 'Month 3', 'order': 13, 'value': 90, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': True},
+            {'label': 'Month 6', 'order': 14, 'value': 180, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': True},
+        ]
     },
     'theme_day': {
         'name': 'Theme Day Workflow',
@@ -366,7 +405,13 @@ DEFAULT_WORKFLOW_CONFIGS = {
         'objective': 'Maintain consistent touchpoints through themed campaigns',
         'statuses_impacted': [],
         'color': '#06b6d4',
-        'days': []
+        'days': [
+            {'label': 'Monday', 'order': 1, 'value': 0, 'repeat_weekly': True, 'repeat_day_of_week': 0, 'phone': False, 'text': True, 'email': True, 'partner': False, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': True},
+            {'label': 'Tuesday', 'order': 2, 'value': 0, 'repeat_weekly': True, 'repeat_day_of_week': 1, 'phone': False, 'text': True, 'email': True, 'partner': False, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': True},
+            {'label': 'Wednesday', 'order': 3, 'value': 0, 'repeat_weekly': True, 'repeat_day_of_week': 2, 'phone': False, 'text': True, 'email': True, 'partner': False, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': True},
+            {'label': 'Thursday', 'order': 4, 'value': 0, 'repeat_weekly': True, 'repeat_day_of_week': 3, 'phone': False, 'text': True, 'email': True, 'partner': False, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': True},
+            {'label': 'Friday', 'order': 5, 'value': 0, 'repeat_weekly': True, 'repeat_day_of_week': 4, 'phone': False, 'text': True, 'email': True, 'partner': False, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': True},
+        ]
     },
     'last_mile': {
         'name': 'Last Mile Workflow',
@@ -374,7 +419,14 @@ DEFAULT_WORKFLOW_CONFIGS = {
         'objective': 'Ensure smooth closing process',
         'statuses_impacted': ['CTC'],
         'color': '#14b8a6',
-        'days': []
+        'days': [
+            {'label': 'Day 1', 'order': 1, 'value': 1, 'phone': True, 'text': True, 'email': True, 'partner': True, 'lo': True, 'jr_lo': False, 'pa': True, 'concierge': False, 'ai': False},
+            {'label': 'Day 2', 'order': 2, 'value': 2, 'phone': True, 'text': True, 'email': False, 'partner': False, 'lo': True, 'jr_lo': False, 'pa': True, 'concierge': False, 'ai': False},
+            {'label': 'Day 3', 'order': 3, 'value': 3, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': True, 'jr_lo': False, 'pa': True, 'concierge': False, 'ai': False},
+            {'label': 'Day 5', 'order': 4, 'value': 5, 'phone': True, 'text': True, 'email': True, 'partner': True, 'lo': True, 'jr_lo': False, 'pa': True, 'concierge': False, 'ai': False},
+            {'label': 'Day 6', 'order': 5, 'value': 6, 'phone': True, 'text': True, 'email': False, 'partner': False, 'lo': True, 'jr_lo': False, 'pa': True, 'concierge': False, 'ai': False},
+            {'label': 'Day 7', 'order': 6, 'value': 7, 'phone': True, 'text': True, 'email': True, 'partner': True, 'lo': True, 'jr_lo': False, 'pa': True, 'concierge': False, 'ai': False},
+        ]
     },
     'post_close': {
         'name': 'Post Close Workflow',
@@ -382,7 +434,12 @@ DEFAULT_WORKFLOW_CONFIGS = {
         'objective': 'Generate referrals and maintain client relationships',
         'statuses_impacted': ['Funded'],
         'color': '#22c55e',
-        'days': []
+        'days': [
+            {'label': 'Week 1', 'order': 1, 'value': 7, 'phone': True, 'text': True, 'email': True, 'partner': False, 'lo': True, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': False},
+            {'label': 'Month 1', 'order': 2, 'value': 30, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': True, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': False},
+            {'label': 'Month 3', 'order': 3, 'value': 90, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': True, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': True},
+            {'label': 'Month 6', 'order': 4, 'value': 180, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': True, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': True},
+        ]
     },
     'credit_repair': {
         'name': 'Credit Repair Workflow',
@@ -390,7 +447,16 @@ DEFAULT_WORKFLOW_CONFIGS = {
         'objective': 'Help clients improve credit for future qualification',
         'statuses_impacted': ['Does Not Qualify'],
         'color': '#f97316',
-        'days': []
+        'days': [
+            {'label': 'Day 1', 'order': 1, 'value': 1, 'phone': True, 'text': True, 'email': True, 'partner': False, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': True, 'ai': False},
+            {'label': 'Week 1', 'order': 2, 'value': 7, 'phone': True, 'text': False, 'email': True, 'partner': False, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': True, 'ai': False},
+            {'label': 'Month 1', 'order': 3, 'value': 30, 'phone': True, 'text': True, 'email': True, 'partner': False, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': True, 'ai': False},
+            {'label': 'Month 2', 'order': 4, 'value': 60, 'phone': True, 'text': False, 'email': True, 'partner': False, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': True, 'ai': True},
+            {'label': 'Month 3', 'order': 5, 'value': 90, 'phone': True, 'text': False, 'email': True, 'partner': False, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': True, 'ai': True},
+            {'label': 'Month 4', 'order': 6, 'value': 120, 'phone': True, 'text': False, 'email': True, 'partner': False, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': True, 'ai': True},
+            {'label': 'Month 5', 'order': 7, 'value': 150, 'phone': True, 'text': False, 'email': True, 'partner': False, 'lo': True, 'jr_lo': False, 'pa': False, 'concierge': True, 'ai': True},
+            {'label': 'Month 6', 'order': 8, 'value': 180, 'phone': True, 'text': True, 'email': True, 'partner': False, 'lo': True, 'jr_lo': False, 'pa': False, 'concierge': True, 'ai': False},
+        ]
     },
     'nurture': {
         'name': 'Nurture Workflow',
@@ -398,6 +464,15 @@ DEFAULT_WORKFLOW_CONFIGS = {
         'objective': 'Keep leads warm until they are ready to buy',
         'statuses_impacted': ['Long-Term Nurture'],
         'color': '#6366f1',
-        'days': []
+        'days': [
+            {'label': 'Day 1', 'order': 1, 'value': 1, 'phone': True, 'text': True, 'email': True, 'partner': False, 'lo': True, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': False},
+            {'label': 'Week 2', 'order': 2, 'value': 14, 'phone': False, 'text': True, 'email': True, 'partner': False, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': True},
+            {'label': 'Month 1', 'order': 3, 'value': 30, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': True},
+            {'label': 'Month 2', 'order': 4, 'value': 60, 'phone': False, 'text': True, 'email': True, 'partner': False, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': True},
+            {'label': 'Month 3', 'order': 5, 'value': 90, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': True},
+            {'label': 'Month 4', 'order': 6, 'value': 120, 'phone': False, 'text': True, 'email': True, 'partner': False, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': True},
+            {'label': 'Month 6', 'order': 7, 'value': 180, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': True, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': True},
+            {'label': 'Month 9', 'order': 8, 'value': 270, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': True, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': True},
+        ]
     }
 }

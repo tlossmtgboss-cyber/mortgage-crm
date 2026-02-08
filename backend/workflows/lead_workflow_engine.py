@@ -10,7 +10,7 @@ Automatically processes lead status changes and triggers:
 - Time-based automation rules
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Optional, Any
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -20,15 +20,45 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Lead stage definitions matching main.py
+# Lead stage definitions matching database/enums.py LeadStage
 LEAD_STAGES = [
     "New",
     "Attempted Contact",
     "Prospect",
-    "Application Started",
-    "Application Complete",
-    "Pre-Approved"
+    "Application",
+    "Document Fulfillment",
+    "Pre-Qualified",
+    "Pre-Approved",
+    "Under Contract",
+    "Disclosed",
+    "Long-Term Nurture",
+    "Does Not Qualify",
+    "Closed",
+    "AMR",
+    "Referral Source",
+    "Withdrawn",
 ]
+
+# Valid state transitions: source_status -> [allowed_target_statuses]
+# None key = initial state (no prior status)
+VALID_TRANSITIONS = {
+    None: ["New"],
+    "New": ["Attempted Contact", "Prospect", "Withdrawn", "Does Not Qualify"],
+    "Attempted Contact": ["Prospect", "New", "Long-Term Nurture", "Withdrawn", "Does Not Qualify"],
+    "Prospect": ["Application", "Attempted Contact", "Long-Term Nurture", "Withdrawn", "Does Not Qualify"],
+    "Application": ["Document Fulfillment", "Pre-Qualified", "Prospect", "Withdrawn", "Does Not Qualify"],
+    "Document Fulfillment": ["Pre-Qualified", "Application", "Withdrawn"],
+    "Pre-Qualified": ["Pre-Approved", "Application", "Does Not Qualify", "Withdrawn"],
+    "Pre-Approved": ["Under Contract", "Disclosed", "Long-Term Nurture", "Withdrawn"],
+    "Under Contract": ["Disclosed", "Pre-Approved", "Withdrawn"],
+    "Disclosed": ["Closed"],
+    "Long-Term Nurture": ["Prospect", "Application", "Withdrawn"],
+    "Does Not Qualify": ["Prospect", "Application"],
+    "Closed": ["AMR"],
+    "AMR": ["Referral Source"],
+    "Referral Source": [],
+    "Withdrawn": ["New"],
+}
 
 # Time-based rules (in hours)
 TIME_RULES = {
@@ -74,6 +104,18 @@ class LeadWorkflowEngine:
     def __init__(self, db: Session):
         self.db = db
 
+    def _check_active_sla_workflow(self, lead_id: int) -> bool:
+        """Check if lead has an active SLA-driven workflow instance."""
+        try:
+            existing = self.db.execute(text("""
+                SELECT id FROM workflow_instances
+                WHERE lead_id = :lid AND status = 'active'
+                LIMIT 1
+            """), {"lid": lead_id}).fetchone()
+            return existing is not None
+        except Exception:
+            return False
+
     async def process_status_change(self, status_change: LeadStatusChange) -> Dict[str, Any]:
         """Process all workflows when a lead status changes"""
         results = []
@@ -82,6 +124,14 @@ class LeadWorkflowEngine:
         new = status_change.new_status
 
         logger.info(f"Processing status change: {old} → {new} for lead {status_change.lead_id}")
+
+        # Validate transition against state machine
+        allowed = VALID_TRANSITIONS.get(old, [])
+        if new not in allowed:
+            logger.warning(
+                f"Invalid transition: {old} → {new} for lead {status_change.lead_id}. "
+                f"Allowed targets: {allowed}. Continuing with best-effort handling."
+            )
 
         # ================================================================
         # TRANSITION: Any → NEW (Lead just entered system)
@@ -118,6 +168,48 @@ class LeadWorkflowEngine:
         # ================================================================
         elif old == "Application Complete" and new == "Pre-Approved":
             results.extend(await self._handle_pre_approved(status_change))
+
+        # ================================================================
+        # TRANSITION: Any → UNDER CONTRACT
+        # ================================================================
+        elif new == "Under Contract":
+            results.extend(await self._handle_to_under_contract(status_change))
+
+        # ================================================================
+        # TRANSITION: Any → LONG-TERM NURTURE
+        # ================================================================
+        elif new == "Long-Term Nurture":
+            results.extend(await self._handle_to_long_term_nurture(status_change))
+
+        # ================================================================
+        # TRANSITION: Any → DOES NOT QUALIFY
+        # ================================================================
+        elif new == "Does Not Qualify":
+            results.extend(await self._handle_to_does_not_qualify(status_change))
+
+        # ================================================================
+        # TRANSITION: Any → WITHDRAWN
+        # ================================================================
+        elif new == "Withdrawn":
+            results.extend(await self._handle_to_withdrawn(status_change))
+
+        # ================================================================
+        # TRANSITION: Any → DISCLOSED (lead-to-loan handoff)
+        # ================================================================
+        elif new == "Disclosed":
+            results.extend(await self._handle_to_disclosed(status_change))
+
+        # ================================================================
+        # TRANSITION: Closed → AMR
+        # ================================================================
+        elif new == "AMR":
+            results.extend(await self._handle_to_amr(status_change))
+
+        # ================================================================
+        # TRANSITION: AMR → REFERRAL SOURCE
+        # ================================================================
+        elif new == "Referral Source":
+            results.extend(await self._handle_to_referral_source(status_change))
 
         # ================================================================
         # Log workflow execution
@@ -318,7 +410,7 @@ class LeadWorkflowEngine:
                     "lead_name": sc.lead_name,
                     "loan_type": sc.loan_type or "purchase"
                 },
-                "scheduled_for": datetime.utcnow() + timedelta(hours=24)
+                "scheduled_for": datetime.now(timezone.utc) + timedelta(hours=24)
             })
 
         # 5. Switch to prospect nurture
@@ -525,6 +617,305 @@ class LeadWorkflowEngine:
         logger.info(f"🏆 PRE-APPROVED workflow triggered: {len(actions)} actions for {sc.lead_name}")
         return actions
 
+    async def _handle_to_under_contract(self, sc: LeadStatusChange) -> List[Dict]:
+        """Handle transition to Under Contract"""
+        actions = []
+        first_name = sc.lead_name.split()[0] if sc.lead_name else "there"
+
+        # Defer to SLA workflow if active
+        if self._check_active_sla_workflow(sc.lead_id):
+            logger.info(f"Lead {sc.lead_id} in SLA workflow, skipping legacy under_contract actions")
+            return actions
+
+        # 1. Notify referral partner
+        actions.append({
+            "action_type": "alert",
+            "target": "referral_partner",
+            "template": "under_contract_notification",
+            "data": {
+                "lead_id": sc.lead_id,
+                "message": f"{sc.lead_name} is now Under Contract! Document collection begins.",
+            },
+            "priority": "high"
+        })
+
+        # 2. Create document collection task
+        actions.append({
+            "action_type": "task",
+            "target": "loan_officer",
+            "template": "contract_doc_collection",
+            "data": {
+                "title": f"Collect contract documents from {first_name}",
+                "description": "Collect: purchase contract, earnest money receipt, HOA docs, inspection reports.",
+                "due_hours": 24,
+                "priority": "high",
+                "lead_id": sc.lead_id,
+                "assigned_to": sc.loan_officer_id
+            }
+        })
+
+        # 3. Start under_contract drip
+        actions.append({
+            "action_type": "drip",
+            "target": "lead",
+            "template": "under_contract_updates",
+            "data": {
+                "lead_id": sc.lead_id,
+                "campaign": "under_contract_updates",
+                "stop_campaign": "pre_approved_nurture"
+            }
+        })
+
+        logger.info(f"🏠 UNDER CONTRACT workflow triggered: {len(actions)} actions for {sc.lead_name}")
+        return actions
+
+    async def _handle_to_long_term_nurture(self, sc: LeadStatusChange) -> List[Dict]:
+        """Handle transition to Long-Term Nurture"""
+        actions = []
+
+        # Defer to SLA workflow if active
+        if self._check_active_sla_workflow(sc.lead_id):
+            logger.info(f"Lead {sc.lead_id} in SLA workflow, skipping legacy nurture actions")
+            return actions
+
+        # 1. Cancel active drip campaigns
+        actions.append({
+            "action_type": "drip",
+            "target": "lead",
+            "template": "nurture_long_term",
+            "data": {
+                "lead_id": sc.lead_id,
+                "campaign": "nurture_long_term",
+                "stop_all_campaigns": True
+            }
+        })
+
+        # 2. Log activity
+        actions.append({
+            "action_type": "activity",
+            "target": "lead",
+            "template": "moved_to_nurture",
+            "data": {
+                "lead_id": sc.lead_id,
+                "activity_type": "status_change",
+                "note": f"Moved to Long-Term Nurture from {sc.old_status}"
+            }
+        })
+
+        logger.info(f"🌱 LONG-TERM NURTURE workflow triggered for {sc.lead_name}")
+        return actions
+
+    async def _handle_to_does_not_qualify(self, sc: LeadStatusChange) -> List[Dict]:
+        """Handle transition to Does Not Qualify"""
+        actions = []
+        first_name = sc.lead_name.split()[0] if sc.lead_name else "there"
+
+        # Defer to SLA workflow if active
+        if self._check_active_sla_workflow(sc.lead_id):
+            logger.info(f"Lead {sc.lead_id} in SLA workflow, skipping legacy DNQ actions")
+            return actions
+
+        # 1. Send DNQ notification email
+        if sc.lead_email:
+            actions.append({
+                "action_type": "email",
+                "target": "lead",
+                "template": "does_not_qualify",
+                "data": {
+                    "to": sc.lead_email,
+                    "subject": f"{first_name}, Let's Work Together on Next Steps",
+                    "lead_name": sc.lead_name,
+                    "loan_officer_name": sc.loan_officer_name
+                },
+                "priority": "normal"
+            })
+
+        # 2. Enroll in credit repair workflow
+        actions.append({
+            "action_type": "drip",
+            "target": "lead",
+            "template": "credit_repair",
+            "data": {
+                "lead_id": sc.lead_id,
+                "campaign": "credit_repair",
+                "stop_all_campaigns": True
+            }
+        })
+
+        # 3. Create credit improvement task
+        actions.append({
+            "action_type": "task",
+            "target": "loan_officer",
+            "template": "credit_improvement_plan",
+            "data": {
+                "title": f"Create credit improvement plan for {first_name}",
+                "description": "Review credit report, identify improvement areas, set follow-up timeline.",
+                "due_hours": 48,
+                "priority": "medium",
+                "lead_id": sc.lead_id,
+                "assigned_to": sc.loan_officer_id
+            }
+        })
+
+        logger.info(f"❌ DOES NOT QUALIFY workflow triggered for {sc.lead_name}")
+        return actions
+
+    async def _handle_to_withdrawn(self, sc: LeadStatusChange) -> List[Dict]:
+        """Handle transition to Withdrawn"""
+        actions = []
+
+        # 1. Cancel all active workflows and drip campaigns
+        actions.append({
+            "action_type": "drip",
+            "target": "lead",
+            "template": "cancel_all",
+            "data": {
+                "lead_id": sc.lead_id,
+                "stop_all_campaigns": True
+            }
+        })
+
+        # 2. Log withdrawal reason
+        actions.append({
+            "action_type": "activity",
+            "target": "lead",
+            "template": "withdrawal",
+            "data": {
+                "lead_id": sc.lead_id,
+                "activity_type": "withdrawal",
+                "note": f"Lead withdrawn from {sc.old_status}. Reason: pending review."
+            }
+        })
+
+        logger.info(f"🚫 WITHDRAWN workflow triggered for {sc.lead_name} (from {sc.old_status})")
+        return actions
+
+    async def _handle_to_disclosed(self, sc: LeadStatusChange) -> List[Dict]:
+        """Handle transition to Disclosed (lead-to-loan handoff)"""
+        actions = []
+        first_name = sc.lead_name.split()[0] if sc.lead_name else "there"
+
+        # Defer to SLA workflow if active
+        if self._check_active_sla_workflow(sc.lead_id):
+            logger.info(f"Lead {sc.lead_id} in SLA workflow, skipping legacy disclosed actions")
+            return actions
+
+        # 1. Alert LO about loan handoff
+        actions.append({
+            "action_type": "alert",
+            "target": "loan_officer",
+            "template": "disclosed_handoff",
+            "data": {
+                "loan_officer_id": sc.loan_officer_id,
+                "message": f"📋 {sc.lead_name} is now Disclosed - loan processing begins.",
+                "lead_id": sc.lead_id
+            },
+            "priority": "high"
+        })
+
+        # 2. Copy role assignments from lead to loan
+        actions.append({
+            "action_type": "task",
+            "target": "loan_officer",
+            "template": "disclosed_setup",
+            "data": {
+                "title": f"Set up loan file for {first_name}",
+                "description": "Verify disclosures sent, set up loan pipeline, assign processor.",
+                "due_hours": 4,
+                "priority": "high",
+                "lead_id": sc.lead_id,
+                "assigned_to": sc.loan_officer_id
+            }
+        })
+
+        # 3. Stop lead drip, start active loan updates
+        actions.append({
+            "action_type": "drip",
+            "target": "lead",
+            "template": "active_loan_updates",
+            "data": {
+                "lead_id": sc.lead_id,
+                "campaign": "active_loan_updates",
+                "stop_all_campaigns": True
+            }
+        })
+
+        logger.info(f"📋 DISCLOSED workflow triggered for {sc.lead_name}")
+        return actions
+
+    async def _handle_to_amr(self, sc: LeadStatusChange) -> List[Dict]:
+        """Handle transition to Annual Mortgage Review"""
+        actions = []
+        first_name = sc.lead_name.split()[0] if sc.lead_name else "there"
+
+        # 1. Schedule annual review task
+        actions.append({
+            "action_type": "task",
+            "target": "loan_officer",
+            "template": "annual_mortgage_review",
+            "data": {
+                "title": f"Annual Mortgage Review with {first_name}",
+                "description": "Review current rate, equity position, and refinance opportunities.",
+                "due_hours": 168,  # 7 days
+                "priority": "medium",
+                "lead_id": sc.lead_id,
+                "assigned_to": sc.loan_officer_id
+            }
+        })
+
+        # 2. Send AMR email
+        if sc.lead_email:
+            actions.append({
+                "action_type": "email",
+                "target": "lead",
+                "template": "annual_review_intro",
+                "data": {
+                    "to": sc.lead_email,
+                    "subject": f"{first_name}, Time for Your Annual Mortgage Review",
+                    "lead_name": sc.lead_name,
+                    "loan_officer_name": sc.loan_officer_name
+                },
+                "priority": "normal"
+            })
+
+        logger.info(f"📅 AMR workflow triggered for {sc.lead_name}")
+        return actions
+
+    async def _handle_to_referral_source(self, sc: LeadStatusChange) -> List[Dict]:
+        """Handle transition to Referral Source (Circle of Cash Flow)"""
+        actions = []
+        first_name = sc.lead_name.split()[0] if sc.lead_name else "there"
+
+        # 1. Create referral outreach task
+        actions.append({
+            "action_type": "task",
+            "target": "loan_officer",
+            "template": "referral_outreach",
+            "data": {
+                "title": f"Referral outreach with {first_name}",
+                "description": "Thank client, request referrals, set up referral partner relationship.",
+                "due_hours": 48,
+                "priority": "medium",
+                "lead_id": sc.lead_id,
+                "assigned_to": sc.loan_officer_id
+            }
+        })
+
+        # 2. Enroll in referral nurture campaign
+        actions.append({
+            "action_type": "drip",
+            "target": "lead",
+            "template": "referral_source_nurture",
+            "data": {
+                "lead_id": sc.lead_id,
+                "campaign": "referral_source_nurture",
+                "stop_all_campaigns": True
+            }
+        })
+
+        logger.info(f"🤝 REFERRAL SOURCE workflow triggered for {sc.lead_name}")
+        return actions
+
     async def _log_execution(self, sc: LeadStatusChange, actions: List[Dict]):
         """Log workflow execution to database"""
         try:
@@ -555,7 +946,7 @@ class TimeBasedWorkflowEngine:
     async def check_stale_leads(self) -> List[Dict]:
         """Check for leads that need time-based actions"""
         actions = []
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Check for New leads not contacted within 1 hour
         actions.extend(await self._check_new_no_contact(now))

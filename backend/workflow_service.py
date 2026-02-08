@@ -1,8 +1,18 @@
 """
-Perennia AI - Active Loan Workflow Engine
-Handles automated task creation, theme days, and last mile processes
+Perennia AI - Active Loan Workflow Engine (LEGACY)
+
+DEPRECATED: This module is superseded by the SLA-driven workflow system:
+  - services/workflow_sla_service.py (enrollment & lifecycle)
+  - services/workflow_task_generator.py (task creation)
+  - services/workflow_scheduler.py (scheduling & escalation)
+  - workflows/lead_workflow_engine.py (lead status change automation)
+
+This module is retained for backward compatibility with existing
+ThemeDayService, LastMileService, and PostClosingService consumers.
+The WorkflowEngine class should not be used for new integrations.
 """
 
+import warnings
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from datetime import datetime, timedelta, date
@@ -11,6 +21,13 @@ import logging
 import json
 
 logger = logging.getLogger(__name__)
+
+warnings.warn(
+    "workflow_service.WorkflowEngine is deprecated. Use services/workflow_sla_service.py "
+    "and services/workflow_task_generator.py instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
 class WorkflowEngine:
@@ -37,14 +54,18 @@ class WorkflowEngine:
             if not loan:
                 return {"error": "Loan not found"}
 
-            # Get active workflow rules
-            rules = db.execute(text("""
-                SELECT id, rule_name, trigger_type, trigger_config,
-                       action_type, action_config, priority
-                FROM workflow_rules
-                WHERE is_active = TRUE
-                ORDER BY priority DESC
-            """)).fetchall()
+            # Get active workflow rules (table may not exist in newer deployments)
+            try:
+                rules = db.execute(text("""
+                    SELECT id, rule_name, trigger_type, trigger_config,
+                           action_type, action_config, priority
+                    FROM workflow_rules
+                    WHERE is_active = TRUE
+                    ORDER BY priority DESC
+                """)).fetchall()
+            except Exception as e:
+                logger.info(f"workflow_rules table not available (expected in new deployments): {e}")
+                return results
 
             for rule in rules:
                 rule_id, name, trigger_type, trigger_config, action_type, action_config, priority = rule
@@ -64,29 +85,32 @@ class WorkflowEngine:
 
                     if not existing:
                         # Execute action
-                        if action_type == 'create_task':
-                            WorkflowEngine._create_workflow_task(
-                                db, loan_id, loan[1], rule_id, action_config
-                            )
-                            results["tasks_created"] += 1
-                        elif action_type == 'create_alert':
-                            WorkflowEngine._create_workflow_alert(
-                                db, loan_id, loan[1], rule_id, action_config
-                            )
-                            results["alerts_created"] += 1
+                        try:
+                            if action_type == 'create_task':
+                                WorkflowEngine._create_workflow_task(
+                                    db, loan_id, loan[1], rule_id, action_config
+                                )
+                                results["tasks_created"] += 1
+                            elif action_type == 'create_alert':
+                                WorkflowEngine._create_workflow_alert(
+                                    db, loan_id, loan[1], rule_id, action_config
+                                )
+                                results["alerts_created"] += 1
 
-                        # Log execution
-                        db.execute(text("""
-                            INSERT INTO workflow_execution_log
-                            (rule_id, loan_id, lead_id, trigger_data, result_data)
-                            VALUES (:rule_id, :loan_id, :lead_id, :trigger, :result)
-                        """), {
-                            "rule_id": rule_id,
-                            "loan_id": loan_id,
-                            "lead_id": loan[1],
-                            "trigger": json.dumps({"type": trigger_type}),
-                            "result": json.dumps({"action": action_type})
-                        })
+                            # Log execution
+                            db.execute(text("""
+                                INSERT INTO workflow_execution_log
+                                (rule_id, loan_id, lead_id, trigger_data, result_data)
+                                VALUES (:rule_id, :loan_id, :lead_id, :trigger, :result)
+                            """), {
+                                "rule_id": rule_id,
+                                "loan_id": loan_id,
+                                "lead_id": loan[1],
+                                "trigger": json.dumps({"type": trigger_type}),
+                                "result": json.dumps({"action": action_type})
+                            })
+                        except Exception as e:
+                            logger.warning(f"Legacy workflow action failed for rule {rule_id}: {e}")
 
                 results["rules_processed"] += 1
 
