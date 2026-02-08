@@ -903,8 +903,8 @@ const AdminPanel = () => {
               )}
             </section>
 
-            {/* Account Management - Platform Admin Only */}
-            {isCurrentUserPlatformAdmin && (
+            {/* Account Management - Admin Only */}
+            {(isCurrentUserPlatformAdmin || isCurrentUserSiteAdmin) && (
               <section
                 className="account-management-section clickable-card"
                 onClick={() => navigate('/settings/account-management')}
@@ -954,8 +954,8 @@ const AdminPanel = () => {
               </section>
             )}
 
-            {/* Financial Management - Platform Admin Only */}
-            {isCurrentUserPlatformAdmin && (
+            {/* Financial Management - Admin Only */}
+            {(isCurrentUserPlatformAdmin || isCurrentUserSiteAdmin) && (
               <section
                 className="financial-management-section clickable-card"
                 onClick={() => navigate('/accounting')}
@@ -995,8 +995,8 @@ const AdminPanel = () => {
               </section>
             )}
 
-            {/* IT Tickets - Platform Admin Only */}
-            {isCurrentUserPlatformAdmin && (
+            {/* IT Tickets - Admin Only */}
+            {(isCurrentUserPlatformAdmin || isCurrentUserSiteAdmin) && (
               <section
                 className="it-tickets-section clickable-card"
                 onClick={() => navigate('/support')}
