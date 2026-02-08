@@ -613,33 +613,33 @@ class SalesforceSyncService:
             return loan_id
 
     def _map_salesforce_stage(self, sf_stage: str) -> str:
-        """Map Salesforce Opportunity stage to CRM loan stage"""
+        """Map Salesforce Opportunity stage to CRM loan stage (UPPERCASE enum values)"""
         stage_mapping = {
             # Common Salesforce stages
-            'Prospecting': 'Application',
-            'Qualification': 'Application',
-            'Needs Analysis': 'Application',
-            'Value Proposition': 'Processing',
-            'Id. Decision Makers': 'Processing',
-            'Perception Analysis': 'Processing',
-            'Proposal/Price Quote': 'Submitted',
-            'Negotiation/Review': 'Underwriting',
-            'Closed Won': 'Funded',
-            'Closed Lost': 'Application',
+            'Prospecting': 'APPLICATION',
+            'Qualification': 'APPLICATION',
+            'Needs Analysis': 'APPLICATION',
+            'Value Proposition': 'PROCESSING',
+            'Id. Decision Makers': 'PROCESSING',
+            'Perception Analysis': 'PROCESSING',
+            'Proposal/Price Quote': 'SUBMITTED',
+            'Negotiation/Review': 'UNDERWRITING',
+            'Closed Won': 'FUNDED',
+            'Closed Lost': 'CANCELLED',
             # Mortgage-specific stages
-            'Application': 'Application',
-            'Processing': 'Processing',
-            'Submitted': 'Submitted',
-            'Underwriting': 'Underwriting',
-            'Conditional Approval': 'Conditional Approval',
-            'Approved': 'Approved',
+            'Application': 'APPLICATION',
+            'Processing': 'PROCESSING',
+            'Submitted': 'SUBMITTED',
+            'Underwriting': 'UNDERWRITING',
+            'Conditional Approval': 'CONDITIONAL_APPROVAL',
+            'Approved': 'APPROVED',
             'Clear to Close': 'CTC',
             'CTC': 'CTC',
-            'Docs Out': 'Docs Out',
-            'Closing': 'Closing',
-            'Funded': 'Funded',
+            'Docs Out': 'DOCS_OUT',
+            'Closing': 'CLOSING',
+            'Funded': 'FUNDED',
         }
-        return stage_mapping.get(sf_stage, 'Application')
+        return stage_mapping.get(sf_stage, 'APPLICATION')
 
     def _group_mappings_by_object(
         self,
@@ -1199,14 +1199,16 @@ class SalesforceSyncService:
         return True
 
     def _map_sf_lead_status_to_crm(self, sf_status: str) -> str:
-        """Map Salesforce Lead status to CRM stage"""
+        """Map Salesforce Lead status to CRM stage (matches LeadStage enum values)"""
         status_mapping = {
-            'Open - Not Contacted': 'new',
-            'Working - Contacted': 'contacted',
-            'Closed - Converted': 'converted',
-            'Closed - Not Converted': 'closed',
+            'Open - Not Contacted': 'New',
+            'Working - Contacted': 'Attempted Contact',
+            'Closed - Converted': 'Closed',
+            'Closed - Not Converted': 'Withdrawn',
+            'Nurture': 'Long-Term Nurture',
+            'Qualified': 'Pre-Qualified',
         }
-        return status_mapping.get(sf_status, 'new')
+        return status_mapping.get(sf_status, 'New')
 
     # =========================================================================
     # IMPORT NEW CLIENTS FROM SALESFORCE
@@ -1542,6 +1544,7 @@ class SalesforceSyncService:
         # Build new lead record
         first_name = sf_record.get('FirstName') or ''
         last_name = sf_record.get('LastName') or 'Unknown'
+        full_name = f"{first_name} {last_name}".strip() or 'Unknown'
 
         # Address fields differ between Lead and Contact
         street = sf_record.get('Street') or sf_record.get('MailingStreet')
@@ -1555,22 +1558,29 @@ class SalesforceSyncService:
         company = sf_record.get('Company') or ''
         notes = sf_record.get('Description') or ''
 
+        # Get user's organization_id for multi-tenant isolation
+        user_row = db.execute(text("""
+            SELECT organization_id FROM users WHERE id = :user_id
+        """), {"user_id": user_id}).fetchone()
+        org_id = user_row.organization_id if user_row else None
+
         db.execute(text("""
             INSERT INTO leads (
-                first_name, last_name, email, phone, company,
+                name, first_name, last_name, email, phone, company,
                 source, stage, address, city, state, zip_code,
-                notes, salesforce_id, owner_id,
+                notes, salesforce_id, owner_id, organization_id,
                 meta_data, created_at, updated_at
             ) VALUES (
-                :first_name, :last_name, :email, :phone, :company,
+                :name, :first_name, :last_name, :email, :phone, :company,
                 :source, :stage, :address, :city, :state, :zip_code,
-                :notes, :sf_id, :owner_id,
+                :notes, :sf_id, :owner_id, :org_id,
                 jsonb_build_object('salesforce_type', :sf_type,
                                    'salesforce_imported_at', CURRENT_TIMESTAMP::text,
                                    'salesforce_source', 'auto_import'),
                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
             )
         """), {
+            "name": full_name,
             "first_name": first_name,
             "last_name": last_name,
             "email": email,
@@ -1585,6 +1595,7 @@ class SalesforceSyncService:
             "notes": notes,
             "sf_id": sf_id,
             "owner_id": user_id,
+            "org_id": org_id,
             "sf_type": sf_type,
         })
 
@@ -1603,6 +1614,7 @@ class SalesforceSyncService:
         Returns True if a new loan was created, False if it already existed.
         """
         from sqlalchemy import text
+        import uuid
 
         sf_id = sf_opp.get('Id')
 
@@ -1619,6 +1631,12 @@ class SalesforceSyncService:
         if existing:
             return False
 
+        # Get user's organization_id for multi-tenant isolation
+        user_row = db.execute(text("""
+            SELECT organization_id FROM users WHERE id = :user_id
+        """), {"user_id": user_id}).fetchone()
+        org_id = user_row.organization_id if user_row else None
+
         # Build new loan record from Opportunity
         name = sf_opp.get('Name') or 'Salesforce Opportunity'
         amount = float(sf_opp.get('Amount') or 0)
@@ -1629,35 +1647,101 @@ class SalesforceSyncService:
         next_step = sf_opp.get('NextStep') or ''
         loan_type = sf_opp.get('Type') or ''
 
+        # Generate loan number (required NOT NULL field)
+        loan_number = f"SF-{str(uuid.uuid4())[:8].upper()}"
+
+        # Set funded_date if the stage is FUNDED (needed for MUM page)
+        funded_date = close_date if stage == 'FUNDED' else None
+
+        # Try to get borrower contact info from related Account/Contact
+        borrower_email = None
+        borrower_phone = None
+        account_id = sf_opp.get('AccountId')
+        if account_id:
+            try:
+                contact_info = await self._get_contact_for_account(
+                    db, sf_id, account_id, user_id
+                )
+                borrower_email = contact_info.get('email')
+                borrower_phone = contact_info.get('phone')
+            except Exception:
+                pass  # Best-effort
+
         db.execute(text("""
             INSERT INTO loans (
-                borrower_name, amount, stage, closing_date,
+                loan_number, borrower_name, borrower_email, borrower_phone,
+                amount, stage, closing_date, funded_date,
                 lead_source, notes, next_steps, loan_type,
-                salesforce_id, loan_officer_id,
+                salesforce_id, loan_officer_id, organization_id,
                 salesforce_sync_status, salesforce_last_synced_at,
                 created_at, updated_at
             ) VALUES (
-                :name, :amount, :stage, :close_date,
+                :loan_number, :name, :borrower_email, :borrower_phone,
+                :amount, :stage, :close_date, :funded_date,
                 :lead_source, :notes, :next_steps, :loan_type,
-                :sf_id, :user_id,
+                :sf_id, :user_id, :org_id,
                 'synced', CURRENT_TIMESTAMP,
                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
             )
         """), {
+            "loan_number": loan_number,
             "name": name,
+            "borrower_email": borrower_email,
+            "borrower_phone": borrower_phone,
             "amount": amount,
             "stage": stage,
             "close_date": close_date,
+            "funded_date": funded_date,
             "lead_source": lead_source,
             "notes": description,
             "next_steps": next_step,
             "loan_type": loan_type,
             "sf_id": sf_id,
             "user_id": user_id,
+            "org_id": org_id,
         })
 
-        logger.info(f"Created CRM loan from Salesforce Opportunity {sf_id}: {name} (${amount:,.0f})")
+        logger.info(f"Created CRM loan from Salesforce Opportunity {sf_id}: {name} (${amount:,.0f}, stage={stage})")
         return True
+
+    async def _get_contact_for_account(
+        self,
+        db: Session,
+        sf_opp_id: str,
+        account_id: str,
+        user_id: int
+    ) -> Dict[str, Any]:
+        """Get primary contact info for a Salesforce Account (for borrower details)."""
+        from sqlalchemy import text
+
+        access_token, instance_url = await salesforce_oauth.get_access_token(
+            db, db.execute(text("""
+                SELECT id FROM integration_profiles
+                WHERE user_id = :user_id AND provider = 'salesforce'
+                LIMIT 1
+            """), {"user_id": user_id}).fetchone().id
+        )
+
+        soql = f"SELECT Email, Phone, MobilePhone FROM Contact WHERE AccountId = '{account_id}' AND Email != null ORDER BY LastModifiedDate DESC LIMIT 1"
+
+        async with get_sf_client() as client:
+            response = await client.get(
+                f"{instance_url}/services/data/v59.0/query",
+                params={"q": soql},
+                headers={"Authorization": f"Bearer {access_token}"},
+                timeout=15.0
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('totalSize', 0) > 0:
+                    record = data['records'][0]
+                    return {
+                        'email': record.get('Email'),
+                        'phone': record.get('Phone') or record.get('MobilePhone'),
+                    }
+
+        return {}
 
 
     # =========================================================================
