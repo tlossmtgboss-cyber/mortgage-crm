@@ -9,6 +9,46 @@ const TAB_CONFIG = [
   { key: 'closing', label: 'Closings', filterType: 'closing' },
 ];
 
+const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const dayAbbreviations = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const monthNames = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+// Hours for Day/Week views (7am to 8pm)
+const VIEW_HOURS = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
+
+const formatHour = (hour) => {
+  if (hour === 0) return '12 AM';
+  if (hour < 12) return `${hour} AM`;
+  if (hour === 12) return '12 PM';
+  return `${hour - 12} PM`;
+};
+
+// DRY helper: map unified API response to frontend format
+const mapUnifiedEvents = (events) => (events || []).map(event => ({
+  ...event,
+  isAppointment: event.is_appointment,
+  isCrmEvent: event.is_crm_event,
+  appointmentId: event.is_appointment ? event.id.replace('appt-', '') : undefined,
+  crmEventId: event.is_crm_event ? event.id.replace('crm-', '') : undefined,
+  calendarEventId: event.source === 'calendar' ? event.id.replace('event-', '') : undefined,
+}));
+
+const getStartOfWeek = (date) => {
+  const d = new Date(date);
+  const day = d.getDay();
+  d.setDate(d.getDate() - day);
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+
+const isSameDay = (d1, d2) =>
+  d1.getFullYear() === d2.getFullYear() &&
+  d1.getMonth() === d2.getMonth() &&
+  d1.getDate() === d2.getDate();
+
 function Calendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState('month');
@@ -18,8 +58,9 @@ function Calendar() {
   const [error, setError] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
-  const [calendarOffset, setCalendarOffset] = useState(0); // Month offset for mini calendar scrolling
+  const [selectedTime, setSelectedTime] = useState(null);
   const [activeTab, setActiveTab] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Edit/reschedule appointment state
   const [showEditModal, setShowEditModal] = useState(false);
@@ -35,33 +76,19 @@ function Calendar() {
   const loadEvents = async () => {
     try {
       setLoading(true);
-      // Get events for current month
       const startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
       const endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59);
 
-      // Fetch all events from unified endpoint (merges calendar, scheduler, and CRM)
       const response = await unifiedCalendarAPI.getAll({
         start_date: startDate.toISOString().split('T')[0],
         end_date: endDate.toISOString().split('T')[0],
       });
 
-      // Map unified response to frontend format
-      const unifiedEvents = (response.events || []).map(event => ({
-        ...event,
-        isAppointment: event.is_appointment,
-        isCrmEvent: event.is_crm_event,
-        // Extract original IDs for API operations
-        appointmentId: event.is_appointment ? event.id.replace('appt-', '') : undefined,
-        crmEventId: event.is_crm_event ? event.id.replace('crm-', '') : undefined,
-        calendarEventId: event.source === 'calendar' ? event.id.replace('event-', '') : undefined,
-      }));
-
-      // Log any warnings from partial failures
       if (response.warnings && response.warnings.length > 0) {
         console.warn('Calendar load warnings:', response.warnings);
       }
 
-      setEvents(unifiedEvents);
+      setEvents(mapUnifiedEvents(response.events));
       setError(null);
     } catch (err) {
       console.error('Failed to load events:', err);
@@ -74,35 +101,21 @@ function Calendar() {
 
   const loadAllEvents = async () => {
     try {
-      // Load all events (6 months past and 6 months future)
       const startDate = new Date();
       startDate.setMonth(startDate.getMonth() - 6);
       const endDate = new Date();
       endDate.setMonth(endDate.getMonth() + 6);
 
-      // Fetch all events from unified endpoint (merges calendar, scheduler, and CRM)
       const response = await unifiedCalendarAPI.getAll({
         start_date: startDate.toISOString().split('T')[0],
         end_date: endDate.toISOString().split('T')[0],
       });
 
-      // Map unified response to frontend format
-      const unifiedEvents = (response.events || []).map(event => ({
-        ...event,
-        isAppointment: event.is_appointment,
-        isCrmEvent: event.is_crm_event,
-        // Extract original IDs for API operations
-        appointmentId: event.is_appointment ? event.id.replace('appt-', '') : undefined,
-        crmEventId: event.is_crm_event ? event.id.replace('crm-', '') : undefined,
-        calendarEventId: event.source === 'calendar' ? event.id.replace('event-', '') : undefined,
-      }));
-
-      // Log any warnings from partial failures
       if (response.warnings && response.warnings.length > 0) {
         console.warn('Calendar load warnings:', response.warnings);
       }
 
-      setAllEvents(unifiedEvents);
+      setAllEvents(mapUnifiedEvents(response.events));
       setError(null);
     } catch (err) {
       console.error('Failed to load all events:', err);
@@ -117,38 +130,34 @@ function Calendar() {
       loadEvents();
       loadAllEvents();
       setShowAddModal(false);
-    } catch (error) {
-      console.error('Failed to create event:', error);
-      alert('Failed to create event. Please try again.');
+    } catch (err) {
+      console.error('Failed to create event:', err);
+      setError('Failed to create event. Please try again.');
     }
   };
 
   const handleDeleteEvent = async (event) => {
     try {
       if (event.isAppointment && event.appointmentId) {
-        // This is a scheduler appointment - use cancel endpoint
         if (!window.confirm('Are you sure you want to cancel this appointment? The attendee will be notified.')) {
           return;
         }
         await schedulerAPI.cancelAppointment(event.appointmentId, 'Cancelled by user');
       } else {
-        // This is a regular calendar event - use delete endpoint
         if (!window.confirm('Are you sure you want to delete this event?')) {
           return;
         }
-        // Use original calendar event ID (without 'event-' prefix)
         const eventId = event.calendarEventId || event.id.replace('event-', '');
         await calendarAPI.delete(eventId);
       }
       loadEvents();
       loadAllEvents();
-    } catch (error) {
-      console.error('Failed to delete/cancel event:', error);
-      alert('Failed to cancel: ' + (error.response?.data?.detail || error.message));
+    } catch (err) {
+      console.error('Failed to delete/cancel event:', err);
+      setError('Failed to cancel: ' + (err.response?.data?.detail || err.message));
     }
   };
 
-  // Handle clicking on an appointment to edit/reschedule
   const handleEditAppointment = (event) => {
     if (!event.isAppointment) return;
     if (!event.start_time || !event.end_time) return;
@@ -172,7 +181,6 @@ function Calendar() {
     setShowEditModal(true);
   };
 
-  // Handle saving edited appointment (reschedule)
   const handleSaveAppointment = async (e) => {
     e.preventDefault();
     if (!editingAppointment) return;
@@ -196,15 +204,14 @@ function Calendar() {
       setEditingAppointment(null);
       loadEvents();
       loadAllEvents();
-    } catch (error) {
-      console.error('Failed to update appointment:', error);
-      alert('Failed to reschedule: ' + (error.response?.data?.detail || error.message));
+    } catch (err) {
+      console.error('Failed to update appointment:', err);
+      setError('Failed to reschedule: ' + (err.response?.data?.detail || err.message));
     } finally {
       setSaving(false);
     }
   };
 
-  // Handle cancelling from edit modal
   const handleCancelFromModal = async () => {
     if (!editingAppointment || !window.confirm('Are you sure you want to cancel this appointment? The attendee will be notified.')) {
       return;
@@ -217,9 +224,9 @@ function Calendar() {
       setEditingAppointment(null);
       loadEvents();
       loadAllEvents();
-    } catch (error) {
-      console.error('Failed to cancel appointment:', error);
-      alert('Failed to cancel: ' + (error.response?.data?.detail || error.message));
+    } catch (err) {
+      console.error('Failed to cancel appointment:', err);
+      setError('Failed to cancel: ' + (err.response?.data?.detail || err.message));
     } finally {
       setSaving(false);
     }
@@ -232,13 +239,16 @@ function Calendar() {
     return eventList.filter(event => event.event_type === tab.filterType);
   };
 
-  // Sort and group events by date
+  // Sort and group events by date, with search filter
   const getSortedEvents = () => {
-    const filtered = getFilteredEvents(allEvents);
-    const sorted = [...filtered].sort((a, b) => {
-      return new Date(a.start_time) - new Date(b.start_time);
+    const filtered = getFilteredEvents(allEvents).filter(event => {
+      if (!searchQuery) return true;
+      const q = searchQuery.toLowerCase();
+      return (event.title || '').toLowerCase().includes(q)
+        || (event.attendee_name || '').toLowerCase().includes(q)
+        || (event.location || '').toLowerCase().includes(q);
     });
-    return sorted;
+    return [...filtered].sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
   };
 
   const formatEventTime = (startTime, endTime) => {
@@ -246,7 +256,7 @@ function Calendar() {
     const end = new Date(endTime);
     const startStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
     const endStr = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-    const duration = Math.round((end - start) / (1000 * 60)); // duration in minutes
+    const duration = Math.round((end - start) / (1000 * 60));
     return { startStr, endStr, duration };
   };
 
@@ -261,16 +271,9 @@ function Calendar() {
     } else if (date.toDateString() === tomorrow.toDateString()) {
       return 'Tomorrow';
     } else {
-      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-      return `${dayNames[date.getDay()]} • ${monthNames[date.getMonth()]} ${date.getDate()}`;
+      return `${dayNames[date.getDay()]} \u2022 ${monthNames[date.getMonth()]} ${date.getDate()}`;
     }
   };
-
-  const monthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
-  ];
 
   const getDaysInMonth = (date) => {
     const year = date.getFullYear();
@@ -283,38 +286,55 @@ function Calendar() {
     return { daysInMonth, startingDayOfWeek, year, month };
   };
 
-  // Get data for displayed months (based on offset)
-  const displayDate = new Date();
-  displayDate.setMonth(displayDate.getMonth() + calendarOffset);
-  const currentMonthData = getDaysInMonth(displayDate);
-
-  const nextMonthDate = new Date(displayDate.getFullYear(), displayDate.getMonth() + 1, 1);
+  // Mini calendar months derived from currentDate (synced with main navigation)
+  const currentMonthData = getDaysInMonth(currentDate);
+  const nextMonthDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
   const nextMonthData = getDaysInMonth(nextMonthDate);
 
-  // Scroll calendar months
-  const handleScrollUp = () => {
-    setCalendarOffset(calendarOffset - 1);
+  // View-aware navigation
+  const handlePrev = () => {
+    if (view === 'day') {
+      setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() - 1));
+    } else if (view === 'week') {
+      setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() - 7));
+    } else {
+      setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1));
+    }
   };
 
-  const handleScrollDown = () => {
-    setCalendarOffset(calendarOffset + 1);
-  };
-
-  const handlePrevMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1));
-  };
-
-  const handleNextMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1));
+  const handleNext = () => {
+    if (view === 'day') {
+      setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() + 1));
+    } else if (view === 'week') {
+      setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() + 7));
+    } else {
+      setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1));
+    }
   };
 
   const handleToday = () => {
     setCurrentDate(new Date());
   };
 
-  const handleDayClick = (day) => {
-    const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+  // Scroll mini calendar (same as prev/next in month mode)
+  const handleScrollUp = () => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+  };
+
+  const handleScrollDown = () => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+  };
+
+  const handleDayClick = (day, year, month) => {
+    const date = new Date(year || currentDate.getFullYear(), month != null ? month : currentDate.getMonth(), day);
     setSelectedDate(date);
+    setSelectedTime(null);
+    setShowAddModal(true);
+  };
+
+  const handleTimeSlotClick = (date, hour) => {
+    setSelectedDate(date);
+    setSelectedTime(hour);
     setShowAddModal(true);
   };
 
@@ -329,10 +349,172 @@ function Calendar() {
     });
   };
 
-  // Render a mini calendar for a specific month
-  const renderMiniCalendar = (monthData, isNextMonth = false) => {
+  const getEventsForDateObj = (dateObj) => {
+    return getEventsForDate(dateObj.getDate(), dateObj.getFullYear(), dateObj.getMonth());
+  };
+
+  const getEventsForDateAndHour = (dateObj, hour) => {
+    const dayEvents = getEventsForDateObj(dateObj);
+    return dayEvents.filter(event => {
+      const eventDate = new Date(event.start_time);
+      return eventDate.getHours() === hour;
+    });
+  };
+
+  // Get header subtitle based on view
+  const getHeaderSubtitle = () => {
+    if (view === 'day') {
+      return `${dayNames[currentDate.getDay()]}, ${monthNames[currentDate.getMonth()]} ${currentDate.getDate()}, ${currentDate.getFullYear()}`;
+    } else if (view === 'week') {
+      const weekStart = getStartOfWeek(currentDate);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      const startMonth = monthNames[weekStart.getMonth()].slice(0, 3);
+      const endMonth = monthNames[weekEnd.getMonth()].slice(0, 3);
+      if (weekStart.getMonth() === weekEnd.getMonth()) {
+        return `${startMonth} ${weekStart.getDate()} - ${weekEnd.getDate()}, ${weekEnd.getFullYear()}`;
+      }
+      return `${startMonth} ${weekStart.getDate()} - ${endMonth} ${weekEnd.getDate()}, ${weekEnd.getFullYear()}`;
+    }
+    return `${monthNames[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
+  };
+
+  // Get event color class
+  const getEventColorClass = (eventType) => {
+    const typeMap = {
+      meeting: 'event-color-meeting',
+      call: 'event-color-call',
+      appraisal: 'event-color-appraisal',
+      closing: 'event-color-closing',
+      pre_purchase_consultation: 'event-color-pre-purchase',
+      purchase_consultation: 'event-color-purchase',
+    };
+    return typeMap[eventType] || 'event-color-other';
+  };
+
+  // ===== DAY VIEW =====
+  const renderDayView = () => {
+    const dayEvents = getEventsForDateObj(currentDate);
+    const today = new Date();
+
+    return (
+      <div className="day-view">
+        <div className="day-view-header">
+          <h3>{dayNames[currentDate.getDay()]}, {monthNames[currentDate.getMonth()]} {currentDate.getDate()}</h3>
+          {isSameDay(currentDate, today) && <span className="today-badge">Today</span>}
+        </div>
+        <div className="day-view-timeline">
+          {VIEW_HOURS.map(hour => {
+            const hourEvents = dayEvents.filter(event => {
+              const eventDate = new Date(event.start_time);
+              return eventDate.getHours() === hour;
+            });
+            return (
+              <div className="day-view-hour" key={hour}>
+                <div className="hour-label">{formatHour(hour)}</div>
+                <div
+                  className="hour-slot"
+                  onClick={() => handleTimeSlotClick(currentDate, hour)}
+                >
+                  {hourEvents.map(event => {
+                    const { startStr, duration } = formatEventTime(event.start_time, event.end_time);
+                    return (
+                      <div
+                        key={event.id}
+                        className={`day-event ${getEventColorClass(event.event_type)} ${event.isAppointment ? 'clickable' : ''}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (event.isAppointment) handleEditAppointment(event);
+                        }}
+                        title={event.title}
+                      >
+                        <div className="day-event-time">{startStr} ({duration}m)</div>
+                        <div className="day-event-title">{event.title}</div>
+                        {event.attendee_name && (
+                          <div className="day-event-attendee" title={event.attendee_name}>{event.attendee_name}</div>
+                        )}
+                        {event.location && (
+                          <div className="day-event-location" title={event.location}>{event.location}</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  // ===== WEEK VIEW =====
+  const renderWeekView = () => {
+    const weekStart = getStartOfWeek(currentDate);
+    const weekDays = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(weekStart);
+      d.setDate(d.getDate() + i);
+      return d;
+    });
+    const today = new Date();
+
+    return (
+      <div className="week-view">
+        <div className="week-view-header">
+          <div className="week-time-gutter" />
+          {weekDays.map((day, i) => (
+            <div
+              key={i}
+              className={`week-day-col-header ${isSameDay(day, today) ? 'today' : ''}`}
+              onClick={() => {
+                setCurrentDate(new Date(day));
+                setView('day');
+              }}
+              style={{ cursor: 'pointer' }}
+            >
+              <span className="week-day-name">{dayAbbreviations[day.getDay()]}</span>
+              <span className="week-day-num">{day.getDate()}</span>
+            </div>
+          ))}
+        </div>
+        <div className="week-view-body">
+          {VIEW_HOURS.map(hour => (
+            <div className="week-hour-row" key={hour}>
+              <div className="hour-label">{formatHour(hour)}</div>
+              {weekDays.map((day, i) => {
+                const cellEvents = getEventsForDateAndHour(day, hour);
+                return (
+                  <div
+                    key={i}
+                    className="week-cell"
+                    onClick={() => handleTimeSlotClick(day, hour)}
+                  >
+                    {cellEvents.map(event => (
+                      <div
+                        key={event.id}
+                        className={`week-event ${getEventColorClass(event.event_type)} ${event.isAppointment ? 'clickable' : ''}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (event.isAppointment) handleEditAppointment(event);
+                        }}
+                        title={event.title}
+                      >
+                        {event.title}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  // ===== MONTH VIEW (mini calendar) =====
+  const renderMiniCalendar = (monthData) => {
     const { daysInMonth, startingDayOfWeek, year, month } = monthData;
-    const monthDate = new Date(year, month, 1);
 
     return (
       <div className="mini-calendar">
@@ -361,10 +543,7 @@ function Calendar() {
               <div
                 key={day}
                 className={`mini-calendar-day ${isToday ? 'today' : ''} ${dayEvents.length > 0 ? 'has-events' : ''}`}
-                onClick={() => {
-                  setSelectedDate(dayDate);
-                  setShowAddModal(true);
-                }}
+                onClick={() => handleDayClick(day, year, month)}
               >
                 <div className="mini-day-number">{day}</div>
                 {dayEvents.length > 0 && (
@@ -377,10 +556,58 @@ function Calendar() {
                     ))}
                   </div>
                 )}
+                {dayEvents.length > 3 && (
+                  <div className="event-overflow">+{dayEvents.length - 3}</div>
+                )}
               </div>
             );
           })}
         </div>
+      </div>
+    );
+  };
+
+  // Render main view area
+  const renderMainView = () => {
+    if (loading) {
+      return <div className="loading">Loading events...</div>;
+    }
+
+    if (view === 'day') {
+      return renderDayView();
+    }
+
+    if (view === 'week') {
+      return renderWeekView();
+    }
+
+    // Month view (two mini calendars)
+    return (
+      <div className="calendar-scroll-container">
+        <button
+          className="calendar-scroll-btn scroll-up"
+          onClick={handleScrollUp}
+          title="Previous month"
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="18 15 12 9 6 15"></polyline>
+          </svg>
+        </button>
+
+        <div className="two-month-view">
+          {renderMiniCalendar(currentMonthData)}
+          {renderMiniCalendar(nextMonthData)}
+        </div>
+
+        <button
+          className="calendar-scroll-btn scroll-down"
+          onClick={handleScrollDown}
+          title="Next month"
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </button>
       </div>
     );
   };
@@ -390,7 +617,7 @@ function Calendar() {
       <div className="calendar-header">
         <div>
           <h1>Calendar</h1>
-          <p>{monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}</p>
+          <p>{getHeaderSubtitle()}</p>
         </div>
         <div className="calendar-controls">
           <div className="view-switcher">
@@ -414,10 +641,10 @@ function Calendar() {
             </button>
           </div>
           <div className="month-navigation">
-            <button onClick={handlePrevMonth}>←</button>
+            <button onClick={handlePrev}>&larr;</button>
             <button onClick={handleToday}>Today</button>
-            <button onClick={handleNextMonth}>→</button>
-            <button className="btn-add-event" onClick={() => { setSelectedDate(new Date()); setShowAddModal(true); }}>
+            <button onClick={handleNext}>&rarr;</button>
+            <button className="btn-add-event" onClick={() => { setSelectedDate(new Date()); setSelectedTime(null); setShowAddModal(true); }}>
               + Add Event
             </button>
           </div>
@@ -440,7 +667,7 @@ function Calendar() {
             <h2>{TAB_CONFIG.find(t => t.key === activeTab)?.label || 'Appointments'}</h2>
             <button
               className="btn-add-appointment"
-              onClick={() => { setSelectedDate(new Date()); setShowAddModal(true); }}
+              onClick={() => { setSelectedDate(new Date()); setSelectedTime(null); setShowAddModal(true); }}
               title="Add new appointment"
             >
               + Add
@@ -457,16 +684,26 @@ function Calendar() {
               </button>
             ))}
           </div>
+          <div className="search-container">
+            <input
+              type="text"
+              className="search-input"
+              placeholder="Search events..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
           <div className="appointments-list">
             {getSortedEvents().length === 0 ? (
               <div className="empty-appointments">
-                <p>No appointments scheduled</p>
+                <p>{searchQuery ? 'No matching events' : 'No appointments scheduled'}</p>
               </div>
             ) : (
               getSortedEvents().map((event, index) => {
                 const { startStr, duration } = formatEventTime(event.start_time, event.end_time);
                 const dateLabel = formatEventDate(event.start_time);
-                const showDateHeader = index === 0 || formatEventDate(getSortedEvents()[index - 1].start_time) !== dateLabel;
+                const sortedEvents = getSortedEvents();
+                const showDateHeader = index === 0 || formatEventDate(sortedEvents[index - 1].start_time) !== dateLabel;
 
                 return (
                   <div key={event.id}>
@@ -483,15 +720,15 @@ function Calendar() {
                         <div className="time-duration">{duration}m</div>
                       </div>
                       <div className="appointment-details">
-                        <div className="appointment-title">{event.title}</div>
+                        <div className="appointment-title" title={event.title}>{event.title}</div>
                         {event.attendee_name && (
-                          <div className="appointment-attendee">{event.attendee_name}</div>
+                          <div className="appointment-attendee" title={event.attendee_name}>{event.attendee_name}</div>
                         )}
                         {event.location && (
-                          <div className="appointment-location">{event.location}</div>
+                          <div className="appointment-location" title={event.location}>{event.location}</div>
                         )}
                         {event.description && (
-                          <div className="appointment-description">{event.description}</div>
+                          <div className="appointment-description" title={event.description}>{event.description}</div>
                         )}
                         {event.isAppointment && (
                           <div className="appointment-edit-hint">Click to edit/reschedule</div>
@@ -502,7 +739,7 @@ function Calendar() {
                         onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event); }}
                         title={event.isAppointment ? "Cancel appointment" : "Delete event"}
                       >
-                        ×
+                        &times;
                       </button>
                     </div>
                   </div>
@@ -512,47 +749,16 @@ function Calendar() {
           </div>
         </div>
 
-        {/* Two-Month Mini Calendar View */}
+        {/* Main View Area */}
         <div className="calendar-main">
-          {loading ? (
-            <div className="loading">Loading events...</div>
-          ) : (
-            <div className="calendar-scroll-container">
-              {/* Scroll Up Button */}
-              <button
-                className="calendar-scroll-btn scroll-up"
-                onClick={handleScrollUp}
-                title="Previous month"
-              >
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="18 15 12 9 6 15"></polyline>
-                </svg>
-              </button>
-
-              {/* Two Month View */}
-              <div className="two-month-view">
-                {renderMiniCalendar(currentMonthData)}
-                {renderMiniCalendar(nextMonthData, true)}
-              </div>
-
-              {/* Scroll Down Button */}
-              <button
-                className="calendar-scroll-btn scroll-down"
-                onClick={handleScrollDown}
-                title="Next month"
-              >
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="6 9 12 15 18 9"></polyline>
-                </svg>
-              </button>
-            </div>
-          )}
+          {renderMainView()}
         </div>
       </div>
 
       {showAddModal && (
         <AddEventModal
           selectedDate={selectedDate}
+          selectedTime={selectedTime}
           onClose={() => setShowAddModal(false)}
           onAdd={handleAddEvent}
         />
@@ -657,8 +863,12 @@ function Calendar() {
   );
 }
 
-function AddEventModal({ selectedDate, onClose, onAdd }) {
+function AddEventModal({ selectedDate, selectedTime, onClose, onAdd }) {
   const defaultStart = selectedDate || new Date();
+  // If a specific hour was selected (from Day/Week view), use it
+  if (selectedTime != null) {
+    defaultStart.setHours(selectedTime, 0, 0, 0);
+  }
   const defaultEnd = new Date(defaultStart.getTime() + 3600000);
   const [formData, setFormData] = useState({
     title: '',
