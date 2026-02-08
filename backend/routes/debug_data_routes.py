@@ -8,9 +8,11 @@ sample data creation, email testing, and Salesforce migration.
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from typing import Any
 import logging
 import os
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +28,8 @@ def register_debug_data_routes(
         User, ExtractedData, IncomingDataEvent, MicrosoftOAuthToken,
         CalendarEvent, ReferralPartner, Task, Loan
     )
+    from schemas.core import ErrorFixRequest, MicrosoftSyncSettings
+    from services.dre_helpers import get_entity_name, create_milestone_tasks
 
     @app.get("/api/v1/debug/email-sync-status")
     async def email_sync_status(
@@ -250,6 +254,8 @@ def register_debug_data_routes(
         Uses Claude AI to analyze frontend errors and provide fix suggestions
         """
         try:
+            import json
+            import anthropic
             anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
 
             if not anthropic_api_key:
@@ -363,8 +369,7 @@ def register_debug_data_routes(
         try:
             # Log diagnostic info
             logger.info(f"Sync triggered by user {current_user.id}")
-            logger.info(f"OpenAI client available: {openai_client is not None}")
-            logger.info(f"OpenAI API key set: {bool(OPENAI_API_KEY)}")
+            logger.info(f"OpenAI API key set: {bool(os.getenv('OPENAI_API_KEY'))}")
             oauth_record = db.query(MicrosoftOAuthToken).filter(
                 MicrosoftOAuthToken.user_id == current_user.id
             ).first()
@@ -604,6 +609,8 @@ def register_debug_data_routes(
         import traceback
         from datetime import date, timedelta, datetime, timezone
         from sqlalchemy import func, extract, case, text
+        from database.models import Lead, AIColleagueAction
+        from database.enums import LeadStage, LoanStage
 
         results = {"user_id": current_user.id, "steps": []}
 
