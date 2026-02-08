@@ -487,13 +487,26 @@ function CalendarSidebar({ leadId, loanId, children }) {
   const handleCreateAppointment = async (e) => {
     e.preventDefault();
 
+    // Validate required fields
+    if (!appointmentForm.attendee_name?.trim()) {
+      alert('Please enter a contact name');
+      return;
+    }
+    if (!appointmentForm.attendee_email?.trim()) {
+      alert('Please enter a contact email');
+      return;
+    }
+    if (!appointmentForm.date) {
+      alert('Please select a date');
+      return;
+    }
+
     try {
       const startDateTime = new Date(`${appointmentForm.date}T${appointmentForm.time}`);
-      const endDateTime = new Date(startDateTime.getTime() + parseInt(appointmentForm.duration) * 60000);
 
       const appointmentData = {
-        contact_name: appointmentForm.attendee_name,
-        contact_email: appointmentForm.attendee_email,
+        contact_name: appointmentForm.attendee_name.trim(),
+        contact_email: appointmentForm.attendee_email.trim(),
         appointment_time: startDateTime.toISOString(),
         duration_minutes: parseInt(appointmentForm.duration),
         appointment_type: appointmentForm.title || 'consultation',
@@ -520,7 +533,11 @@ function CalendarSidebar({ leadId, loanId, children }) {
       loadAppointments();
     } catch (error) {
       console.error('Failed to create appointment:', error);
-      alert('Failed to create appointment: ' + (error.response?.data?.detail || error.message));
+      const detail = error.response?.data?.detail;
+      const msg = Array.isArray(detail)
+        ? detail.map(d => d.msg || d.message || JSON.stringify(d)).join(', ')
+        : detail || error.message;
+      alert('Failed to create appointment: ' + msg);
     }
   };
 
