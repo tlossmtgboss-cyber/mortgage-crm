@@ -530,6 +530,54 @@ async def view_video(
 # Admin Routes
 # =============================================================================
 
+@router.post("/admin/configure-s3-cors")
+async def configure_s3_cors(
+    admin_key: str = Query(...)
+):
+    """Configure S3 bucket CORS to allow browser-based presigned URL uploads."""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        s3_service = get_s3_service()
+
+        cors_configuration = {
+            'CORSRules': [
+                {
+                    'AllowedHeaders': ['Content-Type', 'Authorization', 'x-amz-*'],
+                    'AllowedMethods': ['GET', 'PUT', 'POST', 'DELETE', 'HEAD'],
+                    'AllowedOrigins': [
+                        'https://app.perenniaai.com',
+                        'https://perenniaai.com',
+                        'https://*.railway.app',
+                        'http://localhost:3000',
+                        'http://localhost:5173',
+                    ],
+                    'ExposeHeaders': ['ETag', 'x-amz-version-id'],
+                    'MaxAgeSeconds': 3600,
+                }
+            ]
+        }
+
+        s3_service.s3_client.put_bucket_cors(
+            Bucket=s3_service.bucket_name,
+            CORSConfiguration=cors_configuration,
+        )
+
+        # Verify
+        result = s3_service.s3_client.get_bucket_cors(Bucket=s3_service.bucket_name)
+        return {
+            "status": "success",
+            "bucket": s3_service.bucket_name,
+            "cors_rules": len(result['CORSRules']),
+            "origins": result['CORSRules'][0]['AllowedOrigins'],
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to configure S3 CORS: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/admin/run-migration")
 async def run_portal_video_migration(
     admin_key: str = Query(...),
