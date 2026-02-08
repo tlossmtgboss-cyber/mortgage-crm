@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SF Integration Validation — 20260208T191955</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+               background: #0f172a; color: #e2e8f0; padding: 2rem; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { font-size: 1.75rem; margin-bottom: 0.5rem; }
+        .subtitle { color: #94a3b8; margin-bottom: 2rem; }
+        .health-score {
+            display: inline-flex; align-items: center; gap: 1rem;
+            background: #1e293b; border-radius: 12px; padding: 1.5rem 2rem;
+            margin-bottom: 2rem; border-left: 4px solid #22c55e;
+        }
+        .score-number { font-size: 3rem; font-weight: 700; color: #22c55e; }
+        .score-label { font-size: 1.25rem; color: #22c55e; text-transform: uppercase; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                 gap: 1rem; margin-bottom: 2rem; }
+        .card {
+            background: #1e293b; border-radius: 8px; padding: 1.25rem;
+            border: 1px solid #334155;
+        }
+        .card h3 { font-size: 0.875rem; color: #94a3b8; text-transform: uppercase;
+                     letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+        .card .value { font-size: 2rem; font-weight: 700; }
+        .pass { color: #22c55e; }
+        .fail { color: #ef4444; }
+        .warn { color: #f59e0b; }
+        .issue-card {
+            background: #1e293b; border-radius: 8px; padding: 1rem;
+            margin-bottom: 0.75rem; border-left: 3px solid #ef4444;
+        }
+        .issue-card.critical { border-left-color: #ef4444; }
+        .issue-card strong { display: block; margin-bottom: 0.25rem; }
+        .issue-card small { color: #94a3b8; }
+        .section { margin-bottom: 2rem; }
+        .section h2 { font-size: 1.25rem; margin-bottom: 1rem;
+                        border-bottom: 1px solid #334155; padding-bottom: 0.5rem; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Salesforce Integration Validation</h1>
+    <p class="subtitle">Mode: dry-run-test | Run: 2026-02-08T19:19:55.058686+00:00</p>
+
+    <div class="health-score">
+        <div>
+            <div class="score-number">95.4</div>
+            <div class="score-label">HEALTHY</div>
+        </div>
+    </div>
+
+    <div class="grid">
+        <div class="card">
+            <h3>Total Checks</h3>
+            <div class="value">421</div>
+        </div>
+        <div class="card">
+            <h3>Passed</h3>
+            <div class="value pass">408</div>
+        </div>
+        <div class="card">
+            <h3>Failed</h3>
+            <div class="value fail">4</div>
+        </div>
+        <div class="card">
+            <h3>Warnings</h3>
+            <div class="value warn">9</div>
+        </div>
+    </div>
+
+    <div class="grid">
+        <div class="card">
+            <h3>SLA Fields</h3>
+            <div class="value">334</div>
+            <small class="pass">321 passing</small> /
+            <small class="fail">4 failing</small>
+        </div>
+        <div class="card">
+            <h3>Byte-Mapped Fields</h3>
+            <div class="value">334</div>
+            <small class="pass">321 passing</small> /
+            <small class="fail">4 failing</small>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Critical Issues (3)</h2>
+        
+            <div class="issue-card critical">
+                <strong>field_exists.Loan__c.Appraisal_Ordered_Date__c</strong>
+                <p>Field does not exist on object</p>
+                <small>SF Field: Appraisal_Ordered_Date__c |
+                       Type: FIELD_NOT_FOUND</small>
+            </div>
+            <div class="issue-card critical">
+                <strong>push_accuracy.Disclosure_Sent_Date__c.loan_000007</strong>
+                <p>Value mismatch after transform</p>
+                <small>SF Field: Disclosure_Sent_Date__c |
+                       Type: VALUE_MISMATCH</small>
+            </div>
+            <div class="issue-card critical">
+                <strong>sla_workflow_exists.Appraisal_Ordered_Date__c</strong>
+                <p>Workflow rule/flow not found or inactive</p>
+                <small>SF Field: Appraisal_Ordered_Date__c |
+                       Type: N/A</small>
+            </div>
+    </div>
+</div>
+</body>
+</html>

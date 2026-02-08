@@ -1,0 +1,5514 @@
+{
+  "mode": "dry-run-test",
+  "started_at": "2026-02-08T19:19:55.058686+00:00",
+  "completed_at": "2026-02-08T19:19:55.073348+00:00",
+  "health_score": 95.4,
+  "health_status": "HEALTHY",
+  "summary": {
+    "total_checks": 421,
+    "passed": 408,
+    "failed": 4,
+    "warnings": 9,
+    "skipped": 0
+  },
+  "results": [
+    {
+      "check_name": "field_exists.Loan__c.Application_Received_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "sf_object": "Loan__c",
+        "sf_field": "Application_Received_Date__c",
+        "sf_type": "Date",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.058991+00:00"
+    },
+    {
+      "check_name": "field_exists.Loan__c.Disclosure_Sent_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "sf_object": "Loan__c",
+        "sf_field": "Disclosure_Sent_Date__c",
+        "sf_type": "Date",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059006+00:00"
+    },
+    {
+      "check_name": "field_exists.Loan__c.Disclosure_Ack_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "sf_object": "Loan__c",
+        "sf_field": "Disclosure_Ack_Date__c",
+        "sf_type": "Date",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059013+00:00"
+    },
+    {
+      "check_name": "field_exists.Loan__c.Appraisal_Ordered_Date__c",
+      "status": "FAIL",
+      "severity": "critical",
+      "details": {
+        "sf_object": "Loan__c",
+        "sf_field": "Appraisal_Ordered_Date__c",
+        "error": "Field does not exist on object",
+        "error_type": "FIELD_NOT_FOUND",
+        "is_sla_field": true,
+        "is_byte_mapped": true,
+        "source": "loan.appraisal_ordered_at"
+      },
+      "timestamp": "2026-02-08T19:19:55.059019+00:00"
+    },
+    {
+      "check_name": "field_exists.Loan__c.Appraisal_Received_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "sf_object": "Loan__c",
+        "sf_field": "Appraisal_Received_Date__c",
+        "sf_type": "Date",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059024+00:00"
+    },
+    {
+      "check_name": "field_exists.Loan__c.Title_Ordered_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "sf_object": "Loan__c",
+        "sf_field": "Title_Ordered_Date__c",
+        "sf_type": "Date",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059028+00:00"
+    },
+    {
+      "check_name": "field_exists.Loan__c.Title_Received_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "sf_object": "Loan__c",
+        "sf_field": "Title_Received_Date__c",
+        "sf_type": "Date",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059032+00:00"
+    },
+    {
+      "check_name": "field_exists.Loan__c.Conditions_Sent_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "sf_object": "Loan__c",
+        "sf_field": "Conditions_Sent_Date__c",
+        "sf_type": "Date",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059036+00:00"
+    },
+    {
+      "check_name": "field_exists.Loan__c.Conditions_Cleared_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "sf_object": "Loan__c",
+        "sf_field": "Conditions_Cleared_Date__c",
+        "sf_type": "Date",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059040+00:00"
+    },
+    {
+      "check_name": "field_exists.Loan__c.Clear_To_Close_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "sf_object": "Loan__c",
+        "sf_field": "Clear_To_Close_Date__c",
+        "sf_type": "Date",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059044+00:00"
+    },
+    {
+      "check_name": "field_exists.Loan__c.Closing_Scheduled_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "sf_object": "Loan__c",
+        "sf_field": "Closing_Scheduled_Date__c",
+        "sf_type": "DateTime",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059047+00:00"
+    },
+    {
+      "check_name": "field_exists.Loan__c.Funded_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "sf_object": "Loan__c",
+        "sf_field": "Funded_Date__c",
+        "sf_type": "Date",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059051+00:00"
+    },
+    {
+      "check_name": "field_exists.Loan__c.Docs_Out_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "sf_object": "Loan__c",
+        "sf_field": "Docs_Out_Date__c",
+        "sf_type": "Date",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059054+00:00"
+    },
+    {
+      "check_name": "field_exists.Loan__c.Submitted_To_UW_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "sf_object": "Loan__c",
+        "sf_field": "Submitted_To_UW_Date__c",
+        "sf_type": "Date",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059057+00:00"
+    },
+    {
+      "check_name": "field_exists.Contact.Last_Contact_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "sf_object": "Contact",
+        "sf_field": "Last_Contact_Date__c",
+        "sf_type": "Date",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059061+00:00"
+    },
+    {
+      "check_name": "field_exists.Contact.Next_Followup_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "sf_object": "Contact",
+        "sf_field": "Next_Followup_Date__c",
+        "sf_type": "DateTime",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059064+00:00"
+    },
+    {
+      "check_name": "field_exists.Contact.Preapproval_Expiry__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "sf_object": "Contact",
+        "sf_field": "Preapproval_Expiry__c",
+        "sf_type": "Date",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059067+00:00"
+    },
+    {
+      "check_name": "field_exists.Contact.Rate_Lock_Expiry__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "sf_object": "Contact",
+        "sf_field": "Rate_Lock_Expiry__c",
+        "sf_type": "Date",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059071+00:00"
+    },
+    {
+      "check_name": "field_exists.Loan__c.Loan_Amount__c",
+      "status": "PASS",
+      "severity": "medium",
+      "details": {
+        "sf_object": "Loan__c",
+        "sf_field": "Loan_Amount__c",
+        "sf_type": "Currency",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.059074+00:00"
+    },
+    {
+      "check_name": "field_exists.Loan__c.Interest_Rate__c",
+      "status": "PASS",
+      "severity": "medium",
+      "details": {
+        "sf_object": "Loan__c",
+        "sf_field": "Interest_Rate__c",
+        "sf_type": "Percent",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.059078+00:00"
+    },
+    {
+      "check_name": "field_exists.Loan__c.Loan_Status__c",
+      "status": "PASS",
+      "severity": "medium",
+      "details": {
+        "sf_object": "Loan__c",
+        "sf_field": "Loan_Status__c",
+        "sf_type": "Picklist",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.059081+00:00"
+    },
+    {
+      "check_name": "field_exists.Loan__c.Loan_Type__c",
+      "status": "PASS",
+      "severity": "medium",
+      "details": {
+        "sf_object": "Loan__c",
+        "sf_field": "Loan_Type__c",
+        "sf_type": "Picklist",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.059084+00:00"
+    },
+    {
+      "check_name": "field_exists.Contact.Email",
+      "status": "PASS",
+      "severity": "medium",
+      "details": {
+        "sf_object": "Contact",
+        "sf_field": "Email",
+        "sf_type": "Email",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.059088+00:00"
+    },
+    {
+      "check_name": "field_exists.Contact.Phone",
+      "status": "PASS",
+      "severity": "medium",
+      "details": {
+        "sf_object": "Contact",
+        "sf_field": "Phone",
+        "sf_type": "Phone",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.059091+00:00"
+    },
+    {
+      "check_name": "field_exists.Contact.Credit_Score__c",
+      "status": "PASS",
+      "severity": "medium",
+      "details": {
+        "sf_object": "Contact",
+        "sf_field": "Credit_Score__c",
+        "sf_type": "Number",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.059102+00:00"
+    },
+    {
+      "check_name": "push_value.Application_Received_Date__c.loan_000000",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000000",
+        "sf_field": "Application_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059263+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Sent_Date__c.loan_000000",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000000",
+        "sf_field": "Disclosure_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059281+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Ack_Date__c.loan_000000",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000000",
+        "sf_field": "Disclosure_Ack_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059287+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Ordered_Date__c.loan_000000",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000000",
+        "sf_field": "Appraisal_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059299+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Received_Date__c.loan_000000",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000000",
+        "sf_field": "Appraisal_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059303+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Ordered_Date__c.loan_000000",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000000",
+        "sf_field": "Title_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059314+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Received_Date__c.loan_000000",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000000",
+        "sf_field": "Title_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059318+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Sent_Date__c.loan_000000",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000000",
+        "sf_field": "Conditions_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059326+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Cleared_Date__c.loan_000000",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000000",
+        "sf_field": "Conditions_Cleared_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059331+00:00"
+    },
+    {
+      "check_name": "push_value.Clear_To_Close_Date__c.loan_000000",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000000",
+        "sf_field": "Clear_To_Close_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059334+00:00"
+    },
+    {
+      "check_name": "push_value.Closing_Scheduled_Date__c.loan_000000",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000000",
+        "sf_field": "Closing_Scheduled_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059337+00:00"
+    },
+    {
+      "check_name": "push_value.Funded_Date__c.loan_000000",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000000",
+        "sf_field": "Funded_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059341+00:00"
+    },
+    {
+      "check_name": "push_value.Docs_Out_Date__c.loan_000000",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000000",
+        "sf_field": "Docs_Out_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059344+00:00"
+    },
+    {
+      "check_name": "push_value.Submitted_To_UW_Date__c.loan_000000",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000000",
+        "sf_field": "Submitted_To_UW_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059356+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Amount__c.loan_000000",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000000",
+        "sf_field": "Loan_Amount__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.059377+00:00"
+    },
+    {
+      "check_name": "push_value.Interest_Rate__c.loan_000000",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000000",
+        "sf_field": "Interest_Rate__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.059385+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Status__c.loan_000000",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000000",
+        "sf_field": "Loan_Status__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.059392+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Type__c.loan_000000",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000000",
+        "sf_field": "Loan_Type__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.059398+00:00"
+    },
+    {
+      "check_name": "push_value.Application_Received_Date__c.loan_000001",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000001",
+        "sf_field": "Application_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059411+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Sent_Date__c.loan_000001",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000001",
+        "sf_field": "Disclosure_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059420+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Ack_Date__c.loan_000001",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000001",
+        "sf_field": "Disclosure_Ack_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059430+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Ordered_Date__c.loan_000001",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000001",
+        "sf_field": "Appraisal_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059439+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Received_Date__c.loan_000001",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000001",
+        "sf_field": "Appraisal_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059447+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Ordered_Date__c.loan_000001",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000001",
+        "sf_field": "Title_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059461+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Received_Date__c.loan_000001",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000001",
+        "sf_field": "Title_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059473+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Sent_Date__c.loan_000001",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000001",
+        "sf_field": "Conditions_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059477+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Cleared_Date__c.loan_000001",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000001",
+        "sf_field": "Conditions_Cleared_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059480+00:00"
+    },
+    {
+      "check_name": "push_value.Clear_To_Close_Date__c.loan_000001",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000001",
+        "sf_field": "Clear_To_Close_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059483+00:00"
+    },
+    {
+      "check_name": "push_value.Closing_Scheduled_Date__c.loan_000001",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000001",
+        "sf_field": "Closing_Scheduled_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059486+00:00"
+    },
+    {
+      "check_name": "push_value.Funded_Date__c.loan_000001",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000001",
+        "sf_field": "Funded_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059489+00:00"
+    },
+    {
+      "check_name": "push_value.Docs_Out_Date__c.loan_000001",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000001",
+        "sf_field": "Docs_Out_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059492+00:00"
+    },
+    {
+      "check_name": "push_value.Submitted_To_UW_Date__c.loan_000001",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000001",
+        "sf_field": "Submitted_To_UW_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059503+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Amount__c.loan_000001",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000001",
+        "sf_field": "Loan_Amount__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.059510+00:00"
+    },
+    {
+      "check_name": "push_value.Interest_Rate__c.loan_000001",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000001",
+        "sf_field": "Interest_Rate__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.059515+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Status__c.loan_000001",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000001",
+        "sf_field": "Loan_Status__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.059521+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Type__c.loan_000001",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000001",
+        "sf_field": "Loan_Type__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.059525+00:00"
+    },
+    {
+      "check_name": "push_value.Application_Received_Date__c.loan_000002",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000002",
+        "sf_field": "Application_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059569+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Sent_Date__c.loan_000002",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000002",
+        "sf_field": "Disclosure_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059585+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Ack_Date__c.loan_000002",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000002",
+        "sf_field": "Disclosure_Ack_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059594+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Ordered_Date__c.loan_000002",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000002",
+        "sf_field": "Appraisal_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059607+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Received_Date__c.loan_000002",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000002",
+        "sf_field": "Appraisal_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059617+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Ordered_Date__c.loan_000002",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000002",
+        "sf_field": "Title_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059626+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Received_Date__c.loan_000002",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000002",
+        "sf_field": "Title_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059634+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Sent_Date__c.loan_000002",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000002",
+        "sf_field": "Conditions_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059638+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Cleared_Date__c.loan_000002",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000002",
+        "sf_field": "Conditions_Cleared_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059641+00:00"
+    },
+    {
+      "check_name": "push_value.Clear_To_Close_Date__c.loan_000002",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000002",
+        "sf_field": "Clear_To_Close_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059645+00:00"
+    },
+    {
+      "check_name": "push_value.Closing_Scheduled_Date__c.loan_000002",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000002",
+        "sf_field": "Closing_Scheduled_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059648+00:00"
+    },
+    {
+      "check_name": "push_value.Funded_Date__c.loan_000002",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000002",
+        "sf_field": "Funded_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059651+00:00"
+    },
+    {
+      "check_name": "push_value.Docs_Out_Date__c.loan_000002",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000002",
+        "sf_field": "Docs_Out_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059654+00:00"
+    },
+    {
+      "check_name": "push_value.Submitted_To_UW_Date__c.loan_000002",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000002",
+        "sf_field": "Submitted_To_UW_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059662+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Amount__c.loan_000002",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000002",
+        "sf_field": "Loan_Amount__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.059669+00:00"
+    },
+    {
+      "check_name": "push_value.Interest_Rate__c.loan_000002",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000002",
+        "sf_field": "Interest_Rate__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.059673+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Status__c.loan_000002",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000002",
+        "sf_field": "Loan_Status__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.059679+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Type__c.loan_000002",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000002",
+        "sf_field": "Loan_Type__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.059683+00:00"
+    },
+    {
+      "check_name": "push_value.Application_Received_Date__c.loan_000003",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000003",
+        "sf_field": "Application_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059694+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Sent_Date__c.loan_000003",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000003",
+        "sf_field": "Disclosure_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059703+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Ack_Date__c.loan_000003",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000003",
+        "sf_field": "Disclosure_Ack_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059707+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Ordered_Date__c.loan_000003",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000003",
+        "sf_field": "Appraisal_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059715+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Received_Date__c.loan_000003",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000003",
+        "sf_field": "Appraisal_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059724+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Ordered_Date__c.loan_000003",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000003",
+        "sf_field": "Title_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059732+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Received_Date__c.loan_000003",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000003",
+        "sf_field": "Title_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059741+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Sent_Date__c.loan_000003",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000003",
+        "sf_field": "Conditions_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059745+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Cleared_Date__c.loan_000003",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000003",
+        "sf_field": "Conditions_Cleared_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059748+00:00"
+    },
+    {
+      "check_name": "push_value.Clear_To_Close_Date__c.loan_000003",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000003",
+        "sf_field": "Clear_To_Close_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059756+00:00"
+    },
+    {
+      "check_name": "push_value.Closing_Scheduled_Date__c.loan_000003",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000003",
+        "sf_field": "Closing_Scheduled_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059762+00:00"
+    },
+    {
+      "check_name": "push_value.Funded_Date__c.loan_000003",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000003",
+        "sf_field": "Funded_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059766+00:00"
+    },
+    {
+      "check_name": "push_value.Docs_Out_Date__c.loan_000003",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000003",
+        "sf_field": "Docs_Out_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059770+00:00"
+    },
+    {
+      "check_name": "push_value.Submitted_To_UW_Date__c.loan_000003",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000003",
+        "sf_field": "Submitted_To_UW_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059779+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Amount__c.loan_000003",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000003",
+        "sf_field": "Loan_Amount__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.059785+00:00"
+    },
+    {
+      "check_name": "push_value.Interest_Rate__c.loan_000003",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000003",
+        "sf_field": "Interest_Rate__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.059790+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Status__c.loan_000003",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000003",
+        "sf_field": "Loan_Status__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.059795+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Type__c.loan_000003",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000003",
+        "sf_field": "Loan_Type__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.059799+00:00"
+    },
+    {
+      "check_name": "push_value.Application_Received_Date__c.loan_000004",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000004",
+        "sf_field": "Application_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059810+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Sent_Date__c.loan_000004",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000004",
+        "sf_field": "Disclosure_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059819+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Ack_Date__c.loan_000004",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000004",
+        "sf_field": "Disclosure_Ack_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059828+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Ordered_Date__c.loan_000004",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000004",
+        "sf_field": "Appraisal_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059837+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Received_Date__c.loan_000004",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000004",
+        "sf_field": "Appraisal_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059846+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Ordered_Date__c.loan_000004",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000004",
+        "sf_field": "Title_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059857+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Received_Date__c.loan_000004",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000004",
+        "sf_field": "Title_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059866+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Sent_Date__c.loan_000004",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000004",
+        "sf_field": "Conditions_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059870+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Cleared_Date__c.loan_000004",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000004",
+        "sf_field": "Conditions_Cleared_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059878+00:00"
+    },
+    {
+      "check_name": "push_value.Clear_To_Close_Date__c.loan_000004",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000004",
+        "sf_field": "Clear_To_Close_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059881+00:00"
+    },
+    {
+      "check_name": "push_value.Closing_Scheduled_Date__c.loan_000004",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000004",
+        "sf_field": "Closing_Scheduled_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059885+00:00"
+    },
+    {
+      "check_name": "push_value.Funded_Date__c.loan_000004",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000004",
+        "sf_field": "Funded_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059888+00:00"
+    },
+    {
+      "check_name": "push_value.Docs_Out_Date__c.loan_000004",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000004",
+        "sf_field": "Docs_Out_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059891+00:00"
+    },
+    {
+      "check_name": "push_value.Submitted_To_UW_Date__c.loan_000004",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000004",
+        "sf_field": "Submitted_To_UW_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059905+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Amount__c.loan_000004",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000004",
+        "sf_field": "Loan_Amount__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.059912+00:00"
+    },
+    {
+      "check_name": "push_value.Interest_Rate__c.loan_000004",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000004",
+        "sf_field": "Interest_Rate__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.059917+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Status__c.loan_000004",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000004",
+        "sf_field": "Loan_Status__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.059921+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Type__c.loan_000004",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000004",
+        "sf_field": "Loan_Type__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.059925+00:00"
+    },
+    {
+      "check_name": "push_value.Application_Received_Date__c.loan_000005",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000005",
+        "sf_field": "Application_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059936+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Sent_Date__c.loan_000005",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000005",
+        "sf_field": "Disclosure_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059945+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Ack_Date__c.loan_000005",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000005",
+        "sf_field": "Disclosure_Ack_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059953+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Ordered_Date__c.loan_000005",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000005",
+        "sf_field": "Appraisal_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059962+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Received_Date__c.loan_000005",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000005",
+        "sf_field": "Appraisal_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059974+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Ordered_Date__c.loan_000005",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000005",
+        "sf_field": "Title_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059985+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Received_Date__c.loan_000005",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000005",
+        "sf_field": "Title_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059989+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Sent_Date__c.loan_000005",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000005",
+        "sf_field": "Conditions_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059992+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Cleared_Date__c.loan_000005",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000005",
+        "sf_field": "Conditions_Cleared_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059995+00:00"
+    },
+    {
+      "check_name": "push_value.Clear_To_Close_Date__c.loan_000005",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000005",
+        "sf_field": "Clear_To_Close_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.059999+00:00"
+    },
+    {
+      "check_name": "push_value.Closing_Scheduled_Date__c.loan_000005",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000005",
+        "sf_field": "Closing_Scheduled_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060006+00:00"
+    },
+    {
+      "check_name": "push_value.Funded_Date__c.loan_000005",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000005",
+        "sf_field": "Funded_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060010+00:00"
+    },
+    {
+      "check_name": "push_value.Docs_Out_Date__c.loan_000005",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000005",
+        "sf_field": "Docs_Out_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060013+00:00"
+    },
+    {
+      "check_name": "push_value.Submitted_To_UW_Date__c.loan_000005",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000005",
+        "sf_field": "Submitted_To_UW_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060022+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Amount__c.loan_000005",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000005",
+        "sf_field": "Loan_Amount__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.060028+00:00"
+    },
+    {
+      "check_name": "push_value.Interest_Rate__c.loan_000005",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000005",
+        "sf_field": "Interest_Rate__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.060033+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Status__c.loan_000005",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000005",
+        "sf_field": "Loan_Status__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.060037+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Type__c.loan_000005",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000005",
+        "sf_field": "Loan_Type__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.060041+00:00"
+    },
+    {
+      "check_name": "push_value.Application_Received_Date__c.loan_000006",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000006",
+        "sf_field": "Application_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060052+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Sent_Date__c.loan_000006",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000006",
+        "sf_field": "Disclosure_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060063+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Ack_Date__c.loan_000006",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000006",
+        "sf_field": "Disclosure_Ack_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060067+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Ordered_Date__c.loan_000006",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000006",
+        "sf_field": "Appraisal_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060075+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Received_Date__c.loan_000006",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000006",
+        "sf_field": "Appraisal_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060084+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Ordered_Date__c.loan_000006",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000006",
+        "sf_field": "Title_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060093+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Received_Date__c.loan_000006",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000006",
+        "sf_field": "Title_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060101+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Sent_Date__c.loan_000006",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000006",
+        "sf_field": "Conditions_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060109+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Cleared_Date__c.loan_000006",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000006",
+        "sf_field": "Conditions_Cleared_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060117+00:00"
+    },
+    {
+      "check_name": "push_value.Clear_To_Close_Date__c.loan_000006",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000006",
+        "sf_field": "Clear_To_Close_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060121+00:00"
+    },
+    {
+      "check_name": "push_value.Closing_Scheduled_Date__c.loan_000006",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000006",
+        "sf_field": "Closing_Scheduled_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060124+00:00"
+    },
+    {
+      "check_name": "push_value.Funded_Date__c.loan_000006",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000006",
+        "sf_field": "Funded_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060127+00:00"
+    },
+    {
+      "check_name": "push_value.Docs_Out_Date__c.loan_000006",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000006",
+        "sf_field": "Docs_Out_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060130+00:00"
+    },
+    {
+      "check_name": "push_value.Submitted_To_UW_Date__c.loan_000006",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000006",
+        "sf_field": "Submitted_To_UW_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060140+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Amount__c.loan_000006",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000006",
+        "sf_field": "Loan_Amount__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.060147+00:00"
+    },
+    {
+      "check_name": "push_value.Interest_Rate__c.loan_000006",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000006",
+        "sf_field": "Interest_Rate__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.060152+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Status__c.loan_000006",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000006",
+        "sf_field": "Loan_Status__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.060157+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Type__c.loan_000006",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000006",
+        "sf_field": "Loan_Type__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.060161+00:00"
+    },
+    {
+      "check_name": "push_value.Application_Received_Date__c.loan_000007",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000007",
+        "sf_field": "Application_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060175+00:00"
+    },
+    {
+      "check_name": "push_accuracy.Disclosure_Sent_Date__c.loan_000007",
+      "status": "FAIL",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000007",
+        "sf_id": "a0X000000000007",
+        "source_field": "loan.disclosure_sent_at",
+        "sf_field": "Disclosure_Sent_Date__c",
+        "source_value": "2026-02-05T16:19:55.057166+00:00",
+        "expected_sf_value": "2026-02-05",
+        "actual_sf_value": "2026-02-04",
+        "error": "Value mismatch after transform",
+        "error_type": "VALUE_MISMATCH",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060189+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Ack_Date__c.loan_000007",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000007",
+        "sf_field": "Disclosure_Ack_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060199+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Ordered_Date__c.loan_000007",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000007",
+        "sf_field": "Appraisal_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060210+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Received_Date__c.loan_000007",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000007",
+        "sf_field": "Appraisal_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060219+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Ordered_Date__c.loan_000007",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000007",
+        "sf_field": "Title_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060227+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Received_Date__c.loan_000007",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000007",
+        "sf_field": "Title_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060237+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Sent_Date__c.loan_000007",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000007",
+        "sf_field": "Conditions_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060241+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Cleared_Date__c.loan_000007",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000007",
+        "sf_field": "Conditions_Cleared_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060244+00:00"
+    },
+    {
+      "check_name": "push_value.Clear_To_Close_Date__c.loan_000007",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000007",
+        "sf_field": "Clear_To_Close_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060250+00:00"
+    },
+    {
+      "check_name": "push_value.Closing_Scheduled_Date__c.loan_000007",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000007",
+        "sf_field": "Closing_Scheduled_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060254+00:00"
+    },
+    {
+      "check_name": "push_value.Funded_Date__c.loan_000007",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000007",
+        "sf_field": "Funded_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060263+00:00"
+    },
+    {
+      "check_name": "push_value.Docs_Out_Date__c.loan_000007",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000007",
+        "sf_field": "Docs_Out_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060267+00:00"
+    },
+    {
+      "check_name": "push_value.Submitted_To_UW_Date__c.loan_000007",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000007",
+        "sf_field": "Submitted_To_UW_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060278+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Amount__c.loan_000007",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000007",
+        "sf_field": "Loan_Amount__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.060284+00:00"
+    },
+    {
+      "check_name": "push_value.Interest_Rate__c.loan_000007",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000007",
+        "sf_field": "Interest_Rate__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.060289+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Status__c.loan_000007",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000007",
+        "sf_field": "Loan_Status__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.060294+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Type__c.loan_000007",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000007",
+        "sf_field": "Loan_Type__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.060298+00:00"
+    },
+    {
+      "check_name": "push_value.Application_Received_Date__c.loan_000008",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000008",
+        "sf_field": "Application_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060309+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Sent_Date__c.loan_000008",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000008",
+        "sf_field": "Disclosure_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060319+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Ack_Date__c.loan_000008",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000008",
+        "sf_field": "Disclosure_Ack_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060328+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Ordered_Date__c.loan_000008",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000008",
+        "sf_field": "Appraisal_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060343+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Received_Date__c.loan_000008",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000008",
+        "sf_field": "Appraisal_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060348+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Ordered_Date__c.loan_000008",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000008",
+        "sf_field": "Title_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060360+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Received_Date__c.loan_000008",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000008",
+        "sf_field": "Title_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060370+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Sent_Date__c.loan_000008",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000008",
+        "sf_field": "Conditions_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060373+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Cleared_Date__c.loan_000008",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000008",
+        "sf_field": "Conditions_Cleared_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060376+00:00"
+    },
+    {
+      "check_name": "push_value.Clear_To_Close_Date__c.loan_000008",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000008",
+        "sf_field": "Clear_To_Close_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060380+00:00"
+    },
+    {
+      "check_name": "push_value.Closing_Scheduled_Date__c.loan_000008",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000008",
+        "sf_field": "Closing_Scheduled_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060387+00:00"
+    },
+    {
+      "check_name": "push_value.Funded_Date__c.loan_000008",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000008",
+        "sf_field": "Funded_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060390+00:00"
+    },
+    {
+      "check_name": "push_value.Docs_Out_Date__c.loan_000008",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000008",
+        "sf_field": "Docs_Out_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060394+00:00"
+    },
+    {
+      "check_name": "push_value.Submitted_To_UW_Date__c.loan_000008",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000008",
+        "sf_field": "Submitted_To_UW_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060404+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Amount__c.loan_000008",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000008",
+        "sf_field": "Loan_Amount__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.060410+00:00"
+    },
+    {
+      "check_name": "push_value.Interest_Rate__c.loan_000008",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000008",
+        "sf_field": "Interest_Rate__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.060417+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Status__c.loan_000008",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000008",
+        "sf_field": "Loan_Status__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.060422+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Type__c.loan_000008",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000008",
+        "sf_field": "Loan_Type__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.060426+00:00"
+    },
+    {
+      "check_name": "push_value.Application_Received_Date__c.loan_000009",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000009",
+        "sf_field": "Application_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060438+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Sent_Date__c.loan_000009",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000009",
+        "sf_field": "Disclosure_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060446+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Ack_Date__c.loan_000009",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000009",
+        "sf_field": "Disclosure_Ack_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060450+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Ordered_Date__c.loan_000009",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000009",
+        "sf_field": "Appraisal_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060459+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Received_Date__c.loan_000009",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000009",
+        "sf_field": "Appraisal_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060468+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Ordered_Date__c.loan_000009",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000009",
+        "sf_field": "Title_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060477+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Received_Date__c.loan_000009",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000009",
+        "sf_field": "Title_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060485+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Sent_Date__c.loan_000009",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000009",
+        "sf_field": "Conditions_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060488+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Cleared_Date__c.loan_000009",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000009",
+        "sf_field": "Conditions_Cleared_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060492+00:00"
+    },
+    {
+      "check_name": "push_value.Clear_To_Close_Date__c.loan_000009",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000009",
+        "sf_field": "Clear_To_Close_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060495+00:00"
+    },
+    {
+      "check_name": "push_value.Closing_Scheduled_Date__c.loan_000009",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000009",
+        "sf_field": "Closing_Scheduled_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060498+00:00"
+    },
+    {
+      "check_name": "push_value.Funded_Date__c.loan_000009",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000009",
+        "sf_field": "Funded_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060506+00:00"
+    },
+    {
+      "check_name": "push_value.Docs_Out_Date__c.loan_000009",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000009",
+        "sf_field": "Docs_Out_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060511+00:00"
+    },
+    {
+      "check_name": "push_value.Submitted_To_UW_Date__c.loan_000009",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000009",
+        "sf_field": "Submitted_To_UW_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060521+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Amount__c.loan_000009",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000009",
+        "sf_field": "Loan_Amount__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.060527+00:00"
+    },
+    {
+      "check_name": "push_value.Interest_Rate__c.loan_000009",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000009",
+        "sf_field": "Interest_Rate__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.060532+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Status__c.loan_000009",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000009",
+        "sf_field": "Loan_Status__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.060536+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Type__c.loan_000009",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000009",
+        "sf_field": "Loan_Type__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.060540+00:00"
+    },
+    {
+      "check_name": "push_value.Application_Received_Date__c.loan_000010",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000010",
+        "sf_field": "Application_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060552+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Sent_Date__c.loan_000010",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000010",
+        "sf_field": "Disclosure_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060560+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Ack_Date__c.loan_000010",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000010",
+        "sf_field": "Disclosure_Ack_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060569+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Ordered_Date__c.loan_000010",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000010",
+        "sf_field": "Appraisal_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060577+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Received_Date__c.loan_000010",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000010",
+        "sf_field": "Appraisal_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060585+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Ordered_Date__c.loan_000010",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000010",
+        "sf_field": "Title_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060594+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Received_Date__c.loan_000010",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000010",
+        "sf_field": "Title_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060597+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Sent_Date__c.loan_000010",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000010",
+        "sf_field": "Conditions_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060601+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Cleared_Date__c.loan_000010",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000010",
+        "sf_field": "Conditions_Cleared_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060604+00:00"
+    },
+    {
+      "check_name": "push_value.Clear_To_Close_Date__c.loan_000010",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000010",
+        "sf_field": "Clear_To_Close_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060613+00:00"
+    },
+    {
+      "check_name": "push_value.Closing_Scheduled_Date__c.loan_000010",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000010",
+        "sf_field": "Closing_Scheduled_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060616+00:00"
+    },
+    {
+      "check_name": "push_value.Funded_Date__c.loan_000010",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000010",
+        "sf_field": "Funded_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060624+00:00"
+    },
+    {
+      "check_name": "push_value.Docs_Out_Date__c.loan_000010",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000010",
+        "sf_field": "Docs_Out_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060632+00:00"
+    },
+    {
+      "check_name": "push_value.Submitted_To_UW_Date__c.loan_000010",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000010",
+        "sf_field": "Submitted_To_UW_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060643+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Amount__c.loan_000010",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000010",
+        "sf_field": "Loan_Amount__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.060649+00:00"
+    },
+    {
+      "check_name": "push_value.Interest_Rate__c.loan_000010",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000010",
+        "sf_field": "Interest_Rate__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.060654+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Status__c.loan_000010",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000010",
+        "sf_field": "Loan_Status__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.060658+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Type__c.loan_000010",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000010",
+        "sf_field": "Loan_Type__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.060662+00:00"
+    },
+    {
+      "check_name": "push_value.Application_Received_Date__c.loan_000011",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000011",
+        "sf_field": "Application_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060673+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Sent_Date__c.loan_000011",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000011",
+        "sf_field": "Disclosure_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060681+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Ack_Date__c.loan_000011",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000011",
+        "sf_field": "Disclosure_Ack_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060691+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Ordered_Date__c.loan_000011",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000011",
+        "sf_field": "Appraisal_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060700+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Received_Date__c.loan_000011",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000011",
+        "sf_field": "Appraisal_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060709+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Ordered_Date__c.loan_000011",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000011",
+        "sf_field": "Title_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060717+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Received_Date__c.loan_000011",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000011",
+        "sf_field": "Title_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060725+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Sent_Date__c.loan_000011",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000011",
+        "sf_field": "Conditions_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060734+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Cleared_Date__c.loan_000011",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000011",
+        "sf_field": "Conditions_Cleared_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060738+00:00"
+    },
+    {
+      "check_name": "push_value.Clear_To_Close_Date__c.loan_000011",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000011",
+        "sf_field": "Clear_To_Close_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060741+00:00"
+    },
+    {
+      "check_name": "push_value.Closing_Scheduled_Date__c.loan_000011",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000011",
+        "sf_field": "Closing_Scheduled_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060744+00:00"
+    },
+    {
+      "check_name": "push_value.Funded_Date__c.loan_000011",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000011",
+        "sf_field": "Funded_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060752+00:00"
+    },
+    {
+      "check_name": "push_value.Docs_Out_Date__c.loan_000011",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000011",
+        "sf_field": "Docs_Out_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060756+00:00"
+    },
+    {
+      "check_name": "push_value.Submitted_To_UW_Date__c.loan_000011",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000011",
+        "sf_field": "Submitted_To_UW_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060765+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Amount__c.loan_000011",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000011",
+        "sf_field": "Loan_Amount__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.060772+00:00"
+    },
+    {
+      "check_name": "push_value.Interest_Rate__c.loan_000011",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000011",
+        "sf_field": "Interest_Rate__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.060776+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Status__c.loan_000011",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000011",
+        "sf_field": "Loan_Status__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.060781+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Type__c.loan_000011",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000011",
+        "sf_field": "Loan_Type__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.060785+00:00"
+    },
+    {
+      "check_name": "push_value.Application_Received_Date__c.loan_000012",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000012",
+        "sf_field": "Application_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060801+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Sent_Date__c.loan_000012",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000012",
+        "sf_field": "Disclosure_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060813+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Ack_Date__c.loan_000012",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000012",
+        "sf_field": "Disclosure_Ack_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060817+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Ordered_Date__c.loan_000012",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000012",
+        "sf_field": "Appraisal_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060827+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Received_Date__c.loan_000012",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000012",
+        "sf_field": "Appraisal_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060830+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Ordered_Date__c.loan_000012",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000012",
+        "sf_field": "Title_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060838+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Received_Date__c.loan_000012",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000012",
+        "sf_field": "Title_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060852+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Sent_Date__c.loan_000012",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000012",
+        "sf_field": "Conditions_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060864+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Cleared_Date__c.loan_000012",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000012",
+        "sf_field": "Conditions_Cleared_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060868+00:00"
+    },
+    {
+      "check_name": "push_value.Clear_To_Close_Date__c.loan_000012",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000012",
+        "sf_field": "Clear_To_Close_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060871+00:00"
+    },
+    {
+      "check_name": "push_value.Closing_Scheduled_Date__c.loan_000012",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000012",
+        "sf_field": "Closing_Scheduled_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060877+00:00"
+    },
+    {
+      "check_name": "push_value.Funded_Date__c.loan_000012",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000012",
+        "sf_field": "Funded_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060881+00:00"
+    },
+    {
+      "check_name": "push_value.Docs_Out_Date__c.loan_000012",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000012",
+        "sf_field": "Docs_Out_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060884+00:00"
+    },
+    {
+      "check_name": "push_value.Submitted_To_UW_Date__c.loan_000012",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000012",
+        "sf_field": "Submitted_To_UW_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060894+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Amount__c.loan_000012",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000012",
+        "sf_field": "Loan_Amount__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.060905+00:00"
+    },
+    {
+      "check_name": "push_value.Interest_Rate__c.loan_000012",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000012",
+        "sf_field": "Interest_Rate__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.060910+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Status__c.loan_000012",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000012",
+        "sf_field": "Loan_Status__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.060915+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Type__c.loan_000012",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000012",
+        "sf_field": "Loan_Type__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.060919+00:00"
+    },
+    {
+      "check_name": "push_value.Application_Received_Date__c.loan_000013",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000013",
+        "sf_field": "Application_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060932+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Sent_Date__c.loan_000013",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000013",
+        "sf_field": "Disclosure_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060941+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Ack_Date__c.loan_000013",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000013",
+        "sf_field": "Disclosure_Ack_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060950+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Ordered_Date__c.loan_000013",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000013",
+        "sf_field": "Appraisal_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060958+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Received_Date__c.loan_000013",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000013",
+        "sf_field": "Appraisal_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060967+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Ordered_Date__c.loan_000013",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000013",
+        "sf_field": "Title_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060976+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Received_Date__c.loan_000013",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000013",
+        "sf_field": "Title_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060984+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Sent_Date__c.loan_000013",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000013",
+        "sf_field": "Conditions_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060993+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Cleared_Date__c.loan_000013",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000013",
+        "sf_field": "Conditions_Cleared_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060996+00:00"
+    },
+    {
+      "check_name": "push_value.Clear_To_Close_Date__c.loan_000013",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000013",
+        "sf_field": "Clear_To_Close_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061000+00:00"
+    },
+    {
+      "check_name": "push_value.Closing_Scheduled_Date__c.loan_000013",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000013",
+        "sf_field": "Closing_Scheduled_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061003+00:00"
+    },
+    {
+      "check_name": "push_value.Funded_Date__c.loan_000013",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000013",
+        "sf_field": "Funded_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061012+00:00"
+    },
+    {
+      "check_name": "push_value.Docs_Out_Date__c.loan_000013",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000013",
+        "sf_field": "Docs_Out_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061016+00:00"
+    },
+    {
+      "check_name": "push_value.Submitted_To_UW_Date__c.loan_000013",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000013",
+        "sf_field": "Submitted_To_UW_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061026+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Amount__c.loan_000013",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000013",
+        "sf_field": "Loan_Amount__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.061033+00:00"
+    },
+    {
+      "check_name": "push_value.Interest_Rate__c.loan_000013",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000013",
+        "sf_field": "Interest_Rate__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.061038+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Status__c.loan_000013",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000013",
+        "sf_field": "Loan_Status__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.061043+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Type__c.loan_000013",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000013",
+        "sf_field": "Loan_Type__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.061048+00:00"
+    },
+    {
+      "check_name": "push_value.Application_Received_Date__c.loan_000014",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000014",
+        "sf_field": "Application_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061060+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Sent_Date__c.loan_000014",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000014",
+        "sf_field": "Disclosure_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061069+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Ack_Date__c.loan_000014",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000014",
+        "sf_field": "Disclosure_Ack_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061082+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Ordered_Date__c.loan_000014",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000014",
+        "sf_field": "Appraisal_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061093+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Received_Date__c.loan_000014",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000014",
+        "sf_field": "Appraisal_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061103+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Ordered_Date__c.loan_000014",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000014",
+        "sf_field": "Title_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061111+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Received_Date__c.loan_000014",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000014",
+        "sf_field": "Title_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061119+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Sent_Date__c.loan_000014",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000014",
+        "sf_field": "Conditions_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061127+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Cleared_Date__c.loan_000014",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000014",
+        "sf_field": "Conditions_Cleared_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061131+00:00"
+    },
+    {
+      "check_name": "push_value.Clear_To_Close_Date__c.loan_000014",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000014",
+        "sf_field": "Clear_To_Close_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061134+00:00"
+    },
+    {
+      "check_name": "push_value.Closing_Scheduled_Date__c.loan_000014",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000014",
+        "sf_field": "Closing_Scheduled_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061138+00:00"
+    },
+    {
+      "check_name": "push_value.Funded_Date__c.loan_000014",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000014",
+        "sf_field": "Funded_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061141+00:00"
+    },
+    {
+      "check_name": "push_value.Docs_Out_Date__c.loan_000014",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000014",
+        "sf_field": "Docs_Out_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061145+00:00"
+    },
+    {
+      "check_name": "push_value.Submitted_To_UW_Date__c.loan_000014",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000014",
+        "sf_field": "Submitted_To_UW_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061163+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Amount__c.loan_000014",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000014",
+        "sf_field": "Loan_Amount__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.061169+00:00"
+    },
+    {
+      "check_name": "push_value.Interest_Rate__c.loan_000014",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000014",
+        "sf_field": "Interest_Rate__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.061174+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Status__c.loan_000014",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000014",
+        "sf_field": "Loan_Status__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.061187+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Type__c.loan_000014",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000014",
+        "sf_field": "Loan_Type__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.061191+00:00"
+    },
+    {
+      "check_name": "push_value.Application_Received_Date__c.loan_000015",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000015",
+        "sf_field": "Application_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061203+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Sent_Date__c.loan_000015",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000015",
+        "sf_field": "Disclosure_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061212+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Ack_Date__c.loan_000015",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000015",
+        "sf_field": "Disclosure_Ack_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061216+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Ordered_Date__c.loan_000015",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000015",
+        "sf_field": "Appraisal_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061225+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Received_Date__c.loan_000015",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000015",
+        "sf_field": "Appraisal_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061236+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Ordered_Date__c.loan_000015",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000015",
+        "sf_field": "Title_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061245+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Received_Date__c.loan_000015",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000015",
+        "sf_field": "Title_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061249+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Sent_Date__c.loan_000015",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000015",
+        "sf_field": "Conditions_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061296+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Cleared_Date__c.loan_000015",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000015",
+        "sf_field": "Conditions_Cleared_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061322+00:00"
+    },
+    {
+      "check_name": "null_placeholder.Clear_To_Close_Date__c.loan_000015",
+      "status": "FAIL",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000015",
+        "sf_field": "Clear_To_Close_Date__c",
+        "sf_value": "1970-01-01",
+        "error": "Null placeholder date detected \u2014 should be null",
+        "error_type": "NULL_PLACEHOLDER",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061333+00:00"
+    },
+    {
+      "check_name": "push_value.Closing_Scheduled_Date__c.loan_000015",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000015",
+        "sf_field": "Closing_Scheduled_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061338+00:00"
+    },
+    {
+      "check_name": "push_value.Funded_Date__c.loan_000015",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000015",
+        "sf_field": "Funded_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061342+00:00"
+    },
+    {
+      "check_name": "push_value.Docs_Out_Date__c.loan_000015",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000015",
+        "sf_field": "Docs_Out_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061351+00:00"
+    },
+    {
+      "check_name": "push_value.Submitted_To_UW_Date__c.loan_000015",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000015",
+        "sf_field": "Submitted_To_UW_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061374+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Amount__c.loan_000015",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000015",
+        "sf_field": "Loan_Amount__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.061383+00:00"
+    },
+    {
+      "check_name": "push_value.Interest_Rate__c.loan_000015",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000015",
+        "sf_field": "Interest_Rate__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.061389+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Status__c.loan_000015",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000015",
+        "sf_field": "Loan_Status__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.061395+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Type__c.loan_000015",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000015",
+        "sf_field": "Loan_Type__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.061404+00:00"
+    },
+    {
+      "check_name": "push_value.Application_Received_Date__c.loan_000016",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000016",
+        "sf_field": "Application_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061421+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Sent_Date__c.loan_000016",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000016",
+        "sf_field": "Disclosure_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061433+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Ack_Date__c.loan_000016",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000016",
+        "sf_field": "Disclosure_Ack_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061442+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Ordered_Date__c.loan_000016",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000016",
+        "sf_field": "Appraisal_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061450+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Received_Date__c.loan_000016",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000016",
+        "sf_field": "Appraisal_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061454+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Ordered_Date__c.loan_000016",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000016",
+        "sf_field": "Title_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061463+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Received_Date__c.loan_000016",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000016",
+        "sf_field": "Title_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061473+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Sent_Date__c.loan_000016",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000016",
+        "sf_field": "Conditions_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061485+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Cleared_Date__c.loan_000016",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000016",
+        "sf_field": "Conditions_Cleared_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061488+00:00"
+    },
+    {
+      "check_name": "push_value.Clear_To_Close_Date__c.loan_000016",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000016",
+        "sf_field": "Clear_To_Close_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061491+00:00"
+    },
+    {
+      "check_name": "push_value.Closing_Scheduled_Date__c.loan_000016",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000016",
+        "sf_field": "Closing_Scheduled_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061495+00:00"
+    },
+    {
+      "check_name": "push_value.Funded_Date__c.loan_000016",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000016",
+        "sf_field": "Funded_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061709+00:00"
+    },
+    {
+      "check_name": "push_value.Docs_Out_Date__c.loan_000016",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000016",
+        "sf_field": "Docs_Out_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061724+00:00"
+    },
+    {
+      "check_name": "push_value.Submitted_To_UW_Date__c.loan_000016",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000016",
+        "sf_field": "Submitted_To_UW_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061752+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Amount__c.loan_000016",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000016",
+        "sf_field": "Loan_Amount__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.061762+00:00"
+    },
+    {
+      "check_name": "push_value.Interest_Rate__c.loan_000016",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000016",
+        "sf_field": "Interest_Rate__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.061783+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Status__c.loan_000016",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000016",
+        "sf_field": "Loan_Status__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.061797+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Type__c.loan_000016",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000016",
+        "sf_field": "Loan_Type__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.061806+00:00"
+    },
+    {
+      "check_name": "push_value.Application_Received_Date__c.loan_000017",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000017",
+        "sf_field": "Application_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061823+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Sent_Date__c.loan_000017",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000017",
+        "sf_field": "Disclosure_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061838+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Ack_Date__c.loan_000017",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000017",
+        "sf_field": "Disclosure_Ack_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061847+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Ordered_Date__c.loan_000017",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000017",
+        "sf_field": "Appraisal_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061857+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Received_Date__c.loan_000017",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000017",
+        "sf_field": "Appraisal_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061865+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Ordered_Date__c.loan_000017",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000017",
+        "sf_field": "Title_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061874+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Received_Date__c.loan_000017",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000017",
+        "sf_field": "Title_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061883+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Sent_Date__c.loan_000017",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000017",
+        "sf_field": "Conditions_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061891+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Cleared_Date__c.loan_000017",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000017",
+        "sf_field": "Conditions_Cleared_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061895+00:00"
+    },
+    {
+      "check_name": "push_value.Clear_To_Close_Date__c.loan_000017",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000017",
+        "sf_field": "Clear_To_Close_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061898+00:00"
+    },
+    {
+      "check_name": "push_value.Closing_Scheduled_Date__c.loan_000017",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000017",
+        "sf_field": "Closing_Scheduled_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061901+00:00"
+    },
+    {
+      "check_name": "push_value.Funded_Date__c.loan_000017",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000017",
+        "sf_field": "Funded_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061904+00:00"
+    },
+    {
+      "check_name": "push_value.Docs_Out_Date__c.loan_000017",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000017",
+        "sf_field": "Docs_Out_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061912+00:00"
+    },
+    {
+      "check_name": "push_value.Submitted_To_UW_Date__c.loan_000017",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000017",
+        "sf_field": "Submitted_To_UW_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061928+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Amount__c.loan_000017",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000017",
+        "sf_field": "Loan_Amount__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.061935+00:00"
+    },
+    {
+      "check_name": "push_value.Interest_Rate__c.loan_000017",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000017",
+        "sf_field": "Interest_Rate__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.061940+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Status__c.loan_000017",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000017",
+        "sf_field": "Loan_Status__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.061946+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Type__c.loan_000017",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000017",
+        "sf_field": "Loan_Type__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.061950+00:00"
+    },
+    {
+      "check_name": "push_value.Application_Received_Date__c.loan_000018",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000018",
+        "sf_field": "Application_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061961+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Sent_Date__c.loan_000018",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000018",
+        "sf_field": "Disclosure_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061970+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Ack_Date__c.loan_000018",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000018",
+        "sf_field": "Disclosure_Ack_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061973+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Ordered_Date__c.loan_000018",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000018",
+        "sf_field": "Appraisal_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061985+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Received_Date__c.loan_000018",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000018",
+        "sf_field": "Appraisal_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.061995+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Ordered_Date__c.loan_000018",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000018",
+        "sf_field": "Title_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.062004+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Received_Date__c.loan_000018",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000018",
+        "sf_field": "Title_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.062013+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Sent_Date__c.loan_000018",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000018",
+        "sf_field": "Conditions_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.062021+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Cleared_Date__c.loan_000018",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000018",
+        "sf_field": "Conditions_Cleared_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.062025+00:00"
+    },
+    {
+      "check_name": "push_value.Clear_To_Close_Date__c.loan_000018",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000018",
+        "sf_field": "Clear_To_Close_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.062028+00:00"
+    },
+    {
+      "check_name": "push_value.Closing_Scheduled_Date__c.loan_000018",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000018",
+        "sf_field": "Closing_Scheduled_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.062031+00:00"
+    },
+    {
+      "check_name": "push_value.Funded_Date__c.loan_000018",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000018",
+        "sf_field": "Funded_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.062034+00:00"
+    },
+    {
+      "check_name": "push_value.Docs_Out_Date__c.loan_000018",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000018",
+        "sf_field": "Docs_Out_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.062037+00:00"
+    },
+    {
+      "check_name": "push_value.Submitted_To_UW_Date__c.loan_000018",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000018",
+        "sf_field": "Submitted_To_UW_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.062073+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Amount__c.loan_000018",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000018",
+        "sf_field": "Loan_Amount__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.062080+00:00"
+    },
+    {
+      "check_name": "push_value.Interest_Rate__c.loan_000018",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000018",
+        "sf_field": "Interest_Rate__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.062085+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Status__c.loan_000018",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000018",
+        "sf_field": "Loan_Status__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.062090+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Type__c.loan_000018",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000018",
+        "sf_field": "Loan_Type__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.062094+00:00"
+    },
+    {
+      "check_name": "push_value.Application_Received_Date__c.loan_000019",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000019",
+        "sf_field": "Application_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.062105+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Sent_Date__c.loan_000019",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000019",
+        "sf_field": "Disclosure_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.062127+00:00"
+    },
+    {
+      "check_name": "push_value.Disclosure_Ack_Date__c.loan_000019",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000019",
+        "sf_field": "Disclosure_Ack_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.062137+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Ordered_Date__c.loan_000019",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000019",
+        "sf_field": "Appraisal_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.062146+00:00"
+    },
+    {
+      "check_name": "push_value.Appraisal_Received_Date__c.loan_000019",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000019",
+        "sf_field": "Appraisal_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.062155+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Ordered_Date__c.loan_000019",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000019",
+        "sf_field": "Title_Ordered_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.062164+00:00"
+    },
+    {
+      "check_name": "push_value.Title_Received_Date__c.loan_000019",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000019",
+        "sf_field": "Title_Received_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.062172+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Sent_Date__c.loan_000019",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000019",
+        "sf_field": "Conditions_Sent_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.062180+00:00"
+    },
+    {
+      "check_name": "push_value.Conditions_Cleared_Date__c.loan_000019",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000019",
+        "sf_field": "Conditions_Cleared_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.062188+00:00"
+    },
+    {
+      "check_name": "push_value.Clear_To_Close_Date__c.loan_000019",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000019",
+        "sf_field": "Clear_To_Close_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.062193+00:00"
+    },
+    {
+      "check_name": "push_value.Closing_Scheduled_Date__c.loan_000019",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000019",
+        "sf_field": "Closing_Scheduled_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.062196+00:00"
+    },
+    {
+      "check_name": "push_value.Funded_Date__c.loan_000019",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000019",
+        "sf_field": "Funded_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.062201+00:00"
+    },
+    {
+      "check_name": "push_value.Docs_Out_Date__c.loan_000019",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000019",
+        "sf_field": "Docs_Out_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.062207+00:00"
+    },
+    {
+      "check_name": "push_value.Submitted_To_UW_Date__c.loan_000019",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000019",
+        "sf_field": "Submitted_To_UW_Date__c",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.062218+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Amount__c.loan_000019",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000019",
+        "sf_field": "Loan_Amount__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.062224+00:00"
+    },
+    {
+      "check_name": "push_value.Interest_Rate__c.loan_000019",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000019",
+        "sf_field": "Interest_Rate__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.062229+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Status__c.loan_000019",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000019",
+        "sf_field": "Loan_Status__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.062234+00:00"
+    },
+    {
+      "check_name": "push_value.Loan_Type__c.loan_000019",
+      "status": "PASS",
+      "severity": "high",
+      "details": {
+        "record_id": "loan_000019",
+        "sf_field": "Loan_Type__c",
+        "is_sla_field": false,
+        "is_byte_mapped": false
+      },
+      "timestamp": "2026-02-08T19:19:55.062238+00:00"
+    },
+    {
+      "check_name": "byte_mapping.Loan__c.Application_Received_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "source_field": "loan.application_received_at",
+        "sf_field": "Application_Received_Date__c",
+        "sf_object": "Loan__c",
+        "records_checked": 20,
+        "exact_match": 20,
+        "timezone_adjusted_match": 0,
+        "mismatch": 0,
+        "null_handling_correct": 0,
+        "null_handling_incorrect": 0,
+        "decode_errors": 0,
+        "is_sla_field": true,
+        "is_byte_mapped": true,
+        "issues": [],
+        "sla_config": {
+          "window_days": 0,
+          "workflow_name": "Initial_Doc_Review",
+          "task_type": "Document Review",
+          "assigned_to": "Processor_Queue"
+        }
+      },
+      "timestamp": "2026-02-08T19:19:55.071390+00:00"
+    },
+    {
+      "check_name": "byte_mapping.Loan__c.Disclosure_Sent_Date__c",
+      "status": "WARNING",
+      "severity": "critical",
+      "details": {
+        "source_field": "loan.disclosure_sent_at",
+        "sf_field": "Disclosure_Sent_Date__c",
+        "sf_object": "Loan__c",
+        "records_checked": 20,
+        "exact_match": 19,
+        "timezone_adjusted_match": 1,
+        "mismatch": 0,
+        "null_handling_correct": 0,
+        "null_handling_incorrect": 0,
+        "decode_errors": 0,
+        "is_sla_field": true,
+        "is_byte_mapped": true,
+        "issues": [
+          {
+            "record_id": "loan_000007",
+            "source_value": "2026-02-05T16:19:55.057166+00:00",
+            "sf_value": "2026-02-04",
+            "issue": "Date matched only after timezone adjustment",
+            "error_type": "TIMEZONE_SHIFT"
+          }
+        ],
+        "sla_config": {
+          "window_days": 3,
+          "workflow_name": "TRID_Compliance_Check",
+          "task_type": "Compliance Review",
+          "assigned_to": "Compliance_Team"
+        }
+      },
+      "timestamp": "2026-02-08T19:19:55.071660+00:00"
+    },
+    {
+      "check_name": "byte_mapping.Loan__c.Disclosure_Ack_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "source_field": "loan.disclosure_acknowledged_at",
+        "sf_field": "Disclosure_Ack_Date__c",
+        "sf_object": "Loan__c",
+        "records_checked": 20,
+        "exact_match": 13,
+        "timezone_adjusted_match": 0,
+        "mismatch": 0,
+        "null_handling_correct": 7,
+        "null_handling_incorrect": 0,
+        "decode_errors": 0,
+        "is_sla_field": true,
+        "is_byte_mapped": true,
+        "issues": [],
+        "sla_config": {
+          "window_days": 10,
+          "workflow_name": "Disclosure_Escalation",
+          "task_type": "Escalation",
+          "assigned_to": "Processor_Queue"
+        }
+      },
+      "timestamp": "2026-02-08T19:19:55.071791+00:00"
+    },
+    {
+      "check_name": "byte_mapping.Loan__c.Appraisal_Ordered_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "source_field": "loan.appraisal_ordered_at",
+        "sf_field": "Appraisal_Ordered_Date__c",
+        "sf_object": "Loan__c",
+        "records_checked": 20,
+        "exact_match": 20,
+        "timezone_adjusted_match": 0,
+        "mismatch": 0,
+        "null_handling_correct": 0,
+        "null_handling_incorrect": 0,
+        "decode_errors": 0,
+        "is_sla_field": true,
+        "is_byte_mapped": true,
+        "issues": [],
+        "sla_config": {
+          "window_days": 1,
+          "workflow_name": "Appraisal_Followup",
+          "task_type": "Follow-up",
+          "assigned_to": "Processor_Queue"
+        }
+      },
+      "timestamp": "2026-02-08T19:19:55.072049+00:00"
+    },
+    {
+      "check_name": "byte_mapping.Loan__c.Appraisal_Received_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "source_field": "loan.appraisal_received_at",
+        "sf_field": "Appraisal_Received_Date__c",
+        "sf_object": "Loan__c",
+        "records_checked": 20,
+        "exact_match": 15,
+        "timezone_adjusted_match": 0,
+        "mismatch": 0,
+        "null_handling_correct": 5,
+        "null_handling_incorrect": 0,
+        "decode_errors": 0,
+        "is_sla_field": true,
+        "is_byte_mapped": true,
+        "issues": [],
+        "sla_config": {
+          "window_days": 0,
+          "workflow_name": "Appraisal_Review",
+          "task_type": "Appraisal Review",
+          "assigned_to": "Processor_Queue"
+        }
+      },
+      "timestamp": "2026-02-08T19:19:55.072190+00:00"
+    },
+    {
+      "check_name": "byte_mapping.Loan__c.Title_Ordered_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "source_field": "loan.title_ordered_at",
+        "sf_field": "Title_Ordered_Date__c",
+        "sf_object": "Loan__c",
+        "records_checked": 20,
+        "exact_match": 20,
+        "timezone_adjusted_match": 0,
+        "mismatch": 0,
+        "null_handling_correct": 0,
+        "null_handling_incorrect": 0,
+        "decode_errors": 0,
+        "is_sla_field": true,
+        "is_byte_mapped": true,
+        "issues": [],
+        "sla_config": {
+          "window_days": 1,
+          "workflow_name": "Title_Followup",
+          "task_type": "Follow-up",
+          "assigned_to": "Processor_Queue"
+        }
+      },
+      "timestamp": "2026-02-08T19:19:55.072363+00:00"
+    },
+    {
+      "check_name": "byte_mapping.Loan__c.Title_Received_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "source_field": "loan.title_received_at",
+        "sf_field": "Title_Received_Date__c",
+        "sf_object": "Loan__c",
+        "records_checked": 20,
+        "exact_match": 16,
+        "timezone_adjusted_match": 0,
+        "mismatch": 0,
+        "null_handling_correct": 4,
+        "null_handling_incorrect": 0,
+        "decode_errors": 0,
+        "is_sla_field": true,
+        "is_byte_mapped": true,
+        "issues": [],
+        "sla_config": {
+          "window_days": 0,
+          "workflow_name": "Title_Review",
+          "task_type": "Title Review",
+          "assigned_to": "Processor_Queue"
+        }
+      },
+      "timestamp": "2026-02-08T19:19:55.072503+00:00"
+    },
+    {
+      "check_name": "byte_mapping.Loan__c.Conditions_Sent_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "source_field": "loan.conditions_sent_at",
+        "sf_field": "Conditions_Sent_Date__c",
+        "sf_object": "Loan__c",
+        "records_checked": 20,
+        "exact_match": 9,
+        "timezone_adjusted_match": 0,
+        "mismatch": 0,
+        "null_handling_correct": 11,
+        "null_handling_incorrect": 0,
+        "decode_errors": 0,
+        "is_sla_field": true,
+        "is_byte_mapped": true,
+        "issues": [],
+        "sla_config": {
+          "window_days": 3,
+          "workflow_name": "Condition_Followup",
+          "task_type": "Condition Follow-up",
+          "assigned_to": "Processor_Queue"
+        }
+      },
+      "timestamp": "2026-02-08T19:19:55.072589+00:00"
+    },
+    {
+      "check_name": "byte_mapping.Loan__c.Conditions_Cleared_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "source_field": "loan.conditions_cleared_at",
+        "sf_field": "Conditions_Cleared_Date__c",
+        "sf_object": "Loan__c",
+        "records_checked": 20,
+        "exact_match": 0,
+        "timezone_adjusted_match": 0,
+        "mismatch": 0,
+        "null_handling_correct": 20,
+        "null_handling_incorrect": 0,
+        "decode_errors": 0,
+        "is_sla_field": true,
+        "is_byte_mapped": true,
+        "issues": [],
+        "sla_config": {
+          "window_days": 0,
+          "workflow_name": "Clear_To_Close_Prep",
+          "task_type": "Closing Preparation",
+          "assigned_to": "Closer_Queue"
+        }
+      },
+      "timestamp": "2026-02-08T19:19:55.072611+00:00"
+    },
+    {
+      "check_name": "byte_mapping.Loan__c.Clear_To_Close_Date__c",
+      "status": "WARNING",
+      "severity": "critical",
+      "details": {
+        "source_field": "loan.clear_to_close_at",
+        "sf_field": "Clear_To_Close_Date__c",
+        "sf_object": "Loan__c",
+        "records_checked": 20,
+        "exact_match": 0,
+        "timezone_adjusted_match": 0,
+        "mismatch": 0,
+        "null_handling_correct": 19,
+        "null_handling_incorrect": 1,
+        "decode_errors": 0,
+        "is_sla_field": true,
+        "is_byte_mapped": true,
+        "issues": [
+          {
+            "record_id": "loan_000015",
+            "source_value": null,
+            "sf_value": "1970-01-01",
+            "issue": "Null placeholder in SF \u2014 should be null",
+            "error_type": "NULL_PLACEHOLDER"
+          }
+        ],
+        "sla_config": {
+          "window_days": 0,
+          "workflow_name": "Closing_Package",
+          "task_type": "Closing Package Prep",
+          "assigned_to": "Closer_Queue"
+        }
+      },
+      "timestamp": "2026-02-08T19:19:55.072629+00:00"
+    },
+    {
+      "check_name": "byte_mapping.Loan__c.Closing_Scheduled_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "source_field": "loan.closing_scheduled_at",
+        "sf_field": "Closing_Scheduled_Date__c",
+        "sf_object": "Loan__c",
+        "records_checked": 20,
+        "exact_match": 0,
+        "timezone_adjusted_match": 0,
+        "mismatch": 0,
+        "null_handling_correct": 20,
+        "null_handling_incorrect": 0,
+        "decode_errors": 0,
+        "is_sla_field": true,
+        "is_byte_mapped": true,
+        "issues": [],
+        "sla_config": {
+          "window_days": -1,
+          "workflow_name": "Pre_Closing_Verification",
+          "task_type": "Pre-Closing Check",
+          "assigned_to": "Closer_Queue"
+        }
+      },
+      "timestamp": "2026-02-08T19:19:55.072643+00:00"
+    },
+    {
+      "check_name": "byte_mapping.Loan__c.Funded_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "source_field": "loan.funded_at",
+        "sf_field": "Funded_Date__c",
+        "sf_object": "Loan__c",
+        "records_checked": 20,
+        "exact_match": 0,
+        "timezone_adjusted_match": 0,
+        "mismatch": 0,
+        "null_handling_correct": 20,
+        "null_handling_incorrect": 0,
+        "decode_errors": 0,
+        "is_sla_field": true,
+        "is_byte_mapped": true,
+        "issues": [],
+        "sla_config": {
+          "window_days": 0,
+          "workflow_name": "Post_Closing_Audit",
+          "task_type": "Post-Closing Audit",
+          "assigned_to": "Compliance_Team"
+        }
+      },
+      "timestamp": "2026-02-08T19:19:55.072656+00:00"
+    },
+    {
+      "check_name": "byte_mapping.Loan__c.Docs_Out_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "source_field": "loan.docs_out_at",
+        "sf_field": "Docs_Out_Date__c",
+        "sf_object": "Loan__c",
+        "records_checked": 20,
+        "exact_match": 0,
+        "timezone_adjusted_match": 0,
+        "mismatch": 0,
+        "null_handling_correct": 20,
+        "null_handling_incorrect": 0,
+        "decode_errors": 0,
+        "is_sla_field": true,
+        "is_byte_mapped": true,
+        "issues": [],
+        "sla_config": {
+          "window_days": 0,
+          "workflow_name": "Doc_Tracking_Confirmation",
+          "task_type": "Document Tracking",
+          "assigned_to": "Processor_Queue"
+        }
+      },
+      "timestamp": "2026-02-08T19:19:55.072668+00:00"
+    },
+    {
+      "check_name": "byte_mapping.Loan__c.Submitted_To_UW_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "source_field": "loan.submitted_to_uw_at",
+        "sf_field": "Submitted_To_UW_Date__c",
+        "sf_object": "Loan__c",
+        "records_checked": 20,
+        "exact_match": 20,
+        "timezone_adjusted_match": 0,
+        "mismatch": 0,
+        "null_handling_correct": 0,
+        "null_handling_incorrect": 0,
+        "decode_errors": 0,
+        "is_sla_field": true,
+        "is_byte_mapped": true,
+        "issues": [],
+        "sla_config": {
+          "window_days": 2,
+          "workflow_name": "UW_Followup",
+          "task_type": "UW Follow-up",
+          "assigned_to": "Processor_Queue"
+        }
+      },
+      "timestamp": "2026-02-08T19:19:55.072959+00:00"
+    },
+    {
+      "check_name": "byte_mapping.Contact.Last_Contact_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "source_field": "borrower.last_contact_at",
+        "sf_field": "Last_Contact_Date__c",
+        "sf_object": "Contact",
+        "records_checked": 20,
+        "exact_match": 0,
+        "timezone_adjusted_match": 0,
+        "mismatch": 0,
+        "null_handling_correct": 20,
+        "null_handling_incorrect": 0,
+        "decode_errors": 0,
+        "is_sla_field": true,
+        "is_byte_mapped": true,
+        "issues": [],
+        "sla_config": {
+          "window_days": 7,
+          "workflow_name": "Re_Engagement",
+          "task_type": "Re-engagement Outreach",
+          "assigned_to": "LO_Owner"
+        }
+      },
+      "timestamp": "2026-02-08T19:19:55.072980+00:00"
+    },
+    {
+      "check_name": "byte_mapping.Contact.Next_Followup_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "source_field": "borrower.next_followup_at",
+        "sf_field": "Next_Followup_Date__c",
+        "sf_object": "Contact",
+        "records_checked": 20,
+        "exact_match": 0,
+        "timezone_adjusted_match": 0,
+        "mismatch": 0,
+        "null_handling_correct": 20,
+        "null_handling_incorrect": 0,
+        "decode_errors": 0,
+        "is_sla_field": true,
+        "is_byte_mapped": true,
+        "issues": [],
+        "sla_config": {
+          "window_days": 0,
+          "workflow_name": "Followup_Reminder",
+          "task_type": "Follow-up Reminder",
+          "assigned_to": "LO_Owner"
+        }
+      },
+      "timestamp": "2026-02-08T19:19:55.073019+00:00"
+    },
+    {
+      "check_name": "byte_mapping.Contact.Preapproval_Expiry__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "source_field": "borrower.preapproval_expires_at",
+        "sf_field": "Preapproval_Expiry__c",
+        "sf_object": "Contact",
+        "records_checked": 20,
+        "exact_match": 0,
+        "timezone_adjusted_match": 0,
+        "mismatch": 0,
+        "null_handling_correct": 20,
+        "null_handling_incorrect": 0,
+        "decode_errors": 0,
+        "is_sla_field": true,
+        "is_byte_mapped": true,
+        "issues": [],
+        "sla_config": {
+          "window_days": -14,
+          "workflow_name": "Preapproval_Renewal",
+          "task_type": "Renewal Outreach",
+          "assigned_to": "LO_Owner"
+        }
+      },
+      "timestamp": "2026-02-08T19:19:55.073047+00:00"
+    },
+    {
+      "check_name": "byte_mapping.Contact.Rate_Lock_Expiry__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "source_field": "borrower.rate_lock_expires_at",
+        "sf_field": "Rate_Lock_Expiry__c",
+        "sf_object": "Contact",
+        "records_checked": 20,
+        "exact_match": 0,
+        "timezone_adjusted_match": 0,
+        "mismatch": 0,
+        "null_handling_correct": 20,
+        "null_handling_incorrect": 0,
+        "decode_errors": 0,
+        "is_sla_field": true,
+        "is_byte_mapped": true,
+        "issues": [],
+        "sla_config": {
+          "window_days": -7,
+          "workflow_name": "Rate_Lock_Extension",
+          "task_type": "Rate Lock Review",
+          "assigned_to": "LO_Owner"
+        }
+      },
+      "timestamp": "2026-02-08T19:19:55.073063+00:00"
+    },
+    {
+      "check_name": "sla_workflow_chain.Application_Received_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "sf_field": "Application_Received_Date__c",
+        "workflow_name": "Initial_Doc_Review",
+        "task_type": "Document Review",
+        "assigned_to": "Processor_Queue",
+        "window_days": 0,
+        "recent_tasks_count": 3,
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.073212+00:00"
+    },
+    {
+      "check_name": "sla_workflow_assignment.Disclosure_Sent_Date__c",
+      "status": "WARNING",
+      "severity": "medium",
+      "details": {
+        "sf_field": "Disclosure_Sent_Date__c",
+        "workflow_name": "TRID_Compliance_Check",
+        "expected_assignee": "Compliance_Team",
+        "misassigned_count": 3,
+        "total_tasks": 3,
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.073226+00:00"
+    },
+    {
+      "check_name": "sla_workflow_chain.Disclosure_Ack_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "sf_field": "Disclosure_Ack_Date__c",
+        "workflow_name": "Disclosure_Escalation",
+        "task_type": "Escalation",
+        "assigned_to": "Processor_Queue",
+        "window_days": 10,
+        "recent_tasks_count": 3,
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.073234+00:00"
+    },
+    {
+      "check_name": "sla_workflow_exists.Appraisal_Ordered_Date__c",
+      "status": "FAIL",
+      "severity": "critical",
+      "details": {
+        "sf_field": "Appraisal_Ordered_Date__c",
+        "workflow_name": "Appraisal_Followup",
+        "error": "Workflow rule/flow not found or inactive",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.073239+00:00"
+    },
+    {
+      "check_name": "sla_workflow_tasks.Appraisal_Received_Date__c",
+      "status": "WARNING",
+      "severity": "high",
+      "details": {
+        "sf_field": "Appraisal_Received_Date__c",
+        "workflow_name": "Appraisal_Review",
+        "task_type": "Appraisal Review",
+        "error": "No tasks found for this SLA type in last 7 days",
+        "note": "May be expected if no loans reached this milestone recently",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.073249+00:00"
+    },
+    {
+      "check_name": "sla_workflow_tasks.Title_Ordered_Date__c",
+      "status": "WARNING",
+      "severity": "high",
+      "details": {
+        "sf_field": "Title_Ordered_Date__c",
+        "workflow_name": "Title_Followup",
+        "task_type": "Follow-up",
+        "error": "No tasks found for this SLA type in last 7 days",
+        "note": "May be expected if no loans reached this milestone recently",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.073254+00:00"
+    },
+    {
+      "check_name": "sla_workflow_chain.Title_Received_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "sf_field": "Title_Received_Date__c",
+        "workflow_name": "Title_Review",
+        "task_type": "Title Review",
+        "assigned_to": "Processor_Queue",
+        "window_days": 0,
+        "recent_tasks_count": 3,
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.073263+00:00"
+    },
+    {
+      "check_name": "sla_workflow_chain.Conditions_Sent_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "sf_field": "Conditions_Sent_Date__c",
+        "workflow_name": "Condition_Followup",
+        "task_type": "Condition Follow-up",
+        "assigned_to": "Processor_Queue",
+        "window_days": 3,
+        "recent_tasks_count": 3,
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.073269+00:00"
+    },
+    {
+      "check_name": "sla_workflow_assignment.Conditions_Cleared_Date__c",
+      "status": "WARNING",
+      "severity": "medium",
+      "details": {
+        "sf_field": "Conditions_Cleared_Date__c",
+        "workflow_name": "Clear_To_Close_Prep",
+        "expected_assignee": "Closer_Queue",
+        "misassigned_count": 3,
+        "total_tasks": 3,
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.073276+00:00"
+    },
+    {
+      "check_name": "sla_workflow_assignment.Clear_To_Close_Date__c",
+      "status": "WARNING",
+      "severity": "medium",
+      "details": {
+        "sf_field": "Clear_To_Close_Date__c",
+        "workflow_name": "Closing_Package",
+        "expected_assignee": "Closer_Queue",
+        "misassigned_count": 3,
+        "total_tasks": 3,
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.073282+00:00"
+    },
+    {
+      "check_name": "sla_workflow_assignment.Closing_Scheduled_Date__c",
+      "status": "WARNING",
+      "severity": "medium",
+      "details": {
+        "sf_field": "Closing_Scheduled_Date__c",
+        "workflow_name": "Pre_Closing_Verification",
+        "expected_assignee": "Closer_Queue",
+        "misassigned_count": 3,
+        "total_tasks": 3,
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.073288+00:00"
+    },
+    {
+      "check_name": "sla_workflow_assignment.Funded_Date__c",
+      "status": "WARNING",
+      "severity": "medium",
+      "details": {
+        "sf_field": "Funded_Date__c",
+        "workflow_name": "Post_Closing_Audit",
+        "expected_assignee": "Compliance_Team",
+        "misassigned_count": 3,
+        "total_tasks": 3,
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.073294+00:00"
+    },
+    {
+      "check_name": "sla_workflow_chain.Docs_Out_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "sf_field": "Docs_Out_Date__c",
+        "workflow_name": "Doc_Tracking_Confirmation",
+        "task_type": "Document Tracking",
+        "assigned_to": "Processor_Queue",
+        "window_days": 0,
+        "recent_tasks_count": 3,
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.073299+00:00"
+    },
+    {
+      "check_name": "sla_workflow_chain.Submitted_To_UW_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "sf_field": "Submitted_To_UW_Date__c",
+        "workflow_name": "UW_Followup",
+        "task_type": "UW Follow-up",
+        "assigned_to": "Processor_Queue",
+        "window_days": 2,
+        "recent_tasks_count": 3,
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.073304+00:00"
+    },
+    {
+      "check_name": "sla_workflow_chain.Last_Contact_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "sf_field": "Last_Contact_Date__c",
+        "workflow_name": "Re_Engagement",
+        "task_type": "Re-engagement Outreach",
+        "assigned_to": "LO_Owner",
+        "window_days": 7,
+        "recent_tasks_count": 3,
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.073311+00:00"
+    },
+    {
+      "check_name": "sla_workflow_chain.Next_Followup_Date__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "sf_field": "Next_Followup_Date__c",
+        "workflow_name": "Followup_Reminder",
+        "task_type": "Follow-up Reminder",
+        "assigned_to": "LO_Owner",
+        "window_days": 0,
+        "recent_tasks_count": 3,
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.073316+00:00"
+    },
+    {
+      "check_name": "sla_workflow_chain.Preapproval_Expiry__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "sf_field": "Preapproval_Expiry__c",
+        "workflow_name": "Preapproval_Renewal",
+        "task_type": "Renewal Outreach",
+        "assigned_to": "LO_Owner",
+        "window_days": -14,
+        "recent_tasks_count": 3,
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.073322+00:00"
+    },
+    {
+      "check_name": "sla_workflow_chain.Rate_Lock_Expiry__c",
+      "status": "PASS",
+      "severity": "critical",
+      "details": {
+        "sf_field": "Rate_Lock_Expiry__c",
+        "workflow_name": "Rate_Lock_Extension",
+        "task_type": "Rate Lock Review",
+        "assigned_to": "LO_Owner",
+        "window_days": -7,
+        "recent_tasks_count": 3,
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.073327+00:00"
+    }
+  ],
+  "sla_field_summary": {
+    "total_sla_fields": 334,
+    "passing": 321,
+    "failing": 4,
+    "warnings": 9
+  },
+  "byte_mapping_summary": {
+    "total_byte_mapped_fields": 334,
+    "passing": 321,
+    "failing": 4,
+    "decode_errors": 0
+  },
+  "critical_issues": [
+    {
+      "check_name": "field_exists.Loan__c.Appraisal_Ordered_Date__c",
+      "status": "FAIL",
+      "severity": "critical",
+      "details": {
+        "sf_object": "Loan__c",
+        "sf_field": "Appraisal_Ordered_Date__c",
+        "error": "Field does not exist on object",
+        "error_type": "FIELD_NOT_FOUND",
+        "is_sla_field": true,
+        "is_byte_mapped": true,
+        "source": "loan.appraisal_ordered_at"
+      },
+      "timestamp": "2026-02-08T19:19:55.059019+00:00"
+    },
+    {
+      "check_name": "push_accuracy.Disclosure_Sent_Date__c.loan_000007",
+      "status": "FAIL",
+      "severity": "critical",
+      "details": {
+        "record_id": "loan_000007",
+        "sf_id": "a0X000000000007",
+        "source_field": "loan.disclosure_sent_at",
+        "sf_field": "Disclosure_Sent_Date__c",
+        "source_value": "2026-02-05T16:19:55.057166+00:00",
+        "expected_sf_value": "2026-02-05",
+        "actual_sf_value": "2026-02-04",
+        "error": "Value mismatch after transform",
+        "error_type": "VALUE_MISMATCH",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.060189+00:00"
+    },
+    {
+      "check_name": "sla_workflow_exists.Appraisal_Ordered_Date__c",
+      "status": "FAIL",
+      "severity": "critical",
+      "details": {
+        "sf_field": "Appraisal_Ordered_Date__c",
+        "workflow_name": "Appraisal_Followup",
+        "error": "Workflow rule/flow not found or inactive",
+        "is_sla_field": true,
+        "is_byte_mapped": true
+      },
+      "timestamp": "2026-02-08T19:19:55.073239+00:00"
+    }
+  ]
+}
