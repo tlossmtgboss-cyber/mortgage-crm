@@ -523,7 +523,7 @@ def register_salesforce_sync_jobs(scheduler):
         kwargs={
             'sync_emails': True,
             'sync_calendar': True,
-            'sync_client_fields': False,  # Disabled for now - enable after testing
+            'sync_client_fields': True,  # Match CRM records to Salesforce by email and pull all fields
             'push_to_salesforce': False,  # DISABLED - inbound only
             'email_days_back': 1,
             'calendar_days_back': 1,

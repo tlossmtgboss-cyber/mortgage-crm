@@ -1863,6 +1863,17 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.warning(f"⚠️ Salesforce user integration routes not loaded: {e}")
 
+    # Register Salesforce sync jobs with APScheduler
+    if scheduler:
+        try:
+            from tasks.salesforce_sync_tasks import register_salesforce_sync_jobs
+            register_salesforce_sync_jobs(scheduler)
+            if not scheduler.running:
+                scheduler.start()
+            logger.info("✅ Salesforce sync jobs registered and scheduler started")
+        except Exception as e:
+            logger.warning(f"⚠️ Salesforce sync jobs not registered: {e}")
+
     # Calendar Sync routes (CRM ↔ Salesforce ↔ Outlook calendar synchronization)
     try:
         from models.calendar_sync_models import CRMCalendarEvent, CalendarEventSyncMap, CalendarSyncLog, CalendarSyncSettings
