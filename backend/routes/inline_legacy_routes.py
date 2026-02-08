@@ -256,6 +256,27 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.error(f"❌ Calculator settings routes failed: {e}")
 
+    try:
+        from routes.scorecard_routes import register_scorecard_routes
+        register_scorecard_routes(app, get_db, get_current_user, Lead=Lead, Loan=Loan, LoanStage=LoanStage, **kwargs)
+        logger.info("✅ Scorecard routes loaded (extracted)")
+    except Exception as e:
+        logger.error(f"❌ Scorecard routes failed: {e}")
+
+    try:
+        from routes.search_routes import register_search_routes
+        register_search_routes(app, get_db, get_current_user_flexible=get_current_user_flexible, Lead=Lead, Loan=Loan, LoanTeamMember=LoanTeamMember, ReferralPartner=ReferralPartner, MUMClient=MUMClient, filter_leads_by_permissions=filter_leads_by_permissions, **kwargs)
+        logger.info("✅ Global search routes loaded (extracted)")
+    except Exception as e:
+        logger.error(f"❌ Global search routes failed: {e}")
+
+    try:
+        from routes.ai_underwriter_routes import router as ai_underwriter_router
+        app.include_router(ai_underwriter_router, prefix="/api/v1/ai-underwriter", tags=["AI Underwriter"])
+        logger.info("✅ AI Underwriter routes loaded (extracted)")
+    except Exception as e:
+        logger.error(f"❌ AI Underwriter routes failed: {e}")
+
     # ---- All routes below are registered on `app` ----
 
     @app.post("/api/v1/ai/orchestrator-chat-stream")
@@ -12932,521 +12953,7155 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     # (contacts/search, api-keys CRUD, admin/stats, admin/users CRUD,
     #  debug/user-deletion-blockers, admin/cleanup-sample-users)
 
-    # ============================================================================
-    # LOAN SCORECARD REPORT
-    # ============================================================================
+    # Extracted to routes/scorecard_routes.py
+    # (GET /api/v1/scorecard - conversion metrics, funding totals, referral breakdown)
 
-    @app.get("/api/v1/scorecard")
-    async def get_scorecard(
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
-    ):
-        """
-        Get comprehensive loan scorecard metrics matching the Loan Scorecard Report format.
-        Includes conversion metrics, funding totals, and referral source breakdown.
-        """
-        from datetime import date, datetime as dt, timedelta, timezone
-        from sqlalchemy import func, extract, case
-        from decimal import Decimal
+    # Extracted to routes/search_routes.py
+    # (GET /api/v1/search/global - cross-entity search)
 
-        try:
-            # Date range setup - use timezone-naive datetimes for database compatibility
-            if start_date and end_date:
-                start = dt.strptime(start_date, "%Y-%m-%d").replace(hour=0, minute=0, second=0)
-                end = dt.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
-            else:
-                # Default to current month
-                today = date.today()
-                start = dt(today.year, today.month, 1, 0, 0, 0)
-                end = dt(today.year, today.month, today.day, 23, 59, 59)
-
-            # Store date-only versions for the response
-            start_date_str = start.strftime("%Y-%m-%d")
-            end_date_str = end.strftime("%Y-%m-%d")
-
-            logger.info(f"Scorecard request: {start_date_str} to {end_date_str} for user {current_user.id}")
-        except Exception as e:
-            logger.error(f"Error in scorecard endpoint (date setup): {str(e)}", exc_info=True)
-            raise HTTPException(status_code=500, detail=f"Error processing scorecard data: {str(e)}")
-
-        try:
-            # ============================================================================
-            # LOAN STARTS VS. ACTIVITY TOTALS
-            # ============================================================================
-
-            # Get all relevant loans and leads for the period
-            try:
-                all_leads = db.query(Lead).filter(
-                    Lead.owner_id == current_user.id,
-                    Lead.created_at >= start,
-                    Lead.created_at <= end
-                ).all()
-            except Exception as e:
-                logger.error(f"Error querying leads: {str(e)}")
-                all_leads = []
-
-            try:
-                all_loans = db.query(Loan).filter(
-                    Loan.loan_officer_id == current_user.id
-                ).all()
-            except Exception as e:
-                logger.error(f"Error querying loans: {str(e)}")
-                all_loans = []
-
-            # Calculate counts
-            starts_count = len(all_leads)  # Total leads
-
-            # Applications (leads that became loans)
-            try:
-                apps_count = db.query(func.count(Loan.id)).filter(
-                    Loan.loan_officer_id == current_user.id,
-                    Loan.created_at >= start,
-                    Loan.created_at <= end
-                ).scalar() or 0
-            except Exception as e:
-                logger.error(f"Error counting applications: {str(e)}")
-                apps_count = 0
-
-            # Funded loans
-            try:
-                funded_count = db.query(func.count(Loan.id)).filter(
-                    Loan.loan_officer_id == current_user.id,
-                    Loan.stage == LoanStage.FUNDED,
-                    Loan.funded_date >= start,
-                    Loan.funded_date <= end
-                ).scalar() or 0
-            except Exception as e:
-                logger.error(f"Error counting funded loans: {str(e)}")
-                funded_count = 0
-
-            # Credit pulls (assuming leads with credit_score indicate credit pulled)
-            try:
-                credit_pulls = db.query(func.count(Lead.id)).filter(
-                    Lead.owner_id == current_user.id,
-                    Lead.created_at >= start,
-                    Lead.created_at <= end,
-                    Lead.credit_score.isnot(None)
-                ).scalar() or 0
-            except Exception as e:
-                logger.error(f"Error counting credit pulls: {str(e)}")
-                credit_pulls = 0
-
-            # Cancelled/Suspended loans
-            try:
-                cancelled_count = db.query(func.count(Loan.id)).filter(
-                    Loan.loan_officer_id == current_user.id,
-                    Loan.stage == LoanStage.SUSPENDED,
-                    Loan.created_at >= start,
-                    Loan.created_at <= end
-                ).scalar() or 0
-            except Exception as e:
-                logger.error(f"Error counting cancelled loans: {str(e)}")
-                cancelled_count = 0
-
-            # Denied loans (not tracked in current stages, set to 0)
-            denied_count = 0
-
-            # UW to TBDs (underwriting to clear to close)
-            try:
-                uw_count = db.query(func.count(Loan.id)).filter(
-                    Loan.loan_officer_id == current_user.id,
-                    Loan.stage == LoanStage.UW_RECEIVED,
-                    Loan.created_at >= start,
-                    Loan.created_at <= end
-                ).scalar() or 0
-            except Exception as e:
-                logger.error(f"Error counting UW loans: {str(e)}")
-                uw_count = 0
-
-            try:
-                ctc_count = db.query(func.count(Loan.id)).filter(
-                    Loan.loan_officer_id == current_user.id,
-                    Loan.stage == LoanStage.CTC,
-                    Loan.created_at >= start,
-                    Loan.created_at <= end
-                ).scalar() or 0
-            except Exception as e:
-                logger.error(f"Error counting CTC loans: {str(e)}")
-                ctc_count = 0
-
-            # Initial lock to funded (loans that locked and funded)
-            locked_funded = funded_count  # Simplified - all funded loans were locked
-
-            # Calculate conversion percentages
-            starts_to_apps_pct = int((apps_count / starts_count * 100)) if starts_count > 0 else 0
-            apps_to_funded_pct = int((funded_count / apps_count * 100)) if apps_count > 0 else 0
-            starts_to_funded_pct = int((funded_count / starts_count * 100)) if starts_count > 0 else 0
-            credit_to_funded_pct = int((funded_count / credit_pulls * 100)) if credit_pulls > 0 else 0
-            starts_to_cancelled_pct = int((cancelled_count / starts_count * 100)) if starts_count > 0 else 0
-            starts_to_denied_pct = int((denied_count / starts_count * 100)) if starts_count > 0 else 0
-            uw_to_ctc_pct = int((ctc_count / uw_count * 100)) if uw_count > 0 else 0
-            lock_to_funded_pct = int((funded_count / locked_funded * 100)) if locked_funded > 0 else 0
-
-            conversion_metrics = [
-                {
-                    "metric": "Starts to Appl(E)",
-                    "current": apps_count,
-                    "total": starts_count,
-                    "mot_pct": starts_to_apps_pct,
-                    "goal_pct": 75,
-                    "status": "good" if starts_to_apps_pct >= 75 else "warning" if starts_to_apps_pct >= 60 else "critical"
-                },
-                {
-                    "metric": "Appl(E) to Funded",
-                    "current": funded_count,
-                    "total": apps_count,
-                    "mot_pct": apps_to_funded_pct,
-                    "goal_pct": 80,
-                    "status": "good" if apps_to_funded_pct >= 80 else "warning" if apps_to_funded_pct >= 60 else "critical"
-                },
-                {
-                    "metric": "Starts to Funded",
-                    "current": funded_count,
-                    "total": starts_count,
-                    "mot_pct": starts_to_funded_pct,
-                    "goal_pct": 50,
-                    "status": "good" if starts_to_funded_pct >= 50 else "warning" if starts_to_funded_pct >= 40 else "critical"
-                },
-                {
-                    "metric": "Credit Pulls to Funded",
-                    "current": funded_count,
-                    "total": credit_pulls,
-                    "mot_pct": credit_to_funded_pct,
-                    "goal_pct": 70,
-                    "status": "critical" if credit_to_funded_pct < 50 else "warning" if credit_to_funded_pct < 70 else "good"
-                },
-                {
-                    "metric": "Starts to Cancelled",
-                    "current": cancelled_count,
-                    "total": starts_count,
-                    "mot_pct": starts_to_cancelled_pct,
-                    "goal_pct": 10,
-                    "status": "good" if starts_to_cancelled_pct <= 10 else "warning"
-                },
-                {
-                    "metric": "Starts to Denied",
-                    "current": denied_count,
-                    "total": starts_count,
-                    "mot_pct": starts_to_denied_pct,
-                    "goal_pct": 5,
-                    "status": "good" if starts_to_denied_pct <= 5 else "warning"
-                },
-                {
-                    "metric": "UW to TBDs",
-                    "current": ctc_count,
-                    "total": uw_count,
-                    "mot_pct": uw_to_ctc_pct,
-                    "goal_pct": 50,
-                    "status": "good" if uw_to_ctc_pct >= 50 else "warning"
-                },
-                {
-                    "metric": "Initial Lock to Funded",
-                    "current": funded_count,
-                    "total": locked_funded,
-                    "mot_pct": lock_to_funded_pct,
-                    "goal_pct": 90,
-                    "status": "warning" if lock_to_funded_pct < 90 else "good"
-                }
-            ]
-
-            # ============================================================================
-            # CONVERSION UPSWING (10% Pull-Thru Analysis)
-            # ============================================================================
-
-            # Calculate current vs target metrics
-            current_pull_thru_pct = starts_to_funded_pct
-            target_pull_thru_pct = current_pull_thru_pct + 10  # 10% improvement
-
-            # Get funded loans for volume calculations
-            try:
-                funded_loans = db.query(Loan).filter(
-                    Loan.loan_officer_id == current_user.id,
-                    Loan.stage == LoanStage.FUNDED,
-                    Loan.funded_date >= start,
-                    Loan.funded_date <= end
-                ).all()
-            except Exception as e:
-                logger.error(f"Error querying funded loans for volume: {str(e)}")
-                funded_loans = []
-
-            current_avg_amount = sum(loan.amount for loan in funded_loans if loan.amount) / len(funded_loans) if funded_loans else 0
-            current_volume = sum(loan.amount for loan in funded_loans if loan.amount) if funded_loans else 0
-
-            # Project 10% increase
-            target_funded_count = int(funded_count * 1.1)
-            target_volume = current_volume * 1.1
-            volume_increase = target_volume - current_volume
-
-            # Basis points (commission) - assuming 100 bps average
-            current_bps = 100
-            current_compensation = (current_volume * current_bps) / 10000
-            target_compensation = (target_volume * current_bps) / 10000
-            additional_compensation = target_compensation - current_compensation
-
-            conversion_upswing = {
-                "current_starts": starts_count,
-                "target_starts": int(starts_count * 1.1),
-                "current_pull_thru_pct": current_pull_thru_pct,
-                "target_pull_thru_pct": target_pull_thru_pct,
-                "current_avg_amount": current_avg_amount,
-                "target_avg_amount": current_avg_amount,
-                "current_volume": current_volume,
-                "target_volume": target_volume,
-                "volume_increase": volume_increase,
-                "current_bps": current_bps,
-                "target_bps": current_bps,
-                "current_compensation": current_compensation,
-                "additional_compensation": additional_compensation
-            }
-
-            # ============================================================================
-            # FUNDING TOTALS
-            # ============================================================================
-
-            # Get all funded loans
-            try:
-                funded_loans_all = db.query(Loan).filter(
-                    Loan.loan_officer_id == current_user.id,
-                    Loan.stage == LoanStage.FUNDED,
-                    Loan.funded_date >= start,
-                    Loan.funded_date <= end
-                ).all()
-            except Exception as e:
-                logger.error(f"Error querying all funded loans: {str(e)}")
-                funded_loans_all = []
-
-            # Calculate totals
-            total_funded_units = len(funded_loans_all)
-            total_funded_volume = sum(loan.amount for loan in funded_loans_all if loan.amount) if funded_loans_all else 0
-
-            # Break down by loan type
-            loan_type_breakdown = {}
-            for loan in funded_loans_all:
-                loan_type = loan.loan_type or "Unknown"
-                if loan_type not in loan_type_breakdown:
-                    loan_type_breakdown[loan_type] = {"units": 0, "volume": 0}
-                loan_type_breakdown[loan_type]["units"] += 1
-                loan_type_breakdown[loan_type]["volume"] += loan.amount if loan.amount else 0
-
-            loan_types = [
-                {
-                    "type": loan_type,
-                    "units": data["units"],
-                    "volume": data["volume"],
-                    "percentage": (data["volume"] / total_funded_volume * 100) if total_funded_volume > 0 else 0
-                }
-                for loan_type, data in loan_type_breakdown.items()
-            ]
-
-            # Break down by referral source
-            referral_breakdown = {}
-            for loan in funded_loans_all:
-                source = loan.source or "Unknown"
-                if source not in referral_breakdown:
-                    referral_breakdown[source] = {"referrals": 0, "closed_volume": 0}
-                referral_breakdown[source]["referrals"] += 1
-                referral_breakdown[source]["closed_volume"] += loan.amount if loan.amount else 0
-
-            referral_sources = [
-                {
-                    "source": source,
-                    "referrals": data["referrals"],
-                    "closed_volume": data["closed_volume"]
-                }
-                for source, data in referral_breakdown.items()
-            ]
-
-            funding_totals = {
-                "total_units": total_funded_units,
-                "total_volume": total_funded_volume,
-                "loan_types": loan_types,
-                "referral_sources": referral_sources,
-                "avg_loan_amount": total_funded_volume / total_funded_units if total_funded_units > 0 else 0
-            }
-
-            # ============================================================================
-            # RETURN COMPLETE SCORECARD
-            # ============================================================================
-
-            return {
-                "period": {
-                    "start_date": start_date_str,
-                    "end_date": end_date_str
-                },
-                "conversion_metrics": conversion_metrics,
-                "conversion_upswing": conversion_upswing,
-                "funding_totals": funding_totals,
-                "generated_at": dt.utcnow().isoformat()
-            }
-        except Exception as e:
-            logger.error(f"Error in scorecard endpoint: {str(e)}", exc_info=True)
-            raise HTTPException(status_code=500, detail=f"Error generating scorecard: {str(e)}")
-
-    # ================================================================
-    # GLOBAL SEARCH - Search across all entities
-    # ================================================================
-
-    @app.get("/api/v1/search/global")
-    async def global_search(
-        q: str,
-        limit: int = 20,
+    # IMPORTANT: This route MUST be defined BEFORE /leads/{lead_id} to avoid route conflicts
+    @app.delete("/api/v1/leads/bulk-delete")
+    @app.post("/api/v1/leads/bulk-delete")
+    async def bulk_delete_leads_v2(
+        request: Request,
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user_flexible)
     ):
         """
-        Global search across leads, loans, contacts, and partners.
-        Returns categorized results from all entity types.
+        Bulk delete multiple leads. Admin users, master user (id=1), or users with leads.delete_all permission can use this.
         """
-        if not q or len(q.strip()) < 2:
-            return {"results": [], "total": 0}
-
-        search_term = q.strip().lower()
-        results = []
-
-        # Search Leads
+        # Parse lead_ids from request body
         try:
-            leads_query = db.query(Lead)
-            leads_query = filter_leads_by_permissions(leads_query, current_user, db)
-            leads_query = leads_query.filter(
-                or_(
-                    func.lower(Lead.name).contains(search_term),
-                    func.lower(Lead.email).contains(search_term),
-                    func.lower(Lead.phone).contains(search_term)
-                )
-            ).limit(limit)
-
-            for lead in leads_query.all():
-                results.append({
-                    "id": lead.id,
-                    "type": "lead",
-                    "name": lead.name,
-                    "email": lead.email,
-                    "phone": lead.phone,
-                    "status": lead.status if hasattr(lead, 'status') else lead.stage.value if lead.stage else None,
-                    "url": f"/leads/{lead.id}"
-                })
+            body = await request.json()
+            # Handle both array format [1,2,3] and object format {"lead_ids": [1,2,3]}
+            if isinstance(body, list):
+                lead_ids = body
+            elif isinstance(body, dict):
+                lead_ids = body.get('lead_ids', body.get('ids', []))
+            else:
+                lead_ids = []
+            lead_ids = [int(id) for id in lead_ids]  # Ensure integers
         except Exception as e:
-            logger.warning(f"Global search - leads error: {e}")
+            raise HTTPException(status_code=400, detail=f"Invalid request body: {str(e)}")
 
-        # Search Loans
+        # PHASE 3: Check delete permission (delete or delete_all)
+        is_master = current_user.id == 1 or current_user.email == 'admin@perenniaai.com'
+        has_delete_permission = has_permission(current_user.id, 'leads.delete', db) or has_permission(current_user.id, 'leads.delete_all', db)
+
+        if not (is_master or has_delete_permission):
+            raise HTTPException(status_code=403, detail="Permission denied: leads.delete")
+
+        if not lead_ids:
+            raise HTTPException(status_code=400, detail="No lead IDs provided")
+
+        deleted_count = 0
+        errors = []
+
+        # Get table list once
+        from sqlalchemy import inspect
+        inspector = inspect(db.bind)
+        existing_tables = set(inspector.get_table_names())
+
+        tables_to_clean = [
+            ("activities", "lead_id"),
+            ("tasks", "lead_id"),
+            ("ai_tasks", "lead_id"),
+            ("notes", "lead_id"),
+            ("communications", "lead_id"),
+            ("email_reconciliation_queue", "lead_id"),
+            ("workflow_executions", "lead_id"),
+            ("workflow_sla_instances", "lead_id"),
+            ("workflow_sla_tasks", "lead_id"),
+            ("lead_profiles", "lead_id"),
+            ("circle_contacts", "lead_id"),
+            ("notifications", "lead_id"),
+            ("stage_history", "lead_id"),
+            ("conversation_messages", "lead_id"),
+            ("ai_conversation_messages", "lead_id"),
+            ("incoming_data_events", "lead_id"),
+            ("lead_source_tracking", "lead_id"),
+            ("purl_events", "lead_id"),
+            ("purl_workspaces", "lead_id"),
+        ]
+
+        for lead_id in lead_ids:
+            # Use savepoint for each lead so failures don't cascade
+            savepoint = db.begin_nested()
+            try:
+                lead = db.query(Lead).filter(Lead.id == lead_id).first()
+                if not lead:
+                    errors.append(f"Lead {lead_id} not found")
+                    savepoint.rollback()
+                    continue
+
+                # Delete related records using raw SQL
+                for table, column in tables_to_clean:
+                    if table in existing_tables:
+                        try:
+                            db.execute(text(f"DELETE FROM {table} WHERE {column} = :lead_id"), {"lead_id": lead_id})
+                        except Exception as te:
+                            logger.warning(f"Error cleaning {table} for lead {lead_id}: {te}")
+
+                # Unlink from loans instead of deleting
+                if "loans" in existing_tables:
+                    db.execute(text("UPDATE loans SET lead_id = NULL WHERE lead_id = :lead_id"), {"lead_id": lead_id})
+
+                # Delete the lead
+                db.delete(lead)
+                savepoint.commit()  # Commit the savepoint
+                deleted_count += 1
+
+            except Exception as e:
+                savepoint.rollback()  # Rollback only this lead's savepoint
+                errors.append(f"Failed to delete lead {lead_id}: {str(e)}")
+
+        # Final commit
         try:
-            loans_query = db.query(Loan).filter(
-                or_(
-                    func.lower(Loan.borrower_name).contains(search_term),
-                    func.lower(Loan.borrower_email).contains(search_term),
-                    func.lower(Loan.loan_number).contains(search_term),
-                    func.lower(Loan.property_address).contains(search_term)
-                )
-            ).limit(limit)
-
-            for loan in loans_query.all():
-                results.append({
-                    "id": loan.id,
-                    "type": "loan",
-                    "name": loan.borrower_name,
-                    "email": loan.borrower_email,
-                    "phone": None,
-                    "status": loan.status,
-                    "loan_number": loan.loan_number,
-                    "property_address": loan.property_address,
-                    "url": f"/loans/{loan.id}"
-                })
+            db.commit()
         except Exception as e:
-            logger.warning(f"Global search - loans error: {e}")
-
-        # Search Loan Team Members (contacts on loan transactions)
-        try:
-            team_members_query = db.query(LoanTeamMember).filter(
-                or_(
-                    func.lower(LoanTeamMember.name).contains(search_term),
-                    func.lower(LoanTeamMember.email).contains(search_term),
-                    func.lower(LoanTeamMember.company).contains(search_term)
-                )
-            ).limit(limit)
-
-            for member in team_members_query.all():
-                results.append({
-                    "id": member.id,
-                    "type": "contact",
-                    "name": member.name,
-                    "email": member.email,
-                    "phone": member.phone,
-                    "company": member.company,
-                    "role": member.role,
-                    "url": f"/loans/{member.loan_id}"  # Navigate to the associated loan
-                })
-        except Exception as e:
-            logger.warning(f"Global search - team members error: {e}")
-
-        # Search Referral Partners
-        try:
-            partners_query = db.query(ReferralPartner).filter(
-                or_(
-                    func.lower(ReferralPartner.name).contains(search_term),
-                    func.lower(ReferralPartner.email).contains(search_term),
-                    func.lower(ReferralPartner.company).contains(search_term),
-                    func.lower(ReferralPartner.contact_name).contains(search_term)
-                )
-            ).limit(limit)
-
-            for partner in partners_query.all():
-                results.append({
-                    "id": partner.id,
-                    "type": "partner",
-                    "name": partner.name or partner.contact_name,
-                    "email": partner.email,
-                    "phone": partner.phone,
-                    "company": partner.company or partner.business_name,
-                    "partner_type": partner.type or partner.category,
-                    "url": f"/referral-partners/{partner.id}"
-                })
-        except Exception as e:
-            logger.warning(f"Global search - partners error: {e}")
-
-        # Search Portfolio Clients (MUMClients - past funded loans)
-        try:
-            portfolio_query = db.query(MUMClient).filter(
-                or_(
-                    func.lower(MUMClient.client_name).contains(search_term),
-                    func.lower(MUMClient.email).contains(search_term),
-                    func.lower(MUMClient.phone).contains(search_term),
-                    func.lower(MUMClient.loan_number).contains(search_term)
-                )
-            ).limit(limit)
-
-            for client in portfolio_query.all():
-                results.append({
-                    "id": client.id,
-                    "type": "portfolio",
-                    "name": client.client_name,
-                    "email": client.email,
-                    "phone": client.phone,
-                    "loan_number": client.loan_number,
-                    "status": client.status,
-                    "url": f"/portfolio/{client.id}"
-                })
-        except Exception as e:
-            logger.warning(f"Global search - portfolio error: {e}")
-
-        # Sort results by relevance (exact name match first)
-        def relevance_score(item):
-            name = (item.get("name") or "").lower()
-            if name == search_term:
-                return 0  # Exact match
-            if name.startswith(search_term):
-                return 1  # Starts with
-            return 2  # Contains
-
-        results.sort(key=relevance_score)
+            db.rollback()
+            logger.error(f"Final commit failed: {e}")
 
         return {
-            "results": results[:limit],
-            "total": len(results),
-            "query": q
+            "success": True,
+            "deleted_count": deleted_count,
+            "errors": errors,
+            "message": f"Successfully deleted {deleted_count} leads" + (f" with {len(errors)} errors" if errors else "")
         }
 
+
+    @app.post("/api/v1/leads/bulk-update-status")
+    async def bulk_update_lead_status(
+        request: Request,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user_flexible)
+    ):
+        """
+        Bulk update status/stage for multiple leads.
+        Body: { "lead_ids": [1, 2, 3], "status": "Withdraw" }
+        """
+        logger.info(f"[bulk-update-status] Request received from user {current_user.id} ({current_user.email})")
+        try:
+            body = await request.json()
+            logger.info(f"[bulk-update-status] Request body: {body}")
+            lead_ids = body.get('lead_ids', body.get('ids', []))
+            new_status = body.get('status', body.get('stage'))
+
+            if isinstance(lead_ids, list) == False:
+                lead_ids = [lead_ids]
+            lead_ids = [int(id) for id in lead_ids]
+            logger.info(f"[bulk-update-status] Parsed {len(lead_ids)} lead IDs, new_status={new_status}")
+        except Exception as e:
+            logger.error(f"[bulk-update-status] Failed to parse request: {e}")
+            raise HTTPException(status_code=400, detail=f"Invalid request body: {str(e)}")
+
+        if not lead_ids:
+            raise HTTPException(status_code=400, detail="No lead IDs provided")
+
+        if not new_status:
+            raise HTTPException(status_code=400, detail="No status provided")
+
+        # PHASE 3: Check update permission (master users bypass)
+        is_master = current_user.id == 1 or current_user.email == 'admin@perenniaai.com'
+        if not is_master:
+            has_update_permission = has_permission(current_user.id, 'leads.update', db) or has_permission(current_user.id, 'leads.update_all', db)
+            if not has_update_permission:
+                raise HTTPException(status_code=403, detail="Permission denied: leads.update")
+
+        updated_count = 0
+        errors = []
+
+        for lead_id in lead_ids:
+            try:
+                # Apply permission filtering
+                query = db.query(Lead).filter(Lead.id == lead_id)
+                if not is_master:
+                    query = filter_leads_by_permissions(query, current_user, db)
+                lead = query.first()
+
+                if not lead:
+                    errors.append(f"Lead {lead_id} not found or access denied")
+                    continue
+
+                # Update the stage
+                lead.stage = new_status
+                lead.updated_at = datetime.utcnow()
+                updated_count += 1
+
+            except Exception as e:
+                errors.append(f"Failed to update lead {lead_id}: {str(e)}")
+
+        try:
+            db.commit()
+            logger.info(f"[bulk-update-status] Successfully committed. Updated {updated_count}, errors: {len(errors)}")
+        except Exception as e:
+            db.rollback()
+            logger.error(f"[bulk-update-status] Failed to commit: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to save changes: {str(e)}")
+
+        result = {
+            "success": True,
+            "updated_count": updated_count,
+            "new_status": new_status,
+            "errors": errors,
+            "message": f"Successfully updated {updated_count} leads to '{new_status}'" + (f" with {len(errors)} errors" if errors else "")
+        }
+        logger.info(f"[bulk-update-status] Returning result: {result}")
+        return result
+
+
+    @app.get("/api/v1/leads/{lead_id}")
+    async def get_lead(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
+        # Use the same permission filtering as the list endpoint
+        query = db.query(Lead).filter(Lead.id == lead_id)
+        query = filter_leads_by_permissions(query, current_user, db)
+        lead = query.first()
+        if not lead:
+            raise HTTPException(status_code=404, detail="Lead not found")
+
+        # Handle stage value - it might be an enum or a string depending on DB content
+        stage_value = None
+        if lead.stage:
+            stage_value = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage)
+
+        # Return dict to avoid Pydantic validation issues with enum
+        return {
+            "id": lead.id,
+            "name": lead.name,
+            "first_name": lead.first_name,
+            "last_name": lead.last_name,
+            "email": lead.email,
+            "phone": lead.phone,
+            "co_applicant_name": lead.co_applicant_name,
+            "co_applicant_email": lead.co_applicant_email,
+            "co_applicant_phone": lead.co_applicant_phone,
+            "preferred_communication": lead.preferred_communication,
+            "stage": stage_value,
+            "source": lead.source,
+            "ai_score": lead.ai_score,
+            "sentiment": lead.sentiment,
+            "next_action": lead.next_action,
+            "preapproval_amount": lead.preapproval_amount,
+            "credit_score": lead.credit_score,
+            "loan_type": lead.loan_type,
+            "notes": lead.notes,
+            "owner_id": lead.owner_id,
+            # Property Information
+            "address": lead.address,
+            "city": lead.city,
+            "state": lead.state,
+            "zip_code": lead.zip_code,
+            "property_type": lead.property_type,
+            "property_value": lead.property_value,
+            "down_payment": lead.down_payment,
+            # Financial Information
+            "employment_status": lead.employment_status,
+            "employer_name": getattr(lead, 'employer_name', None),
+            "annual_income": lead.annual_income,
+            "monthly_debts": lead.monthly_debts,
+            "first_time_buyer": lead.first_time_buyer,
+            # Metadata
+            "user_metadata": getattr(lead, 'user_metadata', None),
+            # Loan Details
+            "loan_number": lead.loan_number,
+            "loan_amount": lead.loan_amount,
+            "interest_rate": lead.interest_rate,
+            "loan_term": lead.loan_term,
+            "apr": lead.apr,
+            "points": lead.points,
+            "lock_date": lead.lock_date.isoformat() if lead.lock_date else None,
+            "lock_expiration": lead.lock_expiration.isoformat() if lead.lock_expiration else None,
+            "closing_date": lead.closing_date.isoformat() if lead.closing_date else None,
+            "lender": lead.lender,
+            "loan_officer": lead.loan_officer,
+            "processor": lead.processor,
+            "underwriter": lead.underwriter,
+            "appraisal_value": lead.appraisal_value,
+            "ltv": lead.ltv,
+            "dti": lead.dti,
+            "cltv": lead.cltv,
+            # Salesforce Sync Fields - Property Details
+            "occupancy_type": lead.occupancy_type,
+            "property_county": lead.property_county,
+            "property_ownership_type": lead.property_ownership_type,
+            "property_units": lead.property_units,
+            # Salesforce Sync Fields - 1st Loan Financial Details
+            "rate_type": lead.rate_type,
+            "monthly_payment": lead.monthly_payment,
+            "property_tax": lead.property_tax,
+            "hazard_insurance": lead.hazard_insurance,
+            "mortgage_insurance": lead.mortgage_insurance,
+            "hoa_amount": lead.hoa_amount,
+            "origination_fee": lead.origination_fee,
+            "estimated_prepaid_interest": lead.estimated_prepaid_interest,
+            "index_rate": lead.index_rate,
+            "margin": lead.margin,
+            # Salesforce Sync Fields - LTV/CLTV and Purpose
+            "loan_purpose": lead.loan_purpose,
+            "file_state": lead.file_state,
+            # Salesforce Sync Fields - 2nd Loan Details
+            "second_loan_amount": lead.second_loan_amount,
+            "second_loan_rate": lead.second_loan_rate,
+            "second_loan_payment": lead.second_loan_payment,
+            # Salesforce Sync Fields - Present vs Proposed Housing
+            "present_housing_expense": lead.present_housing_expense,
+            "proposed_housing_expense": lead.proposed_housing_expense,
+            "present_monthly_payment": lead.present_monthly_payment,
+            "proposed_monthly_payment": lead.proposed_monthly_payment,
+            # Timestamps
+            "created_at": lead.created_at.isoformat() if lead.created_at else None,
+            "updated_at": lead.updated_at.isoformat() if lead.updated_at else None,
+            "stage_changed_at": lead.stage_changed_at.isoformat() if lead.stage_changed_at else None,
+            # SLA Milestone Dates
+            "lead_received_date": lead.lead_received_date.isoformat() if lead.lead_received_date else None,
+            "first_contact_attempt_date": lead.first_contact_attempt_date.isoformat() if lead.first_contact_attempt_date else None,
+            "first_contact_successful_date": lead.first_contact_successful_date.isoformat() if lead.first_contact_successful_date else None,
+            "application_started_date": lead.application_started_date.isoformat() if lead.application_started_date else None,
+            "application_completed_date": lead.application_completed_date.isoformat() if lead.application_completed_date else None,
+            "preapproval_issued_date": lead.preapproval_issued_date.isoformat() if lead.preapproval_issued_date else None,
+        }
+
+
+    @app.get("/api/v1/leads/{lead_id}/documents")
+    async def get_lead_documents(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
+        """Get all documents associated with a lead"""
+        # Check lead exists and user has access
+        query = db.query(Lead).filter(Lead.id == lead_id)
+        query = filter_leads_by_permissions(query, current_user, db)
+        lead = query.first()
+        if not lead:
+            raise HTTPException(status_code=404, detail="Lead not found")
+
+        # Fetch documents for this lead
+        documents = db.query(Document).filter(Document.borrower_id == lead_id, Document.status == "active").all()
+
+        # Organize documents by category
+        categorized = {
+            "income_verification": [],
+            "credit_reports": [],
+            "property_documents": [],
+            "disclosures_forms": [],
+            "bank_statements": [],
+            "other": [],
+        }
+
+        category_mapping = {
+            "Income": "income_verification",
+            "Credit": "credit_reports",
+            "Property": "property_documents",
+            "Disclosures": "disclosures_forms",
+            "Assets": "bank_statements",
+            "Miscellaneous": "other",
+        }
+
+        for doc in documents:
+            doc_data = {
+                "id": doc.id,
+                "filename": doc.filename,
+                "original_filename": doc.original_filename,
+                "doc_type": doc.doc_type.value if hasattr(doc.doc_type, 'value') else str(doc.doc_type),
+                "doc_category": doc.doc_category.value if doc.doc_category and hasattr(doc.doc_category, 'value') else str(doc.doc_category) if doc.doc_category else None,
+                "file_size": doc.file_size,
+                "mime_type": doc.mime_type,
+                "uploaded_at": doc.uploaded_at.isoformat() if doc.uploaded_at else None,
+                "source": doc.source,
+            }
+
+            # Determine category
+            cat_key = "other"
+            if doc.doc_category:
+                cat_value = doc.doc_category.value if hasattr(doc.doc_category, 'value') else str(doc.doc_category)
+                cat_key = category_mapping.get(cat_value, "other")
+
+            categorized[cat_key].append(doc_data)
+
+        return {
+            "lead_id": lead_id,
+            "total_documents": len(documents),
+            "documents": categorized,
+        }
+
+
+    @app.patch("/api/v1/leads/{lead_id}")
+    async def update_lead(lead_id: int, lead_update: LeadUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
+        # Use the same permission filtering as the list endpoint
+        query = db.query(Lead).filter(Lead.id == lead_id)
+        query = filter_leads_by_permissions(query, current_user, db)
+        lead = query.first()
+        if not lead:
+            raise HTTPException(status_code=404, detail="Lead not found")
+
+        # PHASE 3: Check edit permission (edit_all or edit_own + ownership)
+        check_resource_access(
+            current_user.id,
+            lead.owner_id,
+            'leads.edit_all',
+            'leads.edit_own',
+            db
+        )
+
+        # Capture old status for workflow trigger
+        old_status = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage) if lead.stage else None
+
+        for key, value in lead_update.dict(exclude_unset=True).items():
+            setattr(lead, key, value)
+
+        # Recalculate AI score
+        lead.ai_score = calculate_lead_score(lead)
+        lead.updated_at = datetime.now(timezone.utc)
+
+        db.commit()
+        db.refresh(lead)
+        logger.info(f"Lead updated: {lead.name}")
+
+        # Trigger workflow if status changed
+        new_status = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage) if lead.stage else None
+        if old_status != new_status and new_status:
+            # Calculate duration in previous stage
+            duration_days = None
+            if lead.stage_changed_at:
+                duration_days = (datetime.now(timezone.utc) - lead.stage_changed_at.replace(tzinfo=timezone.utc)).days
+
+            # Track when stage changed for workflow day calculations
+            lead.stage_changed_at = datetime.now(timezone.utc)
+            lead.workflow_day = 0  # Reset workflow day counter
+
+            # Record stage change in history
+            stage_history = StageHistory(
+                entity_type='lead',
+                entity_id=lead.id,
+                lead_id=lead.id,
+                from_stage=old_status,
+                to_stage=new_status,
+                changed_at=datetime.now(timezone.utc),
+                changed_by_id=current_user.id,
+                duration_in_previous_stage=duration_days
+            )
+            db.add(stage_history)
+
+            db.commit()
+            db.refresh(lead)
+            logger.info(f"Stage changed for lead {lead.id}: {old_status} → {new_status}, stage_changed_at updated, history recorded")
+
+            try:
+                # Create status change event
+                status_change = LeadStatusChange(
+                    lead_id=lead.id,
+                    lead_name=lead.name,
+                    lead_email=lead.email,
+                    lead_phone=lead.phone,
+                    old_status=old_status or "None",
+                    new_status=new_status,
+                    loan_officer_id=current_user.id,
+                    loan_officer_name=current_user.full_name or current_user.email,
+                    loan_officer_email=current_user.email,
+                    loan_type=lead.loan_type if hasattr(lead, 'loan_type') else None,
+                    loan_amount=lead.loan_amount if hasattr(lead, 'loan_amount') else None,
+                    changed_at=datetime.now(timezone.utc)
+                )
+
+                # Process workflow
+                workflow_engine = LeadWorkflowEngine(db)
+                workflow_result = await workflow_engine.process_status_change(status_change)
+
+                # Execute actions
+                if workflow_result.get("actions"):
+                    action_executor = WorkflowActionExecutor(db)
+                    await action_executor.execute_actions(workflow_result["actions"])
+
+                logger.info(f"✅ Workflow triggered for {lead.name}: {old_status} → {new_status} ({workflow_result.get('action_count', 0)} actions)")
+            except Exception as e:
+                logger.error(f"⚠️ Workflow error for lead {lead.id}: {e}")
+                # Don't fail the update if workflow fails
+
+            # Track SLA milestone for stage change
+            try:
+                track_lead_stage_change(db, lead.id, old_status, new_status, current_user.id)
+                logger.info(f"SLA milestone tracked for lead {lead.id} stage change: {old_status} → {new_status}")
+            except Exception as e:
+                logger.warning(f"Failed to track SLA milestone for lead {lead.id}: {e}")
+
+            # Fire lead status change triggers for automated outreach (nurture, etc.)
+            try:
+                from routes.automated_outreach_routes import execute_trigger, TriggerType
+                asyncio.create_task(execute_trigger(
+                    trigger_type=TriggerType.LEAD_STATUS_CHANGE,
+                    lead_id=lead.id,
+                    context={"old_status": old_status, "new_status": new_status},
+                    db=db
+                ))
+                logger.info(f"Lead status change trigger fired for lead {lead.id}: {old_status} → {new_status}")
+            except Exception as trigger_error:
+                logger.error(f"Error firing lead status trigger: {trigger_error}")
+
+        # Handle stage value - it might be an enum or a string depending on DB content
+        stage_value = None
+        if lead.stage:
+            stage_value = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage)
+
+        # Return dict to avoid Pydantic validation issues with enum
+        return {
+            "id": lead.id,
+            "name": lead.name,
+            "email": lead.email,
+            "phone": lead.phone,
+            "stage": stage_value,
+            "source": lead.source,
+            "ai_score": lead.ai_score,
+            "sentiment": lead.sentiment,
+            "next_action": lead.next_action,
+            "preapproval_amount": lead.preapproval_amount,
+            "credit_score": lead.credit_score,
+            "loan_type": lead.loan_type,
+            "notes": lead.notes,
+            "owner_id": lead.owner_id,
+            "created_at": lead.created_at.isoformat() if lead.created_at else None,
+            "updated_at": lead.updated_at.isoformat() if lead.updated_at else None,
+        }
+
+    @app.delete("/api/v1/leads/{lead_id}", status_code=204)
+    async def delete_lead(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
+        # PHASE 3: Check delete permission (master users bypass)
+        is_master = current_user.id == 1 or current_user.email == 'admin@perenniaai.com'
+        if not is_master:
+            require_permission_or_403(current_user.id, 'leads.delete', db)
+
+        # Use the same permission filtering as the list endpoint
+        query = db.query(Lead).filter(Lead.id == lead_id)
+        query = filter_leads_by_permissions(query, current_user, db)
+        lead = query.first()
+        if not lead:
+            raise HTTPException(status_code=404, detail="Lead not found")
+
+        lead_name = lead.name
+
+        try:
+            # Delete related records first using raw SQL connection
+            # This avoids SQLAlchemy transaction issues
+            from sqlalchemy import inspect
+
+            # Get list of existing tables
+            inspector = inspect(db.bind)
+            existing_tables = set(inspector.get_table_names())
+
+            # Define tables and their foreign key columns to lead
+            tables_to_clean = [
+                ("activities", "lead_id"),
+                ("tasks", "lead_id"),
+                ("ai_tasks", "lead_id"),
+                ("notes", "lead_id"),
+                ("communications", "lead_id"),
+                ("email_reconciliation_queue", "lead_id"),
+                ("workflow_executions", "lead_id"),
+                ("lead_profiles", "lead_id"),
+                ("circle_contacts", "lead_id"),
+                ("notifications", "lead_id"),
+                ("stage_history", "lead_id"),
+                ("conversation_messages", "lead_id"),
+                ("ai_conversation_messages", "lead_id"),
+                ("incoming_data_events", "lead_id"),
+            ]
+
+            # Build a single SQL statement that deletes from all existing tables
+            delete_sqls = []
+            for table, column in tables_to_clean:
+                if table in existing_tables:
+                    delete_sqls.append(f"DELETE FROM {table} WHERE {column} = {lead_id}")
+
+            # Nullify loan references if loans table exists
+            if "loans" in existing_tables:
+                delete_sqls.append(f"UPDATE loans SET lead_id = NULL WHERE lead_id = {lead_id}")
+
+            # Add the final lead delete
+            delete_sqls.append(f"DELETE FROM leads WHERE id = {lead_id}")
+
+            # Execute all as a single raw SQL transaction
+            raw_conn = db.bind.raw_connection()
+            try:
+                cursor = raw_conn.cursor()
+                for sql in delete_sqls:
+                    try:
+                        cursor.execute(sql)
+                    except Exception as e:
+                        logger.debug(f"Delete statement skipped: {sql[:50]}... - {e}")
+                        # Continue with next statement
+                raw_conn.commit()
+            finally:
+                raw_conn.close()
+
+            logger.info(f"Lead deleted: {lead_name}")
+            return None
+
+        except Exception as e:
+            logger.error(f"Error deleting lead {lead_id}: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"Failed to delete lead: {str(e)}")
+
+
+    @app.post("/api/v1/leads/claim-orphans")
+    async def claim_orphan_leads(
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+    ):
+        """
+        Claim all orphan leads (leads with no owner) and assign them to the current user.
+        This fixes the AI chat issue where leads aren't visible because they have no owner.
+        Also claims loans that don't belong to any valid user.
+        """
+        try:
+            # Update leads with NULL owner_id to current user
+            result = db.execute(
+                text("UPDATE leads SET owner_id = :user_id WHERE owner_id IS NULL"),
+                {"user_id": current_user.id}
+            )
+            leads_claimed = result.rowcount
+
+            # Update loans with NULL loan_officer_id OR loan_officer_id not matching any user
+            # This catches loans with invalid/orphaned loan_officer_ids
+            result = db.execute(
+                text("""
+                    UPDATE loans
+                    SET loan_officer_id = :user_id
+                    WHERE loan_officer_id IS NULL
+                       OR loan_officer_id NOT IN (SELECT id FROM users)
+                       OR loan_officer_id != :user_id
+                """),
+                {"user_id": current_user.id}
+            )
+            loans_claimed = result.rowcount
+
+            db.commit()
+
+            # Get totals
+            result = db.execute(
+                text("""
+                    SELECT
+                        (SELECT COUNT(*) FROM leads WHERE owner_id = :user_id) as leads,
+                        (SELECT COUNT(*) FROM loans WHERE loan_officer_id = :user_id) as loans
+                """),
+                {"user_id": current_user.id}
+            )
+            totals = result.fetchone()
+
+            logger.info(f"User {current_user.email} claimed {leads_claimed} leads, {loans_claimed} loans")
+
+            return {
+                "success": True,
+                "message": f"Successfully claimed {leads_claimed} leads and {loans_claimed} loans",
+                "claimed": {
+                    "leads": leads_claimed,
+                    "loans": loans_claimed
+                },
+                "totals": {
+                    "leads": totals[0],
+                    "loans": totals[1]
+                }
+            }
+
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error claiming orphan leads: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to claim orphan leads: {str(e)}")
+
+
+    # Extracted to routes/mum_activity_routes.py
+    # (calculate-referral-scores, convert-to-mum, mum-clients CRUD, activities CRUD)
+
+    # ============================================================================
+    # DATABASE INITIALIZATION
+    # ============================================================================
+
+    # Configuration: Skip auto-create tables in production
+    # Tables should be managed via Alembic migrations in production
+    AUTO_CREATE_TABLES = os.getenv("AUTO_CREATE_TABLES", "false").lower() == "true"
+
+
+    def init_db():
+        """
+        Initialize database tables.
+
+        In production (ENVIRONMENT=production), this skips Base.metadata.create_all()
+        to prevent accidental schema changes. Use Alembic migrations instead.
+
+        Set AUTO_CREATE_TABLES=true to force table creation (development only).
+        """
+        try:
+            # Import models to register them with Base before create_all
+            import salesforce_integration_models  # Salesforce integration tables
+
+            # Skip auto-create in production unless explicitly enabled
+            if ENVIRONMENT == "production" and not AUTO_CREATE_TABLES:
+                logger.info("ℹ️ Skipping Base.metadata.create_all() in production - use Alembic migrations")
+            else:
+                Base.metadata.create_all(bind=engine)
+                logger.info("✅ Database tables created successfully")
+
+            # Explicitly create Salesforce integration tables if they don't exist
+            # Use individual transactions for each table to ensure partial success
+            try:
+                with engine.connect() as conn:
+                    conn.execute(text("""
+                        CREATE TABLE IF NOT EXISTS integration_profiles (
+                            id SERIAL PRIMARY KEY,
+                            user_id INTEGER NOT NULL,
+                            provider VARCHAR(50) NOT NULL DEFAULT 'salesforce',
+                            status VARCHAR(50) NOT NULL DEFAULT 'disconnected',
+                            access_token_encrypted TEXT,
+                            refresh_token_encrypted TEXT,
+                            instance_url TEXT,
+                            sf_org_id VARCHAR(100),
+                            sf_user_id VARCHAR(100),
+                            sf_username VARCHAR(255),
+                            connected_at TIMESTAMP,
+                            last_sync_at TIMESTAMP,
+                            last_error TEXT,
+                            field_map_version INTEGER DEFAULT 1,
+                            sync_enabled BOOLEAN DEFAULT TRUE,
+                            sync_interval_minutes INTEGER DEFAULT 15,
+                            sync_direction VARCHAR(20) DEFAULT 'bidirectional',
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            UNIQUE(user_id, provider)
+                        )
+                    """))
+                    conn.commit()
+                    logger.info("✅ integration_profiles table created/verified")
+            except Exception as e:
+                logger.warning(f"integration_profiles table creation: {e}")
+
+            try:
+                with engine.connect() as conn:
+                    conn.execute(text("""
+                        CREATE TABLE IF NOT EXISTS oauth_states (
+                            id SERIAL PRIMARY KEY,
+                            state_token VARCHAR(255) UNIQUE NOT NULL,
+                            user_id INTEGER NOT NULL,
+                            provider VARCHAR(50) NOT NULL,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            expires_at TIMESTAMP NOT NULL,
+                            used BOOLEAN DEFAULT FALSE,
+                            return_url TEXT,
+                            state_metadata JSONB
+                        )
+                    """))
+                    conn.commit()
+                    logger.info("✅ oauth_states table created/verified")
+            except Exception as e:
+                logger.warning(f"oauth_states table creation: {e}")
+
+            # Create oauth_pkce_store table for PKCE verifier storage
+            try:
+                with engine.connect() as conn:
+                    conn.execute(text("""
+                        CREATE TABLE IF NOT EXISTS oauth_pkce_store (
+                            id SERIAL PRIMARY KEY,
+                            state VARCHAR(255) UNIQUE NOT NULL,
+                            code_verifier TEXT NOT NULL,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            expires_at TIMESTAMP NOT NULL
+                        )
+                    """))
+                    conn.commit()
+                    logger.info("✅ oauth_pkce_store table created/verified")
+            except Exception as e:
+                logger.warning(f"oauth_pkce_store table creation: {e}")
+
+            # Run schema migrations for existing tables (PostgreSQL only)
+            # Note: SQLite tables are already created with all columns via Base.metadata.create_all()
+            try:
+                # Only run PostgreSQL-specific migrations if using PostgreSQL
+                if not DATABASE_URL.startswith("sqlite"):
+                    with engine.connect() as conn:
+                        # Add email_verified column if it doesn't exist
+                        conn.execute(text("""
+                            DO $$
+                            BEGIN
+                                IF NOT EXISTS (
+                                    SELECT 1 FROM information_schema.columns
+                                    WHERE table_name='users' AND column_name='email_verified'
+                                ) THEN
+                                    ALTER TABLE users ADD COLUMN email_verified BOOLEAN DEFAULT FALSE;
+                                END IF;
+                            END $$;
+                        """))
+
+                        # Add title column to users table if it doesn't exist (for job title/position)
+                        conn.execute(text("""
+                            DO $$
+                            BEGIN
+                                IF NOT EXISTS (
+                                    SELECT 1 FROM information_schema.columns
+                                    WHERE table_name='users' AND column_name='title'
+                                ) THEN
+                                    ALTER TABLE users ADD COLUMN title TEXT;
+                                END IF;
+                            END $$;
+                        """))
+
+                        # Add company_logo_url column to users table if it doesn't exist
+                        conn.execute(text("""
+                            DO $$
+                            BEGIN
+                                IF NOT EXISTS (
+                                    SELECT 1 FROM information_schema.columns
+                                    WHERE table_name='users' AND column_name='company_logo_url'
+                                ) THEN
+                                    ALTER TABLE users ADD COLUMN company_logo_url TEXT;
+                                END IF;
+                            END $$;
+                        """))
+
+                        # Add headshot_url column to users table if it doesn't exist
+                        conn.execute(text("""
+                            DO $$
+                            BEGIN
+                                IF NOT EXISTS (
+                                    SELECT 1 FROM information_schema.columns
+                                    WHERE table_name='users' AND column_name='headshot_url'
+                                ) THEN
+                                    ALTER TABLE users ADD COLUMN headshot_url TEXT;
+                                END IF;
+                            END $$;
+                        """))
+
+                        # Add team_name column to users table if it doesn't exist
+                        conn.execute(text("""
+                            DO $$
+                            BEGIN
+                                IF NOT EXISTS (
+                                    SELECT 1 FROM information_schema.columns
+                                    WHERE table_name='users' AND column_name='team_name'
+                                ) THEN
+                                    ALTER TABLE users ADD COLUMN team_name TEXT;
+                                END IF;
+                            END $$;
+                        """))
+
+                        conn.commit()
+                        logger.info("✅ User profile columns added/verified")
+
+                        # Add new Lead columns if they don't exist
+                        conn.execute(text("""
+                            DO $$
+                        BEGIN
+                            -- Property Information
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='address') THEN
+                                ALTER TABLE leads ADD COLUMN address VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='city') THEN
+                                ALTER TABLE leads ADD COLUMN city VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='state') THEN
+                                ALTER TABLE leads ADD COLUMN state VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='zip_code') THEN
+                                ALTER TABLE leads ADD COLUMN zip_code VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='property_type') THEN
+                                ALTER TABLE leads ADD COLUMN property_type VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='property_value') THEN
+                                ALTER TABLE leads ADD COLUMN property_value FLOAT;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='down_payment') THEN
+                                ALTER TABLE leads ADD COLUMN down_payment FLOAT;
+                            END IF;
+                            -- Financial Information
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='employment_status') THEN
+                                ALTER TABLE leads ADD COLUMN employment_status VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='annual_income') THEN
+                                ALTER TABLE leads ADD COLUMN annual_income FLOAT;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='monthly_debts') THEN
+                                ALTER TABLE leads ADD COLUMN monthly_debts FLOAT;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='first_time_buyer') THEN
+                                ALTER TABLE leads ADD COLUMN first_time_buyer BOOLEAN DEFAULT FALSE;
+                            END IF;
+                            -- Loan Information
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='loan_number') THEN
+                                ALTER TABLE leads ADD COLUMN loan_number VARCHAR;
+                            END IF;
+                            -- Loan Details
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='loan_amount') THEN
+                                ALTER TABLE leads ADD COLUMN loan_amount FLOAT;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='interest_rate') THEN
+                                ALTER TABLE leads ADD COLUMN interest_rate FLOAT;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='loan_term') THEN
+                                ALTER TABLE leads ADD COLUMN loan_term INTEGER;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='apr') THEN
+                                ALTER TABLE leads ADD COLUMN apr FLOAT;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='points') THEN
+                                ALTER TABLE leads ADD COLUMN points FLOAT;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='lock_date') THEN
+                                ALTER TABLE leads ADD COLUMN lock_date TIMESTAMP;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='lock_expiration') THEN
+                                ALTER TABLE leads ADD COLUMN lock_expiration TIMESTAMP;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='closing_date') THEN
+                                ALTER TABLE leads ADD COLUMN closing_date TIMESTAMP;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='lender') THEN
+                                ALTER TABLE leads ADD COLUMN lender VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='loan_officer') THEN
+                                ALTER TABLE leads ADD COLUMN loan_officer VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='processor') THEN
+                                ALTER TABLE leads ADD COLUMN processor VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='underwriter') THEN
+                                ALTER TABLE leads ADD COLUMN underwriter VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='appraisal_value') THEN
+                                ALTER TABLE leads ADD COLUMN appraisal_value FLOAT;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='ltv') THEN
+                                ALTER TABLE leads ADD COLUMN ltv FLOAT;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='dti') THEN
+                                ALTER TABLE leads ADD COLUMN dti FLOAT;
+                            END IF;
+                            -- Lead tracking date columns
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='application_started_date') THEN
+                                ALTER TABLE leads ADD COLUMN application_started_date TIMESTAMP;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='application_completed_date') THEN
+                                ALTER TABLE leads ADD COLUMN application_completed_date TIMESTAMP;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='credit_pulled_date') THEN
+                                ALTER TABLE leads ADD COLUMN credit_pulled_date TIMESTAMP;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='preapproval_issued_date') THEN
+                                ALTER TABLE leads ADD COLUMN preapproval_issued_date TIMESTAMP;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='property_address') THEN
+                                ALTER TABLE leads ADD COLUMN property_address VARCHAR;
+                            END IF;
+                            -- Buying timeline and risk profile (enum as VARCHAR for flexibility)
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='buying_timeline_category') THEN
+                                ALTER TABLE leads ADD COLUMN buying_timeline_category VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='borrower_risk_profile') THEN
+                                ALTER TABLE leads ADD COLUMN borrower_risk_profile VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='target_payment') THEN
+                                ALTER TABLE leads ADD COLUMN target_payment FLOAT;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='expected_purchase_date') THEN
+                                ALTER TABLE leads ADD COLUMN expected_purchase_date TIMESTAMP;
+                            END IF;
+                            -- Referral scoring columns
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='referral_score') THEN
+                                ALTER TABLE leads ADD COLUMN referral_score INTEGER DEFAULT 0;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='referral_source_score') THEN
+                                ALTER TABLE leads ADD COLUMN referral_source_score INTEGER DEFAULT 0;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='employment_referral_flag') THEN
+                                ALTER TABLE leads ADD COLUMN employment_referral_flag BOOLEAN DEFAULT FALSE;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='manager_flag') THEN
+                                ALTER TABLE leads ADD COLUMN manager_flag BOOLEAN DEFAULT FALSE;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='employees_managed') THEN
+                                ALTER TABLE leads ADD COLUMN employees_managed INTEGER;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='leadership_level') THEN
+                                ALTER TABLE leads ADD COLUMN leadership_level VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='company_size') THEN
+                                ALTER TABLE leads ADD COLUMN company_size VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='employer_name') THEN
+                                ALTER TABLE leads ADD COLUMN employer_name VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='industry') THEN
+                                ALTER TABLE leads ADD COLUMN industry VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='circle_of_cash_flow_map') THEN
+                                ALTER TABLE leads ADD COLUMN circle_of_cash_flow_map JSON;
+                            END IF;
+                            -- Workflow columns
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='current_workflow_id') THEN
+                                ALTER TABLE leads ADD COLUMN current_workflow_id INTEGER;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='workflow_day') THEN
+                                ALTER TABLE leads ADD COLUMN workflow_day INTEGER DEFAULT 0;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='last_workflow_action') THEN
+                                ALTER TABLE leads ADD COLUMN last_workflow_action TIMESTAMP;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='nurture_month') THEN
+                                ALTER TABLE leads ADD COLUMN nurture_month INTEGER DEFAULT 0;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='user_metadata') THEN
+                                ALTER TABLE leads ADD COLUMN user_metadata JSON;
+                            END IF;
+                        END $$;
+                        """))
+
+                        # Add email_intake_id to tasks table for document intake
+                        conn.execute(text("""
+                            DO $$
+                            BEGIN
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='tasks' AND column_name='email_intake_id') THEN
+                                    ALTER TABLE tasks ADD COLUMN email_intake_id INTEGER;
+                                END IF;
+                            END $$;
+                        """))
+
+                        # Create email_intakes table for document intake
+                        conn.execute(text("""
+                            CREATE TABLE IF NOT EXISTS email_intakes (
+                                id SERIAL PRIMARY KEY,
+                                message_id VARCHAR UNIQUE,
+                                from_address VARCHAR NOT NULL,
+                                from_name VARCHAR,
+                                subject VARCHAR,
+                                body_preview TEXT,
+                                received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                matched_loan_id INTEGER REFERENCES loans(id),
+                                matched_lead_id INTEGER REFERENCES leads(id),
+                                match_status VARCHAR DEFAULT 'pending',
+                                match_confidence FLOAT,
+                                match_method VARCHAR,
+                                matched_by_user_id INTEGER REFERENCES users(id),
+                                matched_at TIMESTAMP,
+                                processing_status VARCHAR DEFAULT 'pending',
+                                processing_started_at TIMESTAMP,
+                                processing_completed_at TIMESTAMP,
+                                processing_error TEXT,
+                                raw_email_data JSON,
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            );
+                            CREATE INDEX IF NOT EXISTS ix_email_intakes_match_status ON email_intakes(match_status);
+                            CREATE INDEX IF NOT EXISTS ix_email_intakes_received_at ON email_intakes(received_at);
+                        """))
+
+                        # Create attachment_intakes table
+                        conn.execute(text("""
+                            CREATE TABLE IF NOT EXISTS attachment_intakes (
+                                id SERIAL PRIMARY KEY,
+                                email_intake_id INTEGER NOT NULL REFERENCES email_intakes(id),
+                                filename VARCHAR NOT NULL,
+                                content_type VARCHAR,
+                                file_size INTEGER,
+                                storage_path VARCHAR,
+                                storage_url VARCHAR,
+                                classification VARCHAR,
+                                classification_confidence FLOAT,
+                                extracted_data JSON,
+                                processing_status VARCHAR DEFAULT 'pending',
+                                processing_error TEXT,
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            );
+                            CREATE INDEX IF NOT EXISTS ix_attachment_intakes_email_intake_id ON attachment_intakes(email_intake_id);
+                        """))
+
+                        # Create classified_documents table
+                        conn.execute(text("""
+                            CREATE TABLE IF NOT EXISTS classified_documents (
+                                id SERIAL PRIMARY KEY,
+                                loan_id INTEGER REFERENCES loans(id),
+                                lead_id INTEGER REFERENCES leads(id),
+                                category VARCHAR NOT NULL,
+                                sub_category VARCHAR,
+                                document_name VARCHAR NOT NULL,
+                                file_path VARCHAR,
+                                file_url VARCHAR,
+                                file_size INTEGER,
+                                mime_type VARCHAR,
+                                upload_source VARCHAR DEFAULT 'manual',
+                                source_email_intake_id INTEGER REFERENCES email_intakes(id),
+                                source_attachment_id INTEGER REFERENCES attachment_intakes(id),
+                                extracted_data JSON,
+                                ai_classification_confidence FLOAT,
+                                verified_by_user_id INTEGER REFERENCES users(id),
+                                verified_at TIMESTAMP,
+                                expiration_date DATE,
+                                notes TEXT,
+                                version INTEGER DEFAULT 1,
+                                is_current BOOLEAN DEFAULT TRUE,
+                                created_by_id INTEGER REFERENCES users(id),
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            );
+                            CREATE INDEX IF NOT EXISTS ix_classified_documents_loan_id ON classified_documents(loan_id);
+                            CREATE INDEX IF NOT EXISTS ix_classified_documents_category ON classified_documents(category);
+                        """))
+
+                        # Add new Loan columns for rate lock intelligence, appraisal, etc.
+                        conn.execute(text("""
+                            DO $$
+                            BEGIN
+                                -- Appraisal tracking columns
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='appraisal_ordered_date') THEN
+                                    ALTER TABLE loans ADD COLUMN appraisal_ordered_date TIMESTAMP;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='appraisal_scheduled_date') THEN
+                                    ALTER TABLE loans ADD COLUMN appraisal_scheduled_date TIMESTAMP;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='appraisal_completed_date') THEN
+                                    ALTER TABLE loans ADD COLUMN appraisal_completed_date TIMESTAMP;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='appraisal_value') THEN
+                                    ALTER TABLE loans ADD COLUMN appraisal_value FLOAT;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='lock_expiration_date') THEN
+                                    ALTER TABLE loans ADD COLUMN lock_expiration_date TIMESTAMP;
+                                END IF;
+                                -- Rate Lock Intelligence columns
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='rate_lock_status') THEN
+                                    ALTER TABLE loans ADD COLUMN rate_lock_status VARCHAR;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='rate_lock_recommendation') THEN
+                                    ALTER TABLE loans ADD COLUMN rate_lock_recommendation VARCHAR;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='lock_term_days') THEN
+                                    ALTER TABLE loans ADD COLUMN lock_term_days INTEGER;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='float_down_available') THEN
+                                    ALTER TABLE loans ADD COLUMN float_down_available BOOLEAN DEFAULT FALSE;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='float_down_terms') THEN
+                                    ALTER TABLE loans ADD COLUMN float_down_terms VARCHAR;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='extension_cost_estimate') THEN
+                                    ALTER TABLE loans ADD COLUMN extension_cost_estimate FLOAT;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='volatility_score') THEN
+                                    ALTER TABLE loans ADD COLUMN volatility_score INTEGER DEFAULT 50;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='borrower_risk_profile') THEN
+                                    ALTER TABLE loans ADD COLUMN borrower_risk_profile VARCHAR;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='lock_score') THEN
+                                    ALTER TABLE loans ADD COLUMN lock_score INTEGER;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='lock_decision_date') THEN
+                                    ALTER TABLE loans ADD COLUMN lock_decision_date TIMESTAMP;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='lock_decision_notes') THEN
+                                    ALTER TABLE loans ADD COLUMN lock_decision_notes TEXT;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='last_rate_check') THEN
+                                    ALTER TABLE loans ADD COLUMN last_rate_check TIMESTAMP;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='rate_lock_history') THEN
+                                    ALTER TABLE loans ADD COLUMN rate_lock_history JSON;
+                                END IF;
+                                -- Property and workflow columns
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='property_city') THEN
+                                    ALTER TABLE loans ADD COLUMN property_city VARCHAR;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='property_state') THEN
+                                    ALTER TABLE loans ADD COLUMN property_state VARCHAR;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='property_zip') THEN
+                                    ALTER TABLE loans ADD COLUMN property_zip VARCHAR;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='lender') THEN
+                                    ALTER TABLE loans ADD COLUMN lender VARCHAR;
+                                END IF;
+                                -- Milestone dates
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='initial_disclosures_sent_date') THEN
+                                    ALTER TABLE loans ADD COLUMN initial_disclosures_sent_date TIMESTAMP;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='initial_disclosures_signed_date') THEN
+                                    ALTER TABLE loans ADD COLUMN initial_disclosures_signed_date TIMESTAMP;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='cd_received_signed_date') THEN
+                                    ALTER TABLE loans ADD COLUMN cd_received_signed_date TIMESTAMP;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='final_closing_package_sent_date') THEN
+                                    ALTER TABLE loans ADD COLUMN final_closing_package_sent_date TIMESTAMP;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='contract_received_date') THEN
+                                    ALTER TABLE loans ADD COLUMN contract_received_date TIMESTAMP;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='loan_estimate_sent_date') THEN
+                                    ALTER TABLE loans ADD COLUMN loan_estimate_sent_date TIMESTAMP;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='conditional_approval_date') THEN
+                                    ALTER TABLE loans ADD COLUMN conditional_approval_date TIMESTAMP;
+                                END IF;
+                                -- AMR tracking
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='last_amr_date') THEN
+                                    ALTER TABLE loans ADD COLUMN last_amr_date TIMESTAMP;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='next_amr_date') THEN
+                                    ALTER TABLE loans ADD COLUMN next_amr_date TIMESTAMP;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='refi_opportunity_score') THEN
+                                    ALTER TABLE loans ADD COLUMN refi_opportunity_score INTEGER;
+                                END IF;
+                                -- Workflow columns
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='current_workflow_id') THEN
+                                    ALTER TABLE loans ADD COLUMN current_workflow_id INTEGER;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='last_workflow_action') THEN
+                                    ALTER TABLE loans ADD COLUMN last_workflow_action TIMESTAMP;
+                                END IF;
+                                -- Team member fields
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='loan_officer_name') THEN
+                                    ALTER TABLE loans ADD COLUMN loan_officer_name VARCHAR;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='loan_officer_email') THEN
+                                    ALTER TABLE loans ADD COLUMN loan_officer_email VARCHAR;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='processor_email') THEN
+                                    ALTER TABLE loans ADD COLUMN processor_email VARCHAR;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='underwriter_email') THEN
+                                    ALTER TABLE loans ADD COLUMN underwriter_email VARCHAR;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='closer') THEN
+                                    ALTER TABLE loans ADD COLUMN closer VARCHAR;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='closer_email') THEN
+                                    ALTER TABLE loans ADD COLUMN closer_email VARCHAR;
+                                END IF;
+                            END $$;
+                        """))
+
+                        # Create api_keys table if it doesn't exist
+                        conn.execute(text("""
+                            CREATE TABLE IF NOT EXISTS api_keys (
+                                id SERIAL PRIMARY KEY,
+                                key VARCHAR UNIQUE NOT NULL,
+                                name VARCHAR NOT NULL,
+                                user_id INTEGER NOT NULL REFERENCES users(id),
+                                is_active BOOLEAN DEFAULT TRUE,
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                last_used_at TIMESTAMP
+                            );
+                        """))
+                        conn.execute(text("""
+                            CREATE INDEX IF NOT EXISTS ix_api_keys_key ON api_keys(key);
+                        """))
+
+                        # Add missing columns to referral_partners table
+                        conn.execute(text("""
+                            DO $$
+                            BEGIN
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='name') THEN
+                                    ALTER TABLE referral_partners ADD COLUMN name VARCHAR NOT NULL DEFAULT 'Unknown';
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='company') THEN
+                                    ALTER TABLE referral_partners ADD COLUMN company VARCHAR;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='type') THEN
+                                    ALTER TABLE referral_partners ADD COLUMN type VARCHAR;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='phone') THEN
+                                    ALTER TABLE referral_partners ADD COLUMN phone VARCHAR;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='email') THEN
+                                    ALTER TABLE referral_partners ADD COLUMN email VARCHAR;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='referrals_in') THEN
+                                    ALTER TABLE referral_partners ADD COLUMN referrals_in INTEGER DEFAULT 0;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='referrals_out') THEN
+                                    ALTER TABLE referral_partners ADD COLUMN referrals_out INTEGER DEFAULT 0;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='closed_loans') THEN
+                                    ALTER TABLE referral_partners ADD COLUMN closed_loans INTEGER DEFAULT 0;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='volume') THEN
+                                    ALTER TABLE referral_partners ADD COLUMN volume FLOAT DEFAULT 0.0;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='reciprocity_score') THEN
+                                    ALTER TABLE referral_partners ADD COLUMN reciprocity_score FLOAT DEFAULT 0.0;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='status') THEN
+                                    ALTER TABLE referral_partners ADD COLUMN status VARCHAR DEFAULT 'active';
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='loyalty_tier') THEN
+                                    ALTER TABLE referral_partners ADD COLUMN loyalty_tier VARCHAR DEFAULT 'bronze';
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='last_interaction') THEN
+                                    ALTER TABLE referral_partners ADD COLUMN last_interaction TIMESTAMP;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='notes') THEN
+                                    ALTER TABLE referral_partners ADD COLUMN notes TEXT;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='created_at') THEN
+                                    ALTER TABLE referral_partners ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+                                END IF;
+                            END $$;
+                        """))
+
+                        # Add missing columns to leads table
+                        conn.execute(text("""
+                            DO $$
+                            BEGIN
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='co_applicant_name') THEN
+                                    ALTER TABLE leads ADD COLUMN co_applicant_name VARCHAR;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='co_applicant_email') THEN
+                                    ALTER TABLE leads ADD COLUMN co_applicant_email VARCHAR;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='co_applicant_phone') THEN
+                                    ALTER TABLE leads ADD COLUMN co_applicant_phone VARCHAR;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='loan_officer') THEN
+                                    ALTER TABLE leads ADD COLUMN loan_officer VARCHAR;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='processor') THEN
+                                    ALTER TABLE leads ADD COLUMN processor VARCHAR;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='underwriter') THEN
+                                    ALTER TABLE leads ADD COLUMN underwriter VARCHAR;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='loan_number') THEN
+                                    ALTER TABLE leads ADD COLUMN loan_number VARCHAR;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='lender') THEN
+                                    ALTER TABLE leads ADD COLUMN lender VARCHAR;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='lock_date') THEN
+                                    ALTER TABLE leads ADD COLUMN lock_date TIMESTAMP;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='lock_expiration') THEN
+                                    ALTER TABLE leads ADD COLUMN lock_expiration TIMESTAMP;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='closing_date') THEN
+                                    ALTER TABLE leads ADD COLUMN closing_date TIMESTAMP;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='apr') THEN
+                                    ALTER TABLE leads ADD COLUMN apr FLOAT;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='points') THEN
+                                    ALTER TABLE leads ADD COLUMN points FLOAT;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='user_metadata') THEN
+                                    ALTER TABLE leads ADD COLUMN user_metadata JSON;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='address') THEN
+                                    ALTER TABLE leads ADD COLUMN address VARCHAR;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='city') THEN
+                                    ALTER TABLE leads ADD COLUMN city VARCHAR;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='state') THEN
+                                    ALTER TABLE leads ADD COLUMN state VARCHAR;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='zip_code') THEN
+                                    ALTER TABLE leads ADD COLUMN zip_code VARCHAR;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='property_type') THEN
+                                    ALTER TABLE leads ADD COLUMN property_type VARCHAR;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='property_value') THEN
+                                    ALTER TABLE leads ADD COLUMN property_value FLOAT;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='down_payment') THEN
+                                    ALTER TABLE leads ADD COLUMN down_payment FLOAT;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='employment_status') THEN
+                                    ALTER TABLE leads ADD COLUMN employment_status VARCHAR;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='annual_income') THEN
+                                    ALTER TABLE leads ADD COLUMN annual_income FLOAT;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='monthly_debts') THEN
+                                    ALTER TABLE leads ADD COLUMN monthly_debts FLOAT;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='first_time_buyer') THEN
+                                    ALTER TABLE leads ADD COLUMN first_time_buyer BOOLEAN DEFAULT FALSE;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='loan_amount') THEN
+                                    ALTER TABLE leads ADD COLUMN loan_amount FLOAT;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='interest_rate') THEN
+                                    ALTER TABLE leads ADD COLUMN interest_rate FLOAT;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='loan_term') THEN
+                                    ALTER TABLE leads ADD COLUMN loan_term INTEGER;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='referral_partner_id') THEN
+                                    ALTER TABLE leads ADD COLUMN referral_partner_id INTEGER;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='updated_at') THEN
+                                    ALTER TABLE leads ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+                                END IF;
+                            END $$;
+                        """))
+
+                        # Create user_permissions table if it doesn't exist
+                        conn.execute(text("""
+                            CREATE TABLE IF NOT EXISTS user_permissions (
+                                id SERIAL PRIMARY KEY,
+                                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                                permission_key VARCHAR(255) NOT NULL,
+                                granted BOOLEAN DEFAULT TRUE,
+                                granted_by INTEGER REFERENCES users(id),
+                                granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                expires_at TIMESTAMP,
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                CONSTRAINT unique_user_permission UNIQUE (user_id, permission_key)
+                            );
+                            CREATE INDEX IF NOT EXISTS idx_user_permissions_user ON user_permissions(user_id);
+                            CREATE INDEX IF NOT EXISTS idx_user_permissions_composite ON user_permissions(user_id, permission_key, granted);
+                        """))
+
+                        # Add all missing enum values to loanstage type
+                        # Must use raw connection with autocommit - ALTER TYPE ADD VALUE cannot run in a transaction
+                        try:
+                            raw_conn = engine.raw_connection()
+                            raw_conn.set_isolation_level(0)  # AUTOCOMMIT
+                            raw_cursor = raw_conn.cursor()
+                            for loanstage_val in [
+                                "APPLICATION", "DISCLOSED", "PROCESSING", "SUBMITTED",
+                                "UNDERWRITING", "UW_RECEIVED", "CONDITIONAL_APPROVAL",
+                                "APPROVED", "SUSPENDED", "CTC", "CLEAR_TO_CLOSE",
+                                "CLOSING", "DOCS", "DOCS_OUT", "FUNDED",
+                                "CANCELLED", "DENIED", "DEAD", "NURTURE",
+                                "WITHDRAWN", "DOES_NOT_QUALIFY", "Docs Out",
+                            ]:
+                                try:
+                                    raw_cursor.execute(f"ALTER TYPE loanstage ADD VALUE IF NOT EXISTS '{loanstage_val}'")
+                                except Exception:
+                                    pass
+                            raw_cursor.close()
+                            raw_conn.close()
+                            logger.info("✅ Ensured all loanstage enum values exist")
+                        except Exception as enum_e:
+                            logger.warning(f"⚠️ loanstage enum migration: {enum_e}")
+
+                        # Add role_responsibilities column for dynamic workflow roles
+                        conn.execute(text("""
+                            DO $$
+                            BEGIN
+                                IF NOT EXISTS (
+                                    SELECT 1 FROM information_schema.columns
+                                    WHERE table_name='workflow_day_configs' AND column_name='role_responsibilities'
+                                ) THEN
+                                    ALTER TABLE workflow_day_configs ADD COLUMN role_responsibilities JSONB DEFAULT '{}'::jsonb;
+                                END IF;
+                            END $$;
+                        """))
+
+                        # Add role_id column to workflow_role_assignments for dynamic roles
+                        conn.execute(text("""
+                            DO $$
+                            BEGIN
+                                IF NOT EXISTS (
+                                    SELECT 1 FROM information_schema.columns
+                                    WHERE table_name='workflow_role_assignments' AND column_name='role_id'
+                                ) THEN
+                                    ALTER TABLE workflow_role_assignments ADD COLUMN role_id INTEGER REFERENCES onboarding_roles(id);
+                                END IF;
+                            END $$;
+                        """))
+
+                        # Make the legacy 'role' column nullable for dynamic role support
+                        conn.execute(text("""
+                            DO $$
+                            BEGIN
+                                ALTER TABLE workflow_role_assignments ALTER COLUMN role DROP NOT NULL;
+                            EXCEPTION
+                                WHEN others THEN NULL;
+                            END $$;
+                        """))
+
+                        # Add AM/PM communication method columns for Lead Purchase workflow
+                        conn.execute(text("""
+                            DO $$
+                            BEGIN
+                                -- Add phone_am_enabled column
+                                IF NOT EXISTS (
+                                    SELECT 1 FROM information_schema.columns
+                                    WHERE table_name='workflow_day_configs' AND column_name='phone_am_enabled'
+                                ) THEN
+                                    ALTER TABLE workflow_day_configs ADD COLUMN phone_am_enabled BOOLEAN DEFAULT FALSE;
+                                END IF;
+                                -- Add phone_pm_enabled column
+                                IF NOT EXISTS (
+                                    SELECT 1 FROM information_schema.columns
+                                    WHERE table_name='workflow_day_configs' AND column_name='phone_pm_enabled'
+                                ) THEN
+                                    ALTER TABLE workflow_day_configs ADD COLUMN phone_pm_enabled BOOLEAN DEFAULT FALSE;
+                                END IF;
+                                -- Add text_am_enabled column
+                                IF NOT EXISTS (
+                                    SELECT 1 FROM information_schema.columns
+                                    WHERE table_name='workflow_day_configs' AND column_name='text_am_enabled'
+                                ) THEN
+                                    ALTER TABLE workflow_day_configs ADD COLUMN text_am_enabled BOOLEAN DEFAULT FALSE;
+                                END IF;
+                                -- Add text_pm_enabled column
+                                IF NOT EXISTS (
+                                    SELECT 1 FROM information_schema.columns
+                                    WHERE table_name='workflow_day_configs' AND column_name='text_pm_enabled'
+                                ) THEN
+                                    ALTER TABLE workflow_day_configs ADD COLUMN text_pm_enabled BOOLEAN DEFAULT FALSE;
+                                END IF;
+                            END $$;
+                        """))
+
+                        conn.commit()
+                        logger.info("✅ Schema migrations applied (PostgreSQL)")
+
+                        # Create telephony tables if they don't exist
+                        conn.execute(text("""
+                            CREATE TABLE IF NOT EXISTS agent_telephony_settings (
+                                id SERIAL PRIMARY KEY,
+                                user_id INTEGER UNIQUE NOT NULL REFERENCES users(id),
+                                cell_phone VARCHAR,
+                                business_caller_id VARCHAR,
+                                dialer_enabled BOOLEAN DEFAULT TRUE,
+                                max_calls_per_day INTEGER DEFAULT 200,
+                                max_concurrent_sessions INTEGER DEFAULT 1,
+                                auto_advance BOOLEAN DEFAULT TRUE,
+                                pause_between_calls INTEGER DEFAULT 3,
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            );
+
+                            CREATE TABLE IF NOT EXISTS verified_caller_ids (
+                                id SERIAL PRIMARY KEY,
+                                phone_number VARCHAR UNIQUE NOT NULL,
+                                friendly_name VARCHAR,
+                                verification_status VARCHAR DEFAULT 'pending',
+                                twilio_sid VARCHAR,
+                                user_id INTEGER REFERENCES users(id),
+                                verified_at TIMESTAMP,
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            );
+
+                            CREATE TABLE IF NOT EXISTS contact_dnc_status (
+                                id SERIAL PRIMARY KEY,
+                                phone_number VARCHAR UNIQUE NOT NULL,
+                                reason VARCHAR,
+                                added_by_id INTEGER REFERENCES users(id),
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            );
+                            CREATE INDEX IF NOT EXISTS idx_dnc_phone ON contact_dnc_status(phone_number);
+
+                            DROP TABLE IF EXISTS active_calls;
+                            CREATE TABLE IF NOT EXISTS active_calls (
+                                id SERIAL PRIMARY KEY,
+                                contact_phone VARCHAR NOT NULL,
+                                agent_id INTEGER REFERENCES users(id),
+                                call_sid VARCHAR,
+                                locked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                expires_at TIMESTAMP NOT NULL
+                            );
+                            CREATE INDEX IF NOT EXISTS idx_active_calls_phone ON active_calls(contact_phone);
+
+                            CREATE TABLE IF NOT EXISTS call_logs (
+                                id SERIAL PRIMARY KEY,
+                                agent_id INTEGER REFERENCES users(id),
+                                contact_phone VARCHAR NOT NULL,
+                                contact_name VARCHAR,
+                                lead_id INTEGER,
+                                loan_id INTEGER,
+                                referral_partner_id INTEGER,
+                                mum_client_id INTEGER,
+                                session_id INTEGER,
+                                session_task_id INTEGER,
+                                call_sid VARCHAR,
+                                caller_id_used VARCHAR,
+                                start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                end_time TIMESTAMP,
+                                duration_seconds INTEGER,
+                                outcome VARCHAR,
+                                failure_reason VARCHAR,
+                                disposition VARCHAR,
+                                notes TEXT,
+                                ai_note_summary TEXT,
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            );
+
+                            -- Add missing columns to existing call_logs table
+                            ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS referral_partner_id INTEGER;
+                            ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS mum_client_id INTEGER;
+                            ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS session_id INTEGER;
+                            ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS session_task_id INTEGER;
+                            ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS caller_id_used VARCHAR;
+                            ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS start_time TIMESTAMP;
+                            ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS end_time TIMESTAMP;
+                            ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS failure_reason VARCHAR;
+                            ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+
+                            -- Migrate old column data if they exist
+                            UPDATE call_logs SET start_time = started_at WHERE start_time IS NULL AND started_at IS NOT NULL;
+                            UPDATE call_logs SET end_time = ended_at WHERE end_time IS NULL AND ended_at IS NOT NULL;
+                        """))
+                        conn.commit()
+                        logger.info("✅ Telephony tables created/verified")
+
+                        # Add concierge_responsible column to workflow_day_configs
+                        conn.execute(text("""
+                            DO $$
+                            BEGIN
+                                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='workflow_day_configs') THEN
+                                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='workflow_day_configs' AND column_name='concierge_responsible') THEN
+                                        ALTER TABLE workflow_day_configs ADD COLUMN concierge_responsible BOOLEAN DEFAULT FALSE;
+                                    END IF;
+                                END IF;
+                            END $$;
+                        """))
+                        conn.commit()
+                        logger.info("✅ Workflow concierge_responsible column added")
+
+                        # Add weekly task scheduling columns to workflow_day_configs
+                        # These support recurring tasks like Monday Weekly Updates
+                        conn.execute(text("""
+                            DO $$
+                            BEGIN
+                                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='workflow_day_configs') THEN
+                                    -- repeat_weekly: Flag to mark task as weekly recurring
+                                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='workflow_day_configs' AND column_name='repeat_weekly') THEN
+                                        ALTER TABLE workflow_day_configs ADD COLUMN repeat_weekly BOOLEAN DEFAULT FALSE;
+                                    END IF;
+                                    -- repeat_day_of_week: Which day to repeat (0=Monday, 6=Sunday)
+                                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='workflow_day_configs' AND column_name='repeat_day_of_week') THEN
+                                        ALTER TABLE workflow_day_configs ADD COLUMN repeat_day_of_week INTEGER;
+                                    END IF;
+                                    -- repeat_until_status: JSON array of statuses that stop the recurrence
+                                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='workflow_day_configs' AND column_name='repeat_until_status') THEN
+                                        ALTER TABLE workflow_day_configs ADD COLUMN repeat_until_status JSONB DEFAULT '[]'::jsonb;
+                                    END IF;
+                                END IF;
+                            END $$;
+                        """))
+                        conn.commit()
+                        logger.info("✅ Weekly task scheduling columns added to workflow_day_configs")
+
+                        # Add concierge to TaskResponsibility enum type
+                        conn.execute(text("""
+                            DO $$
+                            BEGIN
+                                -- Check if taskresponsibility enum type exists and add concierge value
+                                IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'taskresponsibility') THEN
+                                    IF NOT EXISTS (
+                                        SELECT 1 FROM pg_enum WHERE enumlabel = 'concierge'
+                                        AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'taskresponsibility')
+                                    ) THEN
+                                        ALTER TYPE taskresponsibility ADD VALUE IF NOT EXISTS 'concierge';
+                                    END IF;
+                                END IF;
+                            EXCEPTION
+                                WHEN duplicate_object THEN NULL;
+                            END $$;
+                        """))
+                        conn.commit()
+                        logger.info("✅ TaskResponsibility enum updated with concierge")
+
+                        # Fix invalid Application stage values
+                        result = conn.execute(text("""
+                            UPDATE leads
+                            SET stage = 'Application'
+                            WHERE stage = 'Application'
+                        """))
+                        if result.rowcount > 0:
+                            logger.info(f"✅ Fixed {result.rowcount} leads with invalid Application stage")
+
+                        # Fix null stages - set to New
+                        result2 = conn.execute(text("""
+                            UPDATE leads
+                            SET stage = 'New'
+                            WHERE stage IS NULL
+                        """))
+                        if result2.rowcount > 0:
+                            logger.info(f"✅ Fixed {result2.rowcount} leads with null stage")
+
+                        conn.commit()
+            except Exception as e:
+                logger.warning(f"⚠️ Schema migration note: {e}")
+
+            # Run comprehensive column migration for all missing columns
+            try:
+                from migrations.add_all_missing_columns import run_migration
+                run_migration()
+                logger.info("✅ Comprehensive column migration completed")
+            except Exception as e:
+                logger.warning(f"⚠️ Comprehensive migration note: {e}")
+
+            return True
+        except Exception as e:
+            logger.error(f"❌ Database initialization failed: {e}")
+            return False
+
+    def create_sample_data(db: Session):
+        """Create sample data for testing"""
+        try:
+            # Check if data already exists - check for both demo and admin users
+            existing_demo = db.query(User).filter(User.email == "admin@perenniaai.com").first()
+            existing_admin = db.query(User).filter(User.email == "admin@perenniaai.com").first()
+
+            if existing_demo or existing_admin:
+                logger.info("Sample data already exists")
+                return
+
+            # Create demo branch
+            branch = Branch(
+                name="Main Office",
+                company="Demo Mortgage Company",
+                nmls_id="123456"
+            )
+            db.add(branch)
+            db.commit()
+
+            # Create demo user
+            demo_user = User(
+                email="admin@perenniaai.com",
+                hashed_password=get_password_hash("demo123"),
+                full_name="Demo User",
+                role="loan_officer",
+                branch_id=branch.id
+            )
+            db.add(demo_user)
+            db.commit()
+
+            # Create sample leads
+            sample_leads = [
+                Lead(
+                    name="John Smith",
+                    email="john.smith@email.com",
+                    phone="555-0101",
+                    stage=LeadStage.NEW,
+                    source="Website",
+                    loan_type="Purchase",
+                    preapproval_amount=450000,
+                    credit_score=750,
+                    debt_to_income=0.35,
+                    owner_id=demo_user.id,
+                    ai_score=85,
+                    sentiment="positive",
+                    next_action="Schedule initial consultation"
+                ),
+                Lead(
+                    name="Sarah Johnson",
+                    email="sarah.j@email.com",
+                    phone="555-0102",
+                    stage=LeadStage.PROSPECT,
+                    source="Referral",
+                    loan_type="Refinance",
+                    preapproval_amount=350000,
+                    credit_score=720,
+                    debt_to_income=0.40,
+                    owner_id=demo_user.id,
+                    ai_score=78,
+                    sentiment="positive",
+                    next_action="Send pre-qualification letter"
+                ),
+                Lead(
+                    name="Mike Williams",
+                    email="mike.w@email.com",
+                    phone="555-0103",
+                    stage=LeadStage.Application,
+                    source="Zillow",
+                    loan_type="Purchase",
+                    preapproval_amount=525000,
+                    credit_score=680,
+                    debt_to_income=0.42,
+                    owner_id=demo_user.id,
+                    ai_score=65,
+                    sentiment="neutral",
+                    next_action="Collect additional documentation"
+                )
+            ]
+
+            for lead in sample_leads:
+                db.add(lead)
+            db.commit()
+
+            # Create sample loans
+            sample_loans = [
+                Loan(
+                    loan_number="L2024-001",
+                    borrower_name="Emily Davis",
+                    amount=400000,
+                    stage=LoanStage.PROCESSING,
+                    program="Conventional",
+                    loan_type="Purchase",
+                    rate=6.875,
+                    term=360,
+                    property_address="123 Main St, Anytown, CA",
+                    closing_date=datetime.now(timezone.utc) + timedelta(days=25),
+                    loan_officer_id=demo_user.id,
+                    processor="Jane Processor",
+                    days_in_stage=5,
+                    sla_status="on-track"
+                ),
+                Loan(
+                    loan_number="L2024-002",
+                    borrower_name="Robert Brown",
+                    amount=550000,
+                    stage=LoanStage.UW_RECEIVED,
+                    program="FHA",
+                    loan_type="Purchase",
+                    rate=7.125,
+                    term=360,
+                    property_address="456 Oak Ave, Somewhere, CA",
+                    closing_date=datetime.now(timezone.utc) + timedelta(days=18),
+                    loan_officer_id=demo_user.id,
+                    processor="John Processor",
+                    underwriter="Sarah UW",
+                    days_in_stage=3,
+                    sla_status="on-track"
+                )
+            ]
+
+            for loan in sample_loans:
+                loan.ai_insights = generate_ai_insights(loan)
+                db.add(loan)
+            db.commit()
+
+            # Create sample tasks
+            sample_tasks = [
+                AITask(
+                    title="Review appraisal for L2024-001",
+                    description="Appraisal came in at $395,000 - need to discuss with borrower",
+                    type=TaskType.HUMAN_NEEDED,
+                    category="Documentation",
+                    priority="high",
+                    ai_confidence=85,
+                    borrower_name="Emily Davis",
+                    loan_id=sample_loans[0].id,
+                    assigned_to_id=demo_user.id,
+                    due_date=datetime.now(timezone.utc) + timedelta(days=1)
+                ),
+                AITask(
+                    title="Follow up on income verification",
+                    description="Waiting on 2023 W2 from borrower",
+                    type=TaskType.IN_PROGRESS,
+                    category="Documentation",
+                    priority="medium",
+                    ai_confidence=92,
+                    borrower_name="Robert Brown",
+                    loan_id=sample_loans[1].id,
+                    assigned_to_id=demo_user.id,
+                    due_date=datetime.now(timezone.utc) + timedelta(days=3)
+                )
+            ]
+
+            for task in sample_tasks:
+                db.add(task)
+            db.commit()
+
+            # Create sample referral partners
+            sample_partners = [
+                ReferralPartner(
+                    name="Jane Realtor",
+                    company="Premier Realty",
+                    type="Real Estate Agent",
+                    phone="555-0200",
+                    email="jane@premierrealty.com",
+                    referrals_in=15,
+                    closed_loans=8,
+                    volume=3200000,
+                    loyalty_tier="gold",
+                    status="active"
+                ),
+                ReferralPartner(
+                    name="Bob Builder",
+                    company="Custom Homes Inc",
+                    type="Builder",
+                    phone="555-0201",
+                    email="bob@customhomes.com",
+                    referrals_in=8,
+                    closed_loans=5,
+                    volume=2100000,
+                    loyalty_tier="silver",
+                    status="active"
+                )
+            ]
+
+            for partner in sample_partners:
+                db.add(partner)
+            db.commit()
+
+            # Create sample MUM clients
+            sample_mum = [
+                MUMClient(
+                    name="Previous Borrower 1",
+                    loan_number="L2023-045",
+                    original_close_date=datetime.now(timezone.utc) - timedelta(days=365),
+                    days_since_funding=365,
+                    original_rate=7.5,
+                    current_rate=6.875,
+                    loan_balance=380000,
+                    refinance_opportunity=True,
+                    estimated_savings=2375,
+                    status="opportunity"
+                )
+            ]
+
+            for mum in sample_mum:
+                db.add(mum)
+            db.commit()
+
+            logger.info("✅ Sample data created successfully")
+            logger.info(f"   Admin user: admin@perenniaai.com")
+            logger.info(f"   Created {len(sample_leads)} leads, {len(sample_loans)} loans, {len(sample_tasks)} tasks")
+
+        except Exception as e:
+            logger.error(f"❌ Sample data creation failed: {e}")
+            db.rollback()
+
+    # Extracted to routes/ai_underwriter_routes.py
+    # (POST /api/v1/ai-underwriter/ask - AI mortgage Q&A)
+
+    # Extracted to routes/db_migration_routes.py
+    # (add-purl-system, add-email-monitor, add-morning-checkin, add-rate-sheets)
+
+    # ============================================================================
+    # API KEY HELPER FUNCTIONS
+    # ============================================================================
+
+    def generate_api_key() -> str:
+        """Generate a secure API key with prefix 'sk_'"""
+        import secrets
+        random_part = secrets.token_urlsafe(32)
+        return f"sk_{random_part}"
+
+    # ============================================================================
+    # AI HELPER FUNCTIONS
+    # ============================================================================
+
+    def generate_ai_insights(loan: Loan) -> str:
+        """Generate AI insights for a loan (simple rule-based for now)"""
+        insights = []
+
+        if loan.days_in_stage and loan.days_in_stage > 10:
+            stage_name = loan.stage.value if hasattr(loan.stage, 'value') else str(loan.stage) if loan.stage else 'unknown'
+            insights.append(f"⚠️ Loan has been in {stage_name} stage for {loan.days_in_stage} days")
+
+        if loan.closing_date:
+            try:
+                # Handle both date and datetime objects
+                if hasattr(loan.closing_date, 'tzinfo'):
+                    closing_dt = loan.closing_date if loan.closing_date.tzinfo else loan.closing_date.replace(tzinfo=timezone.utc)
+                else:
+                    # It's a date object, convert to datetime
+                    closing_dt = datetime.combine(loan.closing_date, datetime.min.time()).replace(tzinfo=timezone.utc)
+                if (closing_dt - datetime.now(timezone.utc)).days < 7:
+                    insights.append("🔥 Closing date approaching - prioritize tasks")
+            except Exception:
+                pass  # Skip closing date insight if there's any issue
+
+        if loan.rate and loan.rate > 7.0:
+            insights.append("💰 Higher rate loan - consider rate lock strategies")
+
+        if not insights:
+            insights.append("✅ Loan progressing normally")
+
+        return " | ".join(insights)
+
+    def calculate_lead_score(lead: Lead) -> int:
+        """Calculate AI score for a lead"""
+        score = 50
+
+        if lead.credit_score:
+            if lead.credit_score >= 740:
+                score += 30
+            elif lead.credit_score >= 680:
+                score += 20
+            elif lead.credit_score >= 620:
+                score += 10
+            else:
+                score -= 10
+
+        if lead.preapproval_amount and lead.preapproval_amount > 0:
+            score += 15
+
+        if lead.email:
+            score += 5
+
+        if lead.phone:
+            score += 5
+
+        if lead.debt_to_income:
+            if lead.debt_to_income < 0.36:
+                score += 10
+            elif lead.debt_to_income > 0.50:
+                score -= 15
+
+        return min(max(score, 0), 100)
+
+    # ============================================================================
+    # DATA RECONCILIATION ENGINE (DRE) - AI EXTRACTION
+    # ============================================================================
+
+    def classify_email_content(content: str, subject: str) -> Dict[str, Any]:
+        """Use AI to classify email content and determine category"""
+
+        if not openai_client:
+            logger.warning("OpenAI client not initialized - using fallback classification")
+            # Fallback: Use keyword matching to classify
+            content_lower = content.lower()
+            subject_lower = subject.lower()
+
+            if any(word in subject_lower or word in content_lower for word in ['loan', 'mortgage', 'borrower', 'closing', 'rate lock']):
+                return {"category": "loan_update", "subcategory": "general", "confidence": 0.5}
+            else:
+                return {"category": "loan_update", "subcategory": "general", "confidence": 0.3}
+
+        try:
+            response = openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": """You are an email classification expert for mortgage loan processing.
+
+    FIRST: Determine if this email is related to the mortgage/lending business.
+    If the email is about ANY of these, classify as "unrelated":
+    - Software updates, tech newsletters, product announcements
+    - Marketing/promotional emails not about mortgage services
+    - Personal emails, social media notifications
+    - General news, politics, entertainment
+    - Subscriptions, newsletters unrelated to mortgage industry
+    - Internal company announcements not about loans
+
+    ONLY classify as mortgage-related if the email contains:
+    - Loan numbers, borrower names, property addresses
+    - Loan status updates, milestone changes
+    - Rate locks, appraisals, title, insurance
+    - Closing documents, CDs, funding
+    - Lead inquiries about getting a mortgage
+
+    Categories (ONLY use if mortgage-related):
+    - lead_update: New lead information or lead status changes
+    - loan_update: Active loan milestone updates
+    - rate_lock: Rate lock confirmations or expirations
+    - appraisal: Appraisal scheduling or results
+    - title: Title work, clear to close
+    - insurance: HOI binders, insurance updates
+    - closing: Closing date/time, CD delivery
+    - document: Document receipt confirmations
+    - portfolio: Servicing, escrow, tax updates
+    - unrelated: NOT mortgage-related (use this liberally for anything that's not clearly about a mortgage transaction)
+
+    Return JSON: {"category": "...", "subcategory": "...", "confidence": 0.0-1.0}"""
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Subject: {subject}\n\nContent: {content[:1000]}"
+                    }
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.3
+            )
+
+            result = json.loads(response.choices[0].message.content)
+            return result
+        except Exception as e:
+            logger.error(f"Email classification error: {e}")
+            # Return loan_update with low confidence so email still gets processed
+            return {"category": "loan_update", "subcategory": "error", "confidence": 0.3}
+
+    def extract_loan_fields(content: str, category: str) -> Dict[str, Dict[str, Any]]:
+        """Extract structured loan fields from email content"""
+
+        if not openai_client:
+            logger.warning("OpenAI client not initialized - cannot extract loan fields, returning empty")
+            return {}
+
+        try:
+            response = openai_client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": f"""Extract mortgage loan fields from this {category} email.
+
+    **CRITICAL - BORROWER NAME EXTRACTION:**
+    You MUST extract the borrower name. Look for these patterns:
+    1. "Borrower:  LastName" or "Borrower: FirstName LastName"
+    2. "Borrower(s): Name1 and Name2"
+    3. Subject line patterns like "Loan # XXX - LastName -" or "[LastName-LoanNumber]"
+    4. Email signatures or references to "the borrower"
+    If you see text like "Borrower:  Spink" - extract "Spink" as borrower_name!
+
+    Extract any present fields:
+    - loan_number: string (look for patterns like RCA#, Loan #, file #)
+    - borrower_name: string (**REQUIRED** - extract from Borrower: field, subject line, or any reference)
+    - coborrower_name: string (if present)
+    - property_address: string
+    - property_city: string
+    - property_state: string
+    - property_zip: string
+    - loan_amount: float
+    - program: string (e.g., "FHA 30 Yr Fixed", "VA 30 Yr Fixed", "Conv 30 Yr Fixed")
+    - term: integer (loan term in years, e.g., 30)
+    - rate: float (as decimal, e.g., 6.125)
+    - rate_lock_date: ISO date
+    - lock_expiration: ISO date
+    - appraisal_ordered_date: ISO date
+    - appraisal_scheduled_date: ISO date
+    - appraisal_completed_date: ISO date
+    - appraisal_value: float
+    - closing_scheduled_date: ISO date
+    - closing_date: ISO datetime
+    - milestone: string (e.g., "RateLocked", "AppraisalOrdered", "ClearToClose", "InspectionCompleted")
+    - documents_received: list of strings
+    - lender: string
+    - loan_officer_name: string
+    - loan_officer_email: string
+    - realtor_name: string
+    - title_company: string
+
+    For each field found, return:
+    {{"field_name": {{"value": actual_value, "confidence": 0.0-1.0}}}}
+
+    Return JSON object. Only include fields you found. Use null for missing."""
+                    },
+                    {
+                        "role": "user",
+                        "content": content[:3000]  # Increased to capture more content
+                    }
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.2
+            )
+
+            fields = json.loads(response.choices[0].message.content)
+            logger.info(f"Extracted fields: {list(fields.keys())}")
+            return fields
+        except Exception as e:
+            logger.error(f"Field extraction error: {e}")
+            return {}
+
+    def extract_borrower_from_subject(subject: str) -> Optional[str]:
+        """Extract borrower name from email subject line as fallback"""
+        import re
+        if not subject:
+            return None
+
+        # Pattern 1: "FirstName LastName RCA0000006026" - Full name before loan number
+        # e.g., "Emma Spink RCA0000006026 - Accepted Electronic Consent"
+        match = re.search(r'^([A-Za-z]+(?:\s+[A-Za-z]+)+)\s+[A-Z]{2,3}\d{7,}', subject)
+        if match:
+            return match.group(1).strip()
+
+        # Pattern 2: "Closing Docs Downloaded, FirstName LastName, RCA..."
+        # e.g., "Closing Docs Downloaded, Kelly M Capps, RCA0000010910"
+        match = re.search(r',\s*([A-Za-z]+(?:\s+[A-Za-z]+)+)\s*,\s*[A-Z]{2,3}\d+', subject)
+        if match:
+            return match.group(1).strip()
+
+        # Pattern 3: "LastName - RCA0000011023" format
+        # e.g., "Davis - RCA0000011023 Signing Completed"
+        match = re.search(r'([A-Za-z]+)\s*-\s*[A-Z]{2,3}\d{7,}', subject)
+        if match:
+            return match.group(1).strip()
+
+        # Pattern 4: "Loan # XXX - LastName -" or "Loan # XXX - LastName - Status"
+        match = re.search(r'Loan\s*#?\s*\w+\s*-\s*([A-Za-z]+)\s*-', subject, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+
+        # Pattern 5: "[LastName-LoanNumber]" like "[Spink-RCA0000006026]"
+        match = re.search(r'\[([A-Za-z]+)-\w+\]', subject)
+        if match:
+            return match.group(1).strip()
+
+        # Pattern 6: "Disclosures for FirstName LastName, RCA..."
+        # e.g., "CMG Mortgage... - Disclosures for John Whitten, RCA0000006456"
+        match = re.search(r'Disclosures for\s+([A-Za-z]+(?:\s+[A-Za-z]+)+)\s*,', subject, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+
+        # Pattern 7: "Package Sent, RCA..." - check body instead
+        # Pattern 8: "for FirstName LastName were" - generic
+        match = re.search(r'for\s+([A-Za-z]+(?:\s+[A-Za-z]+)+)\s+were', subject, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+
+        return None
+
+    def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str, Any]:
+        """Match extracted fields to existing CRM entities
+
+        Enhanced matching includes:
+        - Loan number exact and partial matching
+        - Borrower name matching (primary and co-borrower)
+        - Last name matching for spouse/family identification
+        - Email and phone matching for leads
+        - Combined first_name + last_name support
+        """
+
+        match_results = {
+            "entity_type": None,
+            "entity_id": None,
+            "confidence": 0.0,
+            "candidates": []
+        }
+
+        def get_last_name(full_name: str) -> str:
+            """Extract last name from full name"""
+            if not full_name:
+                return ""
+            parts = full_name.strip().split()
+            return parts[-1].lower() if parts else ""
+
+        def names_match(name1: str, name2: str) -> tuple[bool, float]:
+            """Check if names match - returns (is_match, confidence)
+
+            Handles various name formats:
+            - "First Last" vs "First Last" (exact)
+            - "First Last" vs "Last, First" (reversed with comma)
+            - Partial matches (one contains the other)
+            - Last name only matches (family members)
+            """
+            if not name1 or not name2:
+                return False, 0.0
+            n1 = name1.lower().strip()
+            n2 = name2.lower().strip()
+
+            # Exact match
+            if n1 == n2:
+                return True, 0.95
+
+            # One contains the other (partial name match)
+            if n1 in n2 or n2 in n1:
+                return True, 0.80
+
+            # Handle "Last, First" vs "First Last" format
+            # Normalize both names to "first last" format for comparison
+            def normalize_name(name: str) -> set:
+                """Extract name parts, handling 'Last, First' and 'First Last' formats"""
+                # Remove common suffixes/prefixes
+                name = name.lower().strip()
+                # Split by comma first (handles "Last, First")
+                if ',' in name:
+                    parts = [p.strip() for p in name.split(',')]
+                    # Reverse if comma format: "Last, First" -> ["First", "Last"]
+                    parts = list(reversed(parts))
+                else:
+                    parts = name.split()
+                # Return as set for comparison (ignores order)
+                return set(p for p in parts if len(p) > 1)  # Ignore single letter initials
+
+            parts1 = normalize_name(n1)
+            parts2 = normalize_name(n2)
+
+            # If at least 2 parts match (first and last name), consider it a match
+            common_parts = parts1 & parts2
+            if len(common_parts) >= 2:
+                return True, 0.90  # High confidence for matching first AND last name
+
+            # If just the last name matches (1 common part that's likely the last name)
+            if len(common_parts) == 1:
+                # Check if the common part is the last name
+                ln1 = get_last_name(name1)
+                ln2 = get_last_name(name2)
+                if ln1 and ln2 and ln1 == ln2:
+                    return True, 0.75  # Last name match (family member)
+
+            # Last name match fallback (using original get_last_name)
+            ln1, ln2 = get_last_name(name1), get_last_name(name2)
+            if ln1 and ln2 and ln1 == ln2:
+                return True, 0.75
+
+            return False, 0.0
+
+        def normalize_phone(phone: str) -> str:
+            """Normalize phone number for comparison"""
+            if not phone:
+                return ""
+            return ''.join(c for c in phone if c.isdigit())[-10:]  # Last 10 digits
+
+        def normalize_email(email: str) -> str:
+            """Normalize email for comparison"""
+            if not email:
+                return ""
+            return email.lower().strip()
+
+        # Build combined borrower name from first_name + last_name if not already present
+        borrower_name = None
+        if "borrower_name" in fields and fields["borrower_name"].get("value"):
+            borrower_name = fields["borrower_name"]["value"]
+        elif "first_name" in fields or "last_name" in fields:
+            first = fields.get("first_name", {}).get("value", "") or ""
+            last = fields.get("last_name", {}).get("value", "") or ""
+            if first or last:
+                borrower_name = f"{first} {last}".strip()
+                logger.info(f"Built borrower_name from first_name + last_name: '{borrower_name}'")
+
+        # Extract email and phone from fields
+        extracted_email = None
+        extracted_phone = None
+        if "borrower_email" in fields and fields["borrower_email"].get("value"):
+            extracted_email = normalize_email(fields["borrower_email"]["value"])
+        if "borrower_phone" in fields and fields["borrower_phone"].get("value"):
+            extracted_phone = normalize_phone(fields["borrower_phone"]["value"])
+
+        logger.info(f"=" * 60)
+        logger.info(f"MATCH_ENTITY DEBUG - Starting match process")
+        logger.info(f"=" * 60)
+        logger.info(f"Input fields: {list(fields.keys()) if fields else 'None'}")
+        logger.info(f"Extracted borrower_name: '{borrower_name}'")
+        logger.info(f"Extracted email: '{extracted_email}'")
+        logger.info(f"Extracted phone: '{extracted_phone}'")
+
+        # Collect all potential loan numbers from various fields
+        loan_numbers_to_try = []
+        if "loan_number" in fields and fields["loan_number"].get("value"):
+            loan_numbers_to_try.append(str(fields["loan_number"]["value"]).strip())
+        if "file_number" in fields and fields["file_number"].get("value"):
+            loan_numbers_to_try.append(str(fields["file_number"]["value"]).strip())
+        if "cmg_file_number" in fields and fields["cmg_file_number"].get("value"):
+            loan_numbers_to_try.append(str(fields["cmg_file_number"]["value"]).strip())
+        if "lender_loan_number" in fields and fields["lender_loan_number"].get("value"):
+            loan_numbers_to_try.append(str(fields["lender_loan_number"]["value"]).strip())
+        if "investor_loan_number" in fields and fields["investor_loan_number"].get("value"):
+            loan_numbers_to_try.append(str(fields["investor_loan_number"]["value"]).strip())
+
+        # Remove duplicates while preserving order
+        loan_numbers_to_try = list(dict.fromkeys(loan_numbers_to_try))
+        logger.info(f"Loan numbers to try: {loan_numbers_to_try}")
+        logger.info(f"Total loan numbers to match: {len(loan_numbers_to_try)}")
+
+        # Try to match by loan number first (highest confidence)
+        # IMPORTANT: Check ALL tables and collect candidates, then pick the best match
+        for loan_num in loan_numbers_to_try:
+            loan_num_upper = loan_num.upper()  # For case-insensitive comparison
+            logger.info(f"Attempting to match loan number: '{loan_num}'")
+
+            # Helper to determine entity type based on loan stage
+            def get_loan_entity_type(loan_obj):
+                """Return 'portfolio' for funded loans, 'loan' for active loans"""
+                if loan_obj and loan_obj.stage == LoanStage.FUNDED:
+                    return "portfolio"
+                return "loan"
+
+            # ========== CHECK MUM CLIENTS FIRST (Portfolio) ==========
+            # MUM clients are portfolio/past clients - check these BEFORE loans
+            logger.info(f"[MUM] Searching MUM clients for loan_number='{loan_num}'")
+            try:
+                # Count total MUM clients for context
+                total_mum = db.query(MUMClient).count()
+                logger.info(f"[MUM] Total MUM clients in database: {total_mum}")
+
+                # Exact match (case-insensitive)
+                mum_client = db.query(MUMClient).filter(
+                    func.upper(MUMClient.loan_number) == loan_num_upper
+                ).first()
+
+                if mum_client:
+                    logger.info(f"[MUM] ✓ EXACT MATCH: {mum_client.name} (id={mum_client.id}, loan#={mum_client.loan_number})")
+                    match_results["candidates"].append({
+                        "type": "portfolio",
+                        "id": mum_client.id,
+                        "name": mum_client.name,
+                        "loan_number": mum_client.loan_number,
+                        "confidence": 0.98,  # Very high - exact loan number match
+                        "match_type": "mum_loan_number_exact"
+                    })
+                else:
+                    logger.info(f"[MUM] No exact match for loan_number='{loan_num}'")
+                    # Try partial match (case-insensitive)
+                    mum_clients = db.query(MUMClient).filter(
+                        MUMClient.loan_number.ilike(f"%{loan_num}%")
+                    ).all()
+                    logger.info(f"[MUM] Partial match search found {len(mum_clients)} clients")
+                    for client in mum_clients:
+                        logger.info(f"[MUM] ✓ PARTIAL MATCH: {client.name} (loan#={client.loan_number})")
+                        match_results["candidates"].append({
+                            "type": "portfolio",
+                            "id": client.id,
+                            "name": client.name,
+                            "loan_number": client.loan_number,
+                            "confidence": 0.92,
+                            "match_type": "mum_loan_number_partial"
+                        })
+            except Exception as e:
+                logger.warning(f"MUM client loan number matching error: {e}")
+
+            # ========== ACTIVE LOAN PROFILE MATCHING ==========
+            # Check ActiveLoanProfile table (separate detailed loan profile table)
+            try:
+                from models.active_loan_profile import ActiveLoanProfile
+
+                # Exact match on ActiveLoanProfile (case-insensitive)
+                active_loan = db.query(ActiveLoanProfile).filter(
+                    func.upper(ActiveLoanProfile.loan_number) == loan_num_upper,
+                    ActiveLoanProfile.is_deleted == False
+                ).first()
+
+                if active_loan:
+                    logger.info(f"Found match in ActiveLoanProfile: {active_loan.id}")
+                    match_results["candidates"].append({
+                        "type": "active_loan",
+                        "id": str(active_loan.id),
+                        "name": f"Active Loan {active_loan.loan_number}",
+                        "loan_number": active_loan.loan_number,
+                        "confidence": 0.99,
+                        "match_type": "active_loan_exact"
+                    })
+                else:
+                    # Try partial match on ActiveLoanProfile
+                    active_loans = db.query(ActiveLoanProfile).filter(
+                        ActiveLoanProfile.loan_number.ilike(f"%{loan_num}%"),
+                        ActiveLoanProfile.is_deleted == False
+                    ).all()
+
+                    for al in active_loans:
+                        logger.info(f"Found partial match in ActiveLoanProfile: {al.id}")
+                        match_results["candidates"].append({
+                            "type": "active_loan",
+                            "id": str(al.id),
+                            "name": f"Active Loan {al.loan_number}",
+                            "loan_number": al.loan_number,
+                            "confidence": 0.90,
+                            "match_type": "active_loan_partial"
+                        })
+
+            except Exception as e:
+                logger.debug(f"ActiveLoanProfile check skipped: {e}")
+
+            # ========== REGULAR LOAN TABLE MATCHING ==========
+            # Exact match with user's loans (highest confidence)
+            try:
+                loan = db.query(Loan).filter(
+                    func.upper(Loan.loan_number) == loan_num_upper,
+                    Loan.loan_officer_id == user_id
+                ).first()
+
+                if loan:
+                    entity_type = get_loan_entity_type(loan)
+                    logger.info(f"Found exact match with user's loan: {loan.id} (type: {entity_type})")
+                    match_results["candidates"].append({
+                        "type": entity_type,
+                        "id": loan.id,
+                        "name": loan.borrower_name,
+                        "loan_number": loan.loan_number,
+                        "confidence": 0.98,
+                        "match_type": "loan_user_owned_exact"
+                    })
+                else:
+                    # Try exact loan number match without user filter
+                    loan = db.query(Loan).filter(
+                        func.upper(Loan.loan_number) == loan_num_upper
+                    ).first()
+                    if loan:
+                        entity_type = get_loan_entity_type(loan)
+                        logger.info(f"Found exact match (any user): {loan.id} (type: {entity_type})")
+                        match_results["candidates"].append({
+                            "type": entity_type,
+                            "id": loan.id,
+                            "name": loan.borrower_name,
+                            "loan_number": loan.loan_number,
+                            "confidence": 0.95,
+                            "match_type": "loan_exact"
+                        })
+                    else:
+                        # Try partial loan number match (loan numbers may have prefixes/suffixes)
+                        logger.info(f"Trying partial match for: {loan_num}")
+                        loans = db.query(Loan).filter(
+                            Loan.loan_number.ilike(f"%{loan_num}%")
+                        ).all()
+                        logger.info(f"Found {len(loans)} partial matches")
+                        for l in loans:
+                            entity_type = get_loan_entity_type(l)
+                            conf = 0.90 if l.loan_officer_id == user_id else 0.85
+                            match_results["candidates"].append({
+                                "type": entity_type,
+                                "id": l.id,
+                                "name": l.borrower_name,
+                                "loan_number": l.loan_number,
+                                "confidence": conf,
+                                "match_type": "loan_partial"
+                            })
+            except Exception as e:
+                logger.warning(f"Loan table matching error: {e}")
+
+            # If we have loan number candidates, pick the best one and return early
+            # (loan number matches are most reliable)
+            if match_results["candidates"]:
+                best = max(match_results["candidates"], key=lambda x: x["confidence"])
+                logger.info(f"Best loan number match: {best['type']} id={best['id']} conf={best['confidence']:.2f}")
+                match_results["entity_type"] = best["type"]
+                match_results["entity_id"] = best["id"]
+                match_results["confidence"] = best["confidence"]
+                return match_results
+
+        # ========== LEAD MATCHING (Email, Phone, Name) ==========
+        # Try email matching first (highest confidence for leads)
+        if extracted_email:
+            logger.info(f"Trying email match: '{extracted_email}'")
+            # Search ALL leads by email (not just user-owned)
+            email_leads = db.query(Lead).filter(
+                Lead.email.ilike(extracted_email)
+            ).all()
+            for lead in email_leads:
+                conf = 0.98 if lead.owner_id == user_id else 0.92
+                match_results["candidates"].append({
+                    "type": "lead",
+                    "id": lead.id,
+                    "name": lead.name,
+                    "confidence": conf,
+                    "match_type": "email_exact"
+                })
+                logger.info(f"Email match found: Lead {lead.id} - {lead.name}")
+
+        # Try phone matching (high confidence)
+        if extracted_phone and len(extracted_phone) >= 10:
+            logger.info(f"Trying phone match: '{extracted_phone}'")
+            # Search ALL leads by phone
+            all_leads = db.query(Lead).all()
+            for lead in all_leads:
+                if lead.phone:
+                    lead_phone = normalize_phone(lead.phone)
+                    if lead_phone and lead_phone == extracted_phone:
+                        # Avoid duplicates
+                        existing = next((c for c in match_results["candidates"]
+                                       if c["type"] == "lead" and c["id"] == lead.id), None)
+                        if not existing:
+                            conf = 0.95 if lead.owner_id == user_id else 0.88
+                            match_results["candidates"].append({
+                                "type": "lead",
+                                "id": lead.id,
+                                "name": lead.name,
+                                "confidence": conf,
+                                "match_type": "phone_exact"
+                            })
+                            logger.info(f"Phone match found: Lead {lead.id} - {lead.name}")
+
+        # Try to match by borrower name - NOW SEARCH ALL LEADS GLOBALLY
+        borrower_last_name = get_last_name(borrower_name) if borrower_name else ""
+        if borrower_name:
+            logger.info(f"Attempting to match borrower name: '{borrower_name}' (last name: '{borrower_last_name}')")
+
+            # Search ALL leads by name (not just user-owned)
+            all_leads = db.query(Lead).all()
+            for lead in all_leads:
+                if lead.name:
+                    is_match, conf = names_match(borrower_name, lead.name)
+                    if is_match:
+                        # Avoid duplicates (might already have email/phone match)
+                        existing = next((c for c in match_results["candidates"]
+                                       if c["type"] == "lead" and c["id"] == lead.id), None)
+                        if existing:
+                            # Boost confidence if we have multiple match types
+                            existing["confidence"] = min(0.99, existing["confidence"] + 0.1)
+                            existing["match_type"] += "+name"
+                        else:
+                            # Adjust confidence based on ownership
+                            final_conf = conf if lead.owner_id == user_id else conf * 0.90
+                            match_results["candidates"].append({
+                                "type": "lead",
+                                "id": lead.id,
+                                "name": lead.name,
+                                "confidence": final_conf,
+                                "match_type": "lead_name"
+                            })
+                            logger.info(f"Name match found: Lead {lead.id} - {lead.name} (conf: {final_conf:.2f})")
+
+        # ========== LOAN MATCHING (Name, Email, Phone) ==========
+        # Run loan matching if we have ANY of: borrower_name, extracted_email, or extracted_phone
+        if borrower_name or extracted_email or extracted_phone:
+            # Try loans - check borrower_name, coborrower_name, borrower_email, borrower_phone
+            # Use raw SQL to avoid enum deserialization issues with the stage column
+            try:
+                loan_results = db.execute(
+                    text("""
+                        SELECT id, borrower_name, coborrower_name, loan_officer_id,
+                               borrower_email, borrower_phone, co_borrower_email, loan_number
+                        FROM loans
+                        WHERE loan_officer_id = :user_id
+                    """),
+                    {"user_id": user_id}
+                ).fetchall()
+                logger.info(f"Found {len(loan_results)} loans for user {user_id}")
+            except Exception as e:
+                logger.error(f"Error querying user loans: {e}")
+                loan_results = []
+
+            for loan_row in loan_results:
+                loan_id, loan_borrower_name, loan_coborrower_name, loan_officer_id, loan_borrower_email, loan_borrower_phone, loan_coborrower_email, loan_loan_number = loan_row
+
+                # ===== EMAIL MATCHING (highest confidence for loans) =====
+                if extracted_email and loan_borrower_email:
+                    if normalize_email(extracted_email) == normalize_email(loan_borrower_email):
+                        existing = next((c for c in match_results["candidates"]
+                                       if c["type"] == "loan" and c["id"] == loan_id), None)
+                        if existing:
+                            existing["confidence"] = min(0.99, existing["confidence"] + 0.15)
+                            existing["match_type"] += "+email"
+                        else:
+                            match_results["candidates"].append({
+                                "type": "loan",
+                                "id": loan_id,
+                                "name": loan_borrower_name,
+                                "loan_number": loan_loan_number,
+                                "confidence": 0.96,  # Very high - email is unique
+                                "match_type": "borrower_email"
+                            })
+                            logger.info(f"Loan email match: {loan_id} - {loan_borrower_name} (email: {loan_borrower_email})")
+
+                # Check co-borrower email too
+                if extracted_email and loan_coborrower_email:
+                    if normalize_email(extracted_email) == normalize_email(loan_coborrower_email):
+                        existing = next((c for c in match_results["candidates"]
+                                       if c["type"] == "loan" and c["id"] == loan_id), None)
+                        if existing:
+                            existing["confidence"] = min(0.99, existing["confidence"] + 0.12)
+                            existing["match_type"] += "+coborrower_email"
+                        else:
+                            match_results["candidates"].append({
+                                "type": "loan",
+                                "id": loan_id,
+                                "name": f"{loan_borrower_name} (co-borrower email match)",
+                                "loan_number": loan_loan_number,
+                                "confidence": 0.92,
+                                "match_type": "coborrower_email"
+                            })
+
+                # ===== PHONE MATCHING =====
+                if extracted_phone and loan_borrower_phone:
+                    if normalize_phone(extracted_phone) == normalize_phone(loan_borrower_phone):
+                        existing = next((c for c in match_results["candidates"]
+                                       if c["type"] == "loan" and c["id"] == loan_id), None)
+                        if existing:
+                            existing["confidence"] = min(0.99, existing["confidence"] + 0.12)
+                            existing["match_type"] += "+phone"
+                        else:
+                            match_results["candidates"].append({
+                                "type": "loan",
+                                "id": loan_id,
+                                "name": loan_borrower_name,
+                                "loan_number": loan_loan_number,
+                                "confidence": 0.93,
+                                "match_type": "borrower_phone"
+                            })
+                            logger.info(f"Loan phone match: {loan_id} - {loan_borrower_name}")
+
+                # ===== NAME MATCHING =====
+                # Match against primary borrower (only if we have a borrower_name to match)
+                if borrower_name and loan_borrower_name:
+                    is_match, conf = names_match(borrower_name, loan_borrower_name)
+                    if is_match:
+                        existing = next((c for c in match_results["candidates"]
+                                       if c["type"] == "loan" and c["id"] == loan_id), None)
+                        if existing:
+                            existing["confidence"] = min(0.99, existing["confidence"] + 0.10)
+                            existing["match_type"] += "+name"
+                        else:
+                            match_results["candidates"].append({
+                                "type": "loan",
+                                "id": loan_id,
+                                "name": loan_borrower_name,
+                                "loan_number": loan_loan_number,
+                                "confidence": conf,
+                                "match_type": "borrower_name"
+                            })
+                            logger.info(f"Loan borrower match: {loan_id} - {loan_borrower_name} (conf: {conf:.2f})")
+
+                # Match against co-borrower (spouse) - only if we have a borrower_name to match
+                if borrower_name and loan_coborrower_name:
+                    is_match, conf = names_match(borrower_name, loan_coborrower_name)
+                    if is_match:
+                        existing = next((c for c in match_results["candidates"]
+                                       if c["type"] == "loan" and c["id"] == loan_id), None)
+                        if existing:
+                            existing["confidence"] = min(0.99, existing["confidence"] + 0.08)
+                            existing["match_type"] += "+coborrower_name"
+                        else:
+                            match_results["candidates"].append({
+                                "type": "loan",
+                                "id": loan_id,
+                                "name": f"{loan_borrower_name} (co-borrower: {loan_coborrower_name})",
+                                "loan_number": loan_loan_number,
+                                "confidence": conf * 0.95,  # Slightly lower for co-borrower
+                                "match_type": "coborrower_name"
+                            })
+
+                # Last name match - check if email name shares last name with borrower/coborrower
+                if borrower_last_name:
+                    borrower_ln = get_last_name(loan_borrower_name) if loan_borrower_name else ""
+                    coborrower_ln = get_last_name(loan_coborrower_name) if loan_coborrower_name else ""
+
+                    if borrower_last_name == borrower_ln or borrower_last_name == coborrower_ln:
+                        # Avoid duplicates - check if we already have this loan
+                        existing = next((c for c in match_results["candidates"]
+                                       if c["type"] == "loan" and c["id"] == loan_id), None)
+                        if not existing:
+                            match_results["candidates"].append({
+                                "type": "loan",
+                                "id": loan_id,
+                                "name": loan_borrower_name,
+                                "loan_number": loan_loan_number,
+                                "confidence": 0.75,  # Last name only match
+                                "match_type": "last_name_family"
+                            })
+
+            # If no matches found with user filter, try broader search for loans
+            if not any(c["type"] == "loan" for c in match_results["candidates"]):
+                logger.info("No loan matches with user filter, trying all loans...")
+                try:
+                    all_loan_results = db.execute(
+                        text("""
+                            SELECT id, borrower_name, coborrower_name, loan_officer_id,
+                                   borrower_email, borrower_phone, co_borrower_email, loan_number
+                            FROM loans
+                        """)
+                    ).fetchall()
+                    logger.info(f"Found {len(all_loan_results)} total loans in database")
+                except Exception as e:
+                    logger.error(f"Error querying all loans: {e}")
+                    all_loan_results = []
+
+                for loan_row in all_loan_results:
+                    loan_id, loan_borrower_name, loan_coborrower_name, loan_officer_id, loan_borrower_email, loan_borrower_phone, loan_coborrower_email, loan_loan_number = loan_row
+
+                    # Global email match (very high confidence even for non-owned)
+                    if extracted_email and loan_borrower_email:
+                        if normalize_email(extracted_email) == normalize_email(loan_borrower_email):
+                            match_results["candidates"].append({
+                                "type": "loan",
+                                "id": loan_id,
+                                "name": loan_borrower_name,
+                                "loan_number": loan_loan_number,
+                                "confidence": 0.94,  # High even for non-owned (email is unique)
+                                "match_type": "borrower_email_global"
+                            })
+                            logger.info(f"Global loan email match: {loan_id} - {loan_borrower_name}")
+                            continue  # Email match is definitive
+
+                    # Global phone match
+                    if extracted_phone and loan_borrower_phone:
+                        if normalize_phone(extracted_phone) == normalize_phone(loan_borrower_phone):
+                            match_results["candidates"].append({
+                                "type": "loan",
+                                "id": loan_id,
+                                "name": loan_borrower_name,
+                                "loan_number": loan_loan_number,
+                                "confidence": 0.90,
+                                "match_type": "borrower_phone_global"
+                            })
+                            logger.info(f"Global loan phone match: {loan_id} - {loan_borrower_name}")
+                            continue
+
+                    # Check borrower name
+                    if loan_borrower_name:
+                        is_match, conf = names_match(borrower_name, loan_borrower_name)
+                        if is_match:
+                            match_results["candidates"].append({
+                                "type": "loan",
+                                "id": loan_id,
+                                "name": loan_borrower_name,
+                                "loan_number": loan_loan_number,
+                                "confidence": conf * 0.85,  # Lower for non-owned loan
+                                "match_type": "borrower_name_global"
+                            })
+                            logger.info(f"Global loan borrower match: {loan_id} - {loan_borrower_name}")
+
+                    # Check co-borrower name
+                    if loan_coborrower_name:
+                        is_match, conf = names_match(borrower_name, loan_coborrower_name)
+                        if is_match:
+                            match_results["candidates"].append({
+                                "type": "loan",
+                                "id": loan_id,
+                                "name": f"{loan_borrower_name} (co-borrower: {loan_coborrower_name})",
+                                "loan_number": loan_loan_number,
+                                "confidence": conf * 0.80,
+                                "match_type": "coborrower_name_global"
+                            })
+
+        # ========== PARTNER MATCHING (Referral Partners) ==========
+        # Try to match against referral partners by name, email, phone, or company
+        partner_name = fields.get("partner_name", {}).get("value") or fields.get("agent_name", {}).get("value") or fields.get("realtor_name", {}).get("value")
+        partner_email = fields.get("partner_email", {}).get("value") or fields.get("agent_email", {}).get("value") or fields.get("realtor_email", {}).get("value")
+        partner_phone = fields.get("partner_phone", {}).get("value") or fields.get("agent_phone", {}).get("value") or fields.get("realtor_phone", {}).get("value")
+        partner_company = fields.get("partner_company", {}).get("value") or fields.get("brokerage", {}).get("value") or fields.get("company", {}).get("value")
+
+        if partner_name or partner_email or partner_phone:
+            logger.info(f"Trying partner match: name='{partner_name}', email='{partner_email}', phone='{partner_phone}'")
+            all_partners = db.query(ReferralPartner).filter(ReferralPartner.status == "active").all()
+
+            for partner in all_partners:
+                partner_conf = 0.0
+                match_reasons = []
+
+                # Email match (highest confidence)
+                if partner_email and partner.email:
+                    if normalize_email(partner_email) == normalize_email(partner.email):
+                        partner_conf = max(partner_conf, 0.95)
+                        match_reasons.append("email")
+
+                # Phone match
+                if partner_phone and partner.phone:
+                    if normalize_phone(partner_phone) == normalize_phone(partner.phone):
+                        partner_conf = max(partner_conf, 0.90)
+                        match_reasons.append("phone")
+
+                # Name match
+                if partner_name and partner.name:
+                    is_match, conf = names_match(partner_name, partner.name)
+                    if is_match:
+                        partner_conf = max(partner_conf, conf * 0.90)
+                        match_reasons.append("name")
+
+                # Company match (lower confidence boost)
+                if partner_company and partner.company:
+                    if partner_company.lower().strip() in partner.company.lower() or partner.company.lower() in partner_company.lower().strip():
+                        partner_conf = min(0.98, partner_conf + 0.10)
+                        match_reasons.append("company")
+
+                if partner_conf > 0.5:
+                    match_results["candidates"].append({
+                        "type": "partner",
+                        "id": partner.id,
+                        "name": partner.name,
+                        "confidence": partner_conf,
+                        "match_type": "+".join(match_reasons)
+                    })
+                    logger.info(f"Partner match found: {partner.name} ({partner_conf:.2f}) via {'+'.join(match_reasons)}")
+
+        # ========== PORTFOLIO/MUM CLIENT MATCHING (by name, email, phone) ==========
+        # Match against past clients (portfolio) for retention/referral opportunities
+        # Note: Loan number matching for MUM clients is handled earlier in the code
+        #       with case-insensitive matching and returns early if found
+
+        # Check by name, email, phone
+        if borrower_name or extracted_email or extracted_phone:
+            logger.info(f"[MUM-NAME] Starting name/email/phone matching for borrower='{borrower_name}'")
+            try:
+                all_mum_clients = db.query(MUMClient).all()
+                logger.info(f"[MUM-NAME] Checking {len(all_mum_clients)} MUM clients for name match")
+
+                # Log first 5 client names for debugging
+                sample_names = [c.name for c in all_mum_clients[:5]]
+                logger.info(f"[MUM-NAME] Sample MUM client names: {sample_names}")
+
+                for client in all_mum_clients:
+                    # Skip if already matched by loan number
+                    existing = next((c for c in match_results["candidates"]
+                                   if c["type"] == "portfolio" and c["id"] == client.id), None)
+                    if existing:
+                        continue
+
+                    client_conf = 0.0
+                    match_reasons = []
+
+                    # Email match
+                    if extracted_email and client.email:
+                        if normalize_email(extracted_email) == normalize_email(client.email):
+                            client_conf = max(client_conf, 0.95)
+                            match_reasons.append("email")
+
+                    # Phone match
+                    if extracted_phone and client.phone:
+                        if normalize_phone(extracted_phone) == normalize_phone(client.phone):
+                            client_conf = max(client_conf, 0.90)
+                            match_reasons.append("phone")
+
+                    # Name match
+                    if borrower_name and client.name:
+                        is_match, conf = names_match(borrower_name, client.name)
+                        if is_match:
+                            client_conf = max(client_conf, conf * 0.88)
+                            match_reasons.append("name")
+
+                    if client_conf > 0.5:
+                        match_results["candidates"].append({
+                            "type": "portfolio",
+                            "id": client.id,
+                            "name": client.name,
+                            "loan_number": client.loan_number,
+                            "confidence": client_conf,
+                            "match_type": "+".join(match_reasons)
+                        })
+                        logger.info(f"Portfolio match found: {client.name} ({client_conf:.2f}) via {'+'.join(match_reasons)}")
+            except Exception as e:
+                logger.warning(f"Portfolio matching failed (table may not exist): {e}")
+
+        # Loan matching now includes: loan_number, borrower_name, coborrower_name,
+        # borrower_email, borrower_phone, and co_borrower_email (handled above)
+
+        # Return best candidate if found
+        logger.info(f"=" * 60)
+        logger.info(f"MATCH_ENTITY DEBUG - Final Results")
+        logger.info(f"=" * 60)
+        logger.info(f"Total candidates found: {len(match_results['candidates'])}")
+
+        if match_results["candidates"]:
+            # Log all candidates
+            for i, cand in enumerate(match_results["candidates"]):
+                logger.info(f"  Candidate {i+1}: {cand['type']} - {cand.get('name', 'N/A')} (id={cand['id']}, conf={cand['confidence']:.2f}, via={cand.get('match_type', 'unknown')})")
+
+            best = max(match_results["candidates"], key=lambda x: x["confidence"])
+            logger.info(f"✓ BEST MATCH: {best['type']} - {best.get('name', 'N/A')} (id={best['id']}, conf={best['confidence']:.2f})")
+            match_results["entity_type"] = best["type"]
+            match_results["entity_id"] = best["id"]
+            match_results["confidence"] = best["confidence"]
+        else:
+            logger.info("✗ NO MATCH FOUND - All matching strategies failed")
+            logger.info(f"  Searched with: name='{borrower_name}', email='{extracted_email}', phone='{extracted_phone}'")
+            logger.info(f"  Loan numbers tried: {loan_numbers_to_try}")
+
+        logger.info(f"=" * 60)
+        return match_results
+
+    def classify_email_intent(subject: str, content: str, fields: Dict[str, Any]) -> Dict[str, Any]:
+        """Classify the intent/type of the email based on subject and content"""
+
+        subject_lower = subject.lower() if subject else ""
+        content_lower = content.lower() if content else ""
+
+        # Clear to Close detection
+        if any(keyword in subject_lower for keyword in ["clear to close", "cleartoclose", "ctc", "clear-to-close"]):
+            return {
+                "intent": "Clear to Close",
+                "description": "Borrower has been cleared to close on their loan",
+                "confidence": 0.95
+            }
+
+        # Appraisal detection
+        if any(keyword in subject_lower for keyword in ["appraisal", "appraisal report", "home appraisal"]):
+            return {
+                "intent": "Appraisal Update",
+                "description": "Appraisal report or update received",
+                "confidence": 0.90
+            }
+
+        # Rate lock detection
+        if any(keyword in subject_lower for keyword in ["rate lock", "lock confirmation", "locked rate"]):
+            return {
+                "intent": "Rate Lock",
+                "description": "Interest rate has been locked for the loan",
+                "confidence": 0.90
+            }
+
+        # Underwriting detection
+        if any(keyword in subject_lower for keyword in ["underwriting", "underwriter", "uw approval", "conditionally approved"]):
+            return {
+                "intent": "Underwriting Update",
+                "description": "Update from underwriting department",
+                "confidence": 0.85
+            }
+
+        # Title/closing detection
+        if any(keyword in subject_lower for keyword in ["title", "closing", "settlement"]):
+            return {
+                "intent": "Title/Closing Update",
+                "description": "Update related to title or closing process",
+                "confidence": 0.80
+            }
+
+        # Generic loan update
+        if "loan_number" in fields or "borrower_name" in fields:
+            return {
+                "intent": "Loan Update",
+                "description": "General loan status update",
+                "confidence": 0.70
+            }
+
+        return {
+            "intent": "General",
+            "description": "General communication",
+            "confidence": 0.50
+        }
+
+    def get_entity_name(entity_type: str, entity_id, db: Session) -> str:
+        """Get the name of the matched entity"""
+        try:
+            if entity_type == "loan":
+                loan = db.query(Loan).filter(Loan.id == entity_id).first()
+                return loan.borrower_name if loan and loan.borrower_name else f"Loan #{entity_id}"
+            elif entity_type == "lead":
+                lead = db.query(Lead).filter(Lead.id == entity_id).first()
+                return lead.name if lead and lead.name else f"Lead #{entity_id}"
+            elif entity_type == "active_loan":
+                # Query ActiveLoanProfile table for portfolio loans
+                try:
+                    from models.active_loan_profile import ActiveLoanProfile
+                    from models.lead_profile import LeadProfile
+                    import uuid
+
+                    # Handle both UUID string and UUID object
+                    if isinstance(entity_id, str):
+                        try:
+                            loan_uuid = uuid.UUID(entity_id)
+                        except ValueError:
+                            loan_uuid = entity_id
+                    else:
+                        loan_uuid = entity_id
+
+                    active_loan = db.query(ActiveLoanProfile).filter(
+                        ActiveLoanProfile.id == loan_uuid
+                    ).first()
+
+                    if active_loan:
+                        # Try to get borrower name from linked lead profile
+                        if active_loan.lead_profile_id:
+                            lead_profile = db.query(LeadProfile).filter(
+                                LeadProfile.id == active_loan.lead_profile_id
+                            ).first()
+                            if lead_profile:
+                                name_parts = []
+                                if lead_profile.first_name:
+                                    name_parts.append(lead_profile.first_name)
+                                if lead_profile.last_name:
+                                    name_parts.append(lead_profile.last_name)
+                                if name_parts:
+                                    return " ".join(name_parts)
+                        # Fallback to loan number
+                        return f"Portfolio Loan {active_loan.loan_number}"
+                except Exception as e:
+                    logger.error(f"Error getting ActiveLoanProfile: {e}")
+                return f"Portfolio Loan #{entity_id}"
+            elif entity_type == "client":
+                # Assuming client is a Lead
+                client = db.query(Lead).filter(Lead.id == entity_id).first()
+                return client.name if client and client.name else f"Client #{entity_id}"
+            elif entity_type == "portfolio":
+                # Portfolio can refer to either:
+                # 1. A funded Loan (from Loan table with stage=FUNDED)
+                # 2. A MUM client (from MUMClient table)
+                # Try Loan first (more common case with integer IDs)
+                try:
+                    loan = db.query(Loan).filter(Loan.id == entity_id).first()
+                    if loan:
+                        return loan.borrower_name if loan.borrower_name else f"Portfolio Loan #{entity_id}"
+                except Exception:
+                    pass
+                # Fall back to MUMClient
+                mum_client = db.query(MUMClient).filter(MUMClient.id == entity_id).first()
+                return mum_client.name if mum_client and mum_client.name else f"Portfolio Client #{entity_id}"
+            elif entity_type == "partner":
+                # Referral partner
+                partner = db.query(ReferralPartner).filter(ReferralPartner.id == entity_id).first()
+                return partner.name if partner and partner.name else f"Partner #{entity_id}"
+        except Exception as e:
+            logger.error(f"Error getting entity name: {e}")
+
+        return f"{entity_type} #{entity_id}"
+
+    def generate_recommended_action(email_intent: Dict[str, Any], entity_type: str, fields: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate recommended action based on email intent and context"""
+
+        intent = email_intent.get("intent", "General")
+
+        # Clear to Close recommendation
+        if intent == "Clear to Close":
+            return {
+                "title": "Update Status to Clear to Close",
+                "description": "The AI recommends updating the loan status to 'Clear to Close' based on this email notification.",
+                "action_type": "status_update",
+                "action_value": "Clear to Close",
+                "learning_status": "Learning from your approvals to auto-execute in the future"
+            }
+
+        # Appraisal recommendation
+        if intent == "Appraisal Update":
+            return {
+                "title": "Update Appraisal Information",
+                "description": "The AI recommends updating the appraisal value and date in the loan record.",
+                "action_type": "field_update",
+                "action_value": "appraisal_data",
+                "learning_status": "Learning from your approvals to auto-execute in the future"
+            }
+
+        # Rate Lock recommendation
+        if intent == "Rate Lock":
+            return {
+                "title": "Update Rate and Lock Date",
+                "description": "The AI recommends updating the interest rate and lock expiration date.",
+                "action_type": "field_update",
+                "action_value": "rate_lock_data",
+                "learning_status": "Learning from your approvals to auto-execute in the future"
+            }
+
+        # Underwriting recommendation
+        if intent == "Underwriting Update":
+            return {
+                "title": "Update Status to Underwriting",
+                "description": "The AI recommends updating the loan status based on underwriting progress.",
+                "action_type": "status_update",
+                "action_value": "In Underwriting",
+                "learning_status": "Learning from your approvals to auto-execute in the future"
+            }
+
+        # Generic field update
+        return {
+            "title": "Update Loan Information",
+            "description": "The AI recommends applying the extracted data to the matched loan record.",
+            "action_type": "field_update",
+            "action_value": "general",
+            "learning_status": "Learning from your approvals to auto-execute in the future"
+        }
+
+
+    # ============================================================================
+    # CALENDLY TIME SLOT SCHEDULING FOR TASKS
+    # ============================================================================
+
+    def detect_scheduling_intent(title: str, description: str = "") -> bool:
+        """
+        Detect if a task is about scheduling a meeting/call with someone.
+        Returns True if scheduling intent is detected.
+        """
+        scheduling_keywords = [
+            "schedule", "scheduling", "appointment", "meeting", "call",
+            "pick a time", "pick time", "choose a time", "choose time",
+            "set up a call", "set up call", "book", "booking",
+            "calendar", "availability", "when to speak", "time to speak",
+            "time to meet", "time to talk", "consultation", "consult"
+        ]
+
+        text = f"{title} {description}".lower()
+        return any(keyword in text for keyword in scheduling_keywords)
+
+
+    def get_calendly_time_slots_for_user(user_id: int, db: Session, num_slots: int = 5) -> dict:
+        """
+        Fetch available Calendly time slots for a user.
+        Returns formatted time slots with booking links.
+        """
+        import requests
+        from datetime import datetime, timedelta, timezone
+
+        try:
+            # First get user's Calendly credential
+            cred = db.query(IntegrationCredential).filter(
+                IntegrationCredential.user_id == user_id,
+                IntegrationCredential.integration_type == "calendly",
+                IntegrationCredential.is_active == True
+            ).first()
+
+            calendly_token = None
+            if cred and cred.api_key:
+                calendly_token = cred.api_key
+            else:
+                # Fallback to environment variable
+                calendly_token = os.getenv("CALENDLY_API_TOKEN")
+
+            if not calendly_token:
+                logger.warning(f"No Calendly token found for user {user_id}")
+                return {"success": False, "error": "Calendly not configured", "slots": []}
+
+            headers = {
+                "Authorization": f"Bearer {calendly_token}",
+                "Content-Type": "application/json"
+            }
+
+            # Get user's Calendly URI
+            user_response = requests.get(
+                "https://api.calendly.com/users/me",
+                headers=headers,
+                timeout=10
+            )
+
+            if user_response.status_code != 200:
+                logger.error(f"Calendly user API error: {user_response.status_code}")
+                return {"success": False, "error": "Could not fetch Calendly user", "slots": []}
+
+            user_uri = user_response.json().get("resource", {}).get("uri")
+
+            # Get user's event types
+            event_types_response = requests.get(
+                "https://api.calendly.com/event_types",
+                headers=headers,
+                params={"user": user_uri, "active": "true"},
+                timeout=10
+            )
+
+            if event_types_response.status_code != 200:
+                logger.error(f"Calendly event types API error: {event_types_response.status_code}")
+                return {"success": False, "error": "Could not fetch event types", "slots": []}
+
+            event_types = event_types_response.json().get("collection", [])
+
+            if not event_types:
+                return {"success": False, "error": "No active Calendly event types", "slots": []}
+
+            # Use the first active event type (typically the default meeting type)
+            event_type = event_types[0]
+            event_type_uuid = event_type.get("uri", "").split("/")[-1]
+            event_type_name = event_type.get("name", "Meeting")
+            scheduling_url = event_type.get("scheduling_url", "")
+            duration_minutes = event_type.get("duration", 30)
+
+            # Get availability for next 7 days
+            start_time = datetime.now(timezone.utc).isoformat()
+            end_time = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+
+            availability_response = requests.get(
+                "https://api.calendly.com/event_type_available_times",
+                headers=headers,
+                params={
+                    "event_type": f"https://api.calendly.com/event_types/{event_type_uuid}",
+                    "start_time": start_time,
+                    "end_time": end_time
+                },
+                timeout=10
+            )
+
+            if availability_response.status_code != 200:
+                logger.error(f"Calendly availability API error: {availability_response.status_code}")
+                return {"success": False, "error": "Could not fetch availability", "slots": []}
+
+            available_times = availability_response.json().get("collection", [])
+
+            # Format the slots - take only the first num_slots
+            formatted_slots = []
+            for slot in available_times[:num_slots]:
+                start_str = slot.get("start_time", "")
+                if start_str:
+                    # Parse the ISO timestamp
+                    slot_dt = datetime.fromisoformat(start_str.replace("Z", "+00:00"))
+
+                    # Format for display: "Monday, Dec 2 at 2:00 PM"
+                    display_date = slot_dt.strftime("%A, %b %d at %-I:%M %p")
+
+                    # Create a direct booking link with the time pre-selected
+                    # Calendly supports ?month=YYYY-MM&date=YYYY-MM-DD format
+                    booking_link = f"{scheduling_url}?month={slot_dt.strftime('%Y-%m')}&date={slot_dt.strftime('%Y-%m-%d')}"
+
+                    formatted_slots.append({
+                        "display": display_date,
+                        "iso": start_str,
+                        "booking_link": booking_link,
+                        "duration_minutes": duration_minutes
+                    })
+
+            return {
+                "success": True,
+                "event_type_name": event_type_name,
+                "scheduling_url": scheduling_url,
+                "duration_minutes": duration_minutes,
+                "slots": formatted_slots
+            }
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Calendly API request error: {e}")
+            return {"success": False, "error": str(e), "slots": []}
+        except Exception as e:
+            logger.error(f"Error fetching Calendly slots: {e}")
+            return {"success": False, "error": str(e), "slots": []}
+
+
+    def generate_scheduling_email_draft(
+        client_name: str,
+        calendly_slots: dict,
+        user_name: str = "Your Loan Officer"
+    ) -> str:
+        """
+        Generate an AI-drafted email with embedded Calendly time slots.
+        Returns HTML-formatted email body with clickable time slot links.
+        """
+        first_name = client_name.split()[0] if client_name else "there"
+
+        if not calendly_slots.get("success") or not calendly_slots.get("slots"):
+            # Fallback if Calendly is not configured or no slots available
+            return f"""Hi {first_name},
+
+    I'd like to schedule a call with you to discuss your loan. Please let me know what times work best for you this week.
+
+    Looking forward to connecting!
+
+    Best regards,
+    {user_name}"""
+
+        # Build the time slots HTML with clickable links
+        slots = calendly_slots.get("slots", [])
+        duration = calendly_slots.get("duration_minutes", 30)
+
+        # Create clickable time slot buttons
+        time_slots_html = ""
+        for slot in slots:
+            display = slot.get("display", "")
+            link = slot.get("booking_link", "")
+            time_slots_html += f"""
+    <div style="margin: 8px 0;">
+      <a href="{link}" style="display: inline-block; padding: 12px 24px; background: linear-gradient(135deg, #218D8D 0%, #10b981 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 14px;">
+        {display}
+      </a>
+    </div>"""
+
+        # Build the full email
+        email_body = f"""Hi {first_name},
+
+    I'd like to schedule a {duration}-minute call to discuss your mortgage. Please click one of the available times below to book directly on my calendar:
+
+    <div style="margin: 20px 0; padding: 16px; background: #f7fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
+    <strong style="color: #1a202c; font-size: 14px;">📅 Available Time Slots:</strong>
+    {time_slots_html}
+    </div>
+
+    If none of these times work, you can also <a href="{calendly_slots.get('scheduling_url', '#')}" style="color: #218D8D; font-weight: 600;">view all available times</a> on my calendar.
+
+    Looking forward to speaking with you!
+
+    Best regards,
+    {user_name}"""
+
+        return email_body
+
+
+    def create_milestone_tasks(loan, updated_fields: list, db: Session) -> list:
+        """
+        Create tasks automatically when milestone dates are populated.
+        This is triggered when reconciliation data is applied to a loan.
+        """
+        tasks_created = []
+
+        # Define task triggers based on milestone dates
+        # Format: (field_updated, task_title, task_description, days_offset, priority)
+        milestone_task_triggers = [
+            # Application milestones
+            ("stage->PROCESSING", "Review Application Package", "Review newly submitted application for completeness", 0, "high"),
+            ("stage->SUBMITTED", "Monitor UW Queue", "Application submitted - monitor underwriting queue", 1, "medium"),
+            ("stage->UW_RECEIVED", "Follow Up on Underwriting", "File in underwriting - follow up for status", 2, "high"),
+            ("stage->APPROVED", "Review Approval Conditions", "Loan approved - review and clear any conditions", 0, "high"),
+            ("stage->CTC", "Schedule Closing", "Clear to Close received - coordinate closing date", 0, "urgent"),
+            ("stage->FUNDED", "Send Thank You & Request Review", "Loan funded - send thank you and request review", 1, "medium"),
+
+            # Appraisal milestones
+            ("appraisal_ordered_date", "Follow Up on Appraisal", "Appraisal ordered - follow up in 3 days if not scheduled", 3, "medium"),
+            ("appraisal_scheduled_date", "Confirm Appraisal Access", "Appraisal scheduled - confirm property access", 0, "medium"),
+            ("appraisal_completed_date", "Review Appraisal Report", "Appraisal completed - review report for value/issues", 1, "high"),
+
+            # Lock milestones
+            ("lock_date", "Monitor Lock Expiration", "Rate locked - monitor expiration and closing timeline", 0, "high"),
+            ("lock_expiration_date", "Lock Expiration Alert", "Rate lock expires soon - verify closing timeline", -3, "urgent"),
+
+            # Closing milestones
+            ("closing_date", "7-Day Closing Checklist", "Closing approaching - verify all items ready", -7, "high"),
+            ("closing_date", "Final Closing Prep", "Closing in 3 days - final verification", -3, "urgent"),
+        ]
+
+        try:
+            logger.info(f"🔍 create_milestone_tasks called for loan {loan.loan_number} with updated_fields: {updated_fields}")
+
+            for trigger_field, task_title, task_desc, days_offset, priority in milestone_task_triggers:
+                # Check if this field was just updated
+                if trigger_field not in updated_fields:
+                    continue
+
+                logger.info(f"🎯 Trigger matched: {trigger_field} -> Creating task: {task_title}")
+
+                # Determine the due date
+                due_date = None
+                if trigger_field.startswith("stage->"):
+                    # Stage changes - task is due immediately or with offset from now
+                    due_date = datetime.now(timezone.utc) + timedelta(days=days_offset)
+                else:
+                    # Date fields - task is due relative to the date value
+                    date_value = getattr(loan, trigger_field, None)
+                    if date_value:
+                        if isinstance(date_value, datetime):
+                            due_date = date_value + timedelta(days=days_offset)
+                        else:
+                            due_date = datetime.now(timezone.utc) + timedelta(days=max(0, days_offset))
+
+                if not due_date:
+                    due_date = datetime.now(timezone.utc) + timedelta(days=1)
+
+                # Check if task already exists for this loan with same title
+                existing_task = db.query(Task).filter(
+                    Task.loan_id == loan.id,
+                    Task.title == task_title,
+                    Task.status != "completed"
+                ).first()
+
+                if existing_task:
+                    logger.info(f"Task '{task_title}' already exists for loan {loan.loan_number}, skipping")
+                    continue
+
+                # Create the task
+                new_task = Task(
+                    title=task_title,
+                    description=f"{task_desc}\n\nLoan: {loan.loan_number}\nBorrower: {loan.borrower_name or 'N/A'}",
+                    status="pending",
+                    priority=priority,
+                    due_date=due_date,
+                    loan_id=loan.id,
+                    owner_id=loan.loan_officer_id,  # Use loan_officer_id, not owner_id (Loan model doesn't have owner_id)
+                    related_contact_name=loan.borrower_name,  # Display borrower name in task list
+                    related_type="loan",
+                    created_at=datetime.now(timezone.utc)
+                )
+
+                db.add(new_task)
+                tasks_created.append(task_title)
+                logger.info(f"📋 Created task: '{task_title}' for loan {loan.loan_number}, due: {due_date}")
+
+            if tasks_created:
+                logger.info(f"💾 Committing {len(tasks_created)} tasks to database...")
+                db.commit()
+                logger.info(f"✅ Tasks committed successfully: {tasks_created}")
+            else:
+                logger.info(f"ℹ️ No matching triggers found for updated_fields: {updated_fields}")
+
+        except Exception as e:
+            import traceback
+            logger.error(f"Error creating milestone tasks: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            db.rollback()
+
+        return tasks_created
+
+
+    def create_lead_milestone_tasks(lead, updated_fields: list, db: Session) -> list:
+        """
+        Create tasks automatically when lead milestone dates are populated.
+        This is triggered when reconciliation data is applied to a lead.
+        """
+        tasks_created = []
+
+        # Define task triggers for lead milestones
+        lead_task_triggers = [
+            # Application milestones
+            ("application_started_date", "Review Started Application", "Application started - follow up to encourage completion", 1, "high"),
+            ("application_completed_date", "Review Completed Application", "Application completed - review for completeness and pull credit", 0, "high"),
+            ("stage->APPLICATION", "Process Application Package", "Application received - begin processing and verification", 0, "high"),
+            ("credit_pulled_date", "Review Credit Report", "Credit pulled - review report and discuss with borrower", 0, "high"),
+            ("preapproval_issued_date", "Send Preapproval Letter", "Preapproval issued - send letter to borrower and realtor", 0, "high"),
+            ("stage->PRE_APPROVED", "Connect with Realtor", "Lead pre-approved - connect with realtor for home search", 1, "medium"),
+        ]
+
+        try:
+            for trigger_field, task_title, task_desc, days_offset, priority in lead_task_triggers:
+                # Check if this field was just updated
+                if trigger_field not in updated_fields:
+                    continue
+
+                # Determine the due date
+                due_date = None
+                if trigger_field.startswith("stage->"):
+                    due_date = datetime.now(timezone.utc) + timedelta(days=days_offset)
+                else:
+                    date_value = getattr(lead, trigger_field, None)
+                    if date_value:
+                        if isinstance(date_value, datetime):
+                            due_date = date_value + timedelta(days=days_offset)
+                        else:
+                            due_date = datetime.now(timezone.utc) + timedelta(days=max(0, days_offset))
+
+                if not due_date:
+                    due_date = datetime.now(timezone.utc) + timedelta(days=1)
+
+                # Check if task already exists
+                existing_task = db.query(Task).filter(
+                    Task.lead_id == lead.id,
+                    Task.title == task_title,
+                    Task.status != "completed"
+                ).first()
+
+                if existing_task:
+                    logger.info(f"Task '{task_title}' already exists for lead {lead.name}, skipping")
+                    continue
+
+                # Create the task
+                new_task = Task(
+                    title=task_title,
+                    description=f"{task_desc}\n\nLead: {lead.name}\nEmail: {lead.email or 'N/A'}",
+                    status="pending",
+                    priority=priority,
+                    due_date=due_date,
+                    lead_id=lead.id,
+                    owner_id=lead.owner_id,
+                    created_at=datetime.now(timezone.utc)
+                )
+
+                db.add(new_task)
+                tasks_created.append(task_title)
+                logger.info(f"📋 Created task: '{task_title}' for lead {lead.name}, due: {due_date}")
+
+            if tasks_created:
+                db.commit()
+
+        except Exception as e:
+            logger.error(f"Error creating lead milestone tasks: {e}")
+            db.rollback()
+
+        return tasks_created
+
+
+    def apply_extracted_data(extracted_data: ExtractedData, db: Session) -> bool:
+        """Apply extracted data to CRM entities - save all extracted fields to the borrower's profile"""
+
+        def get_field_value(fields: dict, field_name: str, min_confidence: float = 0.70):
+            """Helper to safely get field value if confidence is high enough"""
+            if field_name in fields:
+                field = fields[field_name]
+                if isinstance(field, dict) and field.get("confidence", 0) >= min_confidence:
+                    return field.get("value")
+            return None
+
+        def parse_date(date_str):
+            """Parse various date formats to datetime"""
+            if not date_str:
+                return None
+            try:
+                if isinstance(date_str, datetime):
+                    return date_str
+                # Try ISO format first
+                return datetime.fromisoformat(str(date_str).replace('Z', '+00:00'))
+            except (ValueError, TypeError):
+                try:
+                    # Try common formats
+                    from dateutil import parser
+                    return parser.parse(str(date_str))
+                except (ValueError, TypeError):
+                    return None
+
+        try:
+            fields = extracted_data.fields or {}
+            updated_fields = []
+
+            if extracted_data.match_entity_type == "loan" and extracted_data.match_entity_id:
+                loan = db.query(Loan).filter(Loan.id == extracted_data.match_entity_id).first()
+                if not loan:
+                    logger.warning(f"Loan {extracted_data.match_entity_id} not found for data application - approving without applying data")
+                    return True  # Allow approval even if loan doesn't exist
+
+                logger.info(f"Applying extracted data to loan {loan.id} ({loan.loan_number})")
+
+                # Borrower name - handle separate first/last name fields
+                if value := get_field_value(fields, "borrower_name"):
+                    loan.borrower_name = str(value)
+                    updated_fields.append("borrower_name")
+                elif get_field_value(fields, "first_name") or get_field_value(fields, "last_name"):
+                    first = get_field_value(fields, "first_name") or ""
+                    last = get_field_value(fields, "last_name") or ""
+                    full_name = f"{first} {last}".strip()
+                    if full_name:
+                        loan.borrower_name = full_name
+                        updated_fields.append("borrower_name")
+
+                # Borrower email
+                if value := get_field_value(fields, "borrower_email"):
+                    loan.borrower_email = str(value)
+                    updated_fields.append("borrower_email")
+
+                # Borrower phone
+                if value := get_field_value(fields, "borrower_phone"):
+                    loan.borrower_phone = str(value)
+                    updated_fields.append("borrower_phone")
+
+                # Co-borrower name
+                if value := get_field_value(fields, "coborrower_name"):
+                    loan.coborrower_name = str(value)
+                    updated_fields.append("coborrower_name")
+
+                # Amount / Loan Amount
+                if value := get_field_value(fields, "amount"):
+                    loan.amount = float(value)
+                    updated_fields.append("amount")
+                elif value := get_field_value(fields, "loan_amount"):
+                    loan.amount = float(value)
+                    updated_fields.append("amount")
+
+                # Rate
+                if value := get_field_value(fields, "rate"):
+                    loan.rate = float(value)
+                    updated_fields.append("rate")
+
+                # Program
+                if value := get_field_value(fields, "program"):
+                    loan.program = str(value)
+                    updated_fields.append("program")
+
+                # Property Address
+                if value := get_field_value(fields, "property_address"):
+                    loan.property_address = str(value)
+                    updated_fields.append("property_address")
+
+                # Property City
+                if value := get_field_value(fields, "property_city"):
+                    loan.property_city = str(value)
+                    updated_fields.append("property_city")
+
+                # Property State
+                if value := get_field_value(fields, "property_state"):
+                    loan.property_state = str(value)
+                    updated_fields.append("property_state")
+
+                # Property Zip
+                if value := get_field_value(fields, "property_zip"):
+                    loan.property_zip = str(value)
+                    updated_fields.append("property_zip")
+
+                # Processor
+                if value := get_field_value(fields, "processor"):
+                    loan.processor = str(value)
+                    updated_fields.append("processor")
+
+                # Underwriter
+                if value := get_field_value(fields, "underwriter"):
+                    loan.underwriter = str(value)
+                    updated_fields.append("underwriter")
+
+                # Lender
+                if value := get_field_value(fields, "lender"):
+                    loan.lender = str(value)
+                    updated_fields.append("lender")
+
+                # Realtor
+                if value := get_field_value(fields, "realtor_name"):
+                    loan.realtor_agent = str(value)
+                    updated_fields.append("realtor_agent")
+
+                # Title Company
+                if value := get_field_value(fields, "title_company"):
+                    loan.title_company = str(value)
+                    updated_fields.append("title_company")
+
+                # Closing Date
+                if value := get_field_value(fields, "closing_date"):
+                    if parsed := parse_date(value):
+                        loan.closing_date = parsed
+                        updated_fields.append("closing_date")
+                elif value := get_field_value(fields, "closing_scheduled_date"):
+                    if parsed := parse_date(value):
+                        loan.closing_date = parsed
+                        updated_fields.append("closing_date")
+
+                # Lock Date
+                if value := get_field_value(fields, "rate_lock_date"):
+                    if parsed := parse_date(value):
+                        loan.lock_date = parsed
+                        updated_fields.append("lock_date")
+
+                # Lock Expiration
+                if value := get_field_value(fields, "lock_expiration"):
+                    if parsed := parse_date(value):
+                        loan.lock_expiration_date = parsed
+                        updated_fields.append("lock_expiration_date")
+
+                # Appraisal Ordered Date
+                if value := get_field_value(fields, "appraisal_ordered_date"):
+                    if parsed := parse_date(value):
+                        loan.appraisal_ordered_date = parsed
+                        updated_fields.append("appraisal_ordered_date")
+
+                # Appraisal Scheduled Date
+                if value := get_field_value(fields, "appraisal_scheduled_date"):
+                    if parsed := parse_date(value):
+                        loan.appraisal_scheduled_date = parsed
+                        updated_fields.append("appraisal_scheduled_date")
+
+                # Appraisal Completed Date
+                if value := get_field_value(fields, "appraisal_completed_date"):
+                    if parsed := parse_date(value):
+                        loan.appraisal_completed_date = parsed
+                        updated_fields.append("appraisal_completed_date")
+
+                # Appraisal Value
+                if value := get_field_value(fields, "appraisal_value"):
+                    loan.appraisal_value = float(value)
+                    updated_fields.append("appraisal_value")
+
+                # Initial Disclosures Sent Date
+                if value := get_field_value(fields, "initial_disclosures_sent_date"):
+                    if parsed := parse_date(value):
+                        loan.initial_disclosures_sent_date = parsed
+                        updated_fields.append("initial_disclosures_sent_date")
+
+                # Initial Disclosures Signed Date
+                if value := get_field_value(fields, "initial_disclosures_signed_date"):
+                    if parsed := parse_date(value):
+                        loan.initial_disclosures_signed_date = parsed
+                        updated_fields.append("initial_disclosures_signed_date")
+
+                # CD Received/Signed Date
+                if value := get_field_value(fields, "cd_received_signed_date"):
+                    if parsed := parse_date(value):
+                        loan.cd_received_signed_date = parsed
+                        updated_fields.append("cd_received_signed_date")
+
+                # Final Closing Package Sent Date - AUTO TRIGGERS STAGE TO CTC
+                if value := get_field_value(fields, "final_closing_package_sent_date"):
+                    if parsed := parse_date(value):
+                        loan.final_closing_package_sent_date = parsed
+                        updated_fields.append("final_closing_package_sent_date")
+                        # Auto-update stage to CTC when closing docs are sent
+                        if loan.stage != LoanStage.FUNDED:
+                            loan.stage = LoanStage.CTC
+                            updated_fields.append("stage->CTC")
+
+                # Borrower Name (from extracted data)
+                if value := get_field_value(fields, "borrower_name"):
+                    if not loan.borrower_name or loan.borrower_name.strip() == "":
+                        loan.borrower_name = str(value)
+                        updated_fields.append("borrower_name")
+
+                # Milestone - update stage based on milestone
+                if value := get_field_value(fields, "milestone", min_confidence=0.85):
+                    milestone = str(value).lower()
+                    if "clearto" in milestone or "ctc" in milestone:
+                        loan.stage = LoanStage.CTC
+                        updated_fields.append("stage->CTC")
+                    elif "approved" in milestone:
+                        loan.stage = LoanStage.APPROVED
+                        updated_fields.append("stage->APPROVED")
+                    elif "processing" in milestone:
+                        loan.stage = LoanStage.PROCESSING
+                        updated_fields.append("stage->PROCESSING")
+                    elif "u/w" in milestone or "underwriting" in milestone or "received" in milestone:
+                        loan.stage = LoanStage.UW_RECEIVED
+                        updated_fields.append("stage->UW_RECEIVED")
+                    elif "submitted" in milestone:
+                        loan.stage = LoanStage.SUBMITTED
+                        updated_fields.append("stage->SUBMITTED")
+                    elif "funded" in milestone:
+                        loan.stage = LoanStage.FUNDED
+                        loan.funded_date = datetime.now(timezone.utc)
+                        updated_fields.append("stage->FUNDED")
+
+                # Update the updated_at timestamp
+                loan.updated_at = datetime.now(timezone.utc)
+
+                db.commit()
+                logger.info(f"✅ Applied {len(updated_fields)} fields to loan {loan.loan_number}: {', '.join(updated_fields)}")
+
+                # TRIGGER TASK CREATION based on updated milestone dates
+                tasks_created = create_milestone_tasks(loan, updated_fields, db)
+                if tasks_created:
+                    logger.info(f"📋 Created {len(tasks_created)} tasks for loan {loan.loan_number}: {tasks_created}")
+                return True
+
+            elif extracted_data.match_entity_type == "lead" and extracted_data.match_entity_id:
+                lead = db.query(Lead).filter(Lead.id == extracted_data.match_entity_id).first()
+                if not lead:
+                    logger.warning(f"Lead {extracted_data.match_entity_id} not found for data application - approving without applying data")
+                    return True  # Allow approval even if lead doesn't exist
+
+                logger.info(f"Applying extracted data to lead {lead.id} ({lead.name})")
+
+                # Update lead fields - handle various field name formats from AI extraction
+                # Name - check for combined or separate first/last name fields
+                if value := get_field_value(fields, "borrower_name"):
+                    lead.name = str(value)
+                    updated_fields.append("name")
+                elif get_field_value(fields, "first_name") or get_field_value(fields, "last_name"):
+                    first = get_field_value(fields, "first_name") or ""
+                    last = get_field_value(fields, "last_name") or ""
+                    full_name = f"{first} {last}".strip()
+                    if full_name:
+                        lead.name = full_name
+                        updated_fields.append("name")
+
+                # Email - check multiple possible field names
+                if value := get_field_value(fields, "email"):
+                    lead.email = str(value)
+                    updated_fields.append("email")
+                elif value := get_field_value(fields, "borrower_email"):
+                    lead.email = str(value)
+                    updated_fields.append("email")
+
+                # Phone - check multiple possible field names
+                if value := get_field_value(fields, "phone"):
+                    lead.phone = str(value)
+                    updated_fields.append("phone")
+                elif value := get_field_value(fields, "borrower_phone"):
+                    lead.phone = str(value)
+                    updated_fields.append("phone")
+
+                if value := get_field_value(fields, "credit_score"):
+                    lead.credit_score = int(value)
+                    updated_fields.append("credit_score")
+
+                if value := get_field_value(fields, "loan_amount"):
+                    lead.loan_amount = float(value)
+                    updated_fields.append("loan_amount")
+                elif value := get_field_value(fields, "amount"):
+                    lead.loan_amount = float(value)
+                    updated_fields.append("loan_amount")
+
+                if value := get_field_value(fields, "property_address"):
+                    lead.property_address = str(value)
+                    updated_fields.append("property_address")
+
+                if value := get_field_value(fields, "program"):
+                    lead.loan_type = str(value)
+                    updated_fields.append("loan_type")
+
+                # Milestone dates for leads
+                if value := get_field_value(fields, "application_started_date"):
+                    if parsed := parse_date(value):
+                        lead.application_started_date = parsed
+                        updated_fields.append("application_started_date")
+
+                if value := get_field_value(fields, "application_completed_date"):
+                    if parsed := parse_date(value):
+                        lead.application_completed_date = parsed
+                        updated_fields.append("application_completed_date")
+                        # Also update stage to APPLICATION using raw SQL
+                        db.execute(text("UPDATE leads SET stage = :stage WHERE id = :id"),
+                                   {"stage": LeadStage.APPLICATION.name, "id": lead.id})
+                        updated_fields.append("stage->APPLICATION")
+
+                if value := get_field_value(fields, "credit_pulled_date"):
+                    if parsed := parse_date(value):
+                        lead.credit_pulled_date = parsed
+                        updated_fields.append("credit_pulled_date")
+
+                if value := get_field_value(fields, "preapproval_issued_date"):
+                    if parsed := parse_date(value):
+                        lead.preapproval_issued_date = parsed
+                        updated_fields.append("preapproval_issued_date")
+                        # Also update stage to PRE_APPROVED using raw SQL
+                        db.execute(text("UPDATE leads SET stage = :stage WHERE id = :id"),
+                                   {"stage": LeadStage.PRE_APPROVED.name, "id": lead.id})
+                        updated_fields.append("stage->PRE_APPROVED")
+
+                # Update timestamp
+                lead.updated_at = datetime.now(timezone.utc)
+
+                db.commit()
+                logger.info(f"✅ Applied {len(updated_fields)} fields to lead {lead.name}: {', '.join(updated_fields)}")
+
+                # TRIGGER TASK CREATION based on updated milestone dates for leads
+                tasks_created = create_lead_milestone_tasks(lead, updated_fields, db)
+                if tasks_created:
+                    logger.info(f"📋 Created {len(tasks_created)} tasks for lead {lead.name}: {tasks_created}")
+                return True
+
+            elif extracted_data.match_entity_type == "partner" and extracted_data.match_entity_id:
+                partner = db.query(ReferralPartner).filter(ReferralPartner.id == extracted_data.match_entity_id).first()
+                if not partner:
+                    logger.warning(f"Partner {extracted_data.match_entity_id} not found for data application")
+                    return True
+
+                logger.info(f"Applying extracted data to partner {partner.id} ({partner.name})")
+
+                # Update partner fields
+                if value := get_field_value(fields, "partner_name"):
+                    partner.name = str(value)
+                    updated_fields.append("name")
+                elif value := get_field_value(fields, "agent_name"):
+                    partner.name = str(value)
+                    updated_fields.append("name")
+                elif value := get_field_value(fields, "realtor_name"):
+                    partner.name = str(value)
+                    updated_fields.append("name")
+
+                if value := get_field_value(fields, "partner_email"):
+                    partner.email = str(value)
+                    updated_fields.append("email")
+                elif value := get_field_value(fields, "agent_email"):
+                    partner.email = str(value)
+                    updated_fields.append("email")
+
+                if value := get_field_value(fields, "partner_phone"):
+                    partner.phone = str(value)
+                    updated_fields.append("phone")
+                elif value := get_field_value(fields, "agent_phone"):
+                    partner.phone = str(value)
+                    updated_fields.append("phone")
+
+                if value := get_field_value(fields, "partner_company"):
+                    partner.company = str(value)
+                    updated_fields.append("company")
+                elif value := get_field_value(fields, "brokerage"):
+                    partner.company = str(value)
+                    updated_fields.append("company")
+
+                # Update last interaction timestamp
+                partner.last_interaction = datetime.now(timezone.utc)
+                updated_fields.append("last_interaction")
+
+                db.commit()
+                logger.info(f"✅ Applied {len(updated_fields)} fields to partner {partner.name}: {', '.join(updated_fields)}")
+                return True
+
+            elif extracted_data.match_entity_type == "portfolio" and extracted_data.match_entity_id:
+                # Portfolio clients (MUM clients) - past borrowers
+                try:
+                    client = db.query(MUMClient).filter(MUMClient.id == extracted_data.match_entity_id).first()
+                    if not client:
+                        logger.warning(f"Portfolio client {extracted_data.match_entity_id} not found")
+                        return True
+
+                    logger.info(f"Applying extracted data to portfolio client {client.id} ({client.name})")
+
+                    # Update portfolio client fields
+                    if value := get_field_value(fields, "borrower_name"):
+                        client.name = str(value)
+                        updated_fields.append("name")
+
+                    if value := get_field_value(fields, "borrower_email"):
+                        client.email = str(value)
+                        updated_fields.append("email")
+                    elif value := get_field_value(fields, "email"):
+                        client.email = str(value)
+                        updated_fields.append("email")
+
+                    if value := get_field_value(fields, "borrower_phone"):
+                        client.phone = str(value)
+                        updated_fields.append("phone")
+                    elif value := get_field_value(fields, "phone"):
+                        client.phone = str(value)
+                        updated_fields.append("phone")
+
+                    db.commit()
+                    logger.info(f"✅ Applied {len(updated_fields)} fields to portfolio client {client.name}: {', '.join(updated_fields)}")
+                except Exception as e:
+                    logger.warning(f"Portfolio client update failed: {e}")
+                return True
+
+            # No match - return True anyway since data was extracted, just nowhere to apply
+            logger.info("No matched entity to apply data to")
+            return True
+
+        except Exception as e:
+            logger.error(f"Apply extracted data error: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            # Don't rollback here - let the calling function handle transactions
+            return False
+
+    # ============================================================================
+    # MICROSOFT OAUTH & EMAIL SYNC FUNCTIONS
+    # ============================================================================
+
+    # Simple token encryption (use Fernet for production)
+    from cryptography.fernet import Fernet
+    import base64
+
+    # Generate encryption key from SECRET_KEY (in production, use dedicated key)
+    def get_encryption_key():
+        # Use first 32 bytes of SECRET_KEY, base64 encoded
+        key_material = SECRET_KEY.encode()[:32].ljust(32, b'0')
+        return base64.urlsafe_b64encode(key_material)
+
+    def encrypt_token(token: str) -> str:
+        """Encrypt a token for secure storage"""
+        f = Fernet(get_encryption_key())
+        return f.encrypt(token.encode()).decode()
+
+    def decrypt_token(encrypted_token: str) -> str:
+        """Decrypt a stored token"""
+        f = Fernet(get_encryption_key())
+        return f.decrypt(encrypted_token.encode()).decode()
+
+    async def refresh_microsoft_token(oauth_record: MicrosoftOAuthToken, db: Session) -> dict:
+        """Refresh an expired Microsoft access token.
+
+        Returns:
+            dict with 'success' (bool) and optionally 'error' (str) and 'needs_reauth' (bool)
+        """
+        try:
+            refresh_token = decrypt_token(oauth_record.refresh_token)
+
+            # Microsoft token endpoint
+            token_url = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
+
+            # Get client credentials from environment
+            client_id = os.getenv("MICROSOFT_CLIENT_ID")
+            client_secret = os.getenv("MICROSOFT_CLIENT_SECRET")
+
+            if not client_id or not client_secret:
+                logger.error("Microsoft OAuth credentials not configured")
+                return {"success": False, "error": "Microsoft OAuth credentials not configured"}
+
+            data = {
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "refresh_token": refresh_token,
+                "grant_type": "refresh_token",
+                "scope": "https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/Calendars.Read offline_access"
+            }
+
+            response = requests.post(token_url, data=data)
+
+            if response.status_code == 200:
+                token_data = response.json()
+
+                # Update tokens
+                oauth_record.access_token = encrypt_token(token_data["access_token"])
+                oauth_record.refresh_token = encrypt_token(token_data["refresh_token"])
+                oauth_record.token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=token_data["expires_in"])
+                oauth_record.updated_at = datetime.now(timezone.utc)
+
+                db.commit()
+                logger.info(f"Refreshed Microsoft token for user {oauth_record.user_id}")
+                return {"success": True}
+            else:
+                error_data = response.json() if response.headers.get('content-type', '').startswith('application/json') else {}
+                error_code = error_data.get("error", "")
+                error_desc = error_data.get("error_description", response.text)
+
+                # Check if refresh token is invalid/expired (requires re-authentication)
+                needs_reauth = error_code in ["invalid_grant", "interaction_required", "consent_required"]
+
+                logger.error(f"Failed to refresh Microsoft token: {error_code} - {error_desc}")
+                return {
+                    "success": False,
+                    "error": error_desc,
+                    "needs_reauth": needs_reauth,
+                    "error_code": error_code
+                }
+
+        except Exception as e:
+            logger.error(f"Error refreshing Microsoft token: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def fetch_microsoft_emails(oauth_record: MicrosoftOAuthToken, db: Session, limit: int = 50):
+        """Fetch emails from Microsoft Graph API"""
+        try:
+            # Check if token needs refresh (proactively refresh if expiring within 5 mins)
+            needs_refresh = False
+            if oauth_record.token_expires_at:
+                token_expiry = oauth_record.token_expires_at
+                if token_expiry.tzinfo is None:
+                    token_expiry = token_expiry.replace(tzinfo=timezone.utc)
+                needs_refresh = token_expiry < datetime.now(timezone.utc) + timedelta(minutes=5)
+
+            if needs_refresh:
+                logger.info("Token expiring soon, refreshing proactively...")
+                refresh_result = await refresh_microsoft_token(oauth_record, db)
+                if not refresh_result.get("success"):
+                    return {
+                        "error": refresh_result.get("error", "Failed to refresh token"),
+                        "needs_reauth": refresh_result.get("needs_reauth", False)
+                    }
+                # Refresh ORM object to get updated token
+                db.refresh(oauth_record)
+
+            access_token = decrypt_token(oauth_record.access_token)
+
+            # Microsoft Graph API endpoint
+            folder = oauth_record.sync_folder or "Inbox"
+            graph_url = f"https://graph.microsoft.com/v1.0/me/mailFolders/{folder}/messages?$top={limit}&$orderby=receivedDateTime desc"
+
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json"
+            }
+
+            response = requests.get(graph_url, headers=headers)
+
+            # If we get a 401, try refreshing token and retry ONCE
+            if response.status_code == 401:
+                logger.info("Got 401 from Microsoft API, attempting token refresh...")
+                refresh_result = await refresh_microsoft_token(oauth_record, db)
+                if not refresh_result.get("success"):
+                    return {
+                        "error": refresh_result.get("error", "Failed to refresh token"),
+                        "needs_reauth": refresh_result.get("needs_reauth", True)
+                    }
+                # Refresh the ORM object to get updated token from DB
+                db.refresh(oauth_record)
+                # Retry with new token
+                access_token = decrypt_token(oauth_record.access_token)
+                headers["Authorization"] = f"Bearer {access_token}"
+                response = requests.get(graph_url, headers=headers)
+
+            if response.status_code == 200:
+                emails_data = response.json()
+                emails = emails_data.get("value", [])
+
+                logger.info(f"Fetched {len(emails)} emails from Microsoft for user {oauth_record.user_id} (folder: {folder})")
+                if len(emails) == 0:
+                    logger.warning(f"Microsoft API returned 0 emails for folder '{folder}'. API response keys: {list(emails_data.keys())}")
+
+                # Update last sync time
+                oauth_record.last_sync_at = datetime.now(timezone.utc)
+                db.commit()
+
+                return {"emails": emails, "count": len(emails)}
+            else:
+                error_detail = response.text
+                logger.error(f"Failed to fetch Microsoft emails: {response.status_code} - {error_detail}")
+                # Check if it's still auth-related
+                if response.status_code == 401 or response.status_code == 403:
+                    return {"error": "Authentication failed", "needs_reauth": True}
+                return {"error": f"Microsoft API error: {response.status_code} - {error_detail[:200]}"}
+
+        except Exception as e:
+            logger.error(f"Error fetching Microsoft emails: {e}")
+            return {"error": str(e)}
+
+
+    async def delete_microsoft_email(oauth_record: MicrosoftOAuthToken, message_id: str, db: Session):
+        """Move an email to trash in Microsoft 365/Outlook"""
+        try:
+            # Check if token needs refresh (proactively)
+            needs_refresh = False
+            if oauth_record.token_expires_at:
+                token_expiry = oauth_record.token_expires_at
+                if token_expiry.tzinfo is None:
+                    token_expiry = token_expiry.replace(tzinfo=timezone.utc)
+                needs_refresh = token_expiry < datetime.now(timezone.utc) + timedelta(minutes=5)
+
+            if needs_refresh:
+                logger.info("Token expiring soon, refreshing before delete...")
+                refresh_result = await refresh_microsoft_token(oauth_record, db)
+                if not refresh_result.get("success"):
+                    return {
+                        "success": False,
+                        "error": refresh_result.get("error", "Failed to refresh token"),
+                        "needs_reauth": refresh_result.get("needs_reauth", False)
+                    }
+                # Refresh ORM object to get updated token
+                db.refresh(oauth_record)
+
+            access_token = decrypt_token(oauth_record.access_token)
+
+            # Microsoft Graph API endpoint to move email to trash (deletedItems folder)
+            graph_url = f"https://graph.microsoft.com/v1.0/me/messages/{message_id}/move"
+
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json"
+            }
+
+            body = {"destinationId": "deleteditems"}
+
+            response = requests.post(graph_url, headers=headers, json=body)
+
+            # If we get a 401, try refreshing token and retry ONCE
+            if response.status_code == 401:
+                logger.info("Got 401 from Microsoft API on delete, attempting token refresh...")
+                refresh_result = await refresh_microsoft_token(oauth_record, db)
+                if not refresh_result.get("success"):
+                    return {
+                        "success": False,
+                        "error": refresh_result.get("error", "Failed to refresh token"),
+                        "needs_reauth": refresh_result.get("needs_reauth", True)
+                    }
+                # Refresh ORM object to get updated token from DB
+                db.refresh(oauth_record)
+                # Retry with new token
+                access_token = decrypt_token(oauth_record.access_token)
+                headers["Authorization"] = f"Bearer {access_token}"
+                response = requests.post(graph_url, headers=headers, json=body)
+
+            if response.status_code == 200 or response.status_code == 201:
+                logger.info(f"Successfully moved email {message_id} to trash for user {oauth_record.user_id}")
+                return {"success": True, "message_id": message_id}
+            elif response.status_code == 404:
+                # Email might have already been deleted
+                logger.warning(f"Email {message_id} not found - may have already been deleted")
+                return {"success": True, "message_id": message_id, "note": "already_deleted"}
+            else:
+                error_detail = response.text
+                logger.error(f"Failed to delete Microsoft email: {response.status_code} - {error_detail}")
+                if response.status_code == 401 or response.status_code == 403:
+                    return {"success": False, "error": "Authentication failed", "needs_reauth": True}
+                return {"success": False, "error": f"Microsoft API error: {response.status_code}"}
+
+        except Exception as e:
+            logger.error(f"Error deleting Microsoft email: {e}")
+            return {"success": False, "error": str(e)}
+
+
+    async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Session):
+        """Process a Microsoft Graph email and ingest into DRE"""
+        try:
+            # Extract email data
+            message_id = email_data.get("id", "")  # Microsoft Graph message ID
+            subject = email_data.get("subject", "")
+            sender = email_data.get("from", {}).get("emailAddress", {}).get("address", "")
+            recipients = [r.get("emailAddress", {}).get("address", "") for r in email_data.get("toRecipients", [])]
+            received_at = email_data.get("receivedDateTime", "")
+
+            # Check if this email was already processed (deduplication)
+            if message_id:
+                existing_event = db.query(IncomingDataEvent).filter(
+                    IncomingDataEvent.external_message_id == message_id,
+                    IncomingDataEvent.user_id == user_id
+                ).first()
+
+                if existing_event:
+                    logger.debug(f"Email {message_id} already processed (event {existing_event.id}), skipping")
+                    return {"status": "skipped", "reason": "already_processed", "event_id": existing_event.id}
+
+            # Get body content - always try to get both HTML and text
+            body = email_data.get("body", {})
+            body_content = body.get("content", "")
+            content_type = body.get("contentType", "text")
+
+            if content_type == "html":
+                raw_html = body_content
+                # Convert HTML to plain text for display
+                try:
+                    from bs4 import BeautifulSoup
+                    soup = BeautifulSoup(body_content, 'html.parser')
+                    # Remove script and style elements
+                    for script in soup(["script", "style"]):
+                        script.decompose()
+                    raw_text = soup.get_text(separator='\n', strip=True)
+                except Exception:
+                    # Fallback: simple HTML tag removal
+                    import re
+                    raw_text = re.sub(r'<[^>]+>', '', body_content)
+                    raw_text = raw_text.replace('&nbsp;', ' ').replace('&amp;', '&')
+            else:
+                raw_text = body_content
+                raw_html = None
+
+            # Parse received_at - handle both ISO format (Microsoft) and RFC 2822 (Gmail)
+            parsed_received_at = datetime.now(timezone.utc)
+            if received_at:
+                try:
+                    # Try ISO format first (Microsoft Graph)
+                    parsed_received_at = datetime.fromisoformat(received_at.replace('Z', '+00:00'))
+                except ValueError:
+                    try:
+                        # Try RFC 2822 format (Gmail)
+                        from email.utils import parsedate_to_datetime
+                        parsed_received_at = parsedate_to_datetime(received_at)
+                    except Exception:
+                        logger.warning(f"Could not parse date: {received_at}")
+                        parsed_received_at = datetime.now(timezone.utc)
+
+            # Create incoming data event
+            db_event = IncomingDataEvent(
+                source="microsoft365",
+                external_message_id=message_id,
+                raw_text=raw_text,
+                raw_html=raw_html,
+                subject=subject,
+                sender=sender,
+                recipients=recipients,
+                received_at=parsed_received_at,
+                user_id=user_id,
+                processed=False
+            )
+            db.add(db_event)
+            db.commit()
+            db.refresh(db_event)
+
+            logger.info(f"Ingested NEW Microsoft email {db_event.id} from {sender} (msg_id: {message_id[:20]}...)")
+
+            # Also queue to Email Intelligence system for intelligent disposition
+            try:
+                from routes.email_intelligence_routes import queue_email_for_intelligence
+                intel_email_data = {
+                    "email_provider": "microsoft365",
+                    "provider_message_id": message_id,
+                    "thread_id": email_data.get("conversationId"),
+                    "from_email": sender,
+                    "from_name": email_data.get("from", {}).get("emailAddress", {}).get("name", ""),
+                    "to_emails": recipients,
+                    "cc_emails": [r.get("emailAddress", {}).get("address", "") for r in email_data.get("ccRecipients", [])],
+                    "subject": subject,
+                    "body_preview": raw_text[:500] if raw_text else "",
+                    "body_full": raw_text,
+                    "body_html": raw_html,
+                    "sent_date": email_data.get("sentDateTime"),
+                    "received_date": received_at,
+                    "has_attachments": email_data.get("hasAttachments", False),
+                    "direction": "inbound"
+                }
+                await queue_email_for_intelligence(
+                    db=db,
+                    user_id=user_id,
+                    email_data=intel_email_data,
+                    auto_analyze=True,  # Auto-analyze to identify borrower, create tasks, log conversations
+                    source="microsoft365"
+                )
+                logger.debug(f"Queued email {message_id[:20]}... to Email Intelligence")
+            except Exception as intel_error:
+                logger.warning(f"Email Intelligence queue error: {intel_error}")
+
+            # Check AI provider setting
+            ai_provider = os.getenv("AI_PROVIDER", "openai").lower()
+
+            # Trigger extraction with Claude or legacy OpenAI
+            content = raw_text or raw_html or ""
+
+            if ai_provider == "claude":
+                # Use Claude for superior extraction (97-99% accuracy)
+                from ai_providers.claude_parser import get_claude_parser
+
+                logger.info(f"🤖 Using Claude parser for email {db_event.id}")
+
+                # Format email for Claude parser
+                claude_email_data = {
+                    "id": message_id,
+                    "subject": subject,
+                    "from_email": sender,
+                    "body_text": raw_text,
+                    "body_html": raw_html,
+                    "received_at": received_at
+                }
+
+                # Get Claude parser and classify
+                parser = get_claude_parser()
+                profile_type = parser.classify_email(claude_email_data)
+
+                logger.info(f"📧 Email classified as: {profile_type}")
+
+                # Skip unrelated emails BEFORE trying to parse
+                if profile_type == "unrelated":
+                    db_event.processed = True
+                    db.commit()
+                    logger.info(f"Skipped unrelated email (Claude): {subject[:50]}")
+                    return {"status": "skipped", "reason": "Email classified as unrelated to mortgage business"}
+
+                # Parse with Claude
+                parsed_result = await parser.parse_email(
+                    claude_email_data,
+                    profile_type,
+                    current_profile=None
+                )
+
+                # Map Claude result to DRE format
+                extracted_fields = parsed_result.get('extracted_fields', {})
+                confidence_scores = parsed_result.get('confidence_scores', {})
+
+                # Convert Claude format to legacy format
+                # Claude: {"field_name": "value"}
+                # Legacy: {"field_name": {"value": "value", "confidence": 0.95}}
+                fields = {}
+                for field_name, field_value in extracted_fields.items():
+                    # Get confidence score (convert from 0-100 to 0-1)
+                    confidence = confidence_scores.get(field_name, 95) / 100.0
+
+                    # Wrap in legacy format
+                    fields[field_name] = {
+                        "value": field_value,
+                        "confidence": confidence
+                    }
+
+                avg_confidence = parsed_result.get('overall_confidence', 0) / 100.0  # Convert to 0-1
+                classification = {
+                    "category": profile_type,
+                    "subcategory": parsed_result.get('email_summary', ''),
+                    "confidence": avg_confidence
+                }
+
+                logger.info(f"✅ Claude extracted {len(fields)} fields with {avg_confidence*100:.1f}% confidence")
+            else:
+                # Legacy OpenAI extraction
+                logger.info(f"⚙️  Using legacy OpenAI parser for email {db_event.id}")
+                classification = classify_email_content(content, subject)
+                fields = extract_loan_fields(content, classification["category"]) if classification["category"] != "unrelated" and classification["confidence"] >= 0.3 else {}
+                avg_confidence = classification["confidence"]
+
+            # Skip unrelated emails - don't clutter the reconciliation queue
+            if classification["category"] == "unrelated":
+                db_event.processed = True
+                db.commit()
+                logger.info(f"Skipped unrelated email: {subject[:50]}")
+                return {"status": "skipped", "reason": "Email classified as unrelated to mortgage business"}
+
+            # Extract fields if not already done (OpenAI path)
+            if not fields:
+                fields = extract_loan_fields(content, classification["category"])
+
+            # Handle different confidence formats (Claude vs OpenAI)
+            if ai_provider == "claude":
+                # Claude already calculated avg_confidence
+                pass
+            else:
+                # Legacy OpenAI format - fields contain {"confidence": ...} dicts
+                confidences = [field.get("confidence", 0.0) for field in fields.values()] if fields else []
+                avg_confidence = sum(confidences) / len(confidences) if confidences else classification["confidence"]
+
+            entity_match = match_entity(fields, db, user_id) if fields else {"entity_type": None, "entity_id": None, "confidence": 0.0}
+
+            # Check for learned patterns - if user has approved similar emails before, auto-complete
+            learned_pattern = None
+            sender_domain = sender.split("@")[1] if "@" in sender else ""
+            email_intent = classification.get("category", "")
+
+            try:
+                pattern_result = db.execute(text("""
+                    SELECT id, pattern_type, pattern_value, response_type, response_config,
+                           confidence_score, auto_execute_threshold, approval_count
+                    FROM email_response_patterns
+                    WHERE user_id = :user_id
+                      AND is_active = true
+                      AND (
+                          (pattern_type = 'sender_domain' AND pattern_value = :domain)
+                          OR (pattern_type = 'sender_email' AND pattern_value = :email)
+                          OR (pattern_type = 'email_intent' AND pattern_value = :intent)
+                      )
+                    ORDER BY confidence_score DESC, approval_count DESC
+                    LIMIT 1
+                """), {
+                    "user_id": user_id,
+                    "domain": sender_domain,
+                    "email": sender.lower(),
+                    "intent": email_intent,
+                })
+                row = pattern_result.fetchone()
+                if row and row.confidence_score and float(row.confidence_score) >= 0.90 and row.approval_count >= 3:
+                    learned_pattern = {
+                        "id": row.id,
+                        "pattern_type": row.pattern_type,
+                        "response_type": row.response_type,
+                        "confidence_score": float(row.confidence_score),
+                        "approval_count": row.approval_count
+                    }
+                    logger.info(f"Found learned pattern {row.id} ({row.pattern_type}={row.pattern_value}) with {row.approval_count} approvals")
+            except Exception as pattern_error:
+                logger.warning(f"Could not check learned patterns: {pattern_error}")
+
+            # Determine status based on confidence, category, AND learned patterns
+            status = "needs_review"  # Default to needs_review for safety
+            auto_complete_reason = None
+
+            # Check if we have a learned pattern that should auto-complete
+            if learned_pattern:
+                status = "auto_approved"
+                auto_complete_reason = f"Learned pattern: {learned_pattern['pattern_type']} ({learned_pattern['approval_count']} prior approvals)"
+                logger.info(f"Auto-completing email based on learned pattern: {auto_complete_reason}")
+            elif fields and avg_confidence > 0.85 and entity_match["confidence"] > 0.90:
+                status = "auto_approved"
+                auto_complete_reason = "High AI confidence with entity match"
+            elif fields and avg_confidence >= 0.60 and entity_match["confidence"] >= 0.50:
+                status = "pending_review"
+            # Everything else stays as needs_review
+
+            extracted = ExtractedData(
+                event_id=db_event.id,
+                category=classification["category"],
+                subcategory=classification.get("subcategory"),
+                fields=fields or {},  # Use empty dict if no fields
+                match_entity_type=entity_match["entity_type"],
+                match_entity_id=entity_match["entity_id"],
+                match_confidence=entity_match["confidence"],
+                ai_confidence=avg_confidence,
+                status=status
+            )
+            db.add(extracted)
+            db_event.processed = True
+            db.commit()
+
+            # Auto-apply if high confidence
+            if status == "auto_approved":
+                if apply_extracted_data(extracted, db):
+                    extracted.status = "applied"
+                    db.commit()
+                    logger.info(f"Auto-applied extraction from email {db_event.id} - Reason: {auto_complete_reason or 'High confidence'}")
+
+                    # Update pattern statistics if we used a learned pattern
+                    if learned_pattern:
+                        try:
+                            db.execute(text("""
+                                UPDATE email_response_patterns
+                                SET last_matched_at = NOW(),
+                                    last_approved_at = NOW()
+                                WHERE id = :pattern_id
+                            """), {"pattern_id": learned_pattern["id"]})
+                            db.commit()
+                        except Exception as update_error:
+                            logger.warning(f"Could not update pattern stats: {update_error}")
+
+            return {"status": "success", "event_id": db_event.id}
+
+        except Exception as e:
+            logger.error(f"Error processing Microsoft email: {e}")
+            db.rollback()
+            return {"status": "error", "error": str(e)}
+
+    # Extracted to routes/db_migration_routes.py
+    # (add-external-message-id through fix-voicemail-drops-columns)
+
+    @app.get("/api/v1/debug/email-sync-status")
+    async def email_sync_status(
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db)
+    ):
+        """
+        Debug endpoint: Check email sync and reconciliation status
+        """
+        try:
+            # Check incoming emails
+            email_stats = db.execute(text("""
+                SELECT
+                    COUNT(*) as total,
+                    COUNT(CASE WHEN processed = true THEN 1 END) as processed,
+                    COUNT(CASE WHEN processed = false THEN 1 END) as pending
+                FROM incoming_data_events
+                WHERE source = 'microsoft365'
+            """)).fetchone()
+
+            # Check reconciliation items
+            recon_stats = db.execute(text("""
+                SELECT
+                    COUNT(*) as total,
+                    COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending,
+                    COUNT(CASE WHEN status = 'approved' THEN 1 END) as approved,
+                    COUNT(CASE WHEN status = 'rejected' THEN 1 END) as rejected
+                FROM reconciliation_items
+            """)).fetchone()
+
+            # Get recent emails
+            recent_emails = db.execute(text("""
+                SELECT subject, sender, received_at, processed
+                FROM incoming_data_events
+                WHERE source = 'microsoft365'
+                ORDER BY received_at DESC
+                LIMIT 5
+            """)).fetchall()
+
+            # Get recent reconciliation items
+            recent_recon = db.execute(text("""
+                SELECT entity_type, confidence_score, status, created_at
+                FROM reconciliation_items
+                ORDER BY created_at DESC
+                LIMIT 5
+            """)).fetchall()
+
+            return {
+                "success": True,
+                "emails": {
+                    "total": email_stats[0],
+                    "processed": email_stats[1],
+                    "pending": email_stats[2],
+                    "recent": [
+                        {
+                            "subject": e[0],
+                            "sender": e[1],
+                            "received_at": e[2].isoformat() if e[2] else None,
+                            "processed": e[3]
+                        }
+                        for e in recent_emails
+                    ]
+                },
+                "reconciliation": {
+                    "total": recon_stats[0],
+                    "pending": recon_stats[1],
+                    "approved": recon_stats[2],
+                    "rejected": recon_stats[3],
+                    "recent": [
+                        {
+                            "entity_type": r[0],
+                            "confidence_score": float(r[1]) if r[1] else 0,
+                            "status": r[2],
+                            "created_at": r[3].isoformat() if r[3] else None
+                        }
+                        for r in recent_recon
+                    ]
+                }
+            }
+        except Exception as e:
+            logger.error(f"Debug endpoint failed: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
+    @app.post("/api/v1/create-sample-tasks")
+    async def create_sample_tasks(
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db)
+    ):
+        """
+        Create 5 sample reconciliation tasks from emails for testing
+        """
+        try:
+            sample_emails = [
+                {
+                    "subject": "RE: Johnson Loan - Appraisal Scheduled for Next Week",
+                    "sender": "appraisal@titleco.com",
+                    "content": "The appraisal for the Johnson property at 123 Oak Street has been scheduled for next Tuesday at 2 PM. Loan amount: $450,000",
+                    "category": "loan_update",
+                    "subcategory": "appraisal_scheduled",
+                    "fields": {
+                        "borrower_name": {"value": "Johnson", "confidence": 0.85},
+                        "property_address": {"value": "123 Oak Street", "confidence": 0.90},
+                        "loan_amount": {"value": "$450,000", "confidence": 0.95}
+                    }
+                },
+                {
+                    "subject": "URGENT: Smith Closing - Title Issue Detected",
+                    "sender": "title@escrow.com",
+                    "content": "We've discovered a lien on the Smith property (456 Maple Avenue). Loan: $325,000. Outstanding HOA lien of $2,500",
+                    "category": "loan_update",
+                    "subcategory": "title_issue",
+                    "fields": {
+                        "borrower_name": {"value": "Smith", "confidence": 0.92},
+                        "property_address": {"value": "456 Maple Avenue", "confidence": 0.95},
+                        "loan_amount": {"value": "$325,000", "confidence": 0.98}
+                    }
+                },
+                {
+                    "subject": "Williams Pre-Approval Request - $600K Budget",
+                    "sender": "sarah.williams@email.com",
+                    "content": "Name: Sarah Williams, Phone: (555) 123-4567, Budget: $600,000, Property Type: Single Family Home",
+                    "category": "lead_update",
+                    "subcategory": "new_lead",
+                    "fields": {
+                        "borrower_name": {"value": "Sarah Williams", "confidence": 0.98},
+                        "phone": {"value": "(555) 123-4567", "confidence": 0.95},
+                        "loan_amount": {"value": "$600,000", "confidence": 0.92}
+                    }
+                },
+                {
+                    "subject": "RE: Martinez Loan - Rate Lock Expiring Soon",
+                    "sender": "processor@lendingco.com",
+                    "content": "Borrower: Carlos Martinez, Property: 789 Pine Boulevard, Loan: $280,000, Rate: 6.75%, Expires: December 1st",
+                    "category": "loan_update",
+                    "subcategory": "rate_lock_expiring",
+                    "fields": {
+                        "borrower_name": {"value": "Carlos Martinez", "confidence": 0.96},
+                        "property_address": {"value": "789 Pine Boulevard", "confidence": 0.94},
+                        "loan_amount": {"value": "$280,000", "confidence": 0.97}
+                    }
+                },
+                {
+                    "subject": "Thompson Family - Clear to Close!",
+                    "sender": "underwriting@mortgage.com",
+                    "content": "Borrower: Michael & Jennifer Thompson, Property: 321 Birch Lane, Loan: $525,000, Closing: November 20th, Status: APPROVED",
+                    "category": "loan_update",
+                    "subcategory": "clear_to_close",
+                    "fields": {
+                        "borrower_name": {"value": "Michael & Jennifer Thompson", "confidence": 0.97},
+                        "property_address": {"value": "321 Birch Lane", "confidence": 0.95},
+                        "loan_amount": {"value": "$525,000", "confidence": 0.98}
+                    }
+                }
+            ]
+
+            created_tasks = []
+
+            for idx, email in enumerate(sample_emails, 1):
+                # Create incoming data event
+                db_event = IncomingDataEvent(
+                    source="microsoft365",
+                    external_message_id=f"sample_task_{idx}_{datetime.now().timestamp()}",
+                    raw_text=email["content"],
+                    subject=email["subject"],
+                    sender=email["sender"],
+                    received_at=datetime.now(timezone.utc),
+                    user_id=current_user.id,
+                    processed=True
+                )
+                db.add(db_event)
+                db.flush()
+
+                # Calculate average confidence
+                confidences = [field["confidence"] for field in email["fields"].values()]
+                avg_confidence = sum(confidences) / len(confidences)
+
+                # Create extracted data (reconciliation item)
+                extracted = ExtractedData(
+                    event_id=db_event.id,
+                    category=email["category"],
+                    subcategory=email["subcategory"],
+                    fields=email["fields"],
+                    ai_confidence=avg_confidence,
+                    status="pending_review"
+                )
+                db.add(extracted)
+                db.flush()
+
+                created_tasks.append({
+                    "event_id": db_event.id,
+                    "extracted_id": extracted.id,
+                    "subject": email["subject"],
+                    "category": email["category"]
+                })
+
+            db.commit()
+
+            return {
+                "success": True,
+                "message": f"Created {len(created_tasks)} reconciliation tasks",
+                "tasks": created_tasks
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to create sample tasks: {e}")
+            db.rollback()
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
+    @app.post("/api/v1/auto-fix-error")
+    async def auto_fix_error(
+        request: ErrorFixRequest,
+        current_user: User = Depends(get_current_user)
+    ):
+        """
+        AI-powered error analysis and fix recommendations
+        Uses Claude AI to analyze frontend errors and provide fix suggestions
+        """
+        try:
+            anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
+
+            if not anthropic_api_key:
+                logger.warning("Anthropic API key not configured for error fix")
+                return {
+                    "success": False,
+                    "message": "AI error analysis is not configured. Please set ANTHROPIC_API_KEY.",
+                    "analysis": None
+                }
+
+            # Initialize Anthropic client
+            client = anthropic.Anthropic(api_key=anthropic_api_key)
+
+            # Build the analysis prompt
+            prompt = f"""You are an expert software engineer debugging a React application error.
+
+    Error Details:
+    - Error Message: {request.error_message}
+    - URL: {request.url}
+    - Attempt Number: {request.attempt_number}
+
+    Error Stack:
+    {request.error_stack if request.error_stack else "Not provided"}
+
+    Component Stack:
+    {request.component_stack if request.component_stack else "Not provided"}
+
+    User Agent:
+    {request.user_agent if request.user_agent else "Not provided"}
+
+    Please analyze this error and provide:
+    1. The root cause of the error
+    2. A step-by-step fix strategy
+    3. Which files are likely affected
+    4. Your confidence level (High/Medium/Low)
+    5. A recommendation for preventing similar errors
+
+    Respond in JSON format with these keys:
+    {{
+      "root_cause": "description of what caused the error",
+      "fix_strategy": "step-by-step plan to fix it",
+      "files_affected": ["list", "of", "file", "paths"],
+      "confidence": "High/Medium/Low",
+      "recommendation": "how to prevent this in the future"
+    }}"""
+
+            # Call Claude API
+            logger.info(f"Requesting error analysis from Claude for user {current_user.id}")
+
+            message = client.messages.create(
+                model="claude-3-5-sonnet-20241022",
+                max_tokens=2000,
+                messages=[{
+                    "role": "user",
+                    "content": prompt
+                }]
+            )
+
+            # Parse the response
+            response_text = message.content[0].text
+            logger.info(f"Received analysis from Claude: {response_text[:200]}...")
+
+            # Try to extract JSON from the response
+            import re
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+
+            if json_match:
+                analysis = json.loads(json_match.group())
+            else:
+                # If no JSON found, structure the response manually
+                analysis = {
+                    "root_cause": response_text,
+                    "fix_strategy": "See root cause analysis",
+                    "files_affected": [],
+                    "confidence": "Medium",
+                    "recommendation": "Review the error analysis above"
+                }
+
+            return {
+                "success": True,
+                "message": "Error analysis completed successfully",
+                "analysis": {
+                    "root_cause": analysis.get("root_cause", "Analysis provided"),
+                    "fix_strategy": analysis.get("fix_strategy", ""),
+                    "files_affected": analysis.get("files_affected", []),
+                    "confidence": analysis.get("confidence", "Medium"),
+                    "recommendation": analysis.get("recommendation", "")
+                },
+                "fix_strategy": analysis.get("fix_strategy", ""),
+                "files_affected": analysis.get("files_affected", []),
+                "confidence": analysis.get("confidence", "Medium"),
+                "recommendation": analysis.get("recommendation", "")
+            }
+
+        except Exception as e:
+            logger.error(f"Error in auto_fix_error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return {
+                "success": False,
+                "message": f"Failed to analyze error: {str(e)}",
+                "analysis": None
+            }
+
+    @app.post("/api/v1/microsoft/sync-now")
+    async def sync_microsoft_emails_now(
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db)
+    ):
+        """Manually trigger email sync from Microsoft 365"""
+        try:
+            # Log diagnostic info
+            logger.info(f"Sync triggered by user {current_user.id}")
+            logger.info(f"OpenAI client available: {openai_client is not None}")
+            logger.info(f"OpenAI API key set: {bool(OPENAI_API_KEY)}")
+            oauth_record = db.query(MicrosoftOAuthToken).filter(
+                MicrosoftOAuthToken.user_id == current_user.id
+            ).first()
+
+            if not oauth_record:
+                raise HTTPException(status_code=404, detail="Microsoft 365 not connected")
+
+            if not oauth_record.sync_enabled:
+                raise HTTPException(status_code=400, detail="Email sync is disabled")
+
+            # Log which account/folder we're syncing from
+            logger.info(f"Syncing from Microsoft account: {oauth_record.email_address}, folder: {oauth_record.sync_folder or 'Inbox'}")
+
+            # Auto-populate known_client_emails table before sync for better identity resolution
+            try:
+                from sqlalchemy import text as sa_text
+                # Get emails from leads
+                leads = db.execute(sa_text("""
+                    SELECT id, email, name FROM leads
+                    WHERE email IS NOT NULL AND status NOT IN ('dead', 'closed_lost')
+                """)).fetchall()
+                for lead in leads:
+                    if lead[1]:
+                        db.execute(sa_text("""
+                            INSERT INTO known_client_emails (email_address, lead_id, client_name, source_type, user_id)
+                            VALUES (:email, :lead_id, :name, 'lead', :user_id)
+                            ON CONFLICT (email_address, user_id) DO UPDATE SET
+                                lead_id = COALESCE(known_client_emails.lead_id, :lead_id),
+                                updated_at = CURRENT_TIMESTAMP
+                        """), {"email": lead[1].lower(), "lead_id": lead[0], "name": lead[2], "user_id": current_user.id})
+
+                # Get emails from loans
+                loans = db.execute(sa_text("""
+                    SELECT id, borrower_email, borrower_name FROM loans
+                    WHERE borrower_email IS NOT NULL AND status NOT IN ('cancelled', 'withdrawn')
+                """)).fetchall()
+                for loan in loans:
+                    if loan[1]:
+                        db.execute(sa_text("""
+                            INSERT INTO known_client_emails (email_address, loan_id, client_name, source_type, user_id)
+                            VALUES (:email, :loan_id, :name, 'loan', :user_id)
+                            ON CONFLICT (email_address, user_id) DO UPDATE SET
+                                loan_id = COALESCE(known_client_emails.loan_id, :loan_id),
+                                updated_at = CURRENT_TIMESTAMP
+                        """), {"email": loan[1].lower(), "loan_id": loan[0], "name": loan[2], "user_id": current_user.id})
+
+                db.commit()
+                logger.info(f"Auto-synced {len(leads)} leads and {len(loans)} loans to known_client_emails")
+            except Exception as kce_error:
+                logger.warning(f"Could not auto-sync known_client_emails: {kce_error}")
+                db.rollback()
+
+            # Fetch emails with timeout
+            import asyncio
+            try:
+                result = await asyncio.wait_for(
+                    fetch_microsoft_emails(oauth_record, db, limit=50),
+                    timeout=60  # 60 second timeout for fetching emails
+                )
+            except asyncio.TimeoutError:
+                logger.error(f"Microsoft email fetch timed out for user {current_user.id}")
+                raise HTTPException(status_code=504, detail="Email fetch timed out - please try again")
+
+            if "error" in result:
+                # If token needs reauth, return specific status code so frontend can handle
+                if result.get("needs_reauth"):
+                    raise HTTPException(status_code=401, detail="needs_reauth")
+                raise HTTPException(status_code=500, detail=result["error"])
+
+            # Process each email through DRE with individual error handling
+            emails = result.get("emails", [])
+            processed_count = 0
+            skipped_count = 0
+            error_count = 0
+            errors = []
+
+            for idx, email_data in enumerate(emails):
+                try:
+                    # Process each email with a 45-second timeout
+                    process_result = await asyncio.wait_for(
+                        process_microsoft_email_to_dre(email_data, current_user.id, db),
+                        timeout=45
+                    )
+                    if process_result.get("status") == "success":
+                        processed_count += 1
+                    elif process_result.get("status") == "skipped":
+                        skipped_count += 1
+                    else:
+                        error_count += 1
+                except asyncio.TimeoutError:
+                    error_count += 1
+                    subject = email_data.get("subject", "Unknown")[:50]
+                    errors.append(f"Timeout processing email {idx+1}: {subject}")
+                    logger.warning(f"Timeout processing email {idx+1}/{len(emails)}: {subject}")
+                except Exception as e:
+                    error_count += 1
+                    subject = email_data.get("subject", "Unknown")[:50]
+                    errors.append(f"Error processing email {idx+1}: {str(e)[:100]}")
+                    logger.error(f"Error processing email {idx+1}/{len(emails)} ({subject}): {e}")
+                    # Continue with next email instead of failing entire sync
+
+            # Update last_sync_at timestamp
+            oauth_record.last_sync_at = datetime.now(timezone.utc)
+            db.commit()
+
+            logger.info(f"Synced {processed_count}/{len(emails)} emails for user {current_user.id} (skipped: {skipped_count}, errors: {error_count})")
+
+            # Build informative message
+            if len(emails) == 0:
+                message = f"No new emails in {oauth_record.sync_folder or 'Inbox'} from {oauth_record.email_address}"
+            elif processed_count == 0 and skipped_count > 0:
+                message = f"All {skipped_count} emails already synced from {oauth_record.email_address}"
+            elif processed_count > 0:
+                message = f"Synced {processed_count} new emails from {oauth_record.email_address}"
+                if error_count > 0:
+                    message += f" ({error_count} errors)"
+            else:
+                message = f"Synced {processed_count} emails from {oauth_record.email_address}"
+
+            return {
+                "status": "success",
+                "email_account": oauth_record.email_address,
+                "sync_folder": oauth_record.sync_folder or "Inbox",
+                "fetched_count": len(emails),
+                "processed_count": processed_count,
+                "skipped_count": skipped_count,
+                "error_count": error_count,
+                "errors": errors[:5] if errors else [],  # Return first 5 errors
+                "message": message
+            }
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Microsoft sync error: {e}")
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"Sync error: {str(e)}")
+
+    @app.get("/api/v1/reconciliation/debug")
+    async def debug_reconciliation(
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db)
+    ):
+        """Debug endpoint to check email and extraction status"""
+        try:
+            from sqlalchemy import text
+
+            # Count IncomingDataEvents
+            events_count = db.execute(text("""
+                SELECT COUNT(*) FROM incoming_data_events WHERE user_id = :user_id
+            """), {"user_id": current_user.id}).scalar()
+
+            # Count ExtractedData for user's events
+            extracted_count = db.execute(text("""
+                SELECT COUNT(*) FROM extracted_data ed
+                JOIN incoming_data_events ide ON ed.event_id = ide.id
+                WHERE ide.user_id = :user_id
+            """), {"user_id": current_user.id}).scalar()
+
+            # Get status breakdown
+            status_breakdown = db.execute(text("""
+                SELECT ed.status, COUNT(*) as count FROM extracted_data ed
+                JOIN incoming_data_events ide ON ed.event_id = ide.id
+                WHERE ide.user_id = :user_id
+                GROUP BY ed.status
+            """), {"user_id": current_user.id}).fetchall()
+
+            # Get recent events
+            recent_events = db.execute(text("""
+                SELECT ide.id, ide.subject, ide.processed, ed.status, ed.category
+                FROM incoming_data_events ide
+                LEFT JOIN extracted_data ed ON ide.id = ed.event_id
+                WHERE ide.user_id = :user_id
+                ORDER BY ide.created_at DESC
+                LIMIT 5
+            """), {"user_id": current_user.id}).fetchall()
+
+            return {
+                "user_id": current_user.id,
+                "incoming_events_count": events_count,
+                "extracted_data_count": extracted_count,
+                "status_breakdown": {row[0]: row[1] for row in status_breakdown},
+                "recent_events": [
+                    {"id": row[0], "subject": row[1][:50] if row[1] else None, "processed": row[2], "status": row[3], "category": row[4]}
+                    for row in recent_events
+                ]
+            }
+        except Exception as e:
+            logger.error(f"Debug error: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+
+    @app.get("/api/v1/debug/all-loans")
+    async def debug_all_loans(
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db)
+    ):
+        """Debug endpoint to see ALL loans in the database (bypasses permission filtering)"""
+        try:
+            from sqlalchemy import text
+
+            # Get ALL loans regardless of loan_officer_id
+            all_loans = db.execute(text("""
+                SELECT id, loan_number, borrower_name, borrower_email, stage, loan_officer_id, created_at
+                FROM loans
+                ORDER BY created_at DESC
+                LIMIT 50
+            """)).fetchall()
+
+            return {
+                "total_loans": len(all_loans),
+                "loans": [
+                    {
+                        "id": row[0],
+                        "loan_number": row[1],
+                        "borrower_name": row[2],
+                        "borrower_email": row[3],
+                        "stage": row[4],
+                        "loan_officer_id": row[5],
+                        "created_at": str(row[6]) if row[6] else None
+                    }
+                    for row in all_loans
+                ]
+            }
+        except Exception as e:
+            logger.error(f"Debug all loans error: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+
+    @app.get("/api/v1/debug/dashboard-diagnosis")
+    async def debug_dashboard_diagnosis(
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db)
+    ):
+        """Debug endpoint to diagnose dashboard errors step by step"""
+        import traceback
+        from datetime import date, timedelta, datetime, timezone
+        from sqlalchemy import func, extract, case, text
+
+        results = {"user_id": current_user.id, "steps": []}
+
+        try:
+            # Step 1: Basic date setup
+            today = date.today()
+            start_of_month = today.replace(day=1)
+            results["steps"].append({"step": "date_setup", "status": "ok", "today": str(today)})
+        except Exception as e:
+            results["steps"].append({"step": "date_setup", "status": "error", "error": str(e)})
+            return results
+
+        try:
+            # Step 2: User metadata
+            user_metadata = current_user.user_metadata or {}
+            goals = user_metadata.get('goals', {})
+            results["steps"].append({"step": "user_metadata", "status": "ok", "has_goals": bool(goals)})
+        except Exception as e:
+            results["steps"].append({"step": "user_metadata", "status": "error", "error": str(e)})
+            return results
+
+        try:
+            # Step 3: Funded loans query with case statements
+            funded_counts = db.query(
+                func.count(case((extract('year', Loan.funded_date) == today.year, 1))).label('annual'),
+                func.count(case((Loan.funded_date >= start_of_month, 1))).label('monthly')
+            ).filter(
+                Loan.loan_officer_id == current_user.id,
+                Loan.stage == LoanStage.FUNDED
+            ).first()
+            results["steps"].append({"step": "funded_counts", "status": "ok", "annual": funded_counts.annual or 0})
+        except Exception as e:
+            results["steps"].append({"step": "funded_counts", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+            return results
+
+        try:
+            # Step 4: Lead counts query
+            lead_counts = db.query(
+                func.count(case((Lead.stage == LeadStage.NEW, 1))).label('new_leads'),
+                func.count(case((Lead.stage == LeadStage.PRE_APPROVED, 1))).label('preapproved')
+            ).filter(
+                Lead.owner_id == current_user.id
+            ).first()
+            results["steps"].append({"step": "lead_counts", "status": "ok", "new_leads": lead_counts.new_leads or 0})
+        except Exception as e:
+            results["steps"].append({"step": "lead_counts", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+            return results
+
+        try:
+            # Step 5: Active loans query
+            active_loans = db.query(Loan).filter(
+                Loan.loan_officer_id == current_user.id,
+                Loan.stage.in_([LoanStage.PROCESSING, LoanStage.UW_RECEIVED, LoanStage.CTC])
+            ).all()
+            results["steps"].append({"step": "active_loans", "status": "ok", "count": len(active_loans)})
+        except Exception as e:
+            results["steps"].append({"step": "active_loans", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+            return results
+
+        try:
+            # Step 6: Tasks query
+            tasks_today = db.query(Task).filter(
+                Task.owner_id == current_user.id,
+                Task.status.in_(["pending", "in_progress"]),
+                Task.due_date <= today + timedelta(days=1)
+            ).limit(10).all()
+            results["steps"].append({"step": "tasks_query", "status": "ok", "count": len(tasks_today)})
+        except Exception as e:
+            results["steps"].append({"step": "tasks_query", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+            return results
+
+        try:
+            # Step 7: Lead metrics with ai_score
+            today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0)
+            lead_metrics_query = db.query(
+                func.count(Lead.id).label('total_leads'),
+                func.count(case((Lead.created_at >= today_start, 1))).label('new_today'),
+                func.count(case(((Lead.ai_score >= 80) & (Lead.stage.in_([LeadStage.NEW, LeadStage.ATTEMPTED_CONTACT])), 1))).label('hot_leads')
+            ).filter(
+                Lead.owner_id == current_user.id
+            ).first()
+            results["steps"].append({"step": "lead_metrics", "status": "ok", "total_leads": lead_metrics_query.total_leads or 0})
+        except Exception as e:
+            results["steps"].append({"step": "lead_metrics", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+            return results
+
+        try:
+            # Step 8: Referral partners query
+            partners = db.query(ReferralPartner).filter(
+                ReferralPartner.status == "active"
+            ).limit(5).all()
+            results["steps"].append({"step": "referral_partners", "status": "ok", "count": len(partners)})
+        except Exception as e:
+            results["steps"].append({"step": "referral_partners", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+            return results
+
+        try:
+            # Step 9: AI Colleague Actions table check
+            thirty_days_ago = today - timedelta(days=30)
+            ai_tasks_count = db.query(func.count(AIColleagueAction.id)).filter(
+                AIColleagueAction.user_id == current_user.id,
+                AIColleagueAction.created_at >= thirty_days_ago
+            ).scalar() or 0
+            results["steps"].append({"step": "ai_colleague_actions", "status": "ok", "count": ai_tasks_count})
+        except Exception as e:
+            results["steps"].append({"step": "ai_colleague_actions", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+            return results
+
+        results["overall_status"] = "all_steps_passed"
+        return results
+
+
+    @app.post("/api/v1/microsoft/reprocess-emails")
+    async def reprocess_unextracted_emails(
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db)
+    ):
+        """Reprocess emails that were synced but not extracted (for fixing failed extractions)"""
+        try:
+            # Find all emails without extracted data for this user
+            unextracted = db.execute(text("""
+                SELECT ide.id, ide.subject, ide.sender, ide.raw_text, ide.raw_html, ide.received_at, ide.recipients
+                FROM incoming_data_events ide
+                LEFT JOIN extracted_data ed ON ide.id = ed.event_id
+                WHERE ed.id IS NULL AND ide.user_id = :user_id
+                ORDER BY ide.created_at DESC
+            """), {"user_id": current_user.id}).fetchall()
+
+            logger.info(f"Found {len(unextracted)} unextracted emails for user {current_user.id}")
+
+            if len(unextracted) == 0:
+                return {
+                    "status": "success",
+                    "reprocessed_count": 0,
+                    "message": "No emails need reprocessing"
+                }
+
+            # Reprocess each email
+            success_count = 0
+
+            for email_id, subject, sender, raw_text, raw_html, received_at, recipients in unextracted:
+                # Get the full event
+                event = db.query(IncomingDataEvent).filter(IncomingDataEvent.id == email_id).first()
+
+                if not event:
+                    continue
+
+                # Create email_data dict (mimicking Microsoft Graph format)
+                email_data = {
+                    "subject": subject,
+                    "from": {"emailAddress": {"address": sender}},
+                    "toRecipients": [{"emailAddress": {"address": r}} for r in (recipients or [])],
+                    "receivedDateTime": received_at.isoformat() if received_at else None,
+                    "body": {
+                        "content": raw_text or raw_html or "",
+                        "contentType": "text" if raw_text else "html"
+                    }
+                }
+
+                # Delete old event to avoid duplicates
+                db.delete(event)
+                db.commit()
+
+                # Reprocess with new extraction logic
+                result = await process_microsoft_email_to_dre(email_data, current_user.id, db)
+
+                if result.get("status") == "success":
+                    success_count += 1
+
+            logger.info(f"Reprocessed {success_count}/{len(unextracted)} emails for user {current_user.id}")
+
+            return {
+                "status": "success",
+                "reprocessed_count": success_count,
+                "total_found": len(unextracted),
+                "message": f"Reprocessed {success_count} emails successfully"
+            }
+
+        except Exception as e:
+            logger.error(f"Email reprocessing error: {e}")
+            db.rollback()
+            raise HTTPException(status_code=500, detail=str(e))
+
+
+    @app.get("/api/v1/microsoft/synced-emails-status")
+    async def get_synced_emails_status(
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db)
+    ):
+        """Check status of synced emails - where did they go?"""
+        try:
+            from sqlalchemy import text
+
+            # Get all incoming events for this user from Microsoft
+            events = db.execute(text("""
+                SELECT
+                    ide.id, ide.subject, ide.sender, ide.received_at, ide.processed, ide.created_at,
+                    ed.id as extracted_id, ed.status as extracted_status, ed.category
+                FROM incoming_data_events ide
+                LEFT JOIN extracted_data ed ON ide.id = ed.event_id
+                WHERE ide.user_id = :user_id AND ide.source = 'microsoft365'
+                ORDER BY ide.received_at DESC
+                LIMIT 20
+            """), {"user_id": current_user.id}).fetchall()
+
+            results = []
+            for e in events:
+                results.append({
+                    "event_id": e[0],
+                    "subject": e[1][:50] if e[1] else None,
+                    "sender": e[2],
+                    "received_at": e[3].isoformat() if e[3] else None,
+                    "processed": e[4],
+                    "synced_at": e[5].isoformat() if e[5] else None,
+                    "extracted_id": e[6],
+                    "extracted_status": e[7],
+                    "category": e[8]
+                })
+
+            # Summary stats
+            total = len(results)
+            with_extraction = len([r for r in results if r["extracted_id"]])
+            pending_review = len([r for r in results if r["extracted_status"] == "pending_review"])
+
+            return {
+                "total_synced": total,
+                "with_extraction": with_extraction,
+                "pending_review": pending_review,
+                "emails": results,
+                "note": "If emails are synced but not in Reconciliation, they may have been classified as 'unrelated' or had extraction errors"
+            }
+
+        except Exception as e:
+            logger.error(f"Synced emails status error: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+
+    @app.post("/api/v1/microsoft/clear-sync-history")
+    async def clear_sync_history(
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db)
+    ):
+        """Clear sync history to allow re-syncing all emails (use with caution)"""
+        try:
+            from sqlalchemy import text
+
+            # Delete extracted data first (foreign key constraint)
+            deleted_extracted = db.execute(text("""
+                DELETE FROM extracted_data
+                WHERE event_id IN (
+                    SELECT id FROM incoming_data_events
+                    WHERE user_id = :user_id AND source = 'microsoft365'
+                )
+            """), {"user_id": current_user.id}).rowcount
+
+            # Delete incoming events
+            deleted_events = db.execute(text("""
+                DELETE FROM incoming_data_events
+                WHERE user_id = :user_id AND source = 'microsoft365'
+            """), {"user_id": current_user.id}).rowcount
+
+            db.commit()
+
+            return {
+                "status": "success",
+                "deleted_events": deleted_events,
+                "deleted_extractions": deleted_extracted,
+                "message": f"Cleared {deleted_events} synced emails. Click 'Sync Emails Now' to re-sync."
+            }
+
+        except Exception as e:
+            logger.error(f"Clear sync history error: {e}")
+            db.rollback()
+            raise HTTPException(status_code=500, detail=str(e))
+
+
+    @app.post("/api/v1/reconciliation/reextract/{extracted_data_id}")
+    async def reextract_email_data(
+        extracted_data_id: int,
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db)
+    ):
+        """Force re-extraction of a specific email using updated AI classification"""
+        try:
+            # Get the extracted data record
+            extracted = db.query(ExtractedData).filter(
+                ExtractedData.id == extracted_data_id
+            ).first()
+
+            if not extracted:
+                raise HTTPException(status_code=404, detail="Extracted data not found")
+
+            # Get the original email event
+            event = db.query(IncomingDataEvent).filter(
+                IncomingDataEvent.id == extracted.event_id
+            ).first()
+
+            if not event:
+                raise HTTPException(status_code=404, detail="Original email not found")
+
+            # Get the email content
+            content = event.raw_text or event.raw_html or ""
+            subject = event.subject or ""
+            sender = event.sender or ""
+
+            logger.info(f"Re-extracting email {extracted_data_id}: {subject[:50]}...")
+
+            # Use Claude parser for re-extraction
+            try:
+                from ai_providers.claude_parser import get_claude_parser
+                parser = get_claude_parser()
+
+                claude_email_data = {
+                    "subject": subject,
+                    "body_text": content,
+                    "sender": sender,
+                    "received_at": event.received_at.isoformat() if event.received_at else None
+                }
+
+                # Re-classify the email type
+                profile_type = parser.classify_email(claude_email_data)
+                logger.info(f"Re-classified as: {profile_type}")
+
+                # Re-parse with Claude
+                parsed_result = await parser.parse_email(
+                    claude_email_data,
+                    profile_type,
+                    None
+                )
+
+                extracted_fields = parsed_result.get('extracted_fields', {})
+                confidence_scores = parsed_result.get('confidence_scores', {})
+
+                # Build new fields dict
+                new_fields = {}
+                for field_name, field_value in extracted_fields.items():
+                    if field_value is not None:
+                        confidence = confidence_scores.get(field_name, 80)
+                        new_fields[field_name] = {
+                            "value": field_value,
+                            "confidence": confidence / 100 if confidence > 1 else confidence
+                        }
+
+                # Update the extracted data record
+                extracted.fields = new_fields
+                extracted.match_confidence = parsed_result.get('overall_confidence', 0) / 100
+                extracted.email_intent = parsed_result.get('email_summary', profile_type)
+                extracted.updated_at = datetime.utcnow()
+
+                db.commit()
+
+                logger.info(f"✅ Re-extracted {len(new_fields)} fields for email {extracted_data_id}")
+
+                return {
+                    "status": "success",
+                    "profile_type": profile_type,
+                    "fields_extracted": len(new_fields),
+                    "fields": new_fields,
+                    "confidence": parsed_result.get('overall_confidence', 0)
+                }
+
+            except Exception as parse_error:
+                logger.error(f"Claude parsing error: {parse_error}")
+                raise HTTPException(status_code=500, detail=f"Parsing error: {str(parse_error)}")
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Re-extraction error: {e}")
+            db.rollback()
+            raise HTTPException(status_code=500, detail=str(e))
+
+
+    @app.post("/api/v1/reconciliation/reextract-all-pending")
+    async def reextract_all_pending_emails(
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db)
+    ):
+        """Force re-extraction of ALL pending reconciliation items using updated AI"""
+        try:
+            # Get all pending items
+            pending = db.query(ExtractedData).filter(
+                ExtractedData.status == "pending_review"
+            ).all()
+
+            if not pending:
+                return {
+                    "status": "success",
+                    "message": "No pending items to reprocess",
+                    "reprocessed": 0
+                }
+
+            logger.info(f"Re-extracting {len(pending)} pending items...")
+
+            success_count = 0
+            errors = []
+
+            from ai_providers.claude_parser import get_claude_parser
+            parser = get_claude_parser()
+
+            for extracted in pending:
+                try:
+                    # Get the original email event
+                    event = db.query(IncomingDataEvent).filter(
+                        IncomingDataEvent.id == extracted.event_id
+                    ).first()
+
+                    if not event:
+                        continue
+
+                    content = event.raw_text or event.raw_html or ""
+                    subject = event.subject or ""
+                    sender = event.sender or ""
+
+                    claude_email_data = {
+                        "subject": subject,
+                        "body_text": content,
+                        "sender": sender,
+                        "received_at": event.received_at.isoformat() if event.received_at else None
+                    }
+
+                    # Re-classify and parse
+                    profile_type = parser.classify_email(claude_email_data)
+                    parsed_result = await parser.parse_email(claude_email_data, profile_type, None)
+
+                    extracted_fields = parsed_result.get('extracted_fields', {})
+                    confidence_scores = parsed_result.get('confidence_scores', {})
+
+                    # Build new fields dict
+                    new_fields = {}
+                    for field_name, field_value in extracted_fields.items():
+                        if field_value is not None:
+                            confidence = confidence_scores.get(field_name, 80)
+                            new_fields[field_name] = {
+                                "value": field_value,
+                                "confidence": confidence / 100 if confidence > 1 else confidence
+                            }
+
+                    # Update the record
+                    extracted.fields = new_fields
+                    extracted.match_confidence = parsed_result.get('overall_confidence', 0) / 100
+                    extracted.email_intent = parsed_result.get('email_summary', profile_type)
+                    extracted.updated_at = datetime.utcnow()
+
+                    success_count += 1
+                    logger.info(f"Re-extracted {extracted.id}: {len(new_fields)} fields as {profile_type}")
+
+                except Exception as item_error:
+                    errors.append(f"Item {extracted.id}: {str(item_error)}")
+                    logger.error(f"Error re-extracting item {extracted.id}: {item_error}")
+
+            db.commit()
+
+            return {
+                "status": "success",
+                "total_pending": len(pending),
+                "reprocessed": success_count,
+                "errors": errors[:5] if errors else [],
+                "message": f"Re-extracted {success_count}/{len(pending)} items"
+            }
+
+        except Exception as e:
+            logger.error(f"Bulk re-extraction error: {e}")
+            db.rollback()
+            raise HTTPException(status_code=500, detail=str(e))
+
+
+    @app.post("/api/v1/reconciliation/create-test-item")
+    async def create_test_reconciliation_item(
+        fields: dict[str, Any],
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db)
+    ):
+        """Create a test extracted data item for testing reconciliation approval flow.
+
+        This endpoint is for development/testing purposes only.
+
+        Example request:
+        {
+            "first_name": "Clarissa",
+            "last_name": "Stansbury",
+            "email": "claire.sumika@gmail.com",
+            "phone": "(937) 789-9802"
+        }
+        """
+        try:
+            # First create a dummy incoming data event
+            test_event = IncomingDataEvent(
+                source="test",
+                raw_text=f"Test data for {fields.get('first_name', '')} {fields.get('last_name', '')}",
+                subject="Test Reconciliation Item",
+                sender="test@example.com",
+                user_id=current_user.id,
+                processed=True
+            )
+            db.add(test_event)
+            db.flush()
+
+            # Build fields dict with confidence scores
+            formatted_fields = {}
+            for field_name, field_value in fields.items():
+                if field_value is not None:
+                    formatted_fields[field_name] = {
+                        "value": field_value,
+                        "confidence": 0.95
+                    }
+
+            # Create extracted data with no match (will trigger "No Matching Borrower" dialog)
+            extracted = ExtractedData(
+                event_id=test_event.id,
+                category="lead_update",
+                subcategory="new_borrower",
+                fields=formatted_fields,
+                match_entity_type=None,  # No match - will trigger create borrower dialog
+                match_entity_id=None,
+                match_confidence=0.0,
+                ai_confidence=0.85,
+                status="pending_review"
+            )
+            db.add(extracted)
+            db.commit()
+            db.refresh(extracted)
+
+            logger.info(f"Created test extracted data item {extracted.id} for testing")
+
+            return {
+                "status": "success",
+                "extracted_data_id": extracted.id,
+                "event_id": test_event.id,
+                "fields": formatted_fields,
+                "message": f"Test item created successfully. Use extracted_data_id={extracted.id} for approval."
+            }
+        except Exception as e:
+            logger.error(f"Error creating test item: {e}")
+            db.rollback()
+            raise HTTPException(status_code=500, detail=str(e))
+
+
+    @app.post("/api/v1/reconciliation/test-match")
+    async def test_entity_match(
+        loan_number: str = None,
+        borrower_name: str = None,
+        email: str = None,
+        phone: str = None,
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db)
+    ):
+        """Test the entity matching logic with provided fields.
+
+        This endpoint is for development/testing purposes to verify matching works.
+        """
+        try:
+            # Build fields dict
+            fields = {}
+            if loan_number:
+                fields["loan_number"] = {"value": loan_number, "confidence": 0.95}
+            if borrower_name:
+                fields["borrower_name"] = {"value": borrower_name, "confidence": 0.95}
+            if email:
+                fields["borrower_email"] = {"value": email, "confidence": 0.95}
+            if phone:
+                fields["borrower_phone"] = {"value": phone, "confidence": 0.95}
+
+            if not fields:
+                raise HTTPException(status_code=400, detail="At least one field required")
+
+            # Run matching
+            match_result = match_entity(fields, db, current_user.id)
+
+            # Get entity name if matched
+            entity_name = None
+            if match_result.get("entity_type") and match_result.get("entity_id"):
+                entity_name = get_entity_name(match_result["entity_type"], match_result["entity_id"], db)
+
+            return {
+                "status": "success",
+                "input_fields": {k: v["value"] for k, v in fields.items()},
+                "match_result": match_result,
+                "entity_name": entity_name,
+                "message": f"Match found: {match_result.get('entity_type', 'None')} ({entity_name})" if match_result.get("entity_type") else "No match found"
+            }
+        except Exception as e:
+            logger.error(f"Error testing match: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+
+    @app.post("/api/v1/reconciliation/rematch-all")
+    async def rematch_all_pending(
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db)
+    ):
+        """Re-run matching on all pending reconciliation items.
+
+        This is useful after adding new matching logic (like ActiveLoanProfile)
+        to update previously unmatched items.
+        """
+        try:
+            from sqlalchemy import or_
+            pending = db.query(ExtractedData).join(
+                IncomingDataEvent,
+                ExtractedData.event_id == IncomingDataEvent.id
+            ).filter(
+                or_(
+                    IncomingDataEvent.user_id == current_user.id,
+                    IncomingDataEvent.user_id == None
+                ),
+                ExtractedData.status.in_(["pending_review", "needs_review", "pending"])
+            ).all()
+
+            updated_count = 0
+            for item in pending:
+                # Re-run matching
+                match_result = match_entity(item.fields or {}, db, current_user.id)
+
+                if match_result.get("entity_type"):
+                    # Update if we found a match
+                    item.match_entity_type = match_result["entity_type"]
+                    item.match_entity_id = str(match_result["entity_id"])
+                    item.match_confidence = match_result.get("confidence", 0)
+                    updated_count += 1
+                    logger.info(f"Rematched item {item.id}: {match_result['entity_type']} - {match_result['entity_id']}")
+
+            db.commit()
+
+            return {
+                "status": "success",
+                "total_items": len(pending),
+                "updated_count": updated_count,
+                "message": f"Rematched {updated_count} of {len(pending)} pending items"
+            }
+        except Exception as e:
+            logger.error(f"Error rematching: {e}")
+            db.rollback()
+            raise HTTPException(status_code=500, detail=str(e))
+
+
+    @app.post("/api/v1/microsoft/sync-calendar")
+    async def sync_microsoft_calendar(
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db)
+    ):
+        """Sync calendar events from Microsoft 365"""
+        try:
+            oauth_record = db.query(MicrosoftOAuthToken).filter(
+                MicrosoftOAuthToken.user_id == current_user.id
+            ).first()
+
+            if not oauth_record:
+                raise HTTPException(status_code=404, detail="Microsoft 365 not connected")
+
+            # Get access token
+            access_token = decrypt_token(oauth_record.access_token)
+
+            # Check if token needs refresh
+            if oauth_record.token_expires_at:
+                token_expiry = oauth_record.token_expires_at
+                if token_expiry.tzinfo is None:
+                    token_expiry = token_expiry.replace(tzinfo=timezone.utc)
+
+                if token_expiry < datetime.now(timezone.utc) + timedelta(minutes=5):
+                    refresh_result = await refresh_microsoft_token(oauth_record, db)
+                    if not refresh_result.get("success"):
+                        if refresh_result.get("needs_reauth"):
+                            raise HTTPException(status_code=401, detail="needs_reauth")
+                        raise HTTPException(status_code=401, detail="Failed to refresh token")
+                    access_token = decrypt_token(oauth_record.access_token)
+
+            # Fetch calendar events from Microsoft Graph API
+            # Get events from next 30 days
+            start_date = datetime.now(timezone.utc).isoformat()
+            end_date = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json"
+            }
+
+            # Microsoft Graph API endpoint for calendar events
+            graph_url = f"https://graph.microsoft.com/v1.0/me/calendar/calendarView?startDateTime={start_date}&endDateTime={end_date}&$top=100"
+
+            response = requests.get(graph_url, headers=headers)
+
+            if response.status_code != 200:
+                logger.error(f"Microsoft Calendar API error: {response.status_code} - {response.text}")
+                raise HTTPException(status_code=500, detail=f"Microsoft Calendar API error: {response.status_code}")
+
+            events_data = response.json()
+            events = events_data.get("value", [])
+
+            # Store events in database
+            synced_count = 0
+            for event_data in events:
+                try:
+                    # Parse event data
+                    subject = event_data.get("subject", "No Subject")
+                    start_dt = datetime.fromisoformat(event_data["start"]["dateTime"].replace('Z', '+00:00'))
+                    end_dt = datetime.fromisoformat(event_data["end"]["dateTime"].replace('Z', '+00:00'))
+                    location = event_data.get("location", {}).get("displayName", "")
+                    body_content = event_data.get("body", {}).get("content", "")
+
+                    # Check if event already exists (by microsoft event id in meta_data)
+                    ms_event_id = event_data.get("id")
+                    existing = db.query(CalendarEvent).filter(
+                        CalendarEvent.user_id == current_user.id,
+                        CalendarEvent.meta_data.contains({"microsoft_event_id": ms_event_id})
+                    ).first()
+
+                    if existing:
+                        # Update existing event
+                        existing.title = subject
+                        existing.description = body_content[:500] if body_content else None
+                        existing.start_time = start_dt
+                        existing.end_time = end_dt
+                        existing.location = location
+                        existing.all_day = event_data.get("isAllDay", False)
+                        existing.updated_at = datetime.now(timezone.utc)
+                    else:
+                        # Create new event
+                        calendar_event = CalendarEvent(
+                            title=subject,
+                            description=body_content[:500] if body_content else None,
+                            start_time=start_dt,
+                            end_time=end_dt,
+                            all_day=event_data.get("isAllDay", False),
+                            location=location,
+                            event_type="meeting",
+                            user_id=current_user.id,
+                            attendees=[att.get("emailAddress", {}).get("address") for att in event_data.get("attendees", [])],
+                            status="scheduled",
+                            meta_data={"microsoft_event_id": ms_event_id, "source": "microsoft365"}
+                        )
+                        db.add(calendar_event)
+
+                    synced_count += 1
+
+                except Exception as e:
+                    logger.error(f"Error processing calendar event: {e}")
+                    continue
+
+            db.commit()
+            logger.info(f"Synced {synced_count} calendar events for user {current_user.id}")
+
+            return {
+                "status": "success",
+                "synced_count": synced_count,
+                "total_events": len(events),
+                "message": f"Synced {synced_count} calendar events successfully"
+            }
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Calendar sync error: {e}")
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"Calendar sync error: {str(e)}")
+
+    @app.patch("/api/v1/microsoft/settings")
+    async def update_microsoft_settings(
+        settings: MicrosoftSyncSettings,
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db)
+    ):
+        """Update Microsoft 365 sync settings"""
+        try:
+            oauth_record = db.query(MicrosoftOAuthToken).filter(
+                MicrosoftOAuthToken.user_id == current_user.id
+            ).first()
+
+            if not oauth_record:
+                raise HTTPException(status_code=404, detail="Microsoft 365 not connected")
+
+            # Update settings
+            if settings.sync_enabled is not None:
+                oauth_record.sync_enabled = settings.sync_enabled
+
+            if settings.sync_folder is not None:
+                oauth_record.sync_folder = settings.sync_folder
+
+            if settings.sync_frequency_minutes is not None:
+                # Validate frequency (min 5 minutes, max 1440 = 24 hours)
+                if settings.sync_frequency_minutes < 5 or settings.sync_frequency_minutes > 1440:
+                    raise HTTPException(status_code=400, detail="Sync frequency must be between 5 and 1440 minutes")
+                oauth_record.sync_frequency_minutes = settings.sync_frequency_minutes
+
+            oauth_record.updated_at = datetime.now(timezone.utc)
+            db.commit()
+
+            logger.info(f"Updated Microsoft settings for user {current_user.id}")
+
+            return {
+                "status": "success",
+                "message": "Settings updated successfully"
+            }
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Microsoft settings update error: {e}")
+            db.rollback()
+            raise HTTPException(status_code=500, detail=str(e))
+
+    # Extracted to routes/health_routes.py
+    # (/, /prd)
+
+    @app.post("/api/v1/debug/test-task-creation")
+    async def debug_test_task_creation(
+        loan_id: int,
+        trigger: str = "stage->CTC",
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user_flexible)
+    ):
+        """
+        Debug endpoint to test task creation in isolation.
+        Pass a loan_id and trigger (like "stage->CTC") to test if tasks are created.
+        """
+        import traceback
+        debug_info = {
+            "loan_id": loan_id,
+            "trigger": trigger,
+            "steps": [],
+            "error": None,
+            "tasks_created": [],
+            "tasks_in_db": []
+        }
+
+        try:
+            # Step 1: Get the loan
+            loan = db.query(Loan).filter(Loan.id == loan_id).first()
+            if not loan:
+                debug_info["error"] = f"Loan {loan_id} not found"
+                return debug_info
+
+            debug_info["steps"].append(f"Found loan: {loan.loan_number}, stage={loan.stage}, loan_officer_id={loan.loan_officer_id}")
+
+            # Step 2: Check Task model
+            debug_info["steps"].append(f"Task model columns: {[c.name for c in Task.__table__.columns]}")
+
+            # Step 3: Call create_milestone_tasks with the trigger
+            updated_fields = [trigger]
+            debug_info["steps"].append(f"Calling create_milestone_tasks with updated_fields={updated_fields}")
+
+            tasks_created = create_milestone_tasks(loan, updated_fields, db)
+            debug_info["tasks_created"] = tasks_created
+            debug_info["steps"].append(f"create_milestone_tasks returned: {tasks_created}")
+
+            # Step 4: Query tasks for this loan to verify
+            tasks = db.query(Task).filter(Task.loan_id == loan_id).all()
+            debug_info["tasks_in_db"] = [
+                {"id": t.id, "title": t.title, "status": t.status, "priority": t.priority}
+                for t in tasks
+            ]
+            debug_info["steps"].append(f"Found {len(tasks)} tasks in DB for loan {loan_id}")
+
+        except Exception as e:
+            debug_info["error"] = str(e)
+            debug_info["steps"].append(f"Exception: {traceback.format_exc()}")
+
+        return debug_info
+
+
+    # /health extracted to routes/health_routes.py
+
+    # Extracted to routes/health_routes.py and routes/admin_ops_routes.py
+    # (admin/pool-status, admin/salesforce-*, admin/pool-reset,
+    #  admin/update-twilio-config, /ping)
+
+    @app.get("/admin/create-salesforce-tables")
+    async def create_salesforce_tables(db: Session = Depends(get_db)):
+        """Admin endpoint to create Salesforce integration tables"""
+        results = []
+
+        try:
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS oauth_states (
+                    id SERIAL PRIMARY KEY,
+                    state_token VARCHAR(255) UNIQUE NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    provider VARCHAR(50) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TIMESTAMP NOT NULL,
+                    used BOOLEAN DEFAULT FALSE,
+                    return_url TEXT,
+                    state_metadata JSONB
+                )
+            """))
+            db.commit()
+            results.append("oauth_states: created/verified")
+        except Exception as e:
+            results.append(f"oauth_states: {str(e)}")
+            db.rollback()
+
+        try:
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS integration_profiles (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    provider VARCHAR(50) NOT NULL DEFAULT 'salesforce',
+                    status VARCHAR(50) NOT NULL DEFAULT 'disconnected',
+                    access_token_encrypted TEXT,
+                    refresh_token_encrypted TEXT,
+                    instance_url TEXT,
+                    sf_org_id VARCHAR(100),
+                    sf_user_id VARCHAR(100),
+                    sf_username VARCHAR(255),
+                    connected_at TIMESTAMP,
+                    last_sync_at TIMESTAMP,
+                    last_error TEXT,
+                    field_map_version INTEGER DEFAULT 1,
+                    sync_enabled BOOLEAN DEFAULT TRUE,
+                    sync_interval_minutes INTEGER DEFAULT 15,
+                    sync_direction VARCHAR(20) DEFAULT 'bidirectional',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(user_id, provider)
+                )
+            """))
+            db.commit()
+            results.append("integration_profiles: created/verified")
+        except Exception as e:
+            results.append(f"integration_profiles: {str(e)}")
+            db.rollback()
+
+        # Create sf_user_schemas table for Salesforce schema discovery
+        try:
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS sf_user_schemas (
+                    id SERIAL PRIMARY KEY,
+                    integration_profile_id INTEGER NOT NULL REFERENCES integration_profiles(id) ON DELETE CASCADE,
+                    object_name VARCHAR(100) NOT NULL,
+                    fields JSONB NOT NULL,
+                    record_types JSONB,
+                    picklist_values JSONB,
+                    discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_validated_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(integration_profile_id, object_name)
+                )
+            """))
+            db.commit()
+            results.append("sf_user_schemas: created/verified")
+        except Exception as e:
+            results.append(f"sf_user_schemas: {str(e)}")
+            db.rollback()
+
+        # Create field_mappings table
+        try:
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS field_mappings (
+                    id SERIAL PRIMARY KEY,
+                    integration_profile_id INTEGER NOT NULL REFERENCES integration_profiles(id) ON DELETE CASCADE,
+                    sf_object VARCHAR(100) NOT NULL,
+                    sf_field VARCHAR(255) NOT NULL,
+                    crm_entity VARCHAR(100) NOT NULL,
+                    crm_field VARCHAR(255) NOT NULL,
+                    transform_type VARCHAR(50) DEFAULT 'direct',
+                    transform_config JSONB,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    is_required BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(integration_profile_id, sf_object, sf_field)
+                )
+            """))
+            db.commit()
+            results.append("field_mappings: created/verified")
+        except Exception as e:
+            results.append(f"field_mappings: {str(e)}")
+            db.rollback()
+
+        # Create integration_events table for logging
+        try:
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS integration_events (
+                    id SERIAL PRIMARY KEY,
+                    integration_profile_id INTEGER NOT NULL REFERENCES integration_profiles(id) ON DELETE CASCADE,
+                    event_type VARCHAR(100) NOT NULL,
+                    status VARCHAR(50) NOT NULL,
+                    error_message TEXT,
+                    duration_ms INTEGER,
+                    event_data JSONB,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            db.commit()
+            results.append("integration_events: created/verified")
+        except Exception as e:
+            results.append(f"integration_events: {str(e)}")
+            db.rollback()
+
+        return {"results": results}
+
+
+    # Extracted to routes/health_routes.py
+    # (/api/v1/health, /deploy-test, /debug/routers, /debug/scheduler-status)
+
+    @app.post("/api/v1/debug/complete-onboarding-by-email")
+    async def debug_complete_onboarding_by_email(
+        email: str,
+        db: Session = Depends(get_db)
+    ):
+        """Debug endpoint to mark a user's onboarding as complete by email"""
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            raise HTTPException(status_code=404, detail=f"User {email} not found")
+
+        user.onboarding_completed = True
+        db.commit()
+
+        return {
+            "success": True,
+            "message": f"Onboarding marked complete for {email}",
+            "user_id": user.id,
+            "email": user.email
+        }
+
+
+    @app.post("/api/v1/admin/run-salesforce-migration")
+    async def run_salesforce_migration(
+        secret: str = Query(..., description="Admin secret key"),
+        db: Session = Depends(get_db)
+    ):
+        """Run Salesforce sync fields migration - adds columns to loans and leads tables"""
+        # Verify admin secret
+        admin_secret = os.getenv("ADMIN_SECRET", "perennia-admin-2025")
+        if secret != admin_secret:
+            raise HTTPException(status_code=401, detail="Invalid admin secret")
+
+        # Columns to add to LOANS table
+        loan_columns = [
+            # Property Details
+            ("property_type", "VARCHAR"),
+            ("occupancy_type", "VARCHAR"),
+            ("property_county", "VARCHAR"),
+            ("property_ownership_type", "VARCHAR"),
+            ("property_units", "INTEGER"),
+            # 1st Loan Financial Details
+            ("rate_type", "VARCHAR"),
+            ("monthly_payment", "FLOAT"),
+            ("property_tax", "FLOAT"),
+            ("hazard_insurance", "FLOAT"),
+            ("mortgage_insurance", "FLOAT"),
+            ("hoa_amount", "FLOAT"),
+            ("origination_fee", "FLOAT"),
+            ("estimated_prepaid_interest", "FLOAT"),
+            ("points", "FLOAT"),
+            ("index_rate", "FLOAT"),
+            ("margin", "FLOAT"),
+            # LTV/CLTV
+            ("ltv", "FLOAT"),
+            ("cltv", "FLOAT"),
+            ("loan_purpose", "VARCHAR"),
+            ("file_state", "VARCHAR"),
+            # 2nd Loan Details
+            ("second_loan_amount", "FLOAT"),
+            ("second_loan_rate", "FLOAT"),
+            ("second_loan_payment", "FLOAT"),
+            # Present vs Proposed Housing
+            ("present_housing_expense", "FLOAT"),
+            ("proposed_housing_expense", "FLOAT"),
+            ("present_monthly_payment", "FLOAT"),
+            ("proposed_monthly_payment", "FLOAT"),
+        ]
+
+        # Columns to add to LEADS table
+        lead_columns = [
+            ("occupancy_type", "VARCHAR"),
+            ("property_county", "VARCHAR"),
+            ("property_ownership_type", "VARCHAR"),
+            ("property_units", "INTEGER"),
+            ("rate_type", "VARCHAR"),
+            ("monthly_payment", "FLOAT"),
+            ("property_tax", "FLOAT"),
+            ("hazard_insurance", "FLOAT"),
+            ("mortgage_insurance", "FLOAT"),
+            ("hoa_amount", "FLOAT"),
+            ("origination_fee", "FLOAT"),
+            ("estimated_prepaid_interest", "FLOAT"),
+            ("index_rate", "FLOAT"),
+            ("margin", "FLOAT"),
+            ("loan_purpose", "VARCHAR"),
+            ("file_state", "VARCHAR"),
+            ("second_loan_amount", "FLOAT"),
+            ("second_loan_rate", "FLOAT"),
+            ("second_loan_payment", "FLOAT"),
+            ("present_housing_expense", "FLOAT"),
+            ("proposed_housing_expense", "FLOAT"),
+            ("present_monthly_payment", "FLOAT"),
+            ("proposed_monthly_payment", "FLOAT"),
+            ("cltv", "FLOAT"),
+        ]
+
+        results = {"loans_added": [], "loans_skipped": [], "leads_added": [], "leads_skipped": [], "errors": []}
+
+        try:
+            # Get existing columns for LOANS
+            loan_cols_result = db.execute(text("""
+                SELECT column_name FROM information_schema.columns WHERE table_name = 'loans'
+            """))
+            existing_loan_cols = {row[0] for row in loan_cols_result}
+
+            # Add missing columns to LOANS
+            for col_name, col_type in loan_columns:
+                if col_name in existing_loan_cols:
+                    results["loans_skipped"].append(col_name)
+                else:
+                    try:
+                        db.execute(text(f"ALTER TABLE loans ADD COLUMN {col_name} {col_type}"))
+                        results["loans_added"].append(col_name)
+                    except Exception as e:
+                        results["errors"].append(f"loans.{col_name}: {str(e)}")
+
+            # Get existing columns for LEADS
+            lead_cols_result = db.execute(text("""
+                SELECT column_name FROM information_schema.columns WHERE table_name = 'leads'
+            """))
+            existing_lead_cols = {row[0] for row in lead_cols_result}
+
+            # Add missing columns to LEADS
+            for col_name, col_type in lead_columns:
+                if col_name in existing_lead_cols:
+                    results["leads_skipped"].append(col_name)
+                else:
+                    try:
+                        db.execute(text(f"ALTER TABLE leads ADD COLUMN {col_name} {col_type}"))
+                        results["leads_added"].append(col_name)
+                    except Exception as e:
+                        results["errors"].append(f"leads.{col_name}: {str(e)}")
+
+            db.commit()
+
+            return {
+                "status": "success",
+                "message": f"Migration complete: {len(results['loans_added'])} loan columns added, {len(results['leads_added'])} lead columns added",
+                "results": results
+            }
+
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Migration failed: {e}")
+            raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
+    @app.post("/api/v1/debug/test-two-way-email")
+    async def debug_test_two_way_email(
+        to_email: str = "tloss@me.com",
+        message: str = "Hi, I am interested in refinancing my home worth $500,000"
+    ):
+        """
+        Debug endpoint to test the two-way email conversation system.
+        Simulates receiving an email and generating an AI response.
+        """
+        try:
+            from agents.qualification_agent import process_qualification_message
+            from datetime import datetime
+
+            # Generate unique conversation ID
+            conv_id = f"test_email_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+            # Process through the qualification agent
+            result = process_qualification_message(
+                conversation_id=conv_id,
+                message=message,
+                channel="email",
+                sender_info={"email": to_email, "first_name": to_email.split("@")[0].title()}
+            )
+
+            return {
+                "status": "success",
+                "conversation_id": conv_id,
+                "simulated_inbound": {
+                    "from": to_email,
+                    "message": message
+                },
+                "ai_response": {
+                    "text": result["response"],
+                    "type": result["response_type"],
+                    "should_send": result["should_send"]
+                },
+                "qualification": {
+                    "status": result["qualification"]["status"],
+                    "completion": f"{result['qualification']['completion_percentage']:.0f}%",
+                    "missing_fields": result["qualification"]["missing_fields"]
+                },
+                "tone_analysis": {
+                    "emotion": result["tone_analysis"]["emotional_state"]["primary_emotion"],
+                    "sentiment": result["tone_analysis"]["sentiment"]["sentiment_category"],
+                    "urgency": result["tone_analysis"]["urgency"]["urgency_level"]
+                },
+                "next_action": result["next_action"],
+                "note": "To send actual emails, configure SENDGRID_API_KEY or authenticate via Microsoft at /auth/microsoft/login"
+            }
+
+        except Exception as e:
+            logger.error(f"Two-way email test error: {e}")
+            import traceback
+            return {
+                "status": "error",
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+
+    @app.post("/api/v1/debug/send-real-email")
+    async def debug_send_real_email(
+        to_email: str = "tloss@me.com",
+        message: str = "Hi, I am interested in refinancing my home worth $500,000"
+    ):
+        """
+        Actually send a real email via SendGrid demonstrating the two-way AI conversation.
+        This processes the message through the AI agent and sends a real response.
+        """
+        try:
+            from agents.qualification_agent import process_qualification_message
+            from email_service import email_service
+            from datetime import datetime
+
+            # Generate unique conversation ID
+            conv_id = f"email_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            sender_name = to_email.split("@")[0].replace(".", " ").title()
+
+            # Process through the qualification agent
+            result = process_qualification_message(
+                conversation_id=conv_id,
+                message=message,
+                channel="email",
+                sender_info={"email": to_email, "first_name": sender_name}
+            )
+
+            # Format the email HTML
+            html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }}
+            .header {{ background: linear-gradient(135deg, #c9a227 0%, #f4d03f 100%); color: white; padding: 20px; border-radius: 8px 8px 0 0; text-align: center; }}
+            .content {{ background: #f9fafb; padding: 24px; border: 1px solid #e5e7eb; }}
+            .message-box {{ background: white; padding: 16px; border-radius: 8px; border-left: 4px solid #c9a227; margin-bottom: 20px; }}
+            .ai-response {{ background: white; padding: 16px; border-radius: 8px; border-left: 4px solid #3b82f6; }}
+            .footer {{ text-align: center; padding: 16px; color: #6b7280; font-size: 12px; }}
+            .badge {{ display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; }}
+            .badge-emotion {{ background: #fef3c7; color: #92400e; }}
+            .badge-urgency {{ background: #dbeafe; color: #1e40af; }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>Perennia AI Mortgage Assistant</h1>
+            <p>Your AI-Powered Loan Qualification Helper</p>
+        </div>
+        <div class="content">
+            <h3>Hello {sender_name}!</h3>
+
+            <p><strong>Your message:</strong></p>
+            <div class="message-box">
+                {message}
+            </div>
+
+            <p><strong>AI Assistant Response:</strong></p>
+            <div class="ai-response">
+                {result['response'].replace(chr(10), '<br>')}
+            </div>
+
+            <p style="margin-top: 20px;">
+                <span class="badge badge-emotion">Tone: {result['tone_analysis']['emotional_state']['primary_emotion']}</span>
+                <span class="badge badge-urgency">Urgency: {result['tone_analysis']['urgency']['urgency_level']}</span>
+            </p>
+
+            <p style="margin-top: 20px; color: #6b7280; font-size: 14px;">
+                <strong>Qualification Progress:</strong> {result['qualification']['completion_percentage']:.0f}%<br>
+                <strong>Conversation ID:</strong> {conv_id}
+            </p>
+        </div>
+        <div class="footer">
+            <p>This is a demonstration of Perennia AI's two-way email conversation system.</p>
+            <p>Reply to this email to continue the conversation!</p>
+        </div>
+    </body>
+    </html>
+    """
+
+            # Send the email with correct FROM address
+            ai_from_email = os.getenv("AI_FROM_EMAIL", "sarah@reply.perenniaai.com")
+            email_sent = email_service.send_html_email(
+                to_email=to_email,
+                subject=f"RE: Your Mortgage Inquiry - Perennia AI Assistant",
+                html_body=html_body,
+                plain_text_body=f"Hello {sender_name}!\n\nYour message: {message}\n\nAI Response:\n{result['response']}\n\nReply to continue the conversation.\n\n- Perennia AI",
+                from_email=ai_from_email,
+                reply_to=ai_from_email
+            )
+
+            return {
+                "status": "success" if email_sent else "failed",
+                "email_sent": email_sent,
+                "to": to_email,
+                "conversation_id": conv_id,
+                "simulated_inbound_message": message,
+                "ai_response": result["response"],
+                "qualification_progress": f"{result['qualification']['completion_percentage']:.0f}%",
+                "tone": {
+                    "emotion": result["tone_analysis"]["emotional_state"]["primary_emotion"],
+                    "sentiment": result["tone_analysis"]["sentiment"]["sentiment_category"],
+                    "urgency": result["tone_analysis"]["urgency"]["urgency_level"]
+                },
+                "sendgrid_configured": bool(email_service.sendgrid_api_key)
+            }
+
+        except Exception as e:
+            logger.error(f"Send real email error: {e}")
+            import traceback
+            return {
+                "status": "error",
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+
+    @app.post("/api/v1/webhook/sendgrid-inbound")
+    async def sendgrid_inbound_webhook(request: Request):
+        """
+        SendGrid Inbound Parse webhook - receives incoming emails and responds with AI.
+
+        To set up:
+        1. Go to SendGrid Settings > Inbound Parse
+        2. Add your domain (e.g., reply.perenniaai.com)
+        3. Set the webhook URL to: https://your-server.com/api/v1/webhook/sendgrid-inbound
+        4. Enable "POST the raw, full MIME message"
+        """
+        try:
+            from agents.qualification_agent import process_qualification_message
+            from email_service import email_service
+            import re
+
+            # Parse form data from SendGrid
+            form_data = await request.form()
+
+            # Log all form fields for debugging
+            all_fields = {key: str(value)[:200] for key, value in form_data.items()}
+            logger.info(f"SendGrid form fields: {list(all_fields.keys())}")
+            logger.info(f"SendGrid form data: {all_fields}")
+
+            # Extract email details
+            from_email = form_data.get("from", "")
+            to_email = form_data.get("to", "")
+            subject = form_data.get("subject", "")
+            text_body = form_data.get("text", "")
+            html_body = form_data.get("html", "")
+
+            # Also try 'email' field (raw MIME)
+            raw_email = form_data.get("email", "")
+
+            logger.info(f"from={from_email}, to={to_email}, subject={subject}")
+            logger.info(f"text_body length={len(text_body)}, html_body length={len(html_body)}, raw_email length={len(raw_email)}")
+
+            # If text/html are empty, parse from raw MIME email
+            if not text_body and not html_body and raw_email:
+                import email
+                from email import policy
+                msg = email.message_from_string(raw_email, policy=policy.default)
+
+                # Extract body from MIME message
+                if msg.is_multipart():
+                    for part in msg.walk():
+                        content_type = part.get_content_type()
+                        if content_type == "text/plain":
+                            text_body = part.get_content()
+                            logger.info(f"Extracted text/plain from MIME: {len(text_body)} chars")
+                        elif content_type == "text/html" and not text_body:
+                            html_body = part.get_content()
+                            logger.info(f"Extracted text/html from MIME: {len(html_body)} chars")
+                else:
+                    text_body = msg.get_content()
+                    logger.info(f"Extracted single part content: {len(text_body)} chars")
+
+            # Extract sender email address (SendGrid sends "Name <email@example.com>")
+            email_match = re.search(r'<([^>]+)>', from_email)
+            sender_email = email_match.group(1) if email_match else from_email
+            sender_name = from_email.split('<')[0].strip().strip('"') if '<' in from_email else sender_email.split('@')[0]
+
+            # Use text body, or strip HTML
+            message_body = text_body or html_body
+            if not text_body and html_body:
+                # Simple HTML strip
+                message_body = re.sub(r'<[^>]+>', ' ', html_body)
+                message_body = re.sub(r'\s+', ' ', message_body)
+
+            logger.info(f"Raw message body from {sender_email}: {message_body[:500]}...")
+
+            # Clean up the message (remove quoted replies)
+            lines = message_body.split('\n')
+            clean_lines = []
+            found_quote_start = False
+            for line in lines:
+                line_lower = line.lower().strip()
+                # Stop at quoted content markers
+                if line.strip().startswith('>'):
+                    found_quote_start = True
+                    break
+                if 'wrote:' in line_lower and ('@' in line_lower or 'on ' in line_lower):
+                    found_quote_start = True
+                    break
+                if line_lower.startswith('from:') and '@' in line_lower:
+                    found_quote_start = True
+                    break
+                if '-------- original message --------' in line_lower:
+                    found_quote_start = True
+                    break
+                if 'sent from my iphone' in line_lower or 'sent from my ipad' in line_lower:
+                    break
+                clean_lines.append(line)
+
+            clean_message = '\n'.join(clean_lines).strip()
+
+            # If still empty, just use the first 500 chars of raw message
+            if not clean_message and message_body:
+                clean_message = message_body[:500].strip()
+                logger.info(f"Using raw message as fallback: {clean_message[:100]}...")
+
+            if not clean_message:
+                logger.warning(f"Empty message received from {sender_email}")
+                return {"status": "ignored", "reason": "empty message"}
+
+            # Generate conversation ID from sender email
+            conv_id = f"email_{sender_email.replace('@', '_').replace('.', '_')}"
+
+            logger.info(f"Inbound email from {sender_email}: {clean_message[:100]}...")
+
+            # =====================================================================
+            # INTELLIGENT EMAIL ROUTING
+            # First identify sender and classify intent, then route appropriately
+            # =====================================================================
+            from services.intelligent_email_handler import get_intelligent_email_handler
+
+            db = SessionLocal()
+            try:
+                intelligent_handler = get_intelligent_email_handler(db)
+                result = intelligent_handler.process_email(
+                    sender_email=sender_email,
+                    sender_name=sender_name,
+                    subject=subject,
+                    message=clean_message,
+                )
+
+                # If handler says to use qualification agent, fall back to that
+                if result.get("use_qualification_agent"):
+                    logger.info(f"Routing to qualification agent for {result.get('sender_type', 'unknown')} sender")
+                    result = process_qualification_message(
+                        conversation_id=conv_id,
+                        message=clean_message,
+                        channel="email",
+                        sender_info=result.get("sender_info", {"email": sender_email, "first_name": sender_name})
+                    )
+                else:
+                    logger.info(f"Intelligent handler processed: sender_type={result.get('sender_type')}, action={result.get('action')}")
+
+            finally:
+                db.close()
+
+            # Only send response if AI has one
+            if result["should_send"] and result.get("response"):
+                # Get conversation history for the email thread
+                from services.conversation_intelligence import get_conversation_service, Channel
+                conv_service = get_conversation_service()
+                state = conv_service.get_or_create_conversation(conv_id, Channel.EMAIL)
+
+                # Record user message in history
+                state.message_history.append({
+                    "role": "user",
+                    "content": clean_message,
+                    "timestamp": datetime.now().isoformat()
+                })
+
+                # Record AI response in history
+                state.message_history.append({
+                    "role": "assistant",
+                    "content": result['response'],
+                    "timestamp": datetime.now().isoformat()
+                })
+
+                # Build Outlook-style email thread
+                thread_html = ""
+                thread_plain = ""
+
+                # Build thread from message history (oldest to newest, excluding current)
+                if state.message_history and len(state.message_history) > 2:
+                    thread_html = '<div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #cccccc;">'
+                    thread_plain = "\n\n"
+
+                    # Show previous messages in reverse chronological order (like Outlook)
+                    prev_messages = state.message_history[:-2]  # Exclude current exchange
+                    for i, msg in enumerate(reversed(prev_messages)):
+                        sender_name_thread = "Sarah - Perennia AI" if msg["role"] == "assistant" else sender_name
+                        sender_email_thread = "admin@perenniaai.com" if msg["role"] == "assistant" else sender_email
+                        msg_time = msg.get("timestamp", "")[:16].replace("T", " ") if msg.get("timestamp") else ""
+
+                        thread_html += f'''
+    <div style="color: #1f497d; font-family: Calibri, sans-serif; font-size: 11pt;">
+    <p style="margin: 0;"><b>From:</b> {sender_name_thread} &lt;{sender_email_thread}&gt;</p>
+    <p style="margin: 0;"><b>Sent:</b> {msg_time}</p>
+    <p style="margin: 0 0 10px 0;"><b>Subject:</b> Re: Quick question about your mortgage goals</p>
+    <div style="margin: 10px 0; padding-left: 10px; border-left: 2px solid #1f497d;">
+    {msg["content"].replace(chr(10), '<br>')}
+    </div>
+    </div>
+    <hr style="border: none; border-top: 1px solid #cccccc; margin: 15px 0;">
+    '''
+                        thread_plain += f"\n________________________________________\nFrom: {sender_name_thread} <{sender_email_thread}>\nSent: {msg_time}\nSubject: Re: Quick question about your mortgage goals\n\n{msg['content']}\n"
+
+                    thread_html += '</div>'
+
+                # Format response email in Outlook style
+                html_response = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #000000; margin: 0; padding: 20px; }}
+        </style>
+    </head>
+    <body>
+    <div style="font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #000000;">
+    <p>Hi {sender_name},</p>
+
+    <p>{result['response'].replace(chr(10), '<br>')}</p>
+
+    <p>Best regards,<br>
+    <b>Sarah</b><br>
+    <span style="color: #666666;">AI Mortgage Assistant | Perennia AI</span></p>
+    </div>
+
+    {thread_html}
+
+    <div style="margin-top: 20px; padding-top: 10px; border-top: 1px solid #cccccc; color: #1f497d; font-family: Calibri, sans-serif; font-size: 11pt;">
+    <p style="margin: 0;"><b>From:</b> {sender_name} &lt;{sender_email}&gt;</p>
+    <p style="margin: 0;"><b>Sent:</b> {datetime.now().strftime('%A, %B %d, %Y %I:%M %p')}</p>
+    <p style="margin: 0 0 10px 0;"><b>Subject:</b> {subject}</p>
+    <div style="margin: 10px 0; padding-left: 10px; border-left: 2px solid #c9a227;">
+    {clean_message[:500]}{"..." if len(clean_message) > 500 else ""}
+    </div>
+    </div>
+    </body>
+    </html>
+    """
+
+                # Determine reply subject
+                reply_subject = subject if subject.lower().startswith('re:') else f"Re: {subject}"
+
+                # Build plain text version
+                plain_text_response = f"""Hi {sender_name},
+
+    {result['response']}
+
+    Best regards,
+    Sarah
+    AI Mortgage Assistant | Perennia AI
+
+    ________________________________________
+    From: {sender_name} <{sender_email}>
+    Sent: {datetime.now().strftime('%A, %B %d, %Y %I:%M %p')}
+    Subject: {subject}
+
+    {clean_message[:500]}
+    {thread_plain}
+    """
+
+                # Check if there's an appointment booking - prepare ICS attachment
+                attachments = None
+                calendar_invite_sent = False
+                lo_invite_sent = False
+                lo_email_sent = False
+                booking_result = result.get("booking_result")
+
+                if booking_result and booking_result.get("success"):
+                    try:
+                        from utils.calendar_invite import generate_appointment_ics, generate_lo_appointment_ics
+                        from datetime import datetime as dt
+
+                        appt_time = dt.fromisoformat(booking_result["datetime"])
+
+                        # Get loan officer info from booking result
+                        lo_info = booking_result.get("loan_officer") or {}
+                        lo_name = lo_info.get("name")
+                        lo_email = lo_info.get("email")
+                        lo_phone = lo_info.get("phone")
+
+                        # Generate customer calendar invite (with LO info)
+                        ics_content = generate_appointment_ics(
+                            appointment_id=booking_result["appointment_id"],
+                            contact_name=booking_result.get("contact_name", sender_name),
+                            contact_email=sender_email,
+                            start_time=appt_time,
+                            duration_minutes=booking_result.get("duration_minutes", 30),
+                            appointment_type=booking_result.get("type", "consultation"),
+                            loan_officer_name=lo_name,
+                            loan_officer_email=lo_email,
+                        )
+
+                        # Prepare attachment for main email to customer
+                        attachments = [{
+                            'content': ics_content.encode('utf-8'),
+                            'filename': 'appointment.ics',
+                            'type': 'text/calendar; method=REQUEST'
+                        }]
+                        calendar_invite_sent = True
+                        logger.info(f"Customer ICS attachment prepared for {sender_email} (with LO: {lo_name})")
+
+                        # Send calendar invite and email to loan officer
+                        if lo_email:
+                            try:
+                                # Generate LO calendar invite
+                                lo_ics_content = generate_lo_appointment_ics(
+                                    appointment_id=booking_result["appointment_id"],
+                                    contact_name=booking_result.get("contact_name", sender_name),
+                                    contact_email=sender_email,
+                                    contact_phone=None,  # May not have phone yet
+                                    start_time=appt_time,
+                                    duration_minutes=booking_result.get("duration_minutes", 30),
+                                    appointment_type=booking_result.get("type", "consultation"),
+                                    loan_officer_name=lo_name,
+                                    loan_officer_email=lo_email,
+                                    notes=f"New appointment booked via AI assistant. Contact: {sender_email}",
+                                )
+
+                                # Prepare LO email content
+                                lo_subject = f"New Appointment: {booking_result.get('contact_name', sender_name)} - {appt_time.strftime('%b %d at %I:%M %p')}"
+                                lo_html = f"""
+                                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                                    <h2 style="color: #1e3a5f;">New Appointment Scheduled</h2>
+                                    <p>A new consultation has been booked via AI assistant.</p>
+
+                                    <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                                        <h3 style="margin-top: 0; color: #333;">Appointment Details</h3>
+                                        <p><strong>Client:</strong> {booking_result.get('contact_name', sender_name)}</p>
+                                        <p><strong>Email:</strong> {sender_email}</p>
+                                        <p><strong>Date:</strong> {appt_time.strftime('%A, %B %d, %Y')}</p>
+                                        <p><strong>Time:</strong> {appt_time.strftime('%I:%M %p')}</p>
+                                        <p><strong>Duration:</strong> {booking_result.get('duration_minutes', 30)} minutes</p>
+                                        <p><strong>Type:</strong> {booking_result.get('type', 'Consultation').replace('_', ' ').title()}</p>
+                                        <p><strong>Reference:</strong> {booking_result['appointment_id']}</p>
+                                    </div>
+
+                                    <p>A calendar invitation is attached. Please add it to your calendar.</p>
+
+                                    <p style="color: #666; font-size: 12px; margin-top: 30px;">
+                                        This appointment was scheduled by Sarah, your AI assistant.
+                                    </p>
+                                </div>
+                                """
+
+                                lo_attachments = [{
+                                    'content': lo_ics_content.encode('utf-8'),
+                                    'filename': 'appointment.ics',
+                                    'type': 'text/calendar; method=REQUEST'
+                                }]
+
+                                # Send email to loan officer
+                                ai_from_email_lo = os.getenv("AI_FROM_EMAIL", "sarah@reply.perenniaai.com")
+                                lo_email_sent = email_service.send_html_email(
+                                    to_email=lo_email,
+                                    subject=lo_subject,
+                                    html_body=lo_html,
+                                    attachments=lo_attachments,
+                                    from_email=ai_from_email_lo,
+                                    reply_to=ai_from_email_lo
+                                )
+                                lo_invite_sent = lo_email_sent
+                                logger.info(f"LO notification sent to {lo_email}: {lo_email_sent}")
+
+                            except Exception as lo_err:
+                                logger.warning(f"Could not send LO notification: {lo_err}")
+
+                    except Exception as ics_err:
+                        logger.warning(f"Could not generate ICS: {ics_err}")
+
+                # Send the response (with ICS attachment if booking)
+                ai_from_email = os.getenv("AI_FROM_EMAIL", "sarah@reply.perenniaai.com")
+                email_sent = email_service.send_html_email(
+                    to_email=sender_email,
+                    subject=reply_subject,
+                    html_body=html_response,
+                    plain_text_body=plain_text_response,
+                    attachments=attachments,
+                    from_email=ai_from_email,
+                    reply_to=ai_from_email
+                )
+
+                logger.info(f"AI response sent to {sender_email}: {email_sent} (with_ics={calendar_invite_sent})")
+
+                # Log for training review
+                try:
+                    from routes.email_training_routes import EmailTrainingLog
+                    training_db = SessionLocal()
+                    training_log = EmailTrainingLog(
+                        conversation_id=conv_id,
+                        from_email=sender_email,
+                        to_email="sarah@reply.perenniaai.com",
+                        subject=subject,
+                        user_message=clean_message,
+                        ai_response=result["response"],
+                        detected_topics=result.get("metadata", {}).get("topics_addressed"),
+                        conversation_stage=result.get("conversation_state", {}).get("stage"),
+                        qualification_data=result.get("qualification", {}).get("data")
+                    )
+                    training_db.add(training_log)
+                    training_db.commit()
+                    training_log_id = training_log.id
+                    training_db.close()
+                    logger.info(f"Email logged for training: id={training_log_id}")
+                except Exception as train_err:
+                    logger.warning(f"Could not log email for training: {train_err}")
+                    training_log_id = None
+
+                # Note: Calendar invite (ICS) is now attached to main response email above
+
+                return {
+                    "status": "processed",
+                    "email_sent": email_sent,
+                    "conversation_id": conv_id,
+                    "from": sender_email,
+                    "ai_response": result["response"][:100] + "...",
+                    "qualification_progress": f"{result['qualification']['completion_percentage']:.0f}%",
+                    "should_escalate": result["should_escalate"],
+                    "training_log_id": training_log_id,
+                    "appointment_booked": booking_result is not None,
+                    "calendar_invite_sent": calendar_invite_sent,
+                    "lo_invite_sent": lo_invite_sent,
+                    "lo_email_sent": lo_email_sent,
+                    "assigned_lo": (booking_result.get("loan_officer") or {}).get("name") if booking_result else None
+                }
+            else:
+                return {
+                    "status": "no_response_needed",
+                    "conversation_id": conv_id,
+                    "reason": "AI determined no response needed or escalated"
+                }
+
+        except Exception as e:
+            logger.error(f"SendGrid inbound webhook error: {e}")
+            import traceback
+            return {"status": "error", "error": str(e), "traceback": traceback.format_exc()}
+
+
+    @app.post("/api/v1/debug/simulate-email-reply")
+    async def simulate_email_reply(
+        conversation_id: str,
+        reply_message: str,
+        sender_email: str = "tloss@me.com"
+    ):
+        """
+        Simulate receiving an email reply to test two-way conversation.
+        Uses an existing conversation_id to continue the conversation.
+        """
+        try:
+            from agents.qualification_agent import process_qualification_message
+            from email_service import email_service
+
+            sender_name = sender_email.split("@")[0].replace(".", " ").title()
+
+            # Process the reply through AI
+            result = process_qualification_message(
+                conversation_id=conversation_id,
+                message=reply_message,
+                channel="email",
+                sender_info={"email": sender_email, "first_name": sender_name}
+            )
+
+            # Send AI response
+            if result["should_send"] and result.get("response"):
+                html_response = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }}
+            .response {{ background: #f0f9ff; padding: 20px; border-radius: 8px; border-left: 4px solid #3b82f6; }}
+            .your-message {{ background: #f9fafb; padding: 16px; border-radius: 8px; border-left: 4px solid #c9a227; margin-bottom: 16px; }}
+            .footer {{ margin-top: 20px; padding-top: 16px; border-top: 1px solid #e5e7eb; color: #6b7280; font-size: 12px; }}
+            .progress {{ background: #ecfdf5; padding: 12px; border-radius: 6px; margin-top: 16px; }}
+        </style>
+    </head>
+    <body>
+        <p>Hi {sender_name},</p>
+
+        <p><strong>You said:</strong></p>
+        <div class="your-message">{reply_message}</div>
+
+        <p><strong>AI Response:</strong></p>
+        <div class="response">
+            {result['response'].replace(chr(10), '<br>')}
+        </div>
+
+        <div class="progress">
+            <strong>Qualification Progress:</strong> {result['qualification']['completion_percentage']:.0f}%
+            {f"<br><strong>Missing:</strong> {', '.join(result['qualification']['missing_fields'][:3])}" if result['qualification']['missing_fields'] else ""}
+        </div>
+
+        <div class="footer">
+            <p>Reply to continue the conversation.</p>
+            <p style="color: #9ca3af;">Conversation ID: {conversation_id}</p>
+        </div>
+    </body>
+    </html>
+    """
+
+                ai_from_email = os.getenv("AI_FROM_EMAIL", "sarah@reply.perenniaai.com")
+                email_sent = email_service.send_html_email(
+                    to_email=sender_email,
+                    subject=f"Re: Your Mortgage Inquiry - Perennia AI",
+                    html_body=html_response,
+                    plain_text_body=f"Hi {sender_name},\n\nYou said: {reply_message}\n\nAI Response:\n{result['response']}\n\nQualification: {result['qualification']['completion_percentage']:.0f}%\n\n- Perennia AI",
+                    from_email=ai_from_email,
+                    reply_to=ai_from_email
+                )
+
+                return {
+                    "status": "success",
+                    "email_sent": email_sent,
+                    "conversation_id": conversation_id,
+                    "your_message": reply_message,
+                    "ai_response": result["response"],
+                    "qualification": {
+                        "progress": f"{result['qualification']['completion_percentage']:.0f}%",
+                        "status": result["qualification"]["status"],
+                        "missing_fields": result["qualification"]["missing_fields"][:5]
+                    },
+                    "tone": {
+                        "emotion": result["tone_analysis"]["emotional_state"]["primary_emotion"],
+                        "urgency": result["tone_analysis"]["urgency"]["urgency_level"]
+                    },
+                    "conversation_state": result["conversation_state"]["stage"],
+                    "should_escalate": result["should_escalate"]
+                }
+            else:
+                return {
+                    "status": "escalated",
+                    "conversation_id": conversation_id,
+                    "message": "Conversation escalated to human agent",
+                    "escalation_reason": result.get("escalation_reason")
+                }
+
+        except Exception as e:
+            logger.error(f"Simulate reply error: {e}")
+            import traceback
+            return {"status": "error", "error": str(e), "traceback": traceback.format_exc()}
+
+
+    @app.post("/api/v1/debug/start-ai-conversation")
+    async def start_ai_conversation(to_email: str = "tloss@me.com"):
+        """
+        Send an initial AI outreach email to start a two-way conversation.
+        The user can reply to this email to continue the conversation.
+        """
+        try:
+            from email_service import email_service
+            from datetime import datetime
+            from services.conversation_intelligence import get_conversation_service, Channel, ConversationStage
+
+            # Use consistent conversation ID format based on email (matches webhook)
+            conv_id = f"email_{to_email.replace('@', '_').replace('.', '_')}"
+
+            # Initialize conversation state and record the AI's first message
+            conv_service = get_conversation_service()
+            state = conv_service.get_or_create_conversation(conv_id, Channel.EMAIL)
+
+            # Record AI's initial question in conversation history
+            initial_ai_message = "Hi! I'm Sarah, your AI mortgage assistant. Are you looking to purchase a new home or refinance your current one?"
+            state.message_history.append({
+                "role": "assistant",
+                "content": initial_ai_message,
+                "timestamp": datetime.now().isoformat()
+            })
+
+            # Advance state past initial contact since we've sent the first question
+            state.stage = ConversationStage.QUALIFICATION
+
+            logger.info(f"Initialized conversation {conv_id} with {len(state.message_history)} messages, stage: {state.stage}")
+
+            html_body = f"""<!DOCTYPE html>
+    <html>
+    <body style="font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #000000; margin: 0; padding: 20px;">
+    <p>Hi there,</p>
+
+    <p>I'm Sarah, a mortgage assistant at Perennia AI. I help people find the best mortgage options for their situation.</p>
+
+    <p>Are you looking to purchase a new home or refinance your current mortgage?</p>
+
+    <p>Just reply to this email and I'll guide you through the process.</p>
+
+    <p>Best regards,<br>
+    <b>Sarah</b><br>
+    <span style="color: #666666;">AI Mortgage Assistant | Perennia AI</span></p>
+    </body>
+    </html>"""
+
+            plain_text = f"""Hi there,
+
+    I'm Sarah, a mortgage assistant at Perennia AI. I help people find the best mortgage options for their situation.
+
+    Are you looking to purchase a new home or refinance your current mortgage?
+
+    Just reply to this email and I'll guide you through the process.
+
+    Best regards,
+    Sarah
+    AI Mortgage Assistant | Perennia AI"""
+
+            # Use the reply subdomain for FROM address so replies come back to us
+            import os
+            ai_from_email = os.getenv("AI_FROM_EMAIL", "sarah@reply.perenniaai.com")
+
+            email_sent = email_service.send_html_email(
+                to_email=to_email,
+                subject="Quick question about your mortgage goals - Perennia AI",
+                html_body=html_body,
+                plain_text_body=plain_text,
+                from_email=ai_from_email,
+                reply_to=ai_from_email
+            )
+
+            return {
+                "status": "success" if email_sent else "failed",
+                "email_sent": email_sent,
+                "to": to_email,
+                "from": ai_from_email,
+                "reply_to": ai_from_email,
+                "conversation_id": conv_id,
+                "message": "Initial AI question sent! Reply to the email to continue.",
+                "instruction": "Reply to this email and SendGrid will forward it to our webhook for AI response"
+            }
+
+        except Exception as e:
+            logger.error(f"Start AI conversation error: {e}")
+            import traceback
+            return {"status": "error", "error": str(e)}
+
+
+    @app.post("/api/v1/debug/test-email-delivery")
+    async def test_email_delivery(to_email: str, test_subject: str = "Email Delivery Test"):
+        """
+        Send a simple test email to diagnose delivery issues.
+        Uses minimal formatting to avoid spam filters.
+        """
+        try:
+            from email_service import email_service
+            from datetime import datetime
+            import os
+
+            # Very simple plain text email
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            test_id = datetime.now().strftime('%H%M%S')
+
+            html_body = f"""<!DOCTYPE html>
+    <html>
+    <body style="font-family: Arial, sans-serif; padding: 20px;">
+    <p>This is a test email from Perennia AI.</p>
+    <p><strong>Test ID:</strong> {test_id}</p>
+    <p><strong>Timestamp:</strong> {timestamp}</p>
+    <p><strong>Sent from:</strong> {email_service.from_email}</p>
+    <p>If you received this, email delivery is working!</p>
+    <p>- Perennia AI Team</p>
+    </body>
+    </html>"""
+
+            plain_text = f"""This is a test email from Perennia AI.
+
+    Test ID: {test_id}
+    Timestamp: {timestamp}
+    Sent from: {email_service.from_email}
+
+    If you received this, email delivery is working!
+
+    - Perennia AI Team"""
+
+            ai_from_email = os.getenv("AI_FROM_EMAIL", "sarah@reply.perenniaai.com")
+            email_sent = email_service.send_html_email(
+                to_email=to_email,
+                subject=f"{test_subject} - ID:{test_id}",
+                html_body=html_body,
+                plain_text_body=plain_text,
+                from_email=ai_from_email,
+                reply_to=ai_from_email
+            )
+
+            return {
+                "status": "success" if email_sent else "failed",
+                "email_sent": email_sent,
+                "to_email": to_email,
+                "from_email": email_service.from_email,
+                "from_name": email_service.from_name,
+                "test_id": test_id,
+                "timestamp": timestamp,
+                "subject": f"{test_subject} - ID:{test_id}",
+                "note": "Check inbox, spam, junk, and all other folders"
+            }
+
+        except Exception as e:
+            logger.error(f"Test email error: {e}")
+            import traceback
+            return {"status": "error", "error": str(e), "traceback": traceback.format_exc()}
+
+
+    @app.post("/api/v1/debug/test-appointment-confirmation-email", tags=["Debug"])
+    async def test_appointment_confirmation_email(
+        to_email: str = "tloss@me.com",
+        contact_name: str = "Test User",
+        lo_name: str = "Tim Loss",
+        appointment_date: str = "Monday, December 30, 2025 at 02:00 PM"
+    ):
+        """
+        Send a test appointment confirmation email to verify the email template works.
+        """
+        try:
+            from services.notification_service import NotificationService
+            from datetime import datetime
+
+            notification_service = NotificationService()
+
+            html_content = f"""
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #1e40af;">Appointment Confirmed!</h2>
+                <p>Hi {contact_name},</p>
+                <p>Your appointment has been scheduled:</p>
+
+                <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <p style="margin: 0;"><strong>Date & Time:</strong> {appointment_date}</p>
+                    <p style="margin: 10px 0 0 0;"><strong>Duration:</strong> 30 minutes</p>
+                    <p style="margin: 10px 0 0 0;"><strong>With:</strong> {lo_name}</p>
+                </div>
+
+                <p>{lo_name} will call you at the scheduled time to discuss your mortgage needs.</p>
+
+                <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+                    Need to reschedule? Reply to this email or contact your loan officer.
+                </p>
+            </div>
+            """
+
+            result = notification_service.send_email(
+                to_email=to_email,
+                subject=f"Appointment Confirmed with {lo_name}",
+                html_content=html_content
+            )
+
+            return {
+                "status": "success" if result else "failed",
+                "email_sent": result,
+                "to_email": to_email,
+                "subject": f"Appointment Confirmed with {lo_name}",
+                "contact_name": contact_name,
+                "appointment_date": appointment_date,
+                "lo_name": lo_name,
+                "timestamp": datetime.now().isoformat()
+            }
+
+        except Exception as e:
+            logger.error(f"Test appointment confirmation email error: {e}")
+            return {"status": "error", "error": str(e)}
+
+
+    @app.get("/debug/test-import")
+    async def debug_test_import():
+        """Test importing the smart scheduler modules"""
+        results = {"errors": [], "success": []}
+
+        try:
+            import pytz
+            results["success"].append("pytz")
+        except Exception as e:
+            results["errors"].append(f"pytz: {str(e)}")
+
+        try:
+            from services.notification_service import notification_service
+            results["success"].append("notification_service")
+        except Exception as e:
+            results["errors"].append(f"notification_service: {str(e)}")
+
+        try:
+            from smart_scheduler_models import create_smart_scheduler_models
+            results["success"].append("smart_scheduler_models")
+        except Exception as e:
+            results["errors"].append(f"smart_scheduler_models: {str(e)}")
+
+        try:
+            from smart_scheduler_routes import router as smart_scheduler_router
+            results["success"].append("smart_scheduler_routes")
+            results["router_routes"] = len(smart_scheduler_router.routes)
+        except Exception as e:
+            import traceback
+            results["errors"].append(f"smart_scheduler_routes: {str(e)}")
+            results["traceback"] = traceback.format_exc()
+
+        return results
+
+
+    # Extracted to routes/health_routes.py
+    # (health/detailed, health/ready, health/live, health/pool, health/cache)
+
+    # Extracted to routes/cache_routes.py and routes/admin_ops_routes.py
+    # (cache/status, cache/metrics, cache/clear, cache/invalidate/user,
+    #  authentication/test, admin setup migrations, create-zapier-api-key)
+
+    # Extracted to routes/email_management_routes.py
+    # (user onboarding, email-signature, email-drafts, generate-call-summary)
+
+    # Extracted to routes/api_key_routes.py and routes/admin_ops_routes.py
+    # (contacts/search, api-keys CRUD, admin/stats, admin/users CRUD,
+    #  debug/user-deletion-blockers, admin/cleanup-sample-users)
+
+    # Extracted to routes/scorecard_routes.py
+    # (GET /api/v1/scorecard - conversion metrics, funding totals, referral breakdown)
+
+    # Extracted to routes/search_routes.py
+    # (GET /api/v1/search/global - cross-entity search)
 
     # IMPORTANT: This route MUST be defined BEFORE /leads/{lead_id} to avoid route conflicts
     @app.delete("/api/v1/leads/bulk-delete")
