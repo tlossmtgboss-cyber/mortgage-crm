@@ -392,6 +392,29 @@
   cursor: not-allowed;
 }
 
+/* Required star */
+.required-star {
+  color: #dc2626;
+  font-weight: bold;
+}
+
+/* Booking link preview */
+.booking-link-preview {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.booking-link-preview a {
+  color: #218D8D;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.booking-link-preview a:hover {
+  text-decoration: underline;
+}
+
 /* Users List */
 .users-list {
   background: white;

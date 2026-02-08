@@ -3,6 +3,7 @@
  *
  * Allows admins to configure which calendars/users receive
  * appointments for different purposes in the application.
+ * Supports team member assignment, booking links, and Calendly URLs.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -15,6 +16,7 @@ const CalendarManagement = () => {
   const [assignments, setAssignments] = useState([]);
   const [purposes, setPurposes] = useState([]);
   const [users, setUsers] = useState([]);
+  const [bookingLinks, setBookingLinks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
@@ -28,26 +30,19 @@ const CalendarManagement = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      // Load all data in parallel
-      const [assignmentsRes, purposesRes, usersRes] = await Promise.all([
+      const [assignmentsRes, purposesRes, usersRes, bookingLinksRes] = await Promise.all([
         fetch(`${API_BASE}/api/v1/calendar-assignments`, { headers: getAuthHeaders() }),
         fetch(`${API_BASE}/api/v1/calendar-assignments/purposes`, { headers: getAuthHeaders() }),
-        fetch(`${API_BASE}/api/v1/users/with-calendars`, { headers: getAuthHeaders() })
+        fetch(`${API_BASE}/api/v1/users/with-calendars`, { headers: getAuthHeaders() }),
+        fetch(`${API_BASE}/api/v1/scheduler/booking-links/all`, { headers: getAuthHeaders() }).catch(() => null)
       ]);
 
-      if (assignmentsRes.ok) {
-        const data = await assignmentsRes.json();
-        setAssignments(data);
-      }
-
-      if (purposesRes.ok) {
-        const data = await purposesRes.json();
-        setPurposes(data);
-      }
-
-      if (usersRes.ok) {
-        const data = await usersRes.json();
-        setUsers(data);
+      if (assignmentsRes.ok) setAssignments(await assignmentsRes.json());
+      if (purposesRes.ok) setPurposes(await purposesRes.json());
+      if (usersRes.ok) setUsers(await usersRes.json());
+      if (bookingLinksRes?.ok) {
+        const data = await bookingLinksRes.json();
+        setBookingLinks(data.booking_links || []);
       }
     } catch (err) {
       console.error('Error loading calendar data:', err);
@@ -61,7 +56,7 @@ const CalendarManagement = () => {
     return assignments.find(a => a.purpose === purpose);
   };
 
-  const handleAssignUser = async (purpose, userId) => {
+  const saveAssignment = async (purpose, updates) => {
     setSaving(true);
     setMessage(null);
 
@@ -70,35 +65,29 @@ const CalendarManagement = () => {
 
     try {
       if (existing) {
-        // Update existing assignment
         const response = await fetch(`${API_BASE}/api/v1/calendar-assignments/${existing.id}`, {
           method: 'PUT',
           headers: getAuthHeaders(),
-          body: JSON.stringify({
-            assigned_user_id: userId || null,
-            calendly_url: null // Clear custom URL when assigning user
-          })
+          body: JSON.stringify(updates)
         });
-
         if (!response.ok) throw new Error('Failed to update assignment');
       } else {
-        // Create new assignment
         const response = await fetch(`${API_BASE}/api/v1/calendar-assignments`, {
           method: 'POST',
           headers: getAuthHeaders(),
           body: JSON.stringify({
             purpose: purpose,
             purpose_label: purposeInfo?.label || purpose,
-            assigned_user_id: userId || null,
-            is_active: true
+            is_active: true,
+            ...updates
           })
         });
-
         if (!response.ok) throw new Error('Failed to create assignment');
       }
 
       setMessage({ type: 'success', text: 'Calendar assignment saved!' });
-      await loadData(); // Refresh data
+      setEditingId(null);
+      await loadData();
     } catch (err) {
       console.error('Error saving assignment:', err);
       setMessage({ type: 'error', text: err.message });
@@ -107,49 +96,22 @@ const CalendarManagement = () => {
     }
   };
 
+  const handleAssignUser = async (purpose, userId) => {
+    await saveAssignment(purpose, { assigned_user_id: userId || null });
+  };
+
+  const handleAssignBookingLink = async (purpose, linkId) => {
+    await saveAssignment(purpose, {
+      booking_link_id: linkId || null,
+      calendly_url: linkId ? null : undefined // clear calendly if setting booking link
+    });
+  };
+
   const handleSetCustomUrl = async (purpose, url) => {
-    setSaving(true);
-    setMessage(null);
-
-    const existing = getAssignmentForPurpose(purpose);
-    const purposeInfo = purposes.find(p => p.purpose === purpose);
-
-    try {
-      if (existing) {
-        const response = await fetch(`${API_BASE}/api/v1/calendar-assignments/${existing.id}`, {
-          method: 'PUT',
-          headers: getAuthHeaders(),
-          body: JSON.stringify({
-            calendly_url: url,
-            assigned_user_id: null // Clear user when setting custom URL
-          })
-        });
-
-        if (!response.ok) throw new Error('Failed to update assignment');
-      } else {
-        const response = await fetch(`${API_BASE}/api/v1/calendar-assignments`, {
-          method: 'POST',
-          headers: getAuthHeaders(),
-          body: JSON.stringify({
-            purpose: purpose,
-            purpose_label: purposeInfo?.label || purpose,
-            calendly_url: url,
-            is_active: true
-          })
-        });
-
-        if (!response.ok) throw new Error('Failed to create assignment');
-      }
-
-      setMessage({ type: 'success', text: 'Calendar URL saved!' });
-      setEditingId(null);
-      await loadData();
-    } catch (err) {
-      console.error('Error saving URL:', err);
-      setMessage({ type: 'error', text: err.message });
-    } finally {
-      setSaving(false);
-    }
+    await saveAssignment(purpose, {
+      calendly_url: url || null,
+      booking_link_id: url ? null : undefined // clear booking link if setting URL
+    });
   };
 
   const handleClearAssignment = async (purpose) => {
@@ -193,8 +155,8 @@ const CalendarManagement = () => {
   return (
     <div className="calendar-management">
       <div className="cm-header">
-        <h2>Calendar Management</h2>
-        <p>Configure which team member receives calendar appointments for different parts of the application.</p>
+        <h2>Calendar Assignments</h2>
+        <p>Configure which team member and scheduling method is used for each purpose. Every assignment requires a team member.</p>
       </div>
 
       {message && (
@@ -212,13 +174,16 @@ const CalendarManagement = () => {
           {purposes.map(purpose => {
             const assignment = getAssignmentForPurpose(purpose.purpose);
             const isEditing = editingId === purpose.purpose;
+            const assignedLink = assignment?.booking_link_id
+              ? bookingLinks.find(l => l.id === assignment.booking_link_id)
+              : null;
 
             return (
               <div key={purpose.purpose} className="assignment-card">
                 <div className="card-header">
                   <h4>{purpose.label}</h4>
-                  <span className={`status-badge ${assignment ? 'assigned' : 'unassigned'}`}>
-                    {assignment ? 'Configured' : 'Not Set'}
+                  <span className={`status-badge ${assignment?.assigned_user_id ? 'assigned' : 'unassigned'}`}>
+                    {assignment?.assigned_user_id ? 'Configured' : 'Not Set'}
                   </span>
                 </div>
 
@@ -233,14 +198,20 @@ const CalendarManagement = () => {
                           </span>
                           <div className="user-info">
                             <span className="user-name">{assignment.assigned_user_name}</span>
-                            <span className="assignment-type">Team Member Calendar</span>
+                            <span className="assignment-type">
+                              {assignment.booking_link_slug
+                                ? `Booking Link: /book/${assignment.booking_link_slug}`
+                                : assignment.calendly_url
+                                  ? 'Calendly URL'
+                                  : 'Team Member Calendar'}
+                            </span>
                           </div>
                         </div>
                       ) : assignment.calendly_url ? (
                         <div className="custom-url">
                           <span className="url-icon">&#128279;</span>
                           <div className="url-info">
-                            <span className="url-label">Custom Calendly URL</span>
+                            <span className="url-label">Custom Calendly URL (no team member assigned)</span>
                             <a href={assignment.calendly_url} target="_blank" rel="noopener noreferrer" className="url-link">
                               {assignment.calendly_url.length > 40
                                 ? assignment.calendly_url.substring(0, 40) + '...'
@@ -254,15 +225,15 @@ const CalendarManagement = () => {
                     </div>
                   )}
 
-                  {/* User Selection */}
+                  {/* User Selection (Required) */}
                   <div className="assignment-form">
-                    <label>Assign to Team Member:</label>
+                    <label>Assign to Team Member: <span className="required-star">*</span></label>
                     <select
                       value={assignment?.assigned_user_id || ''}
                       onChange={(e) => handleAssignUser(purpose.purpose, e.target.value ? parseInt(e.target.value) : null)}
                       disabled={saving}
                     >
-                      <option value="">-- Select Team Member --</option>
+                      <option value="">-- Select Team Member (Required) --</option>
                       {users.map(user => (
                         <option key={user.id} value={user.id}>
                           {user.name} {user.has_calendly ? '(Calendly Connected)' : ''}
@@ -271,42 +242,68 @@ const CalendarManagement = () => {
                     </select>
                   </div>
 
-                  {/* Custom URL Option */}
-                  <div className="custom-url-section">
-                    <label>Or use a custom Calendly URL:</label>
-                    {isEditing ? (
-                      <div className="url-edit-form">
-                        <input
-                          type="url"
-                          placeholder="https://calendly.com/your-link"
-                          value={editForm.calendly_url}
-                          onChange={(e) => setEditForm({ ...editForm, calendly_url: e.target.value })}
-                        />
-                        <div className="url-edit-actions">
-                          <button
-                            className="btn-save"
-                            onClick={() => handleSetCustomUrl(purpose.purpose, editForm.calendly_url)}
-                            disabled={saving}
-                          >
-                            Save
-                          </button>
-                          <button
-                            className="btn-cancel"
-                            onClick={() => setEditingId(null)}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <button
-                        className="btn-set-url"
-                        onClick={() => startEditing(purpose.purpose)}
+                  {/* Booking Link Selection */}
+                  {bookingLinks.length > 0 && (
+                    <div className="assignment-form">
+                      <label>Scheduling Method - Booking Link:</label>
+                      <select
+                        value={assignment?.booking_link_id || ''}
+                        onChange={(e) => handleAssignBookingLink(purpose.purpose, e.target.value ? parseInt(e.target.value) : null)}
+                        disabled={saving}
                       >
-                        {assignment?.calendly_url ? 'Edit URL' : 'Set Custom URL'}
-                      </button>
-                    )}
-                  </div>
+                        <option value="">-- No Booking Link --</option>
+                        {bookingLinks.map(link => (
+                          <option key={link.id} value={link.id}>
+                            {link.link_name} (/book/{link.slug}){link.owner_name ? ` - ${link.owner_name}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                      {assignment?.booking_link_slug && (
+                        <div className="booking-link-preview">
+                          Preview: <a href={`/book/${assignment.booking_link_slug}`} target="_blank" rel="noopener noreferrer">/book/{assignment.booking_link_slug}</a>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Custom URL Option (alternative to booking link) */}
+                  {!assignment?.booking_link_id && (
+                    <div className="custom-url-section">
+                      <label>Or use a custom Calendly URL:</label>
+                      {isEditing ? (
+                        <div className="url-edit-form">
+                          <input
+                            type="url"
+                            placeholder="https://calendly.com/your-link"
+                            value={editForm.calendly_url}
+                            onChange={(e) => setEditForm({ ...editForm, calendly_url: e.target.value })}
+                          />
+                          <div className="url-edit-actions">
+                            <button
+                              className="btn-save"
+                              onClick={() => handleSetCustomUrl(purpose.purpose, editForm.calendly_url)}
+                              disabled={saving}
+                            >
+                              Save
+                            </button>
+                            <button
+                              className="btn-cancel"
+                              onClick={() => setEditingId(null)}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          className="btn-set-url"
+                          onClick={() => startEditing(purpose.purpose)}
+                        >
+                          {assignment?.calendly_url ? 'Edit URL' : 'Set Custom URL'}
+                        </button>
+                      )}
+                    </div>
+                  )}
 
                   {/* Clear Button */}
                   {assignment && (
@@ -355,6 +352,34 @@ const CalendarManagement = () => {
           )}
         </div>
       </div>
+
+      {bookingLinks.length > 0 && (
+        <div className="cm-section">
+          <h3>Available Booking Links</h3>
+          <p className="section-desc">Native booking links created in Video Meetings &gt; Booking Links. These can be assigned to purposes above.</p>
+
+          <div className="users-list">
+            <div className="users-grid">
+              {bookingLinks.map(link => (
+                <div key={link.id} className="user-card">
+                  <div className="user-avatar-lg" style={{ background: 'linear-gradient(135deg, #6366f1, #4f46e5)' }}>
+                    B
+                  </div>
+                  <div className="user-details">
+                    <span className="user-name">{link.link_name}</span>
+                    <span className="user-email">/book/{link.slug}</span>
+                    {link.owner_name && (
+                      <span className="calendly-status connected">
+                        <span className="dot"></span> Owner: {link.owner_name}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -315,7 +315,7 @@ async def get_calendar_assignments(
         )
     ).all()
 
-    # Enrich with user names
+    # Enrich with user names and booking link details
     result = []
     for assignment in assignments:
         data = {
@@ -326,6 +326,8 @@ async def get_calendar_assignments(
             "assigned_user_name": None,
             "calendly_url": assignment.calendly_url,
             "booking_link_id": assignment.booking_link_id,
+            "booking_link_slug": None,
+            "booking_link_name": None,
             "is_active": assignment.is_active,
             "created_at": assignment.created_at,
             "updated_at": assignment.updated_at,
@@ -334,6 +336,18 @@ async def get_calendar_assignments(
             user = db.query(User).filter(User.id == assignment.assigned_user_id).first()
             if user:
                 data["assigned_user_name"] = user.full_name
+        if assignment.booking_link_id:
+            try:
+                from sqlalchemy import text
+                row = db.execute(
+                    text("SELECT slug, link_name FROM scheduler_booking_links WHERE id = :id AND is_active = true"),
+                    {"id": assignment.booking_link_id}
+                ).fetchone()
+                if row:
+                    data["booking_link_slug"] = row[0]
+                    data["booking_link_name"] = row[1]
+            except Exception:
+                pass
         result.append(data)
 
     return result
@@ -361,6 +375,8 @@ async def get_calendar_assignment_by_purpose(
             "assigned_user_id": None,
             "calendly_url": None,
             "booking_link_id": None,
+            "booking_link_slug": None,
+            "booking_link_url": None,
             "assigned_user_name": None,
             "assigned_user_calendly": None
         }
@@ -370,6 +386,8 @@ async def get_calendar_assignment_by_purpose(
         "assigned_user_id": assignment.assigned_user_id,
         "calendly_url": assignment.calendly_url,
         "booking_link_id": assignment.booking_link_id,
+        "booking_link_slug": None,
+        "booking_link_url": None,
         "assigned_user_name": None,
         "assigned_user_calendly": None
     }
@@ -387,6 +405,20 @@ async def get_calendar_assignment_by_purpose(
                     result["assigned_user_calendly"] = calendly["scheduling_url"]
             except Exception:
                 pass  # Calendly integration may not be available
+
+    # Get booking link slug if booking_link_id is set
+    if assignment.booking_link_id:
+        try:
+            from sqlalchemy import text
+            row = db.execute(
+                text("SELECT slug FROM scheduler_booking_links WHERE id = :id AND is_active = true"),
+                {"id": assignment.booking_link_id}
+            ).fetchone()
+            if row:
+                result["booking_link_slug"] = row[0]
+                result["booking_link_url"] = f"/book/{row[0]}"
+        except Exception:
+            pass  # Scheduler table may not exist
 
     return result
 

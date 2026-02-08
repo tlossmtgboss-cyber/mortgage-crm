@@ -1522,6 +1522,17 @@ export default function PurchaseApplication() {
   const [selectedTimeSlot, setSelectedTimeSlot] = useState(null);
   const [scheduleStep, setScheduleStep] = useState(1);
   const [calendarAssignment, setCalendarAssignment] = useState(null);
+  const [bookingSlots, setBookingSlots] = useState([]);
+  const [bookingSelectedDate, setBookingSelectedDate] = useState(null);
+  const [bookingSelectedTime, setBookingSelectedTime] = useState('');
+  const [bookingWeekStart, setBookingWeekStart] = useState(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  });
+  const [bookingLoading, setBookingLoading] = useState(false);
+  const [bookingConfirmed, setBookingConfirmed] = useState(false);
+  const [bookingError, setBookingError] = useState(null);
   const [planningStep, setPlanningStep] = useState(1);
   const [professionalSubStep, setProfessionalSubStep] = useState(1);
   const [wantProfessionalsInvolved, setWantProfessionalsInvolved] = useState(null);
@@ -5047,8 +5058,122 @@ export default function PurchaseApplication() {
 
     // Step 1: Calendar selection
     if (scheduleStep === 1) {
-      // Check if Calendly is configured for this application type
+      const bookingSlug = calendarAssignment?.booking_link_slug;
       const calendlyUrl = calendarAssignment?.calendly_url;
+
+      // Booking link helpers
+      const getWeekDates = () => {
+        const dates = [];
+        const start = new Date(bookingWeekStart);
+        start.setHours(0, 0, 0, 0);
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(start);
+          d.setDate(start.getDate() + i);
+          dates.push(d);
+        }
+        return dates;
+      };
+
+      const isPastDate = (d) => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return d < today;
+      };
+
+      const isTodayDate = (d) => d.toDateString() === new Date().toDateString();
+
+      const formatDayName = (d) => d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
+      const formatDayNumber = (d) => d.getDate();
+      const formatMonth = (d) => d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
+      const formatSlotTime = (timeStr) => {
+        const dt = new Date(timeStr);
+        return dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      };
+
+      const prevWeek = () => {
+        const newStart = new Date(bookingWeekStart);
+        newStart.setDate(bookingWeekStart.getDate() - 7);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (newStart >= today) setBookingWeekStart(newStart);
+      };
+
+      const nextWeek = () => {
+        const newStart = new Date(bookingWeekStart);
+        newStart.setDate(bookingWeekStart.getDate() + 7);
+        setBookingWeekStart(newStart);
+      };
+
+      const fetchBookingSlots = async (date) => {
+        setBookingLoading(true);
+        setBookingError(null);
+        try {
+          const dateStr = date.toISOString().split('T')[0];
+          const response = await fetch(
+            `${API_URL}/api/v1/scheduler/public/book/${bookingSlug}/slots?date=${dateStr}`
+          );
+          if (response.ok) {
+            const data = await response.json();
+            const slots = (data.available_slots || []).map(slot => ({
+              ...slot,
+              start_time: slot.start,
+              display: formatSlotTime(slot.start)
+            }));
+            setBookingSlots(slots);
+            if (slots.length > 0) setBookingSelectedTime(slots[0].start_time);
+            else setBookingSelectedTime('');
+          }
+        } catch (err) {
+          console.error('Error fetching booking slots:', err);
+          setBookingError('Failed to load available times');
+        } finally {
+          setBookingLoading(false);
+        }
+      };
+
+      const handleDateSelect = (date) => {
+        setBookingSelectedDate(date);
+        setBookingSelectedTime('');
+        setBookingSlots([]);
+        fetchBookingSlots(date);
+      };
+
+      const handleConfirmBooking = async () => {
+        if (!bookingSelectedTime) return;
+        setBookingLoading(true);
+        setBookingError(null);
+        try {
+          const response = await fetch(`${API_URL}/api/v1/scheduler/public/book/${bookingSlug}/confirm`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              start_time: bookingSelectedTime,
+              duration_minutes: 30,
+              attendee_name: `${profileData?.firstName || ''} ${profileData?.lastName || ''}`.trim() || 'Applicant',
+              attendee_email: profileData?.email || '',
+              attendee_phone: profileData?.phone || '',
+              notes: 'Booked from Purchase Application',
+              meeting_mode: 'video'
+            })
+          });
+
+          if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.detail || 'Failed to book appointment');
+          }
+
+          setBookingConfirmed(true);
+          showMicroWinAnimation('Consultation Scheduled!');
+          setScheduleStep(2);
+        } catch (err) {
+          console.error('Error confirming booking:', err);
+          setBookingError(err.message || 'Failed to book appointment');
+        } finally {
+          setBookingLoading(false);
+        }
+      };
+
+      const weekDates = bookingSlug ? getWeekDates() : [];
 
       return (
         <div className="stage-content scheduling-page">
@@ -5058,7 +5183,73 @@ export default function PurchaseApplication() {
           </div>
 
           <div className="calendar-section">
-            {calendlyUrl ? (
+            {bookingSlug ? (
+              // Native booking link slot picker
+              <div className="booking-slot-picker">
+                <h4>Pick a Date</h4>
+                <div className="booking-week-picker">
+                  <button className="week-nav-btn" onClick={prevWeek} disabled={isPastDate(weekDates[0])}>
+                    &#8249;
+                  </button>
+                  <div className="booking-week-dates">
+                    {weekDates.map((date, idx) => {
+                      const disabled = isPastDate(date);
+                      const selected = bookingSelectedDate && date.toDateString() === bookingSelectedDate.toDateString();
+                      return (
+                        <button
+                          key={idx}
+                          className={`booking-date-card ${selected ? 'selected' : ''} ${disabled ? 'disabled' : ''} ${isTodayDate(date) ? 'today' : ''}`}
+                          onClick={() => !disabled && handleDateSelect(date)}
+                          disabled={disabled}
+                        >
+                          <span className="booking-day-name">{formatDayName(date)}</span>
+                          <span className="booking-day-number">{formatDayNumber(date)}</span>
+                          <span className="booking-month">{formatMonth(date)}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button className="week-nav-btn" onClick={nextWeek}>
+                    &#8250;
+                  </button>
+                </div>
+
+                {bookingSelectedDate && (
+                  <div className="booking-time-section">
+                    <h4>Pick a Time</h4>
+                    {bookingLoading ? (
+                      <div className="booking-loading">Loading available times...</div>
+                    ) : bookingError ? (
+                      <div className="booking-error">{bookingError}</div>
+                    ) : bookingSlots.length === 0 ? (
+                      <div className="booking-no-slots">No times available for this date. Try another day.</div>
+                    ) : (
+                      <>
+                        <div className="booking-time-grid">
+                          {bookingSlots.map((slot, idx) => (
+                            <button
+                              key={idx}
+                              className={`booking-time-btn ${bookingSelectedTime === slot.start_time ? 'selected' : ''}`}
+                              onClick={() => setBookingSelectedTime(slot.start_time)}
+                            >
+                              {slot.display}
+                            </button>
+                          ))}
+                        </div>
+
+                        <button
+                          className="btn-schedule"
+                          disabled={!bookingSelectedTime || bookingLoading}
+                          onClick={handleConfirmBooking}
+                        >
+                          {bookingLoading ? 'Booking...' : 'Confirm Appointment'}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : calendlyUrl ? (
               // Show Calendly embed when configured
               <div className="calendly-embed-container">
                 <iframe
@@ -5083,7 +5274,7 @@ export default function PurchaseApplication() {
                 </div>
               </div>
             ) : (
-              // Fallback to mock time slots when no Calendly configured
+              // Fallback to mock time slots when nothing configured
               <div className="calendar-placeholder">
                 <span className="cal-icon"><Icon name="calendar" size={48} /></span>
                 <h4>Pick a Time That Works For You</h4>

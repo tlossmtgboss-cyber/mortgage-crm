@@ -2608,6 +2608,43 @@ async def delete_blocked_time(
 # BOOKING LINK ENDPOINTS
 # ============================================================================
 
+@router.get("/booking-links/all")
+async def list_all_booking_links(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """List all active booking links for admin use (calendar assignment)"""
+    user = await get_current_user(request, db)
+
+    BookingLink = _models['BookingLink']
+    User = _models.get('User')
+
+    links = db.query(BookingLink).filter(
+        BookingLink.is_active == True
+    ).all()
+
+    result = []
+    for link in links:
+        link_data = {
+            "id": link.id,
+            "slug": link.slug,
+            "link_name": link.link_name,
+            "description": link.description,
+            "url": f"/book/{link.slug}",
+            "is_public": link.is_public,
+            "user_id": link.user_id,
+            "owner_name": None,
+            "created_at": link.created_at.isoformat() if link.created_at else None
+        }
+        if link.user_id and User:
+            owner = db.query(User).filter(User.id == link.user_id).first()
+            if owner:
+                link_data["owner_name"] = owner.full_name
+        result.append(link_data)
+
+    return {"booking_links": result}
+
+
 @router.get("/booking-links")
 async def list_booking_links(
     request: Request,
