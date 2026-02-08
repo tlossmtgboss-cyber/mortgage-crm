@@ -105,24 +105,19 @@ class AgenticAI:
         """Use AI to analyze the situation and understand what needs to be done"""
 
         system_prompt = """You are an intelligent AI agent for a mortgage CRM system.
-Your job is to analyze situations and determine the best course of action to help loan officers.
+Analyze the trigger and context, then respond with ONLY a JSON object:
+{
+  "urgency": "low|medium|high|critical",
+  "recommendations": ["action 1", "action 2"],
+  "communication_strategy": "brief strategy",
+  "risk_factors": ["risk 1"] or []
+}
+No other text. JSON only."""
 
-Analyze the given trigger and context, then provide:
-1. Urgency level (low, medium, high, critical)
-2. Recommended actions
-3. Client communication strategy
-4. Risk factors if any
-
-Be concise and actionable."""
-
-        user_prompt = f"""
-Trigger: {trigger.value}
+        user_prompt = f"""Trigger: {trigger.value}
 
 Context:
-{self._format_context(context)}
-
-Please analyze this situation and recommend actions.
-"""
+{self._format_context(context)}"""
 
         try:
             response = self.client.messages.create(
@@ -136,12 +131,24 @@ Please analyze this situation and recommend actions.
 
             analysis_text = response.content[0].text
 
-            # Parse the analysis
-            return {
-                "raw_analysis": analysis_text,
-                "urgency": self._extract_urgency(analysis_text),
-                "recommendations": self._extract_recommendations(analysis_text)
-            }
+            # Parse structured JSON response
+            import json as _json
+            try:
+                parsed = _json.loads(analysis_text)
+                return {
+                    "raw_analysis": analysis_text,
+                    "urgency": parsed.get("urgency", "medium"),
+                    "recommendations": parsed.get("recommendations", []),
+                    "communication_strategy": parsed.get("communication_strategy", ""),
+                    "risk_factors": parsed.get("risk_factors", [])
+                }
+            except _json.JSONDecodeError:
+                # Fallback to regex parsing if JSON fails
+                return {
+                    "raw_analysis": analysis_text,
+                    "urgency": self._extract_urgency(analysis_text),
+                    "recommendations": self._extract_recommendations(analysis_text)
+                }
 
         except Exception as e:
             logger.error(f"Error analyzing situation: {e}")

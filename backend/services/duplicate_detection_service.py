@@ -9,7 +9,7 @@ import logging
 from typing import List, Dict, Optional, Tuple, Union
 from uuid import UUID
 from datetime import datetime
-from sqlalchemy import func, or_, and_
+from sqlalchemy import func, or_, and_, text
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -32,7 +32,8 @@ class DuplicateDetectionService:
 
     def find_duplicate_leads(self, lead_id: Optional[Union[UUID, str]] = None) -> List[Dict]:
         """
-        Find duplicate leads in the database.
+        Find duplicate leads in the database using raw SQL to avoid
+        ORM enum deserialization issues with mismatched stage values.
 
         Args:
             lead_id: Optional specific lead to check for duplicates.
@@ -41,36 +42,29 @@ class DuplicateDetectionService:
         Returns:
             List of duplicate groups with confidence scores.
         """
-        # Try to use the Lead model from main (the one used by the frontend)
-        try:
-            from main import Lead
-            using_lead_model = True
-        except ImportError:
-            from models.lead_profile import LeadProfile as Lead
-            using_lead_model = False
-
-        # Get leads to check
+        # Use raw SQL to avoid SQLAlchemy enum deserialization crashes
+        # when leads have stage values that don't match the Python enum names
         if lead_id:
-            if using_lead_model:
-                leads = self.db.query(Lead).filter(Lead.id == lead_id).all()
-            else:
-                leads = self.db.query(Lead).filter(Lead.id == lead_id).all()
+            result = self.db.execute(
+                text("SELECT id, name, email, phone, loan_number, stage::text as stage, created_at FROM leads WHERE id = :lead_id"),
+                {"lead_id": str(lead_id)}
+            )
         else:
-            if using_lead_model:
-                # For Lead model, filter by stage instead of status
-                leads = self.db.query(Lead).all()
-            else:
-                leads = self.db.query(Lead).filter(
-                    Lead.status != 'archived'
-                ).all()
+            result = self.db.execute(
+                text("SELECT id, name, email, phone, loan_number, stage::text as stage, created_at FROM leads")
+            )
 
-        logger.info(f"Found {len(leads)} leads to scan for duplicates (using_lead_model={using_lead_model})")
+        leads = result.fetchall()
+        columns = result.keys()
+        leads = [dict(zip(columns, row)) for row in leads]
+
+        logger.info(f"Found {len(leads)} leads to scan for duplicates (using raw SQL)")
 
         # Group leads by email (simple approach like frontend)
         email_groups = {}
         for lead in leads:
-            if lead.email:
-                email_lower = lead.email.lower()
+            if lead.get('email'):
+                email_lower = lead['email'].lower()
                 if email_lower not in email_groups:
                     email_groups[email_lower] = []
                 email_groups[email_lower].append(lead)
@@ -87,44 +81,38 @@ class DuplicateDetectionService:
             for i, lead1 in enumerate(lead_group):
                 for lead2 in lead_group[i+1:]:
                     # Avoid duplicate pairs
-                    pair_key = tuple(sorted([str(lead1.id), str(lead2.id)]))
+                    pair_key = tuple(sorted([str(lead1['id']), str(lead2['id'])]))
                     if pair_key in checked_pairs:
                         continue
                     checked_pairs.add(pair_key)
 
-                    # Get name - handle both Lead model (has 'name') and LeadProfile (has first/last)
-                    name1 = getattr(lead1, 'name', None) or f"{getattr(lead1, 'first_name', '') or ''} {getattr(lead1, 'last_name', '') or ''}".strip() or 'Unknown'
-                    name2 = getattr(lead2, 'name', None) or f"{getattr(lead2, 'first_name', '') or ''} {getattr(lead2, 'last_name', '') or ''}".strip() or 'Unknown'
+                    name1 = lead1.get('name') or 'Unknown'
+                    name2 = lead2.get('name') or 'Unknown'
 
-                    # Get created_at - handle different field names
-                    created1 = getattr(lead1, 'created_at', None) or getattr(lead1, 'lead_created_date', None)
-                    created2 = getattr(lead2, 'created_at', None) or getattr(lead2, 'lead_created_date', None)
-
-                    # Get stage - convert enum to string if needed
-                    stage1 = str(lead1.stage.value) if hasattr(lead1.stage, 'value') else str(lead1.stage) if lead1.stage else None
-                    stage2 = str(lead2.stage.value) if hasattr(lead2.stage, 'value') else str(lead2.stage) if lead2.stage else None
+                    created1 = lead1.get('created_at')
+                    created2 = lead2.get('created_at')
 
                     duplicates.append({
                         'type': 'lead',
                         'record_1': {
-                            'id': str(lead1.id),
+                            'id': str(lead1['id']),
                             'name': name1,
-                            'email': lead1.email,
-                            'phone': getattr(lead1, 'phone', None),
-                            'loan_number': getattr(lead1, 'loan_number', None),
+                            'email': lead1.get('email'),
+                            'phone': lead1.get('phone'),
+                            'loan_number': lead1.get('loan_number'),
                             'created_at': created1.isoformat() if created1 else None,
-                            'stage': stage1,
-                            'status': getattr(lead1, 'status', None)
+                            'stage': lead1.get('stage'),
+                            'status': None
                         },
                         'record_2': {
-                            'id': str(lead2.id),
+                            'id': str(lead2['id']),
                             'name': name2,
-                            'email': lead2.email,
-                            'phone': getattr(lead2, 'phone', None),
-                            'loan_number': getattr(lead2, 'loan_number', None),
+                            'email': lead2.get('email'),
+                            'phone': lead2.get('phone'),
+                            'loan_number': lead2.get('loan_number'),
                             'created_at': created2.isoformat() if created2 else None,
-                            'stage': stage2,
-                            'status': getattr(lead2, 'status', None)
+                            'stage': lead2.get('stage'),
+                            'status': None
                         },
                         'confidence_score': self.EMAIL_MATCH_WEIGHT,  # 100% for email match
                         'match_reasons': [f"Same email: {email}"]

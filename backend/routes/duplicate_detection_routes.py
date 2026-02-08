@@ -85,7 +85,7 @@ def get_ai_journey_insight_model():
 @router.get("/api/v1/duplicates/scan")
 async def scan_for_duplicates(
     db: Session = Depends(get_db),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(get_current_user_dep())
 ):
     """
     Scan for duplicate leads and loans.
@@ -112,7 +112,7 @@ async def scan_for_duplicates(
 @router.post("/api/v1/duplicates/create-tasks")
 async def create_duplicate_merge_tasks(
     db: Session = Depends(get_db),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(get_current_user_dep())
 ):
     """
     Scan for duplicates and create tasks for each duplicate pair.
@@ -340,7 +340,7 @@ async def check_single_record_duplicates(
     record_type: str,
     record_id: str,
     db: Session = Depends(get_db),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(get_current_user_dep())
 ):
     """
     Check if a specific lead or loan has duplicates.
@@ -421,7 +421,7 @@ async def clear_all_tasks_endpoint(request: dict, db: Session = Depends(get_db))
 @router.post("/api/v1/data/clear-all-demo-data")
 async def clear_sample_data(
     db: Session = Depends(get_db),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(get_current_user_dep())
 ):
     """
     Clear ALL sample/demo data from the CRM.
@@ -594,7 +594,7 @@ async def clear_sample_data(
 @router.post("/api/v1/data/clear-old-leads")
 async def clear_old_leads(
     db: Session = Depends(get_db),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(get_current_user_dep())
 ):
     """
     Clear leads created BEFORE today, keeping only today's uploads.
@@ -679,7 +679,7 @@ async def clear_old_leads(
 @router.post("/api/v1/admin/seed-demo-people")
 async def seed_demo_people(
     db: Session = Depends(get_db),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(get_current_user_dep())
 ):
     """
     Seed comprehensive demo data: team members, leads, loans, and MUM clients.
@@ -851,7 +851,7 @@ async def seed_demo_people(
 @router.post("/api/v1/admin/assign-demo-data")
 async def assign_demo_data_to_user(
     db: Session = Depends(get_db),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(get_current_user_dep())
 ):
     """
     Assign all demo leads and loans to the current user.
@@ -887,10 +887,69 @@ async def assign_demo_data_to_user(
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 
+@router.post("/api/v1/admin/fix-lead-stages")
+async def fix_lead_stages(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_dep())
+):
+    """
+    Fix leads that have stage values stored as display names (e.g. 'New')
+    instead of enum keys (e.g. 'NEW'). This can happen when the frontend
+    sends enum values rather than enum keys.
+    """
+    try:
+        # Map display values to enum keys
+        stage_mappings = {
+            'New': 'NEW',
+            'Attempted Contact': 'ATTEMPTED_CONTACT',
+            'Prospect': 'PROSPECT',
+            'Application': 'APPLICATION',
+            'Document Fulfillment': 'DOCUMENT_FULFILLMENT',
+            'Pre-Qualified': 'PRE_QUALIFIED',
+            'Pre-Approved': 'PRE_APPROVED',
+            'Under Contract': 'UNDER_CONTRACT',
+            'Long-Term Nurture': 'LONG_TERM_NURTURE',
+            'Closed': 'CLOSED',
+            'AMR': 'AMR',
+            'Referral Source': 'REFERRAL_SOURCE',
+            'Withdrawn': 'WITHDRAWN',
+            'Does Not Qualify': 'DOES_NOT_QUALIFY',
+            'Disclosed': 'DISCLOSED',
+        }
+
+        total_fixed = 0
+        details = {}
+
+        for display_val, enum_key in stage_mappings.items():
+            if display_val == enum_key:
+                continue  # Skip if they're the same (e.g. AMR)
+            result = db.execute(
+                text("UPDATE leads SET stage = :enum_key WHERE stage::text = :display_val"),
+                {"enum_key": enum_key, "display_val": display_val}
+            )
+            if result.rowcount > 0:
+                details[f"{display_val} -> {enum_key}"] = result.rowcount
+                total_fixed += result.rowcount
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": f"Fixed {total_fixed} lead stage values",
+            "total_fixed": total_fixed,
+            "details": details
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error fixing lead stages: {e}")
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+
 @router.post("/api/v1/admin/fix-loan-stages")
 async def fix_loan_stages(
     db: Session = Depends(get_db),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(get_current_user_dep())
 ):
     """
     Fix loans that have NULL stage values by setting them to appropriate defaults based on loan number.
@@ -926,7 +985,7 @@ async def fix_loan_stages(
 @router.post("/api/v1/admin/update-permission-roles")
 async def update_permission_roles(
     db: Session = Depends(get_db),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(get_current_user_dep())
 ):
     """
     Update permission templates to new role structure:
@@ -1527,7 +1586,7 @@ async def initialize_ai_only_endpoint(request: dict):
 async def get_ai_health(
     days: int = 7,
     db: Session = Depends(get_db),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(get_current_user_dep())
 ):
     """Get AI Colleague health score and metrics"""
     AIColleagueAction = get_ai_colleague_action_model()
@@ -1603,7 +1662,7 @@ async def get_ai_metrics(
     days: int = 30,
     agent_name: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(get_current_user_dep())
 ):
     """Get detailed AI performance metrics"""
     AIColleagueAction = get_ai_colleague_action_model()
@@ -1673,7 +1732,7 @@ async def get_recent_actions(
     limit: int = 50,
     agent_name: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(get_current_user_dep())
 ):
     """Get recent AI actions for activity feed"""
     AIColleagueAction = get_ai_colleague_action_model()
@@ -1716,7 +1775,7 @@ async def get_recent_actions(
 async def log_ai_action(
     action_data: dict,
     db: Session = Depends(get_db),
-    current_user = Depends(lambda: get_current_user_flexible_dep())
+    current_user = Depends(get_current_user_flexible_dep())
 ):
     """Log an AI Colleague action for tracking"""
     AIColleagueAction = get_ai_colleague_action_model()
@@ -1771,7 +1830,7 @@ async def update_ai_action(
     action_id: str,
     updates: dict,
     db: Session = Depends(get_db),
-    current_user = Depends(lambda: get_current_user_flexible_dep())
+    current_user = Depends(get_current_user_flexible_dep())
 ):
     """Update an AI action (e.g., mark as completed, update outcome)"""
     AIColleagueAction = get_ai_colleague_action_model()
@@ -1814,7 +1873,7 @@ async def get_ai_insights(
     limit: int = 10,
     status: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(get_current_user_dep())
 ):
     """Get AI-discovered journey insights"""
     AIJourneyInsight = get_ai_journey_insight_model()
