@@ -10,11 +10,69 @@ from typing import Any, Callable, Dict, List, Optional, TypedDict
 from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime
+import time
 import logging
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# AGENT METRICS (lightweight in-memory tracking)
+# =============================================================================
+
+@dataclass
+class AgentMetrics:
+    """Lightweight per-agent metrics tracker."""
+    total_calls: int = 0
+    success_count: int = 0
+    error_count: int = 0
+    total_latency_ms: float = 0.0
+    max_latency_ms: float = 0.0
+    consecutive_failures: int = 0
+    last_error: Optional[str] = None
+    last_error_time: Optional[datetime] = None
+
+    @property
+    def avg_latency_ms(self) -> float:
+        return self.total_latency_ms / self.total_calls if self.total_calls > 0 else 0.0
+
+    @property
+    def error_rate(self) -> float:
+        return self.error_count / self.total_calls if self.total_calls > 0 else 0.0
+
+    def record_success(self, latency_ms: float):
+        self.total_calls += 1
+        self.success_count += 1
+        self.total_latency_ms += latency_ms
+        self.max_latency_ms = max(self.max_latency_ms, latency_ms)
+        self.consecutive_failures = 0
+
+    def record_error(self, latency_ms: float, error: str):
+        self.total_calls += 1
+        self.error_count += 1
+        self.total_latency_ms += latency_ms
+        self.consecutive_failures += 1
+        self.last_error = error
+        self.last_error_time = datetime.utcnow()
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "total_calls": self.total_calls,
+            "success_count": self.success_count,
+            "error_count": self.error_count,
+            "error_rate": round(self.error_rate, 3),
+            "avg_latency_ms": round(self.avg_latency_ms, 1),
+            "max_latency_ms": round(self.max_latency_ms, 1),
+            "consecutive_failures": self.consecutive_failures,
+            "last_error": self.last_error,
+        }
+
+
+# Circuit breaker constants
+CIRCUIT_BREAKER_THRESHOLD = 5  # consecutive failures before tripping
+CIRCUIT_BREAKER_RESET_SECONDS = 60  # seconds before allowing retry
 
 
 class ToolCategory(str, Enum):
@@ -110,6 +168,8 @@ class SpecializedAgent(ABC):
         self._tools: Dict[str, AgentTool] = {}
         self._tool_usage_counts: Dict[str, int] = {}
         self._last_tool_use: Dict[str, datetime] = {}
+        self._metrics: Dict[str, AgentMetrics] = {}  # per-tool metrics
+        self._agent_metrics = AgentMetrics()  # aggregate agent metrics
 
         # Register agent-specific tools
         self._register_tools()
@@ -182,6 +242,21 @@ class SpecializedAgent(ABC):
                 error=f"Tool '{tool_name}' not found in agent '{self.name}'"
             )
 
+        # Circuit breaker check
+        tool_metrics = self._metrics.get(tool_name)
+        if tool_metrics and tool_metrics.consecutive_failures >= CIRCUIT_BREAKER_THRESHOLD:
+            if tool_metrics.last_error_time:
+                elapsed = (datetime.utcnow() - tool_metrics.last_error_time).total_seconds()
+                if elapsed < CIRCUIT_BREAKER_RESET_SECONDS:
+                    return ToolResult(
+                        success=False,
+                        error="circuit_breaker_open",
+                        message=f"Tool '{tool_name}' temporarily disabled after {CIRCUIT_BREAKER_THRESHOLD} consecutive failures. Retry in {int(CIRCUIT_BREAKER_RESET_SECONDS - elapsed)}s."
+                    )
+                else:
+                    # Reset circuit breaker after cooldown
+                    tool_metrics.consecutive_failures = 0
+
         # Check rate limits
         if not self._check_rate_limit(tool):
             return ToolResult(
@@ -208,9 +283,16 @@ class SpecializedAgent(ABC):
                 metadata={"tool": tool_name, "risk_level": tool.risk_level.value}
             )
 
+        # Initialize per-tool metrics if needed
+        if tool_name not in self._metrics:
+            self._metrics[tool_name] = AgentMetrics()
+
+        start_time = time.time()
         try:
             # Execute the tool handler
             result = await tool.handler(input_data, self.context)
+
+            latency_ms = (time.time() - start_time) * 1000
 
             # Update usage tracking
             self._tool_usage_counts[tool_name] += 1
@@ -218,18 +300,31 @@ class SpecializedAgent(ABC):
 
             # Wrap raw result if needed
             if isinstance(result, ToolResult):
-                return result
+                tool_result = result
             elif isinstance(result, dict):
-                return ToolResult(
+                tool_result = ToolResult(
                     success=result.get("success", True),
                     data=result.get("data", result),
                     error=result.get("error"),
                     message=result.get("message")
                 )
             else:
-                return ToolResult(success=True, data={"result": result})
+                tool_result = ToolResult(success=True, data={"result": result})
+
+            # Record metrics
+            if tool_result.success:
+                self._metrics[tool_name].record_success(latency_ms)
+                self._agent_metrics.record_success(latency_ms)
+            else:
+                self._metrics[tool_name].record_error(latency_ms, tool_result.error or "unknown")
+                self._agent_metrics.record_error(latency_ms, tool_result.error or "unknown")
+
+            return tool_result
 
         except Exception as e:
+            latency_ms = (time.time() - start_time) * 1000
+            self._metrics[tool_name].record_error(latency_ms, str(e))
+            self._agent_metrics.record_error(latency_ms, str(e))
             logger.error(f"Tool execution failed: {tool_name} - {e}", exc_info=True)
             return ToolResult(
                 success=False,
