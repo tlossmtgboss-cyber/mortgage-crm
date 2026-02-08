@@ -7,7 +7,7 @@ Six specialized agents for processing call transcripts:
 - UnderwriterAgent: Risk flags, conditions, compliance checks
 - CalculatorAgent: Mortgage calculations from conversation data
 - MarketingAgent: Borrower story capture for testimonials and content
-- ReceptionistAgent: Calendar scheduling and appointment coordination
+- CallSchedulingAgent: Calendar scheduling and appointment coordination
 """
 
 from .base_agent import BaseCallAgent, AgentResult, AGENT_MODEL
@@ -16,7 +16,10 @@ from .junior_lo_agent import JuniorLOAgent
 from .underwriter_agent import UnderwriterAgent
 from .calculator_agent import CalculatorAgent
 from .marketing_agent import MarketingAgent
-from .receptionist_agent import ReceptionistAgent
+from .receptionist_agent import CallSchedulingAgent
+
+# Backward compat alias
+ReceptionistAgent = CallSchedulingAgent
 
 __all__ = [
     'BaseCallAgent',
@@ -27,5 +30,6 @@ __all__ = [
     'UnderwriterAgent',
     'CalculatorAgent',
     'MarketingAgent',
-    'ReceptionistAgent',
+    'CallSchedulingAgent',
+    'ReceptionistAgent',  # backward compat alias
 ]

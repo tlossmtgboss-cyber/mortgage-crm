@@ -19,11 +19,37 @@ from dataclasses import dataclass, field
 from enum import Enum
 import uuid
 import json
+import re
 
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
+
+# PII patterns for log redaction
+_PII_PATTERNS = [
+    (re.compile(r'\b\d{3}-\d{2}-\d{4}\b'), '[SSN]'),                    # SSN
+    (re.compile(r'\b\d{9}\b(?!\d)'), '[SSN]'),                            # SSN no dashes
+    (re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'), '[EMAIL]'),  # Email
+    (re.compile(r'\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b'), '[PHONE]'),  # Phone
+    (re.compile(r'\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b'), '[CARD]'),  # Credit card
+]
+
+def _redact_pii(text_val: str) -> str:
+    """Redact PII patterns from a string."""
+    for pattern, replacement in _PII_PATTERNS:
+        text_val = pattern.sub(replacement, text_val)
+    return text_val
+
+def _redact_payload(obj: Any) -> Any:
+    """Recursively redact PII from a payload dict/list/string."""
+    if isinstance(obj, str):
+        return _redact_pii(obj)
+    elif isinstance(obj, dict):
+        return {k: _redact_payload(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_redact_payload(item) for item in obj]
+    return obj
 
 
 # =============================================================================
@@ -154,7 +180,7 @@ class CallMonitoringOrchestrator:
         from .agents.underwriter_agent import UnderwriterAgent
         from .agents.calculator_agent import CalculatorAgent
         from .agents.marketing_agent import MarketingAgent
-        from .agents.receptionist_agent import ReceptionistAgent
+        from .agents.receptionist_agent import CallSchedulingAgent
 
         self._agents = {
             'scribe': ScribeAgent(self.db),
@@ -162,7 +188,7 @@ class CallMonitoringOrchestrator:
             'underwriter': UnderwriterAgent(self.db),
             'calculator': CalculatorAgent(self.db),
             'marketing': MarketingAgent(self.db),
-            'receptionist': ReceptionistAgent(self.db),
+            'receptionist': CallSchedulingAgent(self.db),
         }
 
     # =========================================================================
@@ -1881,7 +1907,8 @@ class CallMonitoringOrchestrator:
         agent_type: Optional[str] = None,
         transcript_timestamp_ms: Optional[int] = None,
     ):
-        """Log an event to the audit log."""
+        """Log an event to the audit log with PII redaction."""
+        redacted = _redact_payload(payload)
         self.db.execute(text("""
             INSERT INTO agent_events (
                 session_id, run_id, event_type, agent_type, payload, transcript_timestamp_ms
@@ -1893,7 +1920,7 @@ class CallMonitoringOrchestrator:
             "run_id": run_id,
             "event_type": event_type,
             "agent_type": agent_type,
-            "payload": json.dumps(payload),
+            "payload": json.dumps(redacted),
             "timestamp_ms": transcript_timestamp_ms,
         })
 

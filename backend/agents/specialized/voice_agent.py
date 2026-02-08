@@ -75,7 +75,8 @@ class VoiceHistoryInput(BaseModel):
 # VOICE OS AGENT
 # ============================================================================
 
-@AgentRegistry.register
+# Retired: All 8 tools were stubs/simulations with no real integrations.
+# Kept unregistered for reference. Remove file entirely when cleaning up.
 class VoiceAgent(SpecializedAgent):
     """
     Voice OS agent for voice command processing.

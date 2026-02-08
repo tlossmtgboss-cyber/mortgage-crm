@@ -493,9 +493,7 @@ class AgentRegistry:
             "keyword": "ContentMarketingAgent",
             "blog": "ContentMarketingAgent",
 
-            "voice": "VoiceAgent",
-            "speech": "VoiceAgent",
-            "transcribe": "VoiceAgent",
+            # VoiceAgent retired — all 8 tools were stubs/simulations
             "coaching": "CoachingAgent",
             "coach": "CoachingAgent",
             "performance": "CoachingAgent",
@@ -508,6 +506,9 @@ class AgentRegistry:
             "email intelligence": "EmailIntelAgent",
             "draft": "EmailIntelAgent",
             "response": "EmailIntelAgent",
+            "sentiment": "EmailIntelAgent",
+            "tone": "EmailIntelAgent",
+            "classify": "EmailIntelAgent",
             "meeting": "SchedulerAgent",
             "availability": "SchedulerAgent",
             "book": "SchedulerAgent",

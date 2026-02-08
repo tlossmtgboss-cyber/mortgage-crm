@@ -1,5 +1,5 @@
 """
-Receptionist Agent - Calendar & Scheduling
+Call Scheduling Agent (formerly Receptionist Agent) - Calendar & Scheduling
 
 AI agent that listens to calls and handles scheduling:
 - Detects when appointments are agreed upon
@@ -9,6 +9,11 @@ AI agent that listens to calls and handles scheduling:
 - Coordinates schedules between parties
 
 Works with the Production Assistant to manage the LO's calendar.
+
+Note: Renamed from ReceptionistAgent to avoid collision with the
+specialized ReceptionistAgent (interactive voice/chat handler).
+This agent does passive post-call analysis; the specialized one
+handles real-time interactions.
 """
 
 import logging
@@ -21,9 +26,9 @@ from .base_agent import BaseCallAgent, AgentResult
 logger = logging.getLogger(__name__)
 
 
-class ReceptionistAgent(BaseCallAgent):
+class CallSchedulingAgent(BaseCallAgent):
     """
-    Receptionist Agent for calendar management and scheduling.
+    Call Scheduling Agent for calendar management and scheduling.
 
     Capabilities:
     - Detects when parties agree on a meeting time
