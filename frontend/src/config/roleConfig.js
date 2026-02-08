@@ -892,7 +892,7 @@ export const MASTER_ADMIN_NAVIGATION = [
     key: 'sales',
     label: 'Sales',
     path: '/leads',
-    matchPaths: ['/leads', '/loans', '/portfolio', '/referral-partners', '/partner-recruiting', '/marketing', '/calendar', '/rate-monitor'],
+    matchPaths: ['/leads', '/loans', '/portfolio', '/referral-partners', '/partner-recruiting', '/marketing', '/rate-monitor'],
     children: [
       { path: '/leads', label: 'Leads', icon: 'fa-user-plus', badgeKey: 'leads' },
       { path: '/loans', label: 'Active Loans', icon: 'fa-file-contract', badgeKey: 'loans' },

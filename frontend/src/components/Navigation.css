@@ -22,7 +22,7 @@
   gap: var(--space-xs);
   flex: 1;
   flex-wrap: nowrap;
-  overflow-x: auto;
+  overflow: visible;
   align-items: center;
 }
 
