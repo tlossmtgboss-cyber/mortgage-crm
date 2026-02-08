@@ -19,6 +19,7 @@ import IncomeTab from '../components/income/IncomeTab';
 import UnifiedIncomeCalculator from '../components/income/UnifiedIncomeCalculator';
 import IncomeCalculator from '../components/IncomeCalculator';
 import CreditTab from '../components/CreditTab';
+import CallIntelligenceTab from '../components/call-intelligence/CallIntelligenceTab';
 import VideoMeetings from '../components/VideoMeetings';
 import VideoCallScheduleModal from '../components/VideoCallScheduleModal';
 import EmailComposerModal from '../components/EmailComposerModal';
@@ -2015,6 +2016,12 @@ function LeadDetail() {
         >
           Team Members
         </button>
+        <button
+          className={`tab-btn ${activeTab === 'call-intelligence' ? 'active' : ''}`}
+          onClick={() => setActiveTab('call-intelligence')}
+        >
+          Call Intelligence
+        </button>
       </div>
 
       <div className="detail-content">
@@ -3465,6 +3472,17 @@ function LeadDetail() {
               <h3 style={{ marginBottom: '16px', color: '#333', fontSize: '16px' }}>General Team Assignments</h3>
               <TeamAssignment leadId={id} />
             </div>
+          </div>
+          )}
+
+          {/* Call Intelligence Tab */}
+          {activeTab === 'call-intelligence' && (
+          <div className="info-section call-intelligence-section">
+            <CallIntelligenceTab
+              clientId={id}
+              loanId={lead?.loan_id}
+              leadId={id}
+            />
           </div>
           )}
 
