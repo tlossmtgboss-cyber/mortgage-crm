@@ -404,12 +404,21 @@ async def classify_intent_llm(
         anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
     try:
+        # Use prompt caching: static classification instructions as cached system prompt,
+        # only the user query varies per call
         response = anthropic_client.messages.create(
             model="claude-3-5-haiku-20241022",  # Fastest model for classification
             max_tokens=20,
+            system=[
+                {
+                    "type": "text",
+                    "text": INTENT_CLASSIFIER_PROMPT.split("Query:")[0].strip(),
+                    "cache_control": {"type": "ephemeral"}
+                }
+            ],
             messages=[{
                 "role": "user",
-                "content": INTENT_CLASSIFIER_PROMPT.format(query=query)
+                "content": f"Query: {query}\n\nCategory:"
             }]
         )
 

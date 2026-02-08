@@ -38,7 +38,12 @@ MODEL_SONNET = "claude-sonnet-4-20250514"   # Full power for complex analysis (~
 
 UNIFIED_SYSTEM_PROMPT = """You are Perennia AI, a mortgage assistant. Be EXTREMELY concise.
 
-CRITICAL RULES:
+ACCURACY RULES (non-negotiable):
+- ONLY state facts from the provided data — never fabricate rates, amounts, dates, or status
+- If data is missing or incomplete, say so — do not guess or approximate
+- For compliance/regulatory topics, note that verification with compliance staff is recommended
+
+RESPONSE RULES:
 - Keep responses under 3-4 sentences MAX
 - Lead with the single most important fact
 - Use bullet points only if listing 2-3 items
@@ -248,6 +253,13 @@ DO NOT use a canned/scripted response. Be natural and human."""
             greeting_response_obj = anthropic_client.messages.create(
                 model=MODEL_HAIKU,
                 max_tokens=150,
+                system=[
+                    {
+                        "type": "text",
+                        "text": "You are Perennia AI, a friendly mortgage assistant. Respond naturally to greetings in 1-2 sentences, then invite the user to ask about their pipeline, leads, or tasks.",
+                        "cache_control": {"type": "ephemeral"}
+                    }
+                ],
                 messages=[{"role": "user", "content": greeting_prompt}]
             )
             greeting_response = greeting_response_obj.content[0].text.strip()
@@ -319,11 +331,18 @@ DO NOT use a canned/scripted response. Be natural and human."""
         logger.info(f"[REASON_AND_RESPOND] Model selection: {model} (intent={intent_str}, intent_str_override={intent_str_override}, use_haiku_flag={use_haiku_flag})")
 
         # Single LLM call for both reasoning AND response generation
+        # Use prompt caching on the system prompt to reduce cost on repeated calls
         llm_start = time.time()
         response = anthropic_client.messages.create(
             model=model,
             max_tokens=max_tokens,
-            system=system_prompt,
+            system=[
+                {
+                    "type": "text",
+                    "text": system_prompt,
+                    "cache_control": {"type": "ephemeral"}
+                }
+            ],
             messages=[
                 {
                     "role": "user",

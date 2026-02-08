@@ -343,10 +343,13 @@ async def run_orchestrator(
             conversation_id=conversation_id,
             conversation_history=conversation_history
         )
-        # Pre-populate intent info (analyze node will refine if needed)
+        # Pre-populate intent info so analyze node can skip re-classification
+        # when confidence is high enough (>0.90)
         state = update_state(state, {
             "intent_agents": intent_agents,
             "intent_confidence": intent_confidence,
+            "pre_classified_intent": intent,
+            "pre_classified_method": intent_method,
         })
         timing["init_state"] = (time.perf_counter() - step_start) * 1000
 

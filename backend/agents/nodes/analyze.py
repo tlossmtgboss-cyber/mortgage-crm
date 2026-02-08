@@ -697,22 +697,39 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
 
         # =================================================================
         # STEP 2: Use intent router for classification (~1-5ms pattern, ~500-1000ms LLM)
+        #         OPTIMIZATION: Skip if orchestrator already classified with high confidence
         # =================================================================
-        logger.info(f"[ANALYZE] No legacy pattern match, using intent router")
+        pre_classified_intent = state.get("pre_classified_intent")
+        pre_classified_confidence = state.get("intent_confidence", 0)
 
-        intent_start = time.time()
-        intent_result = await classify_intent(user_message, anthropic_client)
-        timing["intent_classify"] = intent_result.get("elapsed_ms", (time.time() - intent_start) * 1000)
+        if pre_classified_intent and pre_classified_confidence >= 0.90:
+            # Orchestrator already classified this with high confidence — skip re-classification
+            intent_str = pre_classified_intent
+            confidence = pre_classified_confidence
+            agents = state.get("intent_agents", ["pipeline_analyst"])
+            method = f"pre_classified ({state.get('pre_classified_method', 'unknown')})"
+            timing["intent_classify"] = 0.0
 
-        intent_str = intent_result["intent"]
-        confidence = intent_result["confidence"]
-        agents = intent_result["agents"]
-        method = intent_result["method"]
+            logger.info(
+                f"[ANALYZE] ⚡ SKIP re-classification: pre_classified '{intent_str}' "
+                f"(conf={confidence:.2f}, method={method})"
+            )
+        else:
+            logger.info(f"[ANALYZE] No legacy pattern match, using intent router")
 
-        logger.info(
-            f"[ANALYZE] Intent: {intent_str} (conf={confidence:.2f}) | "
-            f"agents={agents} | method={method} | time={timing['intent_classify']:.1f}ms"
-        )
+            intent_start = time.time()
+            intent_result = await classify_intent(user_message, anthropic_client)
+            timing["intent_classify"] = intent_result.get("elapsed_ms", (time.time() - intent_start) * 1000)
+
+            intent_str = intent_result["intent"]
+            confidence = intent_result["confidence"]
+            agents = intent_result["agents"]
+            method = intent_result["method"]
+
+            logger.info(
+                f"[ANALYZE] Intent: {intent_str} (conf={confidence:.2f}) | "
+                f"agents={agents} | method={method} | time={timing['intent_classify']:.1f}ms"
+            )
 
         # =================================================================
         # STEP 3: Get scoped tools for this intent

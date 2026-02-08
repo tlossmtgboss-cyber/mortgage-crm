@@ -527,11 +527,35 @@ Respond ONLY with the JSON object, no additional text."""
                 # Acquire rate limit token before making request
                 await rate_limiter.acquire(timeout=self.config.timeout)
 
+                # Split prompt into cacheable system prefix and dynamic user content
+                # The extraction instructions are static; only the transcript changes
+                system_instructions = (
+                    "You are an expert mortgage data extraction assistant. "
+                    "Your task is to extract structured information from call transcripts. "
+                    "Respond ONLY with valid JSON.\n\n"
+                    "Important rules:\n"
+                    "1. Only extract information explicitly stated by the borrower\n"
+                    "2. If the borrower corrects themselves, use the corrected value\n"
+                    "3. Handle speech disfluencies (um, uh, like) - extract the actual information\n"
+                    "4. If information is unclear or ambiguous, set confidence below 70\n"
+                    "5. If a field is not mentioned, set value to null with confidence 0\n"
+                    "6. For currency values, extract as numbers (e.g., 'seventy thousand' -> 70000)\n"
+                    "7. For dates, use ISO format (YYYY-MM-DD) when possible\n"
+                    "8. For yes/no questions, extract as boolean true/false"
+                )
+
                 response = await asyncio.wait_for(
                     client.messages.create(
                         model=self.config.model,
                         max_tokens=self.config.max_tokens,
                         temperature=self.config.temperature,
+                        system=[
+                            {
+                                "type": "text",
+                                "text": system_instructions,
+                                "cache_control": {"type": "ephemeral"}
+                            }
+                        ],
                         messages=[
                             {"role": "user", "content": prompt}
                         ]
@@ -625,11 +649,19 @@ Respond ONLY with the JSON object, no additional text."""
 Respond with a JSON object containing the extracted information."""
 
         try:
+            # Use prompt caching on the static custom prompt instructions
             response = await asyncio.wait_for(
                 client.messages.create(
                     model=self.config.model,
                     max_tokens=self.config.max_tokens,
                     temperature=self.config.temperature,
+                    system=[
+                        {
+                            "type": "text",
+                            "text": "You are an expert mortgage data extraction assistant. Respond ONLY with valid JSON.",
+                            "cache_control": {"type": "ephemeral"}
+                        }
+                    ],
                     messages=[
                         {"role": "user", "content": full_prompt}
                     ]

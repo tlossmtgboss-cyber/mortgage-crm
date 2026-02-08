@@ -26,6 +26,71 @@ from sqlalchemy import text
 logger = logging.getLogger(__name__)
 
 
+# =============================================================================
+# CALL TYPE CLASSIFICATION FOR CONDITIONAL AGENT DISPATCH
+# =============================================================================
+
+# Map call types to the subset of agents that are relevant
+CALL_TYPE_AGENTS = {
+    # Purchase/refinance calls need all financial agents
+    "purchase": ["scribe", "junior_lo", "underwriter", "calculator", "marketing", "receptionist"],
+    "refinance": ["scribe", "junior_lo", "underwriter", "calculator", "marketing", "receptionist"],
+    # Support/status calls only need scribe + junior LO
+    "support": ["scribe", "junior_lo", "receptionist"],
+    "status_check": ["scribe", "junior_lo"],
+    # General inquiry calls need scribe + junior LO + receptionist
+    "inquiry": ["scribe", "junior_lo", "receptionist"],
+    # Default: run core agents
+    "unknown": ["scribe", "junior_lo", "underwriter", "receptionist"],
+}
+
+# Keywords for fast call-type classification (avoids LLM call)
+_PURCHASE_KEYWORDS = [
+    "purchase", "buying", "buy a home", "new home", "offer", "contract",
+    "down payment", "pre-approval", "pre-qualify", "house hunting",
+    "first-time", "fha", "va loan", "conventional",
+]
+_REFINANCE_KEYWORDS = [
+    "refinance", "refi", "cash out", "cash-out", "rate and term",
+    "lower my rate", "lower payment", "streamline",
+]
+_SUPPORT_KEYWORDS = [
+    "update", "status", "where are we", "what's happening", "when will",
+    "condition", "document", "upload", "closing date", "timeline",
+]
+_INQUIRY_KEYWORDS = [
+    "question", "wondering", "curious", "information", "how does",
+    "what are", "can you explain", "rates today", "qualify",
+]
+
+
+def classify_call_type(transcript: str) -> str:
+    """
+    Fast keyword-based classification of call type from transcript.
+    Runs in <1ms. No LLM call needed.
+
+    Returns one of: purchase, refinance, support, status_check, inquiry, unknown
+    """
+    transcript_lower = transcript.lower()
+
+    # Score each type by keyword matches
+    scores = {
+        "purchase": sum(1 for kw in _PURCHASE_KEYWORDS if kw in transcript_lower),
+        "refinance": sum(1 for kw in _REFINANCE_KEYWORDS if kw in transcript_lower),
+        "support": sum(1 for kw in _SUPPORT_KEYWORDS if kw in transcript_lower),
+        "inquiry": sum(1 for kw in _INQUIRY_KEYWORDS if kw in transcript_lower),
+    }
+
+    # Get the highest scoring type
+    best_type = max(scores, key=scores.get)
+    best_score = scores[best_type]
+
+    if best_score == 0:
+        return "unknown"
+
+    return best_type
+
+
 @dataclass
 class ProcessingResult:
     """Result from agent processing."""
@@ -342,11 +407,18 @@ class CallMonitoringOrchestrator:
         """), {"id": session_id})
         self.db.commit()
 
-        # Determine which agents to run (all 6 by default)
-        agents_to_run = agent_types or [
-            'scribe', 'junior_lo', 'underwriter', 'calculator',
-            'marketing', 'receptionist'
-        ]
+        # Determine which agents to run
+        if agent_types:
+            # Explicit agents requested — run exactly those
+            agents_to_run = agent_types
+        else:
+            # Classify call type and run only relevant agents
+            call_type = classify_call_type(transcript)
+            agents_to_run = CALL_TYPE_AGENTS.get(call_type, CALL_TYPE_AGENTS["unknown"])
+            logger.info(
+                f"[CM_ORCHESTRATOR] Call type: {call_type} → "
+                f"running {len(agents_to_run)}/{6} agents: {agents_to_run}"
+            )
 
         self._log_event(session_id, 'processing_started', {
             'trigger': trigger,
