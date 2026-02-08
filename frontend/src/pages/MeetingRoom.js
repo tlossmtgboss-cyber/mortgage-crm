@@ -92,6 +92,22 @@ const MeetingRoom = () => {
   const admissionPollRef = useRef(null);
   const waitingRoomPollRef = useRef(null);
 
+  // Virtual background state
+  const [virtualBgMode, setVirtualBgMode] = useState('none'); // 'none', 'blur', 'heavy-blur'
+  const canvasRef = useRef(null);
+  const canvasStreamRef = useRef(null);
+  const bgAnimFrameRef = useRef(null);
+
+  // Breakout room state
+  const [showBreakoutPanel, setShowBreakoutPanel] = useState(false);
+  const [breakoutRooms, setBreakoutRooms] = useState([]);
+  const [currentBreakoutRoom, setCurrentBreakoutRoom] = useState(null);
+  const [newBreakoutName, setNewBreakoutName] = useState('');
+
+  // Meeting mode state (mesh vs SFU)
+  const [meetingMode, setMeetingMode] = useState('mesh'); // 'mesh' or 'sfu'
+  const [sfuAvailable, setSfuAvailable] = useState(false);
+
   // Refs
   const localVideoRef = useRef(null);
   const recordingTimerRef = useRef(null);
@@ -360,6 +376,14 @@ const MeetingRoom = () => {
               setRecordingStartedBy('');
               setIsRecording(false);
               setShowParticipantConsentDialog(false);
+            }
+            break;
+
+          case 'breakout_update':
+            // Breakout room state changed - refresh the list
+            fetchBreakoutRooms();
+            if (message.action === 'closed' && currentBreakoutRoom === message.room_id) {
+              setCurrentBreakoutRoom(null);
             }
             break;
 
@@ -941,6 +965,277 @@ const MeetingRoom = () => {
     }
     setShowParticipantConsentDialog(false);
   };
+
+  // ========================================================================
+  // VIRTUAL BACKGROUND
+  // ========================================================================
+
+  const applyVirtualBackground = useCallback((mode) => {
+    setVirtualBgMode(mode);
+
+    if (mode === 'none') {
+      // Stop canvas processing, revert to original camera stream
+      if (bgAnimFrameRef.current) {
+        cancelAnimationFrame(bgAnimFrameRef.current);
+        bgAnimFrameRef.current = null;
+      }
+      if (canvasStreamRef.current) {
+        canvasStreamRef.current.getTracks().forEach(t => t.stop());
+        canvasStreamRef.current = null;
+      }
+      // Revert peer connections to original video track
+      if (localStream) {
+        const originalTrack = localStream.getVideoTracks()[0];
+        if (originalTrack) {
+          replaceTrackOnPeers(originalTrack, originalTrack); // no-op but ensures consistency
+          if (localVideoRef.current) {
+            localVideoRef.current.srcObject = localStream;
+          }
+        }
+      }
+      return;
+    }
+
+    // Start canvas processing
+    if (!localStream) return;
+    const videoTrack = localStream.getVideoTracks()[0];
+    if (!videoTrack) return;
+
+    const video = document.createElement('video');
+    video.srcObject = new MediaStream([videoTrack]);
+    video.muted = true;
+    video.play();
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    const blurAmount = mode === 'heavy-blur' ? '20px' : '8px';
+
+    const processFrame = () => {
+      if (!videoTrack.enabled || videoTrack.readyState === 'ended') {
+        bgAnimFrameRef.current = requestAnimationFrame(processFrame);
+        return;
+      }
+
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+
+      // Apply blur filter to canvas context
+      ctx.filter = `blur(${blurAmount})`;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Draw center portion sharp (rough person mask - center 60%)
+      ctx.filter = 'none';
+      const cx = canvas.width * 0.2;
+      const cy = canvas.height * 0.05;
+      const cw = canvas.width * 0.6;
+      const ch = canvas.height * 0.9;
+      ctx.drawImage(video, cx, cy, cw, ch, cx, cy, cw, ch);
+
+      bgAnimFrameRef.current = requestAnimationFrame(processFrame);
+    };
+
+    video.onloadedmetadata = () => {
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+
+      // Capture the processed canvas as a stream
+      const processedStream = canvas.captureStream(30);
+      canvasStreamRef.current = processedStream;
+      const processedTrack = processedStream.getVideoTracks()[0];
+
+      // Replace video track on all peers with processed track
+      replaceTrackOnPeers(videoTrack, processedTrack);
+
+      // Update local preview to show processed video
+      const previewStream = new MediaStream();
+      const audioTrack = localStream.getAudioTracks()[0];
+      if (audioTrack) previewStream.addTrack(audioTrack);
+      previewStream.addTrack(processedTrack);
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = previewStream;
+      }
+
+      processFrame();
+    };
+  }, [localStream]);
+
+  // Cleanup virtual background on unmount
+  useEffect(() => {
+    return () => {
+      if (bgAnimFrameRef.current) {
+        cancelAnimationFrame(bgAnimFrameRef.current);
+      }
+      if (canvasStreamRef.current) {
+        canvasStreamRef.current.getTracks().forEach(t => t.stop());
+      }
+    };
+  }, []);
+
+  // Cycle through virtual background modes
+  const cycleVirtualBg = () => {
+    const modes = ['none', 'blur', 'heavy-blur'];
+    const currentIdx = modes.indexOf(virtualBgMode);
+    const nextMode = modes[(currentIdx + 1) % modes.length];
+    applyVirtualBackground(nextMode);
+  };
+
+  // ========================================================================
+  // BREAKOUT ROOMS
+  // ========================================================================
+
+  const fetchBreakoutRooms = useCallback(async () => {
+    if (!meeting?.id) return;
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/meetings/rooms/${meeting.id}/breakout-rooms`, {
+        headers: getAuthHeaders()
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setBreakoutRooms(data.breakout_rooms || []);
+      }
+    } catch (err) {
+      console.error('Error fetching breakout rooms:', err);
+    }
+  }, [meeting?.id]);
+
+  const createBreakoutRoom = async () => {
+    if (!newBreakoutName.trim() || !meeting?.id) return;
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/meetings/rooms/${meeting.id}/breakout-rooms`, {
+        method: 'POST',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ room_name: newBreakoutName.trim() })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setNewBreakoutName('');
+        fetchBreakoutRooms();
+
+        // Broadcast via WebSocket
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({
+            type: 'breakout_created',
+            room: data.breakout_room
+          }));
+        }
+      }
+    } catch (err) {
+      console.error('Error creating breakout room:', err);
+    }
+  };
+
+  const joinBreakoutRoom = async (breakoutId) => {
+    if (!meeting?.id) return;
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/meetings/rooms/${meeting.id}/breakout-rooms/${breakoutId}/join`, {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
+      if (response.ok) {
+        setCurrentBreakoutRoom(breakoutId);
+        fetchBreakoutRooms();
+
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({
+            type: 'breakout_join',
+            room_id: breakoutId
+          }));
+        }
+      }
+    } catch (err) {
+      console.error('Error joining breakout room:', err);
+    }
+  };
+
+  const leaveBreakoutRoom = async () => {
+    if (!meeting?.id || !currentBreakoutRoom) return;
+    try {
+      await fetch(`${API_BASE}/api/v1/meetings/rooms/${meeting.id}/breakout-rooms/${currentBreakoutRoom}/leave`, {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
+
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({
+          type: 'breakout_leave',
+          room_id: currentBreakoutRoom
+        }));
+      }
+
+      setCurrentBreakoutRoom(null);
+      fetchBreakoutRooms();
+    } catch (err) {
+      console.error('Error leaving breakout room:', err);
+    }
+  };
+
+  const closeBreakoutRoom = async (breakoutId) => {
+    if (!meeting?.id) return;
+    try {
+      await fetch(`${API_BASE}/api/v1/meetings/rooms/${meeting.id}/breakout-rooms/${breakoutId}/close`, {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
+
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({
+          type: 'breakout_closed',
+          room_id: breakoutId
+        }));
+      }
+
+      if (currentBreakoutRoom === breakoutId) {
+        setCurrentBreakoutRoom(null);
+      }
+      fetchBreakoutRooms();
+    } catch (err) {
+      console.error('Error closing breakout room:', err);
+    }
+  };
+
+  // ========================================================================
+  // SFU MODE DETECTION
+  // ========================================================================
+
+  // Check SFU availability on mount
+  useEffect(() => {
+    const checkSfu = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/v1/meetings/sfu/status`);
+        if (response.ok) {
+          const data = await response.json();
+          setSfuAvailable(data.enabled);
+        }
+      } catch (err) {
+        console.warn('SFU status check failed:', err);
+      }
+    };
+    checkSfu();
+  }, []);
+
+  // Check meeting mode when participant count changes
+  useEffect(() => {
+    const checkMode = async () => {
+      if (!meeting?.id || !sfuAvailable) return;
+      try {
+        const response = await fetch(`${API_BASE}/api/v1/meetings/rooms/${meeting.id}/mode`, {
+          headers: getAuthHeaders()
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.mode !== meetingMode) {
+            setMeetingMode(data.mode);
+            console.log(`Meeting mode: ${data.mode} (${data.participant_count} participants, threshold: ${data.threshold})`);
+          }
+        }
+      } catch (err) {
+        console.warn('Mode check failed:', err);
+      }
+    };
+
+    checkMode();
+  }, [Object.keys(remoteStreams).length, meeting?.id, sfuAvailable]);
 
   // Send chat message
   const sendChatMessage = () => {
@@ -1905,6 +2200,28 @@ const MeetingRoom = () => {
               {screenRecordingUploading ? 'Processing...' : isScreenRecording ? 'Stop' : 'Record'}
             </span>
           </button>
+
+          <button
+            className={`control-btn virtual-bg ${virtualBgMode !== 'none' ? 'active' : ''}`}
+            onClick={cycleVirtualBg}
+            title={virtualBgMode === 'none' ? 'Enable Background Blur' : virtualBgMode === 'blur' ? 'Heavy Blur' : 'Disable Blur'}
+          >
+            {virtualBgMode === 'none' ? '🌄' : virtualBgMode === 'blur' ? '🔵' : '🟣'}
+            <span className="btn-label">
+              {virtualBgMode === 'none' ? 'BG Blur' : virtualBgMode === 'blur' ? 'Blur+' : 'BG Off'}
+            </span>
+          </button>
+
+          {isHost && (
+            <button
+              className={`control-btn ${showBreakoutPanel ? 'active' : ''}`}
+              onClick={() => { setShowBreakoutPanel(!showBreakoutPanel); if (!showBreakoutPanel) fetchBreakoutRooms(); }}
+              title="Breakout Rooms"
+            >
+              🏠
+              <span className="btn-label">Breakout</span>
+            </button>
+          )}
         </div>
 
         <div className="controls-right">
@@ -1989,6 +2306,98 @@ const MeetingRoom = () => {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Breakout Rooms Panel */}
+      {showBreakoutPanel && (
+        <div className="breakout-panel">
+          <div className="breakout-panel-header">
+            <h4>Breakout Rooms</h4>
+            <button className="close-chat" onClick={() => setShowBreakoutPanel(false)}>x</button>
+          </div>
+          <div style={{ maxHeight: '280px', overflowY: 'auto' }}>
+            {breakoutRooms.length === 0 ? (
+              <p style={{ padding: '16px 20px', color: '#888', fontSize: '13px', margin: 0 }}>
+                No breakout rooms yet. Create one below.
+              </p>
+            ) : (
+              breakoutRooms.map(room => (
+                <div key={room.id} className="breakout-room-item">
+                  <div>
+                    <span className="breakout-room-name">{sanitizeText(room.room_name)}</span>
+                    <span className="breakout-room-count">({room.participant_count}/{room.max_participants})</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    {currentBreakoutRoom === room.id ? (
+                      <button className="breakout-join-btn" onClick={leaveBreakoutRoom} style={{ background: '#ef4444' }}>
+                        Leave
+                      </button>
+                    ) : (
+                      <button className="breakout-join-btn" onClick={() => joinBreakoutRoom(room.id)}>
+                        Join
+                      </button>
+                    )}
+                    {isHost && (
+                      <button
+                        className="breakout-join-btn"
+                        onClick={() => closeBreakoutRoom(room.id)}
+                        style={{ background: '#6b7280', fontSize: '11px' }}
+                      >
+                        Close
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          {isHost && (
+            <div style={{ padding: '12px 20px', borderTop: '1px solid #353535', display: 'flex', gap: '8px' }}>
+              <input
+                type="text"
+                value={newBreakoutName}
+                onChange={(e) => setNewBreakoutName(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && createBreakoutRoom()}
+                placeholder="Room name..."
+                style={{
+                  flex: 1, padding: '8px 12px', background: '#1a1a1a', border: '1px solid #404040',
+                  borderRadius: '6px', color: 'white', fontSize: '13px'
+                }}
+              />
+              <button className="breakout-join-btn" onClick={createBreakoutRoom}>
+                Create
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Current Breakout Room Indicator */}
+      {currentBreakoutRoom && (
+        <div style={{
+          position: 'fixed', bottom: '100px', left: '50%', transform: 'translateX(-50%)',
+          background: '#8b5cf6', color: 'white', padding: '8px 20px', borderRadius: '20px',
+          fontSize: '13px', fontWeight: '600', zIndex: 99, display: 'flex', alignItems: 'center', gap: '10px'
+        }}>
+          <span>In Breakout: {breakoutRooms.find(r => r.id === currentBreakoutRoom)?.room_name || 'Room'}</span>
+          <button onClick={leaveBreakoutRoom} style={{
+            background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white',
+            padding: '4px 10px', borderRadius: '12px', cursor: 'pointer', fontSize: '12px'
+          }}>
+            Return to Main
+          </button>
+        </div>
+      )}
+
+      {/* SFU Mode Indicator */}
+      {meetingMode === 'sfu' && (
+        <div style={{
+          position: 'fixed', top: '60px', right: '16px',
+          background: '#10b981', color: 'white', padding: '4px 10px', borderRadius: '12px',
+          fontSize: '11px', fontWeight: '600', zIndex: 50
+        }}>
+          SFU Mode
         </div>
       )}
 

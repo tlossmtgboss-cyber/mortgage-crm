@@ -584,6 +584,37 @@ def create_video_meeting_models(Base):
         created_at = Column(DateTime, default=datetime.utcnow)
         updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    class BreakoutRoom(Base):
+        """
+        Breakout rooms within a meeting session.
+        Hosts can create sub-rooms and assign participants.
+        """
+        __tablename__ = "breakout_rooms"
+        __table_args__ = {'extend_existing': True}
+
+        id = Column(Integer, primary_key=True, index=True)
+        meeting_id = Column(Integer, ForeignKey("video_meeting_rooms.id"), nullable=False, index=True)
+
+        # Room identification
+        room_name = Column(String(255), nullable=False)
+        room_index = Column(Integer, default=0)  # ordering
+
+        # Status
+        status = Column(String(20), default="open")  # open, closed
+        max_participants = Column(Integer, default=10)
+
+        # Timing
+        opened_at = Column(DateTime, default=datetime.utcnow)
+        closed_at = Column(DateTime)
+        duration_limit_minutes = Column(Integer)  # auto-close after N minutes
+
+        # Participants (JSON list of participant IDs currently in the room)
+        participant_ids = Column(JSON, default=[])
+
+        created_at = Column(DateTime, default=datetime.utcnow)
+        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_by = Column(Integer, ForeignKey("users.id"))
+
     # Return all models as a dictionary
     return {
         'VideoMeetingRoom': VideoMeetingRoom,
@@ -596,7 +627,8 @@ def create_video_meeting_models(Base):
         'ParticipantAnalytics': ParticipantAnalytics,
         'CoachingRecommendation': CoachingRecommendation,
         'MortgageIntelligence': MortgageIntelligence,
-        'OrganizationVideoSettings': OrganizationVideoSettings
+        'OrganizationVideoSettings': OrganizationVideoSettings,
+        'BreakoutRoom': BreakoutRoom
     }
 
 

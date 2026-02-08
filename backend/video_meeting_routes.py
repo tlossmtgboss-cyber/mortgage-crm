@@ -3620,3 +3620,558 @@ async def update_org_video_settings(
             "allowed_providers": settings.allowed_providers
         }
     }
+
+
+# ============================================================================
+# SFU (SELECTIVE FORWARDING UNIT) ENDPOINTS
+# ============================================================================
+
+@router.get("/sfu/status")
+async def get_sfu_status():
+    """Check if SFU (LiveKit) is available and configured."""
+    try:
+        from services.media.sfu_service import sfu_service
+        return {
+            "enabled": sfu_service.enabled,
+            "participant_threshold": 4,
+            "provider": "livekit" if sfu_service.enabled else None
+        }
+    except ImportError:
+        return {
+            "enabled": False,
+            "participant_threshold": 4,
+            "provider": None
+        }
+
+
+@router.post("/rooms/{room_id}/sfu/token")
+async def get_sfu_token(
+    room_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Generate a LiveKit token for a participant to join via SFU."""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Video meeting models not initialized")
+
+    VideoMeetingRoom = _models.get('VideoMeetingRoom')
+    room = db.query(VideoMeetingRoom).filter(VideoMeetingRoom.id == room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    try:
+        from services.media.sfu_service import sfu_service
+        if not sfu_service.enabled:
+            raise HTTPException(status_code=503, detail="SFU service not configured")
+
+        is_host = room.host_user_id == current_user.id
+        display_name = getattr(current_user, 'full_name', None) or getattr(current_user, 'email', 'Participant')
+
+        token = sfu_service.generate_token(
+            room_name=room.room_code,
+            participant_identity=str(current_user.id),
+            is_host=is_host
+        )
+
+        return {
+            "token": token,
+            "room_name": room.room_code,
+            "livekit_url": sfu_service.ws_url,
+            "is_host": is_host,
+            "display_name": display_name
+        }
+    except ImportError:
+        raise HTTPException(status_code=503, detail="SFU service not installed")
+
+
+@router.post("/rooms/{room_id}/sfu/create")
+async def create_sfu_room(
+    room_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Create a LiveKit room for SFU-mode meetings."""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Video meeting models not initialized")
+
+    VideoMeetingRoom = _models.get('VideoMeetingRoom')
+    room = db.query(VideoMeetingRoom).filter(VideoMeetingRoom.id == room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    if room.host_user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the host can create SFU rooms")
+
+    try:
+        from services.media.sfu_service import sfu_service
+        if not sfu_service.enabled:
+            raise HTTPException(status_code=503, detail="SFU service not configured")
+
+        result = sfu_service.create_room(
+            room_name=room.room_code,
+            max_participants=room.max_participants or 50
+        )
+
+        if result is None:
+            raise HTTPException(status_code=500, detail="Failed to create SFU room")
+
+        return {
+            "success": True,
+            "sfu_room": result,
+            "room_code": room.room_code
+        }
+    except ImportError:
+        raise HTTPException(status_code=503, detail="SFU service not installed")
+
+
+@router.get("/rooms/{room_id}/sfu/participants")
+async def get_sfu_participants(
+    room_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """List participants connected via SFU."""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Video meeting models not initialized")
+
+    VideoMeetingRoom = _models.get('VideoMeetingRoom')
+    room = db.query(VideoMeetingRoom).filter(VideoMeetingRoom.id == room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    try:
+        from services.media.sfu_service import sfu_service
+        if not sfu_service.enabled:
+            return {"participants": [], "count": 0}
+
+        participants = sfu_service.list_participants(room.room_code)
+        return {
+            "participants": participants or [],
+            "count": len(participants) if participants else 0
+        }
+    except ImportError:
+        return {"participants": [], "count": 0}
+
+
+@router.get("/rooms/{room_id}/mode")
+async def get_meeting_mode(
+    room_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Determine whether to use mesh (P2P) or SFU mode based on participant count."""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Video meeting models not initialized")
+
+    VideoMeetingRoom = _models.get('VideoMeetingRoom')
+    MeetingParticipant = _models.get('MeetingParticipant')
+
+    room = db.query(VideoMeetingRoom).filter(VideoMeetingRoom.id == room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    active_count = db.query(MeetingParticipant).filter(
+        MeetingParticipant.meeting_id == room_id,
+        MeetingParticipant.status == "joined"
+    ).count()
+
+    sfu_available = False
+    try:
+        from services.media.sfu_service import sfu_service
+        sfu_available = sfu_service.enabled
+    except ImportError:
+        pass
+
+    should_use_sfu = active_count > 4 and sfu_available
+
+    return {
+        "mode": "sfu" if should_use_sfu else "mesh",
+        "participant_count": active_count,
+        "sfu_available": sfu_available,
+        "threshold": 4,
+        "room_code": room.room_code
+    }
+
+
+# ============================================================================
+# BREAKOUT ROOM ENDPOINTS
+# ============================================================================
+
+class BreakoutRoomCreate(BaseModel):
+    room_name: str
+    max_participants: Optional[int] = 10
+    duration_limit_minutes: Optional[int] = None
+
+
+@router.post("/rooms/{room_id}/breakout-rooms")
+async def create_breakout_room(
+    room_id: int,
+    data: BreakoutRoomCreate,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Create a breakout room within a meeting (host only)."""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Video meeting models not initialized")
+
+    VideoMeetingRoom = _models.get('VideoMeetingRoom')
+    BreakoutRoom = _models.get('BreakoutRoom')
+
+    if not BreakoutRoom:
+        raise HTTPException(status_code=500, detail="BreakoutRoom model not found")
+
+    room = db.query(VideoMeetingRoom).filter(VideoMeetingRoom.id == room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    if room.host_user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the host can create breakout rooms")
+
+    # Get next room index
+    existing_count = db.query(BreakoutRoom).filter(
+        BreakoutRoom.meeting_id == room_id,
+        BreakoutRoom.status == "open"
+    ).count()
+
+    breakout = BreakoutRoom(
+        meeting_id=room_id,
+        room_name=data.room_name,
+        room_index=existing_count,
+        max_participants=data.max_participants,
+        duration_limit_minutes=data.duration_limit_minutes,
+        participant_ids=[],
+        created_by=current_user.id
+    )
+    db.add(breakout)
+    db.commit()
+    db.refresh(breakout)
+
+    return {
+        "success": True,
+        "breakout_room": {
+            "id": breakout.id,
+            "room_name": breakout.room_name,
+            "room_index": breakout.room_index,
+            "max_participants": breakout.max_participants,
+            "duration_limit_minutes": breakout.duration_limit_minutes,
+            "participant_ids": breakout.participant_ids,
+            "status": breakout.status
+        }
+    }
+
+
+@router.get("/rooms/{room_id}/breakout-rooms")
+async def list_breakout_rooms(
+    room_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """List all breakout rooms for a meeting."""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Video meeting models not initialized")
+
+    BreakoutRoom = _models.get('BreakoutRoom')
+    if not BreakoutRoom:
+        return {"breakout_rooms": []}
+
+    rooms = db.query(BreakoutRoom).filter(
+        BreakoutRoom.meeting_id == room_id,
+        BreakoutRoom.status == "open"
+    ).order_by(BreakoutRoom.room_index).all()
+
+    return {
+        "breakout_rooms": [
+            {
+                "id": r.id,
+                "room_name": r.room_name,
+                "room_index": r.room_index,
+                "max_participants": r.max_participants,
+                "participant_ids": r.participant_ids or [],
+                "participant_count": len(r.participant_ids or []),
+                "status": r.status
+            }
+            for r in rooms
+        ]
+    }
+
+
+@router.post("/rooms/{room_id}/breakout-rooms/{breakout_id}/join")
+async def join_breakout_room(
+    room_id: int,
+    breakout_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Join a breakout room."""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Video meeting models not initialized")
+
+    BreakoutRoom = _models.get('BreakoutRoom')
+    if not BreakoutRoom:
+        raise HTTPException(status_code=500, detail="BreakoutRoom model not found")
+
+    breakout = db.query(BreakoutRoom).filter(
+        BreakoutRoom.id == breakout_id,
+        BreakoutRoom.meeting_id == room_id,
+        BreakoutRoom.status == "open"
+    ).first()
+
+    if not breakout:
+        raise HTTPException(status_code=404, detail="Breakout room not found")
+
+    participant_ids = breakout.participant_ids or []
+    user_id_str = str(current_user.id)
+
+    if len(participant_ids) >= (breakout.max_participants or 10):
+        raise HTTPException(status_code=400, detail="Breakout room is full")
+
+    if user_id_str not in participant_ids:
+        participant_ids.append(user_id_str)
+        breakout.participant_ids = participant_ids
+        db.commit()
+
+    return {
+        "success": True,
+        "breakout_room_id": breakout_id,
+        "participant_count": len(participant_ids)
+    }
+
+
+@router.post("/rooms/{room_id}/breakout-rooms/{breakout_id}/leave")
+async def leave_breakout_room(
+    room_id: int,
+    breakout_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Leave a breakout room."""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Video meeting models not initialized")
+
+    BreakoutRoom = _models.get('BreakoutRoom')
+    if not BreakoutRoom:
+        raise HTTPException(status_code=500, detail="BreakoutRoom model not found")
+
+    breakout = db.query(BreakoutRoom).filter(
+        BreakoutRoom.id == breakout_id,
+        BreakoutRoom.meeting_id == room_id
+    ).first()
+
+    if not breakout:
+        raise HTTPException(status_code=404, detail="Breakout room not found")
+
+    participant_ids = breakout.participant_ids or []
+    user_id_str = str(current_user.id)
+
+    if user_id_str in participant_ids:
+        participant_ids.remove(user_id_str)
+        breakout.participant_ids = participant_ids
+        db.commit()
+
+    return {"success": True, "breakout_room_id": breakout_id}
+
+
+@router.post("/rooms/{room_id}/breakout-rooms/{breakout_id}/close")
+async def close_breakout_room(
+    room_id: int,
+    breakout_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Close a breakout room (host only)."""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Video meeting models not initialized")
+
+    VideoMeetingRoom = _models.get('VideoMeetingRoom')
+    BreakoutRoom = _models.get('BreakoutRoom')
+
+    room = db.query(VideoMeetingRoom).filter(VideoMeetingRoom.id == room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    if room.host_user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the host can close breakout rooms")
+
+    breakout = db.query(BreakoutRoom).filter(
+        BreakoutRoom.id == breakout_id,
+        BreakoutRoom.meeting_id == room_id
+    ).first()
+
+    if not breakout:
+        raise HTTPException(status_code=404, detail="Breakout room not found")
+
+    breakout.status = "closed"
+    breakout.closed_at = datetime.utcnow()
+    db.commit()
+
+    return {"success": True, "breakout_room_id": breakout_id, "status": "closed"}
+
+
+@router.post("/breakout-rooms/setup")
+async def setup_breakout_rooms_table(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Create the breakout_rooms table if it doesn't exist."""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Video meeting models not initialized")
+
+    BreakoutRoom = _models.get('BreakoutRoom')
+    if not BreakoutRoom:
+        raise HTTPException(status_code=500, detail="BreakoutRoom model not found")
+
+    try:
+        from database import engine
+        BreakoutRoom.__table__.create(engine, checkfirst=True)
+        return {"success": True, "message": "breakout_rooms table ready"}
+    except Exception as e:
+        logger.error(f"Error creating breakout_rooms table: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# TRANSCRIPTION ENDPOINTS
+# ============================================================================
+
+@router.post("/rooms/{room_id}/recordings/{recording_id}/transcribe")
+async def start_transcription(
+    room_id: int,
+    recording_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Start transcription of a meeting recording."""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Video meeting models not initialized")
+
+    VideoMeetingRoom = _models.get('VideoMeetingRoom')
+    MeetingRecording = _models.get('MeetingRecording')
+    RecordingTranscript = _models.get('RecordingTranscript')
+
+    room = db.query(VideoMeetingRoom).filter(VideoMeetingRoom.id == room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    recording = db.query(MeetingRecording).filter(
+        MeetingRecording.id == recording_id,
+        MeetingRecording.meeting_id == room_id
+    ).first()
+    if not recording:
+        raise HTTPException(status_code=404, detail="Recording not found")
+
+    # Check if transcript already exists
+    existing = db.query(RecordingTranscript).filter(
+        RecordingTranscript.recording_id == recording_id
+    ).first()
+    if existing and existing.status in ("processing", "completed"):
+        return {
+            "success": True,
+            "message": f"Transcript already {existing.status}",
+            "transcript_id": existing.id,
+            "status": existing.status
+        }
+
+    # Create transcript record
+    transcript = RecordingTranscript(
+        recording_id=recording_id,
+        meeting_id=room_id,
+        status="pending"
+    )
+    db.add(transcript)
+    db.commit()
+    db.refresh(transcript)
+
+    return {
+        "success": True,
+        "transcript_id": transcript.id,
+        "status": "pending",
+        "message": "Transcription queued"
+    }
+
+
+@router.get("/rooms/{room_id}/recordings/{recording_id}/transcript")
+async def get_transcript(
+    room_id: int,
+    recording_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Get the transcript for a recording."""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Video meeting models not initialized")
+
+    RecordingTranscript = _models.get('RecordingTranscript')
+
+    transcript = db.query(RecordingTranscript).filter(
+        RecordingTranscript.recording_id == recording_id,
+        RecordingTranscript.meeting_id == room_id
+    ).first()
+
+    if not transcript:
+        raise HTTPException(status_code=404, detail="Transcript not found")
+
+    return {
+        "transcript_id": transcript.id,
+        "status": transcript.status,
+        "full_text": transcript.full_transcript,
+        "segments": transcript.transcript_json,
+        "speakers_detected": transcript.speakers_detected,
+        "word_count": transcript.word_count,
+        "confidence": transcript.confidence_score,
+        "provider": transcript.transcription_provider,
+        "language": transcript.language
+    }
+
+
+# ============================================================================
+# CALENDAR INVITE ENDPOINT
+# ============================================================================
+
+@router.post("/rooms/{room_id}/calendar-invite")
+async def generate_calendar_invite(
+    room_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Generate an ICS calendar invite for a meeting."""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Video meeting models not initialized")
+
+    VideoMeetingRoom = _models.get('VideoMeetingRoom')
+    MeetingParticipant = _models.get('MeetingParticipant')
+
+    room = db.query(VideoMeetingRoom).filter(VideoMeetingRoom.id == room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    try:
+        from services.calendar_invite_service import calendar_invite_service
+
+        # Get participants as attendee list
+        participants = db.query(MeetingParticipant).filter(
+            MeetingParticipant.meeting_id == room_id
+        ).all()
+
+        attendees = [
+            {"email": p.email or "", "name": p.display_name or ""}
+            for p in participants if p.email
+        ]
+
+        ics_content = calendar_invite_service.create_meeting_invite(
+            room=room,
+            host_user=current_user,
+            attendee_list=attendees,
+            base_url="https://app.perenniaai.com"
+        )
+
+        from fastapi.responses import Response
+        return Response(
+            content=ics_content,
+            media_type="text/calendar",
+            headers={
+                "Content-Disposition": f'attachment; filename="meeting-{room.room_code}.ics"'
+            }
+        )
+    except ImportError:
+        raise HTTPException(status_code=503, detail="Calendar invite service not available")

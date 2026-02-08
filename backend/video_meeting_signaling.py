@@ -344,6 +344,47 @@ async def websocket_video_meeting(
                         "timestamp": datetime.utcnow().isoformat()
                     }, exclude=participant_id)
 
+            elif message_type == "breakout_created":
+                # Host created a breakout room - broadcast to all
+                if is_host:
+                    await meeting_manager.broadcast_to_room(room_code, {
+                        "type": "breakout_update",
+                        "action": "created",
+                        "room": message.get("room"),
+                        "timestamp": datetime.utcnow().isoformat()
+                    })
+
+            elif message_type == "breakout_closed":
+                # Host closed a breakout room - broadcast to all
+                if is_host:
+                    await meeting_manager.broadcast_to_room(room_code, {
+                        "type": "breakout_update",
+                        "action": "closed",
+                        "room_id": message.get("room_id"),
+                        "timestamp": datetime.utcnow().isoformat()
+                    })
+
+            elif message_type == "breakout_join":
+                # Participant joined a breakout room - broadcast to all
+                await meeting_manager.broadcast_to_room(room_code, {
+                    "type": "breakout_update",
+                    "action": "participant_joined",
+                    "room_id": message.get("room_id"),
+                    "participant_id": participant_id,
+                    "display_name": display_name,
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+
+            elif message_type == "breakout_leave":
+                # Participant left a breakout room - broadcast to all
+                await meeting_manager.broadcast_to_room(room_code, {
+                    "type": "breakout_update",
+                    "action": "participant_left",
+                    "room_id": message.get("room_id"),
+                    "participant_id": participant_id,
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+
             else:
                 logger.warning(f"Unknown message type: {message_type}")
 

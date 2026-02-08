@@ -1210,19 +1210,31 @@
   text-align: center;
 }
 
-/* Responsive */
+/* ============================================
+   RESPONSIVE - TABLET (768px and below)
+   ============================================ */
 @media (max-width: 768px) {
   .video-grid {
-    padding: 50px 12px 90px;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding: 50px 8px 90px;
+  }
+
+  /* Single participant - full width */
+  .video-grid:has(.video-container:only-child) {
+    grid-template-columns: 1fr;
   }
 
   .video-container {
     border-radius: 8px;
+    aspect-ratio: 4/3;
   }
 
   .meeting-controls {
-    padding: 10px 12px;
-    gap: 4px;
+    padding: 8px 12px;
+    gap: 2px;
+    flex-wrap: wrap;
+    justify-content: center;
   }
 
   .controls-left,
@@ -1254,21 +1266,316 @@
   .chat-panel {
     width: 100%;
     left: 0;
+    bottom: 0;
+    top: 40%;
+    border-left: none;
+    border-top: 1px solid #333;
+    border-radius: 16px 16px 0 0;
   }
 
   .meeting-header {
     flex-wrap: wrap;
     gap: 8px;
-    padding: 10px 16px;
+    padding: 8px 12px;
   }
 
   .header-left h3 {
     font-size: 13px;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .room-code {
+    display: none;
   }
 
   .waiting-room-panel {
     left: 10px;
     right: 10px;
     width: auto;
+    top: auto;
+    bottom: 80px;
+    max-height: 300px;
   }
+
+  .invite-modal {
+    max-width: calc(100vw - 32px);
+    margin: 16px;
+  }
+
+  .screen-recording-modal {
+    max-width: calc(100vw - 32px);
+    margin: 16px;
+  }
+
+  .pre-join-content,
+  .waiting-room-content {
+    max-width: 100%;
+    padding: 0 16px;
+  }
+
+  .video-preview {
+    aspect-ratio: 4/3;
+    border-radius: 12px;
+  }
+
+  .avatar {
+    width: 60px;
+    height: 60px;
+    font-size: 24px;
+  }
+
+  .avatar.large {
+    width: 80px;
+    height: 80px;
+    font-size: 36px;
+  }
+
+  .video-label {
+    bottom: 6px;
+    left: 6px;
+    padding: 4px 8px;
+  }
+
+  .video-label span {
+    font-size: 11px;
+  }
+
+  .recording-indicator {
+    font-size: 10px;
+    padding: 4px 10px;
+  }
+}
+
+/* ============================================
+   RESPONSIVE - PHONE (480px and below)
+   ============================================ */
+@media (max-width: 480px) {
+  .video-grid {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    padding: 44px 6px 80px;
+  }
+
+  /* Show max 4 videos on phone, stack vertically */
+  .video-container {
+    aspect-ratio: 16/9;
+    border-radius: 6px;
+  }
+
+  .video-container:nth-child(n+5) {
+    display: none;
+  }
+
+  .meeting-controls {
+    padding: 6px 8px;
+  }
+
+  .control-btn {
+    min-width: 42px;
+    height: 42px;
+    font-size: 18px;
+    padding: 4px 6px;
+  }
+
+  .control-btn.leave {
+    padding: 4px 12px;
+    min-width: 56px;
+  }
+
+  /* Hide less critical buttons on small phones */
+  .control-btn.screen-record,
+  .control-btn.invite {
+    display: none;
+  }
+
+  .meeting-header {
+    padding: 6px 10px;
+  }
+
+  .header-left h3 {
+    font-size: 12px;
+    max-width: 100px;
+  }
+
+  .header-center {
+    display: none;
+  }
+
+  .participant-count {
+    font-size: 12px;
+  }
+
+  .chat-panel {
+    top: 30%;
+  }
+
+  .chat-header {
+    padding: 12px 16px;
+  }
+
+  .chat-input-container {
+    padding: 10px 12px;
+  }
+
+  .chat-input-container input {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+
+  .chat-input-container button {
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+}
+
+/* ============================================
+   LANDSCAPE PHONE ORIENTATION
+   ============================================ */
+@media (max-height: 500px) and (orientation: landscape) {
+  .video-grid {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    padding: 40px 8px 70px;
+    gap: 6px;
+  }
+
+  .video-container {
+    aspect-ratio: 16/9;
+  }
+
+  .meeting-controls {
+    padding: 4px 8px;
+  }
+
+  .control-btn {
+    min-width: 40px;
+    height: 40px;
+    font-size: 16px;
+  }
+
+  .meeting-header {
+    padding: 4px 10px;
+  }
+
+  .chat-panel {
+    width: 280px;
+    top: 0;
+    bottom: 56px;
+  }
+}
+
+/* ============================================
+   CONNECTION LOST / RECORDING BANNERS
+   ============================================ */
+.connection-lost-banner {
+  animation: slideDown 0.3s ease;
+}
+
+.recording-banner {
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from { transform: translateY(-100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Virtual background button */
+.control-btn.virtual-bg {
+  background: transparent;
+}
+
+.control-btn.virtual-bg.active {
+  background: #8b5cf6;
+}
+
+/* Breakout room panel */
+.breakout-panel {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  width: 320px;
+  max-height: 400px;
+  background: #2d2d2d;
+  border-radius: 16px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+  z-index: 100;
+  overflow: hidden;
+  animation: slideIn 0.25s ease;
+}
+
+.breakout-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: #353535;
+  border-bottom: 1px solid #404040;
+}
+
+.breakout-panel-header h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #8b5cf6;
+}
+
+.breakout-room-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid #353535;
+}
+
+.breakout-room-item:last-child {
+  border-bottom: none;
+}
+
+.breakout-room-name {
+  font-size: 14px;
+  color: #fff;
+  font-weight: 500;
+}
+
+.breakout-room-count {
+  font-size: 12px;
+  color: #888;
+  margin-left: 8px;
+}
+
+.breakout-join-btn {
+  padding: 6px 14px;
+  background: #8b5cf6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.breakout-join-btn:hover {
+  background: #7c3aed;
+}
+
+.create-breakout-btn {
+  width: calc(100% - 40px);
+  margin: 12px 20px;
+  padding: 10px;
+  background: transparent;
+  border: 1px dashed #555;
+  border-radius: 8px;
+  color: #aaa;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.create-breakout-btn:hover {
+  background: rgba(139, 92, 246, 0.1);
+  border-color: #8b5cf6;
+  color: #8b5cf6;
 }
