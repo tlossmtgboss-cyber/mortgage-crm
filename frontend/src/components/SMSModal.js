@@ -1,12 +1,6 @@
 import React, { useState } from 'react';
-import { aiAPI } from '../services/api';
+import api, { aiAPI } from '../services/api';
 import './SMSModal.css';
-
-// Use HTTPS Railway URL in production, localhost for development
-const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-const API_BASE_URL = isProduction
-  ? 'https://api.perenniaai.com'
-  : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
 function SMSModal({ isOpen, onClose, lead }) {
   const [mode, setMode] = useState('manual'); // 'manual' or 'ai'
@@ -62,44 +56,29 @@ function SMSModal({ isOpen, onClose, lead }) {
     setResult(null);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/sms/send`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          to_number: lead.phone,
-          message: message,
-          lead_id: lead.id
-        })
+      const response = await api.post('/api/v1/integrations/sms/send', {
+        to_number: lead.phone,
+        message: message,
+        lead_id: lead.id
       });
 
-      const data = await response.json();
+      setResult({
+        status: 'success',
+        message: 'SMS sent successfully!',
+        details: response.data
+      });
+      setMessage('');
+      setUseTemplate('');
 
-      if (response.ok) {
-        setResult({
-          status: 'success',
-          message: 'SMS sent successfully!',
-          details: data
-        });
-        setMessage('');
-        setUseTemplate('');
-
-        // Close modal after 2 seconds
-        setTimeout(() => {
-          onClose();
-        }, 2000);
-      } else {
-        setResult({
-          status: 'error',
-          message: data.detail || 'Failed to send SMS'
-        });
-      }
+      // Close modal after 2 seconds
+      setTimeout(() => {
+        onClose();
+      }, 2000);
     } catch (error) {
+      const errorMsg = error.response?.data?.detail || error.message || 'Failed to send SMS';
       setResult({
         status: 'error',
-        message: `Error: ${error.message}`
+        message: errorMsg
       });
     } finally {
       setSending(false);
@@ -125,55 +104,40 @@ function SMSModal({ isOpen, onClose, lead }) {
 
     try {
       // Call autonomous AI task endpoint
-      const response = await fetch(`${API_BASE_URL}/api/v1/ai/autonomous-task`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          task: aiTask,
-          lead_id: lead.id,
-          lead_name: `${lead.first_name} ${lead.last_name}`,
+      const response = await api.post('/api/v1/ai/autonomous-task', {
+        task: aiTask,
+        lead_id: lead.id,
+        lead_name: `${lead.first_name} ${lead.last_name}`,
+        lead_phone: lead.phone,
+        context: {
+          lead_first_name: lead.first_name,
+          lead_last_name: lead.last_name,
           lead_phone: lead.phone,
-          context: {
-            lead_first_name: lead.first_name,
-            lead_last_name: lead.last_name,
-            lead_phone: lead.phone,
-            lead_email: lead.email
-          }
-        })
+          lead_email: lead.email
+        }
       });
 
-      const data = await response.json();
-
-      if (response.ok) {
-        // Show activity log from AI
-        if (data.activity_log) {
-          setAiActivity(data.activity_log);
-        }
-
-        setAiComplete(true);
-        setResult({
-          status: 'success',
-          message: 'AI Agent completed the task successfully!',
-          details: data
-        });
-
-        // Close modal after 3 seconds
-        setTimeout(() => {
-          onClose();
-        }, 3000);
-      } else {
-        setResult({
-          status: 'error',
-          message: data.detail || 'AI Agent failed to complete the task'
-        });
+      // Show activity log from AI
+      if (response.data.activity_log) {
+        setAiActivity(response.data.activity_log);
       }
+
+      setAiComplete(true);
+      setResult({
+        status: 'success',
+        message: 'AI Agent completed the task successfully!',
+        details: response.data
+      });
+
+      // Close modal after 3 seconds
+      setTimeout(() => {
+        onClose();
+      }, 3000);
     } catch (error) {
+      const errorMsg = error.response?.data?.detail || error.message || 'AI Agent failed to complete the task';
       setResult({
         status: 'error',
-        message: `Error: ${error.message}`
+        message: errorMsg
       });
     } finally {
       setAiRunning(false);

@@ -1,14 +1,16 @@
 // VERSION: 2024-11-14-v2 - MOCK DATA FIX
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { loansAPI, activitiesAPI, schedulerAPI } from '../services/api';
+import { loansAPI, activitiesAPI, schedulerAPI, dialerAPI, borrowerApplicationAPI, purlAPI } from '../services/api';
 import { toast } from '../utils/toast';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import SMSModal from '../components/SMSModal';
 import TeamsModal from '../components/TeamsModal';
 import RecordingModal from '../components/RecordingModal';
-import VoicemailModal from '../components/VoicemailModal';
 import VoicemailDrop from '../components/VoicemailDrop';
+import EscalationModal from '../components/EscalationModal';
+import CreateTaskModal from '../components/CreateTaskModal';
+import EmailComposerModal from '../components/EmailComposerModal';
 import TeamAssignment from '../components/TeamAssignment';
 import EmploymentTab from '../components/EmploymentTab';
 import IncomeTab from '../components/income/IncomeTab';
@@ -62,9 +64,17 @@ function ClientProfile() {
   const [showSMSModal, setShowSMSModal] = useState(false);
   const [showTeamsModal, setShowTeamsModal] = useState(false);
   const [showRecordingModal, setShowRecordingModal] = useState(false);
-  const [showVoicemailModal, setShowVoicemailModal] = useState(false);
   const [showVoicemailDrop, setShowVoicemailDrop] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [showEscalationModal, setShowEscalationModal] = useState(false);
+  const [showTaskModal, setShowTaskModal] = useState(false);
+  const [showEmailComposer, setShowEmailComposer] = useState(false);
+  const [showApplicationModal, setShowApplicationModal] = useState(false);
+  const [applicationLink, setApplicationLink] = useState(null);
+  const [applicationLoading, setApplicationLoading] = useState(false);
+  const [showClientPortalModal, setShowClientPortalModal] = useState(false);
+  const [clientPortalData, setClientPortalData] = useState(null);
+  const [clientPortalLoading, setClientPortalLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [customFields, setCustomFields] = useState([]);
@@ -585,19 +595,112 @@ function ClientProfile() {
     recognition.start();
   };
 
+  const handleSendApplication = async () => {
+    if (!client) return;
+    try {
+      setApplicationLoading(true);
+      const response = await borrowerApplicationAPI.createForLead(client.id || id, {
+        send_email: false,
+        send_sms: false
+      });
+      const appUrl = `${window.location.origin}/apply/${response.public_token}`;
+      setApplicationLink({
+        url: appUrl,
+        token: response.public_token,
+        application_id: response.id
+      });
+      setShowApplicationModal(true);
+    } catch (err) {
+      console.error('Error creating application:', err);
+      toast.error('Failed to create application link. Please try again.');
+    } finally {
+      setApplicationLoading(false);
+    }
+  };
+
+  const handleClientPortal = async () => {
+    if (!client) return;
+    try {
+      setClientPortalLoading(true);
+      let existingWorkspace = null;
+      try {
+        existingWorkspace = await purlAPI.getWorkspaceByLead(client.id || id);
+      } catch (err) {
+        const isNotFound = err.response?.status === 404;
+        const isNetworkError = err.message === 'Network Error' || !err.response;
+        if (!isNotFound && !isNetworkError) throw err;
+      }
+
+      if (existingWorkspace && existingWorkspace.workspace) {
+        const workspaceId = existingWorkspace.workspace.workspace_id || existingWorkspace.workspace.id;
+        const slug = existingWorkspace.workspace.workspace_slug || existingWorkspace.workspace.slug;
+        const tokenResponse = await purlAPI.createToken(workspaceId, { scope: 'full', expires_in_days: 90 });
+        const fullToken = tokenResponse.token;
+        const baseUrl = `${window.location.origin}/portal/${slug}`;
+        const portalUrl = fullToken ? `${baseUrl}?token=${fullToken}` : baseUrl;
+        setClientPortalData({ workspace_id: workspaceId, url: portalUrl, borrower_name: existingWorkspace.workspace.display_name, status: existingWorkspace.workspace.status, exists: true });
+        setShowClientPortalModal(true);
+        return;
+      }
+
+      const borrowerName = client.borrower_name || client.name || '';
+      const createData = { lead_id: client.id || parseInt(id), borrower_name: borrowerName, first_name: client.first_name, last_name: client.last_name, email: client.borrower_email || client.email, phone: client.borrower_phone || client.phone };
+      const response = await purlAPI.createWorkspace(createData);
+      const newWorkspace = response.workspace || response;
+      const tokenResponse = await purlAPI.createToken(newWorkspace.id, { scope: 'full', expires_in_days: 90 });
+      const fullToken = tokenResponse.token;
+      const baseUrl = `${window.location.origin}/portal/${newWorkspace.slug}`;
+      const portalUrl = fullToken ? `${baseUrl}?token=${fullToken}` : baseUrl;
+      setClientPortalData({ workspace_id: newWorkspace.id, url: portalUrl, borrower_name: borrowerName, status: newWorkspace.status, exists: false, justCreated: true });
+      setShowClientPortalModal(true);
+    } catch (err) {
+      console.error('[Client Portal] Error:', err);
+      const errorMessage = err.response?.data?.detail || (err.message === 'Network Error' ? 'Unable to connect to server.' : err.message || 'Unknown error');
+      toast.error(`Failed to access/create client portal: ${errorMessage}`);
+    } finally {
+      setClientPortalLoading(false);
+    }
+  };
+
   const handleAction = async (action) => {
+    const phone = client.borrower_phone || client.phone;
     switch(action) {
       case 'call':
-        window.open(`tel:${client.borrower_phone || client.phone}`, '_self');
+        if (!phone) {
+          toast.error('No phone number available for this contact');
+          return;
+        }
+        try {
+          const cleanPhone = phone.replace(/[^\d+]/g, '');
+          const result = await dialerAPI.clickToDial({
+            phone_number: cleanPhone,
+            contact_name: client.borrower_name || client.name || 'Contact',
+            lead_id: client.id || id
+          });
+          if (result.success) {
+            toast.success(`Calling your phone now... You'll be connected to ${client.borrower_name || client.name || 'the contact'}.`);
+          } else {
+            if (result.error?.includes('cell phone not configured') || result.error?.includes('caller ID')) {
+              toast.warning('Click-to-dial not configured. Opening phone app...');
+              window.open(`tel:${phone}`, '_self');
+            } else {
+              toast.error(`Call failed: ${result.error || 'Unknown error'}`);
+            }
+          }
+        } catch (err) {
+          console.error('Click-to-dial error:', err);
+          toast.warning('Click-to-dial unavailable. Opening phone app...');
+          window.open(`tel:${phone}`, '_self');
+        }
         break;
       case 'sms':
         setShowSMSModal(true);
         break;
       case 'email':
-        window.open(`mailto:${client.borrower_email || client.email}`, '_blank');
+        setShowEmailComposer(true);
         break;
       case 'task':
-        navigate('/tasks');
+        setShowTaskModal(true);
         break;
       case 'calendar':
         setShowScheduleModal(true);
@@ -609,13 +712,13 @@ function ClientProfile() {
         setShowVoicemailDrop(true);
         break;
       case 'send_application':
-        toast.info('Application link feature - coming soon');
+        handleSendApplication();
         break;
       case 'client_portal':
-        toast.info('Portal access feature - coming soon');
+        handleClientPortal();
         break;
       case 'escalation':
-        toast.info('Escalation feature - coming soon');
+        setShowEscalationModal(true);
         break;
       default:
         break;
@@ -2234,15 +2337,6 @@ function ClientProfile() {
         />
       )}
 
-      {/* Voicemail Modal */}
-      {client && (
-        <VoicemailModal
-          isOpen={showVoicemailModal}
-          onClose={() => setShowVoicemailModal(false)}
-          lead={client}
-        />
-      )}
-
       {/* Voicemail Drop */}
       {client && showVoicemailDrop && (
         <VoicemailDrop
@@ -2260,6 +2354,80 @@ function ClientProfile() {
           onSuccess={() => loadUpcomingAppointments()}
           borrower={client}
         />
+      )}
+
+      {/* Escalation Modal */}
+      {client && (
+        <EscalationModal
+          isOpen={showEscalationModal}
+          onClose={() => setShowEscalationModal(false)}
+          lead={client}
+        />
+      )}
+
+      {/* Create Task Modal */}
+      {client && (
+        <CreateTaskModal
+          isOpen={showTaskModal}
+          onClose={() => setShowTaskModal(false)}
+          lead={client}
+        />
+      )}
+
+      {/* Email Composer Modal */}
+      <EmailComposerModal
+        isOpen={showEmailComposer}
+        onClose={() => setShowEmailComposer(false)}
+        recipient={{
+          name: client?.borrower_name || client?.name,
+          email: client?.borrower_email || client?.email
+        }}
+        entityType="client"
+        entityData={{
+          id: client?.id,
+          stage: client?.stage,
+          loan_amount: client?.loan_amount
+        }}
+      />
+
+      {/* Application Link Modal */}
+      {showApplicationModal && applicationLink && (
+        <div className="modal-overlay" onClick={() => setShowApplicationModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <div className="modal-header">
+              <h2>Application Link Created</h2>
+              <button className="close-button" onClick={() => setShowApplicationModal(false)}>×</button>
+            </div>
+            <div style={{ padding: '20px' }}>
+              <p style={{ marginBottom: '12px' }}>Share this link with the borrower:</p>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input type="text" readOnly value={applicationLink.url} style={{ flex: 1, padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} />
+                <button onClick={async () => { try { await navigator.clipboard.writeText(applicationLink.url); toast.success('Link copied!'); } catch { toast.error('Copy failed'); } }} style={{ padding: '8px 16px', backgroundColor: '#218D8D', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Copy</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Client Portal Modal */}
+      {showClientPortalModal && clientPortalData && (
+        <div className="modal-overlay" onClick={() => setShowClientPortalModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <div className="modal-header">
+              <h2>{clientPortalData.justCreated ? 'Portal Created' : 'Client Portal'}</h2>
+              <button className="close-button" onClick={() => setShowClientPortalModal(false)}>×</button>
+            </div>
+            <div style={{ padding: '20px' }}>
+              <p style={{ marginBottom: '4px' }}><strong>Borrower:</strong> {clientPortalData.borrower_name}</p>
+              <p style={{ marginBottom: '12px' }}><strong>Status:</strong> {clientPortalData.status}</p>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input type="text" readOnly value={clientPortalData.url} style={{ flex: 1, padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} />
+                <button onClick={async () => { try { await navigator.clipboard.writeText(clientPortalData.url); toast.success('Link copied!'); } catch { toast.error('Copy failed'); } }} style={{ padding: '8px 16px', backgroundColor: '#218D8D', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Copy</button>
+              </div>
+              <button onClick={() => window.open(clientPortalData.url, '_blank')} style={{ marginTop: '12px', padding: '8px 16px', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', width: '100%' }}>Open Portal</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
