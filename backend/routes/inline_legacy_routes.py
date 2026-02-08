@@ -5975,6 +5975,12 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
 
     # Calendar Sync routes (CRM ↔ Salesforce ↔ Outlook calendar synchronization)
     try:
+        from models.calendar_sync_models import CRMCalendarEvent, CalendarEventSyncMap, CalendarSyncLog, CalendarSyncSettings
+        for model in [CRMCalendarEvent, CalendarEventSyncMap, CalendarSyncLog, CalendarSyncSettings]:
+            try:
+                model.__table__.create(engine, checkfirst=True)
+            except Exception:
+                pass
         from routes.calendar_sync_routes import router as calendar_sync_router
         app.include_router(calendar_sync_router, tags=["Calendar Sync"])
         logger.info("✅ Calendar sync routes loaded")
