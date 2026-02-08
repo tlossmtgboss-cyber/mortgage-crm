@@ -60,7 +60,7 @@ class PlatformContract(Base):
     # Metadata
     notes = Column(Text, nullable=True)
     tags = Column(JSON, nullable=True)
-    metadata = Column(JSON, nullable=True)
+    contract_metadata = Column("metadata", JSON, nullable=True)
 
     # Audit
     created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
@@ -97,7 +97,7 @@ class PlatformContract(Base):
             "signer_title": self.signer_title,
             "notes": self.notes,
             "tags": self.tags,
-            "metadata": self.metadata,
+            "metadata": self.contract_metadata,
             "created_by_user_id": self.created_by_user_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
