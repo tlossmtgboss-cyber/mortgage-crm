@@ -1389,9 +1389,9 @@ class SalesforceSyncService:
     ) -> List[Dict[str, Any]]:
         """Query Salesforce for recently created/modified Leads."""
         soql = f"""
-            SELECT Id, FirstName, LastName, Email, Phone, MobilePhone, Company,
+            SELECT Id, FirstName, LastName, Email, Phone, Company,
                    Title, Industry, Street, City, State, PostalCode, Country,
-                   LeadSource, Status, Rating, AnnualRevenue, Description,
+                   LeadSource, Status, Description,
                    CreatedDate, LastModifiedDate
             FROM Lead
             WHERE LastModifiedDate >= LAST_N_DAYS:{days_back}
@@ -1426,9 +1426,9 @@ class SalesforceSyncService:
     ) -> List[Dict[str, Any]]:
         """Query Salesforce for recently created/modified Contacts."""
         soql = f"""
-            SELECT Id, FirstName, LastName, Email, Phone, MobilePhone, HomePhone,
+            SELECT Id, FirstName, LastName, Email, Phone,
                    Title, Department, MailingStreet, MailingCity, MailingState,
-                   MailingPostalCode, MailingCountry, Birthdate, AccountId,
+                   MailingPostalCode, MailingCountry, AccountId,
                    Description, LeadSource,
                    CreatedDate, LastModifiedDate
             FROM Contact
@@ -1464,9 +1464,9 @@ class SalesforceSyncService:
     ) -> List[Dict[str, Any]]:
         """Query Salesforce for recently created/modified Opportunities."""
         soql = f"""
-            SELECT Id, Name, Amount, StageName, CloseDate, Probability,
+            SELECT Id, Name, Amount, StageName, CloseDate,
                    Type, LeadSource, NextStep, Description,
-                   ExpectedRevenue, AccountId,
+                   AccountId,
                    CreatedDate, LastModifiedDate, IsClosed, IsWon
             FROM Opportunity
             WHERE LastModifiedDate >= LAST_N_DAYS:{days_back}
