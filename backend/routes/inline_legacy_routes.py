@@ -5359,6 +5359,15 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     try:
         from routes.platform_contracts_routes import router as platform_contracts_router
         app.include_router(platform_contracts_router, tags=["Platform Contracts"])
+
+        # Auto-create platform_contracts table if it doesn't exist
+        try:
+            from database.models.platform_contract import PlatformContract
+            PlatformContract.__table__.create(engine, checkfirst=True)
+            logger.info("✅ Platform Contracts table verified/created")
+        except Exception as table_err:
+            logger.warning(f"Could not auto-create platform_contracts table: {table_err}")
+
         logger.info("✅ Platform Contracts routes loaded")
     except Exception as e:
         logger.warning(f"Could not load platform contracts routes: {e}")
