@@ -250,7 +250,10 @@ function EmailComposerModal({ isOpen, onClose, recipient, entityType, entityData
         })
       });
 
-      if (!uploadUrlResponse.ok) throw new Error('Failed to get upload URL');
+      if (!uploadUrlResponse.ok) {
+        const errData = await uploadUrlResponse.json().catch(() => ({}));
+        throw new Error(errData.detail || errData.error || 'Failed to get upload URL');
+      }
 
       const { upload_url, video_key } = await uploadUrlResponse.json();
       setVideoUploadProgress(20);
@@ -262,27 +265,29 @@ function EmailComposerModal({ isOpen, onClose, recipient, entityType, entityData
         body: blob
       });
 
-      if (!uploadResponse.ok) throw new Error('Failed to upload video');
+      if (!uploadResponse.ok) throw new Error('Failed to upload video to storage');
       setVideoUploadProgress(70);
 
-      // Step 3: Complete upload
-      const completeResponse = await fetch(`${API_BASE}/api/v1/portal-video/complete`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          portal_type: 'email',
-          recipient_id: 0,
-          video_key: video_key,
-          message: null,
-          send_notification: false,
-          duration_seconds: duration
-        })
-      });
-
-      if (!completeResponse.ok) throw new Error('Failed to save video');
+      // Step 3: Complete upload (non-blocking — video is already on S3)
+      try {
+        await fetch(`${API_BASE}/api/v1/portal-video/complete`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            portal_type: 'email',
+            recipient_id: 0,
+            video_key: video_key,
+            message: null,
+            send_notification: false,
+            duration_seconds: duration
+          })
+        });
+      } catch (completeErr) {
+        console.warn('Video metadata save failed (non-critical):', completeErr);
+      }
       setVideoUploadProgress(100);
 
       // Insert video marker into email body
@@ -293,7 +298,7 @@ function EmailComposerModal({ isOpen, onClose, recipient, entityType, entityData
 
     } catch (err) {
       console.error('Video upload error:', err);
-      setError('Failed to upload video. Please try again.');
+      setError(err.message || 'Failed to upload video. Please try again.');
     } finally {
       setIsUploadingVideo(false);
       setVideoUploadProgress(0);
