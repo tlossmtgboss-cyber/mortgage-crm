@@ -509,6 +509,171 @@
   color: #9ca3af !important;
 }
 
+/* Insert Toolbar */
+.insert-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  margin-top: 8px;
+  gap: 12px;
+}
+
+.insert-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.insert-btn-wrapper {
+  position: relative;
+}
+
+.insert-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: white;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.insert-btn:hover:not(:disabled) {
+  border-color: #218D8D;
+  color: #218D8D;
+  background: #f0fdfa;
+}
+
+.insert-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.insert-btn-icon {
+  font-size: 15px;
+}
+
+/* Video Recorder Wrapper */
+.video-recorder-wrapper {
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+  min-height: 300px;
+}
+
+/* Video Uploading Progress */
+.video-uploading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+}
+
+.upload-progress-bar {
+  width: 100%;
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.upload-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #218D8D, #2ab0b0);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.upload-progress-text {
+  font-size: 13px;
+  color: #218D8D;
+  font-weight: 500;
+}
+
+/* Booking Link Dropdown */
+.booking-link-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 240px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 20;
+  overflow: hidden;
+}
+
+.booking-link-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: white;
+  cursor: pointer;
+  transition: background 0.15s;
+  text-align: left;
+}
+
+.booking-link-option:hover {
+  background: #f0fdfa;
+}
+
+.booking-link-option + .booking-link-option {
+  border-top: 1px solid #f3f4f6;
+}
+
+.booking-link-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1f2937;
+}
+
+.booking-link-desc {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+/* Inserted Badges */
+.insert-toolbar-badges {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.inserted-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.inserted-badge.video-badge {
+  background: #f0fdfa;
+  color: #218D8D;
+  border: 1px solid #99d5d5;
+}
+
+.inserted-badge.calendar-badge {
+  background: #fef3f2;
+  color: #b45309;
+  border: 1px solid #fcd6a0;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .email-composer-modal {
@@ -536,5 +701,14 @@
   .btn-cancel, .btn-send {
     width: 100%;
     justify-content: center;
+  }
+
+  .insert-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .insert-toolbar-badges {
+    flex-wrap: wrap;
   }
 }

@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import VideoRecorder from './video/VideoRecorder';
 import './EmailComposerModal.css';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
+const APP_BASE = process.env.REACT_APP_BASE_URL || 'https://app.perenniaai.com';
 
 // Email templates organized by category
 const EMAIL_TEMPLATES = {
@@ -60,6 +62,17 @@ function EmailComposerModal({ isOpen, onClose, recipient, entityType, entityData
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
 
+  // Insert Video state
+  const [showVideoRecorder, setShowVideoRecorder] = useState(false);
+  const [isUploadingVideo, setIsUploadingVideo] = useState(false);
+  const [videoUploadProgress, setVideoUploadProgress] = useState(0);
+  const [hasVideoAttached, setHasVideoAttached] = useState(false);
+
+  // Insert Calendar state
+  const [showCalendarPicker, setShowCalendarPicker] = useState(false);
+  const [bookingLinks, setBookingLinks] = useState([]);
+  const [hasCalendarAttached, setHasCalendarAttached] = useState(false);
+
   // Reset state when modal opens
   useEffect(() => {
     if (isOpen) {
@@ -70,6 +83,32 @@ function EmailComposerModal({ isOpen, onClose, recipient, entityType, entityData
       setEmailBody('');
       setError(null);
       setSuccess(false);
+      setShowVideoRecorder(false);
+      setIsUploadingVideo(false);
+      setVideoUploadProgress(0);
+      setHasVideoAttached(false);
+      setShowCalendarPicker(false);
+      setHasCalendarAttached(false);
+    }
+  }, [isOpen]);
+
+  // Fetch booking links when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      const fetchBookingLinks = async () => {
+        try {
+          const response = await fetch(`${API_BASE}/api/v1/scheduler/booking-links`, {
+            headers: { 'Authorization': `Bearer ${getToken()}` }
+          });
+          if (response.ok) {
+            const data = await response.json();
+            setBookingLinks(data.booking_links || []);
+          }
+        } catch (err) {
+          console.error('Failed to fetch booking links:', err);
+        }
+      };
+      fetchBookingLinks();
     }
   }, [isOpen]);
 
@@ -185,6 +224,103 @@ function EmailComposerModal({ isOpen, onClose, recipient, entityType, entityData
       await handleTemplateSelect(selectedTemplate);
     }
   };
+
+  // Handle video recording complete → upload to S3 → insert marker
+  const handleVideoRecordingComplete = useCallback(async (blob, duration) => {
+    setShowVideoRecorder(false);
+    setIsUploadingVideo(true);
+    setVideoUploadProgress(0);
+    setError(null);
+
+    try {
+      const token = getToken();
+
+      // Step 1: Get presigned upload URL
+      const uploadUrlResponse = await fetch(`${API_BASE}/api/v1/portal-video/upload-url`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          portal_type: 'email',
+          recipient_id: 0,
+          content_type: 'video/webm',
+          filename: `email_video_${Date.now()}.webm`
+        })
+      });
+
+      if (!uploadUrlResponse.ok) throw new Error('Failed to get upload URL');
+
+      const { upload_url, video_key } = await uploadUrlResponse.json();
+      setVideoUploadProgress(20);
+
+      // Step 2: Upload blob to S3
+      const uploadResponse = await fetch(upload_url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'video/webm' },
+        body: blob
+      });
+
+      if (!uploadResponse.ok) throw new Error('Failed to upload video');
+      setVideoUploadProgress(70);
+
+      // Step 3: Complete upload
+      const completeResponse = await fetch(`${API_BASE}/api/v1/portal-video/complete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          portal_type: 'email',
+          recipient_id: 0,
+          video_key: video_key,
+          message: null,
+          send_notification: false,
+          duration_seconds: duration
+        })
+      });
+
+      if (!completeResponse.ok) throw new Error('Failed to save video');
+      setVideoUploadProgress(100);
+
+      // Insert video marker into email body
+      const videoUrl = `${API_BASE}/api/v1/portal-video/view/${video_key}`;
+      const videoMarker = `\n[VIDEO MESSAGE - Click to watch: ${videoUrl}]\n`;
+      setEmailBody(prev => prev + videoMarker);
+      setHasVideoAttached(true);
+
+    } catch (err) {
+      console.error('Video upload error:', err);
+      setError('Failed to upload video. Please try again.');
+    } finally {
+      setIsUploadingVideo(false);
+      setVideoUploadProgress(0);
+    }
+  }, []);
+
+  // Handle calendar link insertion
+  const handleInsertCalendarLink = useCallback((link) => {
+    const bookingUrl = `${APP_BASE}/book/${link.slug}`;
+    const calendarMarker = `\nSchedule a time to talk: ${bookingUrl}\n`;
+    setEmailBody(prev => prev + calendarMarker);
+    setHasCalendarAttached(true);
+    setShowCalendarPicker(false);
+  }, []);
+
+  // Handle Insert Calendar button click
+  const handleCalendarClick = useCallback(() => {
+    if (bookingLinks.length === 0) {
+      setError('No booking links found. Please create one in Smart Scheduler first.');
+      return;
+    }
+    if (bookingLinks.length === 1) {
+      handleInsertCalendarLink(bookingLinks[0]);
+    } else {
+      setShowCalendarPicker(prev => !prev);
+    }
+  }, [bookingLinks, handleInsertCalendarLink]);
 
   if (!isOpen) return null;
 
@@ -308,13 +444,97 @@ function EmailComposerModal({ isOpen, onClose, recipient, entityType, entityData
 
               <div className="form-group">
                 <label>Email Body</label>
-                <textarea
-                  value={emailBody}
-                  onChange={(e) => setEmailBody(e.target.value)}
-                  placeholder="Compose your email message..."
-                  className="body-textarea"
-                  rows={12}
-                />
+
+                {/* Video Recorder (replaces textarea when active) */}
+                {showVideoRecorder ? (
+                  <div className="video-recorder-wrapper">
+                    <VideoRecorder
+                      onRecordingComplete={handleVideoRecordingComplete}
+                      onCancel={() => setShowVideoRecorder(false)}
+                      maxDuration={120}
+                    />
+                  </div>
+                ) : (
+                  <textarea
+                    value={emailBody}
+                    onChange={(e) => setEmailBody(e.target.value)}
+                    placeholder="Compose your email message..."
+                    className="body-textarea"
+                    rows={12}
+                  />
+                )}
+
+                {/* Video upload progress */}
+                {isUploadingVideo && (
+                  <div className="video-uploading">
+                    <div className="upload-progress-bar">
+                      <div className="upload-progress-fill" style={{ width: `${videoUploadProgress}%` }}></div>
+                    </div>
+                    <span className="upload-progress-text">Uploading video... {videoUploadProgress}%</span>
+                  </div>
+                )}
+
+                {/* Insert Toolbar */}
+                {!showVideoRecorder && (
+                  <div className="insert-toolbar">
+                    <div className="insert-toolbar-left">
+                      <button
+                        type="button"
+                        className="insert-btn"
+                        onClick={() => setShowVideoRecorder(true)}
+                        disabled={isUploadingVideo}
+                        title="Record and insert a video message"
+                      >
+                        <span className="insert-btn-icon">📹</span>
+                        Insert Video
+                      </button>
+
+                      <div className="insert-btn-wrapper">
+                        <button
+                          type="button"
+                          className="insert-btn"
+                          onClick={handleCalendarClick}
+                          title="Insert your scheduling link"
+                        >
+                          <span className="insert-btn-icon">📅</span>
+                          Insert Calendar Link
+                        </button>
+
+                        {/* Booking link dropdown */}
+                        {showCalendarPicker && bookingLinks.length > 1 && (
+                          <div className="booking-link-dropdown">
+                            {bookingLinks.map(link => (
+                              <button
+                                key={link.id}
+                                className="booking-link-option"
+                                onClick={() => handleInsertCalendarLink(link)}
+                              >
+                                <span className="booking-link-name">{link.link_name}</span>
+                                {link.description && (
+                                  <span className="booking-link-desc">{link.description}</span>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Attached badges */}
+                    <div className="insert-toolbar-badges">
+                      {hasVideoAttached && (
+                        <span className="inserted-badge video-badge">
+                          📹 Video attached
+                        </span>
+                      )}
+                      {hasCalendarAttached && (
+                        <span className="inserted-badge calendar-badge">
+                          📅 Calendar link added
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

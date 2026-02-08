@@ -492,6 +492,41 @@ async def mark_realtor_video_viewed(
 
 
 # =============================================================================
+# Public Video Viewing (for email recipients)
+# =============================================================================
+
+@router.get("/view/{video_key:path}")
+async def view_video(
+    video_key: str,
+    db=Depends(get_db)
+):
+    """Public endpoint for email recipients to view a video.
+    Generates a presigned S3 download URL and redirects to it.
+    """
+    from fastapi.responses import RedirectResponse
+
+    if not video_key:
+        raise HTTPException(status_code=400, detail="Video key is required")
+
+    try:
+        s3_service = get_s3_service()
+
+        # Generate presigned download URL (valid for 1 hour)
+        download_result = s3_service.get_presigned_download_url(video_key, expires_in=3600)
+
+        if not download_result.get("success"):
+            raise HTTPException(status_code=404, detail="Video not found")
+
+        return RedirectResponse(url=download_result["presigned_url"])
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get video view URL: {e}")
+        raise HTTPException(status_code=500, detail="Failed to load video")
+
+
+# =============================================================================
 # Admin Routes
 # =============================================================================
 

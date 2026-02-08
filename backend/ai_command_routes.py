@@ -5238,6 +5238,52 @@ async def send_composed_email(
         sender_name = current_user.full_name if hasattr(current_user, 'full_name') else "Perennia AI"
         sender_email = current_user.email if hasattr(current_user, 'email') else ""
 
+        # Process the email body: detect video and calendar markers
+        import re
+
+        body_text = request.body
+
+        # Replace [VIDEO MESSAGE - Click to watch: URL] with styled HTML card
+        def render_video_card(match):
+            video_url = match.group(1)
+            return (
+                '<div style="background:#f0fdfa; border:1px solid #218D8D; border-radius:8px; '
+                'padding:16px; margin:16px 0; text-align:center;">'
+                '<p style="font-size:16px; font-weight:600; color:#1f2937; margin:0 0 12px 0;">'
+                '&#127909; Video Message</p>'
+                f'<a href="{video_url}" style="display:inline-block; padding:10px 24px; '
+                'background:#218D8D; color:white; border-radius:6px; text-decoration:none; '
+                'font-weight:500; font-size:14px;" target="_blank">Watch Video</a></div>'
+            )
+
+        body_text = re.sub(
+            r'\[VIDEO MESSAGE - Click to watch:\s*(https?://[^\]]+)\]',
+            render_video_card,
+            body_text
+        )
+
+        # Replace "Schedule a time to talk: URL" with styled calendar CTA
+        def render_calendar_card(match):
+            booking_url = match.group(1)
+            return (
+                '<div style="background:#f0fdfa; border:1px solid #218D8D; border-radius:8px; '
+                'padding:16px; margin:16px 0; text-align:center;">'
+                '<p style="font-size:16px; font-weight:600; color:#1f2937; margin:0 0 12px 0;">'
+                '&#128197; Schedule a Meeting</p>'
+                f'<a href="{booking_url}" style="display:inline-block; padding:10px 24px; '
+                'background:#218D8D; color:white; border-radius:6px; text-decoration:none; '
+                'font-weight:500; font-size:14px;" target="_blank">Book a Time</a></div>'
+            )
+
+        body_text = re.sub(
+            r'Schedule a time to talk:\s*(https?://\S+)',
+            render_calendar_card,
+            body_text
+        )
+
+        # Convert remaining newlines to <br>
+        body_html_content = body_text.replace(chr(10), '<br>')
+
         # Format the email body as HTML
         html_body = f"""
 <!DOCTYPE html>
@@ -5266,7 +5312,7 @@ async def send_composed_email(
     </style>
 </head>
 <body>
-    <div class="email-content">{request.body.replace(chr(10), '<br>')}</div>
+    <div class="email-content">{body_html_content}</div>
     <div class="footer">
         <p>Sent via Perennia AI CRM</p>
     </div>
