@@ -433,7 +433,14 @@ async def sync_all_users_salesforce(
 
 def sync_all_users_salesforce_sync(**kwargs) -> Dict[str, Any]:
     """Synchronous wrapper for sync_all_users_salesforce"""
-    return asyncio.run(sync_all_users_salesforce(**kwargs))
+    logger.warning("🔄 Salesforce sync task TRIGGERED by scheduler")
+    try:
+        result = asyncio.run(sync_all_users_salesforce(**kwargs))
+        logger.warning(f"✅ Salesforce sync task COMPLETED: {result.get('users_processed', 0)} users, errors={len(result.get('errors', []))}")
+        return result
+    except Exception as e:
+        logger.error(f"❌ Salesforce sync task FAILED: {e}", exc_info=True)
+        return {"error": str(e)}
 
 
 # ============================================================================
@@ -580,7 +587,7 @@ def register_salesforce_sync_jobs(scheduler):
         replace_existing=True
     )
 
-    logger.info("Salesforce sync jobs registered (STAGGERED): Salesforce → CRM at :08/:18/:28/:38/:48/:58")
+    logger.warning("🔄 Salesforce sync jobs registered (STAGGERED): Salesforce → CRM at :08/:18/:28/:38/:48/:58")
 
 
 # ============================================================================
