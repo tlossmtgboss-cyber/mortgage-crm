@@ -20,7 +20,6 @@ import PreApprovalLetterSettings from '../components/PreApprovalLetterSettings';
 import ApplicationSlidesEditor from '../components/ApplicationSlidesEditor';
 import BusinessOpsDashboard from './BusinessOpsDashboard';
 import IntegrationSettings from './IntegrationSettings';
-import CalendarManagement from '../components/CalendarManagement';
 import { formatPhoneNumber } from '../utils/phoneUtils';
 import './Settings.css';
 
@@ -2838,7 +2837,6 @@ const API_BASE_URL = isProduction
                       <button className={`sidebar-btn child ${activeSection === 'dialer-settings' ? 'active' : ''}`} onClick={() => setActiveSection('dialer-settings')}><span>Power Dialer</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'voice-os' ? 'active' : ''}`} onClick={() => navigate('/voice-os-dashboard')}><span>Voice OS</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'ai-receptionist' ? 'active' : ''}`} onClick={() => setActiveSection('ai-receptionist')}><span>AI Receptionist</span></button>
-                      <button className={`sidebar-btn child ${activeSection === 'calendar-assignments' ? 'active' : ''}`} onClick={() => setActiveSection('calendar-assignments')}><span>Calendar Assignments</span></button>
                       <button className={`sidebar-btn child`} onClick={() => navigate('/settings/twilio')}><span>Twilio Setup</span></button>
                     </div>
                   )}
@@ -5686,11 +5684,6 @@ const API_BASE_URL = isProduction
           {/* Smart Scheduler Settings */}
           {activeSection === 'smart-scheduler' && (
             <SmartSchedulerSettings />
-          )}
-
-          {/* Calendar Assignments */}
-          {activeSection === 'calendar-assignments' && (
-            <CalendarManagement />
           )}
 
           {/* Video Meetings */}

@@ -16,6 +16,7 @@ import { useAsyncOperation, useFormSubmit } from '../hooks/useAsyncOperation';
 import { APIError } from '../utils/api/errors';
 import { toast } from '../utils/toast';
 import { API_BASE_URL } from '../services/api';
+import CalendarManagement from '../components/CalendarManagement';
 import './SmartSchedulerSettings.css';
 
 // Day order for display
@@ -505,6 +506,12 @@ function SmartSchedulerSettings() {
         >
           <i className="fas fa-video"></i> Video
         </button>
+        <button
+          className={`tab ${activeTab === 'calendar-assignments' ? 'active' : ''}`}
+          onClick={() => setActiveTab('calendar-assignments')}
+        >
+          <i className="fas fa-calendar-check"></i> Calendar Assignments
+        </button>
       </div>
 
       <form onSubmit={handleSave}>
@@ -868,6 +875,11 @@ function SmartSchedulerSettings() {
           </div>
         )}
       </form>
+
+      {/* Calendar Assignments Tab (outside form - has its own save logic) */}
+      {activeTab === 'calendar-assignments' && (
+        <CalendarManagement />
+      )}
     </div>
   );
 }
