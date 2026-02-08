@@ -156,6 +156,9 @@
   margin-bottom: 24px;
   border-bottom: 1px solid #e2e8f0;
   padding-bottom: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }
 
 .scheduler-settings-page .tab-btn {
@@ -172,6 +175,8 @@
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s;
   margin-bottom: -1px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .scheduler-settings-page .tab-btn:hover {

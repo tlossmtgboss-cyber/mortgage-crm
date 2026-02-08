@@ -71,6 +71,23 @@ export async function addCustomRequest(loanId, borrowerId, data) {
 }
 
 /**
+ * Add multiple custom document requests in sequence
+ * Returns per-document success/failure results
+ */
+export async function addBulkCustomRequests(loanId, borrowerId, requests) {
+  const results = [];
+  for (const req of requests) {
+    try {
+      const result = await addCustomRequest(loanId, borrowerId, req);
+      results.push({ success: true, title: req.title, result });
+    } catch (err) {
+      results.push({ success: false, title: req.title, error: err.message });
+    }
+  }
+  return results;
+}
+
+/**
  * Waive a document request
  */
 export async function waiveRequest(requestId, reason, waivedBy) {
@@ -404,6 +421,7 @@ export const smartDocsAPI = {
   generateNeedsList,
   getNeedsList,
   addCustomRequest,
+  addBulkCustomRequests,
   waiveRequest,
   // Documents
   uploadDocument,

@@ -17,6 +17,10 @@ import { APIError } from '../utils/api/errors';
 import { toast } from '../utils/toast';
 import { API_BASE_URL } from '../services/api';
 import CalendarManagement from '../components/CalendarManagement';
+import AppointmentTypesManager from '../components/AppointmentTypesManager';
+import BookingLinksManager from '../components/BookingLinksManager';
+import BlockedTimeManager from '../components/BlockedTimeManager';
+import SchedulerAnalytics from '../components/SchedulerAnalytics';
 import './SmartSchedulerSettings.css';
 
 // Day order for display
@@ -495,6 +499,24 @@ function SmartSchedulerSettings() {
           <i className="fas fa-calendar-alt"></i> Booking
         </button>
         <button
+          className={`tab-btn ${activeTab === 'appointment-types' ? 'active' : ''}`}
+          onClick={() => setActiveTab('appointment-types')}
+        >
+          <i className="fas fa-list-alt"></i> Appointment Types
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'booking-links' ? 'active' : ''}`}
+          onClick={() => setActiveTab('booking-links')}
+        >
+          <i className="fas fa-link"></i> Booking Links
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'blocked-time' ? 'active' : ''}`}
+          onClick={() => setActiveTab('blocked-time')}
+        >
+          <i className="fas fa-ban"></i> Blocked Time
+        </button>
+        <button
           className={`tab-btn ${activeTab === 'ai' ? 'active' : ''}`}
           onClick={() => setActiveTab('ai')}
         >
@@ -505,6 +527,12 @@ function SmartSchedulerSettings() {
           onClick={() => setActiveTab('video')}
         >
           <i className="fas fa-video"></i> Video
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'analytics' ? 'active' : ''}`}
+          onClick={() => setActiveTab('analytics')}
+        >
+          <i className="fas fa-chart-bar"></i> Analytics
         </button>
         <button
           className={`tab-btn ${activeTab === 'calendar-assignments' ? 'active' : ''}`}
@@ -876,10 +904,12 @@ function SmartSchedulerSettings() {
         )}
       </form>
 
-      {/* Calendar Assignments Tab (outside form - has its own save logic) */}
-      {activeTab === 'calendar-assignments' && (
-        <CalendarManagement />
-      )}
+      {/* Standalone tabs (outside form - each has own state & API calls) */}
+      {activeTab === 'appointment-types' && <AppointmentTypesManager />}
+      {activeTab === 'booking-links' && <BookingLinksManager />}
+      {activeTab === 'blocked-time' && <BlockedTimeManager />}
+      {activeTab === 'analytics' && <SchedulerAnalytics />}
+      {activeTab === 'calendar-assignments' && <CalendarManagement />}
     </div>
   );
 }

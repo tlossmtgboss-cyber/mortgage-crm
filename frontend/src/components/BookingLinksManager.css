@@ -1,0 +1,499 @@
+/* Booking Links Manager */
+.blm-container {
+  padding: 0;
+}
+
+.blm-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  color: #64748b;
+}
+
+.blm-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #218D8D;
+  border-radius: 50%;
+  animation: blm-spin 0.8s linear infinite;
+  margin-bottom: 12px;
+}
+
+@keyframes blm-spin {
+  to { transform: rotate(360deg); }
+}
+
+.blm-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.blm-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.blm-subtitle {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: #64748b;
+}
+
+/* Buttons */
+.blm-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: #218D8D;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.blm-btn-primary:hover:not(:disabled) {
+  background: #1a7a7a;
+}
+
+.blm-btn-primary:disabled {
+  background: #7cc5c5;
+  cursor: not-allowed;
+}
+
+.blm-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: white;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.blm-btn-secondary:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.blm-btn-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.blm-btn-copy:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.blm-btn-copy.copied {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #15803d;
+}
+
+.blm-btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.blm-btn-icon:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+}
+
+.blm-btn-icon.danger:hover {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #dc2626;
+}
+
+.blm-btn-danger-sm,
+.blm-btn-cancel-sm {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+}
+
+.blm-btn-danger-sm {
+  background: #dc2626;
+  color: white;
+}
+
+.blm-btn-danger-sm:hover {
+  background: #b91c1c;
+}
+
+.blm-btn-cancel-sm {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+/* Error */
+.blm-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #dc2626;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.blm-error button {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: #dc2626;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+/* Empty State */
+.blm-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+  background: #f8fafc;
+  border: 2px dashed #e2e8f0;
+  border-radius: 12px;
+}
+
+.blm-empty i {
+  font-size: 40px;
+  color: #94a3b8;
+  margin-bottom: 12px;
+}
+
+.blm-empty h3 {
+  margin: 0 0 8px;
+  color: #334155;
+}
+
+.blm-empty p {
+  margin: 0 0 20px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+/* Card List */
+.blm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.blm-card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  transition: box-shadow 0.15s;
+}
+
+.blm-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.blm-card-body {
+  padding: 16px 20px;
+}
+
+.blm-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.blm-card-info h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.blm-slug {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #218D8D;
+  font-family: 'SF Mono', monospace;
+  margin-top: 4px;
+}
+
+.blm-slug i {
+  font-size: 11px;
+}
+
+.blm-card-desc {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.blm-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.blm-delete-confirm {
+  display: flex;
+  gap: 4px;
+}
+
+.blm-stats {
+  display: flex;
+  gap: 16px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.blm-stat {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.blm-stat i {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+/* Modal - reuse scheduler-modal from ATM */
+.blm-container .scheduler-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 24px;
+}
+
+.blm-container .scheduler-modal {
+  background: white;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+/* Form Groups */
+.blm-form-group {
+  margin-bottom: 18px;
+}
+
+.blm-form-group:last-child {
+  margin-bottom: 0;
+}
+
+.blm-form-group > label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 6px;
+}
+
+.blm-form-group .required {
+  color: #dc2626;
+}
+
+.blm-form-group input[type="text"],
+.blm-form-group textarea {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #1e293b;
+  box-sizing: border-box;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.blm-form-group input:focus,
+.blm-form-group textarea:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
+}
+
+/* Slug Input */
+.blm-slug-input {
+  display: flex;
+  align-items: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.blm-slug-prefix {
+  padding: 9px 0 9px 12px;
+  font-size: 14px;
+  color: #94a3b8;
+  font-family: 'SF Mono', monospace;
+  white-space: nowrap;
+  background: #f8fafc;
+}
+
+.blm-slug-input input {
+  flex: 1;
+  border: none !important;
+  border-radius: 0 !important;
+  padding-left: 4px !important;
+  font-family: 'SF Mono', monospace;
+}
+
+.blm-slug-input input:focus {
+  box-shadow: none !important;
+}
+
+.blm-slug-input:focus-within {
+  border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
+}
+
+.blm-preview {
+  display: block;
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 4px;
+  font-family: 'SF Mono', monospace;
+}
+
+/* Appointment Types List */
+.blm-types-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.blm-type-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #475569;
+  transition: all 0.15s;
+}
+
+.blm-type-check input[type="checkbox"] {
+  accent-color: #218D8D;
+}
+
+.blm-type-check.selected {
+  border-color: #218D8D;
+  background: #e6f5f5;
+}
+
+.blm-type-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.blm-type-duration {
+  margin-left: auto;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+/* Checkbox */
+.blm-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #475569;
+  cursor: pointer;
+}
+
+.blm-checkbox input[type="checkbox"] {
+  accent-color: #218D8D;
+}
+
+.blm-checkbox-hint {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-left: 4px;
+}
+
+@media (max-width: 640px) {
+  .blm-header {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .blm-card-top {
+    flex-direction: column;
+  }
+
+  .blm-card-actions {
+    align-self: flex-end;
+  }
+
+  .blm-container .scheduler-modal {
+    max-width: 100%;
+    margin: 0;
+    border-radius: 12px 12px 0 0;
+    max-height: 95vh;
+  }
+}

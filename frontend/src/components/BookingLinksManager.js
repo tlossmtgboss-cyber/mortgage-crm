@@ -1,0 +1,371 @@
+/**
+ * Booking Links Manager
+ *
+ * Manage shareable booking pages with custom slugs.
+ * Self-contained component with own state, loading, and API calls.
+ */
+
+import React, { useState, useEffect, useCallback } from 'react';
+import { getAuthHeaders } from '../utils/auth';
+import './BookingLinksManager.css';
+
+const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
+
+const BookingLinksManager = () => {
+  const [links, setLinks] = useState([]);
+  const [appointmentTypes, setAppointmentTypes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [copiedId, setCopiedId] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [form, setForm] = useState({
+    link_name: '',
+    slug: '',
+    description: '',
+    appointment_type_ids: [],
+    is_public: true,
+  });
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [linksRes, typesRes] = await Promise.all([
+        fetch(`${API_BASE}/api/v1/scheduler/booking-links`, { headers: getAuthHeaders() }),
+        fetch(`${API_BASE}/api/v1/scheduler/appointment-types`, { headers: getAuthHeaders() }).catch(() => null),
+      ]);
+
+      if (!linksRes.ok) throw new Error('Failed to load booking links');
+      const linksData = await linksRes.json();
+      setLinks(linksData.booking_links || linksData || []);
+
+      if (typesRes?.ok) {
+        const typesData = await typesRes.json();
+        setAppointmentTypes(typesData.appointment_types || typesData || []);
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const generateSlug = (name) => {
+    return name
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .substring(0, 60);
+  };
+
+  const handleNameChange = (value) => {
+    setForm(prev => ({
+      ...prev,
+      link_name: value,
+      slug: generateSlug(value),
+    }));
+  };
+
+  const toggleAppointmentType = (id) => {
+    setForm(prev => {
+      const ids = prev.appointment_type_ids.includes(id)
+        ? prev.appointment_type_ids.filter(t => t !== id)
+        : [...prev.appointment_type_ids, id];
+      return { ...prev, appointment_type_ids: ids };
+    });
+  };
+
+  const handleCopy = async (link) => {
+    const bookingUrl = `${window.location.origin}/book/${link.slug}`;
+    try {
+      await navigator.clipboard.writeText(bookingUrl);
+      setCopiedId(link.id);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch {
+      // Fallback
+      const textarea = document.createElement('textarea');
+      textarea.value = bookingUrl;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      setCopiedId(link.id);
+      setTimeout(() => setCopiedId(null), 2000);
+    }
+  };
+
+  const openCreate = () => {
+    setForm({
+      link_name: '',
+      slug: '',
+      description: '',
+      appointment_type_ids: [],
+      is_public: true,
+    });
+    setShowModal(true);
+  };
+
+  const handleSave = async () => {
+    if (!form.link_name.trim()) return;
+    setSaving(true);
+    try {
+      const payload = { ...form };
+      if (!payload.slug) {
+        payload.slug = generateSlug(payload.link_name);
+      }
+
+      const res = await fetch(`${API_BASE}/api/v1/scheduler/booking-links`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || errData.error?.message || 'Failed to create booking link');
+      }
+
+      setShowModal(false);
+      await loadData();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/scheduler/booking-links/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) throw new Error('Failed to delete booking link');
+      setDeleteConfirm(null);
+      await loadData();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="blm-container">
+        <div className="blm-loading">
+          <div className="blm-spinner"></div>
+          <p>Loading booking links...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="blm-container">
+      <div className="blm-header">
+        <div>
+          <h2>Booking Links</h2>
+          <p className="blm-subtitle">Create shareable booking pages for clients to schedule appointments.</p>
+        </div>
+        <button className="blm-btn-primary" onClick={openCreate}>
+          <i className="fas fa-plus"></i> New Link
+        </button>
+      </div>
+
+      {error && (
+        <div className="blm-error">
+          <i className="fas fa-exclamation-circle"></i>
+          {error}
+          <button onClick={() => setError(null)}>&times;</button>
+        </div>
+      )}
+
+      {links.length === 0 ? (
+        <div className="blm-empty">
+          <i className="fas fa-link"></i>
+          <h3>No Booking Links</h3>
+          <p>Create a booking link to share with clients.</p>
+          <button className="blm-btn-primary" onClick={openCreate}>
+            <i className="fas fa-plus"></i> Create Booking Link
+          </button>
+        </div>
+      ) : (
+        <div className="blm-list">
+          {links.map(link => (
+            <div key={link.id} className="blm-card">
+              <div className="blm-card-body">
+                <div className="blm-card-top">
+                  <div className="blm-card-info">
+                    <h3>{link.link_name}</h3>
+                    <div className="blm-slug">
+                      <i className="fas fa-link"></i>
+                      /book/{link.slug}
+                    </div>
+                    {link.description && <p className="blm-card-desc">{link.description}</p>}
+                  </div>
+                  <div className="blm-card-actions">
+                    <button
+                      className={`blm-btn-copy ${copiedId === link.id ? 'copied' : ''}`}
+                      onClick={() => handleCopy(link)}
+                      title="Copy booking URL"
+                    >
+                      <i className={`fas ${copiedId === link.id ? 'fa-check' : 'fa-copy'}`}></i>
+                      {copiedId === link.id ? 'Copied!' : 'Copy'}
+                    </button>
+                    {deleteConfirm === link.id ? (
+                      <span className="blm-delete-confirm">
+                        <button className="blm-btn-danger-sm" onClick={() => handleDelete(link.id)}>
+                          Confirm
+                        </button>
+                        <button className="blm-btn-cancel-sm" onClick={() => setDeleteConfirm(null)}>
+                          Cancel
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        className="blm-btn-icon danger"
+                        onClick={() => setDeleteConfirm(link.id)}
+                        title="Delete"
+                      >
+                        <i className="fas fa-trash"></i>
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {(link.total_views != null || link.total_bookings != null) && (
+                  <div className="blm-stats">
+                    {link.total_views != null && (
+                      <span className="blm-stat">
+                        <i className="fas fa-eye"></i> {link.total_views} views
+                      </span>
+                    )}
+                    {link.total_bookings != null && (
+                      <span className="blm-stat">
+                        <i className="fas fa-calendar-check"></i> {link.total_bookings} bookings
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Modal */}
+      {showModal && (
+        <div className="scheduler-modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="scheduler-modal" onClick={e => e.stopPropagation()}>
+            <div className="scheduler-modal-header">
+              <h3>New Booking Link</h3>
+              <button className="scheduler-modal-close" onClick={() => setShowModal(false)}>
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+            <div className="scheduler-modal-body">
+              {/* Link Name */}
+              <div className="blm-form-group">
+                <label>Link Name <span className="required">*</span></label>
+                <input
+                  type="text"
+                  value={form.link_name}
+                  onChange={e => handleNameChange(e.target.value)}
+                  placeholder="e.g., Schedule a Consultation"
+                />
+              </div>
+
+              {/* Slug */}
+              <div className="blm-form-group">
+                <label>URL Slug</label>
+                <div className="blm-slug-input">
+                  <span className="blm-slug-prefix">/book/</span>
+                  <input
+                    type="text"
+                    value={form.slug}
+                    onChange={e => setForm(prev => ({ ...prev, slug: e.target.value }))}
+                    placeholder="consultation"
+                  />
+                </div>
+                <span className="blm-preview">
+                  Preview: {window.location.origin}/book/{form.slug || '...'}
+                </span>
+              </div>
+
+              {/* Description */}
+              <div className="blm-form-group">
+                <label>Description</label>
+                <textarea
+                  value={form.description}
+                  onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="Brief description of this booking page..."
+                  rows={2}
+                />
+              </div>
+
+              {/* Appointment Types */}
+              {appointmentTypes.length > 0 && (
+                <div className="blm-form-group">
+                  <label>Appointment Types</label>
+                  <div className="blm-types-list">
+                    {appointmentTypes.filter(t => t.is_active).map(type => (
+                      <label
+                        key={type.id}
+                        className={`blm-type-check ${form.appointment_type_ids.includes(type.id) ? 'selected' : ''}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={form.appointment_type_ids.includes(type.id)}
+                          onChange={() => toggleAppointmentType(type.id)}
+                        />
+                        <span className="blm-type-dot" style={{ backgroundColor: type.color || '#218D8D' }} />
+                        <span>{type.type_name}</span>
+                        <span className="blm-type-duration">{type.duration_minutes} min</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Public */}
+              <div className="blm-form-group">
+                <label className="blm-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={form.is_public}
+                    onChange={e => setForm(prev => ({ ...prev, is_public: e.target.checked }))}
+                  />
+                  Public Link
+                  <span className="blm-checkbox-hint">Anyone with the link can view and book</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="scheduler-modal-footer">
+              <button className="blm-btn-secondary" onClick={() => setShowModal(false)}>
+                Cancel
+              </button>
+              <button
+                className="blm-btn-primary"
+                onClick={handleSave}
+                disabled={saving || !form.link_name.trim()}
+              >
+                {saving ? (
+                  <><i className="fas fa-spinner fa-spin"></i> Creating...</>
+                ) : (
+                  'Create Link'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default BookingLinksManager;
