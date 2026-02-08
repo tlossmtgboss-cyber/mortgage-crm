@@ -62,6 +62,18 @@ Be brief. Get to the point. Users are on mobile.
 {intent_guidance}"""
 
 
+# Lean prompt for simple/tool-formatting intents (~200 tokens vs ~800 for full prompt)
+# Used with Haiku for schedule, billing, coaching, integrations, video intents
+LEAN_SYSTEM_PROMPT = """You are Perennia AI, a mortgage assistant. Format the provided data into a brief, helpful response.
+
+RULES:
+- ONLY state facts from the data — never fabricate
+- 2-3 sentences max
+- Lead with the answer
+- No markdown headers
+- If data is missing, say so"""
+
+
 INTENT_GUIDANCE = {
     QueryIntent.PIPELINE_STATUS: """FOCUS ON:
 - Overall pipeline health (count, volume, velocity)
@@ -327,6 +339,10 @@ DO NOT use a canned/scripted response. Be natural and human."""
         use_haiku = use_haiku_flag or intent_str in HAIKU_INTENTS or intent_str_override in HAIKU_INTENTS or data_quality in ("insufficient", "not_needed")
         model = MODEL_HAIKU if use_haiku else MODEL_SONNET
         max_tokens = 200 if use_haiku else 400  # Force short, mobile-friendly responses
+
+        # Use lean prompt for simple tool-formatting intents (saves ~600 tokens per call)
+        if use_haiku and intent_str not in ("greeting", "simple") and intent_str_override not in ("greeting", "simple"):
+            system_prompt = LEAN_SYSTEM_PROMPT
 
         logger.info(f"[REASON_AND_RESPOND] Model selection: {model} (intent={intent_str}, intent_str_override={intent_str_override}, use_haiku_flag={use_haiku_flag})")
 

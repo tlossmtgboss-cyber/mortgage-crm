@@ -77,7 +77,15 @@ class Intent(str, Enum):
 # INTENTS THAT USE HAIKU (Fast, simple responses)
 # =============================================================================
 
-HAIKU_INTENTS = {"greeting", "simple"}
+HAIKU_INTENTS = {
+    "greeting",      # Greetings - no data needed
+    "simple",        # Simple lookups, yes/no, thanks
+    "schedule",      # Calendar scheduling - tools do the work
+    "billing",       # Subscription/billing queries - deterministic logic
+    "coaching",      # Team coaching - database-driven metrics
+    "integrations",  # LOS/vendor integration status - tool-based
+    "video",         # Video meeting management - tool-based
+}
 
 
 # =============================================================================
