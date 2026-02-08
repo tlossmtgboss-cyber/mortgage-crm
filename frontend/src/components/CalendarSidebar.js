@@ -680,8 +680,6 @@ function CalendarSidebar({ leadId, loanId, children }) {
         </div>
       </div>
 
-      {/* Drop zone hint - now clickable as fallback */}
-      <div
       {/* Appointments List */}
       <div className="appointments-section">
         <div className="appointments-header">
