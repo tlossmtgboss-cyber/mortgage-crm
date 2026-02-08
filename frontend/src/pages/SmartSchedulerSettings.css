@@ -26,7 +26,7 @@
   width: 40px;
   height: 40px;
   border: 3px solid #e2e8f0;
-  border-top-color: #3b82f6;
+  border-top-color: #218D8D;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   margin-bottom: 16px;
@@ -120,16 +120,16 @@
 }
 
 .btn-primary {
-  background: #3b82f6;
+  background: #218D8D;
   color: white;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #2563eb;
+  background: #1a7a7a;
 }
 
 .btn-primary:disabled {
-  background: #93c5fd;
+  background: #7cc5c5;
   cursor: not-allowed;
 }
 
@@ -175,12 +175,12 @@
 }
 
 .tab-btn:hover {
-  color: #3b82f6;
+  color: #218D8D;
 }
 
 .tab-btn.active {
-  color: #3b82f6;
-  border-bottom-color: #3b82f6;
+  color: #218D8D;
+  border-bottom-color: #218D8D;
 }
 
 .tab-btn i {
@@ -320,8 +320,8 @@
 .form-row select:focus,
 .form-row textarea:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
 .form-row input.has-error,
@@ -387,7 +387,7 @@
   height: 18px;
   margin: 0;
   cursor: pointer;
-  accent-color: #3b82f6;
+  accent-color: #218D8D;
 }
 
 .day-toggle label {
@@ -428,6 +428,117 @@
   margin-left: auto;
 }
 
+/* Day Row (Working Hours tab) */
+.day-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+
+.day-row.disabled {
+  background: #f1f5f9;
+  opacity: 0.6;
+}
+
+.day-row.has-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.day-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #334155;
+  cursor: pointer;
+}
+
+.time-inputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.time-inputs input[type="time"] {
+  width: auto;
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.time-input-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.time-separator {
+  color: #64748b;
+  font-size: 14px;
+  padding: 0 4px;
+}
+
+/* Section Error */
+.section-error {
+  color: #dc2626;
+  font-size: 14px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: #fef2f2;
+  border-radius: 6px;
+}
+
+/* Scheduling Method Options (Booking tab) */
+.method-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.method-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.method-option:hover {
+  border-color: #cbd5e1;
+}
+
+.method-option.selected {
+  border-color: #218D8D;
+  background: #e6f5f5;
+}
+
+.method-option input[type="radio"] {
+  margin-top: 2px;
+  accent-color: #218D8D;
+}
+
+.method-content {
+  flex: 1;
+}
+
+.method-content strong {
+  display: block;
+  color: #1e293b;
+  margin-bottom: 2px;
+}
+
+.method-content span {
+  font-size: 13px;
+  color: #64748b;
+}
+
 /* Toggle Group */
 .toggle-group {
   display: flex;
@@ -453,9 +564,9 @@
 }
 
 .toggle-btn.active {
-  background: #eff6ff;
-  border-color: #3b82f6;
-  color: #1d4ed8;
+  background: #e6f5f5;
+  border-color: #218D8D;
+  color: #176b6b;
 }
 
 /* Range Input */
@@ -479,7 +590,7 @@
   -webkit-appearance: none;
   width: 18px;
   height: 18px;
-  background: #3b82f6;
+  background: #218D8D;
   border-radius: 50%;
   cursor: pointer;
 }
@@ -505,7 +616,7 @@
   height: 18px;
   margin: 0;
   cursor: pointer;
-  accent-color: #3b82f6;
+  accent-color: #218D8D;
 }
 
 .checkbox-hint {
@@ -518,8 +629,8 @@
 
 /* Capacity Estimate Card */
 .capacity-card {
-  background: #f0f9ff;
-  border: 1px solid #7dd3fc;
+  background: #e6f5f5;
+  border: 1px solid #7cc5c5;
   border-radius: 8px;
   padding: 16px;
   margin-top: 16px;
@@ -530,19 +641,61 @@
   align-items: center;
   gap: 8px;
   margin-bottom: 8px;
-  color: #0369a1;
+  color: #176b6b;
 }
 
 .capacity-value {
   font-size: 28px;
   font-weight: 600;
-  color: #0c4a6e;
+  color: #0d5252;
   margin-bottom: 4px;
 }
 
 .capacity-details {
   font-size: 13px;
   color: #64748b;
+}
+
+.capacity-stats {
+  display: flex;
+  gap: 24px;
+}
+
+.capacity-stats .stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.capacity-stats .stat-value {
+  font-size: 22px;
+  font-weight: 600;
+  color: #0d5252;
+}
+
+.capacity-stats .stat-label {
+  font-size: 12px;
+  color: #176b6b;
+  margin-top: 2px;
+}
+
+/* Inline Warning */
+.inline-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #92400e;
+  margin-top: 16px;
+}
+
+.inline-warning i {
+  color: #d97706;
+  flex-shrink: 0;
 }
 
 /* Video Settings */
@@ -563,13 +716,13 @@
 }
 
 .video-option.selected {
-  border-color: #3b82f6;
-  background: #eff6ff;
+  border-color: #218D8D;
+  background: #e6f5f5;
 }
 
 .video-option input[type="radio"] {
   margin-top: 2px;
-  accent-color: #3b82f6;
+  accent-color: #218D8D;
 }
 
 .video-option-content {
@@ -649,7 +802,8 @@
     white-space: nowrap;
   }
 
-  .hours-row {
+  .hours-row,
+  .day-row {
     flex-wrap: wrap;
   }
 
@@ -657,8 +811,13 @@
     min-width: 100%;
   }
 
-  .hours-inputs {
+  .hours-inputs,
+  .time-inputs {
     width: 100%;
+  }
+
+  .method-options {
+    flex-direction: column;
   }
 
   .toggle-group {

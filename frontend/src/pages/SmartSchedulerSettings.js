@@ -483,31 +483,31 @@ function SmartSchedulerSettings() {
       {/* Tab Navigation */}
       <div className="settings-tabs">
         <button
-          className={`tab ${activeTab === 'working-hours' ? 'active' : ''}`}
+          className={`tab-btn ${activeTab === 'working-hours' ? 'active' : ''}`}
           onClick={() => setActiveTab('working-hours')}
         >
           <i className="fas fa-clock"></i> Working Hours
         </button>
         <button
-          className={`tab ${activeTab === 'booking' ? 'active' : ''}`}
+          className={`tab-btn ${activeTab === 'booking' ? 'active' : ''}`}
           onClick={() => setActiveTab('booking')}
         >
           <i className="fas fa-calendar-alt"></i> Booking
         </button>
         <button
-          className={`tab ${activeTab === 'ai' ? 'active' : ''}`}
+          className={`tab-btn ${activeTab === 'ai' ? 'active' : ''}`}
           onClick={() => setActiveTab('ai')}
         >
           <i className="fas fa-robot"></i> AI Settings
         </button>
         <button
-          className={`tab ${activeTab === 'video' ? 'active' : ''}`}
+          className={`tab-btn ${activeTab === 'video' ? 'active' : ''}`}
           onClick={() => setActiveTab('video')}
         >
           <i className="fas fa-video"></i> Video
         </button>
         <button
-          className={`tab ${activeTab === 'calendar-assignments' ? 'active' : ''}`}
+          className={`tab-btn ${activeTab === 'calendar-assignments' ? 'active' : ''}`}
           onClick={() => setActiveTab('calendar-assignments')}
         >
           <i className="fas fa-calendar-check"></i> Calendar Assignments
