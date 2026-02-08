@@ -213,6 +213,11 @@ def create_video_meeting_models(Base):
         can_chat = Column(Boolean, default=True)
         can_record = Column(Boolean, default=False)
 
+        # Recording consent
+        recording_consent_given = Column(Boolean, default=False)
+        recording_consent_at = Column(DateTime)
+        recording_consent_method = Column(String(20))  # "dialog_click", "verbal", "implied"
+
         # AI analysis
         speaking_time_seconds = Column(Integer, default=0)
         sentiment_score = Column(Float)  # -1 to 1
@@ -271,6 +276,13 @@ def create_video_meeting_models(Base):
         auto_delete_at = Column(DateTime)
         is_deleted = Column(Boolean, default=False)
         deleted_at = Column(DateTime)
+
+        # Recording consent
+        consent_obtained = Column(Boolean, default=False)
+        consent_type = Column(String(20))  # "all_party" or "one_party"
+        consent_state_code = Column(String(2))
+        disclosure_script_shown = Column(Text)
+        consent_obtained_at = Column(DateTime)
 
         # Access control
         is_shared = Column(Boolean, default=False)
@@ -546,6 +558,32 @@ def create_video_meeting_models(Base):
         created_at = Column(DateTime, default=datetime.utcnow)
         updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    class OrganizationVideoSettings(Base):
+        """
+        Organization-level video meeting settings and policies.
+        Controls recording permissions, consent requirements, and provider access.
+        """
+        __tablename__ = "organization_video_settings"
+        __table_args__ = {'extend_existing': True}
+
+        id = Column(Integer, primary_key=True, index=True)
+        organization_id = Column(Integer, unique=True, nullable=False, index=True)
+
+        # Recording policies
+        recording_allowed = Column(Boolean, default=True)
+        recording_consent_required = Column(Boolean, default=True)
+        default_consent_type = Column(String(20), default="one_party")  # "all_party" or "one_party"
+
+        # Room defaults
+        default_waiting_room = Column(Boolean, default=True)
+        max_participants = Column(Integer, default=50)
+
+        # Provider restrictions
+        allowed_providers = Column(JSON, default=["internal", "zoom", "teams"])
+
+        created_at = Column(DateTime, default=datetime.utcnow)
+        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
     # Return all models as a dictionary
     return {
         'VideoMeetingRoom': VideoMeetingRoom,
@@ -557,7 +595,8 @@ def create_video_meeting_models(Base):
         'MeetingTemplate': MeetingTemplate,
         'ParticipantAnalytics': ParticipantAnalytics,
         'CoachingRecommendation': CoachingRecommendation,
-        'MortgageIntelligence': MortgageIntelligence
+        'MortgageIntelligence': MortgageIntelligence,
+        'OrganizationVideoSettings': OrganizationVideoSettings
     }
 
 

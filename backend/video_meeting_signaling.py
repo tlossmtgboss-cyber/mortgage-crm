@@ -4,13 +4,69 @@ Handles WebSocket connections for real-time video meeting signaling.
 """
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException
-from typing import Dict, Set, Optional
+from typing import Dict, Set, Optional, Tuple
 import json
 import logging
 import asyncio
+import os
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# HOST AUTHENTICATION
+# ============================================================================
+
+async def resolve_host_status(token: Optional[str], room_code: str) -> Tuple[bool, Optional[int]]:
+    """
+    Resolve whether a connecting user is the host of a meeting room.
+    Decodes JWT token to get user_id, then checks against the room's host_user_id.
+    Returns (is_host, user_id). Falls back to (False, None) for guests.
+    """
+    if not token:
+        return False, None
+
+    try:
+        from jose import jwt, JWTError
+
+        secret_key = os.getenv("SECRET_KEY", "")
+        algorithm = os.getenv("AUTH_ALGORITHM", "HS256")
+
+        if not secret_key:
+            logger.warning("SECRET_KEY not set, cannot verify host status")
+            return False, None
+
+        payload = jwt.decode(token, secret_key, algorithms=[algorithm], options={"verify_aud": False})
+        email = payload.get("sub")
+        if not email:
+            return False, None
+
+        # Look up user and room in DB
+        from database import SessionLocal
+        db = SessionLocal()
+        try:
+            from sqlalchemy import text
+            result = db.execute(text("""
+                SELECT u.id as user_id, vmr.host_user_id
+                FROM users u
+                CROSS JOIN video_meeting_rooms vmr
+                WHERE u.email = :email AND vmr.room_code = :room_code
+                LIMIT 1
+            """), {"email": email, "room_code": room_code})
+
+            row = result.fetchone()
+            if row:
+                user_id = row[0]
+                host_user_id = row[1]
+                return user_id == host_user_id, user_id
+        finally:
+            db.close()
+
+    except Exception as e:
+        logger.warning(f"Could not resolve host status: {e}")
+
+    return False, None
 
 router = APIRouter(prefix="/api/v1/meetings", tags=["Video Meeting Signaling"])
 
@@ -161,11 +217,22 @@ async def websocket_video_meeting(
     - media_state: Audio/video enabled state
     - chat: Chat message
     """
-    # Get display name from query params (falls back to participant_id)
+    # Get display name and token from query params
     display_name = websocket.query_params.get("name", f"Guest-{participant_id[:6]}")
-    is_host = websocket.query_params.get("host", "false").lower() == "true"
+    token = websocket.query_params.get("token", "")
+
+    # Server-side host verification via JWT + DB lookup
+    is_host, user_id = await resolve_host_status(token, room_code)
 
     await meeting_manager.connect(websocket, room_code, participant_id, display_name, is_host)
+
+    # Send connection acknowledgement with server-verified host status
+    await websocket.send_json({
+        "type": "connection_ack",
+        "is_host": is_host,
+        "participant_id": participant_id,
+        "user_id": user_id
+    })
 
     try:
         while True:
@@ -253,6 +320,30 @@ async def websocket_video_meeting(
                         "from": participant_id
                     })
 
+            elif message_type == "recording_started":
+                # Only hosts can broadcast recording state - validated server-side
+                if is_host:
+                    await meeting_manager.broadcast_to_room(room_code, {
+                        "type": "recording_state_changed",
+                        "recording": True,
+                        "started_by": participant_id,
+                        "started_by_name": display_name,
+                        "recording_id": message.get("recording_id"),
+                        "consent_type": message.get("consent_type"),
+                        "disclosure_script": message.get("disclosure_script"),
+                        "timestamp": datetime.utcnow().isoformat()
+                    }, exclude=participant_id)
+
+            elif message_type == "recording_stopped":
+                # Only hosts can broadcast recording state - validated server-side
+                if is_host:
+                    await meeting_manager.broadcast_to_room(room_code, {
+                        "type": "recording_state_changed",
+                        "recording": False,
+                        "stopped_by": participant_id,
+                        "timestamp": datetime.utcnow().isoformat()
+                    }, exclude=participant_id)
+
             else:
                 logger.warning(f"Unknown message type: {message_type}")
 
@@ -289,20 +380,19 @@ async def get_signaling_status(room_code: str):
 async def get_ice_servers():
     """
     Get ICE servers for WebRTC connections.
-    Returns STUN servers and Twilio TURN servers if configured.
+    Priority: 1) Twilio TURN (managed, reliable)
+              2) Self-hosted coturn (if configured)
+              3) STUN-only (no relay, will fail behind symmetric NAT)
     """
-    import os
-
-    # Always include STUN servers
+    # STUN servers (always included)
     ice_servers = [
         {"urls": "stun:stun.l.google.com:19302"},
         {"urls": "stun:stun1.l.google.com:19302"},
-        {"urls": "stun:stun2.l.google.com:19302"},
-        {"urls": "stun:stun3.l.google.com:19302"},
-        {"urls": "stun:stun4.l.google.com:19302"},
     ]
 
-    # Try to get Twilio TURN servers if credentials are available
+    turn_available = False
+
+    # Priority 1: Twilio TURN (managed, most reliable)
     twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
     twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
 
@@ -310,11 +400,8 @@ async def get_ice_servers():
         try:
             from twilio.rest import Client
             client = Client(twilio_sid, twilio_token)
-
-            # Get Network Traversal Service tokens
             token = client.tokens.create()
 
-            # Add Twilio's ICE servers (includes TURN)
             if token.ice_servers:
                 for server in token.ice_servers:
                     ice_server = {"urls": server.urls if isinstance(server.urls, str) else server.urls}
@@ -324,46 +411,62 @@ async def get_ice_servers():
                         ice_server["credential"] = server.credential
                     ice_servers.append(ice_server)
 
-                logger.info(f"Added {len(token.ice_servers)} Twilio ICE servers")
+                turn_available = True
+                logger.info(f"TURN: Twilio ({len(token.ice_servers)} servers)")
         except Exception as e:
-            logger.warning(f"Could not get Twilio TURN servers: {e}")
-            # Add free TURN servers as fallback
+            logger.error(f"Twilio TURN failed: {e}")
+
+    # Priority 2: Self-hosted coturn (if configured)
+    if not turn_available:
+        coturn_host = os.getenv("COTURN_HOST")
+        coturn_user = os.getenv("COTURN_USERNAME")
+        coturn_pass = os.getenv("COTURN_PASSWORD")
+        coturn_port = os.getenv("COTURN_PORT", "3478")
+
+        if coturn_host and coturn_user and coturn_pass:
             ice_servers.extend([
                 {
-                    "urls": "turn:openrelay.metered.ca:80",
-                    "username": "openrelayproject",
-                    "credential": "openrelayproject"
+                    "urls": f"turn:{coturn_host}:{coturn_port}",
+                    "username": coturn_user,
+                    "credential": coturn_pass
                 },
                 {
-                    "urls": "turn:openrelay.metered.ca:443",
-                    "username": "openrelayproject",
-                    "credential": "openrelayproject"
+                    "urls": f"turn:{coturn_host}:{coturn_port}?transport=tcp",
+                    "username": coturn_user,
+                    "credential": coturn_pass
                 },
                 {
-                    "urls": "turn:openrelay.metered.ca:443?transport=tcp",
-                    "username": "openrelayproject",
-                    "credential": "openrelayproject"
+                    "urls": f"turns:{coturn_host}:443?transport=tcp",
+                    "username": coturn_user,
+                    "credential": coturn_pass
                 }
             ])
-    else:
-        # No Twilio - use free TURN servers
-        logger.info("No Twilio credentials - using free TURN servers")
-        ice_servers.extend([
-            {
-                "urls": "turn:openrelay.metered.ca:80",
-                "username": "openrelayproject",
-                "credential": "openrelayproject"
-            },
-            {
-                "urls": "turn:openrelay.metered.ca:443",
-                "username": "openrelayproject",
-                "credential": "openrelayproject"
-            },
-            {
-                "urls": "turn:openrelay.metered.ca:443?transport=tcp",
-                "username": "openrelayproject",
-                "credential": "openrelayproject"
-            }
-        ])
+            turn_available = True
+            logger.info(f"TURN: coturn ({coturn_host})")
 
-    return {"iceServers": ice_servers}
+    if not turn_available:
+        logger.warning(
+            "No TURN server configured. Video calls will fail behind symmetric NAT/firewalls. "
+            "Set TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN or COTURN_HOST/COTURN_USERNAME/COTURN_PASSWORD."
+        )
+
+    return {
+        "iceServers": ice_servers,
+        "turnAvailable": turn_available
+    }
+
+
+@router.get("/ice-servers/health")
+async def ice_servers_health():
+    """Check TURN server availability for monitoring."""
+    twilio_ok = bool(os.getenv("TWILIO_ACCOUNT_SID") and os.getenv("TWILIO_AUTH_TOKEN"))
+    coturn_ok = bool(os.getenv("COTURN_HOST") and os.getenv("COTURN_USERNAME"))
+
+    status = "healthy" if (twilio_ok or coturn_ok) else "degraded"
+
+    return {
+        "status": status,
+        "twilio_configured": twilio_ok,
+        "coturn_configured": coturn_ok,
+        "recommendation": None if (twilio_ok or coturn_ok) else "Configure TWILIO or COTURN credentials for reliable video calls"
+    }

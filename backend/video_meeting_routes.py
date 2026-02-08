@@ -524,6 +524,37 @@ async def create_meeting_room(
     MeetingParticipant = _models.get('MeetingParticipant')
     MeetingTemplate = _models.get('MeetingTemplate')
 
+    # Block unsupported providers
+    unsupported_providers = ("google_meet", "webex")
+    if data.provider in unsupported_providers:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Provider '{data.provider}' is not yet supported. Supported providers: internal, zoom, teams"
+        )
+
+    # Enforce organization-level video settings if available
+    OrganizationVideoSettings = _models.get('OrganizationVideoSettings')
+    org_id = getattr(current_user, 'organization_id', None)
+    org_settings = None
+    if OrganizationVideoSettings and org_id:
+        try:
+            org_settings = db.query(OrganizationVideoSettings).filter(
+                OrganizationVideoSettings.organization_id == org_id
+            ).first()
+        except Exception:
+            pass  # Table may not exist yet
+
+    if org_settings:
+        if not org_settings.recording_allowed:
+            data.recording_enabled = False
+        if org_settings.allowed_providers and data.provider not in org_settings.allowed_providers:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Provider '{data.provider}' is not allowed by your organization. Allowed: {org_settings.allowed_providers}"
+            )
+        if org_settings.max_participants and data.max_participants > org_settings.max_participants:
+            data.max_participants = org_settings.max_participants
+
     # Generate unique room code
     room_code = generate_room_code()
     while db.query(VideoMeetingRoom).filter(VideoMeetingRoom.room_code == room_code).first():
@@ -1672,6 +1703,9 @@ async def start_recording(
     if not room:
         raise HTTPException(status_code=404, detail="Meeting room not found")
 
+    if room.host_user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the host can start recording")
+
     if not room.recording_enabled:
         raise HTTPException(status_code=400, detail="Recording is not enabled for this meeting")
 
@@ -1704,7 +1738,15 @@ async def stop_recording(
     if _models is None:
         raise HTTPException(status_code=500, detail="Video meeting models not initialized")
 
+    VideoMeetingRoom = _models.get('VideoMeetingRoom')
     MeetingRecording = _models.get('MeetingRecording')
+
+    room = db.query(VideoMeetingRoom).filter(VideoMeetingRoom.id == room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Meeting room not found")
+
+    if room.host_user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the host can stop recording")
 
     recording = db.query(MeetingRecording).filter(
         MeetingRecording.id == recording_id,
@@ -3237,3 +3279,344 @@ async def get_team_leaderboard(
     except Exception as e:
         logger.error(f"Error getting leaderboard: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# TABLE SETUP / MIGRATION ENDPOINTS
+# ============================================================================
+
+@router.post("/setup-consent-fields")
+async def setup_consent_fields(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Add recording consent columns to meeting_recordings and meeting_participants tables."""
+    try:
+        alter_statements = [
+            "ALTER TABLE meeting_recordings ADD COLUMN IF NOT EXISTS consent_obtained BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE meeting_recordings ADD COLUMN IF NOT EXISTS consent_type VARCHAR(20)",
+            "ALTER TABLE meeting_recordings ADD COLUMN IF NOT EXISTS consent_state_code VARCHAR(2)",
+            "ALTER TABLE meeting_recordings ADD COLUMN IF NOT EXISTS disclosure_script_shown TEXT",
+            "ALTER TABLE meeting_recordings ADD COLUMN IF NOT EXISTS consent_obtained_at TIMESTAMP",
+            "ALTER TABLE meeting_participants ADD COLUMN IF NOT EXISTS recording_consent_given BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE meeting_participants ADD COLUMN IF NOT EXISTS recording_consent_at TIMESTAMP",
+            "ALTER TABLE meeting_participants ADD COLUMN IF NOT EXISTS recording_consent_method VARCHAR(20)",
+        ]
+
+        from sqlalchemy import text
+        for stmt in alter_statements:
+            try:
+                db.execute(text(stmt))
+            except Exception as e:
+                logger.warning(f"Migration statement skipped: {e}")
+
+        db.commit()
+        return {"success": True, "message": "Consent fields migration completed"}
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error setting up consent fields: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/org-settings/setup")
+async def setup_org_video_settings_table(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Create the organization_video_settings table."""
+    try:
+        from sqlalchemy import text
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS organization_video_settings (
+                id SERIAL PRIMARY KEY,
+                organization_id INTEGER UNIQUE NOT NULL,
+                recording_allowed BOOLEAN DEFAULT TRUE,
+                recording_consent_required BOOLEAN DEFAULT TRUE,
+                default_consent_type VARCHAR(20) DEFAULT 'one_party',
+                default_waiting_room BOOLEAN DEFAULT TRUE,
+                max_participants INTEGER DEFAULT 50,
+                allowed_providers JSON DEFAULT '["internal", "zoom", "teams"]',
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        db.commit()
+        return {"success": True, "message": "organization_video_settings table created"}
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating org video settings table: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# RECORDING CONSENT ENDPOINTS
+# ============================================================================
+
+class StartRecordingRequest(BaseModel):
+    consent_type: Optional[str] = None  # "all_party" or "one_party"
+    state_code: Optional[str] = None
+    disclosure_script: Optional[str] = None
+
+
+class RecordingConsentRequest(BaseModel):
+    consent_given: bool
+    method: str = "dialog_click"  # "dialog_click", "verbal", "implied"
+
+
+@router.post("/rooms/{room_id}/recordings/start-with-consent")
+async def start_recording_with_consent(
+    room_id: int,
+    data: StartRecordingRequest,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Start recording with consent metadata tracked."""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Video meeting models not initialized")
+
+    VideoMeetingRoom = _models.get('VideoMeetingRoom')
+    MeetingRecording = _models.get('MeetingRecording')
+    MeetingParticipant = _models.get('MeetingParticipant')
+
+    room = db.query(VideoMeetingRoom).filter(VideoMeetingRoom.id == room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Meeting room not found")
+
+    if room.host_user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the host can start recording")
+
+    if not room.recording_enabled:
+        raise HTTPException(status_code=400, detail="Recording is not enabled for this meeting")
+
+    # For all-party consent states, check that all active participants have consented
+    if data.consent_type == "all_party" and MeetingParticipant:
+        active_participants = db.query(MeetingParticipant).filter(
+            MeetingParticipant.meeting_id == room_id,
+            MeetingParticipant.status == "joined"
+        ).all()
+
+        not_consented = [
+            {"id": p.id, "display_name": p.display_name, "email": p.email}
+            for p in active_participants
+            if not p.recording_consent_given and p.user_id != current_user.id
+        ]
+
+        if not_consented:
+            return {
+                "success": False,
+                "error": "all_party_consent_required",
+                "message": "All participants must consent before recording in an all-party consent state",
+                "pending_consent": not_consented
+            }
+
+    recording = MeetingRecording(
+        meeting_id=room_id,
+        recording_uuid=secrets.token_urlsafe(16),
+        recording_name=f"{room.room_name} - {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}",
+        status="recording",
+        recording_started_at=datetime.utcnow(),
+        transcription_requested=room.transcription_enabled,
+        created_by=current_user.id,
+        consent_obtained=True,
+        consent_type=data.consent_type,
+        consent_state_code=data.state_code,
+        disclosure_script_shown=data.disclosure_script,
+        consent_obtained_at=datetime.utcnow()
+    )
+
+    db.add(recording)
+    db.commit()
+    db.refresh(recording)
+
+    return {
+        "success": True,
+        "recording": {
+            "id": recording.id,
+            "recording_uuid": recording.recording_uuid,
+            "status": recording.status,
+            "consent_type": data.consent_type,
+            "consent_state_code": data.state_code
+        }
+    }
+
+
+@router.post("/rooms/{room_id}/recordings/{recording_id}/consent")
+async def submit_recording_consent(
+    room_id: int,
+    recording_id: int,
+    data: RecordingConsentRequest,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Submit recording consent for a participant."""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Video meeting models not initialized")
+
+    MeetingParticipant = _models.get('MeetingParticipant')
+
+    participant = db.query(MeetingParticipant).filter(
+        MeetingParticipant.meeting_id == room_id,
+        MeetingParticipant.user_id == current_user.id
+    ).first()
+
+    if not participant:
+        raise HTTPException(status_code=404, detail="Participant not found")
+
+    participant.recording_consent_given = data.consent_given
+    participant.recording_consent_at = datetime.utcnow()
+    participant.recording_consent_method = data.method
+
+    db.commit()
+
+    return {
+        "success": True,
+        "consent_given": data.consent_given,
+        "method": data.method
+    }
+
+
+@router.get("/rooms/{room_id}/recordings/consent-status")
+async def get_consent_status(
+    room_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Get recording consent status for all active participants in a meeting."""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Video meeting models not initialized")
+
+    MeetingParticipant = _models.get('MeetingParticipant')
+
+    participants = db.query(MeetingParticipant).filter(
+        MeetingParticipant.meeting_id == room_id,
+        MeetingParticipant.status == "joined"
+    ).all()
+
+    return {
+        "room_id": room_id,
+        "participants": [
+            {
+                "id": p.id,
+                "user_id": p.user_id,
+                "display_name": p.display_name,
+                "consent_given": p.recording_consent_given or False,
+                "consent_at": p.recording_consent_at.isoformat() if p.recording_consent_at else None,
+                "consent_method": p.recording_consent_method
+            }
+            for p in participants
+        ],
+        "all_consented": all(p.recording_consent_given for p in participants)
+    }
+
+
+# ============================================================================
+# ORGANIZATION VIDEO SETTINGS ENDPOINTS
+# ============================================================================
+
+class OrgVideoSettingsUpdate(BaseModel):
+    recording_allowed: Optional[bool] = None
+    recording_consent_required: Optional[bool] = None
+    default_consent_type: Optional[str] = None
+    default_waiting_room: Optional[bool] = None
+    max_participants: Optional[int] = None
+    allowed_providers: Optional[List[str]] = None
+
+
+@router.get("/org-settings")
+async def get_org_video_settings(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Get organization video meeting settings."""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Video meeting models not initialized")
+
+    OrganizationVideoSettings = _models.get('OrganizationVideoSettings')
+    if not OrganizationVideoSettings:
+        raise HTTPException(status_code=500, detail="OrganizationVideoSettings model not found")
+
+    org_id = getattr(current_user, 'organization_id', None)
+    if not org_id:
+        return {
+            "settings": None,
+            "message": "No organization associated with user"
+        }
+
+    settings = db.query(OrganizationVideoSettings).filter(
+        OrganizationVideoSettings.organization_id == org_id
+    ).first()
+
+    if not settings:
+        return {
+            "settings": {
+                "recording_allowed": True,
+                "recording_consent_required": True,
+                "default_consent_type": "one_party",
+                "default_waiting_room": True,
+                "max_participants": 50,
+                "allowed_providers": ["internal", "zoom", "teams"]
+            },
+            "is_default": True
+        }
+
+    return {
+        "settings": {
+            "recording_allowed": settings.recording_allowed,
+            "recording_consent_required": settings.recording_consent_required,
+            "default_consent_type": settings.default_consent_type,
+            "default_waiting_room": settings.default_waiting_room,
+            "max_participants": settings.max_participants,
+            "allowed_providers": settings.allowed_providers or ["internal", "zoom", "teams"]
+        },
+        "is_default": False
+    }
+
+
+@router.put("/org-settings")
+async def update_org_video_settings(
+    data: OrgVideoSettingsUpdate,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Update organization video meeting settings."""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Video meeting models not initialized")
+
+    OrganizationVideoSettings = _models.get('OrganizationVideoSettings')
+    if not OrganizationVideoSettings:
+        raise HTTPException(status_code=500, detail="OrganizationVideoSettings model not found")
+
+    org_id = getattr(current_user, 'organization_id', None)
+    if not org_id:
+        raise HTTPException(status_code=400, detail="No organization associated with user")
+
+    settings = db.query(OrganizationVideoSettings).filter(
+        OrganizationVideoSettings.organization_id == org_id
+    ).first()
+
+    if not settings:
+        settings = OrganizationVideoSettings(organization_id=org_id)
+        db.add(settings)
+
+    update_data = data.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        if value is not None:
+            setattr(settings, field, value)
+
+    settings.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(settings)
+
+    return {
+        "success": True,
+        "settings": {
+            "recording_allowed": settings.recording_allowed,
+            "recording_consent_required": settings.recording_consent_required,
+            "default_consent_type": settings.default_consent_type,
+            "default_waiting_room": settings.default_waiting_room,
+            "max_participants": settings.max_participants,
+            "allowed_providers": settings.allowed_providers
+        }
+    }

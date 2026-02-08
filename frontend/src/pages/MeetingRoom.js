@@ -37,6 +37,26 @@ const MeetingRoom = () => {
   // Recording state
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
+  const [currentRecordingId, setCurrentRecordingId] = useState(null);
+
+  // Recording consent state
+  const [showConsentDialog, setShowConsentDialog] = useState(false);
+  const [consentState, setConsentState] = useState(null); // state disclosure data
+  const [consentLoading, setConsentLoading] = useState(false);
+
+  // Recording banner for non-hosts (recording indicator)
+  const [recordingBanner, setRecordingBanner] = useState(false);
+  const [recordingStartedBy, setRecordingStartedBy] = useState('');
+
+  // Non-host consent dialog (when host starts recording)
+  const [showParticipantConsentDialog, setShowParticipantConsentDialog] = useState(false);
+  const [participantConsentData, setParticipantConsentData] = useState(null);
+
+  // WebSocket reconnection state
+  const [wsConnectionLost, setWsConnectionLost] = useState(false);
+  const wsReconnectAttemptsRef = useRef(0);
+  const wsReconnectTimeoutRef = useRef(null);
+  const wsIntentionalCloseRef = useRef(false);
 
   // Screen recording state
   const [isScreenRecording, setIsScreenRecording] = useState(false);
@@ -217,7 +237,8 @@ const MeetingRoom = () => {
     const wsHost = isProduction
       ? 'api.perenniaai.com'
       : (process.env.REACT_APP_API_URL?.replace(/^https?:\/\//, '') || 'localhost:8000');
-    const wsUrl = `${wsProtocol}//${wsHost}/api/v1/meetings/ws/${roomCode}/${participantId}?name=${encodeURIComponent(displayName)}&host=${isHost}`;
+    const token = localStorage.getItem('token') || '';
+    const wsUrl = `${wsProtocol}//${wsHost}/api/v1/meetings/ws/${roomCode}/${participantId}?name=${encodeURIComponent(displayName)}&token=${encodeURIComponent(token)}`;
 
     console.log('Connecting to signaling server:', wsUrl);
 
@@ -313,6 +334,35 @@ const MeetingRoom = () => {
             }]);
             break;
 
+          case 'connection_ack':
+            // Server-verified host status
+            console.log('Connection acknowledged, is_host:', message.is_host);
+            setIsHost(message.is_host);
+            break;
+
+          case 'recording_state_changed':
+            // Recording state broadcast from host via server
+            if (message.recording) {
+              setRecordingBanner(true);
+              setRecordingStartedBy(message.started_by_name || 'Host');
+              setIsRecording(true);
+              // Show consent dialog for non-hosts
+              if (!isHost) {
+                setParticipantConsentData({
+                  recording_id: message.recording_id,
+                  consent_type: message.consent_type,
+                  disclosure_script: message.disclosure_script
+                });
+                setShowParticipantConsentDialog(true);
+              }
+            } else {
+              setRecordingBanner(false);
+              setRecordingStartedBy('');
+              setIsRecording(false);
+              setShowParticipantConsentDialog(false);
+            }
+            break;
+
           case 'pong':
             // Ping response - ignore
             break;
@@ -329,12 +379,41 @@ const MeetingRoom = () => {
       console.error('WebSocket error:', error);
     };
 
-    ws.onclose = () => {
-      console.log('WebSocket disconnected');
+    ws.onclose = (event) => {
+      console.log('WebSocket disconnected, code:', event.code);
       if (ws._pingInterval) {
         clearInterval(ws._pingInterval);
       }
+
+      // Don't reconnect if intentional close (code 1000) or component unmounting
+      if (event.code === 1000 || wsIntentionalCloseRef.current) {
+        return;
+      }
+
+      // Exponential backoff reconnection
+      const maxRetries = 5;
+      const delays = [2000, 4000, 8000, 16000, 16000];
+
+      if (wsReconnectAttemptsRef.current < maxRetries) {
+        const delay = delays[wsReconnectAttemptsRef.current];
+        console.log(`Reconnecting in ${delay/1000}s (attempt ${wsReconnectAttemptsRef.current + 1}/${maxRetries})`);
+        setWsConnectionLost(true);
+
+        wsReconnectTimeoutRef.current = setTimeout(() => {
+          wsReconnectAttemptsRef.current += 1;
+          if (stream) {
+            connectSignaling(stream);
+          }
+        }, delay);
+      } else {
+        console.error('Max reconnection attempts reached');
+        setWsConnectionLost(true);
+      }
     };
+
+    // Reset reconnect counter on successful connection
+    wsReconnectAttemptsRef.current = 0;
+    setWsConnectionLost(false);
 
     return ws;
   }, [roomCode, displayName, isHost]);
@@ -351,10 +430,32 @@ const MeetingRoom = () => {
     const pc = new RTCPeerConnection(rtcConfig);
     peerConnectionsRef.current[remoteParticipantId] = pc;
 
-    // Add local tracks to the connection
+    // Add local tracks to the connection with simulcast for video
     if (stream) {
       stream.getTracks().forEach(track => {
-        pc.addTrack(track, stream);
+        const sender = pc.addTrack(track, stream);
+
+        // Configure simulcast encodings for video tracks (3 quality layers)
+        if (track.kind === 'video' && sender) {
+          try {
+            const params = sender.getParameters();
+            if (!params.encodings || params.encodings.length === 0) {
+              params.encodings = [{}];
+            }
+            // Set up simulcast layers: low, medium, high
+            params.encodings = [
+              { rid: 'low', maxBitrate: 150000, scaleResolutionDownBy: 4.0 },
+              { rid: 'medium', maxBitrate: 500000, scaleResolutionDownBy: 2.0 },
+              { rid: 'high', maxBitrate: 1500000 },
+            ];
+            sender.setParameters(params).catch(err => {
+              // Simulcast not supported in all browsers - fall back to single layer
+              console.warn('Simulcast not supported, using single encoding:', err.message);
+            });
+          } catch (e) {
+            console.warn('Could not configure simulcast:', e.message);
+          }
+        }
       });
     }
 
@@ -381,6 +482,30 @@ const MeetingRoom = () => {
           videoEl.srcObject = remoteStream;
         }
       }, 100);
+
+      // Monitor bandwidth and adapt quality for incoming streams
+      if (pc.getReceivers) {
+        const videoReceiver = pc.getReceivers().find(r => r.track?.kind === 'video');
+        if (videoReceiver) {
+          const monitorBandwidth = async () => {
+            try {
+              const stats = await pc.getStats(videoReceiver.track);
+              stats.forEach(report => {
+                if (report.type === 'inbound-rtp' && report.kind === 'video') {
+                  const bitrate = report.bytesReceived ? (report.bytesReceived * 8) : 0;
+                  // If bitrate is very low, the connection is struggling
+                  if (bitrate > 0 && bitrate < 50000 && report.framesDecoded > 10) {
+                    console.warn(`Low bandwidth from ${remoteParticipantId}: ${Math.round(bitrate/1000)}kbps`);
+                  }
+                }
+              });
+            } catch (e) { /* stats not available */ }
+          };
+          // Check bandwidth every 10 seconds
+          const bandwidthInterval = setInterval(monitorBandwidth, 10000);
+          pc._bandwidthInterval = bandwidthInterval;
+        }
+      }
     };
 
     // Handle ICE candidates
@@ -477,6 +602,7 @@ const MeetingRoom = () => {
   const closePeerConnection = (participantId) => {
     const pc = peerConnectionsRef.current[participantId];
     if (pc) {
+      if (pc._bandwidthInterval) clearInterval(pc._bandwidthInterval);
       pc.close();
       delete peerConnectionsRef.current[participantId];
     }
@@ -596,28 +722,85 @@ const MeetingRoom = () => {
     }
   };
 
-  // Toggle screen share
+  // Replace tracks on all active peer connections (for screen share toggle)
+  const replaceTrackOnPeers = (oldTrack, newTrack) => {
+    Object.values(peerConnectionsRef.current).forEach(pc => {
+      const senders = pc.getSenders();
+      const sender = senders.find(s => s.track && s.track.kind === oldTrack.kind);
+      if (sender) {
+        sender.replaceTrack(newTrack).catch(err => {
+          console.error('Error replacing track on peer:', err);
+        });
+      }
+    });
+  };
+
+  // Toggle screen share - replaces video track on all peer connections
   const toggleScreenShare = async () => {
     if (screenSharing) {
-      // Stop screen sharing
-      if (localStream) {
-        localStream.getTracks().forEach(track => track.stop());
+      // Stop screen sharing - switch back to camera
+      try {
+        const cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        const cameraTrack = cameraStream.getVideoTracks()[0];
+
+        // Replace screen track with camera track on all peers
+        if (localStream) {
+          const screenTrack = localStream.getVideoTracks()[0];
+          if (screenTrack) {
+            replaceTrackOnPeers(screenTrack, cameraTrack);
+            screenTrack.stop();
+          }
+
+          // Update local stream: keep audio, replace video
+          const audioTrack = localStream.getAudioTracks()[0];
+          const newStream = new MediaStream();
+          if (audioTrack) newStream.addTrack(audioTrack);
+          newStream.addTrack(cameraTrack);
+          setLocalStream(newStream);
+          if (localVideoRef.current) {
+            localVideoRef.current.srcObject = newStream;
+          }
+        }
+
+        setScreenSharing(false);
+
+        // Notify peers of media state change
+        sendMediaState(audioEnabled, true);
+      } catch (err) {
+        console.error('Error reverting to camera:', err);
+        // Fallback: full re-init
+        await initializeMedia();
+        setScreenSharing(false);
       }
-      await initializeMedia();
-      setScreenSharing(false);
     } else {
       try {
         const screenStream = await navigator.mediaDevices.getDisplayMedia({
-          video: true
+          video: { cursor: 'always' }
         });
-        setLocalStream(screenStream);
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = screenStream;
+        const screenTrack = screenStream.getVideoTracks()[0];
+
+        // Replace camera track with screen track on all peers
+        if (localStream) {
+          const cameraTrack = localStream.getVideoTracks()[0];
+          if (cameraTrack) {
+            replaceTrackOnPeers(cameraTrack, screenTrack);
+          }
+
+          // Update local stream: keep audio, replace video
+          const audioTrack = localStream.getAudioTracks()[0];
+          const newStream = new MediaStream();
+          if (audioTrack) newStream.addTrack(audioTrack);
+          newStream.addTrack(screenTrack);
+          setLocalStream(newStream);
+          if (localVideoRef.current) {
+            localVideoRef.current.srcObject = newStream;
+          }
         }
+
         setScreenSharing(true);
 
         // Handle when user stops sharing via browser UI
-        screenStream.getVideoTracks()[0].onended = () => {
+        screenTrack.onended = () => {
           toggleScreenShare();
         };
       } catch (err) {
@@ -626,32 +809,137 @@ const MeetingRoom = () => {
     }
   };
 
-  // Toggle recording (host only)
+  // Toggle recording (host only) - shows consent dialog before starting
   const toggleRecording = async () => {
     if (!isRecording) {
+      // Fetch state recording rules to show consent dialog
+      setConsentLoading(true);
       try {
-        const response = await fetch(`${API_BASE}/api/v1/meetings/rooms/${meeting?.id}/recordings/start`, {
-          method: 'POST',
-          headers: getAuthHeaders()
-        });
-
+        // Default to user's state or fall back to CA
+        const stateCode = meeting?.state_code || 'CA';
+        const response = await fetch(`${API_BASE}/api/v1/state-recording-rules/by-state/${stateCode}`);
         if (response.ok) {
-          setIsRecording(true);
-          recordingTimerRef.current = setInterval(() => {
-            setRecordingTime(t => t + 1);
-          }, 1000);
+          const stateData = await response.json();
+          setConsentState(stateData);
+        } else {
+          // Default one-party consent
+          setConsentState({
+            state: stateCode,
+            consent_type: 'one_party',
+            script: 'This meeting may be recorded for quality and compliance purposes.',
+            recording_required: true,
+            requires_verbal_ack: false
+          });
         }
+        setShowConsentDialog(true);
       } catch (err) {
-        console.error('Error starting recording:', err);
+        console.error('Error fetching state recording rules:', err);
+        // Show dialog with default
+        setConsentState({
+          state: 'unknown',
+          consent_type: 'one_party',
+          script: 'This meeting may be recorded for quality and compliance purposes.',
+          recording_required: true,
+          requires_verbal_ack: false
+        });
+        setShowConsentDialog(true);
+      } finally {
+        setConsentLoading(false);
       }
     } else {
-      // Stop recording would need recording_id from start response
+      // Stop recording
+      try {
+        if (currentRecordingId) {
+          await fetch(`${API_BASE}/api/v1/meetings/rooms/${meeting?.id}/recordings/${currentRecordingId}/stop`, {
+            method: 'POST',
+            headers: getAuthHeaders()
+          });
+        }
+
+        // Broadcast recording stopped to all participants
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({ type: 'recording_stopped' }));
+        }
+      } catch (err) {
+        console.error('Error stopping recording:', err);
+      }
+
       setIsRecording(false);
+      setRecordingBanner(false);
+      setCurrentRecordingId(null);
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current);
       }
       setRecordingTime(0);
     }
+  };
+
+  // Start recording after consent acknowledged
+  const startRecordingWithConsent = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/meetings/rooms/${meeting?.id}/recordings/start-with-consent`, {
+        method: 'POST',
+        headers: {
+          ...getAuthHeaders(),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          consent_type: consentState?.consent_type || 'one_party',
+          state_code: consentState?.state || null,
+          disclosure_script: consentState?.script || null
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setIsRecording(true);
+        setCurrentRecordingId(data.recording.id);
+        setShowConsentDialog(false);
+        recordingTimerRef.current = setInterval(() => {
+          setRecordingTime(t => t + 1);
+        }, 1000);
+
+        // Broadcast recording started to all participants via WebSocket
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({
+            type: 'recording_started',
+            recording_id: data.recording.id,
+            consent_type: consentState?.consent_type,
+            disclosure_script: consentState?.script
+          }));
+        }
+      } else if (data.error === 'all_party_consent_required') {
+        alert(`Recording requires consent from all participants. Waiting for: ${data.pending_consent.map(p => p.display_name).join(', ')}`);
+      } else {
+        alert(data.message || 'Failed to start recording');
+      }
+    } catch (err) {
+      console.error('Error starting recording with consent:', err);
+      alert('Failed to start recording');
+    }
+  };
+
+  // Submit participant consent (non-host)
+  const submitParticipantConsent = async (consentGiven) => {
+    try {
+      if (participantConsentData?.recording_id) {
+        await fetch(`${API_BASE}/api/v1/meetings/rooms/${meeting?.id}/recordings/${participantConsentData.recording_id}/consent`, {
+          method: 'POST',
+          headers: {
+            ...getAuthHeaders(),
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            consent_given: consentGiven,
+            method: 'dialog_click'
+          })
+        });
+      }
+    } catch (err) {
+      console.error('Error submitting consent:', err);
+    }
+    setShowParticipantConsentDialog(false);
   };
 
   // Send chat message
@@ -1185,6 +1473,17 @@ const MeetingRoom = () => {
 
   // Leave meeting
   const leaveMeeting = () => {
+    // Signal intentional close to prevent reconnection
+    wsIntentionalCloseRef.current = true;
+    if (wsReconnectTimeoutRef.current) {
+      clearTimeout(wsReconnectTimeoutRef.current);
+    }
+
+    // Close WebSocket with code 1000 (intentional)
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.close(1000, 'User left meeting');
+    }
+
     // Cleanup WebRTC connections
     cleanupWebRTC();
 
@@ -1235,6 +1534,11 @@ const MeetingRoom = () => {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      wsIntentionalCloseRef.current = true;
+      if (wsReconnectTimeoutRef.current) {
+        clearTimeout(wsReconnectTimeoutRef.current);
+      }
+
       // Cleanup WebRTC
       cleanupWebRTC();
 
@@ -1452,6 +1756,34 @@ const MeetingRoom = () => {
           </span>
         </div>
       </div>
+
+      {/* Connection Lost Banner */}
+      {wsConnectionLost && (
+        <div className="connection-lost-banner" style={{
+          background: '#ef4444', color: 'white', padding: '8px 16px',
+          textAlign: 'center', fontSize: '14px', fontWeight: '600'
+        }}>
+          Connection lost. {wsReconnectAttemptsRef.current < 5
+            ? 'Reconnecting...'
+            : 'Unable to reconnect. Please refresh the page.'}
+        </div>
+      )}
+
+      {/* Recording Banner for ALL participants */}
+      {recordingBanner && !isHost && (
+        <div className="recording-banner" style={{
+          background: '#dc2626', color: 'white', padding: '8px 16px',
+          textAlign: 'center', fontSize: '14px', fontWeight: '600',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+        }}>
+          <span className="rec-dot" style={{
+            width: '10px', height: '10px', borderRadius: '50%',
+            background: 'white', display: 'inline-block',
+            animation: 'pulse 1.5s infinite'
+          }}></span>
+          Recording in progress — started by {recordingStartedBy}
+        </div>
+      )}
 
       {/* Video Grid */}
       <div className="video-grid">
@@ -1816,6 +2148,123 @@ const MeetingRoom = () => {
                   Activity will be logged as: "Screen recording sent to {recipientName}"
                 </p>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Host Consent Dialog - shown before starting recording */}
+      {showConsentDialog && (
+        <div className="invite-modal-overlay" onClick={() => setShowConsentDialog(false)}>
+          <div className="invite-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <div className="invite-modal-header">
+              <h3>Recording Consent Required</h3>
+              <button className="close-modal" onClick={() => setShowConsentDialog(false)}>×</button>
+            </div>
+            <div className="invite-modal-body" style={{ padding: '20px' }}>
+              {consentState && (
+                <>
+                  <div style={{
+                    background: consentState.consent_type === 'all_party' ? '#fef3c7' : '#dbeafe',
+                    border: `1px solid ${consentState.consent_type === 'all_party' ? '#f59e0b' : '#3b82f6'}`,
+                    borderRadius: '8px', padding: '16px', marginBottom: '16px'
+                  }}>
+                    <p style={{ margin: '0 0 8px', fontWeight: '600', fontSize: '14px' }}>
+                      {consentState.consent_type === 'all_party'
+                        ? '⚠️ All-Party Consent State'
+                        : 'One-Party Consent State'}
+                      {consentState.state ? ` (${consentState.state})` : ''}
+                    </p>
+                    {consentState.consent_type === 'all_party' && (
+                      <p style={{ margin: '0', fontSize: '13px', color: '#92400e' }}>
+                        All participants must consent before recording can begin.
+                      </p>
+                    )}
+                  </div>
+
+                  <div style={{
+                    background: '#f9fafb', borderRadius: '8px', padding: '16px',
+                    marginBottom: '16px', fontStyle: 'italic', fontSize: '14px',
+                    lineHeight: '1.5', borderLeft: '4px solid #6b7280'
+                  }}>
+                    <p style={{ margin: '0 0 8px', fontWeight: '600', fontStyle: 'normal' }}>Disclosure Script:</p>
+                    <p style={{ margin: 0 }}>{consentState.script}</p>
+                  </div>
+
+                  <p style={{ fontSize: '13px', color: '#6b7280', margin: '0' }}>
+                    By clicking "Start Recording", you acknowledge that you will read the disclosure
+                    script to all participants before the recording begins.
+                  </p>
+                </>
+              )}
+            </div>
+            <div className="invite-modal-footer" style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', padding: '16px 20px' }}>
+              <button
+                className="cancel-btn"
+                onClick={() => setShowConsentDialog(false)}
+                style={{ padding: '8px 20px', borderRadius: '6px', border: '1px solid #d1d5db', background: 'white', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={startRecordingWithConsent}
+                disabled={consentLoading}
+                style={{
+                  padding: '8px 20px', borderRadius: '6px', border: 'none',
+                  background: '#dc2626', color: 'white', fontWeight: '600', cursor: 'pointer'
+                }}
+              >
+                {consentLoading ? 'Loading...' : 'Start Recording'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Participant Consent Dialog - shown to non-hosts when recording starts */}
+      {showParticipantConsentDialog && participantConsentData && (
+        <div className="invite-modal-overlay">
+          <div className="invite-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '450px' }}>
+            <div className="invite-modal-header" style={{ background: '#dc2626', color: 'white' }}>
+              <h3 style={{ margin: 0 }}>Recording Started</h3>
+            </div>
+            <div className="invite-modal-body" style={{ padding: '20px' }}>
+              <p style={{ fontSize: '15px', lineHeight: '1.6', margin: '0 0 16px' }}>
+                The host has started recording this meeting.
+              </p>
+
+              {participantConsentData.disclosure_script && (
+                <div style={{
+                  background: '#f9fafb', borderRadius: '8px', padding: '16px',
+                  marginBottom: '16px', fontStyle: 'italic', fontSize: '14px',
+                  lineHeight: '1.5', borderLeft: '4px solid #dc2626'
+                }}>
+                  <p style={{ margin: 0 }}>{participantConsentData.disclosure_script}</p>
+                </div>
+              )}
+
+              {participantConsentData.consent_type === 'all_party' && (
+                <p style={{ fontSize: '13px', color: '#92400e', margin: '0 0 8px', fontWeight: '600' }}>
+                  Your consent is required to continue recording.
+                </p>
+              )}
+            </div>
+            <div className="invite-modal-footer" style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', padding: '16px 20px' }}>
+              <button
+                onClick={() => submitParticipantConsent(false)}
+                style={{ padding: '8px 20px', borderRadius: '6px', border: '1px solid #d1d5db', background: 'white', cursor: 'pointer' }}
+              >
+                Decline
+              </button>
+              <button
+                onClick={() => submitParticipantConsent(true)}
+                style={{
+                  padding: '8px 20px', borderRadius: '6px', border: 'none',
+                  background: '#10b981', color: 'white', fontWeight: '600', cursor: 'pointer'
+                }}
+              >
+                I Agree
+              </button>
             </div>
           </div>
         </div>

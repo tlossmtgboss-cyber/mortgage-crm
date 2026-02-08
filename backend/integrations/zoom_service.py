@@ -5,6 +5,7 @@ Handles OAuth authentication and meeting operations for Zoom
 import os
 import logging
 import base64
+import time
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 import requests
@@ -155,34 +156,77 @@ class ZoomClient:
         endpoint: str,
         access_token: str,
         data: Dict = None,
-        params: Dict = None
+        params: Dict = None,
+        max_retries: int = 3
     ) -> Optional[Dict[str, Any]]:
-        """Make an authenticated API request"""
-        try:
-            headers = {
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json"
-            }
+        """Make an authenticated API request with retry and backoff."""
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+        url = f"{self.api_base_url}{endpoint}"
+        backoff_delays = [2, 4, 8]  # seconds
 
-            url = f"{self.api_base_url}{endpoint}"
+        for attempt in range(max_retries):
+            try:
+                response = requests.request(
+                    method=method,
+                    url=url,
+                    headers=headers,
+                    json=data,
+                    params=params,
+                    timeout=30
+                )
 
-            response = requests.request(
-                method=method,
-                url=url,
-                headers=headers,
-                json=data,
-                params=params
-            )
-            response.raise_for_status()
+                # Success
+                if response.ok:
+                    return response.json() if response.text else {}
 
-            return response.json() if response.text else {}
+                # Rate limited - respect Retry-After header
+                if response.status_code == 429:
+                    retry_after = int(response.headers.get("Retry-After", backoff_delays[min(attempt, len(backoff_delays) - 1)]))
+                    logger.warning(f"Zoom API rate limited, retrying after {retry_after}s (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(retry_after)
+                    continue
 
-        except requests.exceptions.HTTPError as e:
-            logger.error(f"Zoom API error: {e.response.text}")
-            return None
-        except Exception as e:
-            logger.error(f"Zoom request error: {e}")
-            return None
+                # Server errors - retry with backoff
+                if response.status_code in (502, 503, 504):
+                    delay = backoff_delays[min(attempt, len(backoff_delays) - 1)]
+                    logger.warning(f"Zoom API server error {response.status_code}, retrying in {delay}s (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(delay)
+                    continue
+
+                # Client errors (4xx except 429) - don't retry
+                response.raise_for_status()
+
+            except requests.exceptions.ConnectionError:
+                if attempt < max_retries - 1:
+                    delay = backoff_delays[min(attempt, len(backoff_delays) - 1)]
+                    logger.warning(f"Zoom API connection error, retrying in {delay}s (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(delay)
+                    continue
+                logger.error(f"Zoom API connection failed after {max_retries} attempts")
+                return None
+
+            except requests.exceptions.HTTPError as e:
+                logger.error(f"Zoom API error: {e.response.text if e.response else str(e)}")
+                return None
+
+            except requests.exceptions.Timeout:
+                if attempt < max_retries - 1:
+                    delay = backoff_delays[min(attempt, len(backoff_delays) - 1)]
+                    logger.warning(f"Zoom API timeout, retrying in {delay}s (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(delay)
+                    continue
+                logger.error(f"Zoom API timed out after {max_retries} attempts")
+                return None
+
+            except Exception as e:
+                logger.error(f"Zoom request error: {e}")
+                return None
+
+        logger.error(f"Zoom API request failed after {max_retries} retries: {method} {endpoint}")
+        return None
 
     # Meeting operations
     def list_meetings(
