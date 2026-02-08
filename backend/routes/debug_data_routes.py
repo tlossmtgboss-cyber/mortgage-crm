@@ -5,7 +5,7 @@ Extracted from inline_legacy_routes.py.
 Provides debug endpoints for email sync, reconciliation, Microsoft integration,
 sample data creation, email testing, and Salesforce migration.
 """
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from datetime import datetime, timezone, timedelta
