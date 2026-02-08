@@ -5,7 +5,7 @@ Extracted from inline_legacy_routes.py.
 Includes:
 - Cache status
 - Cache metrics
-- Cache clear (admin only)
+- Cache clear is in api/cache_routes.py (not duplicated here)
 - Cache invalidate per user
 
 Lines ~16994-17072 from inline_legacy_routes.py.
@@ -57,29 +57,7 @@ def register_cache_routes(app, get_db, get_current_user, **kwargs):
         except Exception as e:
             return {"error": str(e), "timestamp": datetime.now(timezone.utc).isoformat()}
 
-    @app.post("/api/v1/cache/clear")
-    async def clear_cache_endpoint(
-        current_user: User = Depends(get_current_user)
-    ):
-        """
-        Clear all AI Agent cache (admin only)
-
-        Use with caution - will slow down queries until cache rebuilds
-        """
-        if current_user.role != 'admin':
-            raise HTTPException(status_code=403, detail="Admin only")
-
-        try:
-            from core.cache import clear_all_cache
-            await clear_all_cache()
-            return {
-                "success": True,
-                "message": "All AI Agent cache cleared"
-            }
-        except ImportError:
-            return {"success": False, "message": "Cache module not available"}
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+    # Note: POST /api/v1/cache/clear is handled by api/cache_routes.py
 
     @app.post("/api/v1/cache/invalidate/user/{user_id}")
     async def invalidate_user_cache_endpoint(

@@ -1610,26 +1610,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             "mtd_volume": mtd_volume
         }
 
-    @app.get("/api/v1/admin/users/roles")
-    async def get_user_roles(
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
-    ):
-        """Get available user roles for admin panel"""
-        from utils.auth import require_admin
-        require_admin(current_user)
-
-        # Return standard roles
-        roles = [
-            {"id": 1, "name": "admin", "description": "Full system access", "is_active": True},
-            {"id": 2, "name": "manager", "description": "Team management access", "is_active": True},
-            {"id": 3, "name": "loan_officer", "description": "Loan origination access", "is_active": True},
-            {"id": 4, "name": "processor", "description": "Loan processing access", "is_active": True},
-            {"id": 5, "name": "realtor", "description": "Realtor partner access", "is_active": True},
-            {"id": 6, "name": "user", "description": "Basic user access", "is_active": True},
-        ]
-
-        return {"roles": roles}
+    # Note: GET /api/v1/admin/users/roles is handled by user_creation_routes.py
 
     @app.get("/api/v1/admin/users")
     async def get_all_users(
@@ -1790,61 +1771,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             "temp_password": password if not user_data.get('password') else None  # Return temp password for admin to share
         }
 
-    @app.get("/api/v1/debug/user-deletion-blockers/{user_id}")
-    async def debug_user_deletion_blockers(
-        user_id: int,
-        admin_key: str = None,
-        db: Session = Depends(get_db)
-    ):
-        """Debug endpoint to check what blocks user deletion (protected by admin_key)"""
-        if admin_key != "perennia-admin-2024":
-            raise HTTPException(status_code=403, detail="Invalid admin key")
-
-        user = db.query(User).filter(User.id == user_id).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-
-        blockers = []
-        try:
-            fk_query = """
-                SELECT tc.table_name, kcu.column_name
-                FROM information_schema.table_constraints tc
-                JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
-                JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name = tc.constraint_name
-                WHERE tc.constraint_type = 'FOREIGN KEY'
-                    AND ccu.table_name = 'users'
-                    AND tc.table_schema = 'public'
-                    AND tc.table_name != 'users'
-            """
-            result = db.execute(text(fk_query))
-            for table_name, column_name in result.fetchall():
-                try:
-                    count_result = db.execute(
-                        text(f"SELECT COUNT(*) FROM {table_name} WHERE {column_name} = :user_id"),
-                        {"user_id": user_id}
-                    ).scalar()
-                    if count_result and count_result > 0:
-                        blockers.append({
-                            "table": table_name,
-                            "column": column_name,
-                            "count": count_result
-                        })
-                except Exception as e:
-                    blockers.append({
-                        "table": table_name,
-                        "column": column_name,
-                        "error": str(e)[:100]
-                    })
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to check blockers: {str(e)}")
-
-        return {
-            "user_id": user_id,
-            "email": user.email,
-            "can_delete": len(blockers) == 0,
-            "blockers": blockers
-        }
-
+    # Note: debug/user-deletion-blockers is defined below using _get_deletion_blockers helper
 
     @app.post("/api/v1/debug/create-test-user")
     async def debug_create_test_user(
@@ -1960,58 +1887,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             }
 
 
-    @app.get("/api/v1/admin/users/{user_id}/deletion-blockers")
-    async def get_user_deletion_blockers(
-        user_id: int,
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
-    ):
-        """Check what tables would block user deletion"""
-        user = db.query(User).filter(User.id == user_id).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-
-        blockers = []
-        try:
-            fk_query = """
-                SELECT tc.table_name, kcu.column_name
-                FROM information_schema.table_constraints tc
-                JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
-                JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name = tc.constraint_name
-                WHERE tc.constraint_type = 'FOREIGN KEY'
-                    AND ccu.table_name = 'users'
-                    AND tc.table_schema = 'public'
-                    AND tc.table_name != 'users'
-            """
-            result = db.execute(text(fk_query))
-            for table_name, column_name in result.fetchall():
-                try:
-                    count_result = db.execute(
-                        text(f"SELECT COUNT(*) FROM {table_name} WHERE {column_name} = :user_id"),
-                        {"user_id": user_id}
-                    ).scalar()
-                    if count_result and count_result > 0:
-                        blockers.append({
-                            "table": table_name,
-                            "column": column_name,
-                            "count": count_result
-                        })
-                except Exception as e:
-                    blockers.append({
-                        "table": table_name,
-                        "column": column_name,
-                        "error": str(e)[:100]
-                    })
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to check blockers: {str(e)}")
-
-        return {
-            "user_id": user_id,
-            "email": user.email,
-            "can_delete": len(blockers) == 0,
-            "blockers": blockers
-        }
-
+    # Note: GET /api/v1/admin/users/{user_id}/deletion-blockers is defined below using _get_deletion_blockers helper
 
     @app.delete("/api/v1/admin/users/{user_id}")
     async def delete_user(

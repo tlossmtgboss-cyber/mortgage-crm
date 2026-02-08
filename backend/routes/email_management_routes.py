@@ -602,10 +602,11 @@ def register_email_management_routes(app, get_db, get_current_user, **kwargs):
         lead_id: Optional[int] = None,
         loan_id: Optional[int] = None,
         status: Optional[str] = "draft",
+        source_type: Optional[str] = None,
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user)
     ):
-        """Get email drafts, optionally filtered by lead/loan"""
+        """Get email drafts, optionally filtered by lead/loan/source_type"""
         try:
             query = db.query(EmailDraft).filter(EmailDraft.user_id == current_user.id)
 
@@ -615,6 +616,8 @@ def register_email_management_routes(app, get_db, get_current_user, **kwargs):
                 query = query.filter(EmailDraft.lead_id == lead_id)
             if loan_id:
                 query = query.filter(EmailDraft.loan_id == loan_id)
+            if source_type:
+                query = query.filter(EmailDraft.source_type == source_type)
 
             drafts = query.order_by(EmailDraft.created_at.desc()).all()
 

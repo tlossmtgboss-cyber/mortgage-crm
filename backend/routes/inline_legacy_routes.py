@@ -5467,13 +5467,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     from routes.business_operations_routes import router as business_ops_router
     app.include_router(business_ops_router, tags=["Business Operations"])
 
-    # Include Master Manager Platform routes (capacity, talent, recruiting)
-    try:
-        from routes.master_manager_routes import router as master_manager_router
-        app.include_router(master_manager_router, tags=["Master Manager"])
-        logger.info("✅ Master Manager routes loaded")
-    except Exception as e:
-        logger.warning(f"Could not load Master Manager routes: {e}")
+    # Note: Master Manager routes already loaded above (line ~5084)
 
     # Include Recruiting Engine routes (Phase 2)
     try:
@@ -6081,12 +6075,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.warning(f"⚠️ Agent Governance Settings routes not loaded: {e}")
 
     # Page Permissions routes (Role-based page access control)
-    try:
-        from routes.page_permissions_routes import router as page_permissions_router
-        app.include_router(page_permissions_router, tags=["Page Permissions"])
-        logger.info("✅ Page Permissions routes loaded")
-    except Exception as e:
-        logger.warning(f"⚠️ Page Permissions routes not loaded: {e}")
+    # Note: Page Permissions routes already loaded above (line ~5068)
 
     # Smart Scheduler Settings routes (Comprehensive error handling pattern)
     try:
