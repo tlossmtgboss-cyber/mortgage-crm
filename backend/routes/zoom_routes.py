@@ -120,7 +120,7 @@ async def zoom_callback(
         )
 
     # Exchange code for tokens
-    token_data = zoom_client.exchange_code_for_token(code)
+    token_data = await zoom_client.async_exchange_code_for_token(code)
 
     if not token_data:
         logger.error("Failed to exchange Zoom authorization code")
@@ -129,7 +129,7 @@ async def zoom_callback(
         )
 
     # Get user info
-    user_info = zoom_client.get_user_info(token_data["access_token"])
+    user_info = await zoom_client.async_get_user_info(token_data["access_token"])
     user_email = user_info.get("email") if user_info else None
     zoom_user_id = user_info.get("id") if user_info else None
 
@@ -286,7 +286,7 @@ async def refresh_zoom_token(
             raise HTTPException(status_code=404, detail="No Zoom connection found")
 
         # Refresh the token
-        token_data = zoom_client.refresh_access_token(row.refresh_token)
+        token_data = await zoom_client.async_refresh_access_token(row.refresh_token)
 
         if not token_data:
             raise HTTPException(status_code=500, detail="Failed to refresh token")
@@ -375,7 +375,7 @@ async def list_meetings(
 
     # Check if token is expired and refresh if needed
     if row.expires_at and datetime.utcnow() > row.expires_at:
-        token_data = zoom_client.refresh_access_token(row.refresh_token)
+        token_data = await zoom_client.async_refresh_access_token(row.refresh_token)
         if token_data:
             access_token = token_data["access_token"]
             db.execute(text("""
@@ -395,7 +395,7 @@ async def list_meetings(
         else:
             raise HTTPException(status_code=401, detail="Token expired and refresh failed")
 
-    meetings = zoom_client.list_meetings(access_token, meeting_type=meeting_type)
+    meetings = await zoom_client.async_list_meetings(access_token, meeting_type=meeting_type)
 
     if meetings is None:
         raise HTTPException(status_code=500, detail="Failed to fetch meetings from Zoom")
@@ -424,7 +424,7 @@ async def create_meeting(
     if not row:
         raise HTTPException(status_code=404, detail="Zoom not connected")
 
-    new_meeting = zoom_client.create_meeting(
+    new_meeting = await zoom_client.async_create_meeting(
         row.access_token,
         topic=meeting.topic,
         start_time=meeting.start_time,
@@ -460,7 +460,7 @@ async def get_meeting(
     if not row:
         raise HTTPException(status_code=404, detail="Zoom not connected")
 
-    meeting = zoom_client.get_meeting(row.access_token, meeting_id)
+    meeting = await zoom_client.async_get_meeting(row.access_token, meeting_id)
 
     if meeting is None:
         raise HTTPException(status_code=404, detail="Meeting not found")
@@ -489,7 +489,7 @@ async def delete_meeting(
     if not row:
         raise HTTPException(status_code=404, detail="Zoom not connected")
 
-    success = zoom_client.delete_meeting(row.access_token, meeting_id)
+    success = await zoom_client.async_delete_meeting(row.access_token, meeting_id)
 
     if not success:
         raise HTTPException(status_code=500, detail="Failed to delete meeting")
@@ -521,7 +521,7 @@ async def list_recordings(
     from_date = datetime.utcnow() - timedelta(days=days)
     to_date = datetime.utcnow()
 
-    recordings = zoom_client.list_recordings(
+    recordings = await zoom_client.async_list_recordings(
         row.access_token,
         from_date=from_date,
         to_date=to_date

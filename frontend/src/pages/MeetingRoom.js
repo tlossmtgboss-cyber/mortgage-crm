@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { sanitizeText } from '../utils/sanitize';
 import { getAuthHeaders } from '../utils/auth';
@@ -104,9 +104,8 @@ const MeetingRoom = () => {
   const [currentBreakoutRoom, setCurrentBreakoutRoom] = useState(null);
   const [newBreakoutName, setNewBreakoutName] = useState('');
 
-  // Meeting mode state (mesh vs SFU)
-  const [meetingMode, setMeetingMode] = useState('mesh'); // 'mesh' or 'sfu'
-  const [sfuAvailable, setSfuAvailable] = useState(false);
+  // Breakout room media isolation: maps participantId -> breakoutRoomId or null
+  const [participantBreakoutMap, setParticipantBreakoutMap] = useState({});
 
   // Refs
   const localVideoRef = useRef(null);
@@ -118,6 +117,8 @@ const MeetingRoom = () => {
   const remoteStreamsRef = useRef({}); // {participantId: MediaStream}
   const remoteVideoRefs = useRef({}); // {participantId: HTMLVideoElement ref}
   const localParticipantIdRef = useRef(null);
+  const audioContextRef = useRef(null); // AudioContext for screen recording audio mixing
+  const iceCandidateQueueRef = useRef([]); // Queued ICE candidates during WS disconnect
 
   // Remote streams state (for rendering)
   const [remoteStreams, setRemoteStreams] = useState({}); // {participantId: {stream, displayName, audioEnabled, videoEnabled}}
@@ -148,6 +149,15 @@ const MeetingRoom = () => {
     };
     fetchIceServers();
   }, []);
+
+  // Cleanup blob URLs to prevent memory leaks (Issue 8)
+  useEffect(() => {
+    return () => {
+      if (screenRecordingUrl && screenRecordingUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(screenRecordingUrl);
+      }
+    };
+  }, [screenRecordingUrl]);
 
   // Fetch meeting info
   useEffect(() => {
@@ -263,6 +273,14 @@ const MeetingRoom = () => {
 
     ws.onopen = () => {
       console.log('Connected to signaling server');
+      // Flush queued ICE candidates from during disconnect
+      if (iceCandidateQueueRef.current.length > 0) {
+        console.log(`Flushing ${iceCandidateQueueRef.current.length} queued ICE candidates`);
+        iceCandidateQueueRef.current.forEach(msg => {
+          try { ws.send(JSON.stringify(msg)); } catch (e) { /* ignore */ }
+        });
+        iceCandidateQueueRef.current = [];
+      }
       // Start ping to keep connection alive
       const pingInterval = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) {
@@ -384,6 +402,21 @@ const MeetingRoom = () => {
             fetchBreakoutRooms();
             if (message.action === 'closed' && currentBreakoutRoom === message.room_id) {
               setCurrentBreakoutRoom(null);
+            }
+            // Update participant-to-breakout mapping for media isolation
+            if (message.action === 'participant_joined' && message.participant_id && message.room_id) {
+              setParticipantBreakoutMap(prev => ({ ...prev, [message.participant_id]: message.room_id }));
+            } else if (message.action === 'participant_left' && message.participant_id) {
+              setParticipantBreakoutMap(prev => ({ ...prev, [message.participant_id]: null }));
+            } else if (message.action === 'closed' && message.room_id) {
+              // Clear all participants from this breakout room
+              setParticipantBreakoutMap(prev => {
+                const updated = { ...prev };
+                Object.keys(updated).forEach(pid => {
+                  if (updated[pid] === message.room_id) updated[pid] = null;
+                });
+                return updated;
+              });
             }
             break;
 
@@ -532,14 +565,20 @@ const MeetingRoom = () => {
       }
     };
 
-    // Handle ICE candidates
+    // Handle ICE candidates - queue if WebSocket not connected
     pc.onicecandidate = (event) => {
-      if (event.candidate && wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({
+      if (event.candidate) {
+        const candidateMsg = {
           type: 'ice_candidate',
           target: remoteParticipantId,
           candidate: event.candidate
-        }));
+        };
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify(candidateMsg));
+        } else {
+          // Queue for sending after reconnect
+          iceCandidateQueueRef.current.push(candidateMsg);
+        }
       }
     };
 
@@ -668,6 +707,15 @@ const MeetingRoom = () => {
       wsRef.current.close();
       wsRef.current = null;
     }
+
+    // Close AudioContext (safety net for screen recording cleanup)
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
+
+    // Clear ICE candidate queue
+    iceCandidateQueueRef.current = [];
   }, []);
 
   // ============================================================================
@@ -1195,47 +1243,57 @@ const MeetingRoom = () => {
   };
 
   // ========================================================================
-  // SFU MODE DETECTION
+  // SFU MODE DETECTION (informational only — no UI badge)
   // ========================================================================
 
-  // Check SFU availability on mount
+  // Log SFU recommendation when participant count is high (no UI state changes)
   useEffect(() => {
-    const checkSfu = async () => {
-      try {
-        const response = await fetch(`${API_BASE}/api/v1/meetings/sfu/status`);
-        if (response.ok) {
-          const data = await response.json();
-          setSfuAvailable(data.enabled);
-        }
-      } catch (err) {
-        console.warn('SFU status check failed:', err);
-      }
-    };
-    checkSfu();
-  }, []);
+    const participantCount = 1 + Object.keys(remoteStreams).length;
+    if (participantCount >= 5) {
+      console.info(`Meeting has ${participantCount} participants — SFU mode would improve performance if available`);
+    }
+  }, [Object.keys(remoteStreams).length]);
 
-  // Check meeting mode when participant count changes
+  // ========================================================================
+  // BREAKOUT ROOM MEDIA ISOLATION
+  // ========================================================================
+
+  // Filter remote streams to only show participants in the same breakout room (or main room)
+  const visibleStreams = useMemo(() => {
+    // If not in any breakout room, show all participants NOT in a breakout room
+    // If in a breakout room, show only participants in the same breakout room
+    if (!currentBreakoutRoom) {
+      // In main room: show participants who are not in any breakout room
+      const filtered = {};
+      Object.entries(remoteStreams).forEach(([pid, data]) => {
+        if (!participantBreakoutMap[pid]) {
+          filtered[pid] = data;
+        }
+      });
+      return filtered;
+    } else {
+      // In a breakout room: show only participants in the same breakout room
+      const filtered = {};
+      Object.entries(remoteStreams).forEach(([pid, data]) => {
+        if (participantBreakoutMap[pid] === currentBreakoutRoom) {
+          filtered[pid] = data;
+        }
+      });
+      return filtered;
+    }
+  }, [remoteStreams, currentBreakoutRoom, participantBreakoutMap]);
+
+  // Mute audio tracks for participants not in our visible set
   useEffect(() => {
-    const checkMode = async () => {
-      if (!meeting?.id || !sfuAvailable) return;
-      try {
-        const response = await fetch(`${API_BASE}/api/v1/meetings/rooms/${meeting.id}/mode`, {
-          headers: getAuthHeaders()
+    Object.entries(remoteStreams).forEach(([pid, data]) => {
+      const isVisible = pid in visibleStreams;
+      if (data.stream) {
+        data.stream.getAudioTracks().forEach(track => {
+          track.enabled = isVisible;
         });
-        if (response.ok) {
-          const data = await response.json();
-          if (data.mode !== meetingMode) {
-            setMeetingMode(data.mode);
-            console.log(`Meeting mode: ${data.mode} (${data.participant_count} participants, threshold: ${data.threshold})`);
-          }
-        }
-      } catch (err) {
-        console.warn('Mode check failed:', err);
       }
-    };
-
-    checkMode();
-  }, [Object.keys(remoteStreams).length, meeting?.id, sfuAvailable]);
+    });
+  }, [visibleStreams, remoteStreams]);
 
   // Send chat message
   const sendChatMessage = () => {
@@ -1521,7 +1579,12 @@ const MeetingRoom = () => {
       // Combine streams if both available
       let combinedStream;
       if (audioStream) {
+        // Close any previous AudioContext to prevent leaks
+        if (audioContextRef.current) {
+          audioContextRef.current.close().catch(() => {});
+        }
         const audioContext = new AudioContext();
+        audioContextRef.current = audioContext;
         const destination = audioContext.createMediaStreamDestination();
 
         // Add screen audio if present
@@ -1599,12 +1662,21 @@ const MeetingRoom = () => {
     if (screenStreamRef.current) {
       screenStreamRef.current.getTracks().forEach(track => track.stop());
     }
+    // Close AudioContext to prevent memory leak
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
     setIsScreenRecording(false);
     setScreenRecordingUploading(true);
   };
 
   // Upload screen recording and get shareable link
   const uploadScreenRecording = async (blob) => {
+    // Revoke previous blob URL if any to prevent memory leak
+    if (screenRecordingUrl && screenRecordingUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(screenRecordingUrl);
+    }
     try {
       const token = localStorage.getItem('token');
       const formData = new FormData();
@@ -2047,7 +2119,7 @@ const MeetingRoom = () => {
         </div>
         <div className="header-right">
           <span className="participant-count">
-            👥 {1 + Object.keys(remoteStreams).length}
+            👥 {1 + Object.keys(visibleStreams).length}
           </span>
         </div>
       </div>
@@ -2101,7 +2173,7 @@ const MeetingRoom = () => {
         </div>
 
         {/* Remote participants with WebRTC video streams */}
-        {Object.entries(remoteStreams).map(([participantId, participantData]) => (
+        {Object.entries(visibleStreams).map(([participantId, participantData]) => (
           <div key={participantId} className="video-container remote">
             <video
               id={`remote-video-${participantId}`}
@@ -2387,17 +2459,6 @@ const MeetingRoom = () => {
           }}>
             Return to Main
           </button>
-        </div>
-      )}
-
-      {/* SFU Mode Indicator */}
-      {meetingMode === 'sfu' && (
-        <div style={{
-          position: 'fixed', top: '60px', right: '16px',
-          background: '#10b981', color: 'white', padding: '4px 10px', borderRadius: '12px',
-          fontSize: '11px', fontWeight: '600', zIndex: 50
-        }}>
-          SFU Mode
         </div>
       )}
 

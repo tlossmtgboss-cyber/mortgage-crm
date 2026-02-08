@@ -37,14 +37,16 @@ router = APIRouter(prefix="/api/v1/meetings", tags=["Video Meetings"])
 _get_db = None
 _get_current_user = None
 _models = None
+_pwd_context = None
 
 
-def set_dependencies(get_db_func, get_current_user_func, models_dict):
+def set_dependencies(get_db_func, get_current_user_func, models_dict, pwd_context=None):
     """Set dependencies from main.py"""
-    global _get_db, _get_current_user, _models
+    global _get_db, _get_current_user, _models, _pwd_context
     _get_db = get_db_func
     _get_current_user = get_current_user_func
     _models = models_dict
+    _pwd_context = pwd_context
 
 
 def get_db():
@@ -215,7 +217,7 @@ async def process_recording(recording_id: int):
     db = SessionLocal()
     try:
         MeetingRecording = _models.get('MeetingRecording')
-        MeetingTranscript = _models.get('MeetingTranscript')
+        RecordingTranscript = _models.get('RecordingTranscript')
 
         recording = db.query(MeetingRecording).filter(
             MeetingRecording.id == recording_id
@@ -230,8 +232,8 @@ async def process_recording(recording_id: int):
         db.commit()
 
         # If transcription is enabled, create transcript placeholder
-        if recording.storage_url:
-            transcript = MeetingTranscript(
+        if recording.storage_path and RecordingTranscript:
+            transcript = RecordingTranscript(
                 meeting_id=recording.meeting_id,
                 recording_id=recording_id,
                 status="pending",
@@ -243,12 +245,22 @@ async def process_recording(recording_id: int):
             # Note: Actual transcription would integrate with Whisper or similar
             logger.info(f"Recording {recording_id} queued for transcription")
 
-        recording.status = "completed"
-        db.commit()
-        logger.info(f"Recording {recording_id} processing completed")
+        # Don't mark as "completed" yet — leave as "processing" until
+        # transcription is actually done. Only mark error on failure.
+        logger.info(f"Recording {recording_id} processing started")
 
     except Exception as e:
         logger.error(f"Error processing recording {recording_id}: {e}")
+        # Mark recording with error status for retry visibility
+        try:
+            recording = db.query(_models.get('MeetingRecording')).filter(
+                _models.get('MeetingRecording').id == recording_id
+            ).first()
+            if recording:
+                recording.status = "error"
+                db.commit()
+        except Exception:
+            pass
     finally:
         db.close()
 
@@ -594,7 +606,7 @@ async def create_meeting_room(
         transcription_enabled=template_settings.get('transcription_enabled', data.transcription_enabled),
         ai_assistant_enabled=template_settings.get('ai_assistant_enabled', data.ai_assistant_enabled),
         password_protected=data.password_protected,
-        room_password=data.room_password,
+        room_password=_pwd_context.hash(data.room_password) if data.password_protected and data.room_password and _pwd_context else data.room_password,
         max_participants=data.max_participants,
         loan_id=data.loan_id,
         lead_id=data.lead_id,
@@ -1193,6 +1205,10 @@ import os
 SCREEN_RECORDINGS_DIR = os.path.join(os.path.dirname(__file__), "screen_recordings")
 os.makedirs(SCREEN_RECORDINGS_DIR, exist_ok=True)
 
+MAX_UPLOAD_SIZE = 500 * 1024 * 1024  # 500 MB
+ALLOWED_RECORDING_EXTENSIONS = {"webm", "mp4", "mkv"}
+UPLOAD_CHUNK_SIZE = 64 * 1024  # 64 KB
+
 
 @router.post("/screen-recordings/upload")
 async def upload_screen_recording(
@@ -1204,16 +1220,45 @@ async def upload_screen_recording(
 ):
     """Upload a screen recording and return a shareable link."""
     try:
+        # Validate file extension
+        file_extension = file.filename.split('.')[-1].lower() if '.' in file.filename else 'webm'
+        if file_extension not in ALLOWED_RECORDING_EXTENSIONS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid file type '.{file_extension}'. Allowed: {', '.join(ALLOWED_RECORDING_EXTENSIONS)}"
+            )
+
         # Generate unique filename
         recording_id = str(uuid.uuid4())
-        file_extension = file.filename.split('.')[-1] if '.' in file.filename else 'webm'
         filename = f"{recording_id}.{file_extension}"
         filepath = os.path.join(SCREEN_RECORDINGS_DIR, filename)
 
-        # Save the file
-        contents = await file.read()
-        with open(filepath, 'wb') as f:
-            f.write(contents)
+        # Stream file to disk in chunks with size enforcement
+        total_size = 0
+        try:
+            with open(filepath, 'wb') as f:
+                while True:
+                    chunk = await file.read(UPLOAD_CHUNK_SIZE)
+                    if not chunk:
+                        break
+                    total_size += len(chunk)
+                    if total_size > MAX_UPLOAD_SIZE:
+                        break
+                    f.write(chunk)
+        except Exception:
+            # Clean up partial file on write error
+            if os.path.exists(filepath):
+                os.remove(filepath)
+            raise
+
+        if total_size > MAX_UPLOAD_SIZE:
+            # Clean up partial file
+            if os.path.exists(filepath):
+                os.remove(filepath)
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large. Maximum size is {MAX_UPLOAD_SIZE // (1024*1024)} MB"
+            )
 
         # Generate shareable URL
         # In production, this would be a cloud storage URL
@@ -1221,16 +1266,18 @@ async def upload_screen_recording(
         share_url = f"{base_url}/api/v1/meetings/screen-recordings/{recording_id}"
 
         # Log recording metadata
-        logger.info(f"Screen recording uploaded: {recording_id} by user {current_user.id}, meeting: {meeting_id or room_code}")
+        logger.info(f"Screen recording uploaded: {recording_id} by user {current_user.id}, meeting: {meeting_id or room_code}, size: {total_size}")
 
         return {
             "success": True,
             "recording_id": recording_id,
             "share_url": share_url,
             "filename": filename,
-            "size_bytes": len(contents)
+            "size_bytes": total_size
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error uploading screen recording: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to upload recording: {str(e)}")
@@ -1929,6 +1976,7 @@ async def create_instant_meeting(
 @router.get("/join/{room_code}")
 async def join_meeting_by_code(
     room_code: str,
+    password: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
     """Get meeting room info for joining by room code (public endpoint)."""
@@ -1946,6 +1994,18 @@ async def join_meeting_by_code(
 
     if room.status == "ended":
         raise HTTPException(status_code=400, detail="This meeting has already ended")
+
+    # Verify password for password-protected rooms
+    if room.password_protected and room.room_password:
+        if not password:
+            raise HTTPException(status_code=403, detail="This meeting requires a password")
+        # Verify against hashed password if pwd_context is available, otherwise plain compare
+        if _pwd_context:
+            if not _pwd_context.verify(password, room.room_password):
+                raise HTTPException(status_code=403, detail="Incorrect meeting password")
+        else:
+            if password != room.room_password:
+                raise HTTPException(status_code=403, detail="Incorrect meeting password")
 
     return {
         "meeting": {

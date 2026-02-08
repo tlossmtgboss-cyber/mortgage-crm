@@ -28,7 +28,7 @@ async def resolve_host_status(token: Optional[str], room_code: str) -> Tuple[boo
         return False, None
 
     try:
-        from jose import jwt, JWTError
+        from jose import jwt, JWTError, ExpiredSignatureError
 
         secret_key = os.getenv("SECRET_KEY", "")
         algorithm = os.getenv("AUTH_ALGORITHM", "HS256")
@@ -37,34 +37,47 @@ async def resolve_host_status(token: Optional[str], room_code: str) -> Tuple[boo
             logger.warning("SECRET_KEY not set, cannot verify host status")
             return False, None
 
-        payload = jwt.decode(token, secret_key, algorithms=[algorithm], options={"verify_aud": False})
+        payload = jwt.decode(
+            token, secret_key, algorithms=[algorithm],
+            options={"verify_aud": False, "verify_exp": True}
+        )
         email = payload.get("sub")
         if not email:
             return False, None
 
-        # Look up user and room in DB
+        # Look up user and room in DB with two indexed queries (not CROSS JOIN)
         from database import SessionLocal
         db = SessionLocal()
         try:
             from sqlalchemy import text
-            result = db.execute(text("""
-                SELECT u.id as user_id, vmr.host_user_id
-                FROM users u
-                CROSS JOIN video_meeting_rooms vmr
-                WHERE u.email = :email AND vmr.room_code = :room_code
-                LIMIT 1
-            """), {"email": email, "room_code": room_code})
+            user_row = db.execute(
+                text("SELECT id FROM users WHERE email = :email LIMIT 1"),
+                {"email": email}
+            ).fetchone()
+            if not user_row:
+                return False, None
 
-            row = result.fetchone()
-            if row:
-                user_id = row[0]
-                host_user_id = row[1]
-                return user_id == host_user_id, user_id
+            room_row = db.execute(
+                text("SELECT host_user_id FROM video_meeting_rooms WHERE room_code = :room_code LIMIT 1"),
+                {"room_code": room_code}
+            ).fetchone()
+            if not room_row:
+                return False, None
+
+            user_id = user_row[0]
+            host_user_id = room_row[0]
+            return user_id == host_user_id, user_id
         finally:
             db.close()
 
+    except ExpiredSignatureError:
+        logger.info(f"Expired token for room {room_code}")
+        return False, None
+    except JWTError as e:
+        logger.warning(f"JWT error for room {room_code}: {e}")
+        return False, None
     except Exception as e:
-        logger.warning(f"Could not resolve host status: {e}")
+        logger.error(f"Unexpected error resolving host status: {e}")
 
     return False, None
 

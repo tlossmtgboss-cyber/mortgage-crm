@@ -6,6 +6,7 @@ import os
 import logging
 import base64
 import time
+import asyncio
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 import requests
@@ -340,6 +341,46 @@ class ZoomClient:
             access_token,
             params=params
         )
+
+    # ========================================================================
+    # ASYNC WRAPPERS (avoid blocking event loop with time.sleep in retries)
+    # ========================================================================
+
+    async def async_create_meeting(self, *args, **kwargs) -> Optional[Dict[str, Any]]:
+        """Async wrapper for create_meeting - runs in thread pool to avoid blocking."""
+        return await asyncio.to_thread(self.create_meeting, *args, **kwargs)
+
+    async def async_update_meeting(self, *args, **kwargs) -> Optional[Dict[str, Any]]:
+        """Async wrapper for update_meeting."""
+        return await asyncio.to_thread(self.update_meeting, *args, **kwargs)
+
+    async def async_delete_meeting(self, *args, **kwargs) -> bool:
+        """Async wrapper for delete_meeting."""
+        return await asyncio.to_thread(self.delete_meeting, *args, **kwargs)
+
+    async def async_list_meetings(self, *args, **kwargs) -> Optional[Dict[str, Any]]:
+        """Async wrapper for list_meetings."""
+        return await asyncio.to_thread(self.list_meetings, *args, **kwargs)
+
+    async def async_get_meeting(self, *args, **kwargs) -> Optional[Dict[str, Any]]:
+        """Async wrapper for get_meeting."""
+        return await asyncio.to_thread(self.get_meeting, *args, **kwargs)
+
+    async def async_list_recordings(self, *args, **kwargs) -> Optional[Dict[str, Any]]:
+        """Async wrapper for list_recordings."""
+        return await asyncio.to_thread(self.list_recordings, *args, **kwargs)
+
+    async def async_get_user_info(self, *args, **kwargs) -> Optional[Dict[str, Any]]:
+        """Async wrapper for get_user_info."""
+        return await asyncio.to_thread(self.get_user_info, *args, **kwargs)
+
+    async def async_exchange_code_for_token(self, *args, **kwargs) -> Optional[Dict[str, Any]]:
+        """Async wrapper for exchange_code_for_token."""
+        return await asyncio.to_thread(self.exchange_code_for_token, *args, **kwargs)
+
+    async def async_refresh_access_token(self, *args, **kwargs) -> Optional[Dict[str, Any]]:
+        """Async wrapper for refresh_access_token."""
+        return await asyncio.to_thread(self.refresh_access_token, *args, **kwargs)
 
 
 # Global instance
