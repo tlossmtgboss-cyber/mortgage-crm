@@ -204,16 +204,19 @@ async def sync_all_users_salesforce(
     sync_emails: bool = True,
     sync_calendar: bool = True,
     sync_client_fields: bool = True,  # Match by email and pull ALL fields
+    import_new_clients: bool = True,  # Import NEW clients from Salesforce
     push_to_salesforce: bool = False,  # DISABLED - inbound only
     email_days_back: int = 7,
     calendar_days_back: int = 7,
     calendar_days_forward: int = 30,
+    import_days_back: int = 7,
     push_since_hours: int = 1  # Ignored - no outbound sync
 ) -> Dict[str, Any]:
     """
     Run INBOUND Salesforce sync for all connected users.
 
     Data flows ONE WAY: Salesforce → CRM
+    - Imports NEW Salesforce Leads/Contacts/Opportunities as CRM records
     - Matches CRM clients to Salesforce by EMAIL
     - Pulls ALL fields (text, number, date) from matched Salesforce records
     - Pulls emails from Salesforce EmailMessage and Task objects
@@ -245,6 +248,9 @@ async def sync_all_users_salesforce(
             'leads_updated': 0,
             'loans_matched': 0,
             'loans_updated': 0,
+            'new_leads_created': 0,
+            'new_loans_created': 0,
+            'duplicates_skipped': 0,
         },
         'errors': [],
         'started_at': datetime.utcnow().isoformat(),
@@ -261,8 +267,15 @@ async def sync_all_users_salesforce(
             profiles = db.query(IntegrationProfile).filter(
                 IntegrationProfile.provider == 'salesforce',
                 IntegrationProfile.status.in_(['connected', 'active']),
-                IntegrationProfile.sync_enabled == True
             ).all()
+
+            # Auto-enable sync on connected profiles that have it disabled
+            for profile in profiles:
+                if not profile.sync_enabled:
+                    logger.info(f"Auto-enabling sync for profile {profile.id} (user {profile.user_id})")
+                    profile.sync_enabled = True
+            db.commit()
+
         except Exception as e:
             # Table might not exist or other DB error
             logger.warning(f"Could not query integration profiles: {e}")
@@ -296,6 +309,30 @@ async def sync_all_users_salesforce(
                     except Exception as e:
                         logger.error(f"Client field sync failed for profile {profile.id}: {e}")
                         results['errors'].append(f"Client sync: {str(e)[:100]}")
+                        try:
+                            db.rollback()
+                        except Exception:
+                            pass
+
+                # ===== IMPORT NEW CLIENTS: Create CRM records for new SF records =====
+                if import_new_clients:
+                    try:
+                        from services.salesforce.sync_service import salesforce_sync
+
+                        import_result = await salesforce_sync.import_new_clients_from_salesforce(
+                            db=db,
+                            integration_profile_id=profile.id,
+                            days_back=import_days_back,
+                            limit=200
+                        )
+                        results['inbound']['new_leads_created'] += import_result.get('new_leads_created', 0)
+                        results['inbound']['new_loans_created'] += import_result.get('new_loans_created', 0)
+                        results['inbound']['duplicates_skipped'] += import_result.get('duplicates_skipped', 0)
+                        if import_result.get('errors'):
+                            results['errors'].extend(import_result['errors'][:3])
+                    except Exception as e:
+                        logger.error(f"New client import failed for profile {profile.id}: {e}")
+                        results['errors'].append(f"New client import: {str(e)[:100]}")
                         try:
                             db.rollback()
                         except Exception:
@@ -524,10 +561,12 @@ def register_salesforce_sync_jobs(scheduler):
             'sync_emails': True,
             'sync_calendar': True,
             'sync_client_fields': True,  # Match CRM records to Salesforce by email and pull all fields
+            'import_new_clients': True,  # Import NEW Salesforce Leads/Contacts/Opportunities
             'push_to_salesforce': False,  # DISABLED - inbound only
             'email_days_back': 1,
             'calendar_days_back': 1,
             'calendar_days_forward': 14,
+            'import_days_back': 7,  # Import clients created/modified in last 7 days
         }
     )
 

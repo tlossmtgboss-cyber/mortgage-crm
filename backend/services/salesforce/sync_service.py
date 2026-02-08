@@ -1208,6 +1208,457 @@ class SalesforceSyncService:
         }
         return status_mapping.get(sf_status, 'new')
 
+    # =========================================================================
+    # IMPORT NEW CLIENTS FROM SALESFORCE
+    # Query Salesforce for recently created Leads/Contacts/Opportunities
+    # and create CRM records for any that don't already exist.
+    # =========================================================================
+
+    async def import_new_clients_from_salesforce(
+        self,
+        db: Session,
+        integration_profile_id: int,
+        days_back: int = 7,
+        limit: int = 200
+    ) -> Dict[str, Any]:
+        """
+        Import NEW clients from Salesforce that don't yet exist in the CRM.
+
+        Queries Salesforce for recently created/modified Leads and Contacts,
+        then creates CRM lead records for any that don't already exist
+        (matched by email or salesforce_id).
+
+        Args:
+            db: Database session
+            integration_profile_id: User's Salesforce integration profile
+            days_back: How many days back to query for new records
+            limit: Max records to process per sync
+
+        Returns:
+            Import result with counts
+        """
+        from sqlalchemy import text
+
+        result = {
+            'success': False,
+            'sf_leads_found': 0,
+            'sf_contacts_found': 0,
+            'sf_opportunities_found': 0,
+            'new_leads_created': 0,
+            'new_loans_created': 0,
+            'duplicates_skipped': 0,
+            'errors': []
+        }
+
+        try:
+            # Get access token
+            access_token, instance_url = await salesforce_oauth.get_access_token(
+                db, integration_profile_id
+            )
+
+            if not access_token:
+                result['errors'].append("Failed to get Salesforce access token")
+                return result
+
+            # Get the integration profile for user_id
+            profile = db.query(IntegrationProfile).filter(
+                IntegrationProfile.id == integration_profile_id
+            ).first()
+
+            if not profile:
+                result['errors'].append("Integration profile not found")
+                return result
+
+            user_id = profile.user_id
+
+            # ===== IMPORT SALESFORCE LEADS =====
+            try:
+                sf_leads = await self._query_recent_sf_leads(
+                    access_token, instance_url, days_back, limit
+                )
+                result['sf_leads_found'] = len(sf_leads)
+
+                for sf_lead in sf_leads:
+                    try:
+                        created = await self._create_crm_lead_if_new(
+                            db, sf_lead, 'Lead', user_id
+                        )
+                        if created:
+                            result['new_leads_created'] += 1
+                        else:
+                            result['duplicates_skipped'] += 1
+                    except Exception as e:
+                        sf_id = sf_lead.get('Id', 'unknown')
+                        logger.error(f"Error importing SF Lead {sf_id}: {e}")
+                        result['errors'].append(f"Lead {sf_id}: {str(e)[:100]}")
+                        try:
+                            db.rollback()
+                        except Exception:
+                            pass
+
+            except Exception as e:
+                logger.error(f"Error querying SF Leads: {e}")
+                result['errors'].append(f"Lead query: {str(e)[:100]}")
+
+            # ===== IMPORT SALESFORCE CONTACTS =====
+            try:
+                sf_contacts = await self._query_recent_sf_contacts(
+                    access_token, instance_url, days_back, limit
+                )
+                result['sf_contacts_found'] = len(sf_contacts)
+
+                for sf_contact in sf_contacts:
+                    try:
+                        created = await self._create_crm_lead_if_new(
+                            db, sf_contact, 'Contact', user_id
+                        )
+                        if created:
+                            result['new_leads_created'] += 1
+                        else:
+                            result['duplicates_skipped'] += 1
+                    except Exception as e:
+                        sf_id = sf_contact.get('Id', 'unknown')
+                        logger.error(f"Error importing SF Contact {sf_id}: {e}")
+                        result['errors'].append(f"Contact {sf_id}: {str(e)[:100]}")
+                        try:
+                            db.rollback()
+                        except Exception:
+                            pass
+
+            except Exception as e:
+                logger.error(f"Error querying SF Contacts: {e}")
+                result['errors'].append(f"Contact query: {str(e)[:100]}")
+
+            # ===== IMPORT SALESFORCE OPPORTUNITIES AS LOANS =====
+            try:
+                sf_opps = await self._query_recent_sf_opportunities(
+                    access_token, instance_url, days_back, limit
+                )
+                result['sf_opportunities_found'] = len(sf_opps)
+
+                for sf_opp in sf_opps:
+                    try:
+                        created = await self._create_crm_loan_if_new(
+                            db, sf_opp, user_id
+                        )
+                        if created:
+                            result['new_loans_created'] += 1
+                        else:
+                            result['duplicates_skipped'] += 1
+                    except Exception as e:
+                        sf_id = sf_opp.get('Id', 'unknown')
+                        logger.error(f"Error importing SF Opportunity {sf_id}: {e}")
+                        result['errors'].append(f"Opportunity {sf_id}: {str(e)[:100]}")
+                        try:
+                            db.rollback()
+                        except Exception:
+                            pass
+
+            except Exception as e:
+                logger.error(f"Error querying SF Opportunities: {e}")
+                result['errors'].append(f"Opportunity query: {str(e)[:100]}")
+
+            result['success'] = True
+            db.commit()
+
+            logger.info(
+                f"New client import complete: "
+                f"leads_created={result['new_leads_created']}, "
+                f"loans_created={result['new_loans_created']}, "
+                f"duplicates_skipped={result['duplicates_skipped']}"
+            )
+
+        except Exception as e:
+            logger.error(f"New client import failed: {e}")
+            result['errors'].append(str(e))
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
+        return result
+
+    async def _query_recent_sf_leads(
+        self,
+        access_token: str,
+        instance_url: str,
+        days_back: int = 7,
+        limit: int = 200
+    ) -> List[Dict[str, Any]]:
+        """Query Salesforce for recently created/modified Leads."""
+        soql = f"""
+            SELECT Id, FirstName, LastName, Email, Phone, MobilePhone, Company,
+                   Title, Industry, Street, City, State, PostalCode, Country,
+                   LeadSource, Status, Rating, AnnualRevenue, Description,
+                   CreatedDate, LastModifiedDate
+            FROM Lead
+            WHERE LastModifiedDate >= LAST_N_DAYS:{days_back}
+              AND Email != null
+            ORDER BY LastModifiedDate DESC
+            LIMIT {limit}
+        """
+
+        async with get_sf_client() as client:
+            response = await client.get(
+                f"{instance_url}/services/data/v59.0/query",
+                params={"q": soql},
+                headers={"Authorization": f"Bearer {access_token}"},
+                timeout=30.0
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                records = data.get('records', [])
+                logger.info(f"Found {len(records)} recent SF Leads (last {days_back} days)")
+                return records
+            else:
+                logger.error(f"SF Lead query failed: {response.status_code} {response.text[:200]}")
+                return []
+
+    async def _query_recent_sf_contacts(
+        self,
+        access_token: str,
+        instance_url: str,
+        days_back: int = 7,
+        limit: int = 200
+    ) -> List[Dict[str, Any]]:
+        """Query Salesforce for recently created/modified Contacts."""
+        soql = f"""
+            SELECT Id, FirstName, LastName, Email, Phone, MobilePhone, HomePhone,
+                   Title, Department, MailingStreet, MailingCity, MailingState,
+                   MailingPostalCode, MailingCountry, Birthdate, AccountId,
+                   Description, LeadSource,
+                   CreatedDate, LastModifiedDate
+            FROM Contact
+            WHERE LastModifiedDate >= LAST_N_DAYS:{days_back}
+              AND Email != null
+            ORDER BY LastModifiedDate DESC
+            LIMIT {limit}
+        """
+
+        async with get_sf_client() as client:
+            response = await client.get(
+                f"{instance_url}/services/data/v59.0/query",
+                params={"q": soql},
+                headers={"Authorization": f"Bearer {access_token}"},
+                timeout=30.0
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                records = data.get('records', [])
+                logger.info(f"Found {len(records)} recent SF Contacts (last {days_back} days)")
+                return records
+            else:
+                logger.error(f"SF Contact query failed: {response.status_code} {response.text[:200]}")
+                return []
+
+    async def _query_recent_sf_opportunities(
+        self,
+        access_token: str,
+        instance_url: str,
+        days_back: int = 7,
+        limit: int = 200
+    ) -> List[Dict[str, Any]]:
+        """Query Salesforce for recently created/modified Opportunities."""
+        soql = f"""
+            SELECT Id, Name, Amount, StageName, CloseDate, Probability,
+                   Type, LeadSource, NextStep, Description,
+                   ExpectedRevenue, AccountId,
+                   CreatedDate, LastModifiedDate, IsClosed, IsWon
+            FROM Opportunity
+            WHERE LastModifiedDate >= LAST_N_DAYS:{days_back}
+            ORDER BY LastModifiedDate DESC
+            LIMIT {limit}
+        """
+
+        async with get_sf_client() as client:
+            response = await client.get(
+                f"{instance_url}/services/data/v59.0/query",
+                params={"q": soql},
+                headers={"Authorization": f"Bearer {access_token}"},
+                timeout=30.0
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                records = data.get('records', [])
+                logger.info(f"Found {len(records)} recent SF Opportunities (last {days_back} days)")
+                return records
+            else:
+                logger.error(f"SF Opportunity query failed: {response.status_code} {response.text[:200]}")
+                return []
+
+    async def _create_crm_lead_if_new(
+        self,
+        db: Session,
+        sf_record: Dict[str, Any],
+        sf_type: str,
+        user_id: int
+    ) -> bool:
+        """
+        Create a CRM lead from a Salesforce Lead/Contact if it doesn't already exist.
+
+        Returns True if a new lead was created, False if it already existed.
+        """
+        from sqlalchemy import text
+
+        sf_id = sf_record.get('Id')
+        email = sf_record.get('Email')
+
+        if not sf_id:
+            return False
+
+        # Check if already exists by salesforce_id
+        existing = db.execute(text("""
+            SELECT id FROM leads
+            WHERE salesforce_id = :sf_id AND owner_id = :user_id
+            LIMIT 1
+        """), {"sf_id": sf_id, "user_id": user_id}).fetchone()
+
+        if existing:
+            return False
+
+        # Check if already exists by email (for this user)
+        if email:
+            existing_by_email = db.execute(text("""
+                SELECT id FROM leads
+                WHERE email = :email AND owner_id = :user_id
+                LIMIT 1
+            """), {"email": email, "user_id": user_id}).fetchone()
+
+            if existing_by_email:
+                # Update salesforce_id on the existing record
+                db.execute(text("""
+                    UPDATE leads SET salesforce_id = :sf_id,
+                        meta_data = COALESCE(meta_data, '{}'::jsonb) ||
+                            jsonb_build_object('salesforce_type', :sf_type,
+                                              'salesforce_synced_at', CURRENT_TIMESTAMP::text),
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = :lead_id
+                """), {"sf_id": sf_id, "sf_type": sf_type, "lead_id": existing_by_email.id})
+                return False
+
+        # Build new lead record
+        first_name = sf_record.get('FirstName') or ''
+        last_name = sf_record.get('LastName') or 'Unknown'
+
+        # Address fields differ between Lead and Contact
+        street = sf_record.get('Street') or sf_record.get('MailingStreet')
+        city = sf_record.get('City') or sf_record.get('MailingCity')
+        state = sf_record.get('State') or sf_record.get('MailingState')
+        zip_code = sf_record.get('PostalCode') or sf_record.get('MailingPostalCode')
+
+        source = sf_record.get('LeadSource') or 'Salesforce'
+        stage = self._map_sf_lead_status_to_crm(sf_record.get('Status', ''))
+        phone = sf_record.get('Phone') or sf_record.get('MobilePhone')
+        company = sf_record.get('Company') or ''
+        notes = sf_record.get('Description') or ''
+
+        db.execute(text("""
+            INSERT INTO leads (
+                first_name, last_name, email, phone, company,
+                source, stage, address, city, state, zip_code,
+                notes, salesforce_id, owner_id,
+                meta_data, created_at, updated_at
+            ) VALUES (
+                :first_name, :last_name, :email, :phone, :company,
+                :source, :stage, :address, :city, :state, :zip_code,
+                :notes, :sf_id, :owner_id,
+                jsonb_build_object('salesforce_type', :sf_type,
+                                   'salesforce_imported_at', CURRENT_TIMESTAMP::text,
+                                   'salesforce_source', 'auto_import'),
+                CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            )
+        """), {
+            "first_name": first_name,
+            "last_name": last_name,
+            "email": email,
+            "phone": phone,
+            "company": company,
+            "source": source,
+            "stage": stage,
+            "address": street,
+            "city": city,
+            "state": state,
+            "zip_code": zip_code,
+            "notes": notes,
+            "sf_id": sf_id,
+            "owner_id": user_id,
+            "sf_type": sf_type,
+        })
+
+        logger.info(f"Created CRM lead from Salesforce {sf_type} {sf_id}: {first_name} {last_name} ({email})")
+        return True
+
+    async def _create_crm_loan_if_new(
+        self,
+        db: Session,
+        sf_opp: Dict[str, Any],
+        user_id: int
+    ) -> bool:
+        """
+        Create a CRM loan from a Salesforce Opportunity if it doesn't already exist.
+
+        Returns True if a new loan was created, False if it already existed.
+        """
+        from sqlalchemy import text
+
+        sf_id = sf_opp.get('Id')
+
+        if not sf_id:
+            return False
+
+        # Check if already exists by salesforce_id
+        existing = db.execute(text("""
+            SELECT id FROM loans
+            WHERE salesforce_id = :sf_id AND loan_officer_id = :user_id
+            LIMIT 1
+        """), {"sf_id": sf_id, "user_id": user_id}).fetchone()
+
+        if existing:
+            return False
+
+        # Build new loan record from Opportunity
+        name = sf_opp.get('Name') or 'Salesforce Opportunity'
+        amount = float(sf_opp.get('Amount') or 0)
+        stage = self._map_salesforce_stage(sf_opp.get('StageName', ''))
+        close_date = sf_opp.get('CloseDate')
+        lead_source = sf_opp.get('LeadSource') or 'Salesforce'
+        description = sf_opp.get('Description') or ''
+        next_step = sf_opp.get('NextStep') or ''
+        loan_type = sf_opp.get('Type') or ''
+
+        db.execute(text("""
+            INSERT INTO loans (
+                borrower_name, amount, stage, closing_date,
+                lead_source, notes, next_steps, loan_type,
+                salesforce_id, loan_officer_id,
+                salesforce_sync_status, salesforce_last_synced_at,
+                created_at, updated_at
+            ) VALUES (
+                :name, :amount, :stage, :close_date,
+                :lead_source, :notes, :next_steps, :loan_type,
+                :sf_id, :user_id,
+                'synced', CURRENT_TIMESTAMP,
+                CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            )
+        """), {
+            "name": name,
+            "amount": amount,
+            "stage": stage,
+            "close_date": close_date,
+            "lead_source": lead_source,
+            "notes": description,
+            "next_steps": next_step,
+            "loan_type": loan_type,
+            "sf_id": sf_id,
+            "user_id": user_id,
+        })
+
+        logger.info(f"Created CRM loan from Salesforce Opportunity {sf_id}: {name} (${amount:,.0f})")
+        return True
+
 
     # =========================================================================
     # OUTBOUND SYNC - DISABLED (Push CRM data TO Salesforce)
