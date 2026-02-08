@@ -1328,6 +1328,8 @@ class CallMonitoringOrchestrator:
             return await self._execute_calendar_action(title, content, structured_data, session, user_id)
         elif artifact_type == 'follow_up_call':
             return await self._create_follow_up_reminder(title, content, structured_data, session, user_id)
+        elif artifact_type == 'follow_up_draft':
+            return await self._create_email_draft(title, content, structured_data, session, user_id)
         else:
             # Non-actionable artifacts (summary, uw_note, marketing content, etc.)
             return None
@@ -1340,15 +1342,74 @@ class CallMonitoringOrchestrator:
         session: Dict,
         user_id: str,
     ) -> str:
-        """Create a calendar event from a scheduled_appointment artifact."""
-        event_id = str(uuid.uuid4())
+        """Create a calendar event from a scheduled_appointment artifact.
 
+        Uses SmartSchedulerService for LO auto-assignment and availability checking.
+        Falls back to raw SQL INSERT if the scheduler service fails.
+        """
         # Parse appointment details
         appointment_type = structured_data.get('appointment_type', 'general_meeting')
         proposed_datetime = structured_data.get('proposed_datetime')
         duration_minutes = structured_data.get('duration_minutes', 30)
         participants = structured_data.get('participants', [])
         meeting_type = structured_data.get('meeting_type', 'phone')
+
+        # Try SmartSchedulerService first for proper LO assignment + availability
+        try:
+            from backend.services.smart_scheduler_service import SmartSchedulerService
+
+            # Resolve contact info from lead/loan
+            contact_name = structured_data.get('contact_name', '')
+            contact_email = structured_data.get('contact_email', '')
+            contact_phone = structured_data.get('contact_phone', '')
+            contact_id = None
+
+            lead_id = session.get('lead_id')
+            if lead_id and (not contact_name or not contact_email):
+                lead_row = self.db.execute(text(
+                    "SELECT id, first_name, last_name, email, phone FROM leads WHERE id = :lid"
+                ), {"lid": lead_id}).fetchone()
+                if lead_row:
+                    contact_id = lead_row[0]
+                    contact_name = contact_name or f"{lead_row[1] or ''} {lead_row[2] or ''}".strip()
+                    contact_email = contact_email or (lead_row[3] or '')
+                    contact_phone = contact_phone or (lead_row[4] or '')
+
+            # Parse proposed_datetime to a datetime object if it's a string
+            if isinstance(proposed_datetime, str):
+                from dateutil.parser import parse as parse_dt
+                appointment_time = parse_dt(proposed_datetime)
+            elif isinstance(proposed_datetime, datetime):
+                appointment_time = proposed_datetime
+            else:
+                raise ValueError(f"Cannot parse proposed_datetime: {proposed_datetime}")
+
+            scheduler = SmartSchedulerService(self.db)
+            result = scheduler.book_appointment(
+                contact_name=contact_name or 'Unknown',
+                contact_email=contact_email or '',
+                appointment_time=appointment_time,
+                contact_phone=contact_phone,
+                contact_id=contact_id,
+                appointment_type=appointment_type,
+                duration_minutes=duration_minutes,
+                notes=content,
+                conversation_id=session.get('id'),
+                loan_officer_id=structured_data.get('loan_officer_id'),  # None = auto-assign
+            )
+
+            if result.get('success'):
+                logger.info(f"Smart Scheduler booked appointment {result.get('appointment_id')} "
+                           f"with LO {result.get('loan_officer', {}).get('name', 'auto-assigned')}")
+                return result['appointment_id']
+            else:
+                logger.warning(f"Smart Scheduler failed: {result.get('error')}. Falling back to raw SQL.")
+
+        except Exception as e:
+            logger.warning(f"SmartSchedulerService unavailable ({e}). Falling back to raw calendar_events INSERT.")
+
+        # Fallback: raw SQL INSERT into calendar_events
+        event_id = str(uuid.uuid4())
 
         self.db.execute(text("""
             INSERT INTO calendar_events (
@@ -1437,6 +1498,58 @@ class CallMonitoringOrchestrator:
         })
 
         return reminder_id
+
+    async def _create_email_draft(
+        self,
+        title: str,
+        content: str,
+        structured_data: Dict,
+        session: Dict,
+        user_id: str,
+    ) -> str:
+        """Create an email draft from a follow_up_draft artifact."""
+        draft_id = str(uuid.uuid4())
+
+        # Resolve recipient info from lead
+        recipient_email = structured_data.get('recipient_email', '')
+        recipient_name = structured_data.get('recipient_name', '')
+
+        lead_id = session.get('lead_id')
+        if lead_id and (not recipient_email or not recipient_name):
+            lead_row = self.db.execute(text(
+                "SELECT first_name, last_name, email FROM leads WHERE id = :lid"
+            ), {"lid": lead_id}).fetchone()
+            if lead_row:
+                recipient_name = recipient_name or f"{lead_row[0] or ''} {lead_row[1] or ''}".strip()
+                recipient_email = recipient_email or (lead_row[2] or '')
+
+        subject = structured_data.get('subject', title)
+        body_html = structured_data.get('body_html', '')
+        body_text = structured_data.get('body_text', content)
+
+        self.db.execute(text("""
+            INSERT INTO email_drafts (
+                user_id, lead_id, loan_id, recipient_email, recipient_name,
+                subject, body_html, body_text, source_type, source_id,
+                status, created_at, updated_at
+            ) VALUES (
+                :user_id, :lead_id, :loan_id, :recipient_email, :recipient_name,
+                :subject, :body_html, :body_text, 'call_recording', :source_id,
+                'draft', NOW(), NOW()
+            )
+        """), {
+            "user_id": session.get('user_id') or user_id,
+            "lead_id": lead_id,
+            "loan_id": session.get('loan_id'),
+            "recipient_email": recipient_email,
+            "recipient_name": recipient_name,
+            "subject": subject,
+            "body_html": body_html,
+            "body_text": body_text,
+            "source_id": session.get('id'),
+        })
+
+        return draft_id
 
     async def _create_pa_task(
         self,

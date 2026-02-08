@@ -3108,4 +3108,39 @@ export const callMonitoringAPI = {
   },
 };
 
+// ==================== Email Drafts ====================
+export const emailDraftsAPI = {
+  getAll: async (params = {}) => {
+    const response = await api.get('/api/v1/email-drafts', { params });
+    return response.data;
+  },
+
+  getCallDrafts: async () => {
+    const response = await api.get('/api/v1/email-drafts', {
+      params: { source_type: 'call_recording', status: 'draft' }
+    });
+    return response.data.drafts || [];
+  },
+
+  getById: async (id) => {
+    const response = await api.get(`/api/v1/email-drafts/${id}`);
+    return response.data;
+  },
+
+  update: async (id, data) => {
+    const response = await api.put(`/api/v1/email-drafts/${id}`, data);
+    return response.data;
+  },
+
+  send: async (id) => {
+    const response = await api.post(`/api/v1/email-drafts/${id}/send`);
+    return response.data;
+  },
+
+  delete: async (id) => {
+    const response = await api.delete(`/api/v1/email-drafts/${id}`);
+    return response.data;
+  },
+};
+
 export default api;

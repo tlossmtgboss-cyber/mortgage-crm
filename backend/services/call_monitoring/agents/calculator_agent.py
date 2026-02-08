@@ -322,7 +322,24 @@ IMPORTANT: Only extract data explicitly stated. Flag when you make assumptions."
 
         # If no specific calculations requested but we have data, suggest calculations
         if not calculations_to_run and self._has_sufficient_data(merged_data):
-            suggested = self._suggest_calculations(merged_data)
+            # Look up lead's buyer_type for filtering suggestions
+            buyer_type = None
+            lead = context.get('lead') or {}
+            lead_id = context.get('lead_id') or lead.get('id')
+            if lead.get('buyer_type'):
+                buyer_type = lead['buyer_type']
+            elif lead_id:
+                try:
+                    from sqlalchemy import text as _text
+                    row = self.db.execute(_text(
+                        "SELECT buyer_type FROM leads WHERE id = :lid"
+                    ), {"lid": lead_id}).fetchone()
+                    if row and row[0]:
+                        buyer_type = row[0]
+                except Exception:
+                    pass
+
+            suggested = self._suggest_calculations(merged_data, buyer_type=buyer_type)
             for calc_type in suggested:
                 try:
                     result = self._execute_calculation(calc_type, merged_data, context)
@@ -902,8 +919,13 @@ IMPORTANT: Only extract data explicitly stated. Flag when you make assumptions."
             (data.get('annual_income') or data.get('monthly_income'))
         )
 
-    def _suggest_calculations(self, data: Dict) -> List[str]:
-        """Suggest relevant calculations based on available data."""
+    def _suggest_calculations(self, data: Dict, buyer_type: Optional[str] = None) -> List[str]:
+        """Suggest relevant calculations based on available data.
+
+        If buyer_type is set, filters suggestions to only those assigned
+        to that buyer type in calculator_buyer_type_assignments.
+        Falls back to default behavior when no assignments exist.
+        """
         suggested = []
 
         # Always suggest these if we have the data
@@ -935,6 +957,22 @@ IMPORTANT: Only extract data explicitly stated. Flag when you make assumptions."
         # Suggest prepay vs invest if extra cash mentioned
         if data.get('extra_monthly_cash') and data.get('loan_amount'):
             suggested.append('prepay_vs_invest')
+
+        # Filter by buyer_type assignments if available
+        if buyer_type and suggested:
+            try:
+                from sqlalchemy import text
+                rows = self.db.execute(text("""
+                    SELECT calculator_type FROM calculator_buyer_type_assignments
+                    WHERE buyer_type = :bt AND enabled = TRUE
+                    ORDER BY priority DESC
+                """), {"bt": buyer_type}).fetchall()
+
+                if rows:
+                    allowed = {r[0] for r in rows}
+                    suggested = [s for s in suggested if s in allowed]
+            except Exception as e:
+                logger.debug(f"Buyer type filter unavailable: {e}")
 
         return suggested[:4]  # Limit suggestions
 

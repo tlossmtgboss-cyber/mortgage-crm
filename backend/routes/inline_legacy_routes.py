@@ -246,6 +246,13 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.error(f"❌ Cache routes failed: {e}")
 
+    try:
+        from routes.calculator_settings_routes import register_calculator_settings_routes
+        register_calculator_settings_routes(app, get_db, get_current_user, **kwargs)
+        logger.info("✅ Calculator settings routes loaded (extracted)")
+    except Exception as e:
+        logger.error(f"❌ Calculator settings routes failed: {e}")
+
     # ---- All routes below are registered on `app` ----
 
     @app.post("/api/v1/ai/orchestrator-chat-stream")

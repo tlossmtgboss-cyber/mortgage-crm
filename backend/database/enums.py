@@ -308,6 +308,16 @@ class CoachMode(str, enum.Enum):
     priority_guidance = "priority_guidance"
 
 
+class BuyerType(str, enum.Enum):
+    """Buyer type categories for calculator assignment"""
+    FIRST_TIME = "first_time"
+    REPEAT = "repeat"
+    VACATION = "vacation"
+    INVESTMENT = "investment"
+    REFINANCE = "refinance"
+    CUSTOM = "custom"
+
+
 # ============================================================================
 # EXPORTS
 # ============================================================================
@@ -342,4 +352,6 @@ __all__ = [
     "ApplicationStep",
     # AI
     "CoachMode",
+    # Calculator
+    "BuyerType",
 ]
