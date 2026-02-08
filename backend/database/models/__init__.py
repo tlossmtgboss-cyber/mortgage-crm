@@ -236,6 +236,9 @@ from .estimate import (
     EstimateComparison,
 )
 
+# Platform contract models
+from .platform_contract import PlatformContract
+
 
 __all__ = [
     # =====================
@@ -449,4 +452,9 @@ __all__ = [
     "EstimateParseCache",
     "EstimateParseFailure",
     "EstimateComparison",
+
+    # =====================
+    # Platform Contracts
+    # =====================
+    "PlatformContract",
 ]

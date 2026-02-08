@@ -12,11 +12,12 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { smartDocsAPI } from '../services/smartDocsApi';
 import { usePermissions } from '../contexts/PermissionContext';
+import AdminContracts from '../components/AdminContracts';
 import './SmartDocs.css';
 
 function SmartDocs() {
   const navigate = useNavigate();
-  const { userRole, hasAnyPermission, isAdmin } = usePermissions();
+  const { userRole, hasAnyPermission, isAdmin, isPlatformAdmin } = usePermissions();
 
   // Permission check - require documents/loans access
   // Use isAdmin from context which has robust admin detection (checks permission_role, is_admin flag, legacy role)
@@ -429,6 +430,11 @@ function SmartDocs() {
       alert('Failed to create duplicate tasks');
     }
   };
+
+  // Platform admin sees contracts dashboard instead of loan documents
+  if (isPlatformAdmin) {
+    return <AdminContracts />;
+  }
 
   // Access denied if user doesn't have documents permissions
   if (!canAccessSmartDocs) {

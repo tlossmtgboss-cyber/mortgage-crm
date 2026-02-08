@@ -5355,6 +5355,14 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.warning(f"Could not load portal smart docs routes: {e}")
 
+    # Include Platform Contracts routes (admin licensing agreements)
+    try:
+        from routes.platform_contracts_routes import router as platform_contracts_router
+        app.include_router(platform_contracts_router, tags=["Platform Contracts"])
+        logger.info("✅ Platform Contracts routes loaded")
+    except Exception as e:
+        logger.warning(f"Could not load platform contracts routes: {e}")
+
     # Include Income routes (AI-powered income extraction and calculation)
     try:
         from routes.income_routes import router as income_router
