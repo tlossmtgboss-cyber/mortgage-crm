@@ -395,26 +395,8 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ CSRF protection middleware not loaded: {e}")
 
-# Dynamic CORS middleware - checks database for allowed custom domains
-# Caches domains in memory for performance, refreshes every 60 seconds
-# SECURITY: Using explicit allowlists instead of wildcards
-app.add_middleware(
-    DynamicCORSMiddleware,
-    allow_credentials=True,
-    # Explicit method allowlist (no wildcards for security)
-    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    # Explicit header allowlist (no wildcards for security)
-    allow_headers=[
-        "Accept", "Accept-Language", "Authorization", "Content-Language",
-        "Content-Type", "Origin", "X-Requested-With", "X-CSRF-Token",
-        "X-Request-ID", "X-Visitor-ID", "X-Impersonation-Token",
-    ],
-    expose_headers=[
-        "Content-Length", "Content-Type", "X-Request-ID",
-        "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset",
-    ],
-    max_age=3600,
-)
+# NOTE: CORS middleware is added AFTER all other middleware (including production hardening)
+# to ensure it is the absolute outermost middleware. See below after production hardening block.
 
 # Performance Monitoring middleware - tracks endpoint response times and slow requests
 try:
@@ -438,7 +420,7 @@ except Exception as e:
     logger.warning(f"⚠️ Tenant context middleware not loaded: {e}")
 
 logger.info(f"✅ Security middleware enabled (ENVIRONMENT={os.getenv('ENVIRONMENT', 'development')}): "
-            "CORS (outermost), IP access control, rate limiting, IP blocking, security headers, request validation, and logging")
+            "IP access control, rate limiting, IP blocking, security headers, request validation, and logging")
 
 # ============================================================================
 # PRODUCTION HARDENING - Sentry, structured logging, request tracing
@@ -502,6 +484,32 @@ except Exception as e:
     logger.warning(f"⚠️ DataDog monitoring not fully initialized: {e}")
     business_metrics = None
     dd_metrics = None
+
+# ============================================================================
+# CORS MIDDLEWARE — MUST be added LAST to be the absolute outermost middleware
+# In Starlette/FastAPI, middleware is LIFO: last added = outermost = first to execute.
+# This ensures CORS headers are present on ALL responses, including errors from
+# inner middleware (rate limiting, IP blocking, security headers, etc.)
+# ============================================================================
+try:
+    app.add_middleware(
+        DynamicCORSMiddleware,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+        allow_headers=[
+            "Accept", "Accept-Language", "Authorization", "Content-Language",
+            "Content-Type", "Origin", "X-Requested-With", "X-CSRF-Token",
+            "X-Request-ID", "X-Visitor-ID", "X-Impersonation-Token",
+        ],
+        expose_headers=[
+            "Content-Length", "Content-Type", "X-Request-ID",
+            "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset",
+        ],
+        max_age=3600,
+    )
+    logger.info("✅ CORS middleware enabled (outermost — added last for correct ordering)")
+except Exception as e:
+    logger.warning(f"⚠️ CORS middleware not loaded: {e}")
 
 # Mount static files directory for voicemail audio files
 from pathlib import Path as PathLib
