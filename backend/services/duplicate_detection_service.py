@@ -163,28 +163,40 @@ class DuplicateDetectionService:
         return digits if len(digits) == 10 else None
 
     def find_duplicate_loans(self) -> List[Dict]:
-        """Find duplicate loans based on borrower info."""
-        from main import Loan, LoanStage
+        """Find duplicate loans based on borrower email using raw SQL."""
+        # Use raw SQL to avoid ORM enum issues (stage is a String column)
+        result = self.db.execute(
+            text("""
+                SELECT id, loan_number, borrower_name, borrower_email,
+                       amount, stage, created_at
+                FROM loans
+                WHERE stage IS NULL
+                   OR stage NOT IN ('FUNDED', 'DEAD')
+            """)
+        )
+        loans = result.fetchall()
+        columns = result.keys()
+        loans = [dict(zip(columns, row)) for row in loans]
 
-        # Get all active loans (exclude funded and dead loans)
-        loans = self.db.query(Loan).filter(
-            Loan.stage.notin_([LoanStage.FUNDED, LoanStage.DEAD])
-        ).all()
+        # Group by borrower email
+        email_groups = {}
+        for loan in loans:
+            if loan.get('borrower_email'):
+                email_lower = loan['borrower_email'].lower()
+                if email_lower not in email_groups:
+                    email_groups[email_lower] = []
+                email_groups[email_lower].append(loan)
 
         duplicates = []
         checked_pairs = set()
 
-        for loan in loans:
-            # Check for loans with same borrower email
-            if loan.borrower_email:
-                matches = self.db.query(Loan).filter(
-                    Loan.id != loan.id,
-                    Loan.borrower_email == loan.borrower_email,
-                    Loan.stage.notin_([LoanStage.FUNDED, LoanStage.DEAD])
-                ).all()
+        for email, loan_group in email_groups.items():
+            if len(loan_group) < 2:
+                continue
 
-                for match in matches:
-                    pair_key = tuple(sorted([loan.id, match.id]))
+            for i, loan in enumerate(loan_group):
+                for match in loan_group[i+1:]:
+                    pair_key = tuple(sorted([loan['id'], match['id']]))
                     if pair_key in checked_pairs:
                         continue
                     checked_pairs.add(pair_key)
@@ -192,25 +204,25 @@ class DuplicateDetectionService:
                     duplicates.append({
                         'type': 'loan',
                         'record_1': {
-                            'id': loan.id,
-                            'loan_number': loan.loan_number,
-                            'borrower_name': loan.borrower_name or '',
-                            'borrower_email': loan.borrower_email,
-                            'amount': float(loan.amount) if loan.amount else None,
-                            'status': str(loan.stage.value) if loan.stage else loan.status,
-                            'created_at': loan.created_at.isoformat() if loan.created_at else None
+                            'id': loan['id'],
+                            'loan_number': loan.get('loan_number'),
+                            'borrower_name': loan.get('borrower_name') or '',
+                            'borrower_email': loan.get('borrower_email'),
+                            'amount': float(loan['amount']) if loan.get('amount') else None,
+                            'status': loan.get('stage'),
+                            'created_at': loan['created_at'].isoformat() if loan.get('created_at') else None
                         },
                         'record_2': {
-                            'id': match.id,
-                            'loan_number': match.loan_number,
-                            'borrower_name': match.borrower_name or '',
-                            'borrower_email': match.borrower_email,
-                            'amount': float(match.amount) if match.amount else None,
-                            'status': str(match.stage.value) if match.stage else match.status,
-                            'created_at': match.created_at.isoformat() if match.created_at else None
+                            'id': match['id'],
+                            'loan_number': match.get('loan_number'),
+                            'borrower_name': match.get('borrower_name') or '',
+                            'borrower_email': match.get('borrower_email'),
+                            'amount': float(match['amount']) if match.get('amount') else None,
+                            'status': match.get('stage'),
+                            'created_at': match['created_at'].isoformat() if match.get('created_at') else None
                         },
                         'confidence_score': 100,
-                        'match_reasons': [f"Same borrower email: {loan.borrower_email}"]
+                        'match_reasons': [f"Same borrower email: {email}"]
                     })
 
         return duplicates

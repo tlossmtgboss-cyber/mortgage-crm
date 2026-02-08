@@ -21,7 +21,7 @@ const ONBOARDING_STEPS = [
     id: 'action-items',
     title: '⚡ Action Required',
     description: 'This is your task center! When you have items to complete, they\'ll appear here. Click each task to view details and mark it done. Completing these keeps your loan moving forward quickly!',
-    position: 'bottom',
+    position: 'top',
     targetSelector: '.applicant-tasks-section, .all-caught-up-section',
     highlightNav: false,
     isPrimary: true,
