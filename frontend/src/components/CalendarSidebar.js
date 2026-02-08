@@ -682,23 +682,6 @@ function CalendarSidebar({ leadId, loanId, children }) {
 
       {/* Drop zone hint - now clickable as fallback */}
       <div
-        className="drop-zone-hint clickable"
-        onClick={() => {
-          // Open modal for manual appointment creation
-          const defaultDate = selectedDate.toISOString().split('T')[0];
-          setAppointmentForm(prev => ({
-            ...prev,
-            title: 'New Appointment',
-            date: defaultDate,
-          }));
-          setEmailData(null);
-          setShowAppointmentModal(true);
-        }}
-        title="Click to create a new appointment"
-      >
-        <span>📅 Click here to schedule</span>
-      </div>
-
       {/* Appointments List */}
       <div className="appointments-section">
         <div className="appointments-header">
