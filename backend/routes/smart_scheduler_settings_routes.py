@@ -10,20 +10,19 @@ Proof-of-concept implementation following the Agent Governance pattern:
 - Working hours logic validation
 """
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from pydantic import BaseModel, Field, validator, root_validator
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List, Any, Callable
 from datetime import datetime, time
 from enum import Enum
 import pytz
 import re
 import logging
 
-from database import get_db
-from auth import get_current_user
+from database import get_db as db_get_db
 from utils.error_handling import (
     ValidationException,
     PermissionException,
@@ -36,6 +35,28 @@ from utils.error_handling import (
 
 router = APIRouter(prefix="/api/v1/smart-scheduler-settings", tags=["Smart Scheduler Settings"])
 logger = logging.getLogger(__name__)
+
+# Dependency injection for auth
+_get_current_user: Optional[Callable] = None
+
+
+def set_dependencies(get_current_user_func: Callable):
+    """Set dependencies at runtime from main.py."""
+    global _get_current_user
+    _get_current_user = get_current_user_func
+
+
+def get_db():
+    yield from db_get_db()
+
+
+async def get_current_user(request: Request, db: Session = Depends(get_db)):
+    """Get current user - wrapper that works at request time."""
+    if _get_current_user is None:
+        raise HTTPException(status_code=500, detail="Auth dependency not configured")
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    return await _get_current_user(token=token, request=request, db=db)
 
 
 # =============================================================================

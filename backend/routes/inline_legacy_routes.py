@@ -6127,7 +6127,8 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
 
     # Smart Scheduler Settings routes (Comprehensive error handling pattern)
     try:
-        from routes.smart_scheduler_settings_routes import router as smart_scheduler_settings_router
+        from routes.smart_scheduler_settings_routes import router as smart_scheduler_settings_router, set_dependencies as set_scheduler_settings_deps
+        set_scheduler_settings_deps(get_current_user)
         app.include_router(smart_scheduler_settings_router, tags=["Smart Scheduler Settings"])
         logger.info("✅ Smart Scheduler Settings routes loaded")
     except Exception as e:
