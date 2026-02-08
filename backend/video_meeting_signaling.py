@@ -171,6 +171,7 @@ class MeetingConnectionManager:
             del self.rooms[room_code]
             if room_code in self.participants:
                 del self.participants[room_code]
+            logger.info(f"Room {room_code} emptied and cleaned up")
 
         logger.info(f"Participant {participant_id} disconnected from room {room_code}")
 
@@ -182,8 +183,8 @@ class MeetingConnectionManager:
             websocket = self.rooms[room_code][participant_id]
             try:
                 await websocket.send_json(message)
-            except Exception as e:
-                logger.error(f"Error sending to {participant_id}: {e}")
+            except (RuntimeError, ConnectionError, WebSocketDisconnect) as e:
+                logger.warning(f"Connection lost sending to {participant_id}: {e}")
 
     async def broadcast_to_room(self, room_code: str, message: dict, exclude: str = None):
         """Broadcast a message to all participants in a room"""
@@ -336,12 +337,15 @@ async def websocket_video_meeting(
             elif message_type == "recording_started":
                 # Only hosts can broadcast recording state - validated server-side
                 if is_host:
+                    recording_id = message.get("recording_id", "")
+                    if len(str(recording_id)) > 64:
+                        recording_id = str(recording_id)[:64]
                     await meeting_manager.broadcast_to_room(room_code, {
                         "type": "recording_state_changed",
                         "recording": True,
                         "started_by": participant_id,
                         "started_by_name": display_name,
-                        "recording_id": message.get("recording_id"),
+                        "recording_id": recording_id,
                         "consent_type": message.get("consent_type"),
                         "disclosure_script": message.get("disclosure_script"),
                         "timestamp": datetime.utcnow().isoformat()
@@ -363,6 +367,7 @@ async def websocket_video_meeting(
                     await meeting_manager.broadcast_to_room(room_code, {
                         "type": "breakout_update",
                         "action": "created",
+                        "room_id": message.get("room_id") or message.get("room"),
                         "room": message.get("room"),
                         "timestamp": datetime.utcnow().isoformat()
                     })
@@ -454,7 +459,10 @@ async def get_ice_servers():
         try:
             from twilio.rest import Client
             client = Client(twilio_sid, twilio_token)
-            token = client.tokens.create()
+            token = await asyncio.wait_for(
+                asyncio.to_thread(client.tokens.create),
+                timeout=5.0
+            )
 
             if token.ice_servers:
                 for server in token.ice_servers:
@@ -467,6 +475,8 @@ async def get_ice_servers():
 
                 turn_available = True
                 logger.info(f"TURN: Twilio ({len(token.ice_servers)} servers)")
+        except asyncio.TimeoutError:
+            logger.error("Twilio TURN token creation timed out after 5s")
         except Exception as e:
             logger.error(f"Twilio TURN failed: {e}")
 
@@ -496,7 +506,7 @@ async def get_ice_servers():
                 }
             ])
             turn_available = True
-            logger.info(f"TURN: coturn ({coturn_host})")
+            logger.info(f"TURN: coturn ({coturn_host.split('.')[0]}...)")
 
     if not turn_available:
         logger.warning(

@@ -18,6 +18,7 @@ from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, EmailStr, validator
 import logging
 import os
+from pathlib import Path
 import secrets
 import string
 import time
@@ -111,13 +112,19 @@ async def _validate_twilio_signature(request: Request) -> bool:
 _rate_limit_store: Dict[str, list] = defaultdict(list)
 _RATE_LIMIT_WINDOW = 60  # seconds
 _RATE_LIMIT_MAX = 10  # max requests per window per IP
+_RATE_LIMIT_MAX_KEYS = 10000  # max tracked IPs before forced cleanup
 
 
 def _check_rate_limit(client_ip: str) -> bool:
     """Check if client IP is within rate limit. Returns True if allowed."""
     now = time.time()
-    # Prune old entries
+    # Prune old entries for this IP
     _rate_limit_store[client_ip] = [t for t in _rate_limit_store[client_ip] if now - t < _RATE_LIMIT_WINDOW]
+    # Periodic global cleanup to prevent unbounded growth
+    if len(_rate_limit_store) > _RATE_LIMIT_MAX_KEYS:
+        stale_keys = [k for k, v in _rate_limit_store.items() if not v or now - v[-1] > _RATE_LIMIT_WINDOW]
+        for k in stale_keys:
+            del _rate_limit_store[k]
     if len(_rate_limit_store[client_ip]) >= _RATE_LIMIT_MAX:
         return False
     _rate_limit_store[client_ip].append(now)
@@ -621,10 +628,14 @@ async def create_meeting_room(
         if org_settings.max_participants and data.max_participants > org_settings.max_participants:
             data.max_participants = org_settings.max_participants
 
-    # Generate unique room code
+    # Generate unique room code (with collision guard)
     room_code = generate_room_code()
-    while db.query(VideoMeetingRoom).filter(VideoMeetingRoom.room_code == room_code).first():
+    for _ in range(10):
+        if not db.query(VideoMeetingRoom).filter(VideoMeetingRoom.room_code == room_code).first():
+            break
         room_code = generate_room_code()
+    else:
+        raise HTTPException(status_code=500, detail="Failed to generate unique room code")
 
     # Calculate end time if not provided
     scheduled_end = data.scheduled_end
@@ -1277,6 +1288,7 @@ UPLOAD_CHUNK_SIZE = 64 * 1024  # 64 KB
 
 @router.post("/screen-recordings/upload")
 async def upload_screen_recording(
+    request: Request,
     file: UploadFile = File(...),
     meeting_id: Optional[str] = Form(None),
     room_code: Optional[str] = Form(None),
@@ -1285,18 +1297,23 @@ async def upload_screen_recording(
 ):
     """Upload a screen recording and return a shareable link."""
     try:
-        # Validate file extension
-        file_extension = file.filename.split('.')[-1].lower() if '.' in file.filename else 'webm'
-        if file_extension not in ALLOWED_RECORDING_EXTENSIONS:
+        # Validate file extension using pathlib for safe parsing
+        file_ext = Path(file.filename).suffix.lower().lstrip('.') if file.filename else ''
+        if not file_ext:
+            file_ext = 'webm'
+        if file_ext not in ALLOWED_RECORDING_EXTENSIONS:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid file type '.{file_extension}'. Allowed: {', '.join(ALLOWED_RECORDING_EXTENSIONS)}"
+                detail=f"Invalid file type '.{file_ext}'. Allowed: {', '.join(ALLOWED_RECORDING_EXTENSIONS)}"
             )
 
-        # Generate unique filename
+        # Generate unique filename and resolve path to prevent traversal
         recording_id = str(uuid.uuid4())
-        filename = f"{recording_id}.{file_extension}"
-        filepath = os.path.join(SCREEN_RECORDINGS_DIR, filename)
+        filename = f"{recording_id}.{file_ext}"
+        filepath = Path(SCREEN_RECORDINGS_DIR).resolve() / filename
+        if not str(filepath).startswith(str(Path(SCREEN_RECORDINGS_DIR).resolve())):
+            raise HTTPException(status_code=400, detail="Invalid file path")
+        filepath = str(filepath)
 
         # Stream file to disk in chunks with size enforcement
         total_size = 0
@@ -1325,9 +1342,8 @@ async def upload_screen_recording(
                 detail=f"File too large. Maximum size is {MAX_UPLOAD_SIZE // (1024*1024)} MB"
             )
 
-        # Generate shareable URL
-        # In production, this would be a cloud storage URL
-        base_url = os.getenv('BACKEND_URL', 'https://app.perenniaai.com')
+        # Generate shareable URL from request origin or BACKEND_URL env var
+        base_url = os.getenv('BACKEND_URL', str(request.base_url).rstrip('/'))
         share_url = f"{base_url}/api/v1/meetings/screen-recordings/{recording_id}"
 
         # Log recording metadata
@@ -1361,12 +1377,13 @@ async def get_screen_recording(
     if not re.match(r'^[a-zA-Z0-9\-]+$', recording_id):
         raise HTTPException(status_code=400, detail="Invalid recording ID")
 
-    # Find the recording file
-    for ext in ['webm', 'mp4', 'mkv']:
-        filepath = os.path.join(SCREEN_RECORDINGS_DIR, f"{recording_id}.{ext}")
-        if os.path.exists(filepath):
+    # Find the recording file with path safety check
+    recordings_dir = Path(SCREEN_RECORDINGS_DIR).resolve()
+    for ext in ALLOWED_RECORDING_EXTENSIONS:
+        filepath = recordings_dir / f"{recording_id}.{ext}"
+        if filepath.exists() and str(filepath).startswith(str(recordings_dir)):
             return FileResponse(
-                filepath,
+                str(filepath),
                 media_type=f"video/{ext}",
                 filename=f"screen-recording-{recording_id}.{ext}"
             )
@@ -1381,11 +1398,11 @@ async def delete_screen_recording(
     current_user = Depends(get_current_user)
 ):
     """Delete a screen recording."""
-    # Find and delete the recording file
-    for ext in ['webm', 'mp4', 'mkv']:
-        filepath = os.path.join(SCREEN_RECORDINGS_DIR, f"{recording_id}.{ext}")
-        if os.path.exists(filepath):
-            os.remove(filepath)
+    recordings_dir = Path(SCREEN_RECORDINGS_DIR).resolve()
+    for ext in ALLOWED_RECORDING_EXTENSIONS:
+        filepath = recordings_dir / f"{recording_id}.{ext}"
+        if filepath.exists() and str(filepath).startswith(str(recordings_dir)):
+            filepath.unlink()
             return {"success": True, "message": "Recording deleted"}
 
     raise HTTPException(status_code=404, detail="Recording not found")

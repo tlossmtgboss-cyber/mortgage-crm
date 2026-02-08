@@ -11,6 +11,11 @@ const API_BASE = isProduction
   ? 'https://api.perenniaai.com'
   : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
+// Configurable constants
+const WS_PING_INTERVAL_MS = 30000;       // WebSocket keepalive ping
+const BANDWIDTH_CHECK_INTERVAL_MS = 10000; // Remote stream quality monitoring
+const MAX_RECONNECT_ATTEMPTS = 5;
+
 const MeetingRoom = () => {
   const { roomCode } = useParams();
   const navigate = useNavigate();
@@ -287,7 +292,7 @@ const MeetingRoom = () => {
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'ping' }));
         }
-      }, 30000);
+      }, WS_PING_INTERVAL_MS);
       ws._pingInterval = pingInterval;
     };
 
@@ -451,12 +456,11 @@ const MeetingRoom = () => {
       }
 
       // Exponential backoff reconnection
-      const maxRetries = 5;
       const delays = [2000, 4000, 8000, 16000, 16000];
 
-      if (wsReconnectAttemptsRef.current < maxRetries) {
-        const delay = delays[wsReconnectAttemptsRef.current];
-        console.log(`Reconnecting in ${delay/1000}s (attempt ${wsReconnectAttemptsRef.current + 1}/${maxRetries})`);
+      if (wsReconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
+        const delay = delays[Math.min(wsReconnectAttemptsRef.current, delays.length - 1)];
+        console.log(`Reconnecting in ${delay/1000}s (attempt ${wsReconnectAttemptsRef.current + 1}/${MAX_RECONNECT_ATTEMPTS})`);
         setWsConnectionLost(true);
 
         wsReconnectTimeoutRef.current = setTimeout(() => {
@@ -561,8 +565,7 @@ const MeetingRoom = () => {
               });
             } catch (e) { /* stats not available */ }
           };
-          // Check bandwidth every 10 seconds
-          const bandwidthInterval = setInterval(monitorBandwidth, 10000);
+          const bandwidthInterval = setInterval(monitorBandwidth, BANDWIDTH_CHECK_INTERVAL_MS);
           pc._bandwidthInterval = bandwidthInterval;
         }
       }
@@ -588,8 +591,8 @@ const MeetingRoom = () => {
     // Handle connection state changes
     pc.onconnectionstatechange = () => {
       console.log(`Connection state with ${remoteParticipantId}:`, pc.connectionState);
-      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-        // Connection failed - cleanup
+      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected' || pc.connectionState === 'closed') {
+        // Connection ended - cleanup (closePeerConnection also clears bandwidth interval)
         closePeerConnection(remoteParticipantId);
       }
     };
@@ -787,27 +790,33 @@ const MeetingRoom = () => {
 
   // Toggle audio
   const toggleAudio = () => {
-    if (localStream) {
-      const audioTrack = localStream.getAudioTracks()[0];
-      if (audioTrack) {
-        audioTrack.enabled = !audioTrack.enabled;
-        setAudioEnabled(audioTrack.enabled);
-        // Notify other participants of state change
-        sendMediaState(audioTrack.enabled, videoEnabled);
-      }
+    if (!localStream) {
+      toast.warning('Microphone not available. Check device permissions.');
+      return;
+    }
+    const audioTrack = localStream.getAudioTracks()[0];
+    if (audioTrack) {
+      audioTrack.enabled = !audioTrack.enabled;
+      setAudioEnabled(audioTrack.enabled);
+      sendMediaState(audioTrack.enabled, videoEnabled);
+    } else {
+      toast.warning('No microphone detected.');
     }
   };
 
   // Toggle video
   const toggleVideo = () => {
-    if (localStream) {
-      const videoTrack = localStream.getVideoTracks()[0];
-      if (videoTrack) {
-        videoTrack.enabled = !videoTrack.enabled;
-        setVideoEnabled(videoTrack.enabled);
-        // Notify other participants of state change
-        sendMediaState(audioEnabled, videoTrack.enabled);
-      }
+    if (!localStream) {
+      toast.warning('Camera not available. Check device permissions.');
+      return;
+    }
+    const videoTrack = localStream.getVideoTracks()[0];
+    if (videoTrack) {
+      videoTrack.enabled = !videoTrack.enabled;
+      setVideoEnabled(videoTrack.enabled);
+      sendMediaState(audioEnabled, videoTrack.enabled);
+    } else {
+      toast.warning('No camera detected.');
     }
   };
 
@@ -1437,7 +1446,18 @@ const MeetingRoom = () => {
       clearInterval(admissionPollRef.current);
     }
 
+    const pollStartTime = Date.now();
+    const ADMISSION_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
     admissionPollRef.current = setInterval(async () => {
+      // Timeout after 5 minutes of waiting
+      if (Date.now() - pollStartTime > ADMISSION_TIMEOUT_MS) {
+        clearInterval(admissionPollRef.current);
+        setInWaitingRoom(false);
+        toast.error('Waiting room request timed out. Please try joining again.');
+        return;
+      }
+
       try {
         const response = await fetch(
           `${API_BASE}/api/v1/meetings/rooms/${meeting?.id}/waiting-room/status/${pId}`
@@ -1787,9 +1807,11 @@ const MeetingRoom = () => {
 
   // Download screen recording locally
   const downloadScreenRecording = () => {
+    const meetingName = (meeting?.room_name || 'meeting').replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '-');
+    const datestamp = new Date().toISOString().slice(0, 10);
     const a = document.createElement('a');
     a.href = screenRecordingUrl;
-    a.download = `screen-recording-${new Date().toISOString().slice(0, 10)}.webm`;
+    a.download = `${meetingName}-recording-${datestamp}.webm`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -2154,9 +2176,9 @@ const MeetingRoom = () => {
           background: '#ef4444', color: 'white', padding: '8px 16px',
           textAlign: 'center', fontSize: '14px', fontWeight: '600'
         }}>
-          Connection lost. {wsReconnectAttemptsRef.current < 5
-            ? 'Reconnecting...'
-            : 'Unable to reconnect. Please refresh the page.'}
+          {wsReconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS
+            ? `Connection lost — checking connection... (attempt ${wsReconnectAttemptsRef.current + 1}/${MAX_RECONNECT_ATTEMPTS})`
+            : 'Unable to reconnect. Please check your internet and refresh the page.'}
         </div>
       )}
 
@@ -2550,11 +2572,17 @@ const MeetingRoom = () => {
 
       {/* Screen Recording Share Modal */}
       {showScreenRecordingModal && (
-        <div className="invite-modal-overlay" onClick={() => setShowScreenRecordingModal(false)}>
+        <div className="invite-modal-overlay" onClick={() => {
+          setShowScreenRecordingModal(false);
+          if (screenRecordingUrl?.startsWith('blob:')) URL.revokeObjectURL(screenRecordingUrl);
+        }}>
           <div className="screen-recording-modal" onClick={(e) => e.stopPropagation()}>
             <div className="invite-modal-header">
               <h3>Screen Recording Ready</h3>
-              <button className="close-modal" onClick={() => setShowScreenRecordingModal(false)}>×</button>
+              <button className="close-modal" onClick={() => {
+                setShowScreenRecordingModal(false);
+                if (screenRecordingUrl?.startsWith('blob:')) URL.revokeObjectURL(screenRecordingUrl);
+              }}>×</button>
             </div>
             <div className="screen-recording-modal-body">
               <div className="recording-success-icon">🎬</div>
