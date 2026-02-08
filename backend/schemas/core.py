@@ -91,6 +91,7 @@ class LeadCreate(BaseModel):
     down_payment: Optional[float] = None
     # Financial Information
     employment_status: Optional[str] = None
+    employer_name: Optional[str] = None
     annual_income: Optional[float] = None
     monthly_debts: Optional[float] = None
     first_time_buyer: Optional[bool] = False
@@ -114,6 +115,8 @@ class LeadCreate(BaseModel):
     dti: Optional[float] = None
     # Notes
     notes: Optional[str] = None
+    # Metadata (for assets, etc.)
+    user_metadata: Optional[Dict[str, Any]] = None
 
 class LeadUpdate(BaseModel):
     name: Optional[str] = None
@@ -139,6 +142,7 @@ class LeadUpdate(BaseModel):
     # Financial Information
     credit_score: Optional[int] = None
     employment_status: Optional[str] = None
+    employer_name: Optional[str] = None
     annual_income: Optional[float] = None
     monthly_debts: Optional[float] = None
     first_time_buyer: Optional[bool] = None
@@ -203,6 +207,8 @@ class LeadUpdate(BaseModel):
     rate_watch_enrollment_date: Optional[datetime] = None
     # Referral Partner
     referral_partner_id: Optional[int] = None
+    # Metadata (for assets, etc.)
+    user_metadata: Optional[Dict[str, Any]] = None
 
 class LeadResponse(BaseModel):
     id: int

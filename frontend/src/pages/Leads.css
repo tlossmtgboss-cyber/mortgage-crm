@@ -606,6 +606,42 @@
   transform: scale(1.05);
 }
 
+/* Form Section Tabs (Borrower Info / Property / Income / Assets) */
+.form-section-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 20px;
+  padding: 4px;
+  background: #f1f5f9;
+  border-radius: 8px;
+}
+
+.form-section-tab {
+  flex: 1;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.form-section-tab:hover {
+  color: #334155;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.form-section-tab.active {
+  background: white;
+  color: #218D8D;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
 @media (max-width: 768px) {
   .leads-grid {
     grid-template-columns: 1fr;
@@ -614,6 +650,17 @@
   .form-row,
   .form-row.three-cols {
     grid-template-columns: 1fr;
+  }
+
+  .form-section-tabs {
+    flex-wrap: wrap;
+  }
+
+  .form-section-tab {
+    flex: 1 1 calc(50% - 4px);
+    min-width: 0;
+    font-size: 12px;
+    padding: 8px 6px;
   }
 }
 
