@@ -3,7 +3,7 @@
  *
  * Allows admins to configure which calendars/users receive
  * appointments for different purposes in the application.
- * Supports team member assignment, booking links, and Calendly URLs.
+ * Supports team member assignment, booking links, and custom scheduling URLs.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -202,7 +202,7 @@ const CalendarManagement = () => {
                               {assignment.booking_link_slug
                                 ? `Booking Link: /book/${assignment.booking_link_slug}`
                                 : assignment.calendly_url
-                                  ? 'Calendly URL'
+                                  ? 'Custom Scheduling URL'
                                   : 'Team Member Calendar'}
                             </span>
                           </div>
@@ -211,7 +211,7 @@ const CalendarManagement = () => {
                         <div className="custom-url">
                           <span className="url-icon">&#128279;</span>
                           <div className="url-info">
-                            <span className="url-label">Custom Calendly URL (no team member assigned)</span>
+                            <span className="url-label">Custom Scheduling URL (no team member assigned)</span>
                             <a href={assignment.calendly_url} target="_blank" rel="noopener noreferrer" className="url-link">
                               {assignment.calendly_url.length > 40
                                 ? assignment.calendly_url.substring(0, 40) + '...'
@@ -236,7 +236,7 @@ const CalendarManagement = () => {
                       <option value="">-- Select Team Member (Required) --</option>
                       {users.map(user => (
                         <option key={user.id} value={user.id}>
-                          {user.name} {user.has_calendly ? '(Calendly Connected)' : ''}
+                          {user.name} {user.has_calendly ? '(Calendar Active)' : ''}
                         </option>
                       ))}
                     </select>
@@ -269,12 +269,12 @@ const CalendarManagement = () => {
                   {/* Custom URL Option (alternative to booking link) */}
                   {!assignment?.booking_link_id && (
                     <div className="custom-url-section">
-                      <label>Or use a custom Calendly URL:</label>
+                      <label>Or use a custom scheduling URL:</label>
                       {isEditing ? (
                         <div className="url-edit-form">
                           <input
                             type="url"
-                            placeholder="https://calendly.com/your-link"
+                            placeholder="https://your-scheduling-link.com"
                             value={editForm.calendly_url}
                             onChange={(e) => setEditForm({ ...editForm, calendly_url: e.target.value })}
                           />
@@ -324,13 +324,13 @@ const CalendarManagement = () => {
 
       <div className="cm-section">
         <h3>Team Members with Calendars</h3>
-        <p className="section-desc">These team members have connected their Calendly accounts and can receive appointments.</p>
+        <p className="section-desc">These team members have active calendars and can receive appointments.</p>
 
         <div className="users-list">
           {users.filter(u => u.has_calendly).length === 0 ? (
             <div className="no-users">
-              <p>No team members have connected their Calendly accounts yet.</p>
-              <p className="hint">Team members can connect Calendly from their Profile Settings.</p>
+              <p>No team members have active calendars yet.</p>
+              <p className="hint">Team members can set up their calendar from their Profile Settings.</p>
             </div>
           ) : (
             <div className="users-grid">
@@ -343,7 +343,7 @@ const CalendarManagement = () => {
                     <span className="user-name">{user.name}</span>
                     <span className="user-email">{user.email}</span>
                     <span className="calendly-status connected">
-                      <span className="dot"></span> Calendly Connected
+                      <span className="dot"></span> Calendar Active
                     </span>
                   </div>
                 </div>
