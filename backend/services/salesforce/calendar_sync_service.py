@@ -142,7 +142,7 @@ class SalesforceCalendarSyncService:
             SELECT Id, OwnerId, WhoId, WhatId, Subject, Location,
                    StartDateTime, EndDateTime, ActivityDate, ActivityDateTime,
                    DurationInMinutes, Description, IsAllDayEvent, IsPrivate,
-                   ShowAs, Type, RecurrenceActivityId, IsRecurrence,
+                   ShowAs, RecurrenceActivityId, IsRecurrence,
                    CreatedDate, LastModifiedDate
             FROM Event
             WHERE StartDateTime >= {start_date} AND StartDateTime <= {end_date}
