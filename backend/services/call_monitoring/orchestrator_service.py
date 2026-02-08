@@ -673,38 +673,33 @@ class CallMonitoringOrchestrator:
         loan_id = context.get('loan_id')
         lead_id = context.get('lead_id')
 
-        # Get Loan Officer (current user or assigned LO)
+        # Get Loan Officer + Production Assistant in a single query (replaces 2 queries)
         if user_id:
-            lo_data = self.db.execute(text("""
-                SELECT id, name, email, phone, calendar_link
-                FROM users
-                WHERE id = :id
+            lo_pa_data = self.db.execute(text("""
+                SELECT
+                    lo.id, lo.name, lo.email, lo.phone, lo.calendar_link,
+                    pa.id as pa_id, pa.name as pa_name, pa.email as pa_email, pa.phone as pa_phone
+                FROM users lo
+                LEFT JOIN user_assignments ua ON ua.loan_officer_id = lo.id AND ua.role = 'production_assistant'
+                LEFT JOIN users pa ON pa.id = ua.assistant_id
+                WHERE lo.id = :id
             """), {"id": user_id}).fetchone()
 
-            if lo_data:
+            if lo_pa_data:
                 team['loan_officer'] = {
-                    "id": str(lo_data[0]),
-                    "name": lo_data[1],
-                    "email": lo_data[2],
-                    "phone": lo_data[3],
-                    "calendar_link": lo_data[4],
+                    "id": str(lo_pa_data[0]),
+                    "name": lo_pa_data[1],
+                    "email": lo_pa_data[2],
+                    "phone": lo_pa_data[3],
+                    "calendar_link": lo_pa_data[4],
                 }
 
-                # Get Production Assistant (PA) assigned to this LO
-                pa_data = self.db.execute(text("""
-                    SELECT u.id, u.name, u.email, u.phone
-                    FROM users u
-                    JOIN user_assignments ua ON ua.assistant_id = u.id
-                    WHERE ua.loan_officer_id = :lo_id AND ua.role = 'production_assistant'
-                    LIMIT 1
-                """), {"lo_id": user_id}).fetchone()
-
-                if pa_data:
+                if lo_pa_data[5]:  # pa_id
                     team['production_assistant'] = {
-                        "id": str(pa_data[0]),
-                        "name": pa_data[1],
-                        "email": pa_data[2],
-                        "phone": pa_data[3],
+                        "id": str(lo_pa_data[5]),
+                        "name": lo_pa_data[6],
+                        "email": lo_pa_data[7],
+                        "phone": lo_pa_data[8],
                     }
 
         # Get Borrower(s) from loan or lead
@@ -750,90 +745,67 @@ class CallMonitoringOrchestrator:
         if borrowers:
             team['borrowers'] = borrowers
 
-        # Get Real Estate Agents (if loan exists)
+        # Get loan team in a single JOIN query (replaces 5 separate queries)
         if loan_id:
-            # Buyer's agent
-            buyer_agent = self.db.execute(text("""
-                SELECT ra.id, ra.name, ra.email, ra.phone, ra.brokerage
-                FROM realtor_assignments ra
-                WHERE ra.loan_id = :loan_id AND ra.role = 'buyer_agent'
-                LIMIT 1
-            """), {"loan_id": loan_id}).fetchone()
-
-            if buyer_agent:
-                team['buyer_agent'] = {
-                    "id": str(buyer_agent[0]),
-                    "name": buyer_agent[1],
-                    "email": buyer_agent[2],
-                    "phone": buyer_agent[3],
-                    "brokerage": buyer_agent[4],
-                }
-
-            # Listing agent
-            listing_agent = self.db.execute(text("""
-                SELECT ra.id, ra.name, ra.email, ra.phone, ra.brokerage
-                FROM realtor_assignments ra
-                WHERE ra.loan_id = :loan_id AND ra.role = 'listing_agent'
-                LIMIT 1
-            """), {"loan_id": loan_id}).fetchone()
-
-            if listing_agent:
-                team['listing_agent'] = {
-                    "id": str(listing_agent[0]),
-                    "name": listing_agent[1],
-                    "email": listing_agent[2],
-                    "phone": listing_agent[3],
-                    "brokerage": listing_agent[4],
-                }
-
-            # Processor
-            processor = self.db.execute(text("""
-                SELECT u.id, u.name, u.email
-                FROM users u
-                JOIN loans l ON l.processor_id = u.id
+            loan_team = self.db.execute(text("""
+                SELECT
+                    proc.id as proc_id, proc.name as proc_name, proc.email as proc_email,
+                    tc.id as tc_id, tc.name as tc_name, tc.contact_name as tc_contact,
+                    tc.email as tc_email, tc.phone as tc_phone,
+                    ia.id as ia_id, ia.name as ia_name, ia.email as ia_email,
+                    ia.phone as ia_phone, ia.company as ia_company,
+                    ba.id as ba_id, ba.name as ba_name, ba.email as ba_email,
+                    ba.phone as ba_phone, ba.brokerage as ba_brokerage,
+                    la.id as la_id, la.name as la_name, la.email as la_email,
+                    la.phone as la_phone, la.brokerage as la_brokerage
+                FROM loans l
+                LEFT JOIN users proc ON proc.id = l.processor_id
+                LEFT JOIN title_companies tc ON tc.id = l.title_company_id
+                LEFT JOIN insurance_agents ia ON ia.id = l.insurance_agent_id
+                LEFT JOIN realtor_assignments ba ON ba.loan_id = l.id AND ba.role = 'buyer_agent'
+                LEFT JOIN realtor_assignments la ON la.loan_id = l.id AND la.role = 'listing_agent'
                 WHERE l.id = :loan_id
             """), {"loan_id": loan_id}).fetchone()
 
-            if processor:
-                team['processor'] = {
-                    "id": str(processor[0]),
-                    "name": processor[1],
-                    "email": processor[2],
-                }
-
-            # Title Company
-            title_co = self.db.execute(text("""
-                SELECT tc.id, tc.name, tc.contact_name, tc.email, tc.phone
-                FROM title_companies tc
-                JOIN loans l ON l.title_company_id = tc.id
-                WHERE l.id = :loan_id
-            """), {"loan_id": loan_id}).fetchone()
-
-            if title_co:
-                team['title_company'] = {
-                    "id": str(title_co[0]),
-                    "name": title_co[1],
-                    "contact_name": title_co[2],
-                    "email": title_co[3],
-                    "phone": title_co[4],
-                }
-
-            # Insurance Agent
-            insurance = self.db.execute(text("""
-                SELECT ia.id, ia.name, ia.email, ia.phone, ia.company
-                FROM insurance_agents ia
-                JOIN loans l ON l.insurance_agent_id = ia.id
-                WHERE l.id = :loan_id
-            """), {"loan_id": loan_id}).fetchone()
-
-            if insurance:
-                team['insurance_agent'] = {
-                    "id": str(insurance[0]),
-                    "name": insurance[1],
-                    "email": insurance[2],
-                    "phone": insurance[3],
-                    "company": insurance[4],
-                }
+            if loan_team:
+                if loan_team[0]:  # proc_id
+                    team['processor'] = {
+                        "id": str(loan_team[0]),
+                        "name": loan_team[1],
+                        "email": loan_team[2],
+                    }
+                if loan_team[3]:  # tc_id
+                    team['title_company'] = {
+                        "id": str(loan_team[3]),
+                        "name": loan_team[4],
+                        "contact_name": loan_team[5],
+                        "email": loan_team[6],
+                        "phone": loan_team[7],
+                    }
+                if loan_team[8]:  # ia_id
+                    team['insurance_agent'] = {
+                        "id": str(loan_team[8]),
+                        "name": loan_team[9],
+                        "email": loan_team[10],
+                        "phone": loan_team[11],
+                        "company": loan_team[12],
+                    }
+                if loan_team[13]:  # ba_id
+                    team['buyer_agent'] = {
+                        "id": str(loan_team[13]),
+                        "name": loan_team[14],
+                        "email": loan_team[15],
+                        "phone": loan_team[16],
+                        "brokerage": loan_team[17],
+                    }
+                if loan_team[18]:  # la_id
+                    team['listing_agent'] = {
+                        "id": str(loan_team[18]),
+                        "name": loan_team[19],
+                        "email": loan_team[20],
+                        "phone": loan_team[21],
+                        "brokerage": loan_team[22],
+                    }
 
         return team
 

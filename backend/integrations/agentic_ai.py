@@ -7,7 +7,6 @@ import logging
 import re
 from typing import Dict, Any, List, Optional
 from datetime import datetime
-from openai import OpenAI
 from enum import Enum
 
 logger = logging.getLogger(__name__)
@@ -41,15 +40,16 @@ class AgenticAI:
     """Autonomous AI agent for task execution"""
 
     def __init__(self):
-        self.openai_api_key = os.getenv("OPENAI_API_KEY", "")
-        if self.openai_api_key:
-            self.client = OpenAI(api_key=self.openai_api_key)
+        self.api_key = os.getenv("ANTHROPIC_API_KEY", "")
+        if self.api_key:
+            from anthropic import Anthropic
+            self.client = Anthropic(api_key=self.api_key)
             self.enabled = True
-            logger.info("Agentic AI initialized successfully")
+            logger.info("Agentic AI initialized with Claude Haiku")
         else:
             self.client = None
             self.enabled = False
-            logger.warning("Agentic AI not enabled - OpenAI API key not configured")
+            logger.warning("Agentic AI not enabled - ANTHROPIC_API_KEY not configured")
 
     async def analyze_and_execute(
         self,
@@ -125,17 +125,16 @@ Please analyze this situation and recommend actions.
 """
 
         try:
-            response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
+            response = self.client.messages.create(
+                model="claude-3-5-haiku-20241022",
+                max_tokens=500,
+                system=system_prompt,
                 messages=[
-                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
-                ],
-                temperature=0.3,
-                max_tokens=500
+                ]
             )
 
-            analysis_text = response.choices[0].message.content
+            analysis_text = response.content[0].text
 
             # Parse the analysis
             return {
