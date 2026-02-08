@@ -127,8 +127,14 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
         if self._is_exempt(request):
             return await call_next(request)
 
+        # Skip if request uses JWT Bearer auth (inherently CSRF-safe since
+        # the token is in localStorage, not auto-sent by the browser like cookies)
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer ") and self._is_jwt_token(auth_header[7:]):
+            return await call_next(request)
+
         # Skip if request has valid API key (machine-to-machine)
-        api_key = request.headers.get("X-API-Key") or request.headers.get("Authorization", "").replace("Bearer ", "")
+        api_key = request.headers.get("X-API-Key") or auth_header.replace("Bearer ", "")
         if api_key and self._is_api_key_auth(api_key):
             return await call_next(request)
 
@@ -163,6 +169,10 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
                 max_age=86400 * 7,  # 7 days
                 path="/",
             )
+
+    def _is_jwt_token(self, token: str) -> bool:
+        """Check if token is a JWT (three base64 segments separated by dots)."""
+        return len(token) >= 50 and token.count(".") == 2
 
     def _is_api_key_auth(self, token: str) -> bool:
         """Check if token looks like an API key (not a user JWT)."""

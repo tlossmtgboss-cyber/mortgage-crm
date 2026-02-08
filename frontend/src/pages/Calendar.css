@@ -192,6 +192,18 @@
   border-left: 3px solid var(--color-info);
 }
 
+.event-pre_purchase_consultation {
+  background: rgba(139, 92, 246, 0.15);
+  color: #8b5cf6;
+  border-left: 3px solid #8b5cf6;
+}
+
+.event-purchase_consultation {
+  background: rgba(99, 102, 241, 0.15);
+  color: #6366f1;
+  border-left: 3px solid #6366f1;
+}
+
 @media (max-width: 768px) {
   .calendar-page {
     padding: var(--space-md);
@@ -281,6 +293,43 @@
   box-shadow: 0 2px 8px rgba(33, 127, 141, 0.3);
 }
 
+/* Calendar Tabs */
+.calendar-tabs {
+  display: flex;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--color-border-light);
+  background: var(--color-bg-surface);
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+
+.calendar-tab {
+  padding: 6px 14px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  font-size: var(--font-xs);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all 150ms ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.calendar-tab:hover {
+  background: var(--color-bg-tertiary, #e2e8f0);
+  color: var(--color-text-primary);
+}
+
+.calendar-tab.active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: white;
+  font-weight: var(--weight-semibold);
+}
+
 .appointments-list {
   flex: 1;
   overflow-y: auto;
@@ -349,6 +398,16 @@
 
 .appointment-closing {
   border-color: #22c55e;
+  border-left-width: 4px;
+}
+
+.appointment-pre_purchase_consultation {
+  border-color: #8b5cf6;
+  border-left-width: 4px;
+}
+
+.appointment-purchase_consultation {
+  border-color: #6366f1;
   border-left-width: 4px;
 }
 
@@ -607,6 +666,14 @@
 
 .event-dot-closing {
   background: #22c55e;
+}
+
+.event-dot-pre_purchase_consultation {
+  background: #8b5cf6;
+}
+
+.event-dot-purchase_consultation {
+  background: #6366f1;
 }
 
 .event-dot-other {

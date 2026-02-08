@@ -2,6 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { calendarAPI, schedulerAPI, unifiedCalendarAPI } from '../services/api';
 import './Calendar.css';
 
+const TAB_CONFIG = [
+  { key: 'all', label: 'Appointments', filterType: null },
+  { key: 'pre_purchase', label: 'Pre-Purchase Consultations', filterType: 'pre_purchase_consultation' },
+  { key: 'purchase', label: 'Purchase Consultations', filterType: 'purchase_consultation' },
+  { key: 'closing', label: 'Closings', filterType: 'closing' },
+];
+
 function Calendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState('month');
@@ -12,6 +19,7 @@ function Calendar() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
   const [calendarOffset, setCalendarOffset] = useState(0); // Month offset for mini calendar scrolling
+  const [activeTab, setActiveTab] = useState('all');
 
   // Edit/reschedule appointment state
   const [showEditModal, setShowEditModal] = useState(false);
@@ -216,9 +224,17 @@ function Calendar() {
     }
   };
 
+  // Filter events by active tab
+  const getFilteredEvents = (eventList) => {
+    const tab = TAB_CONFIG.find(t => t.key === activeTab);
+    if (!tab || !tab.filterType) return eventList;
+    return eventList.filter(event => event.event_type === tab.filterType);
+  };
+
   // Sort and group events by date
   const getSortedEvents = () => {
-    const sorted = [...allEvents].sort((a, b) => {
+    const filtered = getFilteredEvents(allEvents);
+    const sorted = [...filtered].sort((a, b) => {
       return new Date(a.start_time) - new Date(b.start_time);
     });
     return sorted;
@@ -305,7 +321,8 @@ function Calendar() {
     const dateStart = new Date(year, month, day);
     const dateEnd = new Date(year, month, day, 23, 59, 59);
 
-    return allEvents.filter(event => {
+    const filtered = getFilteredEvents(allEvents);
+    return filtered.filter(event => {
       const eventDate = new Date(event.start_time);
       return eventDate >= dateStart && eventDate <= dateEnd;
     });
@@ -419,7 +436,7 @@ function Calendar() {
         {/* Appointments Sidebar */}
         <div className="appointments-sidebar">
           <div className="appointments-sidebar-header">
-            <h2>Appointments</h2>
+            <h2>{TAB_CONFIG.find(t => t.key === activeTab)?.label || 'Appointments'}</h2>
             <button
               className="btn-add-appointment"
               onClick={() => { setSelectedDate(new Date()); setShowAddModal(true); }}
@@ -427,6 +444,17 @@ function Calendar() {
             >
               + Add
             </button>
+          </div>
+          <div className="calendar-tabs">
+            {TAB_CONFIG.map(tab => (
+              <button
+                key={tab.key}
+                className={`calendar-tab ${activeTab === tab.key ? 'active' : ''}`}
+                onClick={() => setActiveTab(tab.key)}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
           <div className="appointments-list">
             {getSortedEvents().length === 0 ? (
@@ -670,6 +698,8 @@ function AddEventModal({ selectedDate, onClose, onAdd }) {
             >
               <option value="meeting">Meeting</option>
               <option value="call">Call</option>
+              <option value="pre_purchase_consultation">Pre-Purchase Consultation</option>
+              <option value="purchase_consultation">Purchase Consultation</option>
               <option value="appraisal">Appraisal</option>
               <option value="closing">Closing</option>
               <option value="other">Other</option>

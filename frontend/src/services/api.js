@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { Capacitor } from '@capacitor/core';
 import { ensureArray } from '../utils/arrayHelpers';
+import { getCSRFTokenFromCookie } from '../utils/security';
 
 // Use direct Railway URL for production, localhost for development
 // Bypassing Vercel proxy due to POST request issues
@@ -23,9 +24,46 @@ const api = axios.create({
   },
 });
 
-// Add token and impersonation headers to requests
+// CSRF token cache — fetched once, reused for all requests
+let csrfTokenPromise = null;
+
+const fetchCSRFToken = async () => {
+  // Try cookie first (set by backend on GET responses)
+  const cookieToken = getCSRFTokenFromCookie();
+  if (cookieToken) return cookieToken;
+
+  // Fetch from server if no cookie
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/v1/csrf-token`, {
+      withCredentials: true,
+    });
+    return response.data?.csrf_token || null;
+  } catch (error) {
+    console.warn('Could not fetch CSRF token:', error);
+    return null;
+  }
+};
+
+const getCSRFToken = () => {
+  // Check cookie synchronously first (fast path)
+  const cookieToken = getCSRFTokenFromCookie();
+  if (cookieToken) return Promise.resolve(cookieToken);
+
+  // Fetch from server (deduplicated — only one in-flight request)
+  if (!csrfTokenPromise) {
+    csrfTokenPromise = fetchCSRFToken().finally(() => {
+      // Allow re-fetch after 5 minutes
+      setTimeout(() => { csrfTokenPromise = null; }, 5 * 60 * 1000);
+    });
+  }
+  return csrfTokenPromise;
+};
+
+const CSRF_METHODS = ['post', 'put', 'patch', 'delete'];
+
+// Add token, impersonation, and CSRF headers to requests
 api.interceptors.request.use(
-  (config) => {
+  async (config) => {
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -44,6 +82,14 @@ api.interceptors.request.use(
       }
     }
 
+    // Add CSRF token for state-changing requests
+    if (CSRF_METHODS.includes(config.method)) {
+      const csrfToken = await getCSRFToken();
+      if (csrfToken) {
+        config.headers['X-CSRF-Token'] = csrfToken;
+      }
+    }
+
     return config;
   },
   (error) => {
@@ -54,7 +100,7 @@ api.interceptors.request.use(
 // Handle response errors
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     // Log network errors for debugging
     if (!error.response) {
       console.error('[API] Network error (no response):', {
@@ -66,6 +112,22 @@ api.interceptors.response.use(
           baseURL: error.config?.baseURL
         }
       });
+    }
+
+    // Retry once on CSRF token failure (token may have expired)
+    if (
+      error.response?.status === 403 &&
+      error.response?.data?.code === 'CSRF_VALIDATION_FAILED' &&
+      !error.config._csrfRetry
+    ) {
+      // Force re-fetch CSRF token
+      csrfTokenPromise = null;
+      const newToken = await fetchCSRFToken();
+      if (newToken) {
+        error.config._csrfRetry = true;
+        error.config.headers['X-CSRF-Token'] = newToken;
+        return api.request(error.config);
+      }
     }
 
     if (error.response?.status === 401) {
