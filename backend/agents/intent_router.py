@@ -85,6 +85,10 @@ HAIKU_INTENTS = {
     "coaching",      # Team coaching - database-driven metrics
     "integrations",  # LOS/vendor integration status - tool-based
     "video",         # Video meeting management - tool-based
+    "calls",         # Phone call management - tool-based routing
+    "sla",           # SLA tracking - deadline/metric lookup
+    "documents",     # Document tracking - checklist/status lookup
+    "reports",       # Report generation - tools aggregate, LLM formats
 }
 
 

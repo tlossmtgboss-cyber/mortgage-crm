@@ -13,6 +13,7 @@ Specialized agent for post-close client management with 8 tools:
 """
 
 from typing import Any, Dict, Optional, List
+from ..utils.financial_calcs import calculate_ltv, calculate_rate_savings
 from datetime import datetime, date, timedelta
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -355,22 +356,13 @@ class PortfolioAgent(SpecializedAgent):
 
             # Calculate current estimated LTV
             if loan.property_value and loan.amount:
-                original_ltv = (float(loan.amount) / float(loan.property_value)) * 100
-                # Assume 5% annual appreciation
-                months = int(loan.months_since_close or 0)
-                appreciation = 1 + (0.05 * months / 12)
-                current_value = float(loan.property_value) * appreciation
-                # Estimate current balance (rough amortization)
-                balance_factor = 1 - (months * 0.002)  # Simplified
-                current_balance = float(loan.amount) * max(0.5, balance_factor)
-                current_ltv = (current_balance / current_value) * 100
-
+                ltv = calculate_ltv(float(loan.amount), float(loan.property_value), int(loan.months_since_close or 0))
                 client_data["equity_analysis"] = {
-                    "original_ltv": round(original_ltv, 1),
-                    "estimated_current_ltv": round(current_ltv, 1),
+                    "original_ltv": ltv["original_ltv"],
+                    "estimated_current_ltv": ltv["current_ltv"],
                     "original_property_value": float(loan.property_value),
-                    "estimated_current_value": round(current_value, 0),
-                    "estimated_equity": round(current_value - current_balance, 0)
+                    "estimated_current_value": ltv["current_value"],
+                    "estimated_equity": ltv["equity"]
                 }
 
             # Get interaction history if requested
@@ -452,19 +444,13 @@ class PortfolioAgent(SpecializedAgent):
                 if not r.amount or not r.property_value:
                     continue
 
-                # Calculate current LTV estimate
                 months = int(r.months_since_close or 0)
-                appreciation = 1 + (0.05 * months / 12)
-                current_value = float(r.property_value) * appreciation
-                balance_factor = 1 - (months * 0.002)
-                est_balance = float(r.amount) * max(0.5, balance_factor)
-                current_ltv = (est_balance / current_value) * 100
+                ltv = calculate_ltv(float(r.amount), float(r.property_value), months)
 
-                if current_ltv > (100 - min_equity):
+                if ltv["current_ltv"] > (100 - min_equity):
                     continue  # Not enough equity
 
-                rate_savings = float(r.rate) - current_market_rate
-                monthly_savings = (rate_savings / 100 / 12) * est_balance
+                savings = calculate_rate_savings(float(r.rate), current_market_rate, ltv["current_balance"])
 
                 candidates.append({
                     "loan_id": r.id,
@@ -473,12 +459,12 @@ class PortfolioAgent(SpecializedAgent):
                     "borrower_email": r.borrower_email,
                     "current_rate": float(r.rate),
                     "market_rate": current_market_rate,
-                    "rate_savings": round(rate_savings, 3),
-                    "estimated_monthly_savings": round(monthly_savings, 2),
-                    "estimated_annual_savings": round(monthly_savings * 12, 2),
-                    "current_ltv": round(current_ltv, 1),
+                    "rate_savings": savings["rate_savings"],
+                    "estimated_monthly_savings": savings["monthly_savings"],
+                    "estimated_annual_savings": savings["annual_savings"],
+                    "current_ltv": ltv["current_ltv"],
                     "months_since_close": months,
-                    "priority": "high" if rate_savings >= 1.0 else "medium" if rate_savings >= 0.5 else "low"
+                    "priority": "high" if savings["rate_savings"] >= 1.0 else "medium" if savings["rate_savings"] >= 0.5 else "low"
                 })
 
             # Sort by savings potential
@@ -663,19 +649,10 @@ class PortfolioAgent(SpecializedAgent):
 
             for r in results:
                 months = int(r.months_since_close or 0)
-                original_ltv = (float(r.amount) / float(r.property_value)) * 100
+                ltv = calculate_ltv(float(r.amount), float(r.property_value), months, appreciation_rate / 100)
 
-                # Calculate appreciation
-                appreciation = 1 + (appreciation_rate / 100 * months / 12)
-                current_value = float(r.property_value) * appreciation
-
-                # Estimate current balance
-                balance_factor = 1 - (months * 0.002)
-                current_balance = float(r.amount) * max(0.5, balance_factor)
-
-                current_ltv = (current_balance / current_value) * 100
                 original_equity = float(r.property_value) - float(r.amount)
-                current_equity = current_value - current_balance
+                current_equity = ltv["equity"]
                 equity_change = current_equity - original_equity
                 equity_gained += equity_change
 
@@ -683,11 +660,11 @@ class PortfolioAgent(SpecializedAgent):
                     "loan_id": r.id,
                     "loan_number": r.loan_number,
                     "borrower_name": r.borrower_name,
-                    "original_ltv": round(original_ltv, 1),
-                    "current_ltv": round(current_ltv, 1),
-                    "ltv_change": round(original_ltv - current_ltv, 1),
+                    "original_ltv": ltv["original_ltv"],
+                    "current_ltv": ltv["current_ltv"],
+                    "ltv_change": round(ltv["original_ltv"] - ltv["current_ltv"], 1),
                     "original_value": float(r.property_value),
-                    "estimated_value": round(current_value, 0),
+                    "estimated_value": ltv["current_value"],
                     "original_equity": round(original_equity, 0),
                     "current_equity": round(current_equity, 0),
                     "equity_gained": round(equity_change, 0),
@@ -801,12 +778,8 @@ class PortfolioAgent(SpecializedAgent):
 
                 # Equity (high equity = more likely to be targeted)
                 if r.property_value and r.amount:
-                    months = int(r.months_since_close or 0)
-                    appreciation = 1 + (0.05 * months / 12)
-                    current_value = float(r.property_value) * appreciation
-                    balance_factor = 1 - (months * 0.002)
-                    current_balance = float(r.amount) * max(0.5, balance_factor)
-                    equity_percent = ((current_value - current_balance) / current_value) * 100
+                    ltv = calculate_ltv(float(r.amount), float(r.property_value), int(r.months_since_close or 0))
+                    equity_percent = ltv["equity_percent"]
 
                     if equity_percent > 40:
                         risk_score += 20

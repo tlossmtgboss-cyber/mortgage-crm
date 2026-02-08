@@ -125,6 +125,23 @@ INTENT_GUIDANCE = {
 }
 
 
+# =============================================================================
+# TIER 2: ROLE CONTEXT (~100 tokens, injected when user role is known)
+# =============================================================================
+
+_ROLE_CONTEXT = {
+    "loan_officer": "USER ROLE: Loan Officer — prioritize personal pipeline, closings, commissions, borrower relationships, and task prioritization.",
+    "processor": "USER ROLE: Processor — prioritize document completeness, condition clearing, workflow efficiency, and underwriting coordination.",
+    "manager": "USER ROLE: Manager — prioritize team performance, pipeline health across team, resource allocation, SLA compliance, and capacity planning.",
+    "admin": "USER ROLE: Admin — prioritize system configuration, user management, compliance oversight, and operational reporting.",
+}
+
+
+def _get_role_context(role: str) -> str:
+    """Get concise role context for Tier 2 prompt injection."""
+    return _ROLE_CONTEXT.get(role, "")
+
+
 def format_gathered_data_for_llm(gathered_data: dict) -> str:
     """Format gathered data into a concise string for LLM consumption."""
     if not gathered_data:
@@ -291,6 +308,13 @@ DO NOT use a canned/scripted response. Be natural and human."""
 
         # Get intent-specific guidance
         intent_guidance = INTENT_GUIDANCE.get(query_intent, "")
+
+        # Inject Tier 2 role context if user role is available (~100 tokens)
+        user_role = state.get("user_role", "")
+        if user_role:
+            role_context = _get_role_context(user_role)
+            if role_context:
+                intent_guidance = f"{role_context}\n\n{intent_guidance}" if intent_guidance else role_context
 
         # Build the system prompt
         system_prompt = UNIFIED_SYSTEM_PROMPT.format(intent_guidance=intent_guidance)
