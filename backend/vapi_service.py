@@ -746,6 +746,9 @@ class VapiCRMIntegration:
         # Log to AI Receptionist Dashboard tables
         await self._log_to_dashboard(vapi_call, call_data)
 
+        # Sync status back to VoicemailDrop if this was a voicemail drop call
+        await self._sync_voicemail_drop_status(call_data, vapi_call)
+
         self.db.commit()
         self.db.refresh(vapi_call)
 
@@ -757,6 +760,98 @@ class VapiCRMIntegration:
         await self._send_post_call_sms(vapi_call, call_data)
 
         return vapi_call
+
+    async def _sync_voicemail_drop_status(
+        self, call_data: Dict[str, Any], vapi_call: VapiCall
+    ) -> None:
+        """
+        Sync call outcome back to VoicemailDrop record.
+
+        When a voicemail drop call completes, Vapi sends the end-of-call webhook.
+        This method reads the voicemail_drop_id from call metadata and updates
+        the VoicemailDrop record with the final status, duration, and cost.
+        """
+        try:
+            metadata = call_data.get("metadata", {})
+            voicemail_drop_id = metadata.get("voicemail_drop_id")
+
+            if not voicemail_drop_id or metadata.get("type") != "voicemail_drop":
+                return  # Not a voicemail drop call
+
+            from main import VoicemailDrop, VoicemailEvent
+
+            drop = self.db.query(VoicemailDrop).filter(
+                VoicemailDrop.id == int(voicemail_drop_id)
+            ).first()
+
+            if not drop:
+                logger.warning(f"VoicemailDrop {voicemail_drop_id} not found for webhook sync")
+                return
+
+            # Determine final status from Vapi call data
+            call_status = call_data.get("status", "")
+            ended_reason = call_data.get("endedReason", "")
+
+            # Map Vapi outcomes to VoicemailDrop status
+            if ended_reason in ("voicemail", "machine-detected"):
+                drop.status = "delivered"
+                drop.delivered_at = datetime.now(timezone.utc)
+            elif ended_reason in ("customer-answered", "assistant-ended"):
+                # Human picked up — the AI delivered the message live
+                drop.status = "human_answered"
+                drop.delivered_at = datetime.now(timezone.utc)
+            elif ended_reason in (
+                "customer-busy", "customer-did-not-answer",
+                "no-answer", "busy",
+            ):
+                drop.status = "no_voicemail"
+            elif ended_reason in (
+                "error", "phone-call-provider-error",
+                "customer-did-not-give-microphone-permission",
+            ):
+                drop.status = "failed"
+                drop.error_message = f"Call failed: {ended_reason}"
+            elif call_status == "ended":
+                # Generic ended — check if voicemail detection was triggered
+                analysis = call_data.get("analysis", {})
+                if analysis.get("successEvaluation") == "true":
+                    drop.status = "delivered"
+                    drop.delivered_at = datetime.now(timezone.utc)
+                else:
+                    drop.status = "delivered"
+                    drop.delivered_at = datetime.now(timezone.utc)
+            else:
+                drop.status = "failed"
+                drop.error_message = f"Unknown outcome: {call_status}/{ended_reason}"
+
+            # Update call metadata
+            if vapi_call.duration:
+                drop.call_duration = vapi_call.duration
+            cost = call_data.get("cost")
+            if cost is not None:
+                drop.call_cost = float(cost)
+
+            # Create event for the status change
+            event = VoicemailEvent(
+                voicemail_drop_id=drop.id,
+                event_type=drop.status,
+                event_data={
+                    "vapi_call_id": call_data.get("id"),
+                    "ended_reason": ended_reason,
+                    "duration": vapi_call.duration,
+                    "cost": cost,
+                }
+            )
+            self.db.add(event)
+
+            logger.info(
+                f"VoicemailDrop {voicemail_drop_id} synced: "
+                f"status={drop.status}, reason={ended_reason}"
+            )
+
+        except Exception as e:
+            logger.error(f"Error syncing voicemail drop status: {e}", exc_info=True)
+            # Don't raise — this shouldn't block the main webhook processing
 
     async def _send_post_call_sms(self, vapi_call: VapiCall, call_data: Dict[str, Any]) -> None:
         """
