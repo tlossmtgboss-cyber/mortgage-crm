@@ -15,10 +15,13 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func
 from datetime import datetime, timedelta, date, time
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, validator
 import logging
+import os
 import secrets
 import string
+import time
+from collections import defaultdict
 
 from video_meeting_models import (
     MeetingRoomStatus, ParticipantRole, ParticipantStatus,
@@ -68,6 +71,57 @@ def generate_room_code(length: int = 9) -> str:
     chars = string.ascii_uppercase + string.digits
     code = ''.join(secrets.choice(chars) for _ in range(length))
     return f"MTG-{code[:3]}-{code[3:6]}-{code[6:]}"
+
+
+def _require_admin(current_user):
+    """Raise 403 if user is not an admin or site_admin."""
+    role = getattr(current_user, 'permission_role', None) or getattr(current_user, 'role', None)
+    if role not in ('admin', 'site_admin'):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+
+async def _validate_twilio_signature(request: Request) -> bool:
+    """Validate Twilio request signature. Returns True if valid or if validation is not configured."""
+    auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+    if not auth_token:
+        logger.warning("TWILIO_AUTH_TOKEN not set — skipping Twilio signature validation")
+        return True
+
+    try:
+        from twilio.request_validator import RequestValidator
+        validator = RequestValidator(auth_token)
+
+        signature = request.headers.get("X-Twilio-Signature", "")
+        form_data = await request.form()
+        params = {k: v for k, v in form_data.items()}
+
+        # Reconstruct the full URL Twilio used
+        url = str(request.url)
+
+        return validator.validate(url, params, signature)
+    except ImportError:
+        logger.warning("twilio package not installed — skipping signature validation")
+        return True
+    except Exception as e:
+        logger.error(f"Twilio signature validation error: {e}")
+        return False
+
+
+# In-memory rate limiter for unauthenticated endpoints
+_rate_limit_store: Dict[str, list] = defaultdict(list)
+_RATE_LIMIT_WINDOW = 60  # seconds
+_RATE_LIMIT_MAX = 10  # max requests per window per IP
+
+
+def _check_rate_limit(client_ip: str) -> bool:
+    """Check if client IP is within rate limit. Returns True if allowed."""
+    now = time.time()
+    # Prune old entries
+    _rate_limit_store[client_ip] = [t for t in _rate_limit_store[client_ip] if now - t < _RATE_LIMIT_WINDOW]
+    if len(_rate_limit_store[client_ip]) >= _RATE_LIMIT_MAX:
+        return False
+    _rate_limit_store[client_ip].append(now)
+    return True
 
 
 # ============================================================================
@@ -386,20 +440,20 @@ class MeetingRoomUpdate(BaseModel):
     password_protected: Optional[bool] = None
     room_password: Optional[str] = None
     max_participants: Optional[int] = None
-    status: Optional[str] = None
+    status: Optional[MeetingRoomStatus] = None
 
 
 class ParticipantAdd(BaseModel):
     user_id: Optional[int] = None
     email: Optional[str] = None
     display_name: Optional[str] = None
-    role: str = "participant"
+    role: ParticipantRole = ParticipantRole.PARTICIPANT
     send_invite: bool = True
 
 
 class ParticipantUpdate(BaseModel):
-    role: Optional[str] = None
-    status: Optional[str] = None
+    role: Optional[ParticipantRole] = None
+    status: Optional[ParticipantStatus] = None
     can_share_screen: Optional[bool] = None
     can_unmute: Optional[bool] = None
     can_chat: Optional[bool] = None
@@ -440,7 +494,7 @@ class AvailableSlotsRequest(BaseModel):
 
 
 class AIAnalysisRequest(BaseModel):
-    analysis_types: List[str] = ["summary", "action_items"]
+    analysis_types: List[AIAnalysisType] = [AIAnalysisType.SUMMARY, AIAnalysisType.ACTION_ITEMS]
     custom_prompt: Optional[str] = None
 
 
@@ -979,9 +1033,14 @@ class WaitingRoomRequest(BaseModel):
 async def request_to_join_meeting(
     room_id: int,
     data: WaitingRoomRequest,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Guest requests to join a meeting - adds them to waiting room."""
+    client_ip = request.client.host if request.client else "unknown"
+    if not _check_rate_limit(f"waiting_room:{client_ip}"):
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again in a minute.")
+
     if _models is None:
         raise HTTPException(status_code=500, detail="Video meeting models not initialized")
 
@@ -2091,6 +2150,9 @@ async def twilio_connect_to_meeting(
     """TwiML endpoint for connecting participant to meeting conference."""
     from fastapi.responses import Response
 
+    if not await _validate_twilio_signature(request):
+        raise HTTPException(status_code=403, detail="Invalid Twilio signature")
+
     try:
         from uvip.recording_service import get_recording_service
         recording_service = get_recording_service()
@@ -2125,6 +2187,9 @@ async def twilio_recording_callback(
     db: Session = Depends(get_db)
 ):
     """Handle Twilio recording completion callback."""
+    if not await _validate_twilio_signature(request):
+        raise HTTPException(status_code=403, detail="Invalid Twilio signature")
+
     if _models is None:
         return {"error": "Models not initialized"}
 
@@ -2189,7 +2254,7 @@ async def twilio_recording_callback(
 
     except Exception as e:
         logger.error(f"Recording callback error: {e}")
-        return {"error": str(e)}
+        return {"error": "Internal processing error"}
 
 
 @router.post("/twilio/call-status/{room_code}")
@@ -2199,6 +2264,9 @@ async def twilio_call_status_callback(
     db: Session = Depends(get_db)
 ):
     """Handle Twilio call status updates."""
+    if not await _validate_twilio_signature(request):
+        raise HTTPException(status_code=403, detail="Invalid Twilio signature")
+
     try:
         form_data = await request.form()
 
@@ -2225,7 +2293,7 @@ async def twilio_call_status_callback(
 
     except Exception as e:
         logger.error(f"Call status callback error: {e}")
-        return {"error": str(e)}
+        return {"error": "Internal processing error"}
 
 
 async def process_recording_ai(recording_id: int, meeting_id: int, transcription_enabled: bool):
@@ -3356,6 +3424,7 @@ async def setup_consent_fields(
     current_user = Depends(get_current_user)
 ):
     """Add recording consent columns to meeting_recordings and meeting_participants tables."""
+    _require_admin(current_user)
     try:
         alter_statements = [
             "ALTER TABLE meeting_recordings ADD COLUMN IF NOT EXISTS consent_obtained BOOLEAN DEFAULT FALSE",
@@ -3390,6 +3459,7 @@ async def setup_org_video_settings_table(
     current_user = Depends(get_current_user)
 ):
     """Create the organization_video_settings table."""
+    _require_admin(current_user)
     try:
         from sqlalchemy import text
         db.execute(text("""
@@ -3586,7 +3656,13 @@ class OrgVideoSettingsUpdate(BaseModel):
     default_consent_type: Optional[str] = None
     default_waiting_room: Optional[bool] = None
     max_participants: Optional[int] = None
-    allowed_providers: Optional[List[str]] = None
+    allowed_providers: Optional[List[MeetingProvider]] = None
+
+    @validator('default_consent_type')
+    def validate_consent_type(cls, v):
+        if v is not None and v not in ('one_party', 'two_party', 'all_party'):
+            raise ValueError("consent_type must be one_party, two_party, or all_party")
+        return v
 
 
 @router.get("/org-settings")
@@ -3646,6 +3722,7 @@ async def update_org_video_settings(
     current_user = Depends(get_current_user)
 ):
     """Update organization video meeting settings."""
+    _require_admin(current_user)
     if _models is None:
         raise HTTPException(status_code=500, detail="Video meeting models not initialized")
 
@@ -4078,6 +4155,7 @@ async def setup_breakout_rooms_table(
     current_user = Depends(get_current_user)
 ):
     """Create the breakout_rooms table if it doesn't exist."""
+    _require_admin(current_user)
     if _models is None:
         raise HTTPException(status_code=500, detail="Video meeting models not initialized")
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom';
 import { sanitizeText } from '../utils/sanitize';
 import { getAuthHeaders } from '../utils/auth';
+import { toast } from '../utils/toast';
 import './MeetingRoom.css';
 
 // API Base URL
@@ -727,12 +728,12 @@ const MeetingRoom = () => {
   // Join meeting
   const handleJoin = async () => {
     if (!displayName.trim()) {
-      alert('Please enter your name');
+      toast.warning('Please enter your name');
       return;
     }
 
     if (meeting?.password_protected && !password) {
-      alert('Please enter the meeting password');
+      toast.warning('Please enter the meeting password');
       return;
     }
 
@@ -756,7 +757,7 @@ const MeetingRoom = () => {
       const verifyResponse = await fetch(`${API_BASE}/api/v1/meetings/join/${roomCode}${passwordParam}`);
       if (!verifyResponse.ok) {
         const errorData = await verifyResponse.json();
-        alert(errorData.detail || 'Failed to join meeting');
+        toast.error(errorData.detail || 'Failed to join meeting');
         setJoined(false);
         return;
       }
@@ -998,13 +999,13 @@ const MeetingRoom = () => {
           }));
         }
       } else if (data.error === 'all_party_consent_required') {
-        alert(`Recording requires consent from all participants. Waiting for: ${data.pending_consent.map(p => p.display_name).join(', ')}`);
+        toast.warning(`Recording requires consent from all participants. Waiting for: ${data.pending_consent.map(p => p.display_name).join(', ')}`);
       } else {
-        alert(data.message || 'Failed to start recording');
+        toast.error(data.message || 'Failed to start recording');
       }
     } catch (err) {
       console.error('Error starting recording with consent:', err);
-      alert('Failed to start recording');
+      toast.error('Failed to start recording');
     }
   };
 
@@ -1104,7 +1105,8 @@ const MeetingRoom = () => {
       canvas.height = video.videoHeight || 480;
 
       // Capture the processed canvas as a stream
-      const processedStream = canvas.captureStream(30);
+      const captureMethod = canvas.captureStream || canvas.mozCaptureStream;
+      const processedStream = captureMethod.call(canvas, 30);
       canvasStreamRef.current = processedStream;
       const processedTrack = processedStream.getVideoTracks()[0];
 
@@ -1375,11 +1377,11 @@ const MeetingRoom = () => {
         } catch (parseErr) {
           errorMessage = `Server error (${response.status})`;
         }
-        alert(errorMessage);
+        toast.error(errorMessage);
       }
     } catch (err) {
       console.error('Error sending invite:', err);
-      alert('Failed to send invite: ' + (err.message || 'Network error'));
+      toast.error('Failed to send invite: ' + (err.message || 'Network error'));
     } finally {
       setInviteSending(false);
     }
@@ -1399,7 +1401,7 @@ const MeetingRoom = () => {
   // Request to join waiting room (for guests)
   const requestToJoin = async () => {
     if (!displayName.trim()) {
-      alert('Please enter your name');
+      toast.warning('Please enter your name');
       return;
     }
 
@@ -1421,11 +1423,11 @@ const MeetingRoom = () => {
         startAdmissionPolling(data.participant_id);
       } else {
         const errorData = await response.json();
-        alert(errorData.detail || 'Failed to join waiting room');
+        toast.error(errorData.detail || 'Failed to join waiting room');
       }
     } catch (err) {
       console.error('Error requesting to join:', err);
-      alert('Failed to join meeting');
+      toast.error('Failed to join meeting');
     }
   };
 
@@ -1599,7 +1601,8 @@ const MeetingRoom = () => {
         if (audioContextRef.current) {
           audioContextRef.current.close().catch(() => {});
         }
-        const audioContext = new AudioContext();
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        const audioContext = new AudioCtx();
         audioContextRef.current = audioContext;
         const destination = audioContext.createMediaStreamDestination();
 
@@ -1624,10 +1627,15 @@ const MeetingRoom = () => {
 
       screenStreamRef.current = screenStream;
 
-      // Setup MediaRecorder
-      const recorder = new MediaRecorder(combinedStream, {
-        mimeType: 'video/webm;codecs=vp9,opus'
-      });
+      // Setup MediaRecorder with browser-compatible mimeType
+      const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+        ? 'video/webm;codecs=vp9,opus'
+        : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+          ? 'video/webm;codecs=vp8,opus'
+          : MediaRecorder.isTypeSupported('video/webm')
+            ? 'video/webm'
+            : 'video/mp4';
+      const recorder = new MediaRecorder(combinedStream, { mimeType });
 
       const chunks = [];
       recorder.ondataavailable = (e) => {
@@ -1643,7 +1651,7 @@ const MeetingRoom = () => {
         }
 
         // Create blob from recorded chunks
-        const blob = new Blob(chunks, { type: 'video/webm' });
+        const blob = new Blob(chunks, { type: recorder.mimeType || 'video/webm' });
         setRecordedChunks(chunks);
 
         // Upload the recording
@@ -1666,7 +1674,7 @@ const MeetingRoom = () => {
 
     } catch (err) {
       console.error('Error starting screen recording:', err);
-      alert('Failed to start screen recording. Please make sure you allowed screen sharing.');
+      toast.error('Failed to start screen recording. Please make sure you allowed screen sharing.');
     }
   };
 
@@ -1770,10 +1778,10 @@ const MeetingRoom = () => {
         }]);
       }
 
-      alert('Link copied to clipboard!');
+      toast.success('Link copied to clipboard!');
     } catch (err) {
       console.error('Failed to copy link:', err);
-      alert('Failed to copy link. Please copy manually: ' + screenRecordingUrl);
+      toast.error('Failed to copy link. Please copy manually from the input above.');
     }
   };
 
@@ -1790,7 +1798,7 @@ const MeetingRoom = () => {
   // Generate AI email summary from recording
   const generateEmailSummary = async () => {
     if (!recipientEmail) {
-      alert('Please enter a recipient email address');
+      toast.warning('Please enter a recipient email address');
       return;
     }
 
@@ -1817,7 +1825,7 @@ const MeetingRoom = () => {
       if (response.ok) {
         const data = await response.json();
         setEmailSummaryGenerated(true);
-        alert(`Email summary draft created! You can find it in the Email tab of the borrower's profile page.`);
+        toast.success('Email summary draft created! Check the Email tab of the borrower\'s profile page.');
 
         // Log the activity
         try {
@@ -1848,7 +1856,7 @@ const MeetingRoom = () => {
       }
     } catch (err) {
       console.error('Error generating email summary:', err);
-      alert('Failed to generate email summary: ' + err.message);
+      toast.error('Failed to generate email summary: ' + err.message);
     } finally {
       setGeneratingEmailSummary(false);
     }
