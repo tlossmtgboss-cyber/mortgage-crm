@@ -704,24 +704,30 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.warning(f"⚠️ Could not load MUM Client Portal routes: {e}")
 
-    # Include Voice AI Receptionist routes
+    # Include Voice AI Receptionist sub-routes (webhooks, SMS, debug)
+    # NOTE: The main voice_router is NOT included here — voice_routes.py (line ~492)
+    # is the canonical /api/v1/voice router. Including both caused duplicate route conflicts.
+    # Unique endpoints (drop-voicemail, amd-callback, voicemail-twiml) were migrated to voice_routes.py.
     try:
-        from routes.voice_ai_receptionist_routes import router as voice_router, webhook_router, sms_router, debug_router
-        app.include_router(voice_router, tags=["Voice AI Receptionist"])
+        from routes.voice_ai_receptionist_routes import webhook_router, sms_router, debug_router
         app.include_router(webhook_router, tags=["Voice Webhooks"])
         app.include_router(sms_router, tags=["SMS Messaging"])
         app.include_router(debug_router, tags=["Debug"])
-        logger.info("✅ Voice AI Receptionist routes loaded")
+        logger.info("✅ Voice AI Receptionist sub-routes loaded (webhooks, SMS, debug)")
     except Exception as e:
-        logger.warning(f"⚠️ Could not load Voice AI Receptionist routes: {e}")
+        logger.warning(f"⚠️ Could not load Voice AI Receptionist sub-routes: {e}")
 
-    # Include Power Dialer routes for telephony
-    try:
-        from routes.power_dialer_routes import router as power_dialer_router
-        app.include_router(power_dialer_router, tags=["Power Dialer"])
-        logger.info("✅ Power Dialer routes loaded")
-    except Exception as e:
-        logger.warning(f"⚠️ Could not load Power Dialer routes: {e}")
+    # Power Dialer routes — DISABLED to resolve duplicate route conflict.
+    # telephony/router.py (registered at line ~1568) is the canonical /api/v1/dialer router
+    # with 1,506 lines, response models, TwiML webhooks, and better structure.
+    # power_dialer_routes.py (882 lines) is a subset of that functionality.
+    # try:
+    #     from routes.power_dialer_routes import router as power_dialer_router
+    #     app.include_router(power_dialer_router, tags=["Power Dialer"])
+    #     logger.info("✅ Power Dialer routes loaded")
+    # except Exception as e:
+    #     logger.warning(f"⚠️ Could not load Power Dialer routes: {e}")
+    logger.info("ℹ️ Power Dialer routes skipped (telephony/router.py is canonical)")
 
     # Include Client Profile routes for CMP API
     try:

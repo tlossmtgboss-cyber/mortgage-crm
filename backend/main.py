@@ -511,6 +511,24 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ CORS middleware not loaded: {e}")
 
+# ============================================================================
+# SECURITY CONFIGURATION VALIDATION
+# ============================================================================
+try:
+    from security_config import validate_security_config
+    security_issues = validate_security_config()
+    if security_issues:
+        for issue in security_issues:
+            if issue.startswith("CRITICAL"):
+                logger.error(f"🔴 Security: {issue}")
+            else:
+                logger.warning(f"🟡 Security: {issue}")
+        logger.warning(f"⚠️ Security validation: {len(security_issues)} issue(s) found")
+    else:
+        logger.info("✅ Security configuration validated — all checks passed")
+except Exception as e:
+    logger.warning(f"⚠️ Security validation could not run: {e}")
+
 # Mount static files directory for voicemail audio files
 from pathlib import Path as PathLib
 static_dir = PathLib("static")

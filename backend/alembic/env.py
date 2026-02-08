@@ -28,10 +28,11 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Import your models' MetaData object for autogenerate support
-# from models import Base
-# target_metadata = Base.metadata
-target_metadata = None
+# Import models' MetaData for autogenerate support
+# Base comes from database.py; importing database.models registers all models on Base.metadata
+from database import Base
+import database.models  # noqa: F401 — registers all model classes with Base
+target_metadata = Base.metadata
 
 # Get database URL from environment
 def get_url():

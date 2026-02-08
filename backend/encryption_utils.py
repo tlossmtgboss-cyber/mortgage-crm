@@ -21,8 +21,11 @@ class EncryptionManager:
 
         if not encryption_key:
             # Fallback to SECRET_KEY for backward compatibility
-            # But log a warning - should use dedicated key
-            logger.warning("⚠️ DATA_ENCRYPTION_KEY not set, using SECRET_KEY (not recommended)")
+            is_production = os.getenv("ENVIRONMENT") == "production" or bool(os.getenv("RAILWAY_ENVIRONMENT"))
+            if is_production:
+                logger.error("❌ DATA_ENCRYPTION_KEY not set in PRODUCTION — falling back to SECRET_KEY. Set a dedicated Fernet key!")
+            else:
+                logger.warning("⚠️ DATA_ENCRYPTION_KEY not set, using SECRET_KEY (not recommended for production)")
             secret_key = os.getenv("SECRET_KEY", "")
             key_material = secret_key.encode()[:32].ljust(32, b'0')
             encryption_key = base64.urlsafe_b64encode(key_material).decode()

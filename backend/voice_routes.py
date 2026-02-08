@@ -2966,3 +2966,287 @@ async def attach_operators(request: Request):
     except Exception as e:
         logger.error(f"Error attaching operators: {e}")
         return {"status": "error", "message": str(e)}
+
+
+# ============================================================================
+# RINGLESS VOICEMAIL & AMD ENDPOINTS
+# Migrated from voice_ai_receptionist_routes.py to resolve duplicate route conflict
+# ============================================================================
+
+@router.post("/drop-voicemail")
+async def drop_voicemail(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Drop a ringless voicemail using Slybroadcast (or fallback to Vapi)"""
+    try:
+        import httpx
+        import tempfile
+        import shutil
+        from pathlib import Path
+        from main import get_current_user_flexible as auth_dependency
+
+        User, Lead, Task, Activity, IncomingDataEvent = get_models()
+
+        # Authenticate
+        current_user = await auth_dependency(request, db)
+
+        # Lazy import models needed for voicemail
+        from main import VoicemailDrop, ActivityType
+
+        data = await request.json()
+        to_number = data.get("to_number")
+        message = data.get("message")
+        recipient_name = data.get("recipient_name", "")
+        lead_id = data.get("lead_id")
+        loan_id = data.get("loan_id")
+        provider = data.get("provider", "slybroadcast")
+
+        if not to_number:
+            raise HTTPException(status_code=400, detail="Phone number is required")
+        if not message:
+            raise HTTPException(status_code=400, detail="Message is required")
+
+        # Format phone number
+        clean_number = ''.join(filter(str.isdigit, to_number))
+        if len(clean_number) == 11 and clean_number.startswith('1'):
+            clean_number = clean_number[1:]
+
+        logger.info(f"Dropping voicemail to {clean_number} for {recipient_name} via {provider}")
+
+        greeting = f"Hi {recipient_name}, " if recipient_name else "Hello, "
+        full_message = (
+            f"{greeting}this is the AI assistant calling from "
+            f"{current_user.full_name or 'your loan officer'}'s office. "
+            f"{message} "
+            f"Feel free to call us back at your convenience. Have a great day!"
+        )
+
+        voicemail_drop = VoicemailDrop(
+            user_id=current_user.id,
+            lead_id=lead_id,
+            loan_id=loan_id,
+            phone_number=clean_number,
+            contact_name=recipient_name,
+            message_text=message,
+            status='pending'
+        )
+        db.add(voicemail_drop)
+        db.commit()
+        db.refresh(voicemail_drop)
+
+        session_id = None
+
+        if provider == "zapier":
+            logger.info("Using Zapier webhook to trigger Slybroadcast")
+            zapier_webhook_url = os.getenv("ZAPIER_VOICEMAIL_WEBHOOK_URL")
+            if not zapier_webhook_url:
+                raise HTTPException(status_code=503, detail="Zapier webhook URL not configured")
+
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                zapier_payload = {
+                    "phone_number": clean_number,
+                    "message": full_message,
+                    "recipient_name": recipient_name or "Customer",
+                    "caller_id": os.getenv("SLYBROADCAST_CALLER_ID", "8438345251"),
+                    "voicemail_id": voicemail_drop.id
+                }
+                zapier_response = await client.post(zapier_webhook_url, json=zapier_payload, timeout=30.0)
+
+                if zapier_response.status_code not in [200, 201]:
+                    error_msg = zapier_response.text
+                    voicemail_drop.status = 'failed'
+                    voicemail_drop.error_message = f"Zapier error: {error_msg}"
+                    db.commit()
+                    raise HTTPException(status_code=500, detail=f"Zapier webhook error: {error_msg}")
+
+                session_id = f"zapier_{voicemail_drop.id}"
+                voicemail_drop.vapi_call_id = session_id
+                voicemail_drop.status = 'sent_to_zapier'
+                db.commit()
+
+        elif provider == "slybroadcast":
+            logger.info("Using Slybroadcast for ringless voicemail")
+            sly_email = os.getenv("SLYBROADCAST_EMAIL")
+            sly_password = os.getenv("SLYBROADCAST_PASSWORD")
+            sly_caller_id = os.getenv("SLYBROADCAST_CALLER_ID", "8438345251")
+
+            if not sly_email or not sly_password:
+                raise HTTPException(status_code=503, detail="Slybroadcast credentials not configured")
+
+            openai_api_key = os.getenv("OPENAI_API_KEY")
+            if not openai_api_key:
+                raise HTTPException(status_code=503, detail="OpenAI API key not configured for TTS")
+
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                tts_response = await client.post(
+                    "https://api.openai.com/v1/audio/speech",
+                    headers={"Authorization": f"Bearer {openai_api_key}", "Content-Type": "application/json"},
+                    json={"model": "tts-1", "voice": "nova", "input": full_message, "speed": 0.95}
+                )
+                if tts_response.status_code != 200:
+                    raise HTTPException(status_code=500, detail="Failed to generate voicemail audio")
+
+                audio_data = tts_response.content
+                temp_dir = Path(tempfile.gettempdir())
+                audio_filename = f"voicemail_{voicemail_drop.id}_{datetime.now(timezone.utc).timestamp()}.mp3"
+                audio_path = temp_dir / audio_filename
+
+                with open(audio_path, 'wb') as f:
+                    f.write(audio_data)
+
+                static_dir = Path("/app/static") if Path("/app/static").exists() else Path("static")
+                static_dir.mkdir(exist_ok=True)
+                shutil.copy(audio_path, static_dir / audio_filename)
+
+                api_url = os.getenv("API_URL", "https://app.perenniaai.com")
+                audio_url = f"{api_url}/static/{audio_filename}"
+
+                slybroadcast_data = {
+                    "c_method": "new_campaign",
+                    "c_uid": sly_email,
+                    "c_password": sly_password,
+                    "c_phone": clean_number,
+                    "c_callerID": sly_caller_id,
+                    "c_date": "now",
+                    "c_url": audio_url,
+                    "c_audio": "mp3",
+                    "c_title": f"Voicemail to {recipient_name or clean_number}",
+                    "mobile_only": "1"
+                }
+                sly_response = await client.post(
+                    "https://www.slybroadcast.com/gateway/vmb.json.php",
+                    data=slybroadcast_data,
+                    timeout=30.0
+                )
+
+                try:
+                    sly_data = sly_response.json()
+                except Exception:
+                    raise HTTPException(status_code=500, detail=f"Invalid JSON from Slybroadcast: {sly_response.text}")
+
+                if sly_data.get("new_campaign") == "OK":
+                    session_id = str(sly_data.get("session_id"))
+                    voicemail_drop.vapi_call_id = session_id
+                    voicemail_drop.status = 'sent'
+                    db.commit()
+                elif "ERROR" in sly_data:
+                    error_msg = sly_data.get("ERROR", "Unknown error")
+                    voicemail_drop.status = 'failed'
+                    voicemail_drop.error_message = error_msg
+                    db.commit()
+                    raise HTTPException(status_code=500, detail=f"Slybroadcast error: {error_msg}")
+                else:
+                    voicemail_drop.status = 'failed'
+                    voicemail_drop.error_message = str(sly_data)
+                    db.commit()
+                    raise HTTPException(status_code=500, detail=f"Unexpected Slybroadcast response: {sly_data}")
+
+        else:
+            # Vapi fallback
+            logger.info("Using Vapi for voicemail (phone will ring)")
+            vapi_api_key = os.getenv("VAPI_API_KEY")
+            vapi_assistant_id = os.getenv("VAPI_VOICEMAIL_ASSISTANT_ID", os.getenv("VAPI_ASSISTANT_ID"))
+            vapi_phone_number_id = os.getenv("VAPI_PHONE_NUMBER_ID")
+
+            if not vapi_api_key or not vapi_assistant_id:
+                raise HTTPException(status_code=503, detail="Vapi credentials not configured")
+
+            vapi_number = f"+1{clean_number}"
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                vapi_payload = {
+                    "customer": {"number": vapi_number},
+                    "assistantId": vapi_assistant_id,
+                    "assistantOverrides": {
+                        "firstMessage": full_message,
+                        "voicemailMessage": full_message
+                    }
+                }
+                if vapi_phone_number_id:
+                    vapi_payload["phoneNumberId"] = vapi_phone_number_id
+
+                vapi_response = await client.post(
+                    "https://api.vapi.ai/call/phone",
+                    headers={"Authorization": f"Bearer {vapi_api_key}", "Content-Type": "application/json"},
+                    json=vapi_payload
+                )
+                if vapi_response.status_code not in [200, 201]:
+                    raise HTTPException(status_code=500, detail=f"Vapi error: {vapi_response.text}")
+
+                vapi_data = vapi_response.json()
+                session_id = vapi_data.get("id")
+                voicemail_drop.vapi_call_id = session_id
+                db.commit()
+
+        # Log activity
+        activity = Activity(
+            user_id=current_user.id,
+            type=ActivityType.CALL,
+            content=f"Ringless voicemail sent to {recipient_name or clean_number}: {message[:100]}",
+            user_metadata={
+                "direction": "outbound",
+                "phone_number": clean_number,
+                "recipient_name": recipient_name,
+                "session_id": session_id,
+                "voicemail_drop_id": voicemail_drop.id,
+                "message": message,
+                "status": "sent",
+                "call_type": "ringless_voicemail",
+                "provider": provider
+            },
+            lead_id=lead_id,
+            loan_id=loan_id
+        )
+        db.add(activity)
+        db.commit()
+
+        return {
+            "success": True,
+            "voicemail_id": voicemail_drop.id,
+            "session_id": session_id,
+            "provider": provider,
+            "message": f"Ringless voicemail sent successfully via {provider}"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error dropping voicemail: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/amd-callback")
+async def amd_callback(request: Request):
+    """Handle AMD (Answering Machine Detection) callback (legacy Twilio)"""
+    try:
+        form_data = await request.form()
+        amd_status = form_data.get("AnsweredBy")
+        call_sid = form_data.get("CallSid")
+        logger.info(f"AMD Callback - CallSid: {call_sid}, AnsweredBy: {amd_status}")
+        return {"status": "received", "answered_by": amd_status}
+    except Exception as e:
+        logger.error(f"Error in AMD callback: {e}")
+        return {"status": "error"}
+
+
+@router.get("/voicemail-twiml")
+async def voicemail_twiml_generator(
+    message: str = "",
+    AnsweredBy: str = None,
+    request: Request = None
+):
+    """Generate TwiML for voicemail message - only plays if voicemail detected"""
+    from twilio.twiml.voice_response import VoiceResponse
+
+    response = VoiceResponse()
+
+    if AnsweredBy == 'human':
+        logger.info("Human detected, hanging up to avoid disturbing")
+        response.hangup()
+    else:
+        response.pause(length=2)
+        response.say(message, voice='Polly.Ruth-Neural', language='en-US')
+        response.pause(length=1)
+        response.hangup()
+
+    return Response(content=str(response), media_type="application/xml")

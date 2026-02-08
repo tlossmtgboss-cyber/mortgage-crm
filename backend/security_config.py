@@ -167,7 +167,7 @@ class SecurityConfig:
                 issues.append("CRITICAL: SECRET_KEY not set in production")
 
             if not os.getenv("DATA_ENCRYPTION_KEY"):
-                issues.append("WARNING: DATA_ENCRYPTION_KEY not set, using fallback")
+                issues.append("CRITICAL: DATA_ENCRYPTION_KEY not set in production, falling back to SECRET_KEY (set a dedicated Fernet key)")
 
             if self.access_token_expire_minutes > 30:
                 issues.append(f"WARNING: Access token expiry ({self.access_token_expire_minutes} min) is longer than recommended (30 min)")
