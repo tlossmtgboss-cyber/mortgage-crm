@@ -576,8 +576,6 @@ class SalesforceSyncService:
                 db.execute(text(f"""
                     UPDATE loans SET {set_clauses},
                         salesforce_id = :salesforce_id,
-                        salesforce_last_synced_at = CURRENT_TIMESTAMP,
-                        salesforce_sync_status = 'synced',
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = :loan_id
                 """), loan_data)
@@ -589,7 +587,6 @@ class SalesforceSyncService:
             loan_data['loan_number'] = loan_number
             loan_data['loan_officer_id'] = user_id
             loan_data['salesforce_id'] = salesforce_id
-            loan_data['salesforce_sync_status'] = 'synced'
 
             # Ensure required fields have defaults
             if not loan_data.get('borrower_name'):
@@ -603,8 +600,8 @@ class SalesforceSyncService:
             placeholders = ", ".join([f":{k}" for k in loan_data.keys()])
 
             result = db.execute(text(f"""
-                INSERT INTO loans ({columns}, salesforce_last_synced_at, created_at, updated_at)
-                VALUES ({placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                INSERT INTO loans ({columns}, created_at, updated_at)
+                VALUES ({placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 RETURNING id
             """), loan_data)
 
@@ -1056,12 +1053,8 @@ class SalesforceSyncService:
             update_fields['email'] = sf_record['Email']
         if sf_record.get('Phone'):
             update_fields['phone'] = sf_record['Phone']
-        if sf_record.get('MobilePhone'):
-            update_fields['mobile_phone'] = sf_record['MobilePhone']
         if sf_record.get('Company'):
-            update_fields['company'] = sf_record['Company']
-        if sf_record.get('Title'):
-            update_fields['title'] = sf_record['Title']
+            update_fields['employer_name'] = sf_record['Company']
         if sf_record.get('Industry'):
             update_fields['industry'] = sf_record['Industry']
 
@@ -1137,22 +1130,12 @@ class SalesforceSyncService:
         # Text fields
         if sf_record.get('Name'):
             update_fields['borrower_name'] = sf_record['Name']
-        if sf_record.get('Description'):
-            update_fields['notes'] = sf_record['Description']
-        if sf_record.get('NextStep'):
-            update_fields['next_steps'] = sf_record['NextStep']
         if sf_record.get('Type'):
             update_fields['loan_type'] = sf_record['Type']
-        if sf_record.get('LeadSource'):
-            update_fields['lead_source'] = sf_record['LeadSource']
 
         # Number fields
         if sf_record.get('Amount'):
             update_fields['amount'] = float(sf_record['Amount'])
-        if sf_record.get('Probability'):
-            update_fields['probability'] = float(sf_record['Probability'])
-        if sf_record.get('ExpectedRevenue'):
-            update_fields['expected_revenue'] = float(sf_record['ExpectedRevenue'])
 
         # Date fields
         if sf_record.get('CloseDate'):
@@ -1162,35 +1145,18 @@ class SalesforceSyncService:
         if sf_record.get('StageName'):
             update_fields['stage'] = self._map_salesforce_stage(sf_record['StageName'])
 
-        # Status flags
-        if sf_record.get('IsClosed') is not None:
-            update_fields['is_closed'] = sf_record['IsClosed']
-        if sf_record.get('IsWon') is not None:
-            update_fields['is_won'] = sf_record['IsWon']
-
         # Always update salesforce_id
         update_fields['salesforce_id'] = sf_id
 
         if not update_fields:
             return False
 
-        # Build dynamic UPDATE query - handle special fields
-        set_parts = []
-        for k in update_fields.keys():
-            if k in ['amount', 'probability', 'expected_revenue']:
-                set_parts.append(f"{k} = :{k}")
-            elif k in ['is_closed', 'is_won']:
-                set_parts.append(f"{k} = :{k}")
-            else:
-                set_parts.append(f"{k} = :{k}")
-
-        set_clauses = ", ".join(set_parts)
+        # Build dynamic UPDATE query
+        set_clauses = ", ".join([f"{k} = :{k}" for k in update_fields.keys()])
         update_fields['loan_id'] = loan_id
 
         db.execute(text(f"""
             UPDATE loans SET {set_clauses},
-                salesforce_last_synced_at = CURRENT_TIMESTAMP,
-                salesforce_sync_status = 'synced',
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = :loan_id
         """), update_fields)
@@ -1644,9 +1610,6 @@ class SalesforceSyncService:
         amount = float(sf_opp.get('Amount') or 0)
         stage = self._map_salesforce_stage(sf_opp.get('StageName', ''))
         close_date = sf_opp.get('CloseDate')
-        lead_source = sf_opp.get('LeadSource') or 'Salesforce'
-        description = sf_opp.get('Description') or ''
-        next_step = sf_opp.get('NextStep') or ''
         loan_type = sf_opp.get('Type') or ''
 
         # Generate loan number (required NOT NULL field)
@@ -1672,17 +1635,13 @@ class SalesforceSyncService:
         db.execute(text("""
             INSERT INTO loans (
                 loan_number, borrower_name, borrower_email, borrower_phone,
-                amount, stage, closing_date, funded_date,
-                lead_source, notes, next_steps, loan_type,
+                amount, stage, closing_date, funded_date, loan_type,
                 salesforce_id, loan_officer_id, organization_id,
-                salesforce_sync_status, salesforce_last_synced_at,
                 created_at, updated_at
             ) VALUES (
                 :loan_number, :name, :borrower_email, :borrower_phone,
-                :amount, :stage, :close_date, :funded_date,
-                :lead_source, :notes, :next_steps, :loan_type,
+                :amount, :stage, :close_date, :funded_date, :loan_type,
                 :sf_id, :user_id, :org_id,
-                'synced', CURRENT_TIMESTAMP,
                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
             )
         """), {
@@ -1694,9 +1653,6 @@ class SalesforceSyncService:
             "stage": stage,
             "close_date": close_date,
             "funded_date": funded_date,
-            "lead_source": lead_source,
-            "notes": description,
-            "next_steps": next_step,
             "loan_type": loan_type,
             "sf_id": sf_id,
             "user_id": user_id,
@@ -1831,12 +1787,9 @@ class SalesforceSyncService:
                 if response.status_code == 204:
                     logger.info(f"Updated Salesforce Opportunity {salesforce_id} for loan {loan_id}")
 
-                    # Update loan's sync status
+                    # Update loan's sync timestamp
                     db.execute(text("""
-                        UPDATE loans SET
-                            salesforce_last_synced_at = CURRENT_TIMESTAMP,
-                            salesforce_sync_status = 'synced',
-                            salesforce_sync_direction = 'outbound'
+                        UPDATE loans SET updated_at = CURRENT_TIMESTAMP
                         WHERE id = :loan_id
                     """), {"loan_id": loan_id})
                     db.commit()
@@ -1877,9 +1830,7 @@ class SalesforceSyncService:
                     db.execute(text("""
                         UPDATE loans SET
                             salesforce_id = :sf_id,
-                            salesforce_last_synced_at = CURRENT_TIMESTAMP,
-                            salesforce_sync_status = 'synced',
-                            salesforce_sync_direction = 'outbound'
+                            updated_at = CURRENT_TIMESTAMP
                         WHERE id = :loan_id
                     """), {"sf_id": salesforce_id, "loan_id": loan_id})
                     db.commit()
@@ -2562,9 +2513,6 @@ class SalesforceSyncService:
                 SELECT id FROM loans
                 WHERE loan_officer_id = :user_id
                   AND updated_at >= :since
-                  AND (salesforce_sync_status IS NULL
-                       OR salesforce_sync_status != 'synced'
-                       OR salesforce_last_synced_at < updated_at)
                 ORDER BY updated_at DESC
                 LIMIT 100
             """), {"user_id": user_id, "since": since}).fetchall()
