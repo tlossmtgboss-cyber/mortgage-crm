@@ -5,7 +5,7 @@ This module provides endpoints for processing natural language commands
 and executing CRM actions through Claude AI.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, File, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, File, UploadFile, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 from pydantic import BaseModel
@@ -5222,13 +5222,21 @@ Generate the email now:"""
 @router.post("/send-composed-email")
 async def send_composed_email(
     request: EmailSendRequest,
+    fastapi_request: Request,
     authorization: str = None,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_dependency)
 ):
     """Send a composed email via the email service"""
     try:
         from email_service import email_service
+
+        # Resolve auth dependency manually (get_current_user_dependency returns the function)
+        get_current_user_fn = get_current_user_dependency()
+        current_user = await get_current_user_fn(
+            token=fastapi_request.headers.get("Authorization", "").replace("Bearer ", ""),
+            request=fastapi_request,
+            db=db,
+        )
 
         # Require authenticated user
         if not current_user or not hasattr(current_user, 'id'):
