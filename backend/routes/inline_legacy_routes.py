@@ -3996,24 +3996,6 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         )
 
 
-    # ============================================================================
-    # SSE STREAMING CHAT ENDPOINT - Moved to routes/sse_streaming_chat_routes.py
-    # ============================================================================
-
-    # ============================================================================
-    # VOICE INTEGRATION ENDPOINTS - Moved to routes/voice_integration_routes.py
-    # ============================================================================
-
-    # ============================================================================
-    # AUTONOMOUS WORKFLOW ENDPOINTS - Moved to routes/ai_workflow_routes.py
-    # ============================================================================
-
-
-    # ============================================================================
-    # AI UNDERWRITING ENDPOINTS - Moved to routes/ai_underwriting_analysis_routes.py
-    # ============================================================================
-
-
     @app.post("/api/v1/ai/autonomous-task")
     async def execute_autonomous_task(
         request: Request,
@@ -5077,7 +5059,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         # Add fallback endpoint if main scheduler routes failed to load
         from pydantic import BaseModel
         from typing import Optional, List, Dict, Any
-        from datetime import datetime, timedelta
+        # datetime and timedelta already imported at module level (line 22)
         import pytz
 
         class FallbackSlotsRequest(BaseModel):
@@ -10489,49 +10471,6 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
             logger.error(f"Error processing Microsoft email: {e}")
             db.rollback()
             return {"status": "error", "error": str(e)}
-
-    # ============================================================================
-    # VOICE API - AI RECEPTIONIST ENDPOINTS
-    # Moved to routes/voice_ai_receptionist_routes.py
-    # ============================================================================
-
-
-    # ============================================================================
-    # VOICEMAIL DROP SYSTEM - API ENDPOINTS
-    # Moved to routes/voicemail_drop_routes.py
-    # ============================================================================
-
-
-    # ============================================================================
-    # DATA RECONCILIATION ENGINE - API ENDPOINTS
-    # Moved to routes/data_reconciliation_routes.py
-    # ============================================================================
-
-
-    # ============================================================================
-    # EMAIL RESPONSE QUEUE - Moved to routes/email_response_queue_routes.py
-    # ============================================================================
-
-    # ============================================================================
-    # DUPLICATE MERGE & AI LEARNING SYSTEM - Moved to routes/duplicate_merge_routes.py
-    # ============================================================================
-
-    # ============================================================================
-    # ORGANIZATION MANAGEMENT ENDPOINTS - Moved to routes/organization_routes.py
-    # ============================================================================
-
-    # ============================================================================
-    # USER SETTINGS ENDPOINTS - Moved to routes/user_settings_routes.py
-    # ============================================================================
-
-    # ============================================================================
-    # MICROSOFT 365 OAUTH ENDPOINTS - Moved to routes/microsoft_oauth_routes.py
-    # ============================================================================
-
-    # ============================================================================
-    # IT HELPDESK ENDPOINTS - Moved to routes/it_helpdesk_routes.py
-    # ============================================================================
-
 
     @app.post("/api/v1/migrations/add-external-message-id")
     async def add_external_message_id_migration(
@@ -17934,14 +17873,6 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
             )
 
     # ============================================================================
-    # AUTH ROUTES - Moved to routes/auth_routes.py
-    # ============================================================================
-
-    # ============================================================================
-    # SECURITY DASHBOARD ENDPOINTS - Moved to routes/security_dashboard_routes.py
-    # ============================================================================
-
-    # ============================================================================
     # FIRST-TIME USER ONBOARDING
     # ============================================================================
 
@@ -19722,10 +19653,6 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
 
 
     # ============================================================================
-    # DASHBOARD HELPER FUNCTIONS & DASHBOARD - Moved to routes/dashboard_routes.py
-    # ============================================================================
-
-    # ============================================================================
     # LOAN SCORECARD REPORT
     # ============================================================================
 
@@ -20077,10 +20004,6 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
             logger.error(f"Error in scorecard endpoint: {str(e)}", exc_info=True)
             raise HTTPException(status_code=500, detail=f"Error generating scorecard: {str(e)}")
 
-    # ============================================================================
-    # LEADS CRUD - Moved to routes/leads_crud_routes.py
-    # ============================================================================
-
     # ================================================================
     # GLOBAL SEARCH - Search across all entities
     # ================================================================
@@ -20244,10 +20167,6 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
             "query": q
         }
 
-
-    # ============================================================================
-    # COMMAND CENTER - Moved to routes/command_center_routes.py
-    # ============================================================================
 
     # IMPORTANT: This route MUST be defined BEFORE /leads/{lead_id} to avoid route conflicts
     @app.delete("/api/v1/leads/bulk-delete")
@@ -20949,27 +20868,6 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         return scores
 
     # ============================================================================
-    # WORKFLOW AUTOMATION TEST ENDPOINTS - Moved to routes/workflow_test_routes.py
-    # Includes: Workflow Test, Stage History, Lead Conditions, Rate Lock Intelligence,
-    # Power Play Workflow, Document Intake Classification, Post-Closing Workflow
-    # ============================================================================
-
-    # ============================================================================
-    # CLIENT MANAGEMENT PROFILE (CMP) API ENDPOINTS
-    # Moved to routes/client_profile_routes.py
-    # ============================================================================
-
-
-    # ============================================================================
-    # WORKFLOW ROLE ASSIGNMENT ENDPOINTS - Moved to routes/workflow_role_routes.py
-    # ============================================================================
-
-    # ============================================================================
-    # DEFAULT TEAM ROLE SETTINGS ENDPOINTS - Moved to routes/workflow_role_routes.py
-    # ============================================================================
-
-
-    # ============================================================================
     # FUNDED LOAN → MUM CLIENT CONVERSION
     # ============================================================================
 
@@ -21330,11 +21228,6 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
 
 
     # ============================================================================
-    # MUM CLIENT PORTAL ENDPOINTS - Moved to routes/mum_client_portal_routes.py
-    # ============================================================================
-
-
-    # ============================================================================
     # ACTIVITIES CRUD
     # ============================================================================
 
@@ -21398,24 +21291,6 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         db.commit()
         logger.info(f"Activity deleted: {activity.type.value}")
         return None
-
-    # ============================================================================
-    # PROCESS TEMPLATES - Moved to routes/crm_operations_routes.py
-    # ANALYTICS - Moved to routes/crm_operations_routes.py
-    # PORTFOLIO - Moved to routes/crm_operations_routes.py
-    # ============================================================================
-
-    # ============================================================================
-    # # AI ASSISTANT & CONVERSATIONS - Moved to routes/ai_assistant_routes.py
-    # ============================================================================
-
-    # ============================================================================
-    # # CALENDAR EVENTS CRUD - Moved to routes/calendar_routes.py
-    # ============================================================================
-
-    # ============================================================================
-    # # CALENDAR ASSIGNMENT API - Moved to routes/calendar_routes.py
-    # ============================================================================
 
     # ============================================================================
     # DATABASE INITIALIZATION
@@ -22827,83 +22702,6 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
                 raise HTTPException(status_code=500, detail=f"Anthropic API quota/billing error: {error_msg}")
             else:
                 raise HTTPException(status_code=500, detail=f"AI Underwriter error: {error_msg}")
-
-    # ============================================================================
-    # CALENDLY INTEGRATION - Moved to routes/calendly_integration_routes.py
-    # ============================================================================
-
-    # ============================================================================
-    # ONBOARDING ENDPOINTS - Moved to routes/onboarding_routes.py
-    # ============================================================================
-
-
-    # ============================================================================
-    # PHASE 2: PERMISSION SYSTEM - CORE FUNCTIONS & ENDPOINTS - Moved to routes/permission_core_routes.py
-    # ============================================================================
-
-    # ============================================================================
-    # PERMISSION SYSTEM ENDPOINTS - Moved to routes/permission_system_routes.py
-    # (Includes: Permission Requests, Notifications, Access Certification,
-    #  Compliance Dashboard, Access & Audit)
-    # ============================================================================
-
-
-    # ============================================================================
-    # HR MANAGEMENT ENDPOINTS - Moved to routes/hr_management_routes.py
-    # (Includes: Job Descriptions, Skills Library, Responsibilities, Goals/OKRs,
-    #  Skills Assessment)
-    # ============================================================================
-
-
-    # ============================================================================
-    # TEMPORARY MIGRATION ENDPOINTS - Moved to routes/admin_migration_routes.py
-    # ============================================================================
-
-    # ============================================================================
-    # DUPLICATE DETECTION ENDPOINTS - Moved to routes/duplicate_detection_routes.py
-    # ============================================================================
-
-
-    # ============================================================================
-    # PHASE 2: PERMISSION SYSTEM MIGRATION ENDPOINTS - Moved to routes/admin_migration_routes.py
-    # ============================================================================
-
-    # ============================================================================
-    # MUM (MORTGAGES UNDER MANAGEMENT) API - Moved to routes/mum_api_routes.py
-    # ============================================================================
-
-    # ============================================================================
-    # ONBOARDING ENDPOINTS - Moved to routes/onboarding_extended_routes.py
-    # ============================================================================
-
-    # ============================================================================
-    # WORKFLOW STAGES ENDPOINTS - Moved to routes/onboarding_extended_routes.py
-    # ============================================================================
-
-    # ============================================================================
-    # ONBOARDING & PERMISSION SYSTEM SEED DATA - Moved to routes/onboarding_extended_routes.py
-    # ============================================================================
-
-    # ============================================================================
-    # ONBOARDING API ENDPOINTS - Moved to routes/onboarding_extended_routes.py
-    # ============================================================================
-
-    # ============================================================================
-    # POWER DIALER API ENDPOINTS - Moved to routes/power_dialer_routes.py
-    # ============================================================================
-
-
-    # ============================================================================
-    # SIMPLIFIED CHAT ENDPOINTS WITH CACHING - Moved to routes/chat_screenshot_routes.py
-    # ============================================================================
-
-    # ============================================================================
-    # SCREENSHOT PARSING ENDPOINT - Vision AI for Partner/Lead Extraction - Moved to routes/chat_screenshot_routes.py
-    # ============================================================================
-
-    # ============================================================================
-    # BORROWER APPLICATION API ROUTES - Moved to routes/borrower_application_routes.py
-    # ============================================================================
 
     # ============================================================================
     # DATABASE MIGRATIONS (Protected by CRON_API_KEY)
