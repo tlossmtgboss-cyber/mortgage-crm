@@ -492,15 +492,12 @@ function CalendarSidebar({ leadId, loanId, children }) {
       const endDateTime = new Date(startDateTime.getTime() + parseInt(appointmentForm.duration) * 60000);
 
       const appointmentData = {
-        title: appointmentForm.title,
-        attendee_name: appointmentForm.attendee_name,
-        attendee_email: appointmentForm.attendee_email,
-        scheduled_start: startDateTime.toISOString(),
-        scheduled_end: endDateTime.toISOString(),
-        meeting_mode: appointmentForm.meeting_mode,
-        attendee_notes: appointmentForm.notes,
-        lead_id: leadId || null,
-        loan_id: loanId || null,
+        contact_name: appointmentForm.attendee_name,
+        contact_email: appointmentForm.attendee_email,
+        appointment_time: startDateTime.toISOString(),
+        duration_minutes: parseInt(appointmentForm.duration),
+        appointment_type: appointmentForm.title || 'consultation',
+        notes: appointmentForm.notes || null,
       };
 
       await schedulerAPI.createAppointment(appointmentData);
