@@ -37,7 +37,12 @@ DATABASE_POOLED_URL = os.getenv("DATABASE_POOLED_URL") or os.getenv("DATABASE_PU
 DATABASE_URL = DATABASE_POOLED_URL or os.getenv("DATABASE_URL", "sqlite:///./mortgage_crm.db")
 
 # Detect if using PgBouncer (pooled connection)
-USE_PGBOUNCER = DATABASE_POOLED_URL is not None or "pooler" in DATABASE_URL
+# Only treat as PgBouncer if the pooled URL is DIFFERENT from the direct URL
+# Railway sets DATABASE_POOLED_URL even when there's no PgBouncer, so we must check
+_raw_direct = os.getenv("DATABASE_URL", "")
+_raw_pooled = os.getenv("DATABASE_POOLED_URL", "")
+USE_PGBOUNCER = bool(_raw_pooled and _raw_pooled != _raw_direct)
+print(f"DB.PY: PgBouncer detected: {USE_PGBOUNCER} (pooled_url_set={bool(_raw_pooled)}, urls_differ={_raw_pooled != _raw_direct})", flush=True)
 
 # Fix postgres:// to postgresql:// for SQLAlchemy
 if DATABASE_URL.startswith("postgres://"):
@@ -60,6 +65,7 @@ elif USE_PGBOUNCER:
     # PgBouncer mode: Let PgBouncer handle connection pooling
     # Use NullPool - each request gets a fresh connection from PgBouncer
     # This prevents "too many clients" errors by using PgBouncer's pool
+    print("DB.PY: Using PgBouncer connection pooling (NullPool)", flush=True)
     logger.info("Using PgBouncer connection pooling (NullPool)")
     engine = create_engine(
         DATABASE_URL,
@@ -77,6 +83,7 @@ else:
     # Direct PostgreSQL connection with SQLAlchemy pooling
     # Railway has 97 connections max; conservative pool to prevent exhaustion
     # Key: pool_size + max_overflow should not exceed ~50% of Railway's limit
+    print("DB.PY: Using direct PostgreSQL with QueuePool (pool_size=3, max_overflow=5, max=8)", flush=True)
     logger.info("Using direct PostgreSQL connection with SQLAlchemy pooling")
     engine = create_engine(
         DATABASE_URL,
