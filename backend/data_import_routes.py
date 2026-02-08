@@ -35,7 +35,7 @@ def get_db_connection():
     global _get_db_connection
     if _get_db_connection is None:
         try:
-            from main import get_db_connection as _gdbc
+            from auto_import_routes import get_db_connection as _gdbc
             _get_db_connection = _gdbc
         except Exception:
             import psycopg2

@@ -157,9 +157,9 @@ def get_user_profile_for_agent(
                     "metadata": {},
                 }
 
-        # Try to get contact
+        # Try to get contact (using Lead model - no separate Contact model exists)
         if contact_id:
-            from main import Contact
+            from main import Lead as Contact
             contact = db.query(Contact).filter(Contact.id == contact_id).first()
             if contact:
                 return {

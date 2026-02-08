@@ -38,7 +38,7 @@ from requests.exceptions import RequestException
 
 # Import encryption functions for secure token storage
 try:
-    from main import encrypt_token, decrypt_token
+    from services.calendly_service import encrypt_token, decrypt_token
 except ImportError:
     # SECURITY: Fail hard if encryption not available - never store tokens in plaintext
     logger.error("CRITICAL: Token encryption not available - refusing to handle tokens insecurely")
@@ -2676,17 +2676,25 @@ async def debug_import_closed_loans_from_sf(
         instance_url = profile[3]
         user_id = profile[4]
 
-        # Get access token with automatic refresh
+        # Get access token - try refresh first since tokens expire frequently
         from services.salesforce.oauth_service import SalesforceOAuthService
         oauth = SalesforceOAuthService()
+        access_token = None
         try:
-            access_token, _ = await oauth.get_access_token(db, profile_id)
-        except Exception as oauth_err:
-            return {
-                "status": "error",
-                "message": f"Failed to get Salesforce access token: {oauth_err}",
-                "hint": "Try reconnecting Salesforce in Settings > Integrations"
-            }
+            # First try to refresh the token (it's likely expired after ~1-2 hours)
+            access_token = await oauth.refresh_access_token(db, profile_id)
+            logger.info(f"Refreshed Salesforce token for profile {profile_id}")
+        except Exception as refresh_err:
+            logger.warning(f"Token refresh failed, trying existing token: {refresh_err}")
+            # Fall back to existing token
+            try:
+                access_token, _ = await oauth.get_access_token(db, profile_id)
+            except Exception as oauth_err:
+                return {
+                    "status": "error",
+                    "message": f"Failed to get Salesforce access token: {oauth_err}",
+                    "hint": "Try reconnecting Salesforce in Settings > Integrations"
+                }
 
         # Query closed loans from Salesforce
         sf_object = "MtgPlanner_CRM__Transaction_Property__c"
@@ -2695,7 +2703,7 @@ async def debug_import_closed_loans_from_sf(
                    MtgPlanner_CRM__Loan_Amount__c, MtgPlanner_CRM__Interest_Rate__c,
                    MtgPlanner_CRM__Property_Address__c, MtgPlanner_CRM__Property_City__c,
                    MtgPlanner_CRM__Property_State__c, MtgPlanner_CRM__Property_Zip__c,
-                   MtgPlanner_CRM__Closing_Date__c, MtgPlanner_CRM__Funded_Date__c,
+                   MtgPlanner_CRM__Closing_Date__c,
                    MtgPlanner_CRM__Borrower_Email__c, MtgPlanner_CRM__Borrower_Phone__c,
                    MtgPlanner_CRM__Loan_Type__c, LastModifiedDate
             FROM {sf_object}
@@ -2747,7 +2755,6 @@ async def debug_import_closed_loans_from_sf(
                     'property_state': record.get('MtgPlanner_CRM__Property_State__c'),
                     'property_zip': record.get('MtgPlanner_CRM__Property_Zip__c'),
                     'closing_date': record.get('MtgPlanner_CRM__Closing_Date__c'),
-                    'funded_date': record.get('MtgPlanner_CRM__Funded_Date__c'),
                     'borrower_email': record.get('MtgPlanner_CRM__Borrower_Email__c'),
                     'borrower_phone': record.get('MtgPlanner_CRM__Borrower_Phone__c'),
                     'loan_type': record.get('MtgPlanner_CRM__Loan_Type__c'),

@@ -49,7 +49,7 @@ def get_permission_functions():
 
 def get_lead_score_calculator():
     """Get lead score calculator - lazy import"""
-    from main import calculate_lead_score
+    from utils.lead_scoring import calculate_lead_score
     return calculate_lead_score
 
 def get_sla_tracker():

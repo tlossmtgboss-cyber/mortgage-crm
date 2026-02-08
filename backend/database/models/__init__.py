@@ -5,36 +5,31 @@ Organized SQLAlchemy model definitions extracted from main.py.
 
 Structure:
     models/
-    ├── __init__.py      # This file - aggregates all exports
-    ├── core.py          # Organization, User, Branch, Auth models
-    ├── lead_loan.py     # Lead and Loan pipeline models
-    ├── task.py          # Task and AITask models
-    ├── document.py      # Document management models
-    ├── communication.py # Email, SMS, Call, Activity models
-    ├── ai.py            # AI/ML related models
-    ├── referral.py      # Referral partner models
-    ├── workflow.py      # Workflow automation models
-    ├── permission.py    # Permission and role models
-    ├── security.py      # Security and audit models
-    └── dialer.py        # Power dialer/telephony models (TODO)
+    ├── __init__.py           # This file - aggregates all exports
+    ├── core.py               # Organization, User, Branch, Auth models
+    ├── lead_loan.py          # Lead and Loan pipeline models
+    ├── task.py               # Task and AITask models
+    ├── document.py           # Document management models
+    ├── communication.py      # Email, SMS, Call, Activity models
+    ├── ai.py                 # AI/ML related models
+    ├── referral.py           # Referral partner models
+    ├── workflow.py           # Workflow automation models
+    ├── permission.py         # Permission and role models
+    ├── security.py           # Security and audit models
+    ├── subscription.py       # Subscription, billing, promo codes
+    ├── microsoft.py          # Microsoft OAuth/Graph integration
+    ├── data_reconciliation.py # Data reconciliation engine (DRE)
+    ├── it_helpdesk.py        # IT helpdesk tickets and tools
+    ├── client.py             # Client management profiles
+    ├── hr_goals.py           # HR goals, skills, assessments
+    ├── dialer.py             # Power dialer/telephony models
+    ├── borrower.py           # Borrower application system
+    └── estimate.py           # Loan estimate parser/comparison
 
 Usage:
     from database.models import User, Organization, Lead, Loan
     from database.models.core import User, Branch
     from database.models.task import Task, AITask
-
-Migration Notes:
-    During the decomposition of main.py (75K lines -> modular structure),
-    models are being extracted incrementally. New code should import from
-    this module, but main.py still contains the authoritative definitions
-    until the migration is complete.
-
-    Pattern for extracting models:
-    1. Copy model class from main.py to appropriate module
-    2. Update imports (Base, Column, relationship, etc.)
-    3. Add to module's __all__ list
-    4. Add import to this __init__.py
-    5. Update main.py to import from here (once all models extracted)
 """
 
 # Core models - Organization, User, Auth
@@ -154,6 +149,91 @@ from .security import (
     SystemAlert,
     SystemJobsLog,
     Notification,
+)
+
+# Subscription & billing models
+from .subscription import (
+    SubscriptionPlan,
+    Subscription,
+    PromoCode,
+    TeamMember,
+)
+
+# Microsoft integration models
+from .microsoft import (
+    MicrosoftToken,
+    MicrosoftOAuthToken,
+    MicrosoftAppConfig,
+)
+
+# Data reconciliation engine models
+from .data_reconciliation import (
+    IncomingDataEvent,
+    ExtractedData,
+    BlockedSender,
+    DuplicatePair,
+    MergeTrainingEvent,
+    MergeAIModel,
+)
+
+# IT helpdesk models
+from .it_helpdesk import (
+    ITHelpdeskTicket,
+    ITHelpdeskTool,
+)
+
+# Client management models
+from .client import (
+    ClientProfile,
+    TeamRole,
+    ProcessFlowDocument,
+    KPISnapshot,
+)
+
+# HR goals & skills models
+from .hr_goals import (
+    UserJobDescription,
+    Skill,
+    EmployeeResponsibility,
+    ResponsibilitySkill,
+    UserGoal,
+    GoalKeyResult,
+    GoalEmployeeAssessment,
+    GoalManagerAssessment,
+    GoalResponsibility,
+    UserSkillAssessment,
+)
+
+# Power dialer / telephony models
+from .dialer import (
+    AgentTelephonySettings,
+    VerifiedCallerId,
+    DialerSession,
+    DialerSessionTask,
+    CallLog,
+    ActiveCall,
+    ContactDNCStatus,
+)
+
+# Borrower application system models
+from .borrower import (
+    BorrowerProfile,
+    BorrowerAuthEvent,
+    BorrowerMagicLink,
+    BorrowerApplication,
+    ApplicationDocument,
+    CoborrowerInvitation,
+    ApplicationEvent,
+    ApplicationNotification,
+    ApplicationSession,
+    VoiceApplicationSession,
+)
+
+# Loan estimate parser/comparison models
+from .estimate import (
+    EstimateParseCache,
+    EstimateParseFailure,
+    EstimateComparison,
 )
 
 
@@ -284,4 +364,89 @@ __all__ = [
     "SystemAlert",
     "SystemJobsLog",
     "Notification",
+
+    # =====================
+    # Subscription & Billing
+    # =====================
+    "SubscriptionPlan",
+    "Subscription",
+    "PromoCode",
+    "TeamMember",
+
+    # =====================
+    # Microsoft Integration
+    # =====================
+    "MicrosoftToken",
+    "MicrosoftOAuthToken",
+    "MicrosoftAppConfig",
+
+    # =====================
+    # Data Reconciliation
+    # =====================
+    "IncomingDataEvent",
+    "ExtractedData",
+    "BlockedSender",
+    "DuplicatePair",
+    "MergeTrainingEvent",
+    "MergeAIModel",
+
+    # =====================
+    # IT Helpdesk
+    # =====================
+    "ITHelpdeskTicket",
+    "ITHelpdeskTool",
+
+    # =====================
+    # Client Management
+    # =====================
+    "ClientProfile",
+    "TeamRole",
+    "ProcessFlowDocument",
+    "KPISnapshot",
+
+    # =====================
+    # HR Goals & Skills
+    # =====================
+    "UserJobDescription",
+    "Skill",
+    "EmployeeResponsibility",
+    "ResponsibilitySkill",
+    "UserGoal",
+    "GoalKeyResult",
+    "GoalEmployeeAssessment",
+    "GoalManagerAssessment",
+    "GoalResponsibility",
+    "UserSkillAssessment",
+
+    # =====================
+    # Power Dialer
+    # =====================
+    "AgentTelephonySettings",
+    "VerifiedCallerId",
+    "DialerSession",
+    "DialerSessionTask",
+    "CallLog",
+    "ActiveCall",
+    "ContactDNCStatus",
+
+    # =====================
+    # Borrower Application
+    # =====================
+    "BorrowerProfile",
+    "BorrowerAuthEvent",
+    "BorrowerMagicLink",
+    "BorrowerApplication",
+    "ApplicationDocument",
+    "CoborrowerInvitation",
+    "ApplicationEvent",
+    "ApplicationNotification",
+    "ApplicationSession",
+    "VoiceApplicationSession",
+
+    # =====================
+    # Loan Estimates
+    # =====================
+    "EstimateParseCache",
+    "EstimateParseFailure",
+    "EstimateComparison",
 ]

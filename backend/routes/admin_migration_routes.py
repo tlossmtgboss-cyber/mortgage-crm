@@ -1,0 +1,201 @@
+"""
+Admin Migration Routes
+Temporary migration endpoints for database updates and admin bootstrapping
+"""
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+import logging
+import subprocess
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+
+def get_models():
+    """Get models at runtime to avoid circular imports"""
+    import main
+    return {
+        'User': main.User,
+    }
+
+
+def get_db_dep():
+    """Get database dependency at runtime"""
+    from db import get_db
+    return get_db
+
+
+def get_current_user_dep():
+    """Get current user dependency at runtime"""
+    import main
+    return main.get_current_user
+
+
+def get_apply_role_template():
+    """Get role template function"""
+    import main
+    return main.apply_role_template_to_user
+
+
+@router.post("/admin/run-ai-migration")
+async def run_ai_migration_endpoint(request: dict):
+    """
+    Temporary endpoint to run AI migration remotely.
+    Usage: POST /admin/run-ai-migration with body: {"secret": "migrate-ai-2024"}
+    """
+    if request.get("secret") != "migrate-ai-2024":
+        raise HTTPException(status_code=403, detail="Invalid secret")
+
+    try:
+        result = subprocess.run(
+            ["python3", "run_ai_migration.py"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            cwd="/app"
+        )
+
+        return {
+            "success": result.returncode == 0,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "returncode": result.returncode
+        }
+    except subprocess.TimeoutExpired:
+        return {
+            "success": False,
+            "error": "Migration timed out after 120 seconds"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@router.get("/api/v1/migrations/check-phase2-permissions", response_model=None)
+async def check_phase2_permission_migration(db: Session = Depends(lambda: get_db_dep())):
+    """
+    Check if Phase 2 Permission System Migration has completed
+    Returns status of tables and templates
+    """
+    try:
+        results = {
+            "permission_role_column_exists": False,
+            "permission_templates_table_exists": False,
+            "user_permissions_table_exists": False,
+            "template_count": 0,
+            "templates": []
+        }
+
+        try:
+            db.execute(text("SELECT permission_role FROM users LIMIT 1"))
+            results["permission_role_column_exists"] = True
+        except Exception:
+            pass
+
+        try:
+            result = db.execute(text("SELECT COUNT(*) FROM permission_templates"))
+            results["permission_templates_table_exists"] = True
+            results["template_count"] = result.fetchone()[0]
+
+            templates = db.execute(text("SELECT id, name, category FROM permission_templates"))
+            results["templates"] = [{"id": t[0], "name": t[1], "category": t[2]} for t in templates]
+        except Exception:
+            pass
+
+        try:
+            db.execute(text("SELECT COUNT(*) FROM user_permissions LIMIT 1"))
+            results["user_permissions_table_exists"] = True
+        except Exception:
+            pass
+
+        results["migration_complete"] = (
+            results["permission_role_column_exists"] and
+            results["permission_templates_table_exists"] and
+            results["user_permissions_table_exists"] and
+            results["template_count"] >= 3
+        )
+
+        return results
+
+    except Exception as e:
+        logger.error(f"Check migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/v1/migrations/bootstrap-admin-user", response_model=None)
+async def bootstrap_admin_user(
+    user_id: int = 1,
+    bootstrap_key: str = "",
+    db: Session = Depends(lambda: get_db_dep())
+):
+    """
+    Bootstrap an admin user with management permissions
+    """
+    models = get_models()
+    User = models['User']
+    apply_role_template = get_apply_role_template()
+
+    try:
+        if bootstrap_key != "bootstrap-now":
+            raise HTTPException(status_code=403, detail="Invalid bootstrap key")
+
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail=f"User {user_id} not found")
+
+        success = apply_role_template(user_id, "management", user_id, db)
+
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to apply management template")
+
+        return {
+            "success": True,
+            "message": f"Successfully bootstrapped user {user.email} with management permissions",
+            "user_id": user_id,
+            "email": user.email,
+            "role": "management"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Bootstrap error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/v1/admin/set-admin-role")
+async def set_admin_role(
+    db: Session = Depends(lambda: get_db_dep()),
+    current_user = Depends(lambda: get_current_user_dep())
+):
+    """
+    Set the current user's permission_role to admin.
+    """
+    try:
+        current_user.permission_role = "admin"
+        current_user.role = "admin"
+        db.commit()
+        db.refresh(current_user)
+
+        return {
+            "success": True,
+            "message": f"User {current_user.email} is now an admin",
+            "user_id": current_user.id,
+            "email": current_user.email,
+            "permission_role": current_user.permission_role
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to set admin role: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def set_dependencies(get_db_func, get_current_user_func):
+    """Set dependencies for this router"""
+    global _get_db, _get_current_user
+    _get_db = get_db_func
+    _get_current_user = get_current_user_func

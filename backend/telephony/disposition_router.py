@@ -49,7 +49,7 @@ async def submit_task_disposition(
     """
     from main import (
         DialerSessionTask, CallLog, DialerSession, DialerSessionStatus,
-        Task, Contact
+        Task, Lead as Contact
     )
     from telephony.websocket import ws_manager
     from telephony.dialer_engine import DialerEngine
@@ -204,7 +204,7 @@ async def submit_call_log_disposition(
 
     Use this endpoint for standalone calls (not part of a dialer session)
     """
-    from main import CallLog, Task, Contact
+    from main import CallLog, Task, Lead as Contact
 
     call_log = db.query(CallLog).filter(
         CallLog.id == call_log_id,

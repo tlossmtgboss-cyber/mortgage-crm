@@ -813,7 +813,7 @@ def send_email(
 
                 if oauth and oauth.access_token:
                     # Decrypt token
-                    from main import decrypt_token
+                    from services.calendly_service import decrypt_token
                     access_token = decrypt_token(oauth.access_token)
 
                     # Check if token expired and needs refresh
@@ -843,7 +843,7 @@ def send_email(
                                 access_token = tokens["access_token"]
 
                                 # Update stored tokens
-                                from main import encrypt_token
+                                from services.calendly_service import encrypt_token
                                 from datetime import timedelta
                                 new_expires_at = datetime.now(timezone.utc) + timedelta(seconds=tokens["expires_in"])
 
@@ -1283,7 +1283,7 @@ def search_email_inbox(
                 )
 
             # Decrypt and possibly refresh token
-            from main import decrypt_token, encrypt_token
+            from services.calendly_service import decrypt_token, encrypt_token
             from datetime import timezone
             access_token = decrypt_token(oauth.access_token)
 
@@ -1778,7 +1778,7 @@ def _search_inbox_for_contact(name: str, user_id: int) -> List[Dict[str, Any]]:
                 return []
 
             # Decrypt and possibly refresh token
-            from main import decrypt_token, encrypt_token
+            from services.calendly_service import decrypt_token, encrypt_token
             access_token = decrypt_token(oauth.access_token)
 
             now = datetime.now(timezone.utc)

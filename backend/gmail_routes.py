@@ -351,7 +351,8 @@ async def send_email(
         if include_signature:
             try:
                 # Get user's email signature from main app
-                from main import EmailSignature, generate_email_signature_html
+                from main import EmailSignature
+                from utils.email_signature import generate_email_signature_html
                 signature = db.execute(
                     text("SELECT * FROM email_signatures WHERE user_id = :user_id"),
                     {"user_id": current_user._user_id}

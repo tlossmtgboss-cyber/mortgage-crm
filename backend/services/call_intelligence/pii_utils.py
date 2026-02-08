@@ -604,6 +604,13 @@ def redact_transcript_for_llm(
             f"Email={stats['email']}"
         )
 
+        # Track PII redaction metrics
+        try:
+            from .metrics import track_pii_stats
+            track_pii_stats(stats)
+        except ImportError:
+            pass  # Metrics module not available
+
     return redacted, stats
 
 

@@ -21,7 +21,12 @@ RECALLAI_WEBHOOK_SECRET = os.getenv("RECALLAI_WEBHOOK_SECRET", "")
 RECALLAI_API_BASE = "https://us-west-2.recall.ai/api/v1"
 
 # Import get_db and auth from main
-from main import get_db, get_current_user, RecallAIBot, User
+# Note: RecallAIBot model does not exist yet - guarded to prevent import crash
+try:
+    from main import get_db, get_current_user, User
+    from main import RecallAIBot
+except ImportError:
+    RecallAIBot = None
 
 
 # Pydantic Models

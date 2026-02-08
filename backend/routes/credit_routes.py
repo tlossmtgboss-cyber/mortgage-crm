@@ -40,7 +40,7 @@ def get_models():
 
 def get_filters():
     """Get filter functions - lazy import"""
-    from main import filter_leads_by_permissions, filter_loans_by_permissions
+    from routes.permission_core_routes import filter_leads_by_permissions, filter_loans_by_permissions
     return filter_leads_by_permissions, filter_loans_by_permissions
 
 
