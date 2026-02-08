@@ -88,6 +88,16 @@ try:
 except Exception as e:
     logger.info(f"Note: support_tickets table creation: {e}")
 
+# Add attachments column if missing (table predates this column)
+try:
+    with engine.connect() as conn:
+        conn.execute(text(
+            "ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS attachments JSON"
+        ))
+        conn.commit()
+except Exception as e:
+    logger.info(f"Note: support_tickets attachments column: {e}")
+
 
 # ============================================================================
 # PYDANTIC SCHEMAS
