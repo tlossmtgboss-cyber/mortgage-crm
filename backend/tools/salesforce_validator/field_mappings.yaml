@@ -1,0 +1,548 @@
+# =============================================================================
+# Perennia AI → Salesforce Field Mapping Configuration
+# =============================================================================
+# This file defines all field mappings between Perennia AI and Salesforce.
+# It is the single source of truth for the validation suite.
+#
+# IMPORTANT: When adding a new field mapping:
+# 1. Add the entry here
+# 2. Run `python scripts/run_validation.py --mode quick` to verify
+# 3. If it's an SLA field, also add the sla_config block
+# 4. If it's a byte-mapped date, set is_byte_mapped: true
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Global Settings
+# -----------------------------------------------------------------------------
+settings:
+  source_system: perennia_ai
+  sf_api_version: "v59.0"
+  default_sync_direction: push
+  sync_latency_tolerance_seconds: 300
+  date_comparison_tolerance_hours: 24
+
+# -----------------------------------------------------------------------------
+# Transform Definitions
+# -----------------------------------------------------------------------------
+transforms:
+  utc_to_date_only:
+    description: "Convert UTC datetime to date-only (YYYY-MM-DD) in user's timezone"
+    input_type: datetime
+    output_type: date
+    notes: "Applies EST/EDT conversion before truncating time component"
+
+  utc_passthrough:
+    description: "Pass UTC datetime through unchanged"
+    input_type: datetime
+    output_type: datetime
+
+  cents_to_dollars:
+    description: "Convert integer cents to decimal dollars"
+    input_type: integer
+    output_type: decimal
+    formula: "value / 100"
+
+  decimal_to_percent:
+    description: "Convert decimal rate (0.0425) to percentage (4.25)"
+    input_type: decimal
+    output_type: decimal
+    formula: "value * 100"
+
+  status_code_to_label:
+    description: "Map internal status codes to Salesforce picklist labels"
+    input_type: string
+    output_type: string
+    mapping:
+      application: "Application"
+      processing: "Processing"
+      underwriting: "Underwriting"
+      approved: "Approved"
+      clear_to_close: "Clear to Close"
+      closing: "Closing"
+      funded: "Funded"
+      denied: "Denied"
+      withdrawn: "Withdrawn"
+
+  normalize_phone_e164:
+    description: "Normalize phone number to E.164 format (+1XXXXXXXXXX)"
+    input_type: string
+    output_type: string
+
+  none:
+    description: "No transformation applied"
+
+# -----------------------------------------------------------------------------
+# Field Mappings — Loan Origination SLA Dates
+# These are the CRITICAL byte-mapped date fields that drive workflows.
+# Every field here must pass validation or workflows will break.
+# -----------------------------------------------------------------------------
+mappings:
+
+  # ─── Application & Disclosure ─────────────────────────────────────────
+
+  - source:
+      object: loan
+      field: application_received_at
+      type: datetime
+    destination:
+      object: Loan__c
+      field: Application_Received_Date__c
+      type: Date
+    transform: utc_to_date_only
+    is_sla_field: true
+    is_byte_mapped: true
+    required: true
+    sync_direction: push
+    sla_config:
+      window_days: 0
+      workflow_name: Initial_Doc_Review
+      task_type: Document Review
+      assigned_to: Processor_Queue
+      escalation_after_hours: 24
+      description: "Triggers initial document review task upon application receipt"
+
+  - source:
+      object: loan
+      field: disclosure_sent_at
+      type: datetime
+    destination:
+      object: Loan__c
+      field: Disclosure_Sent_Date__c
+      type: Date
+    transform: utc_to_date_only
+    is_sla_field: true
+    is_byte_mapped: true
+    required: true
+    sync_direction: push
+    sla_config:
+      window_days: 3
+      workflow_name: TRID_Compliance_Check
+      task_type: Compliance Review
+      assigned_to: Compliance_Team
+      escalation_after_hours: 72
+      description: "TRID compliance — must verify within 3 business days"
+
+  - source:
+      object: loan
+      field: disclosure_acknowledged_at
+      type: datetime
+    destination:
+      object: Loan__c
+      field: Disclosure_Ack_Date__c
+      type: Date
+    transform: utc_to_date_only
+    is_sla_field: true
+    is_byte_mapped: true
+    required: false
+    sync_direction: push
+    sla_config:
+      window_days: 10
+      workflow_name: Disclosure_Escalation
+      task_type: Escalation
+      assigned_to: Processor_Queue
+      escalation_after_hours: 240
+      description: "Escalate if borrower hasn't acknowledged disclosure within 10 days"
+
+  # ─── Appraisal ────────────────────────────────────────────────────────
+
+  - source:
+      object: loan
+      field: appraisal_ordered_at
+      type: datetime
+    destination:
+      object: Loan__c
+      field: Appraisal_Ordered_Date__c
+      type: Date
+    transform: utc_to_date_only
+    is_sla_field: true
+    is_byte_mapped: true
+    required: true
+    sync_direction: push
+    sla_config:
+      window_days: 1
+      workflow_name: Appraisal_Followup
+      task_type: Follow-up
+      assigned_to: Processor_Queue
+      escalation_after_hours: 48
+      description: "Follow up on appraisal order status within 1 business day"
+
+  - source:
+      object: loan
+      field: appraisal_received_at
+      type: datetime
+    destination:
+      object: Loan__c
+      field: Appraisal_Received_Date__c
+      type: Date
+    transform: utc_to_date_only
+    is_sla_field: true
+    is_byte_mapped: true
+    required: false
+    sync_direction: push
+    sla_config:
+      window_days: 0
+      workflow_name: Appraisal_Review
+      task_type: Appraisal Review
+      assigned_to: Processor_Queue
+      escalation_after_hours: 24
+      description: "Review appraisal immediately upon receipt"
+
+  # ─── Title ────────────────────────────────────────────────────────────
+
+  - source:
+      object: loan
+      field: title_ordered_at
+      type: datetime
+    destination:
+      object: Loan__c
+      field: Title_Ordered_Date__c
+      type: Date
+    transform: utc_to_date_only
+    is_sla_field: true
+    is_byte_mapped: true
+    required: true
+    sync_direction: push
+    sla_config:
+      window_days: 1
+      workflow_name: Title_Followup
+      task_type: Follow-up
+      assigned_to: Processor_Queue
+      escalation_after_hours: 48
+
+  - source:
+      object: loan
+      field: title_received_at
+      type: datetime
+    destination:
+      object: Loan__c
+      field: Title_Received_Date__c
+      type: Date
+    transform: utc_to_date_only
+    is_sla_field: true
+    is_byte_mapped: true
+    required: false
+    sync_direction: push
+    sla_config:
+      window_days: 0
+      workflow_name: Title_Review
+      task_type: Title Review
+      assigned_to: Processor_Queue
+      escalation_after_hours: 24
+
+  # ─── Conditions & Underwriting ────────────────────────────────────────
+
+  - source:
+      object: loan
+      field: submitted_to_uw_at
+      type: datetime
+    destination:
+      object: Loan__c
+      field: Submitted_To_UW_Date__c
+      type: Date
+    transform: utc_to_date_only
+    is_sla_field: true
+    is_byte_mapped: true
+    required: true
+    sync_direction: push
+    sla_config:
+      window_days: 2
+      workflow_name: UW_Followup
+      task_type: UW Follow-up
+      assigned_to: Processor_Queue
+      escalation_after_hours: 48
+
+  - source:
+      object: loan
+      field: conditions_sent_at
+      type: datetime
+    destination:
+      object: Loan__c
+      field: Conditions_Sent_Date__c
+      type: Date
+    transform: utc_to_date_only
+    is_sla_field: true
+    is_byte_mapped: true
+    required: false
+    sync_direction: push
+    sla_config:
+      window_days: 3
+      workflow_name: Condition_Followup
+      task_type: Condition Follow-up
+      assigned_to: Processor_Queue
+      escalation_after_hours: 72
+
+  - source:
+      object: loan
+      field: conditions_cleared_at
+      type: datetime
+    destination:
+      object: Loan__c
+      field: Conditions_Cleared_Date__c
+      type: Date
+    transform: utc_to_date_only
+    is_sla_field: true
+    is_byte_mapped: true
+    required: false
+    sync_direction: push
+    sla_config:
+      window_days: 0
+      workflow_name: Clear_To_Close_Prep
+      task_type: Closing Preparation
+      assigned_to: Closer_Queue
+      escalation_after_hours: 24
+
+  # ─── Closing & Funding ────────────────────────────────────────────────
+
+  - source:
+      object: loan
+      field: clear_to_close_at
+      type: datetime
+    destination:
+      object: Loan__c
+      field: Clear_To_Close_Date__c
+      type: Date
+    transform: utc_to_date_only
+    is_sla_field: true
+    is_byte_mapped: true
+    required: false
+    sync_direction: push
+    sla_config:
+      window_days: 0
+      workflow_name: Closing_Package
+      task_type: Closing Package Prep
+      assigned_to: Closer_Queue
+      escalation_after_hours: 24
+
+  - source:
+      object: loan
+      field: closing_scheduled_at
+      type: datetime
+    destination:
+      object: Loan__c
+      field: Closing_Scheduled_Date__c
+      type: DateTime
+    transform: utc_passthrough
+    is_sla_field: true
+    is_byte_mapped: true
+    required: false
+    sync_direction: push
+    sla_config:
+      window_days: -1
+      workflow_name: Pre_Closing_Verification
+      task_type: Pre-Closing Check
+      assigned_to: Closer_Queue
+      escalation_after_hours: 24
+      description: "Fires 1 day BEFORE closing to verify everything is ready"
+
+  - source:
+      object: loan
+      field: docs_out_at
+      type: datetime
+    destination:
+      object: Loan__c
+      field: Docs_Out_Date__c
+      type: Date
+    transform: utc_to_date_only
+    is_sla_field: true
+    is_byte_mapped: true
+    required: false
+    sync_direction: push
+    sla_config:
+      window_days: 0
+      workflow_name: Doc_Tracking_Confirmation
+      task_type: Document Tracking
+      assigned_to: Processor_Queue
+
+  - source:
+      object: loan
+      field: funded_at
+      type: datetime
+    destination:
+      object: Loan__c
+      field: Funded_Date__c
+      type: Date
+    transform: utc_to_date_only
+    is_sla_field: true
+    is_byte_mapped: true
+    required: false
+    sync_direction: push
+    sla_config:
+      window_days: 0
+      workflow_name: Post_Closing_Audit
+      task_type: Post-Closing Audit
+      assigned_to: Compliance_Team
+      escalation_after_hours: 48
+
+  # ─── Borrower/Contact SLA Dates ───────────────────────────────────────
+
+  - source:
+      object: borrower
+      field: last_contact_at
+      type: datetime
+    destination:
+      object: Contact
+      field: Last_Contact_Date__c
+      type: Date
+    transform: utc_to_date_only
+    is_sla_field: true
+    is_byte_mapped: true
+    required: false
+    sync_direction: push
+    sla_config:
+      window_days: 7
+      workflow_name: Re_Engagement
+      task_type: Re-engagement Outreach
+      assigned_to: LO_Owner
+      description: "Auto-create follow-up if no contact in 7 days"
+
+  - source:
+      object: borrower
+      field: next_followup_at
+      type: datetime
+    destination:
+      object: Contact
+      field: Next_Followup_Date__c
+      type: DateTime
+    transform: utc_passthrough
+    is_sla_field: true
+    is_byte_mapped: true
+    required: false
+    sync_direction: push
+    sla_config:
+      window_days: 0
+      workflow_name: Followup_Reminder
+      task_type: Follow-up Reminder
+      assigned_to: LO_Owner
+
+  - source:
+      object: borrower
+      field: preapproval_expires_at
+      type: datetime
+    destination:
+      object: Contact
+      field: Preapproval_Expiry__c
+      type: Date
+    transform: utc_to_date_only
+    is_sla_field: true
+    is_byte_mapped: true
+    required: false
+    sync_direction: push
+    sla_config:
+      window_days: -14
+      workflow_name: Preapproval_Renewal
+      task_type: Renewal Outreach
+      assigned_to: LO_Owner
+      description: "Fires 14 days BEFORE expiry to prompt renewal outreach"
+
+  - source:
+      object: borrower
+      field: rate_lock_expires_at
+      type: datetime
+    destination:
+      object: Contact
+      field: Rate_Lock_Expiry__c
+      type: Date
+    transform: utc_to_date_only
+    is_sla_field: true
+    is_byte_mapped: true
+    required: false
+    sync_direction: push
+    sla_config:
+      window_days: -7
+      workflow_name: Rate_Lock_Extension
+      task_type: Rate Lock Review
+      assigned_to: LO_Owner
+      description: "Fires 7 days BEFORE lock expires to evaluate extension"
+
+  # ─── Non-SLA Fields (Standard Sync) ──────────────────────────────────
+
+  - source:
+      object: loan
+      field: loan_amount
+      type: decimal
+    destination:
+      object: Loan__c
+      field: Loan_Amount__c
+      type: Currency
+    transform: cents_to_dollars
+    is_sla_field: false
+    is_byte_mapped: false
+    required: true
+
+  - source:
+      object: loan
+      field: interest_rate
+      type: decimal
+    destination:
+      object: Loan__c
+      field: Interest_Rate__c
+      type: Percent
+    transform: decimal_to_percent
+    is_sla_field: false
+    is_byte_mapped: false
+    required: true
+
+  - source:
+      object: loan
+      field: loan_status
+      type: string
+    destination:
+      object: Loan__c
+      field: Loan_Status__c
+      type: Picklist
+    transform: status_code_to_label
+    is_sla_field: false
+    is_byte_mapped: false
+    required: true
+
+  - source:
+      object: loan
+      field: loan_type
+      type: string
+    destination:
+      object: Loan__c
+      field: Loan_Type__c
+      type: Picklist
+    transform: none
+    is_sla_field: false
+    is_byte_mapped: false
+    required: true
+
+  - source:
+      object: borrower
+      field: email
+      type: string
+    destination:
+      object: Contact
+      field: Email
+      type: Email
+    transform: none
+    is_sla_field: false
+    is_byte_mapped: false
+    required: true
+
+  - source:
+      object: borrower
+      field: phone
+      type: string
+    destination:
+      object: Contact
+      field: Phone
+      type: Phone
+    transform: normalize_phone_e164
+    is_sla_field: false
+    is_byte_mapped: false
+    required: false
+
+  - source:
+      object: borrower
+      field: credit_score
+      type: integer
+    destination:
+      object: Contact
+      field: Credit_Score__c
+      type: Number
+    transform: none
+    is_sla_field: false
+    is_byte_mapped: false
+    required: false
