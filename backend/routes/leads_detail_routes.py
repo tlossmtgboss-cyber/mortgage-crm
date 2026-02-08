@@ -1,0 +1,686 @@
+"""
+Leads Detail/CRUD Routes
+
+Extracted from inline_legacy_routes.py.
+Provides bulk operations, individual CRUD by ID, documents, and orphan claiming.
+
+Routes:
+  DELETE/POST /api/v1/leads/bulk-delete
+  POST /api/v1/leads/bulk-update-status
+  GET /api/v1/leads/{lead_id}
+  GET /api/v1/leads/{lead_id}/documents
+  PATCH /api/v1/leads/{lead_id}
+  DELETE /api/v1/leads/{lead_id}
+  POST /api/v1/leads/claim-orphans
+"""
+from fastapi import Depends, HTTPException, Request
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from datetime import datetime, timezone
+import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def register_leads_detail_routes(app, get_db, get_current_user, get_current_user_flexible, **kwargs):
+    """Register leads detail/CRUD routes."""
+    # Lazy imports to avoid circular dependencies
+    from database.models import Lead, Loan, User, Document, StageHistory
+    from schemas.core import LeadUpdate
+    from routes.permission_core_routes import (
+        filter_leads_by_permissions, has_permission,
+        check_resource_access, require_permission_or_403,
+    )
+    from services.dre_helpers import calculate_lead_score
+
+    # IMPORTANT: This route MUST be defined BEFORE /leads/{lead_id} to avoid route conflicts
+    @app.delete("/api/v1/leads/bulk-delete")
+    @app.post("/api/v1/leads/bulk-delete")
+    async def bulk_delete_leads_v2(
+        request: Request,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user_flexible)
+    ):
+        """
+        Bulk delete multiple leads. Admin users, master user (id=1), or users with leads.delete_all permission can use this.
+        """
+        # Parse lead_ids from request body
+        try:
+            body = await request.json()
+            # Handle both array format [1,2,3] and object format {"lead_ids": [1,2,3]}
+            if isinstance(body, list):
+                lead_ids = body
+            elif isinstance(body, dict):
+                lead_ids = body.get('lead_ids', body.get('ids', []))
+            else:
+                lead_ids = []
+            lead_ids = [int(id) for id in lead_ids]  # Ensure integers
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid request body: {str(e)}")
+
+        # PHASE 3: Check delete permission (delete or delete_all)
+        is_master = current_user.id == 1 or current_user.email == 'admin@perenniaai.com'
+        has_delete_permission = has_permission(current_user.id, 'leads.delete', db) or has_permission(current_user.id, 'leads.delete_all', db)
+
+        if not (is_master or has_delete_permission):
+            raise HTTPException(status_code=403, detail="Permission denied: leads.delete")
+
+        if not lead_ids:
+            raise HTTPException(status_code=400, detail="No lead IDs provided")
+
+        deleted_count = 0
+        errors = []
+
+        # Get table list once
+        from sqlalchemy import inspect
+        inspector = inspect(db.bind)
+        existing_tables = set(inspector.get_table_names())
+
+        tables_to_clean = [
+            ("activities", "lead_id"),
+            ("tasks", "lead_id"),
+            ("ai_tasks", "lead_id"),
+            ("notes", "lead_id"),
+            ("communications", "lead_id"),
+            ("email_reconciliation_queue", "lead_id"),
+            ("workflow_executions", "lead_id"),
+            ("workflow_sla_instances", "lead_id"),
+            ("workflow_sla_tasks", "lead_id"),
+            ("lead_profiles", "lead_id"),
+            ("circle_contacts", "lead_id"),
+            ("notifications", "lead_id"),
+            ("stage_history", "lead_id"),
+            ("conversation_messages", "lead_id"),
+            ("ai_conversation_messages", "lead_id"),
+            ("incoming_data_events", "lead_id"),
+            ("lead_source_tracking", "lead_id"),
+            ("purl_events", "lead_id"),
+            ("purl_workspaces", "lead_id"),
+        ]
+
+        for lead_id in lead_ids:
+            # Use savepoint for each lead so failures don't cascade
+            savepoint = db.begin_nested()
+            try:
+                lead = db.query(Lead).filter(Lead.id == lead_id).first()
+                if not lead:
+                    errors.append(f"Lead {lead_id} not found")
+                    savepoint.rollback()
+                    continue
+
+                # Delete related records using raw SQL
+                for table, column in tables_to_clean:
+                    if table in existing_tables:
+                        try:
+                            db.execute(text(f"DELETE FROM {table} WHERE {column} = :lead_id"), {"lead_id": lead_id})
+                        except Exception as te:
+                            logger.warning(f"Error cleaning {table} for lead {lead_id}: {te}")
+
+                # Unlink from loans instead of deleting
+                if "loans" in existing_tables:
+                    db.execute(text("UPDATE loans SET lead_id = NULL WHERE lead_id = :lead_id"), {"lead_id": lead_id})
+
+                # Delete the lead
+                db.delete(lead)
+                savepoint.commit()  # Commit the savepoint
+                deleted_count += 1
+
+            except Exception as e:
+                savepoint.rollback()  # Rollback only this lead's savepoint
+                errors.append(f"Failed to delete lead {lead_id}: {str(e)}")
+
+        # Final commit
+        try:
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Final commit failed: {e}")
+
+        return {
+            "success": True,
+            "deleted_count": deleted_count,
+            "errors": errors,
+            "message": f"Successfully deleted {deleted_count} leads" + (f" with {len(errors)} errors" if errors else "")
+        }
+
+
+    @app.post("/api/v1/leads/bulk-update-status")
+    async def bulk_update_lead_status(
+        request: Request,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user_flexible)
+    ):
+        """
+        Bulk update status/stage for multiple leads.
+        Body: { "lead_ids": [1, 2, 3], "status": "Withdraw" }
+        """
+        logger.info(f"[bulk-update-status] Request received from user {current_user.id} ({current_user.email})")
+        try:
+            body = await request.json()
+            logger.info(f"[bulk-update-status] Request body: {body}")
+            lead_ids = body.get('lead_ids', body.get('ids', []))
+            new_status = body.get('status', body.get('stage'))
+
+            if isinstance(lead_ids, list) == False:
+                lead_ids = [lead_ids]
+            lead_ids = [int(id) for id in lead_ids]
+            logger.info(f"[bulk-update-status] Parsed {len(lead_ids)} lead IDs, new_status={new_status}")
+        except Exception as e:
+            logger.error(f"[bulk-update-status] Failed to parse request: {e}")
+            raise HTTPException(status_code=400, detail=f"Invalid request body: {str(e)}")
+
+        if not lead_ids:
+            raise HTTPException(status_code=400, detail="No lead IDs provided")
+
+        if not new_status:
+            raise HTTPException(status_code=400, detail="No status provided")
+
+        # PHASE 3: Check update permission (master users bypass)
+        is_master = current_user.id == 1 or current_user.email == 'admin@perenniaai.com'
+        if not is_master:
+            has_update_permission = has_permission(current_user.id, 'leads.update', db) or has_permission(current_user.id, 'leads.update_all', db)
+            if not has_update_permission:
+                raise HTTPException(status_code=403, detail="Permission denied: leads.update")
+
+        updated_count = 0
+        errors = []
+
+        for lead_id in lead_ids:
+            try:
+                # Apply permission filtering
+                query = db.query(Lead).filter(Lead.id == lead_id)
+                if not is_master:
+                    query = filter_leads_by_permissions(query, current_user, db)
+                lead = query.first()
+
+                if not lead:
+                    errors.append(f"Lead {lead_id} not found or access denied")
+                    continue
+
+                # Update the stage
+                lead.stage = new_status
+                lead.updated_at = datetime.utcnow()
+                updated_count += 1
+
+            except Exception as e:
+                errors.append(f"Failed to update lead {lead_id}: {str(e)}")
+
+        try:
+            db.commit()
+            logger.info(f"[bulk-update-status] Successfully committed. Updated {updated_count}, errors: {len(errors)}")
+        except Exception as e:
+            db.rollback()
+            logger.error(f"[bulk-update-status] Failed to commit: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to save changes: {str(e)}")
+
+        result = {
+            "success": True,
+            "updated_count": updated_count,
+            "new_status": new_status,
+            "errors": errors,
+            "message": f"Successfully updated {updated_count} leads to '{new_status}'" + (f" with {len(errors)} errors" if errors else "")
+        }
+        logger.info(f"[bulk-update-status] Returning result: {result}")
+        return result
+
+
+    @app.get("/api/v1/leads/{lead_id}")
+    async def get_lead(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
+        # Use the same permission filtering as the list endpoint
+        query = db.query(Lead).filter(Lead.id == lead_id)
+        query = filter_leads_by_permissions(query, current_user, db)
+        lead = query.first()
+        if not lead:
+            raise HTTPException(status_code=404, detail="Lead not found")
+
+        # Handle stage value - it might be an enum or a string depending on DB content
+        stage_value = None
+        if lead.stage:
+            stage_value = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage)
+
+        # Return dict to avoid Pydantic validation issues with enum
+        return {
+            "id": lead.id,
+            "name": lead.name,
+            "first_name": lead.first_name,
+            "last_name": lead.last_name,
+            "email": lead.email,
+            "phone": lead.phone,
+            "co_applicant_name": lead.co_applicant_name,
+            "co_applicant_email": lead.co_applicant_email,
+            "co_applicant_phone": lead.co_applicant_phone,
+            "preferred_communication": lead.preferred_communication,
+            "stage": stage_value,
+            "source": lead.source,
+            "ai_score": lead.ai_score,
+            "sentiment": lead.sentiment,
+            "next_action": lead.next_action,
+            "preapproval_amount": lead.preapproval_amount,
+            "credit_score": lead.credit_score,
+            "loan_type": lead.loan_type,
+            "notes": lead.notes,
+            "owner_id": lead.owner_id,
+            # Property Information
+            "address": lead.address,
+            "city": lead.city,
+            "state": lead.state,
+            "zip_code": lead.zip_code,
+            "property_type": lead.property_type,
+            "property_value": lead.property_value,
+            "down_payment": lead.down_payment,
+            # Financial Information
+            "employment_status": lead.employment_status,
+            "employer_name": getattr(lead, 'employer_name', None),
+            "annual_income": lead.annual_income,
+            "monthly_debts": lead.monthly_debts,
+            "first_time_buyer": lead.first_time_buyer,
+            # Metadata
+            "user_metadata": getattr(lead, 'user_metadata', None),
+            # Loan Details
+            "loan_number": lead.loan_number,
+            "loan_amount": lead.loan_amount,
+            "interest_rate": lead.interest_rate,
+            "loan_term": lead.loan_term,
+            "apr": lead.apr,
+            "points": lead.points,
+            "lock_date": lead.lock_date.isoformat() if lead.lock_date else None,
+            "lock_expiration": lead.lock_expiration.isoformat() if lead.lock_expiration else None,
+            "closing_date": lead.closing_date.isoformat() if lead.closing_date else None,
+            "lender": lead.lender,
+            "loan_officer": lead.loan_officer,
+            "processor": lead.processor,
+            "underwriter": lead.underwriter,
+            "appraisal_value": lead.appraisal_value,
+            "ltv": lead.ltv,
+            "dti": lead.dti,
+            "cltv": lead.cltv,
+            # Salesforce Sync Fields - Property Details
+            "occupancy_type": lead.occupancy_type,
+            "property_county": lead.property_county,
+            "property_ownership_type": lead.property_ownership_type,
+            "property_units": lead.property_units,
+            # Salesforce Sync Fields - 1st Loan Financial Details
+            "rate_type": lead.rate_type,
+            "monthly_payment": lead.monthly_payment,
+            "property_tax": lead.property_tax,
+            "hazard_insurance": lead.hazard_insurance,
+            "mortgage_insurance": lead.mortgage_insurance,
+            "hoa_amount": lead.hoa_amount,
+            "origination_fee": lead.origination_fee,
+            "estimated_prepaid_interest": lead.estimated_prepaid_interest,
+            "index_rate": lead.index_rate,
+            "margin": lead.margin,
+            # Salesforce Sync Fields - LTV/CLTV and Purpose
+            "loan_purpose": lead.loan_purpose,
+            "file_state": lead.file_state,
+            # Salesforce Sync Fields - 2nd Loan Details
+            "second_loan_amount": lead.second_loan_amount,
+            "second_loan_rate": lead.second_loan_rate,
+            "second_loan_payment": lead.second_loan_payment,
+            # Salesforce Sync Fields - Present vs Proposed Housing
+            "present_housing_expense": lead.present_housing_expense,
+            "proposed_housing_expense": lead.proposed_housing_expense,
+            "present_monthly_payment": lead.present_monthly_payment,
+            "proposed_monthly_payment": lead.proposed_monthly_payment,
+            # Timestamps
+            "created_at": lead.created_at.isoformat() if lead.created_at else None,
+            "updated_at": lead.updated_at.isoformat() if lead.updated_at else None,
+            "stage_changed_at": lead.stage_changed_at.isoformat() if lead.stage_changed_at else None,
+            # SLA Milestone Dates
+            "lead_received_date": lead.lead_received_date.isoformat() if lead.lead_received_date else None,
+            "first_contact_attempt_date": lead.first_contact_attempt_date.isoformat() if lead.first_contact_attempt_date else None,
+            "first_contact_successful_date": lead.first_contact_successful_date.isoformat() if lead.first_contact_successful_date else None,
+            "application_started_date": lead.application_started_date.isoformat() if lead.application_started_date else None,
+            "application_completed_date": lead.application_completed_date.isoformat() if lead.application_completed_date else None,
+            "preapproval_issued_date": lead.preapproval_issued_date.isoformat() if lead.preapproval_issued_date else None,
+        }
+
+
+    @app.get("/api/v1/leads/{lead_id}/documents")
+    async def get_lead_documents(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
+        """Get all documents associated with a lead"""
+        # Check lead exists and user has access
+        query = db.query(Lead).filter(Lead.id == lead_id)
+        query = filter_leads_by_permissions(query, current_user, db)
+        lead = query.first()
+        if not lead:
+            raise HTTPException(status_code=404, detail="Lead not found")
+
+        # Fetch documents for this lead
+        documents = db.query(Document).filter(Document.borrower_id == lead_id, Document.status == "active").all()
+
+        # Organize documents by category
+        categorized = {
+            "income_verification": [],
+            "credit_reports": [],
+            "property_documents": [],
+            "disclosures_forms": [],
+            "bank_statements": [],
+            "other": [],
+        }
+
+        category_mapping = {
+            "Income": "income_verification",
+            "Credit": "credit_reports",
+            "Property": "property_documents",
+            "Disclosures": "disclosures_forms",
+            "Assets": "bank_statements",
+            "Miscellaneous": "other",
+        }
+
+        for doc in documents:
+            doc_data = {
+                "id": doc.id,
+                "filename": doc.filename,
+                "original_filename": doc.original_filename,
+                "doc_type": doc.doc_type.value if hasattr(doc.doc_type, 'value') else str(doc.doc_type),
+                "doc_category": doc.doc_category.value if doc.doc_category and hasattr(doc.doc_category, 'value') else str(doc.doc_category) if doc.doc_category else None,
+                "file_size": doc.file_size,
+                "mime_type": doc.mime_type,
+                "uploaded_at": doc.uploaded_at.isoformat() if doc.uploaded_at else None,
+                "source": doc.source,
+            }
+
+            # Determine category
+            cat_key = "other"
+            if doc.doc_category:
+                cat_value = doc.doc_category.value if hasattr(doc.doc_category, 'value') else str(doc.doc_category)
+                cat_key = category_mapping.get(cat_value, "other")
+
+            categorized[cat_key].append(doc_data)
+
+        return {
+            "lead_id": lead_id,
+            "total_documents": len(documents),
+            "documents": categorized,
+        }
+
+
+    @app.patch("/api/v1/leads/{lead_id}")
+    async def update_lead(lead_id: int, lead_update: LeadUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
+        # Use the same permission filtering as the list endpoint
+        query = db.query(Lead).filter(Lead.id == lead_id)
+        query = filter_leads_by_permissions(query, current_user, db)
+        lead = query.first()
+        if not lead:
+            raise HTTPException(status_code=404, detail="Lead not found")
+
+        # PHASE 3: Check edit permission (edit_all or edit_own + ownership)
+        check_resource_access(
+            current_user.id,
+            lead.owner_id,
+            'leads.edit_all',
+            'leads.edit_own',
+            db
+        )
+
+        # Capture old status for workflow trigger
+        old_status = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage) if lead.stage else None
+
+        for key, value in lead_update.dict(exclude_unset=True).items():
+            setattr(lead, key, value)
+
+        # Recalculate AI score
+        lead.ai_score = calculate_lead_score(lead)
+        lead.updated_at = datetime.now(timezone.utc)
+
+        db.commit()
+        db.refresh(lead)
+        logger.info(f"Lead updated: {lead.name}")
+
+        # Trigger workflow if status changed
+        new_status = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage) if lead.stage else None
+        if old_status != new_status and new_status:
+            # Calculate duration in previous stage
+            duration_days = None
+            if lead.stage_changed_at:
+                duration_days = (datetime.now(timezone.utc) - lead.stage_changed_at.replace(tzinfo=timezone.utc)).days
+
+            # Track when stage changed for workflow day calculations
+            lead.stage_changed_at = datetime.now(timezone.utc)
+            lead.workflow_day = 0  # Reset workflow day counter
+
+            # Record stage change in history
+            stage_history = StageHistory(
+                entity_type='lead',
+                entity_id=lead.id,
+                lead_id=lead.id,
+                from_stage=old_status,
+                to_stage=new_status,
+                changed_at=datetime.now(timezone.utc),
+                changed_by_id=current_user.id,
+                duration_in_previous_stage=duration_days
+            )
+            db.add(stage_history)
+
+            db.commit()
+            db.refresh(lead)
+            logger.info(f"Stage changed for lead {lead.id}: {old_status} -> {new_status}, stage_changed_at updated, history recorded")
+
+            try:
+                from workflows.lead_workflow_engine import LeadStatusChange, LeadWorkflowEngine
+                from workflows.workflow_actions import WorkflowActionExecutor
+
+                # Create status change event
+                status_change = LeadStatusChange(
+                    lead_id=lead.id,
+                    lead_name=lead.name,
+                    lead_email=lead.email,
+                    lead_phone=lead.phone,
+                    old_status=old_status or "None",
+                    new_status=new_status,
+                    loan_officer_id=current_user.id,
+                    loan_officer_name=current_user.full_name or current_user.email,
+                    loan_officer_email=current_user.email,
+                    loan_type=lead.loan_type if hasattr(lead, 'loan_type') else None,
+                    loan_amount=lead.loan_amount if hasattr(lead, 'loan_amount') else None,
+                    changed_at=datetime.now(timezone.utc)
+                )
+
+                # Process workflow
+                workflow_engine = LeadWorkflowEngine(db)
+                workflow_result = await workflow_engine.process_status_change(status_change)
+
+                # Execute actions
+                if workflow_result.get("actions"):
+                    action_executor = WorkflowActionExecutor(db)
+                    await action_executor.execute_actions(workflow_result["actions"])
+
+                logger.info(f"Workflow triggered for {lead.name}: {old_status} -> {new_status} ({workflow_result.get('action_count', 0)} actions)")
+            except Exception as e:
+                logger.error(f"Workflow error for lead {lead.id}: {e}")
+                # Don't fail the update if workflow fails
+
+            # Track SLA milestone for stage change
+            try:
+                from services.sla_tracking_service import track_lead_stage_change
+                track_lead_stage_change(db, lead.id, old_status, new_status, current_user.id)
+                logger.info(f"SLA milestone tracked for lead {lead.id} stage change: {old_status} -> {new_status}")
+            except Exception as e:
+                logger.warning(f"Failed to track SLA milestone for lead {lead.id}: {e}")
+
+            # Fire lead status change triggers for automated outreach (nurture, etc.)
+            try:
+                from routes.automated_outreach_routes import execute_trigger, TriggerType
+                asyncio.create_task(execute_trigger(
+                    trigger_type=TriggerType.LEAD_STATUS_CHANGE,
+                    lead_id=lead.id,
+                    context={"old_status": old_status, "new_status": new_status},
+                    db=db
+                ))
+                logger.info(f"Lead status change trigger fired for lead {lead.id}: {old_status} -> {new_status}")
+            except Exception as trigger_error:
+                logger.error(f"Error firing lead status trigger: {trigger_error}")
+
+        # Handle stage value - it might be an enum or a string depending on DB content
+        stage_value = None
+        if lead.stage:
+            stage_value = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage)
+
+        # Return dict to avoid Pydantic validation issues with enum
+        return {
+            "id": lead.id,
+            "name": lead.name,
+            "email": lead.email,
+            "phone": lead.phone,
+            "stage": stage_value,
+            "source": lead.source,
+            "ai_score": lead.ai_score,
+            "sentiment": lead.sentiment,
+            "next_action": lead.next_action,
+            "preapproval_amount": lead.preapproval_amount,
+            "credit_score": lead.credit_score,
+            "loan_type": lead.loan_type,
+            "notes": lead.notes,
+            "owner_id": lead.owner_id,
+            "created_at": lead.created_at.isoformat() if lead.created_at else None,
+            "updated_at": lead.updated_at.isoformat() if lead.updated_at else None,
+        }
+
+    @app.delete("/api/v1/leads/{lead_id}", status_code=204)
+    async def delete_lead(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
+        # PHASE 3: Check delete permission (master users bypass)
+        is_master = current_user.id == 1 or current_user.email == 'admin@perenniaai.com'
+        if not is_master:
+            require_permission_or_403(current_user.id, 'leads.delete', db)
+
+        # Use the same permission filtering as the list endpoint
+        query = db.query(Lead).filter(Lead.id == lead_id)
+        query = filter_leads_by_permissions(query, current_user, db)
+        lead = query.first()
+        if not lead:
+            raise HTTPException(status_code=404, detail="Lead not found")
+
+        lead_name = lead.name
+
+        try:
+            # Delete related records first using raw SQL connection
+            # This avoids SQLAlchemy transaction issues
+            from sqlalchemy import inspect
+
+            # Get list of existing tables
+            inspector = inspect(db.bind)
+            existing_tables = set(inspector.get_table_names())
+
+            # Define tables and their foreign key columns to lead
+            tables_to_clean = [
+                ("activities", "lead_id"),
+                ("tasks", "lead_id"),
+                ("ai_tasks", "lead_id"),
+                ("notes", "lead_id"),
+                ("communications", "lead_id"),
+                ("email_reconciliation_queue", "lead_id"),
+                ("workflow_executions", "lead_id"),
+                ("lead_profiles", "lead_id"),
+                ("circle_contacts", "lead_id"),
+                ("notifications", "lead_id"),
+                ("stage_history", "lead_id"),
+                ("conversation_messages", "lead_id"),
+                ("ai_conversation_messages", "lead_id"),
+                ("incoming_data_events", "lead_id"),
+            ]
+
+            # Build a single SQL statement that deletes from all existing tables
+            delete_sqls = []
+            for table, column in tables_to_clean:
+                if table in existing_tables:
+                    delete_sqls.append(f"DELETE FROM {table} WHERE {column} = {lead_id}")
+
+            # Nullify loan references if loans table exists
+            if "loans" in existing_tables:
+                delete_sqls.append(f"UPDATE loans SET lead_id = NULL WHERE lead_id = {lead_id}")
+
+            # Add the final lead delete
+            delete_sqls.append(f"DELETE FROM leads WHERE id = {lead_id}")
+
+            # Execute all as a single raw SQL transaction
+            raw_conn = db.bind.raw_connection()
+            try:
+                cursor = raw_conn.cursor()
+                for sql in delete_sqls:
+                    try:
+                        cursor.execute(sql)
+                    except Exception as e:
+                        logger.debug(f"Delete statement skipped: {sql[:50]}... - {e}")
+                        # Continue with next statement
+                raw_conn.commit()
+            finally:
+                raw_conn.close()
+
+            logger.info(f"Lead deleted: {lead_name}")
+            return None
+
+        except Exception as e:
+            logger.error(f"Error deleting lead {lead_id}: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"Failed to delete lead: {str(e)}")
+
+
+    @app.post("/api/v1/leads/claim-orphans")
+    async def claim_orphan_leads(
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+    ):
+        """
+        Claim all orphan leads (leads with no owner) and assign them to the current user.
+        This fixes the AI chat issue where leads aren't visible because they have no owner.
+        Also claims loans that don't belong to any valid user.
+        """
+        try:
+            # Update leads with NULL owner_id to current user
+            result = db.execute(
+                text("UPDATE leads SET owner_id = :user_id WHERE owner_id IS NULL"),
+                {"user_id": current_user.id}
+            )
+            leads_claimed = result.rowcount
+
+            # Update loans with NULL loan_officer_id OR loan_officer_id not matching any user
+            # This catches loans with invalid/orphaned loan_officer_ids
+            result = db.execute(
+                text("""
+                    UPDATE loans
+                    SET loan_officer_id = :user_id
+                    WHERE loan_officer_id IS NULL
+                       OR loan_officer_id NOT IN (SELECT id FROM users)
+                       OR loan_officer_id != :user_id
+                """),
+                {"user_id": current_user.id}
+            )
+            loans_claimed = result.rowcount
+
+            db.commit()
+
+            # Get totals
+            result = db.execute(
+                text("""
+                    SELECT
+                        (SELECT COUNT(*) FROM leads WHERE owner_id = :user_id) as leads,
+                        (SELECT COUNT(*) FROM loans WHERE loan_officer_id = :user_id) as loans
+                """),
+                {"user_id": current_user.id}
+            )
+            totals = result.fetchone()
+
+            logger.info(f"User {current_user.email} claimed {leads_claimed} leads, {loans_claimed} loans")
+
+            return {
+                "success": True,
+                "message": f"Successfully claimed {leads_claimed} leads and {loans_claimed} loans",
+                "claimed": {
+                    "leads": leads_claimed,
+                    "loans": loans_claimed
+                },
+                "totals": {
+                    "leads": totals[0],
+                    "loans": totals[1]
+                }
+            }
+
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error claiming orphan leads: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to claim orphan leads: {str(e)}")
+
+    logger.info("Leads detail/CRUD routes loaded")
