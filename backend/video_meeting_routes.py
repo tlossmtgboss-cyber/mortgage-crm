@@ -140,8 +140,8 @@ async def process_meeting_ai_analysis(room_id: int):
     try:
         VideoMeetingRoom = _models.get('VideoMeetingRoom')
         MeetingRecording = _models.get('MeetingRecording')
-        MeetingTranscript = _models.get('MeetingTranscript')
-        AIAnalysis = _models.get('AIAnalysis')
+        MeetingTranscript = _models.get('RecordingTranscript')
+        AIAnalysis = _models.get('MeetingAIAnalysis')
 
         room = db.query(VideoMeetingRoom).filter(VideoMeetingRoom.id == room_id).first()
         if not room:
@@ -154,7 +154,7 @@ async def process_meeting_ai_analysis(room_id: int):
             MeetingTranscript.status == "completed"
         ).first()
 
-        if transcript and transcript.full_text:
+        if transcript and transcript.full_transcript:
             # Create AI analysis using Claude
             import httpx
             import os
@@ -180,7 +180,7 @@ async def process_meeting_ai_analysis(room_id: int):
 4. Follow-up items needed
 
 Transcript:
-{transcript.full_text[:10000]}"""
+{transcript.full_transcript[:10000]}"""
                             }],
                         },
                     )
@@ -819,6 +819,9 @@ async def start_meeting(
     if not room:
         raise HTTPException(status_code=404, detail="Meeting room not found")
 
+    if room.host_user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the host can start this meeting")
+
     room.status = "active"
     room.actual_start = datetime.utcnow()
     room.updated_at = datetime.utcnow()
@@ -843,6 +846,9 @@ async def end_meeting(
     room = db.query(VideoMeetingRoom).filter(VideoMeetingRoom.id == room_id).first()
     if not room:
         raise HTTPException(status_code=404, detail="Meeting room not found")
+
+    if room.host_user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the host can end this meeting")
 
     room.status = "ended"
     room.actual_end = datetime.utcnow()
@@ -1285,10 +1291,16 @@ async def upload_screen_recording(
 
 @router.get("/screen-recordings/{recording_id}")
 async def get_screen_recording(
-    recording_id: str
+    recording_id: str,
+    current_user = Depends(get_current_user)
 ):
-    """Retrieve a screen recording by ID (public endpoint for sharing)."""
+    """Retrieve a screen recording by ID (authenticated endpoint)."""
     from fastapi.responses import FileResponse
+
+    # Validate recording_id format (UUID-like, alphanumeric + hyphens only)
+    import re
+    if not re.match(r'^[a-zA-Z0-9\-]+$', recording_id):
+        raise HTTPException(status_code=400, detail="Invalid recording ID")
 
     # Find the recording file
     for ext in ['webm', 'mp4', 'mkv']:
@@ -1606,7 +1618,7 @@ async def seed_default_templates(
 @router.put("/templates/{template_id}")
 async def update_template(
     template_id: int,
-    data: MeetingTemplateCreate,
+    data: MeetingTemplateUpdate,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
@@ -1622,18 +1634,11 @@ async def update_template(
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
 
-    # Update fields
-    template.template_name = data.template_name
-    template.description = data.description
-    template.default_duration_minutes = data.default_duration_minutes
-    template.recording_enabled = data.recording_enabled
-    template.ai_assistant_enabled = data.ai_assistant_enabled
-    if data.color:
-        template.color = data.color
-    if data.icon:
-        template.icon = data.icon
-    if data.template_key:
-        template.template_key = data.template_key
+    # Update only provided fields
+    update_data = data.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        if hasattr(template, field):
+            setattr(template, field, value)
 
     db.commit()
     db.refresh(template)
@@ -3736,7 +3741,7 @@ async def get_sfu_token(
         return {
             "token": token,
             "room_name": room.room_code,
-            "livekit_url": sfu_service.ws_url,
+            "livekit_url": sfu_service.livekit_url,
             "is_host": is_host,
             "display_name": display_name
         }

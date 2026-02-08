@@ -254,8 +254,8 @@ const MeetingRoom = () => {
 
   // Connect to WebSocket signaling server
   const connectSignaling = useCallback((stream) => {
-    // Generate unique participant ID
-    const participantId = `p-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    // Reuse existing participant ID on reconnect, generate new one only on first connect
+    const participantId = localParticipantIdRef.current || `p-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     localParticipantIdRef.current = participantId;
 
     // Determine WebSocket URL
@@ -359,13 +359,15 @@ const MeetingRoom = () => {
             break;
 
           case 'chat':
-            // Chat message received
-            setChatMessages(prev => [...prev, {
-              id: Date.now(),
-              sender: message.sender_name,
-              text: message.message,
-              timestamp: new Date(message.timestamp)
-            }]);
+            // Chat message received — skip if from self (already added locally)
+            if (message.from !== localParticipantIdRef.current) {
+              setChatMessages(prev => [...prev, {
+                id: Date.now(),
+                sender: message.sender_name,
+                text: message.message,
+                timestamp: new Date(message.timestamp)
+              }]);
+            }
             break;
 
           case 'connection_ack':
@@ -747,6 +749,20 @@ const MeetingRoom = () => {
       audioEnabled: true,
       videoEnabled: true
     }]);
+
+    // Verify password with backend before joining
+    try {
+      const passwordParam = password ? `?password=${encodeURIComponent(password)}` : '';
+      const verifyResponse = await fetch(`${API_BASE}/api/v1/meetings/join/${roomCode}${passwordParam}`);
+      if (!verifyResponse.ok) {
+        const errorData = await verifyResponse.json();
+        alert(errorData.detail || 'Failed to join meeting');
+        setJoined(false);
+        return;
+      }
+    } catch (err) {
+      console.warn('Could not verify meeting access:', err);
+    }
 
     // Notify backend of join (if authenticated)
     const token = localStorage.getItem('token');

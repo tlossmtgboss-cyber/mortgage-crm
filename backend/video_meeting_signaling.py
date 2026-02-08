@@ -148,7 +148,7 @@ class MeetingConnectionManager:
     def disconnect(self, websocket: WebSocket):
         """Disconnect a participant from a meeting room"""
         if websocket not in self.connections:
-            return None, None
+            return None, None, None
 
         room_code, participant_id = self.connections[websocket]
 
