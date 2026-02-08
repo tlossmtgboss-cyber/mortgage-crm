@@ -175,7 +175,7 @@ async def create_event(
     CalendarEvent = models['CalendarEvent']
 
     db_event = CalendarEvent(
-        **event.dict(exclude={'attendees'}),
+        **event.model_dump(exclude={'attendees'}),
         user_id=current_user.id,
         attendees=event.attendees if event.attendees else []
     )
@@ -252,7 +252,7 @@ async def update_event(
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    for key, value in event_update.dict(exclude_unset=True).items():
+    for key, value in event_update.model_dump(exclude_unset=True).items():
         setattr(event, key, value)
 
     event.updated_at = datetime.now(timezone.utc)

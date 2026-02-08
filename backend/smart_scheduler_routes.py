@@ -1279,7 +1279,7 @@ async def update_scheduler_config(
         raise HTTPException(status_code=404, detail="Configuration not found")
 
     # Update fields
-    update_fields = config_data.dict(exclude_unset=True)
+    update_fields = config_data.model_dump(exclude_unset=True)
     for field, value in update_fields.items():
         if field == "routing_strategy" and value:
             try:
@@ -1366,12 +1366,12 @@ async def update_landing_page_settings(
             user_id=user.id,
             config_name=f"{user.email}'s Schedule",
             working_hours=DEFAULT_WORKING_HOURS,
-            landing_page_settings=settings_data.dict()
+            landing_page_settings=settings_data.model_dump()
         )
         db.add(config)
     else:
         # Update existing config
-        config.landing_page_settings = settings_data.dict()
+        config.landing_page_settings = settings_data.model_dump()
 
     db.commit()
 
@@ -1530,7 +1530,7 @@ async def update_appointment_type(
     if not appt_type:
         raise HTTPException(status_code=404, detail="Appointment type not found")
 
-    update_fields = type_data.dict(exclude_unset=True)
+    update_fields = type_data.model_dump(exclude_unset=True)
     for field, value in update_fields.items():
         setattr(appt_type, field, value)
 
@@ -2204,7 +2204,7 @@ async def update_appointment(
         logger.warning(f"User {user.id} attempted to update appointment {appointment_id} without permission")
         raise HTTPException(status_code=403, detail="You don't have permission to update this appointment")
 
-    update_fields = appt_data.dict(exclude_unset=True)
+    update_fields = appt_data.model_dump(exclude_unset=True)
     is_cancellation = False
     is_reschedule = False
     send_notification = update_fields.pop('send_notification', True)  # Remove from fields, default to True

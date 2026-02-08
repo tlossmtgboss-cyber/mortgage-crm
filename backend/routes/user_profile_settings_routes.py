@@ -134,7 +134,7 @@ class WorkHoursUpdate(BaseModel):
             raise ValueError(f'Invalid days: {", ".join(invalid_days)}')
         return [d.lower() for d in v]
 
-    @root_validator
+    @root_validator(skip_on_failure=True)
     def validate_time_range(cls, values):
         start = values.get('work_hours_start')
         end = values.get('work_hours_end')
@@ -169,7 +169,7 @@ class PasswordChange(BaseModel):
             raise ValueError('Password must contain at least one number')
         return v
 
-    @root_validator
+    @root_validator(skip_on_failure=True)
     def validate_passwords_match(cls, values):
         new_pw = values.get('new_password')
         confirm_pw = values.get('confirm_password')

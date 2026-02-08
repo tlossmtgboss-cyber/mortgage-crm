@@ -93,7 +93,7 @@ class BusinessHoursDay(BaseModel):
             raise ValueError('Time must be in HH:MM format (e.g., 09:00, 17:30)')
         return v
 
-    @root_validator
+    @root_validator(skip_on_failure=True)
     def validate_time_range(cls, values):
         """Ensure end time is after start time"""
         start = values.get('start')
@@ -122,7 +122,7 @@ class BusinessHours(BaseModel):
     saturday: BusinessHoursDay = BusinessHoursDay(start="10:00", end="14:00", enabled=False)
     sunday: BusinessHoursDay = BusinessHoursDay(start="10:00", end="14:00", enabled=False)
 
-    @root_validator
+    @root_validator(skip_on_failure=True)
     def validate_at_least_one_day_enabled(cls, values):
         """Ensure at least one day has hours enabled"""
         days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
@@ -440,13 +440,13 @@ async def update_scheduler_settings(
     if settings.business_hours:
         update_fields.append("working_hours = :working_hours")
         update_params["working_hours"] = {
-            "monday": settings.business_hours.monday.dict(),
-            "tuesday": settings.business_hours.tuesday.dict(),
-            "wednesday": settings.business_hours.wednesday.dict(),
-            "thursday": settings.business_hours.thursday.dict(),
-            "friday": settings.business_hours.friday.dict(),
-            "saturday": settings.business_hours.saturday.dict(),
-            "sunday": settings.business_hours.sunday.dict(),
+            "monday": settings.business_hours.monday.model_dump(),
+            "tuesday": settings.business_hours.tuesday.model_dump(),
+            "wednesday": settings.business_hours.wednesday.model_dump(),
+            "thursday": settings.business_hours.thursday.model_dump(),
+            "friday": settings.business_hours.friday.model_dump(),
+            "saturday": settings.business_hours.saturday.model_dump(),
+            "sunday": settings.business_hours.sunday.model_dump(),
         }
 
     if settings.booking_settings:

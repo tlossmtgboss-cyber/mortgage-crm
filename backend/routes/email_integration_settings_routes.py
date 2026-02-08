@@ -131,7 +131,7 @@ class QuietHoursSettings(BaseModel):
             raise ValueError('Time must be in HH:MM format (e.g., 09:00, 17:30)')
         return v
 
-    @root_validator
+    @root_validator(skip_on_failure=True)
     def validate_time_range(cls, values):
         enabled = values.get('enabled')
         start = values.get('start_time')
@@ -238,7 +238,7 @@ class EmailIntegrationSettingsUpdate(BaseModel):
             raise ValueError('Time must be in HH:MM format')
         return v
 
-    @root_validator
+    @root_validator(skip_on_failure=True)
     def validate_quiet_hours(cls, values):
         enabled = values.get('quiet_hours_enabled')
         start = values.get('quiet_hours_start')

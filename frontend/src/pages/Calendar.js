@@ -151,6 +151,7 @@ function Calendar() {
   // Handle clicking on an appointment to edit/reschedule
   const handleEditAppointment = (event) => {
     if (!event.isAppointment) return;
+    if (!event.start_time || !event.end_time) return;
 
     const startDate = new Date(event.start_time);
     const endDate = new Date(event.end_time);
@@ -657,14 +658,16 @@ function Calendar() {
 }
 
 function AddEventModal({ selectedDate, onClose, onAdd }) {
+  const defaultStart = selectedDate || new Date();
+  const defaultEnd = new Date(defaultStart.getTime() + 3600000);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     event_type: 'meeting',
     location: '',
     all_day: false,
-    start_time: selectedDate ? selectedDate.toISOString().slice(0, 16) : '',
-    end_time: selectedDate ? new Date(selectedDate.getTime() + 3600000).toISOString().slice(0, 16) : '',
+    start_time: defaultStart.toISOString().slice(0, 16),
+    end_time: defaultEnd.toISOString().slice(0, 16),
   });
 
   const handleSubmit = (e) => {
