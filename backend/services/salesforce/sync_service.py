@@ -1555,7 +1555,8 @@ class SalesforceSyncService:
         source = sf_record.get('LeadSource') or 'Salesforce'
         stage = self._map_sf_lead_status_to_crm(sf_record.get('Status', ''))
         phone = sf_record.get('Phone') or sf_record.get('MobilePhone')
-        company = sf_record.get('Company') or ''
+        employer_name = sf_record.get('Company') or ''
+        industry = sf_record.get('Industry') or ''
         notes = sf_record.get('Description') or ''
 
         # Get user's organization_id for multi-tenant isolation
@@ -1566,13 +1567,13 @@ class SalesforceSyncService:
 
         db.execute(text("""
             INSERT INTO leads (
-                name, first_name, last_name, email, phone, company,
-                source, stage, address, city, state, zip_code,
+                name, first_name, last_name, email, phone, employer_name,
+                industry, source, stage, address, city, state, zip_code,
                 notes, salesforce_id, owner_id, organization_id,
                 meta_data, created_at, updated_at
             ) VALUES (
-                :name, :first_name, :last_name, :email, :phone, :company,
-                :source, :stage, :address, :city, :state, :zip_code,
+                :name, :first_name, :last_name, :email, :phone, :employer_name,
+                :industry, :source, :stage, :address, :city, :state, :zip_code,
                 :notes, :sf_id, :owner_id, :org_id,
                 jsonb_build_object('salesforce_type', :sf_type,
                                    'salesforce_imported_at', CURRENT_TIMESTAMP::text,
@@ -1585,7 +1586,8 @@ class SalesforceSyncService:
             "last_name": last_name,
             "email": email,
             "phone": phone,
-            "company": company,
+            "employer_name": employer_name,
+            "industry": industry,
             "source": source,
             "stage": stage,
             "address": street,
