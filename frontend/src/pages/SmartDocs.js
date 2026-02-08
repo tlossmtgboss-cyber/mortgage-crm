@@ -12,6 +12,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { smartDocsAPI } from '../services/smartDocsApi';
 import { usePermissions } from '../contexts/PermissionContext';
+import { isMasterAdmin } from '../config/roleConfig';
 import AdminContracts from '../components/AdminContracts';
 import './SmartDocs.css';
 
@@ -432,7 +433,10 @@ function SmartDocs() {
   };
 
   // Platform admin sees contracts dashboard instead of loan documents
-  if (isPlatformAdmin) {
+  const userEmail = (() => {
+    try { return JSON.parse(localStorage.getItem('user'))?.email; } catch { return null; }
+  })();
+  if (isPlatformAdmin || isMasterAdmin(userEmail)) {
     return <AdminContracts />;
   }
 
