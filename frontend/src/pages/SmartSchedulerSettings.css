@@ -158,29 +158,31 @@
   padding-bottom: 0;
 }
 
-.tab-btn {
+.scheduler-settings-page .tab-btn {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 12px 20px;
-  background: none;
+  background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
   color: #64748b;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: color 0.15s, border-color 0.15s;
   margin-bottom: -1px;
 }
 
-.tab-btn:hover {
+.scheduler-settings-page .tab-btn:hover {
   color: #218D8D;
+  background: transparent;
 }
 
-.tab-btn.active {
+.scheduler-settings-page .tab-btn.active {
   color: #218D8D;
   border-bottom-color: #218D8D;
+  background: transparent;
 }
 
 .tab-btn i {
@@ -284,16 +286,18 @@
   margin: -12px 0 20px;
 }
 
-/* Form Rows */
-.form-row {
+/* Form Rows — scoped to override Settings.css grid */
+.scheduler-settings-page .form-row {
+  display: block;
+  grid-template-columns: none;
   margin-bottom: 20px;
 }
 
-.form-row:last-child {
+.scheduler-settings-page .form-row:last-child {
   margin-bottom: 0;
 }
 
-.form-row > label {
+.scheduler-settings-page .form-row > label {
   display: block;
   font-size: 14px;
   font-weight: 500;
@@ -301,11 +305,11 @@
   margin-bottom: 8px;
 }
 
-.form-row input[type="text"],
-.form-row input[type="number"],
-.form-row input[type="time"],
-.form-row select,
-.form-row textarea {
+.scheduler-settings-page .form-row input[type="text"],
+.scheduler-settings-page .form-row input[type="number"],
+.scheduler-settings-page .form-row input[type="time"],
+.scheduler-settings-page .form-row select,
+.scheduler-settings-page .form-row textarea {
   width: 100%;
   padding: 10px 14px;
   border: 1px solid #e2e8f0;
@@ -316,21 +320,21 @@
   box-sizing: border-box;
 }
 
-.form-row input:focus,
-.form-row select:focus,
-.form-row textarea:focus {
+.scheduler-settings-page .form-row input:focus,
+.scheduler-settings-page .form-row select:focus,
+.scheduler-settings-page .form-row textarea:focus {
   outline: none;
   border-color: #218D8D;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
-.form-row input.has-error,
-.form-row select.has-error,
-.form-row textarea.has-error {
+.scheduler-settings-page .form-row input.has-error,
+.scheduler-settings-page .form-row select.has-error,
+.scheduler-settings-page .form-row textarea.has-error {
   border-color: #ef4444;
 }
 
-.form-row input.has-error:focus {
+.scheduler-settings-page .form-row input.has-error:focus {
   box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
 }
 
