@@ -350,6 +350,65 @@ def run_compliance_checks(
 
 
 # =============================================================================
+# Rate Limiting
+# =============================================================================
+
+# Per-user rate limits
+VOICEMAIL_DAILY_LIMIT = 100       # Max drops per user per day
+VOICEMAIL_PER_MINUTE_LIMIT = 5    # Max drops per user per minute
+
+# In-memory rate tracker: {user_id: [timestamp, ...]}
+_rate_tracker: dict = {}
+_RATE_TRACKER_MAX_KEYS = 5000
+
+
+def _clean_stale_rate_entries():
+    """Remove entries older than 24 hours to prevent memory growth."""
+    if len(_rate_tracker) < _RATE_TRACKER_MAX_KEYS:
+        return
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    stale_keys = [
+        uid for uid, timestamps in _rate_tracker.items()
+        if not timestamps or timestamps[-1] < cutoff
+    ]
+    for key in stale_keys:
+        del _rate_tracker[key]
+
+
+def check_rate_limit(user_id: int) -> Tuple[bool, Optional[str]]:
+    """
+    Check per-user voicemail drop rate limits.
+
+    Returns (is_allowed, rejection_reason).
+    """
+    _clean_stale_rate_entries()
+
+    now = datetime.now(timezone.utc)
+    if user_id not in _rate_tracker:
+        _rate_tracker[user_id] = []
+
+    timestamps = _rate_tracker[user_id]
+
+    # Clean old entries (older than 24h)
+    day_ago = now - timedelta(hours=24)
+    timestamps[:] = [ts for ts in timestamps if ts > day_ago]
+
+    # Check daily limit
+    if len(timestamps) >= VOICEMAIL_DAILY_LIMIT:
+        return False, f"Daily voicemail limit reached ({VOICEMAIL_DAILY_LIMIT}/day). Try again tomorrow."
+
+    # Check per-minute limit
+    minute_ago = now - timedelta(minutes=1)
+    recent_count = sum(1 for ts in timestamps if ts > minute_ago)
+    if recent_count >= VOICEMAIL_PER_MINUTE_LIMIT:
+        return False, f"Too many voicemails sent. Limit: {VOICEMAIL_PER_MINUTE_LIMIT}/minute."
+
+    # Record this attempt
+    timestamps.append(now)
+    return True, None
+
+
+# =============================================================================
 # Helper Functions
 # =============================================================================
 
@@ -365,7 +424,10 @@ async def send_voicemail_via_vapi(
     import httpx
 
     vapi_api_key = os.getenv("VAPI_API_KEY")
-    vapi_assistant_id = os.getenv("VAPI_ASSISTANT_ID")
+    # VAPI_PHONE_NUMBER_ID is the Vapi phone number resource (not the assistant)
+    # Falls back to VAPI_ASSISTANT_ID for backward compatibility
+    vapi_phone_number_id = os.getenv("VAPI_PHONE_NUMBER_ID") or os.getenv("VAPI_ASSISTANT_ID")
+    vapi_assistant_id = os.getenv("VAPI_VOICEMAIL_ASSISTANT_ID") or os.getenv("VAPI_ASSISTANT_ID")
 
     if not vapi_api_key:
         raise HTTPException(status_code=503, detail="Vapi API key not configured")
@@ -387,7 +449,8 @@ async def send_voicemail_via_vapi(
 
     # Vapi call configuration
     vapi_payload = {
-        "phoneNumberId": vapi_assistant_id,
+        "phoneNumberId": vapi_phone_number_id,
+        "assistantId": vapi_assistant_id,
         "customer": {
             "number": clean_number,
             "name": recipient_name
@@ -504,6 +567,11 @@ async def create_voicemail_drop(
             )
             raise HTTPException(status_code=403, detail=rejection_reason)
 
+        # --- Rate Limiting ---
+        is_allowed, rate_msg = check_rate_limit(current_user.id)
+        if not is_allowed:
+            raise HTTPException(status_code=429, detail=rate_msg)
+
         # Create voicemail drop record
         voicemail_drop = VoicemailDrop(
             user_id=current_user.id,
@@ -610,17 +678,52 @@ async def transcribe_voice_message(
         if not audio_file:
             raise HTTPException(status_code=400, detail="Audio file is required")
 
+        # Validate file type
+        ALLOWED_AUDIO_TYPES = {
+            "audio/webm", "audio/mp3", "audio/mpeg", "audio/wav",
+            "audio/wave", "audio/x-wav", "audio/ogg", "audio/mp4",
+            "audio/m4a", "audio/x-m4a", "audio/flac",
+        }
+        ALLOWED_EXTENSIONS = {".webm", ".mp3", ".wav", ".ogg", ".m4a", ".mp4", ".flac"}
+        MAX_AUDIO_SIZE = 25 * 1024 * 1024  # 25 MB (Whisper API limit)
+
+        content_type = getattr(audio_file, 'content_type', '') or ''
+        filename = getattr(audio_file, 'filename', '') or 'audio.webm'
+        file_ext = os.path.splitext(filename)[1].lower()
+
+        if content_type and content_type not in ALLOWED_AUDIO_TYPES:
+            if file_ext not in ALLOWED_EXTENSIONS:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid audio file type: {content_type}. Allowed: webm, mp3, wav, ogg, m4a, mp4, flac"
+                )
+
         openai_api_key = os.getenv("OPENAI_API_KEY")
         if not openai_api_key:
             raise HTTPException(status_code=503, detail="OpenAI API key not configured")
 
-        # Read audio file
+        # Read audio file with size limit
         audio_data = await audio_file.read()
+        if len(audio_data) > MAX_AUDIO_SIZE:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Audio file too large ({len(audio_data) // (1024*1024)}MB). Maximum: 25MB"
+            )
+        if len(audio_data) == 0:
+            raise HTTPException(status_code=400, detail="Audio file is empty")
+
+        # Infer content type for Whisper from extension
+        ext_to_mime = {
+            ".webm": "audio/webm", ".mp3": "audio/mpeg", ".wav": "audio/wav",
+            ".ogg": "audio/ogg", ".m4a": "audio/mp4", ".mp4": "audio/mp4",
+            ".flac": "audio/flac",
+        }
+        upload_mime = ext_to_mime.get(file_ext, content_type or "audio/webm")
 
         # Call OpenAI Whisper API
         async with httpx.AsyncClient(timeout=60.0) as client:
             files = {
-                'file': ('audio.webm', audio_data, 'audio/webm'),
+                'file': (filename, audio_data, upload_mime),
                 'model': (None, 'whisper-1')
             }
 

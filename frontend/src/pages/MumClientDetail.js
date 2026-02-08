@@ -6,7 +6,6 @@ import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import SMSModal from '../components/SMSModal';
 import TeamsModal from '../components/TeamsModal';
 import RecordingModal from '../components/RecordingModal';
-import VoicemailModal from '../components/VoicemailModal';
 import VoicemailDrop from '../components/VoicemailDrop';
 import TeamAssignment from '../components/TeamAssignment';
 import EmploymentTab from '../components/EmploymentTab';
@@ -75,7 +74,6 @@ function MumClientDetail() {
   const [showSMSModal, setShowSMSModal] = useState(false);
   const [showTeamsModal, setShowTeamsModal] = useState(false);
   const [showRecordingModal, setShowRecordingModal] = useState(false);
-  const [showVoicemailModal, setShowVoicemailModal] = useState(false);
   const [showVoicemailDrop, setShowVoicemailDrop] = useState(false);
   const [showVideoMeetings, setShowVideoMeetings] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
@@ -2549,15 +2547,6 @@ function MumClientDetail() {
         <RecordingModal
           isOpen={showRecordingModal}
           onClose={() => setShowRecordingModal(false)}
-          lead={client}
-        />
-      )}
-
-      {/* Voicemail Modal */}
-      {client && (
-        <VoicemailModal
-          isOpen={showVoicemailModal}
-          onClose={() => setShowVoicemailModal(false)}
           lead={client}
         />
       )}

@@ -6,7 +6,6 @@ import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import SMSModal from '../components/SMSModal';
 import TeamsModal from '../components/TeamsModal';
 import RecordingModal from '../components/RecordingModal';
-import VoicemailModal from '../components/VoicemailModal';
 import EscalationModal from '../components/EscalationModal';
 import VoicemailDrop from '../components/VoicemailDrop';
 import CreateTaskModal from '../components/CreateTaskModal';
@@ -77,7 +76,6 @@ function LeadDetail() {
   const [showSMSModal, setShowSMSModal] = useState(false);
   const [showTeamsModal, setShowTeamsModal] = useState(false);
   const [showRecordingModal, setShowRecordingModal] = useState(false);
-  const [showVoicemailModal, setShowVoicemailModal] = useState(false);
   const [showVoicemailDrop, setShowVoicemailDrop] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
@@ -4640,15 +4638,6 @@ function LeadDetail() {
         <RecordingModal
           isOpen={showRecordingModal}
           onClose={() => setShowRecordingModal(false)}
-          lead={lead}
-        />
-      )}
-
-      {/* Voicemail Modal */}
-      {lead && (
-        <VoicemailModal
-          isOpen={showVoicemailModal}
-          onClose={() => setShowVoicemailModal(false)}
           lead={lead}
         />
       )}
