@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime, timedelta, timezone, time as dt_time
 from typing import Optional, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, UploadFile, File
 from fastapi.responses import Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -456,7 +456,9 @@ async def send_voicemail_via_vapi(
     full_message = (
         f"{greeting}this is calling from {user_name}'s office. "
         f"{message} "
-        f"Feel free to call us back at your convenience. Have a great day!"
+        f"Feel free to call us back at your convenience. "
+        f"If you no longer wish to receive these calls, please call us back and ask to be placed on our do-not-call list. "
+        f"Have a great day!"
     )
 
     # Build voice config from template settings
@@ -1166,7 +1168,7 @@ async def upload_template_audio(
     try:
         template = db.query(VoicemailTemplate).filter(
             VoicemailTemplate.id == template_id,
-            or_(VoicemailTemplate.user_id == current_user.id, VoicemailTemplate.user_id == None),
+            VoicemailTemplate.user_id == current_user.id,
         ).first()
 
         if not template:
@@ -1623,15 +1625,114 @@ async def update_campaign(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+async def _dispatch_campaign_drops(campaign_id: int, user_name: str):
+    """
+    Background task to actually send queued campaign drops via Vapi.
+    Respects throttle_rate (drops per minute) and campaign pause/cancel.
+    """
+    import asyncio
+    from db import SessionLocal
+
+    db = SessionLocal()
+    try:
+        VoicemailCampaign = get_voicemail_campaign_model()
+        VoicemailDrop = get_voicemail_drop_model()
+        VoicemailTemplate = get_voicemail_template_model()
+
+        campaign = db.query(VoicemailCampaign).filter(
+            VoicemailCampaign.id == campaign_id
+        ).first()
+        if not campaign:
+            return
+
+        template = db.query(VoicemailTemplate).filter(
+            VoicemailTemplate.id == campaign.template_id
+        ).first()
+
+        throttle_rate = campaign.throttle_rate or 10  # drops per minute
+        delay_between = 60.0 / throttle_rate
+
+        queued_drops = db.query(VoicemailDrop).filter(
+            VoicemailDrop.campaign_id == campaign_id,
+            VoicemailDrop.status == "queued",
+        ).all()
+
+        sent = 0
+        failed = 0
+
+        for drop in queued_drops:
+            # Refresh campaign status to check for pause/cancel
+            db.refresh(campaign)
+            if campaign.status in ("paused", "cancelled"):
+                logger.info(f"Campaign {campaign_id} {campaign.status} — stopping dispatch")
+                break
+
+            try:
+                voice_provider = template.voice_provider if template else "11labs"
+                voice_id = template.voice_id if template else "paula"
+                voice_speed = template.voice_speed if template else 1.0
+                audio_url = template.audio_url if template else None
+
+                result = await send_voicemail_via_vapi(
+                    phone_number=drop.phone_number,
+                    message=drop.message_text,
+                    recipient_name=drop.contact_name or "",
+                    user_name=user_name,
+                    voicemail_drop_id=drop.id,
+                    db=db,
+                    voice_provider=voice_provider or "11labs",
+                    voice_id=voice_id or "paula",
+                    voice_speed=voice_speed or 1.0,
+                    audio_url=audio_url,
+                )
+
+                drop.status = "sending"
+                drop.vapi_call_id = result.get("call_id")
+                sent += 1
+            except Exception as e:
+                drop.status = "failed"
+                drop.error_message = str(e)[:500]
+                failed += 1
+                logger.error(f"Campaign {campaign_id} drop {drop.id} failed: {e}")
+
+            db.commit()
+
+            # Throttle between sends
+            await asyncio.sleep(delay_between)
+
+        # Update campaign counts
+        db.refresh(campaign)
+        campaign.sent_count = sent
+        campaign.failed_count = (campaign.failed_count or 0) + failed
+
+        # If all drops processed and campaign still running, mark completed
+        remaining = db.query(VoicemailDrop).filter(
+            VoicemailDrop.campaign_id == campaign_id,
+            VoicemailDrop.status == "queued",
+        ).count()
+        if remaining == 0 and campaign.status == "running":
+            campaign.status = "completed"
+            campaign.completed_at = datetime.now(timezone.utc)
+
+        db.commit()
+        logger.info(f"Campaign {campaign_id} dispatch done: {sent} sent, {failed} failed, {remaining} remaining")
+
+    except Exception as e:
+        logger.error(f"Campaign {campaign_id} dispatch error: {e}", exc_info=True)
+    finally:
+        db.close()
+
+
 @router.post("/campaigns/{campaign_id}/start")
 async def start_campaign(
     campaign_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     """
     Start executing a campaign. Resolves contacts from filter, creates VoicemailDrop
-    records, and begins sending in batches respecting throttle_rate.
+    records, and dispatches them via background task respecting throttle_rate.
     """
     VoicemailCampaign = get_voicemail_campaign_model()
     VoicemailDrop = get_voicemail_drop_model()
@@ -1715,8 +1816,11 @@ async def start_campaign(
         campaign.status = "running"
         campaign.started_at = datetime.now(timezone.utc)
         campaign.total_contacts = created_count + skipped_count
-        campaign.sent_count = created_count
         db.commit()
+
+        # Dispatch drops in background
+        user_name = current_user.full_name or "your loan officer"
+        background_tasks.add_task(_dispatch_campaign_drops, campaign_id, user_name)
 
         logger.info(f"Campaign {campaign_id} started: {created_count} drops queued, {skipped_count} skipped")
 

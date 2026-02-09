@@ -3,6 +3,8 @@ Vapi AI Service - API Client and Business Logic
 Handles all Vapi API interactions and CRM integration
 Enhanced with AI Receptionist SMS capabilities
 """
+import hmac
+import hashlib
 import httpx
 import os
 from typing import Optional, Dict, List, Any
@@ -681,6 +683,29 @@ class VapiCRMIntegration:
         self.db = db
         self.vapi = VapiService()
 
+    @staticmethod
+    def verify_webhook_signature(payload_body: bytes, signature_header: str) -> bool:
+        """
+        Verify Vapi webhook signature using HMAC-SHA256.
+        Returns True if signature is valid or if no secret is configured (graceful degradation).
+        """
+        secret = os.getenv("VAPI_WEBHOOK_SECRET")
+        if not secret:
+            logger.warning("VAPI_WEBHOOK_SECRET not configured — skipping signature verification")
+            return True
+
+        if not signature_header:
+            logger.warning("Missing X-Vapi-Signature header on webhook request")
+            return False
+
+        expected = hmac.new(
+            secret.encode("utf-8"),
+            payload_body,
+            hashlib.sha256,
+        ).hexdigest()
+
+        return hmac.compare_digest(expected, signature_header)
+
     async def process_call_webhook(self, webhook_data: Dict[str, Any]) -> Optional[VapiCall]:
         """
         Process incoming Vapi webhook and create/update call record
@@ -780,8 +805,14 @@ class VapiCRMIntegration:
 
             from main import VoicemailDrop, VoicemailEvent
 
+            try:
+                drop_id_int = int(voicemail_drop_id)
+            except (ValueError, TypeError):
+                logger.warning(f"Malformed voicemail_drop_id in webhook: {voicemail_drop_id!r}")
+                return
+
             drop = self.db.query(VoicemailDrop).filter(
-                VoicemailDrop.id == int(voicemail_drop_id)
+                VoicemailDrop.id == drop_id_int
             ).first()
 
             if not drop:
@@ -814,12 +845,13 @@ class VapiCRMIntegration:
             elif call_status == "ended":
                 # Generic ended — check if voicemail detection was triggered
                 analysis = call_data.get("analysis", {})
-                if analysis.get("successEvaluation") == "true":
+                success_eval = analysis.get("successEvaluation")
+                if success_eval is True or str(success_eval).lower() == "true":
                     drop.status = "delivered"
                     drop.delivered_at = datetime.now(timezone.utc)
                 else:
-                    drop.status = "delivered"
-                    drop.delivered_at = datetime.now(timezone.utc)
+                    drop.status = "failed"
+                    drop.error_message = f"Call ended without confirmed delivery (successEvaluation={success_eval})"
             else:
                 drop.status = "failed"
                 drop.error_message = f"Unknown outcome: {call_status}/{ended_reason}"
