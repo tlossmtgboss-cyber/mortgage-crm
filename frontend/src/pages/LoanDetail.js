@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { loansAPI, activitiesAPI, circleOfCashflowAPI, partnersAPI, salesforceAPI, dialerAPI } from '../services/api';
+import { loansAPI, activitiesAPI, circleOfCashflowAPI, partnersAPI, salesforceAPI, dialerAPI, borrowerApplicationAPI } from '../services/api';
 import { toast } from '../utils/toast';
 import VoicemailDrop from '../components/VoicemailDrop';
 import SMSModal from '../components/SMSModal';
@@ -11,7 +11,7 @@ import AppointmentModal from '../components/AppointmentModal';
 import ScheduleAppointmentModal from '../components/ScheduleAppointmentModal';
 import EscalationModal from '../components/EscalationModal';
 import EmploymentTab from '../components/EmploymentTab';
-import VideoMeetings from '../components/VideoMeetings';
+import VideoCallScheduleModal from '../components/VideoCallScheduleModal';
 import EmailComposerModal from '../components/EmailComposerModal';
 import CalendarSidebar from '../components/CalendarSidebar';
 import AddressAutocomplete from '../components/AddressAutocomplete';
@@ -84,8 +84,11 @@ function LoanDetail() {
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [calendarRefreshKey, setCalendarRefreshKey] = useState(0);
   const [showEscalationModal, setShowEscalationModal] = useState(false);
-  const [showVideoMeetings, setShowVideoMeetings] = useState(false);
+  const [showVideoCall, setShowVideoCall] = useState(false);
   const [showEmailComposer, setShowEmailComposer] = useState(false);
+  const [showApplicationModal, setShowApplicationModal] = useState(false);
+  const [applicationLink, setApplicationLink] = useState(null);
+  const [applicationLoading, setApplicationLoading] = useState(false);
   const [showPortalSelector, setShowPortalSelector] = useState(false);
   const [showSendVideoModal, setShowSendVideoModal] = useState(false);
   const [clientPortalWorkspaceId, setClientPortalWorkspaceId] = useState(null);
@@ -936,6 +939,29 @@ function LoanDetail() {
     }
   }, [id]);
 
+  const handleSendApplication = async () => {
+    if (!loan) return;
+    try {
+      setApplicationLoading(true);
+      const response = await borrowerApplicationAPI.createForLead(loan.id, {
+        send_email: false,
+        send_sms: false
+      });
+      const appUrl = `${window.location.origin}/apply/${response.public_token}`;
+      setApplicationLink({
+        url: appUrl,
+        token: response.public_token,
+        application_id: response.id
+      });
+      setShowApplicationModal(true);
+    } catch (err) {
+      console.error('Error creating application:', err);
+      toast.error('Failed to create application link. Please try again.');
+    } finally {
+      setApplicationLoading(false);
+    }
+  };
+
   const handleAction = async (action) => {
     const borrowerPhone = loan.borrower_phone || formData.borrower_phone;
     const _borrowerEmail = loan.borrower_email || formData.borrower_email; // eslint-disable-line no-unused-vars
@@ -985,7 +1011,7 @@ function LoanDetail() {
         setShowTeamsModal(true);
         break;
       case 'video':
-        setShowVideoMeetings(true);
+        setShowVideoCall(true);
         break;
       case 'record':
         setShowRecordingModal(true);
@@ -1000,13 +1026,7 @@ function LoanDetail() {
         setShowEscalationModal(true);
         break;
       case 'send_application':
-        // For active loans, open the existing application or create new
-        if (loan.borrower_email) {
-          const appUrl = `${window.location.origin}/apply/purchase`;
-          window.open(appUrl, '_blank');
-        } else {
-          alert('Borrower email is required to send application');
-        }
+        handleSendApplication();
         break;
       case 'client_portal':
         // Open portal selector modal to choose between Client, Buyer's Agent, or Listing Agent portals
@@ -4022,15 +4042,36 @@ function LoanDetail() {
         />
       )}
 
-      {/* UVIP Video Meetings Modal */}
-      {showVideoMeetings && (
-        <div className="modal-overlay" onClick={() => setShowVideoMeetings(false)}>
-          <div className="modal-content video-meetings-modal" onClick={(e) => e.stopPropagation()}>
-            <button className="modal-close-btn" onClick={() => setShowVideoMeetings(false)}>×</button>
-            <VideoMeetings
-              onClose={() => setShowVideoMeetings(false)}
-              loanId={loan?.id}
-            />
+      {/* UVIP Video Call Schedule Modal */}
+      <VideoCallScheduleModal
+        isOpen={showVideoCall}
+        onClose={() => setShowVideoCall(false)}
+        borrower={{
+          id: loan?.id,
+          name: loan?.borrower_name || loan?.borrower,
+          email: loan?.borrower_email || formData.borrower_email,
+          phone: loan?.borrower_phone || formData.borrower_phone
+        }}
+        onStartVideoCall={(data) => {
+          console.log('Video call started:', data);
+        }}
+      />
+
+      {/* Application Link Modal */}
+      {showApplicationModal && applicationLink && (
+        <div className="modal-overlay" onClick={() => setShowApplicationModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <div className="modal-header">
+              <h2>Application Link Created</h2>
+              <button className="close-button" onClick={() => setShowApplicationModal(false)}>×</button>
+            </div>
+            <div style={{ padding: '20px' }}>
+              <p style={{ marginBottom: '12px' }}>Share this link with the borrower:</p>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input type="text" readOnly value={applicationLink.url} style={{ flex: 1, padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} />
+                <button onClick={async () => { try { await navigator.clipboard.writeText(applicationLink.url); toast.success('Link copied!'); } catch { toast.error('Copy failed'); } }} style={{ padding: '8px 16px', backgroundColor: '#218D8D', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Copy</button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -4282,8 +4323,8 @@ function LoanDetail() {
           <button className="action-btn record-video" onClick={() => setShowSendVideoModal(true)} disabled={!clientPortalWorkspaceId} title={clientPortalWorkspaceId ? "Record and send a video message" : "No client portal available"}>
             <span>Record Video</span>
           </button>
-          <button className="action-btn application" onClick={() => handleAction('send_application')} title="Send application link">
-            <span>Send Application</span>
+          <button className="action-btn application" onClick={() => handleAction('send_application')} disabled={applicationLoading} title="Send application link">
+            <span>{applicationLoading ? 'Creating...' : 'Send Application'}</span>
           </button>
           <button className="action-btn portal" onClick={() => handleAction('client_portal')} title="Access portals">
             <span>Portals</span>

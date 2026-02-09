@@ -5,8 +5,9 @@ import { loansAPI, activitiesAPI, schedulerAPI, dialerAPI, borrowerApplicationAP
 import { toast } from '../utils/toast';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import SMSModal from '../components/SMSModal';
-import TeamsModal from '../components/TeamsModal';
+import VideoCallScheduleModal from '../components/VideoCallScheduleModal';
 import RecordingModal from '../components/RecordingModal';
+import SendVideoModal from '../components/video/SendVideoModal';
 import VoicemailDrop from '../components/VoicemailDrop';
 import EscalationModal from '../components/EscalationModal';
 import CreateTaskModal from '../components/CreateTaskModal';
@@ -62,7 +63,8 @@ function ClientProfile() {
   const [activeBorrower, setActiveBorrower] = useState(0);
   const [saveTimeout, setSaveTimeout] = useState(null);
   const [showSMSModal, setShowSMSModal] = useState(false);
-  const [showTeamsModal, setShowTeamsModal] = useState(false);
+  const [showVideoCall, setShowVideoCall] = useState(false);
+  const [showSendVideoModal, setShowSendVideoModal] = useState(false);
   const [showRecordingModal, setShowRecordingModal] = useState(false);
   const [showVoicemailDrop, setShowVoicemailDrop] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -706,7 +708,7 @@ function ClientProfile() {
         setShowScheduleModal(true);
         break;
       case 'video':
-        setShowTeamsModal(true);
+        setShowVideoCall(true);
         break;
       case 'voicemail':
         setShowVoicemailDrop(true);
@@ -2296,7 +2298,10 @@ function ClientProfile() {
               <button className="action-btn voicemail" onClick={() => handleAction('voicemail')} disabled={!(client.borrower_phone || client.phone)} title="Drop voicemail">
                 <span>Voicemail Drop</span>
               </button>
-              <button className="action-btn application" onClick={() => handleAction('send_application')} title="Send application link">
+              <button className="action-btn record-video" onClick={() => setShowSendVideoModal(true)} disabled={!clientPortalData?.workspace_id} title={clientPortalData?.workspace_id ? "Record and send a video message" : "No client portal available"}>
+                <span>Record Video</span>
+              </button>
+              <button className="action-btn application" onClick={() => handleAction('send_application')} disabled={applicationLoading} title="Send application link">
                 <span>Send Application</span>
               </button>
               <button className="action-btn portal" onClick={() => handleAction('client_portal')} title="Access portals">
@@ -2319,12 +2324,27 @@ function ClientProfile() {
         />
       )}
 
-      {/* Teams Modal */}
-      {client && (
-        <TeamsModal
-          isOpen={showTeamsModal}
-          onClose={() => setShowTeamsModal(false)}
-          lead={client}
+      {/* Video Call Schedule Modal */}
+      <VideoCallScheduleModal
+        isOpen={showVideoCall}
+        onClose={() => setShowVideoCall(false)}
+        borrower={client}
+        onStartVideoCall={(data) => {
+          console.log('Video call started:', data);
+        }}
+      />
+
+      {/* Send Video Message Modal */}
+      {client && clientPortalData?.workspace_id && (
+        <SendVideoModal
+          isOpen={showSendVideoModal}
+          onClose={() => setShowSendVideoModal(false)}
+          recipientType="client"
+          recipientId={clientPortalData.workspace_id}
+          recipientName={client?.borrower_name || client?.name || 'Client'}
+          onSuccess={() => {
+            console.log('Video sent successfully');
+          }}
         />
       )}
 
