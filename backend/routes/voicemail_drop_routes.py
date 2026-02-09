@@ -353,13 +353,25 @@ def check_consent(lead_id: Optional[int], db: Session) -> Tuple[bool, str]:
             ).first()
 
             if borrower:
+                # Check if consent has been revoked
+                if borrower.consent_revoked_at is not None:
+                    return False, "Contact has revoked communication consent"
+
                 if borrower.communication_consent is False:
                     return False, "Contact has opted out of communications"
+
                 if borrower.marketing_consent is False:
                     # Allow transactional (loan status, doc requests) but warn about marketing
                     logger.info(
                         f"Lead {lead_id}: marketing_consent=False — "
                         "allowing transactional voicemail, blocking marketing"
+                    )
+
+                # FCC one-to-one consent: warn if consent_given_to is missing
+                if not getattr(borrower, 'consent_given_to', None):
+                    logger.info(
+                        f"Lead {lead_id}: consent_given_to not recorded — "
+                        "FCC one-to-one consent rule may not be satisfied"
                     )
 
     except ImportError:
@@ -1191,11 +1203,38 @@ async def send_voicemail_ringless(
             result = response.json()
             return {"success": True, "call_id": result.get("session_id", ""), "provider": "slybroadcast"}
 
+    elif provider == "dropcowboy":
+        # Drop Cowboy API: $0.004/msg, AI voice cloning, auto-TCPA compliance
+        # Docs: https://app.dropcowboy.com/api
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            payload = {
+                "api_key": api_key,
+                "phone_number": clean_number,
+                "caller_id": caller_id,
+                "audio_url": audio_url,
+            }
+            # Optional: per-contact personalization
+            if voicemail_drop_id:
+                payload["reference_id"] = str(voicemail_drop_id)
+
+            response = await client.post(
+                "https://api.dropcowboy.com/v1/ringless-voicemail",
+                json=payload,
+            )
+            if response.status_code not in (200, 201):
+                raise HTTPException(status_code=500, detail=f"Drop Cowboy error: {response.text}")
+            result = response.json()
+            return {
+                "success": True,
+                "call_id": result.get("id", result.get("message_id", "")),
+                "provider": "dropcowboy",
+            }
+
     # Generic stub for other providers
     logger.warning(f"RVM provider '{provider}' not implemented — falling back to error")
     raise HTTPException(
         status_code=503,
-        detail=f"RVM provider '{provider}' is not yet supported. Supported: slybroadcast"
+        detail=f"RVM provider '{provider}' is not yet supported. Supported: slybroadcast, dropcowboy"
     )
 
 
@@ -1686,10 +1725,11 @@ async def update_campaign(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-async def _dispatch_campaign_drops(campaign_id: int, user_name: str):
+async def _resolve_and_dispatch_campaign(campaign_id: int, user_id: int, user_name: str):
     """
-    Background task to actually send queued campaign drops via Vapi.
-    Respects throttle_rate (drops per minute) and campaign pause/cancel.
+    Background task to resolve contacts, create VoicemailDrop records, run compliance
+    checks, and dispatch drops via Vapi. Runs entirely in background to avoid
+    Railway's 30s request timeout on large campaigns.
     """
     import asyncio
     from db import SessionLocal
@@ -1709,8 +1749,79 @@ async def _dispatch_campaign_drops(campaign_id: int, user_name: str):
         template = db.query(VoicemailTemplate).filter(
             VoicemailTemplate.id == campaign.template_id
         ).first()
+        if not template:
+            campaign.status = "failed"
+            db.commit()
+            return
 
-        throttle_rate = campaign.throttle_rate or 10  # drops per minute
+        # --- Phase 1: Resolve contacts and create drop records ---
+        import main
+        Lead = main.Lead
+        contact_filter = campaign.contact_filter or {}
+
+        query = db.query(Lead).filter(Lead.phone != None, Lead.phone != "")
+        if contact_filter.get("status"):
+            query = query.filter(Lead.status == contact_filter["status"])
+        if contact_filter.get("source"):
+            query = query.filter(Lead.source == contact_filter["source"])
+
+        contacts = query.limit(1000).all()
+
+        created_count = 0
+        skipped_count = 0
+        delivery_method = template.delivery_method or os.getenv("VOICEMAIL_DELIVERY_METHOD", "vapi_ai")
+
+        for contact in contacts:
+            # Check for pause/cancel every 100 contacts
+            if (created_count + skipped_count) % 100 == 0 and (created_count + skipped_count) > 0:
+                db.refresh(campaign)
+                if campaign.status in ("paused", "cancelled"):
+                    break
+
+            is_allowed, reason = run_compliance_checks(contact.phone, contact.id, db)
+            if not is_allowed:
+                skipped_count += 1
+                continue
+
+            # Substitute variables in message
+            msg = template.message_text
+            first_name = getattr(contact, 'first_name', '') or ''
+            last_name = getattr(contact, 'last_name', '') or ''
+            msg = msg.replace("{{contact_name}}", f"{first_name} {last_name}".strip())
+            msg = msg.replace("{{first_name}}", first_name)
+            msg = msg.replace("{{last_name}}", last_name)
+            msg = msg.replace("{{loan_officer}}", user_name)
+            msg = msg.replace("{{company_name}}", os.getenv("COMPANY_NAME", "our office"))
+            msg = msg.replace("{{phone}}", getattr(contact, 'phone', '') or '')
+            msg = msg.replace("{{email}}", getattr(contact, 'email', '') or '')
+            msg = re.sub(r'\{\{[^}]+\}\}', '', msg)
+
+            drop = VoicemailDrop(
+                user_id=user_id,
+                lead_id=contact.id,
+                campaign_id=campaign.id,
+                template_id=template.id,
+                contact_name=f"{first_name} {last_name}".strip(),
+                phone_number=contact.phone,
+                message_text=msg,
+                delivery_method=delivery_method,
+                status='queued',
+            )
+            db.add(drop)
+            created_count += 1
+
+        campaign.total_contacts = created_count + skipped_count
+        db.commit()
+
+        logger.info(f"Campaign {campaign_id}: {created_count} drops created, {skipped_count} skipped")
+
+        if created_count == 0:
+            campaign.status = "completed"
+            db.commit()
+            return
+
+        # --- Phase 2: Dispatch queued drops ---
+        throttle_rate = campaign.throttle_rate or 10
         delay_between = 60.0 / throttle_rate
 
         queued_drops = db.query(VoicemailDrop).filter(
@@ -1722,7 +1833,6 @@ async def _dispatch_campaign_drops(campaign_id: int, user_name: str):
         failed = 0
 
         for drop in queued_drops:
-            # Refresh campaign status to check for pause/cancel
             db.refresh(campaign)
             if campaign.status in ("paused", "cancelled"):
                 logger.info(f"Campaign {campaign_id} {campaign.status} — stopping dispatch")
@@ -1757,8 +1867,6 @@ async def _dispatch_campaign_drops(campaign_id: int, user_name: str):
                 logger.error(f"Campaign {campaign_id} drop {drop.id} failed: {e}")
 
             db.commit()
-
-            # Throttle between sends
             await asyncio.sleep(delay_between)
 
         # Update campaign counts
@@ -1766,7 +1874,6 @@ async def _dispatch_campaign_drops(campaign_id: int, user_name: str):
         campaign.sent_count = sent
         campaign.failed_count = (campaign.failed_count or 0) + failed
 
-        # If all drops processed and campaign still running, mark completed
         remaining = db.query(VoicemailDrop).filter(
             VoicemailDrop.campaign_id == campaign_id,
             VoicemailDrop.status == "queued",
@@ -1780,6 +1887,11 @@ async def _dispatch_campaign_drops(campaign_id: int, user_name: str):
 
     except Exception as e:
         logger.error(f"Campaign {campaign_id} dispatch error: {e}", exc_info=True)
+        try:
+            campaign.status = "failed"
+            db.commit()
+        except Exception:
+            pass
     finally:
         db.close()
 
@@ -1792,11 +1904,11 @@ async def start_campaign(
     current_user=Depends(get_current_user),
 ):
     """
-    Start executing a campaign. Resolves contacts from filter, creates VoicemailDrop
-    records, and dispatches them via background task respecting throttle_rate.
+    Start executing a campaign. Validates campaign, marks as running, then offloads
+    contact resolution + compliance checks + dispatch to a background task
+    to avoid Railway's 30s request timeout on large campaigns.
     """
     VoicemailCampaign = get_voicemail_campaign_model()
-    VoicemailDrop = get_voicemail_drop_model()
     VoicemailTemplate = get_voicemail_template_model()
 
     try:
@@ -1820,82 +1932,24 @@ async def start_campaign(
         if not template:
             raise HTTPException(status_code=404, detail="Campaign template not found")
 
-        # Resolve contacts from filter
-        import main
-        Lead = main.Lead
-        contact_filter = campaign.contact_filter or {}
-
-        query = db.query(Lead).filter(Lead.phone != None, Lead.phone != "")
-
-        if contact_filter.get("status"):
-            query = query.filter(Lead.status == contact_filter["status"])
-        if contact_filter.get("source"):
-            query = query.filter(Lead.source == contact_filter["source"])
-
-        contacts = query.limit(1000).all()  # Safety cap
-
-        if not contacts:
-            raise HTTPException(status_code=400, detail="No contacts match the campaign filter")
-
-        # Create VoicemailDrop records for each contact
-        created_count = 0
-        skipped_count = 0
-        delivery_method = template.delivery_method or os.getenv("VOICEMAIL_DELIVERY_METHOD", "vapi_ai")
-
-        for contact in contacts:
-            # Run compliance checks
-            is_allowed, reason = run_compliance_checks(contact.phone, contact.id, db)
-            if not is_allowed:
-                skipped_count += 1
-                continue
-
-            # Substitute variables in message
-            msg = template.message_text
-            first_name = getattr(contact, 'first_name', '') or ''
-            last_name = getattr(contact, 'last_name', '') or ''
-            msg = msg.replace("{{contact_name}}", f"{first_name} {last_name}".strip())
-            msg = msg.replace("{{first_name}}", first_name)
-            msg = msg.replace("{{last_name}}", last_name)
-            msg = msg.replace("{{loan_officer}}", current_user.full_name or "your loan officer")
-            msg = msg.replace("{{company_name}}", os.getenv("COMPANY_NAME", "our office"))
-            msg = msg.replace("{{phone}}", getattr(contact, 'phone', '') or '')
-            msg = msg.replace("{{email}}", getattr(contact, 'email', '') or '')
-            # Strip any remaining unresolved {{variables}} so they aren't spoken literally
-            msg = re.sub(r'\{\{[^}]+\}\}', '', msg)
-
-            drop = VoicemailDrop(
-                user_id=current_user.id,
-                lead_id=contact.id,
-                campaign_id=campaign.id,
-                template_id=template.id,
-                contact_name=f"{getattr(contact, 'first_name', '')} {getattr(contact, 'last_name', '')}".strip(),
-                phone_number=contact.phone,
-                message_text=msg,
-                delivery_method=delivery_method,
-                status='queued',
-            )
-            db.add(drop)
-            created_count += 1
-
-        # Update campaign
+        # Mark campaign as running immediately (lightweight — no contact resolution here)
         campaign.status = "running"
         campaign.started_at = datetime.now(timezone.utc)
-        campaign.total_contacts = created_count + skipped_count
         db.commit()
 
-        # Dispatch drops in background
+        # Offload all heavy work to background
         user_name = current_user.full_name or "your loan officer"
-        background_tasks.add_task(_dispatch_campaign_drops, campaign_id, user_name)
+        background_tasks.add_task(
+            _resolve_and_dispatch_campaign, campaign_id, current_user.id, user_name
+        )
 
-        logger.info(f"Campaign {campaign_id} started: {created_count} drops queued, {skipped_count} skipped")
+        logger.info(f"Campaign {campaign_id} started — contact resolution running in background")
 
         return {
             "success": True,
             "campaign_id": campaign_id,
             "status": "running",
-            "drops_queued": created_count,
-            "skipped_compliance": skipped_count,
-            "message": f"Campaign started with {created_count} voicemail drops queued",
+            "message": "Campaign started. Contacts are being resolved and drops will be dispatched in the background.",
         }
 
     except HTTPException:
@@ -1989,3 +2043,116 @@ def _serialize_campaign(campaign) -> dict:
         "total_cost": float(campaign.total_cost) if campaign.total_cost else 0,
         "created_at": campaign.created_at.isoformat() if campaign.created_at else None,
     }
+
+
+# =============================================================================
+# Consent Revocation
+# =============================================================================
+
+@router.post("/consent/revoke")
+async def revoke_consent(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Revoke communication consent for a phone number or email.
+    TCPA (effective April 2025) requires honoring revocation within 10 business days.
+
+    This endpoint can be called:
+    - By the contact via a public opt-out link
+    - By staff processing a verbal/written revocation request
+    - Automatically by STOP reply processing (SMS webhook)
+
+    Body: { "phone_number": str, "email": str (optional), "method": str }
+    """
+    try:
+        data = await request.json()
+        phone_number = data.get("phone_number", "")
+        email = data.get("email", "")
+        method = data.get("method", "web_form")  # web_form, sms_stop, email, phone, verbal
+
+        if not phone_number and not email:
+            raise HTTPException(status_code=400, detail="phone_number or email is required")
+
+        revoked_count = 0
+
+        # 1. Add to internal DNC list
+        if phone_number:
+            from database.models.dialer import ContactDNCStatus
+            digits = _normalize_phone(phone_number)
+
+            existing = db.query(ContactDNCStatus).filter(
+                or_(
+                    ContactDNCStatus.phone_number == phone_number,
+                    ContactDNCStatus.phone_number == digits,
+                    ContactDNCStatus.phone_number == f"+1{digits}",
+                )
+            ).first()
+
+            if not existing:
+                dnc_entry = ContactDNCStatus(
+                    phone_number=f"+1{digits}" if len(digits) == 10 else digits,
+                    reason=f"Consent revoked via {method}",
+                    source="consent_revocation",
+                )
+                db.add(dnc_entry)
+
+        # 2. Update BorrowerProfile consent fields
+        try:
+            from database.models.borrower import BorrowerProfile
+            filters = []
+            if phone_number:
+                digits = _normalize_phone(phone_number)
+                filters.extend([
+                    BorrowerProfile.phone == phone_number,
+                    BorrowerProfile.phone == digits,
+                ])
+            if email:
+                filters.append(BorrowerProfile.email == email)
+
+            if filters:
+                borrowers = db.query(BorrowerProfile).filter(or_(*filters)).all()
+                for borrower in borrowers:
+                    borrower.communication_consent = False
+                    borrower.marketing_consent = False
+                    borrower.consent_revoked_at = datetime.now(timezone.utc)
+                    borrower.consent_revocation_method = method
+                    revoked_count += 1
+        except ImportError:
+            logger.debug("BorrowerProfile not available for consent revocation")
+
+        # 3. Cancel any queued voicemail drops for this number
+        if phone_number:
+            VoicemailDrop = get_voicemail_drop_model()
+            digits = _normalize_phone(phone_number)
+            cancelled = db.query(VoicemailDrop).filter(
+                VoicemailDrop.status.in_(["queued", "pending"]),
+                or_(
+                    VoicemailDrop.phone_number == phone_number,
+                    VoicemailDrop.phone_number == digits,
+                    VoicemailDrop.phone_number == f"+1{digits}",
+                ),
+            ).update(
+                {"status": "cancelled", "error_message": f"Consent revoked via {method}"},
+                synchronize_session=False,
+            )
+            logger.info(f"Cancelled {cancelled} queued drops for revoked number")
+
+        db.commit()
+
+        logger.info(
+            f"Consent revocation processed: phone={phone_number}, email={email}, "
+            f"method={method}, profiles_updated={revoked_count}"
+        )
+
+        return {
+            "success": True,
+            "message": "Consent revocation processed",
+            "profiles_updated": revoked_count,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error processing consent revocation: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))

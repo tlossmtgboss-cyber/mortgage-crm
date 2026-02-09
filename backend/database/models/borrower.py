@@ -45,11 +45,18 @@ class BorrowerProfile(Base):
     provider_user_id = Column(String, nullable=False)
     raw_profile = Column(JSON)
 
-    # Consent tracking
+    # Consent tracking (basic)
     communication_consent = Column(Boolean, default=True)
     marketing_consent = Column(Boolean, default=False)
     consent_captured_at = Column(DateTime)
     consent_ip_address = Column(String)
+
+    # Granular consent tracking (FCC Jan 2025 one-to-one consent rule)
+    consent_given_to = Column(String(255))       # Company or user name consent was given to
+    consent_method = Column(String(50))           # 'web_form', 'verbal', 'written', 'sms_optin'
+    consent_text = Column(Text)                   # Exact disclosure language agreed to
+    consent_revoked_at = Column(DateTime)         # When consent was revoked (if applicable)
+    consent_revocation_method = Column(String(50))  # 'sms_stop', 'email', 'phone', 'web_form'
 
     # Timestamps
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

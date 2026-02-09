@@ -13,6 +13,9 @@ function VoicemailDrop({ phoneNumber, recipientName, leadId, loanId, onClose }) 
   const [status, setStatus] = useState('idle'); // idle, success, error
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const recordingTimerRef = useRef(null);
+  const MAX_RECORDING_SECONDS = 30;
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -29,6 +32,9 @@ function VoicemailDrop({ phoneNumber, recipientName, leadId, loanId, onClose }) 
       }
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         mediaRecorderRef.current.stop();
+      }
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
       }
     };
   }, []);
@@ -88,6 +94,24 @@ function VoicemailDrop({ phoneNumber, recipientName, leadId, loanId, onClose }) 
 
       mediaRecorder.start();
       setIsRecording(true);
+      setRecordingSeconds(0);
+
+      // Start countdown timer
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingSeconds(prev => {
+          if (prev + 1 >= MAX_RECORDING_SECONDS) {
+            // Auto-stop at max duration
+            if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+              mediaRecorderRef.current.stop();
+            }
+            setIsRecording(false);
+            clearInterval(recordingTimerRef.current);
+            recordingTimerRef.current = null;
+            return MAX_RECORDING_SECONDS;
+          }
+          return prev + 1;
+        });
+      }, 1000);
 
     } catch (error) {
       console.error('Error accessing microphone:', error);
@@ -100,6 +124,10 @@ function VoicemailDrop({ phoneNumber, recipientName, leadId, loanId, onClose }) 
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
+    }
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
     }
   };
 
@@ -253,7 +281,16 @@ function VoicemailDrop({ phoneNumber, recipientName, leadId, loanId, onClose }) 
               {isRecording && (
                 <div className="recording-active">
                   <div className="pulse-icon">🔴</div>
-                  <p>Recording... Speak your message now</p>
+                  <p>Recording... {MAX_RECORDING_SECONDS - recordingSeconds}s remaining</p>
+                  <div style={{
+                    width: '100%', height: '4px', background: '#e5e7eb', borderRadius: '2px', margin: '8px 0'
+                  }}>
+                    <div style={{
+                      width: `${(recordingSeconds / MAX_RECORDING_SECONDS) * 100}%`,
+                      height: '100%', background: recordingSeconds >= MAX_RECORDING_SECONDS - 5 ? '#ef4444' : '#3b82f6',
+                      borderRadius: '2px', transition: 'width 1s linear'
+                    }} />
+                  </div>
                   <button className="btn-stop" onClick={stopRecording}>
                     Stop Recording
                   </button>
