@@ -343,7 +343,8 @@ class VoicemailDrop(Base):
     message_variables = Column(JSON)
     audio_url = Column(String(500))
 
-    # Vapi details
+    # Delivery
+    delivery_method = Column(String(50), default='vapi_ai')  # vapi_ai, ringless
     vapi_call_id = Column(String(255), index=True)
     vapi_assistant_id = Column(String(255))
 
@@ -388,6 +389,15 @@ class VoicemailTemplate(Base):
 
     message_text = Column(Text, nullable=False)
     variables = Column(JSON)  # ["contact_name", "loan_officer"]
+    audio_url = Column(String(500))  # Pre-recorded audio file URL
+
+    # Voice configuration
+    voice_provider = Column(String(50), default='11labs')  # 11labs, openai, deepgram
+    voice_id = Column(String(100), default='paula')  # Provider-specific voice ID
+    voice_speed = Column(Numeric(3, 2), default=1.0)  # 0.5 - 2.0
+
+    # Delivery method
+    delivery_method = Column(String(50), default='vapi_ai')  # vapi_ai, ringless
 
     # Usage tracking
     times_used = Column(Integer, default=0)

@@ -1055,6 +1055,76 @@ export const voicemailAPI = {
     const response = await api.get('/api/v1/voicemail/analytics', { params });
     return response.data;
   },
+
+  // Update voicemail template
+  updateTemplate: async (templateId, data) => {
+    const response = await api.put(`/api/v1/voicemail/templates/${templateId}`, data);
+    return response.data;
+  },
+
+  // Delete voicemail template
+  deleteTemplate: async (templateId) => {
+    const response = await api.delete(`/api/v1/voicemail/templates/${templateId}`);
+    return response.data;
+  },
+
+  // Upload audio for template
+  uploadTemplateAudio: async (templateId, formData) => {
+    const response = await api.post(`/api/v1/voicemail/templates/${templateId}/upload-audio`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
+  },
+
+  // Delete template audio
+  deleteTemplateAudio: async (templateId) => {
+    const response = await api.delete(`/api/v1/voicemail/templates/${templateId}/audio`);
+    return response.data;
+  },
+
+  // Preview voice (TTS)
+  previewVoice: async (data) => {
+    const response = await api.post('/api/v1/voicemail/preview', data, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  // Campaign CRUD
+  getCampaigns: async (params = {}) => {
+    const response = await api.get('/api/v1/voicemail/campaigns', { params });
+    return ensureArray(response.data, 'campaigns');
+  },
+
+  createCampaign: async (data) => {
+    const response = await api.post('/api/v1/voicemail/campaigns', data);
+    return response.data;
+  },
+
+  getCampaign: async (campaignId) => {
+    const response = await api.get(`/api/v1/voicemail/campaigns/${campaignId}`);
+    return response.data;
+  },
+
+  updateCampaign: async (campaignId, data) => {
+    const response = await api.put(`/api/v1/voicemail/campaigns/${campaignId}`, data);
+    return response.data;
+  },
+
+  startCampaign: async (campaignId) => {
+    const response = await api.post(`/api/v1/voicemail/campaigns/${campaignId}/start`);
+    return response.data;
+  },
+
+  pauseCampaign: async (campaignId) => {
+    const response = await api.post(`/api/v1/voicemail/campaigns/${campaignId}/pause`);
+    return response.data;
+  },
+
+  cancelCampaign: async (campaignId) => {
+    const response = await api.post(`/api/v1/voicemail/campaigns/${campaignId}/cancel`);
+    return response.data;
+  },
 };
 
 // AI Receptionist Dashboard API

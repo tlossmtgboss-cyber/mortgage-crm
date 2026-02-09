@@ -8,10 +8,12 @@ Extracted from main.py for better code organization.
 import os
 import logging
 import re
+import uuid
 from datetime import datetime, timedelta, timezone, time as dt_time
 from typing import Optional, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
+from fastapi.responses import Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
@@ -185,6 +187,12 @@ def get_voicemail_template_model():
     """Get VoicemailTemplate model - imports from main at runtime"""
     import main
     return main.VoicemailTemplate
+
+
+def get_voicemail_campaign_model():
+    """Get VoicemailCampaign model - imports from main at runtime"""
+    import main
+    return main.VoicemailCampaign
 
 
 # =============================================================================
@@ -418,7 +426,11 @@ async def send_voicemail_via_vapi(
     recipient_name: str,
     user_name: str,
     voicemail_drop_id: int,
-    db: Session
+    db: Session,
+    voice_provider: str = "11labs",
+    voice_id: str = "paula",
+    voice_speed: float = 1.0,
+    audio_url: str = None,
 ) -> dict:
     """Helper function to send voicemail using Vapi AI"""
     import httpx
@@ -447,6 +459,14 @@ async def send_voicemail_via_vapi(
         f"Feel free to call us back at your convenience. Have a great day!"
     )
 
+    # Build voice config from template settings
+    voice_config = {
+        "provider": voice_provider or "11labs",
+        "voiceId": voice_id or "paula",
+    }
+    if voice_speed and voice_speed != 1.0:
+        voice_config["speed"] = float(voice_speed)
+
     # Vapi call configuration
     vapi_payload = {
         "phoneNumberId": vapi_phone_number_id,
@@ -462,10 +482,7 @@ async def send_voicemail_via_vapi(
                 "model": "gpt-4",
                 "temperature": 0.7
             },
-            "voice": {
-                "provider": "11labs",
-                "voiceId": "paula"  # Natural, professional female voice
-            },
+            "voice": voice_config,
             "endCallFunctionEnabled": True,
             "endCallMessage": "Thank you, goodbye!",
             "voicemailDetection": {
@@ -479,6 +496,10 @@ async def send_voicemail_via_vapi(
             "type": "voicemail_drop"
         }
     }
+
+    # If audio URL is provided, include it for pre-recorded playback
+    if audio_url:
+        vapi_payload["assistantOverrides"]["voicemailDetection"]["voicemailAudioUrl"] = audio_url
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -572,6 +593,28 @@ async def create_voicemail_drop(
         if not is_allowed:
             raise HTTPException(status_code=429, detail=rate_msg)
 
+        # Load template voice settings if template_id provided
+        VoicemailTemplate = get_voicemail_template_model()
+        voice_provider = "11labs"
+        voice_id = "paula"
+        voice_speed = 1.0
+        audio_url = None
+        delivery_method = os.getenv("VOICEMAIL_DELIVERY_METHOD", "vapi_ai")
+
+        if template_id:
+            template = db.query(VoicemailTemplate).filter(
+                VoicemailTemplate.id == template_id
+            ).first()
+            if template:
+                voice_provider = template.voice_provider or voice_provider
+                voice_id = template.voice_id or voice_id
+                voice_speed = float(template.voice_speed) if template.voice_speed else voice_speed
+                audio_url = template.audio_url
+                delivery_method = template.delivery_method or delivery_method
+                # Increment usage
+                template.times_used = (template.times_used or 0) + 1
+                template.last_used_at = datetime.now(timezone.utc)
+
         # Create voicemail drop record
         voicemail_drop = VoicemailDrop(
             user_id=current_user.id,
@@ -581,6 +624,7 @@ async def create_voicemail_drop(
             contact_name=recipient_name,
             phone_number=phone_number,
             message_text=message,
+            delivery_method=delivery_method,
             status='pending'
         )
         db.add(voicemail_drop)
@@ -596,16 +640,28 @@ async def create_voicemail_drop(
         db.add(event)
         db.commit()
 
-        # Send voicemail via Vapi
+        # Send voicemail via configured delivery method
         try:
-            vapi_result = await send_voicemail_via_vapi(
-                phone_number=phone_number,
-                message=message,
-                recipient_name=recipient_name,
-                user_name=current_user.full_name or "your loan officer",
-                voicemail_drop_id=voicemail_drop.id,
-                db=db
-            )
+            if delivery_method == "ringless":
+                vapi_result = await send_voicemail_ringless(
+                    phone_number=phone_number,
+                    message=message,
+                    audio_url=audio_url,
+                    voicemail_drop_id=voicemail_drop.id,
+                )
+            else:
+                vapi_result = await send_voicemail_via_vapi(
+                    phone_number=phone_number,
+                    message=message,
+                    recipient_name=recipient_name,
+                    user_name=current_user.full_name or "your loan officer",
+                    voicemail_drop_id=voicemail_drop.id,
+                    db=db,
+                    voice_provider=voice_provider,
+                    voice_id=voice_id,
+                    voice_speed=voice_speed,
+                    audio_url=audio_url,
+                )
 
             # Update voicemail drop with Vapi call ID
             voicemail_drop.vapi_call_id = vapi_result.get("call_id")
@@ -795,7 +851,12 @@ async def get_voicemail_templates(
                     "variables": t.variables,
                     "is_default": t.is_default,
                     "times_used": t.times_used,
-                    "last_used_at": t.last_used_at.isoformat() if t.last_used_at else None
+                    "last_used_at": t.last_used_at.isoformat() if t.last_used_at else None,
+                    "audio_url": t.audio_url,
+                    "voice_provider": t.voice_provider,
+                    "voice_id": t.voice_id,
+                    "voice_speed": float(t.voice_speed) if t.voice_speed else 1.0,
+                    "delivery_method": t.delivery_method,
                 }
                 for t in templates
             ]
@@ -835,6 +896,10 @@ async def create_voicemail_template(
             category=category,
             message_text=message_text,
             variables=variables,
+            voice_provider=data.get("voice_provider", "11labs"),
+            voice_id=data.get("voice_id", "paula"),
+            voice_speed=data.get("voice_speed", 1.0),
+            delivery_method=data.get("delivery_method", "vapi_ai"),
             is_active=True,
             is_default=False
         )
@@ -852,7 +917,12 @@ async def create_voicemail_template(
                 "name": template.name,
                 "category": template.category,
                 "message_text": template.message_text,
-                "variables": template.variables
+                "variables": template.variables,
+                "audio_url": template.audio_url,
+                "voice_provider": template.voice_provider,
+                "voice_id": template.voice_id,
+                "voice_speed": float(template.voice_speed) if template.voice_speed else 1.0,
+                "delivery_method": template.delivery_method,
             }
         }
 
@@ -997,3 +1067,756 @@ async def get_voicemail_analytics(
     except Exception as e:
         logger.error(f"Error fetching analytics: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# Ringless Voicemail Delivery (Stub)
+# =============================================================================
+
+async def send_voicemail_ringless(
+    phone_number: str,
+    message: str,
+    audio_url: str = None,
+    voicemail_drop_id: int = None,
+) -> dict:
+    """
+    Send voicemail via ringless voicemail (RVM) provider.
+
+    Requires an RVM provider API key (e.g., Drop Cowboy, Stratics, SlyBroadcast).
+    Set RINGLESS_VM_API_KEY and RINGLESS_VM_PROVIDER env vars to enable.
+
+    Falls back to error if no provider is configured.
+    """
+    import httpx
+
+    provider = os.getenv("RINGLESS_VM_PROVIDER", "")
+    api_key = os.getenv("RINGLESS_VM_API_KEY", "")
+    caller_id = os.getenv("RINGLESS_VM_CALLER_ID", "")
+
+    if not api_key or not provider:
+        raise HTTPException(
+            status_code=503,
+            detail="Ringless voicemail provider not configured. Set RINGLESS_VM_PROVIDER and RINGLESS_VM_API_KEY."
+        )
+
+    if not audio_url:
+        raise HTTPException(
+            status_code=400,
+            detail="Ringless voicemail requires a pre-recorded audio file. Upload audio to the template first."
+        )
+
+    clean_number = ''.join(filter(str.isdigit, phone_number))
+    if len(clean_number) == 10:
+        clean_number = f"1{clean_number}"
+
+    # Provider-specific implementations
+    if provider == "slybroadcast":
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                "https://api.slybroadcast.com/v1/vmb",
+                data={
+                    "c_uid": api_key,
+                    "c_password": os.getenv("RINGLESS_VM_PASSWORD", ""),
+                    "c_callerID": caller_id,
+                    "c_phone": clean_number,
+                    "c_url": audio_url,
+                    "c_date": "now",
+                },
+            )
+            if response.status_code != 200:
+                raise HTTPException(status_code=500, detail=f"SlyBroadcast error: {response.text}")
+            result = response.json()
+            return {"success": True, "call_id": result.get("session_id", ""), "provider": "slybroadcast"}
+
+    # Generic stub for other providers
+    logger.warning(f"RVM provider '{provider}' not implemented — falling back to error")
+    raise HTTPException(
+        status_code=503,
+        detail=f"RVM provider '{provider}' is not yet supported. Supported: slybroadcast"
+    )
+
+
+# =============================================================================
+# Audio Upload for Templates
+# =============================================================================
+
+ALLOWED_AUDIO_UPLOAD_TYPES = {
+    "audio/mpeg", "audio/mp3", "audio/wav", "audio/wave", "audio/x-wav",
+    "audio/ogg", "audio/m4a", "audio/x-m4a", "audio/mp4",
+}
+ALLOWED_AUDIO_UPLOAD_EXTS = {".mp3", ".wav", ".ogg", ".m4a", ".mp4"}
+MAX_TEMPLATE_AUDIO_SIZE = 10 * 1024 * 1024  # 10 MB
+
+
+@router.post("/templates/{template_id}/upload-audio")
+async def upload_template_audio(
+    template_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """
+    Upload a pre-recorded audio file for a voicemail template.
+
+    Accepts multipart/form-data with an 'audio_file' field.
+    Max 10 MB, formats: mp3, wav, ogg, m4a.
+    """
+    VoicemailTemplate = get_voicemail_template_model()
+
+    try:
+        template = db.query(VoicemailTemplate).filter(
+            VoicemailTemplate.id == template_id,
+            or_(VoicemailTemplate.user_id == current_user.id, VoicemailTemplate.user_id == None),
+        ).first()
+
+        if not template:
+            raise HTTPException(status_code=404, detail="Template not found")
+
+        form_data = await request.form()
+        audio_file = form_data.get("audio_file")
+        if not audio_file:
+            raise HTTPException(status_code=400, detail="audio_file is required")
+
+        filename = getattr(audio_file, 'filename', '') or 'audio.mp3'
+        content_type = getattr(audio_file, 'content_type', '') or ''
+        file_ext = os.path.splitext(filename)[1].lower()
+
+        if file_ext not in ALLOWED_AUDIO_UPLOAD_EXTS:
+            raise HTTPException(status_code=400, detail=f"Invalid file type. Allowed: {', '.join(ALLOWED_AUDIO_UPLOAD_EXTS)}")
+
+        audio_data = await audio_file.read()
+        if len(audio_data) > MAX_TEMPLATE_AUDIO_SIZE:
+            raise HTTPException(status_code=413, detail=f"File too large ({len(audio_data) // (1024*1024)}MB). Max: 10MB")
+        if len(audio_data) == 0:
+            raise HTTPException(status_code=400, detail="Audio file is empty")
+
+        # Save to uploads directory
+        upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", "voicemail_audio")
+        os.makedirs(upload_dir, exist_ok=True)
+
+        safe_name = f"{template_id}_{uuid.uuid4().hex[:8]}{file_ext}"
+        file_path = os.path.join(upload_dir, safe_name)
+
+        with open(file_path, "wb") as f:
+            f.write(audio_data)
+
+        # Generate URL (relative — frontend/proxy will serve)
+        audio_url = f"/api/v1/voicemail/audio/{safe_name}"
+
+        template.audio_url = audio_url
+        db.commit()
+
+        logger.info(f"Uploaded audio for template {template_id}: {safe_name}")
+
+        return {
+            "success": True,
+            "audio_url": audio_url,
+            "file_size": len(audio_data),
+            "filename": safe_name,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error uploading template audio: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/audio/{filename}")
+async def serve_voicemail_audio(filename: str):
+    """Serve uploaded voicemail audio files."""
+    # Sanitize filename to prevent directory traversal
+    safe_name = os.path.basename(filename)
+    upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", "voicemail_audio")
+    file_path = os.path.join(upload_dir, safe_name)
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Audio file not found")
+
+    ext = os.path.splitext(safe_name)[1].lower()
+    mime_types = {".mp3": "audio/mpeg", ".wav": "audio/wav", ".ogg": "audio/ogg", ".m4a": "audio/mp4"}
+    content_type = mime_types.get(ext, "audio/mpeg")
+
+    with open(file_path, "rb") as f:
+        data = f.read()
+
+    return Response(content=data, media_type=content_type)
+
+
+@router.delete("/templates/{template_id}/audio")
+async def delete_template_audio(
+    template_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Remove audio file from a voicemail template."""
+    VoicemailTemplate = get_voicemail_template_model()
+
+    template = db.query(VoicemailTemplate).filter(
+        VoicemailTemplate.id == template_id,
+        VoicemailTemplate.user_id == current_user.id,
+    ).first()
+
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    if template.audio_url:
+        # Delete physical file
+        safe_name = os.path.basename(template.audio_url)
+        upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", "voicemail_audio")
+        file_path = os.path.join(upload_dir, safe_name)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+        template.audio_url = None
+        db.commit()
+
+    return {"success": True, "message": "Audio removed"}
+
+
+# =============================================================================
+# Voice Preview (TTS)
+# =============================================================================
+
+@router.post("/preview")
+async def preview_voicemail_voice(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """
+    Generate a TTS audio preview of a voicemail message.
+
+    Request body:
+    {
+        "message": "Hello, this is a test voicemail...",
+        "voice": "alloy",          // OpenAI voice: alloy, echo, fable, onyx, nova, shimmer
+        "speed": 1.0               // 0.25 - 4.0
+    }
+
+    Returns audio/mpeg binary.
+    """
+    import httpx
+
+    try:
+        data = await request.json()
+        message = data.get("message", "").strip()
+        voice = data.get("voice", "nova")
+        speed = data.get("speed", 1.0)
+
+        if not message:
+            raise HTTPException(status_code=400, detail="Message text is required")
+
+        # Limit preview length
+        if len(message) > 1000:
+            message = message[:1000]
+
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+        if not openai_api_key:
+            raise HTTPException(status_code=503, detail="OpenAI API key not configured")
+
+        # Clamp speed
+        speed = max(0.25, min(4.0, float(speed)))
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                "https://api.openai.com/v1/audio/speech",
+                headers={
+                    "Authorization": f"Bearer {openai_api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": "tts-1",
+                    "input": message,
+                    "voice": voice,
+                    "speed": speed,
+                    "response_format": "mp3",
+                },
+            )
+
+            if response.status_code != 200:
+                logger.error(f"OpenAI TTS error: {response.text}")
+                raise HTTPException(status_code=500, detail="Voice preview generation failed")
+
+            return Response(
+                content=response.content,
+                media_type="audio/mpeg",
+                headers={"Content-Disposition": "inline; filename=preview.mp3"},
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating voice preview: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# Template Updates (voice config, edit, delete)
+# =============================================================================
+
+@router.put("/templates/{template_id}")
+async def update_voicemail_template(
+    template_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Update a voicemail template (name, message, voice settings, delivery method)."""
+    VoicemailTemplate = get_voicemail_template_model()
+
+    try:
+        template = db.query(VoicemailTemplate).filter(
+            VoicemailTemplate.id == template_id,
+            VoicemailTemplate.user_id == current_user.id,
+        ).first()
+
+        if not template:
+            raise HTTPException(status_code=404, detail="Template not found")
+
+        data = await request.json()
+
+        if "name" in data:
+            template.name = data["name"]
+        if "category" in data:
+            template.category = data["category"]
+        if "message_text" in data:
+            template.message_text = data["message_text"]
+        if "variables" in data:
+            template.variables = data["variables"]
+        if "voice_provider" in data:
+            template.voice_provider = data["voice_provider"]
+        if "voice_id" in data:
+            template.voice_id = data["voice_id"]
+        if "voice_speed" in data:
+            template.voice_speed = data["voice_speed"]
+        if "delivery_method" in data:
+            template.delivery_method = data["delivery_method"]
+
+        db.commit()
+        db.refresh(template)
+
+        return {
+            "success": True,
+            "template": {
+                "id": template.id,
+                "name": template.name,
+                "category": template.category,
+                "message_text": template.message_text,
+                "variables": template.variables,
+                "audio_url": template.audio_url,
+                "voice_provider": template.voice_provider,
+                "voice_id": template.voice_id,
+                "voice_speed": float(template.voice_speed) if template.voice_speed else 1.0,
+                "delivery_method": template.delivery_method,
+            },
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating template: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/templates/{template_id}")
+async def delete_voicemail_template(
+    template_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Soft-delete a voicemail template (sets is_active=False)."""
+    VoicemailTemplate = get_voicemail_template_model()
+
+    template = db.query(VoicemailTemplate).filter(
+        VoicemailTemplate.id == template_id,
+        VoicemailTemplate.user_id == current_user.id,
+    ).first()
+
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    template.is_active = False
+    db.commit()
+
+    return {"success": True, "message": "Template deleted"}
+
+
+# =============================================================================
+# Campaign CRUD + Execution
+# =============================================================================
+
+@router.post("/campaigns")
+async def create_campaign(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """
+    Create a voicemail campaign.
+
+    Request body:
+    {
+        "name": "Rate Lock Reminder Blast",
+        "description": "Remind all closing-stage leads about rate locks",
+        "template_id": 5,
+        "contact_filter": {"status": "closing", "tags": ["hot_lead"]},
+        "throttle_rate": 50,
+        "scheduled_at": "2026-02-10T14:00:00Z"  // optional — null = draft
+    }
+    """
+    VoicemailCampaign = get_voicemail_campaign_model()
+    VoicemailTemplate = get_voicemail_template_model()
+
+    try:
+        data = await request.json()
+
+        name = data.get("name", "").strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="Campaign name is required")
+
+        template_id = data.get("template_id")
+        if template_id:
+            template = db.query(VoicemailTemplate).filter(
+                VoicemailTemplate.id == template_id,
+                VoicemailTemplate.is_active == True,
+            ).first()
+            if not template:
+                raise HTTPException(status_code=404, detail="Template not found")
+
+        scheduled_at = None
+        if data.get("scheduled_at"):
+            scheduled_at = datetime.fromisoformat(data["scheduled_at"].replace("Z", "+00:00"))
+
+        campaign = VoicemailCampaign(
+            user_id=current_user.id,
+            name=name,
+            description=data.get("description", ""),
+            template_id=template_id,
+            contact_filter=data.get("contact_filter", {}),
+            throttle_rate=data.get("throttle_rate", 100),
+            scheduled_at=scheduled_at,
+            status="scheduled" if scheduled_at else "draft",
+        )
+        db.add(campaign)
+        db.commit()
+        db.refresh(campaign)
+
+        logger.info(f"Created campaign {campaign.id}: {name}")
+
+        return {
+            "success": True,
+            "campaign": _serialize_campaign(campaign),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating campaign: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/campaigns")
+async def list_campaigns(
+    status: str = None,
+    limit: int = 20,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """List voicemail campaigns for current user."""
+    VoicemailCampaign = get_voicemail_campaign_model()
+
+    try:
+        query = db.query(VoicemailCampaign).filter(
+            VoicemailCampaign.user_id == current_user.id,
+        )
+
+        if status:
+            query = query.filter(VoicemailCampaign.status == status)
+
+        total = query.count()
+        campaigns = query.order_by(VoicemailCampaign.created_at.desc()).offset(offset).limit(limit).all()
+
+        return {
+            "success": True,
+            "total": total,
+            "campaigns": [_serialize_campaign(c) for c in campaigns],
+        }
+
+    except Exception as e:
+        logger.error(f"Error listing campaigns: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/campaigns/{campaign_id}")
+async def get_campaign(
+    campaign_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Get campaign details."""
+    VoicemailCampaign = get_voicemail_campaign_model()
+
+    campaign = db.query(VoicemailCampaign).filter(
+        VoicemailCampaign.id == campaign_id,
+        VoicemailCampaign.user_id == current_user.id,
+    ).first()
+
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    return {"success": True, "campaign": _serialize_campaign(campaign)}
+
+
+@router.put("/campaigns/{campaign_id}")
+async def update_campaign(
+    campaign_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Update a draft/scheduled campaign."""
+    VoicemailCampaign = get_voicemail_campaign_model()
+
+    try:
+        campaign = db.query(VoicemailCampaign).filter(
+            VoicemailCampaign.id == campaign_id,
+            VoicemailCampaign.user_id == current_user.id,
+        ).first()
+
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+
+        if campaign.status not in ("draft", "scheduled"):
+            raise HTTPException(status_code=400, detail="Can only edit draft or scheduled campaigns")
+
+        data = await request.json()
+
+        if "name" in data:
+            campaign.name = data["name"]
+        if "description" in data:
+            campaign.description = data["description"]
+        if "template_id" in data:
+            campaign.template_id = data["template_id"]
+        if "contact_filter" in data:
+            campaign.contact_filter = data["contact_filter"]
+        if "throttle_rate" in data:
+            campaign.throttle_rate = data["throttle_rate"]
+        if "scheduled_at" in data:
+            if data["scheduled_at"]:
+                campaign.scheduled_at = datetime.fromisoformat(data["scheduled_at"].replace("Z", "+00:00"))
+                campaign.status = "scheduled"
+            else:
+                campaign.scheduled_at = None
+                campaign.status = "draft"
+
+        db.commit()
+        db.refresh(campaign)
+
+        return {"success": True, "campaign": _serialize_campaign(campaign)}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating campaign: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/campaigns/{campaign_id}/start")
+async def start_campaign(
+    campaign_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """
+    Start executing a campaign. Resolves contacts from filter, creates VoicemailDrop
+    records, and begins sending in batches respecting throttle_rate.
+    """
+    VoicemailCampaign = get_voicemail_campaign_model()
+    VoicemailDrop = get_voicemail_drop_model()
+    VoicemailTemplate = get_voicemail_template_model()
+
+    try:
+        campaign = db.query(VoicemailCampaign).filter(
+            VoicemailCampaign.id == campaign_id,
+            VoicemailCampaign.user_id == current_user.id,
+        ).first()
+
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+
+        if campaign.status not in ("draft", "scheduled", "paused"):
+            raise HTTPException(status_code=400, detail=f"Cannot start campaign in '{campaign.status}' status")
+
+        if not campaign.template_id:
+            raise HTTPException(status_code=400, detail="Campaign requires a template")
+
+        template = db.query(VoicemailTemplate).filter(
+            VoicemailTemplate.id == campaign.template_id
+        ).first()
+        if not template:
+            raise HTTPException(status_code=404, detail="Campaign template not found")
+
+        # Resolve contacts from filter
+        import main
+        Lead = main.Lead
+        contact_filter = campaign.contact_filter or {}
+
+        query = db.query(Lead).filter(Lead.phone != None, Lead.phone != "")
+
+        if contact_filter.get("status"):
+            query = query.filter(Lead.status == contact_filter["status"])
+        if contact_filter.get("source"):
+            query = query.filter(Lead.source == contact_filter["source"])
+
+        contacts = query.limit(1000).all()  # Safety cap
+
+        if not contacts:
+            raise HTTPException(status_code=400, detail="No contacts match the campaign filter")
+
+        # Create VoicemailDrop records for each contact
+        created_count = 0
+        skipped_count = 0
+        delivery_method = template.delivery_method or os.getenv("VOICEMAIL_DELIVERY_METHOD", "vapi_ai")
+
+        for contact in contacts:
+            # Run compliance checks
+            is_allowed, reason = run_compliance_checks(contact.phone, contact.id, db)
+            if not is_allowed:
+                skipped_count += 1
+                continue
+
+            # Substitute variables in message
+            msg = template.message_text
+            if template.variables:
+                first_name = getattr(contact, 'first_name', '') or ''
+                last_name = getattr(contact, 'last_name', '') or ''
+                msg = msg.replace("{{contact_name}}", f"{first_name} {last_name}".strip())
+                msg = msg.replace("{{first_name}}", first_name)
+                msg = msg.replace("{{last_name}}", last_name)
+                msg = msg.replace("{{loan_officer}}", current_user.full_name or "your loan officer")
+
+            drop = VoicemailDrop(
+                user_id=current_user.id,
+                lead_id=contact.id,
+                campaign_id=campaign.id,
+                template_id=template.id,
+                contact_name=f"{getattr(contact, 'first_name', '')} {getattr(contact, 'last_name', '')}".strip(),
+                phone_number=contact.phone,
+                message_text=msg,
+                delivery_method=delivery_method,
+                status='queued',
+            )
+            db.add(drop)
+            created_count += 1
+
+        # Update campaign
+        campaign.status = "running"
+        campaign.started_at = datetime.now(timezone.utc)
+        campaign.total_contacts = created_count + skipped_count
+        campaign.sent_count = created_count
+        db.commit()
+
+        logger.info(f"Campaign {campaign_id} started: {created_count} drops queued, {skipped_count} skipped")
+
+        return {
+            "success": True,
+            "campaign_id": campaign_id,
+            "status": "running",
+            "drops_queued": created_count,
+            "skipped_compliance": skipped_count,
+            "message": f"Campaign started with {created_count} voicemail drops queued",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error starting campaign: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/campaigns/{campaign_id}/pause")
+async def pause_campaign(
+    campaign_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Pause a running campaign."""
+    VoicemailCampaign = get_voicemail_campaign_model()
+
+    campaign = db.query(VoicemailCampaign).filter(
+        VoicemailCampaign.id == campaign_id,
+        VoicemailCampaign.user_id == current_user.id,
+    ).first()
+
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    if campaign.status != "running":
+        raise HTTPException(status_code=400, detail="Can only pause running campaigns")
+
+    campaign.status = "paused"
+    campaign.paused_at = datetime.now(timezone.utc)
+    db.commit()
+
+    return {"success": True, "message": "Campaign paused"}
+
+
+@router.post("/campaigns/{campaign_id}/cancel")
+async def cancel_campaign(
+    campaign_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Cancel a campaign and mark unsent drops as cancelled."""
+    VoicemailCampaign = get_voicemail_campaign_model()
+    VoicemailDrop = get_voicemail_drop_model()
+
+    campaign = db.query(VoicemailCampaign).filter(
+        VoicemailCampaign.id == campaign_id,
+        VoicemailCampaign.user_id == current_user.id,
+    ).first()
+
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    if campaign.status in ("completed", "cancelled"):
+        raise HTTPException(status_code=400, detail=f"Campaign already {campaign.status}")
+
+    # Cancel unsent drops
+    cancelled_count = db.query(VoicemailDrop).filter(
+        VoicemailDrop.campaign_id == campaign_id,
+        VoicemailDrop.status.in_(["pending", "queued"]),
+    ).update({"status": "failed", "error_message": "Campaign cancelled"}, synchronize_session=False)
+
+    campaign.status = "cancelled"
+    campaign.completed_at = datetime.now(timezone.utc)
+    db.commit()
+
+    logger.info(f"Campaign {campaign_id} cancelled, {cancelled_count} drops cancelled")
+
+    return {"success": True, "message": f"Campaign cancelled, {cancelled_count} pending drops removed"}
+
+
+def _serialize_campaign(campaign) -> dict:
+    """Serialize a VoicemailCampaign to dict."""
+    return {
+        "id": campaign.id,
+        "name": campaign.name,
+        "description": campaign.description,
+        "template_id": campaign.template_id,
+        "contact_filter": campaign.contact_filter,
+        "total_contacts": campaign.total_contacts,
+        "status": campaign.status,
+        "scheduled_at": campaign.scheduled_at.isoformat() if campaign.scheduled_at else None,
+        "started_at": campaign.started_at.isoformat() if campaign.started_at else None,
+        "completed_at": campaign.completed_at.isoformat() if campaign.completed_at else None,
+        "throttle_rate": campaign.throttle_rate,
+        "sent_count": campaign.sent_count or 0,
+        "delivered_count": campaign.delivered_count or 0,
+        "failed_count": campaign.failed_count or 0,
+        "callback_count": campaign.callback_count or 0,
+        "total_cost": float(campaign.total_cost) if campaign.total_cost else 0,
+        "created_at": campaign.created_at.isoformat() if campaign.created_at else None,
+    }
