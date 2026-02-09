@@ -343,3 +343,7 @@ class WheelCalculator:
             8: "#3B82F6",  # Blue - Analyzer
         }
         return colors.get(zone, "#6B7280")
+
+
+# Module-level alias used by report_generator.py
+ZONES = WheelCalculator.ZONE_INFO

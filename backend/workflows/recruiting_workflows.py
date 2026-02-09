@@ -8,7 +8,7 @@ Integrates with the workflow SLA system for task routing and management.
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 from sqlalchemy import text
-from database import get_db_connection
+from database import engine
 
 
 # =============================================================================
@@ -258,7 +258,7 @@ class RecruitingWorkflowService:
         created_tasks = []
         now = datetime.now()
 
-        with get_db_connection() as conn:
+        with engine.connect() as conn:
             for task_def in workflow["tasks"]:
                 due_date = now + timedelta(days=task_def["day"])
 
@@ -317,7 +317,7 @@ class RecruitingWorkflowService:
 
         where_sql = " AND ".join(filters)
 
-        with get_db_connection() as conn:
+        with engine.connect() as conn:
             result = conn.execute(
                 text(f"""
                     SELECT rt.id, rt.candidate_id, rt.title, rt.description,
@@ -355,7 +355,7 @@ class RecruitingWorkflowService:
 
     def complete_task(self, task_id: int, completed_by: int) -> bool:
         """Mark a task as completed."""
-        with get_db_connection() as conn:
+        with engine.connect() as conn:
             conn.execute(
                 text("""
                     UPDATE recruiting_tasks
@@ -369,7 +369,7 @@ class RecruitingWorkflowService:
 
     def skip_task(self, task_id: int, reason: str, skipped_by: int) -> bool:
         """Skip a task with a reason."""
-        with get_db_connection() as conn:
+        with engine.connect() as conn:
             conn.execute(
                 text("""
                     UPDATE recruiting_tasks
@@ -401,7 +401,7 @@ class RecruitingWorkflowService:
 
         where_sql = " AND ".join(filters)
 
-        with get_db_connection() as conn:
+        with engine.connect() as conn:
             result = conn.execute(
                 text(f"""
                     SELECT rt.id, rt.candidate_id, rt.title, rt.description,

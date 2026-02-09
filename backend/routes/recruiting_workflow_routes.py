@@ -212,10 +212,10 @@ async def start_call_for_task(task_id: int, user_id: int = Query(...)):
 
     This can be called when initiating a call to prevent duplicate calls.
     """
-    from database import get_db_connection
+    from database import engine
     from sqlalchemy import text
 
-    with get_db_connection() as conn:
+    with engine.connect() as conn:
         # Update task status to in_progress
         conn.execute(
             text("""
@@ -240,7 +240,7 @@ async def get_workflow_dashboard(
     organization_id: int = 1
 ):
     """Get workflow dashboard data including task counts and dialer queue."""
-    from database import get_db_connection
+    from database import engine
     from sqlalchemy import text
 
     params = {"org_id": organization_id}
@@ -249,7 +249,7 @@ async def get_workflow_dashboard(
         user_filter = "AND assigned_to = :assigned_to"
         params["assigned_to"] = assigned_to
 
-    with get_db_connection() as conn:
+    with engine.connect() as conn:
         # Get task counts by status
         result = conn.execute(
             text(f"""
@@ -346,7 +346,7 @@ async def get_email_queue(
 
     Returns candidates that need automated emails sent.
     """
-    from database import get_db_connection
+    from database import engine
     from sqlalchemy import text
 
     params = {"org_id": organization_id}
@@ -362,7 +362,7 @@ async def get_email_queue(
 
     where_sql = " AND ".join(filters)
 
-    with get_db_connection() as conn:
+    with engine.connect() as conn:
         result = conn.execute(
             text(f"""
                 SELECT rt.id, rt.candidate_id, rt.title, rt.description,
@@ -409,10 +409,10 @@ async def send_email_for_task(task_id: int, user_id: int = Query(...)):
 
     This marks the task as completed after successful send.
     """
-    from database import get_db_connection
+    from database import engine
     from sqlalchemy import text
 
-    with get_db_connection() as conn:
+    with engine.connect() as conn:
         email_service = get_recruiting_email_service(conn)
 
         # Process the email task
@@ -458,7 +458,7 @@ async def process_all_pending_emails(
     Sends emails for all tasks in the queue and marks them complete.
     Returns summary of processed tasks.
     """
-    from database import get_db_connection
+    from database import engine
     from sqlalchemy import text
 
     results = {
@@ -468,7 +468,7 @@ async def process_all_pending_emails(
         "details": []
     }
 
-    with get_db_connection() as conn:
+    with engine.connect() as conn:
         # Get pending email tasks
         tasks = conn.execute(
             text("""
@@ -539,14 +539,14 @@ async def preview_email_for_task(task_id: int):
 
     Useful for reviewing email content before sending.
     """
-    from database import get_db_connection
+    from database import engine
     from sqlalchemy import text
     from services.recruiting_email_service import RecruitingEmailTemplates
     import os
 
     FRONTEND_URL = os.getenv("FRONTEND_URL", "https://perenniaai.com")
 
-    with get_db_connection() as conn:
+    with engine.connect() as conn:
         # Get task and candidate info
         task = conn.execute(
             text("""

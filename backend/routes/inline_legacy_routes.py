@@ -1352,7 +1352,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
 
     # Include Call Recording routes (mobile app call recording + AI summary)
     try:
-        from backend.api.routes.call_recording import router as call_recording_router
+        from api.routes.call_recording import router as call_recording_router
         app.include_router(call_recording_router, tags=["Call Recording"])
     except Exception as e:
         logger.warning(f"Could not load call recording routes: {e}")

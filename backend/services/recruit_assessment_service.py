@@ -11,7 +11,7 @@ Handles:
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from sqlalchemy import text
-from database import get_db_connection
+from database import engine
 
 from models.recruit_assessment_models import (
     QuizTemplate,
@@ -47,7 +47,7 @@ class RecruitAssessmentService:
 
     def get_quiz_for_disposition(self, disposition: str) -> QuizForDisposition:
         """Get all quiz questions for a specific disposition."""
-        with get_db_connection() as conn:
+        with engine.connect() as conn:
             result = conn.execute(
                 text("""
                     SELECT id, disposition, question_text, question_type,
@@ -100,7 +100,7 @@ class RecruitAssessmentService:
         """Submit quiz responses and update scores."""
         disposition = submission.disposition
 
-        with get_db_connection() as conn:
+        with engine.connect() as conn:
             # Insert responses
             for response in submission.responses:
                 conn.execute(
@@ -126,7 +126,7 @@ class RecruitAssessmentService:
 
     def calculate_and_update_scores(self, candidate_id: int) -> AssessmentScores:
         """Calculate scores from all quiz responses and update the scores table."""
-        with get_db_connection() as conn:
+        with engine.connect() as conn:
             # Get all responses with their categories and weights
             result = conn.execute(
                 text("""
@@ -203,7 +203,7 @@ class RecruitAssessmentService:
         last_disposition = rows[0].disposition if rows else None
 
         # Upsert scores
-        with get_db_connection() as conn:
+        with engine.connect() as conn:
             conn.execute(
                 text("""
                     INSERT INTO recruit_assessment_scores
@@ -253,7 +253,7 @@ class RecruitAssessmentService:
 
     def get_candidate_scores(self, candidate_id: int) -> Optional[AssessmentScores]:
         """Get assessment scores for a candidate."""
-        with get_db_connection() as conn:
+        with engine.connect() as conn:
             result = conn.execute(
                 text("""
                     SELECT id, candidate_id, production_score, disc_score,
@@ -290,7 +290,7 @@ class RecruitAssessmentService:
             scores = AssessmentScores(candidate_id=candidate_id)
 
         # Get quiz history
-        with get_db_connection() as conn:
+        with engine.connect() as conn:
             result = conn.execute(
                 text("""
                     SELECT DISTINCT disposition, MIN(responded_at) as completed_at
@@ -348,7 +348,7 @@ class RecruitAssessmentService:
 
     def check_quiz_completed(self, candidate_id: int, disposition: str) -> bool:
         """Check if quiz has been completed for a disposition."""
-        with get_db_connection() as conn:
+        with engine.connect() as conn:
             result = conn.execute(
                 text("""
                     SELECT COUNT(*) as count
@@ -366,7 +366,7 @@ class RecruitAssessmentService:
 
     def get_calculator_config(self, organization_id: int = 1) -> CalculatorConfig:
         """Get calculator configuration for an organization."""
-        with get_db_connection() as conn:
+        with engine.connect() as conn:
             result = conn.execute(
                 text("""
                     SELECT id, organization_id, lead_conversion_lift, avg_deal_size_lift,
@@ -401,7 +401,7 @@ class RecruitAssessmentService:
         organization_id: int = 1
     ) -> CalculatorConfig:
         """Update calculator configuration."""
-        with get_db_connection() as conn:
+        with engine.connect() as conn:
             conn.execute(
                 text("""
                     INSERT INTO recruit_calculator_config

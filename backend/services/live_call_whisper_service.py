@@ -24,8 +24,6 @@ from enum import Enum
 
 from anthropic import Anthropic
 
-from .live_call_whisper_calculator import calculator_whisper_detector
-
 logger = logging.getLogger(__name__)
 
 
@@ -586,6 +584,7 @@ Provide a brief, actionable suggestion:"""
     def _detect_calculator_opportunities(self, context: CallContext, text: str) -> Optional[Whisper]:
         """Detect calculator opportunities and return pre-calculated whisper."""
         try:
+            from .live_call_whisper_calculator import calculator_whisper_detector
             return calculator_whisper_detector.detect_calculator_opportunity(text, context)
         except Exception as e:
             logger.warning(f"Calculator whisper detection error: {e}")

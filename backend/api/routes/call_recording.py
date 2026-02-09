@@ -17,12 +17,9 @@ import os
 import httpx
 from sqlalchemy.orm import Session
 
-from backend.db.database import get_db
-from backend.api.deps import get_current_user
-from backend.models.user import User
-from backend.models.task import Task
-from backend.models.lead import Lead
-from backend.models.loan import Loan
+from database import get_db
+from database.models import User, Task, Lead, Loan
+from main import get_current_user
 import logging
 import json
 

@@ -165,10 +165,10 @@ class QuizTemplateCreate(BaseModel):
 @router.get("/quiz/templates/all")
 async def get_all_quiz_templates():
     """Get all quiz templates (admin only)."""
-    from database import get_db_connection
+    from database import engine
     from sqlalchemy import text
 
-    with get_db_connection() as conn:
+    with engine.connect() as conn:
         result = conn.execute(
             text("""
                 SELECT id, disposition, question_text, question_type,
@@ -198,10 +198,10 @@ async def get_all_quiz_templates():
 @router.post("/quiz/templates")
 async def create_quiz_template(template: QuizTemplateCreate):
     """Create a new quiz template (admin only)."""
-    from database import get_db_connection
+    from database import engine
     from sqlalchemy import text
 
-    with get_db_connection() as conn:
+    with engine.connect() as conn:
         result = conn.execute(
             text("""
                 INSERT INTO recruit_quiz_templates
@@ -227,10 +227,10 @@ async def create_quiz_template(template: QuizTemplateCreate):
 @router.delete("/quiz/templates/{template_id}")
 async def delete_quiz_template(template_id: int):
     """Soft delete a quiz template (admin only)."""
-    from database import get_db_connection
+    from database import engine
     from sqlalchemy import text
 
-    with get_db_connection() as conn:
+    with engine.connect() as conn:
         conn.execute(
             text("UPDATE recruit_quiz_templates SET is_active = false WHERE id = :id"),
             {"id": template_id}
