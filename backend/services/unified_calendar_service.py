@@ -222,6 +222,13 @@ class UnifiedCalendarService:
             "booked_via": appt.booked_via,
             "meeting_link": appt.meeting_link,
             "duration_minutes": appt.duration_minutes,
+            "attendee_phone": appt.contact_phone,
+            "assigned_user_id": appt.loan_officer_id,
+            "meeting_mode": (
+                "PHONE" if (appt.booked_via == "ai_assistant" or location == "Phone Call")
+                else "VIDEO" if appt.meeting_link
+                else "IN_PERSON"
+            ),
         }
 
     def _transform_crm_event(self, event) -> Dict[str, Any]:

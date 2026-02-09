@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { calendarAPI, schedulerAPI, unifiedCalendarAPI } from '../services/api';
+import { calendarAPI, schedulerAPI, unifiedCalendarAPI, teamAPI } from '../services/api';
 import './Calendar.css';
 
 const TAB_CONFIG = [
@@ -67,11 +67,18 @@ function Calendar() {
   const [editingAppointment, setEditingAppointment] = useState(null);
   const [saving, setSaving] = useState(false);
 
+  // Team members for appointment assignment
+  const [teamMembers, setTeamMembers] = useState([]);
+
   useEffect(() => {
     loadEvents();
     loadAllEvents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentDate]);
+
+  useEffect(() => {
+    teamAPI.getMembers().then(members => setTeamMembers(members)).catch(() => {});
+  }, []);
 
   const loadEvents = async () => {
     try {
@@ -136,6 +143,18 @@ function Calendar() {
     }
   };
 
+  const handleAddAppointment = async (appointmentData) => {
+    try {
+      await schedulerAPI.createAppointment(appointmentData);
+      loadEvents();
+      loadAllEvents();
+      setShowAddModal(false);
+    } catch (err) {
+      console.error('Failed to create appointment:', err);
+      setError('Failed to create appointment. Please try again.');
+    }
+  };
+
   const handleDeleteEvent = async (event) => {
     try {
       if (event.isAppointment && event.appointmentId) {
@@ -172,6 +191,8 @@ function Calendar() {
       title: event.title || '',
       attendee_name: event.attendee_name || '',
       attendee_email: event.attendee_email || '',
+      attendee_phone: event.attendee_phone || '',
+      meeting_mode: event.meeting_mode || 'PHONE',
       date: startDate.toISOString().split('T')[0],
       time: startDate.toTimeString().slice(0, 5),
       duration: String(durationMins),
@@ -192,6 +213,10 @@ function Calendar() {
 
       const updateData = {
         title: editingAppointment.title,
+        attendee_name: editingAppointment.attendee_name,
+        attendee_email: editingAppointment.attendee_email,
+        attendee_phone: editingAppointment.attendee_phone,
+        meeting_mode: editingAppointment.meeting_mode,
         scheduled_start: startDateTime.toISOString(),
         scheduled_end: endDateTime.toISOString(),
         duration_minutes: parseInt(editingAppointment.duration),
@@ -761,6 +786,8 @@ function Calendar() {
           selectedTime={selectedTime}
           onClose={() => setShowAddModal(false)}
           onAdd={handleAddEvent}
+          onAddAppointment={handleAddAppointment}
+          teamMembers={teamMembers}
         />
       )}
 
@@ -779,17 +806,59 @@ function Calendar() {
                 />
               </div>
 
-              {editingAppointment.attendee_name && (
+              <div className="form-group">
+                <label>Meeting Type</label>
+                <div className="meeting-mode-group">
+                  {[
+                    { value: 'PHONE', label: 'Phone Call' },
+                    { value: 'VIDEO', label: 'Video Call' },
+                    { value: 'IN_PERSON', label: 'In Person' },
+                  ].map(opt => (
+                    <div className="meeting-mode-option" key={opt.value}>
+                      <input
+                        type="radio"
+                        id={`edit-mode-${opt.value}`}
+                        name="edit-meeting-mode"
+                        value={opt.value}
+                        checked={editingAppointment.meeting_mode === opt.value}
+                        onChange={(e) => setEditingAppointment({...editingAppointment, meeting_mode: e.target.value})}
+                      />
+                      <label htmlFor={`edit-mode-${opt.value}`}>{opt.label}</label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="attendee-section">
+                <h4>Attendee</h4>
                 <div className="form-group">
-                  <label>Attendee</label>
+                  <label>Name</label>
                   <input
                     type="text"
                     value={editingAppointment.attendee_name}
-                    disabled
-                    className="disabled-input"
+                    onChange={(e) => setEditingAppointment({...editingAppointment, attendee_name: e.target.value})}
+                    placeholder="Attendee name"
                   />
                 </div>
-              )}
+                <div className="form-group">
+                  <label>Email</label>
+                  <input
+                    type="email"
+                    value={editingAppointment.attendee_email}
+                    onChange={(e) => setEditingAppointment({...editingAppointment, attendee_email: e.target.value})}
+                    placeholder="attendee@email.com"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Phone</label>
+                  <input
+                    type="tel"
+                    value={editingAppointment.attendee_phone}
+                    onChange={(e) => setEditingAppointment({...editingAppointment, attendee_phone: e.target.value})}
+                    placeholder="(555) 123-4567"
+                  />
+                </div>
+              </div>
 
               <div className="form-row">
                 <div className="form-group">
@@ -863,13 +932,15 @@ function Calendar() {
   );
 }
 
-function AddEventModal({ selectedDate, selectedTime, onClose, onAdd }) {
+function AddEventModal({ selectedDate, selectedTime, onClose, onAdd, onAddAppointment, teamMembers }) {
   const defaultStart = selectedDate || new Date();
   // If a specific hour was selected (from Day/Week view), use it
   if (selectedTime != null) {
     defaultStart.setHours(selectedTime, 0, 0, 0);
   }
   const defaultEnd = new Date(defaultStart.getTime() + 3600000);
+
+  const [mode, setMode] = useState('event');
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -878,21 +949,61 @@ function AddEventModal({ selectedDate, selectedTime, onClose, onAdd }) {
     all_day: false,
     start_time: defaultStart.toISOString().slice(0, 16),
     end_time: defaultEnd.toISOString().slice(0, 16),
+    // Appointment-specific fields
+    meeting_mode: 'PHONE',
+    duration: '30',
+    attendee_name: '',
+    attendee_email: '',
+    attendee_phone: '',
+    team_member_id: '',
   });
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onAdd({
-      ...formData,
-      start_time: new Date(formData.start_time).toISOString(),
-      end_time: new Date(formData.end_time).toISOString(),
-    });
+    if (mode === 'appointment') {
+      const startTime = new Date(formData.start_time);
+      onAddAppointment({
+        title: formData.title,
+        description: formData.description,
+        meeting_mode: formData.meeting_mode.toLowerCase(),
+        scheduled_start: startTime.toISOString(),
+        duration_minutes: parseInt(formData.duration),
+        attendee_name: formData.attendee_name || undefined,
+        attendee_email: formData.attendee_email || undefined,
+        attendee_phone: formData.attendee_phone || undefined,
+        assigned_user_id: formData.team_member_id ? parseInt(formData.team_member_id) : undefined,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      });
+    } else {
+      onAdd({
+        ...formData,
+        start_time: new Date(formData.start_time).toISOString(),
+        end_time: new Date(formData.end_time).toISOString(),
+      });
+    }
   };
 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <h3>Add Event</h3>
+        <div className="modal-mode-toggle">
+          <button
+            type="button"
+            className={mode === 'event' ? 'active' : ''}
+            onClick={() => setMode('event')}
+          >
+            Calendar Event
+          </button>
+          <button
+            type="button"
+            className={mode === 'appointment' ? 'active' : ''}
+            onClick={() => setMode('appointment')}
+          >
+            Appointment
+          </button>
+        </div>
+
+        <h3>{mode === 'event' ? 'Add Event' : 'Add Appointment'}</h3>
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label>Title *</label>
@@ -903,47 +1014,148 @@ function AddEventModal({ selectedDate, selectedTime, onClose, onAdd }) {
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
             />
           </div>
-          <div className="form-group">
-            <label>Type</label>
-            <select
-              value={formData.event_type}
-              onChange={(e) => setFormData({ ...formData, event_type: e.target.value })}
-            >
-              <option value="meeting">Meeting</option>
-              <option value="call">Call</option>
-              <option value="pre_purchase_consultation">Pre-Purchase Consultation</option>
-              <option value="purchase_consultation">Purchase Consultation</option>
-              <option value="appraisal">Appraisal</option>
-              <option value="closing">Closing</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
-          <div className="form-group">
-            <label>Start Time *</label>
-            <input
-              type="datetime-local"
-              required
-              value={formData.start_time}
-              onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
-            />
-          </div>
-          <div className="form-group">
-            <label>End Time *</label>
-            <input
-              type="datetime-local"
-              required
-              value={formData.end_time}
-              onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
-            />
-          </div>
-          <div className="form-group">
-            <label>Location</label>
-            <input
-              type="text"
-              value={formData.location}
-              onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-            />
-          </div>
+
+          {mode === 'event' && (
+            <>
+              <div className="form-group">
+                <label>Type</label>
+                <select
+                  value={formData.event_type}
+                  onChange={(e) => setFormData({ ...formData, event_type: e.target.value })}
+                >
+                  <option value="meeting">Meeting</option>
+                  <option value="call">Call</option>
+                  <option value="pre_purchase_consultation">Pre-Purchase Consultation</option>
+                  <option value="purchase_consultation">Purchase Consultation</option>
+                  <option value="appraisal">Appraisal</option>
+                  <option value="closing">Closing</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Start Time *</label>
+                <input
+                  type="datetime-local"
+                  required
+                  value={formData.start_time}
+                  onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label>End Time *</label>
+                <input
+                  type="datetime-local"
+                  required
+                  value={formData.end_time}
+                  onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label>Location</label>
+                <input
+                  type="text"
+                  value={formData.location}
+                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                />
+              </div>
+            </>
+          )}
+
+          {mode === 'appointment' && (
+            <>
+              <div className="form-group">
+                <label>Meeting Type</label>
+                <div className="meeting-mode-group">
+                  {[
+                    { value: 'PHONE', label: 'Phone Call' },
+                    { value: 'VIDEO', label: 'Video Call' },
+                    { value: 'IN_PERSON', label: 'In Person' },
+                  ].map(opt => (
+                    <div className="meeting-mode-option" key={opt.value}>
+                      <input
+                        type="radio"
+                        id={`add-mode-${opt.value}`}
+                        name="add-meeting-mode"
+                        value={opt.value}
+                        checked={formData.meeting_mode === opt.value}
+                        onChange={(e) => setFormData({ ...formData, meeting_mode: e.target.value })}
+                      />
+                      <label htmlFor={`add-mode-${opt.value}`}>{opt.label}</label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="form-group">
+                <label>Start Time *</label>
+                <input
+                  type="datetime-local"
+                  required
+                  value={formData.start_time}
+                  onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label>Duration</label>
+                <select
+                  value={formData.duration}
+                  onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
+                >
+                  <option value="15">15 minutes</option>
+                  <option value="30">30 minutes</option>
+                  <option value="45">45 minutes</option>
+                  <option value="60">1 hour</option>
+                  <option value="90">1.5 hours</option>
+                  <option value="120">2 hours</option>
+                </select>
+              </div>
+              <div className="attendee-section">
+                <h4>Attendee</h4>
+                <div className="form-group">
+                  <label>Name</label>
+                  <input
+                    type="text"
+                    value={formData.attendee_name}
+                    onChange={(e) => setFormData({ ...formData, attendee_name: e.target.value })}
+                    placeholder="Attendee name"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Email</label>
+                  <input
+                    type="email"
+                    value={formData.attendee_email}
+                    onChange={(e) => setFormData({ ...formData, attendee_email: e.target.value })}
+                    placeholder="attendee@email.com"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Phone</label>
+                  <input
+                    type="tel"
+                    value={formData.attendee_phone}
+                    onChange={(e) => setFormData({ ...formData, attendee_phone: e.target.value })}
+                    placeholder="(555) 123-4567"
+                  />
+                </div>
+              </div>
+              {teamMembers.length > 0 && (
+                <div className="form-group">
+                  <label>Assign To</label>
+                  <select
+                    className="team-select"
+                    value={formData.team_member_id}
+                    onChange={(e) => setFormData({ ...formData, team_member_id: e.target.value })}
+                  >
+                    <option value="">Myself</option>
+                    {teamMembers.map(m => (
+                      <option key={m.id} value={m.id}>{m.full_name || m.email}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </>
+          )}
+
           <div className="form-group">
             <label>Description</label>
             <textarea
@@ -954,7 +1166,9 @@ function AddEventModal({ selectedDate, selectedTime, onClose, onAdd }) {
           </div>
           <div className="form-actions">
             <button type="button" onClick={onClose}>Cancel</button>
-            <button type="submit" className="btn-primary">Add Event</button>
+            <button type="submit" className="btn-primary">
+              {mode === 'event' ? 'Add Event' : 'Add Appointment'}
+            </button>
           </div>
         </form>
       </div>

@@ -1297,3 +1297,99 @@
 .calendar-error-banner button:hover {
   background: #dc2626;
 }
+
+/* Mode toggle for Add modal */
+.modal-mode-toggle {
+  display: flex;
+  gap: 0;
+  margin-bottom: var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  overflow: hidden;
+}
+
+.modal-mode-toggle button {
+  flex: 1;
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: var(--font-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-secondary);
+  transition: all 0.2s;
+}
+
+.modal-mode-toggle button:hover {
+  background: var(--color-bg-secondary);
+}
+
+.modal-mode-toggle button.active {
+  background: var(--color-primary);
+  color: white;
+}
+
+/* Meeting mode selector */
+.meeting-mode-group {
+  display: flex;
+  gap: 8px;
+}
+
+.meeting-mode-option {
+  flex: 1;
+}
+
+.meeting-mode-option input[type="radio"] {
+  display: none;
+}
+
+.meeting-mode-option label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-base);
+  cursor: pointer;
+  font-size: var(--font-sm);
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.meeting-mode-option label:hover {
+  border-color: var(--color-primary);
+  background: rgba(33, 127, 141, 0.03);
+}
+
+.meeting-mode-option input:checked + label {
+  border-color: var(--color-primary);
+  background: rgba(33, 127, 141, 0.06);
+  color: var(--color-primary);
+  font-weight: var(--weight-semibold);
+}
+
+/* Team member select */
+.team-select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  font-size: var(--font-sm);
+  background: white;
+}
+
+/* Attendee section in modal */
+.attendee-section {
+  border-top: 1px solid var(--color-border-light);
+  padding-top: var(--space-md);
+  margin-top: var(--space-md);
+}
+
+.attendee-section h4 {
+  font-size: var(--font-sm);
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--space-sm) 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}

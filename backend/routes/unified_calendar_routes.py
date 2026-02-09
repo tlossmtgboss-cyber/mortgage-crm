@@ -53,6 +53,9 @@ class UnifiedEventResponse(BaseModel):
     related_contact_id: Optional[int] = None
     attendee_name: Optional[str] = None
     attendee_email: Optional[str] = None
+    attendee_phone: Optional[str] = None
+    meeting_mode: Optional[str] = None
+    assigned_user_id: Optional[int] = None
     status: Optional[str] = None
     is_appointment: bool = False
     is_crm_event: bool = False
