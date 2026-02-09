@@ -26,6 +26,7 @@ function VoicemailSettings() {
   const [loading, setLoading] = useState(true);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [campaignsLoading, setCampaignsLoading] = useState(false);
+  const [loadError, setLoadError] = useState(null);
 
   // Template form
   const [showForm, setShowForm] = useState(false);
@@ -51,10 +52,12 @@ function VoicemailSettings() {
 
   const loadTemplates = useCallback(async () => {
     try {
+      setLoadError(null);
       const res = await voicemailAPI.getTemplates();
       if (res.success) setTemplates(res.templates);
     } catch (err) {
       console.error('Error loading templates:', err);
+      setLoadError('Failed to load templates. Please try refreshing the page.');
     }
   }, []);
 
@@ -64,16 +67,19 @@ function VoicemailSettings() {
       if (res.success) setAnalytics(res.analytics);
     } catch (err) {
       console.error('Error loading analytics:', err);
+      setLoadError(prev => prev || 'Failed to load analytics data.');
     }
   }, []);
 
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
+    setLoadError(null);
     try {
       const res = await voicemailAPI.getHistory({ limit: 50 });
       if (res.success) setHistory(res.voicemails);
     } catch (err) {
       console.error('Error loading history:', err);
+      setLoadError('Failed to load voicemail history.');
     } finally {
       setHistoryLoading(false);
     }
@@ -81,11 +87,13 @@ function VoicemailSettings() {
 
   const loadCampaigns = useCallback(async () => {
     setCampaignsLoading(true);
+    setLoadError(null);
     try {
       const res = await voicemailAPI.getCampaigns();
       if (res.success) setCampaigns(res.campaigns);
     } catch (err) {
       console.error('Error loading campaigns:', err);
+      setLoadError('Failed to load campaigns.');
     } finally {
       setCampaignsLoading(false);
     }
@@ -285,6 +293,25 @@ function VoicemailSettings() {
 
       {/* Hidden audio element for previews */}
       <audio ref={audioRef} style={{ display: 'none' }} />
+
+      {/* Error Banner */}
+      {loadError && (
+        <div style={{
+          background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px',
+          padding: '12px 16px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px'
+        }}>
+          <span style={{ color: '#dc2626', fontWeight: '500' }}>{loadError}</span>
+          <button
+            onClick={() => { setLoadError(null); loadTemplates(); loadAnalytics(); }}
+            style={{
+              marginLeft: 'auto', background: '#dc2626', color: '#fff', border: 'none',
+              borderRadius: '6px', padding: '4px 12px', cursor: 'pointer', fontSize: '12px'
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Analytics Cards */}
       {analytics && (

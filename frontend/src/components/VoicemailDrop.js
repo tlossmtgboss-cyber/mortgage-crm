@@ -16,10 +16,21 @@ function VoicemailDrop({ phoneNumber, recipientName, leadId, loanId, onClose }) 
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
+  const streamRef = useRef(null);
 
-  // Load templates on mount
+  // Load templates on mount + cleanup stream on unmount
   useEffect(() => {
     loadTemplates();
+    return () => {
+      // Stop any active recording stream on modal close
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+    };
   }, []);
 
   const loadTemplates = async () => {
@@ -38,7 +49,12 @@ function VoicemailDrop({ phoneNumber, recipientName, leadId, loanId, onClose }) 
     // Replace variables in template
     let processedMessage = template.message_text;
     processedMessage = processedMessage.replace(/\{\{contact_name\}\}/g, recipientName || 'Customer');
+    processedMessage = processedMessage.replace(/\{\{first_name\}\}/g, (recipientName || 'Customer').split(' ')[0]);
+    processedMessage = processedMessage.replace(/\{\{last_name\}\}/g, (recipientName || '').split(' ').slice(1).join(' '));
     processedMessage = processedMessage.replace(/\{\{loan_officer\}\}/g, 'your loan officer');
+    processedMessage = processedMessage.replace(/\{\{company_name\}\}/g, 'our office');
+    // Strip any remaining unresolved {{variables}} so they aren't spoken literally
+    processedMessage = processedMessage.replace(/\{\{[^}]+\}\}/g, '');
 
     setMessage(processedMessage);
   };
@@ -46,6 +62,7 @@ function VoicemailDrop({ phoneNumber, recipientName, leadId, loanId, onClose }) 
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
 
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: 'audio/webm'
@@ -66,6 +83,7 @@ function VoicemailDrop({ phoneNumber, recipientName, leadId, loanId, onClose }) 
 
         // Stop all tracks
         stream.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
       };
 
       mediaRecorder.start();

@@ -5,6 +5,7 @@ This module contains all API endpoints for the voicemail drop system.
 Extracted from main.py for better code organization.
 """
 
+import asyncio
 import os
 import logging
 import re
@@ -252,9 +253,48 @@ def check_calling_hours(phone_number: str) -> Tuple[bool, str]:
     return True, ""
 
 
+_dnc_scrub_warned = False  # Only warn once per process to avoid log spam
+
+
+def _check_national_dnc_scrub_freshness():
+    """
+    Warn if the National DNC Registry scrub data is stale.
+    TCPA requires scrubbing against the National DNC Registry at least every 31 days.
+    Set NATIONAL_DNC_LAST_SCRUB env var (ISO date) after each scrub.
+    """
+    global _dnc_scrub_warned
+    if _dnc_scrub_warned:
+        return
+
+    last_scrub_date = os.getenv("NATIONAL_DNC_LAST_SCRUB")
+    if not last_scrub_date:
+        logger.warning(
+            "NATIONAL_DNC_LAST_SCRUB env var not set. "
+            "TCPA requires National DNC Registry scrubbing every 31 days."
+        )
+        _dnc_scrub_warned = True
+        return
+
+    try:
+        scrub_dt = datetime.fromisoformat(last_scrub_date)
+        if scrub_dt.tzinfo is None:
+            scrub_dt = scrub_dt.replace(tzinfo=timezone.utc)
+        days_since = (datetime.now(timezone.utc) - scrub_dt).days
+        if days_since > 31:
+            logger.warning(
+                f"National DNC Registry scrub is {days_since} days old (max 31). "
+                "TCPA requires re-scrubbing. Update NATIONAL_DNC_LAST_SCRUB after scrub."
+            )
+            _dnc_scrub_warned = True
+    except (ValueError, TypeError) as e:
+        logger.warning(f"Invalid NATIONAL_DNC_LAST_SCRUB format: {e}")
+        _dnc_scrub_warned = True
+
+
 def check_dnc_status(phone_number: str, db: Session) -> Tuple[bool, str]:
     """
     Check if phone number is on the Do Not Call list.
+    Checks both internal DNC table and National DNC Registry scrub freshness.
 
     Returns (is_blocked, message).
     """
@@ -262,7 +302,7 @@ def check_dnc_status(phone_number: str, db: Session) -> Tuple[bool, str]:
 
     digits = _normalize_phone(phone_number)
 
-    # Check exact match and common formats
+    # Check exact match and common formats in internal DNC table
     dnc = db.query(ContactDNCStatus).filter(
         or_(
             ContactDNCStatus.phone_number == phone_number,
@@ -274,6 +314,10 @@ def check_dnc_status(phone_number: str, db: Session) -> Tuple[bool, str]:
 
     if dnc:
         return True, f"Phone number is on Do Not Call list (reason: {dnc.reason or 'N/A'})"
+
+    # Check National DNC Registry scrub freshness (TCPA requires scrub every 31 days)
+    _check_national_dnc_scrub_freshness()
+
     return False, ""
 
 
@@ -365,13 +409,14 @@ def run_compliance_checks(
 VOICEMAIL_DAILY_LIMIT = 100       # Max drops per user per day
 VOICEMAIL_PER_MINUTE_LIMIT = 5    # Max drops per user per minute
 
-# In-memory rate tracker: {user_id: [timestamp, ...]}
+# Thread-safe in-memory rate tracker with asyncio lock
 _rate_tracker: dict = {}
+_rate_lock = asyncio.Lock()
 _RATE_TRACKER_MAX_KEYS = 5000
 
 
 def _clean_stale_rate_entries():
-    """Remove entries older than 24 hours to prevent memory growth."""
+    """Remove entries older than 24 hours to prevent memory growth. Must hold _rate_lock."""
     if len(_rate_tracker) < _RATE_TRACKER_MAX_KEYS:
         return
     cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
@@ -383,36 +428,52 @@ def _clean_stale_rate_entries():
         del _rate_tracker[key]
 
 
-def check_rate_limit(user_id: int) -> Tuple[bool, Optional[str]]:
+async def check_rate_limit(user_id: int, db: Session) -> Tuple[bool, Optional[str]]:
     """
     Check per-user voicemail drop rate limits.
+    Uses async lock for thread-safety. Falls back to DB count for
+    deploy-resilient daily limiting (in-memory only tracks burst/minute).
 
     Returns (is_allowed, rejection_reason).
     """
-    _clean_stale_rate_entries()
+    async with _rate_lock:
+        _clean_stale_rate_entries()
 
-    now = datetime.now(timezone.utc)
-    if user_id not in _rate_tracker:
-        _rate_tracker[user_id] = []
+        now = datetime.now(timezone.utc)
+        if user_id not in _rate_tracker:
+            _rate_tracker[user_id] = []
 
-    timestamps = _rate_tracker[user_id]
+        timestamps = _rate_tracker[user_id]
 
-    # Clean old entries (older than 24h)
-    day_ago = now - timedelta(hours=24)
-    timestamps[:] = [ts for ts in timestamps if ts > day_ago]
+        # Clean old entries (older than 24h)
+        day_ago = now - timedelta(hours=24)
+        timestamps[:] = [ts for ts in timestamps if ts > day_ago]
 
-    # Check daily limit
-    if len(timestamps) >= VOICEMAIL_DAILY_LIMIT:
-        return False, f"Daily voicemail limit reached ({VOICEMAIL_DAILY_LIMIT}/day). Try again tomorrow."
+        # Check per-minute limit (in-memory — instant burst protection)
+        minute_ago = now - timedelta(minutes=1)
+        recent_count = sum(1 for ts in timestamps if ts > minute_ago)
+        if recent_count >= VOICEMAIL_PER_MINUTE_LIMIT:
+            return False, f"Too many voicemails sent. Limit: {VOICEMAIL_PER_MINUTE_LIMIT}/minute."
 
-    # Check per-minute limit
-    minute_ago = now - timedelta(minutes=1)
-    recent_count = sum(1 for ts in timestamps if ts > minute_ago)
-    if recent_count >= VOICEMAIL_PER_MINUTE_LIMIT:
-        return False, f"Too many voicemails sent. Limit: {VOICEMAIL_PER_MINUTE_LIMIT}/minute."
+        # Record this attempt
+        timestamps.append(now)
 
-    # Record this attempt
-    timestamps.append(now)
+    # Check daily limit via DB (survives deploys)
+    try:
+        VoicemailDrop = get_voicemail_drop_model()
+        day_start = now - timedelta(hours=24)
+        daily_count = db.query(func.count(VoicemailDrop.id)).filter(
+            VoicemailDrop.user_id == user_id,
+            VoicemailDrop.created_at >= day_start,
+        ).scalar() or 0
+        if daily_count >= VOICEMAIL_DAILY_LIMIT:
+            return False, f"Daily voicemail limit reached ({VOICEMAIL_DAILY_LIMIT}/day). Try again tomorrow."
+    except Exception as e:
+        logger.warning(f"DB rate limit check failed, using in-memory only: {e}")
+        # Fallback to in-memory daily count
+        if len(timestamps) >= VOICEMAIL_DAILY_LIMIT:
+            return False, f"Daily voicemail limit reached ({VOICEMAIL_DAILY_LIMIT}/day). Try again tomorrow."
+
     return True, None
 
 
@@ -591,7 +652,7 @@ async def create_voicemail_drop(
             raise HTTPException(status_code=403, detail=rejection_reason)
 
         # --- Rate Limiting ---
-        is_allowed, rate_msg = check_rate_limit(current_user.id)
+        is_allowed, rate_msg = await check_rate_limit(current_user.id, db)
         if not is_allowed:
             raise HTTPException(status_code=429, detail=rate_msg)
 
@@ -1790,13 +1851,17 @@ async def start_campaign(
 
             # Substitute variables in message
             msg = template.message_text
-            if template.variables:
-                first_name = getattr(contact, 'first_name', '') or ''
-                last_name = getattr(contact, 'last_name', '') or ''
-                msg = msg.replace("{{contact_name}}", f"{first_name} {last_name}".strip())
-                msg = msg.replace("{{first_name}}", first_name)
-                msg = msg.replace("{{last_name}}", last_name)
-                msg = msg.replace("{{loan_officer}}", current_user.full_name or "your loan officer")
+            first_name = getattr(contact, 'first_name', '') or ''
+            last_name = getattr(contact, 'last_name', '') or ''
+            msg = msg.replace("{{contact_name}}", f"{first_name} {last_name}".strip())
+            msg = msg.replace("{{first_name}}", first_name)
+            msg = msg.replace("{{last_name}}", last_name)
+            msg = msg.replace("{{loan_officer}}", current_user.full_name or "your loan officer")
+            msg = msg.replace("{{company_name}}", os.getenv("COMPANY_NAME", "our office"))
+            msg = msg.replace("{{phone}}", getattr(contact, 'phone', '') or '')
+            msg = msg.replace("{{email}}", getattr(contact, 'email', '') or '')
+            # Strip any remaining unresolved {{variables}} so they aren't spoken literally
+            msg = re.sub(r'\{\{[^}]+\}\}', '', msg)
 
             drop = VoicemailDrop(
                 user_id=current_user.id,
