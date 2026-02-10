@@ -426,9 +426,18 @@ async def upload_document(
     if not app:
         raise HTTPException(status_code=404, detail="Application not found")
 
-    # Read file content
+    # Read file content with size and type validation
+    MAX_UPLOAD_SIZE = 20 * 1024 * 1024  # 20MB
+    ALLOWED_TYPES = {"application/pdf", "image/png", "image/jpeg", "image/jpg",
+                     "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
+    if file.content_type and file.content_type not in ALLOWED_TYPES:
+        raise HTTPException(status_code=400, detail="Invalid file type. Allowed: PDF, images, Word documents.")
     content = await file.read()
     file_size = len(content)
+    if file_size > MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=400, detail="File too large. Maximum size is 20MB.")
+    if file_size == 0:
+        raise HTTPException(status_code=400, detail="Empty file.")
 
     # Store document
     doc_id = str(uuid.uuid4())

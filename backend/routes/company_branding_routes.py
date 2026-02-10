@@ -445,6 +445,15 @@ async def upload_brand_asset(
         if file_ext not in allowed_extensions:
             raise ValidationException("file", f"File must be one of: {', '.join(allowed_extensions)}")
 
+        # Validate file size (10MB max for brand assets)
+        MAX_BRAND_SIZE = 10 * 1024 * 1024
+        content = await file.read()
+        if len(content) > MAX_BRAND_SIZE:
+            raise HTTPException(status_code=400, detail="File too large. Maximum size is 10MB.")
+        if len(content) == 0:
+            raise HTTPException(status_code=400, detail="Empty file.")
+        await file.seek(0)
+
         # In production, this would upload to S3/cloud storage
         # For now, generate a mock URL
         mock_url = f"https://storage.perennia.com/assets/{asset_type}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}{file_ext}"

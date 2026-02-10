@@ -251,6 +251,13 @@ async def upload_direct(
     import os
     import aiofiles
 
+    # Validate file size and type
+    MAX_UPLOAD_SIZE = 500 * 1024 * 1024  # 500MB for video
+    ALLOWED_EXTENSIONS = {'.mp4', '.mov', '.webm', '.avi', '.mkv'}
+    file_ext = ('.' + file.filename.split('.')[-1].lower()) if file.filename and '.' in file.filename else '.mp4'
+    if file_ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"Invalid video type. Allowed: {', '.join(ALLOWED_EXTENSIONS)}")
+
     profile = avatar_service.get_profile_by_user(db, avatar_id, current_user["id"])
     if not profile:
         raise HTTPException(status_code=404, detail="Avatar not found")
@@ -259,12 +266,16 @@ async def upload_direct(
     upload_dir = f"/tmp/avatars/{avatar_id}/training"
     os.makedirs(upload_dir, exist_ok=True)
 
-    file_ext = file.filename.split('.')[-1] if '.' in file.filename else 'mp4'
-    file_path = f"{upload_dir}/video.{file_ext}"
+    file_path = f"{upload_dir}/video{file_ext}"
 
-    # Save file
+    # Save file with size check
+    content = await file.read()
+    if len(content) > MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=400, detail="File too large. Maximum size is 500MB.")
+    if len(content) == 0:
+        raise HTTPException(status_code=400, detail="Empty file.")
+
     async with aiofiles.open(file_path, 'wb') as f:
-        content = await file.read()
         await f.write(content)
 
     # Update profile

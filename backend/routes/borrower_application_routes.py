@@ -1086,6 +1086,19 @@ async def upload_document(
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
 
+    # Validate file size and type
+    MAX_UPLOAD_SIZE = 20 * 1024 * 1024  # 20MB
+    ALLOWED_TYPES = {"application/pdf", "image/png", "image/jpeg", "image/jpg",
+                     "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
+    if file.content_type and file.content_type not in ALLOWED_TYPES:
+        raise HTTPException(status_code=400, detail="Invalid file type. Allowed: PDF, images, Word documents.")
+    contents = await file.read()
+    if len(contents) > MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=400, detail="File too large. Maximum size is 20MB.")
+    if len(contents) == 0:
+        raise HTTPException(status_code=400, detail="Empty file.")
+    await file.seek(0)
+
     # Generate unique filename
     import uuid
     ext = file.filename.split('.')[-1] if '.' in file.filename else 'pdf'
@@ -1095,9 +1108,6 @@ async def upload_document(
     storage_dir = Path("uploads/applications")
     storage_dir.mkdir(parents=True, exist_ok=True)
     storage_path = storage_dir / unique_filename
-
-    # Read and save file
-    contents = await file.read()
     with open(storage_path, "wb") as f:
         f.write(contents)
 
