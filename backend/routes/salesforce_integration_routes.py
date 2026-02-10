@@ -3487,3 +3487,78 @@ async def diag_lead_visibility(
         ],
         "note": "TEMPORARY DIAGNOSTIC - delete after debugging",
     }
+
+
+@router.post("/diag/fix-stages")
+async def diag_fix_stages(
+    email: str = Query(..., description="User email to fix stages for"),
+    db: Session = Depends(get_db)
+):
+    """
+    Temporary no-auth repair: fix stage case mismatches that break SQLAlchemy enum loading.
+    e.g., 'NEW' -> 'New', 'new' -> 'New', NULL -> 'New'
+    DELETE THIS ENDPOINT after debugging is complete.
+    """
+    user = db.execute(text("""
+        SELECT id, organization_id FROM users WHERE email = :email
+    """), {"email": email}).fetchone()
+
+    if not user:
+        return {"error": f"User {email} not found"}
+
+    uid = user.id
+    org_id = user.organization_id
+
+    # Fix lead stages: normalize case to match LeadStage enum values
+    # LeadStage.NEW = "New", not "NEW" or "new"
+    stage_fixes = {
+        'new': 'New',
+        'attempted contact': 'Attempted Contact',
+        'prospect': 'Prospect',
+        'application': 'Application',
+        'pre-qualified': 'Pre-Qualified',
+        'pre-approved': 'Pre-Approved',
+        'nurture': 'Nurture',
+        'withdrawn': 'Withdrawn',
+        'does not qualify': 'Does Not Qualify',
+    }
+
+    total_fixed = 0
+    fix_details = {}
+
+    for bad_stage, correct_stage in stage_fixes.items():
+        count = db.execute(text("""
+            UPDATE leads SET stage = :correct, updated_at = CURRENT_TIMESTAMP
+            WHERE owner_id = :uid AND lower(stage) = :bad AND stage != :correct
+        """), {"correct": correct_stage, "uid": uid, "bad": bad_stage}).rowcount
+        if count > 0:
+            fix_details[f"{bad_stage} -> {correct_stage}"] = count
+            total_fixed += count
+
+    # Fix NULL stages
+    null_fixed = db.execute(text("""
+        UPDATE leads SET stage = 'New', updated_at = CURRENT_TIMESTAMP
+        WHERE owner_id = :uid AND stage IS NULL
+    """), {"uid": uid}).rowcount
+    if null_fixed > 0:
+        fix_details["NULL -> New"] = null_fixed
+        total_fixed += null_fixed
+
+    # Also fix org_id while we're at it
+    org_fixed = 0
+    if org_id:
+        org_fixed = db.execute(text("""
+            UPDATE leads SET organization_id = :org_id, updated_at = CURRENT_TIMESTAMP
+            WHERE owner_id = :uid AND organization_id IS NULL
+        """), {"org_id": org_id, "uid": uid}).rowcount
+
+    db.commit()
+
+    return {
+        "status": "success",
+        "user_id": uid,
+        "total_stage_fixes": total_fixed,
+        "fix_details": fix_details,
+        "org_id_fixes": org_fixed,
+        "note": "TEMPORARY - delete after debugging",
+    }
