@@ -228,6 +228,7 @@ function VoicemailSettings() {
       }
     } catch (err) {
       console.error('Error creating campaign:', err);
+      setLoadError(err.response?.data?.detail || 'Failed to create campaign. Please try again.');
     } finally {
       setCampaignSaving(false);
     }
@@ -247,6 +248,7 @@ function VoicemailSettings() {
       await loadCampaigns();
     } catch (err) {
       console.error(`Error ${action} campaign:`, err);
+      setLoadError(err.response?.data?.detail || `Failed to ${action} campaign. Please try again.`);
       alert(err.response?.data?.detail || `Failed to ${action} campaign`);
     }
   };

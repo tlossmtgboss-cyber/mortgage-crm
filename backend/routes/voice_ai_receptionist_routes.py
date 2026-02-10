@@ -460,12 +460,18 @@ async def drop_voicemail(
                 # For now, we'll use a base64 encoded data URL (Slybroadcast supports c_url parameter)
                 # In production, upload to S3/CloudFlare R2 and use c_url
 
-                # For immediate testing: Save to static directory if it exists
+                # WARNING: Audio saved to ephemeral filesystem. On Railway, any deploy
+                # wipes these files. If Slybroadcast fetches after a deploy, it gets 404.
+                # TODO: Upload to S3/CloudFlare R2 for persistent URLs.
                 static_dir = Path("/app/static") if Path("/app/static").exists() else Path("static")
                 static_dir.mkdir(exist_ok=True)
                 static_audio_path = static_dir / audio_filename
 
                 shutil.copy(audio_path, static_audio_path)
+                logger.warning(
+                    f"Audio file {audio_filename} saved to ephemeral disk. "
+                    "Migrate to S3/R2 for reliable Slybroadcast delivery."
+                )
 
                 # Get public URL for audio
                 api_url = os.getenv("API_URL", "https://app.perenniaai.com")

@@ -302,18 +302,16 @@ def check_dnc_status(phone_number: str, db: Session) -> Tuple[bool, str]:
 
     digits = _normalize_phone(phone_number)
 
-    # Check exact match and common formats in internal DNC table
-    dnc = db.query(ContactDNCStatus).filter(
-        or_(
-            ContactDNCStatus.phone_number == phone_number,
-            ContactDNCStatus.phone_number == digits,
-            ContactDNCStatus.phone_number == f"+1{digits}",
-            ContactDNCStatus.phone_number == f"1{digits}",
-        )
-    ).first()
+    # Normalize DNC entries to digits-only for reliable matching.
+    # Uses SQL to strip non-digits so format variations (dashes, parens, +1) all match.
+    dnc = db.execute(text("""
+        SELECT id, reason FROM contact_dnc_status
+        WHERE regexp_replace(phone_number, '[^0-9]', '', 'g') LIKE :suffix
+        LIMIT 1
+    """), {"suffix": f"%{digits[-10:]}" if len(digits) >= 10 else f"%{digits}"}).fetchone()
 
     if dnc:
-        return True, f"Phone number is on Do Not Call list (reason: {dnc.reason or 'N/A'})"
+        return True, f"Phone number is on Do Not Call list (reason: {dnc[1] or 'N/A'})"
 
     # Check National DNC Registry scrub freshness (TCPA requires scrub every 31 days)
     _check_national_dnc_scrub_freshness()
@@ -685,6 +683,19 @@ async def create_voicemail_drop(
         if not is_allowed:
             raise HTTPException(status_code=429, detail=rate_msg)
 
+        # --- Idempotency: prevent duplicate drops within 60 seconds ---
+        recent_dup = db.execute(text("""
+            SELECT id FROM voicemail_drops
+            WHERE user_id = :uid AND phone_number = :phone
+              AND created_at > NOW() - INTERVAL '60 seconds'
+            LIMIT 1
+        """), {"uid": current_user.id, "phone": phone_number}).fetchone()
+        if recent_dup:
+            raise HTTPException(
+                status_code=409,
+                detail="A voicemail to this number was already sent in the last 60 seconds"
+            )
+
         # Load template voice settings if template_id provided
         VoicemailTemplate = get_voicemail_template_model()
         voice_provider = "11labs"
@@ -788,9 +799,9 @@ async def create_voicemail_drop(
             }
 
         except Exception as e:
-            # Update voicemail drop with error
+            # Update voicemail drop with error (truncate to prevent DB bloat)
             voicemail_drop.status = 'failed'
-            voicemail_drop.error_message = str(e)
+            voicemail_drop.error_message = str(e)[:500]
             db.commit()
 
             # Create failed event
@@ -1810,6 +1821,9 @@ async def _resolve_and_dispatch_campaign(campaign_id: int, user_id: int, user_na
         Lead = main.Lead
         User = main.User
         contact_filter = campaign.contact_filter or {}
+        # Whitelist allowed filter keys to prevent unexpected query behavior
+        ALLOWED_FILTER_KEYS = {"status", "source", "stage", "assigned_to", "tag"}
+        contact_filter = {k: v for k, v in contact_filter.items() if k in ALLOWED_FILTER_KEYS}
 
         # Get user's organization for multi-tenant isolation
         campaign_user = db.query(User).filter(User.id == user_id).first()
@@ -1855,7 +1869,8 @@ async def _resolve_and_dispatch_campaign(campaign_id: int, user_id: int, user_na
             msg = template.message_text
             first_name = getattr(contact, 'first_name', '') or ''
             last_name = getattr(contact, 'last_name', '') or ''
-            msg = msg.replace("{{contact_name}}", f"{first_name} {last_name}".strip())
+            full_name = " ".join(filter(None, [first_name, last_name]))
+            msg = msg.replace("{{contact_name}}", full_name)
             msg = msg.replace("{{first_name}}", first_name)
             msg = msg.replace("{{last_name}}", last_name)
             msg = msg.replace("{{loan_officer}}", user_name)
@@ -1863,6 +1878,8 @@ async def _resolve_and_dispatch_campaign(campaign_id: int, user_id: int, user_na
             msg = msg.replace("{{phone}}", getattr(contact, 'phone', '') or '')
             msg = msg.replace("{{email}}", getattr(contact, 'email', '') or '')
             msg = re.sub(r'\{\{[^}]+\}\}', '', msg)
+            # Normalize whitespace left by empty variable substitutions
+            msg = re.sub(r'  +', ' ', msg).strip()
 
             drop = VoicemailDrop(
                 user_id=user_id,
@@ -1900,57 +1917,75 @@ async def _resolve_and_dispatch_campaign(campaign_id: int, user_id: int, user_na
 
         sent = 0
         failed = 0
+        DISPATCH_BATCH_SIZE = 5  # Concurrent Vapi calls per batch
 
-        for drop in queued_drops:
+        voice_provider = template.voice_provider if template else "11labs"
+        voice_id = template.voice_id if template else "paula"
+        voice_speed = template.voice_speed if template else 1.0
+        audio_url = template.audio_url if template else None
+
+        async def _dispatch_one(drop_id, phone, msg_text, contact_name):
+            """Send a single drop via Vapi (no DB access — returns result or exception)."""
+            return await send_voicemail_via_vapi(
+                phone_number=phone,
+                message=msg_text,
+                recipient_name=contact_name or "",
+                user_name=user_name,
+                voicemail_drop_id=drop_id,
+                db=db,
+                voice_provider=voice_provider or "11labs",
+                voice_id=voice_id or "paula",
+                voice_speed=voice_speed or 1.0,
+                audio_url=audio_url,
+            )
+
+        # Process drops in batches for parallel Vapi calls
+        for batch_start in range(0, len(queued_drops), DISPATCH_BATCH_SIZE):
             db.refresh(campaign)
             if campaign.status in ("paused", "cancelled"):
                 logger.info(f"Campaign {campaign_id} {campaign.status} — stopping dispatch")
                 break
 
-            # Claim drop atomically: only update if still "queued" (prevents double-send)
-            claimed = db.execute(
-                sa_update(VoicemailDrop)
-                .where(VoicemailDrop.id == drop.id)
-                .where(VoicemailDrop.status == "queued")
-                .values(status="sending")
-            ).rowcount
+            batch = queued_drops[batch_start:batch_start + DISPATCH_BATCH_SIZE]
+
+            # Claim all drops in batch atomically
+            claimed_drops = []
+            for drop in batch:
+                claimed = db.execute(
+                    sa_update(VoicemailDrop)
+                    .where(VoicemailDrop.id == drop.id)
+                    .where(VoicemailDrop.status == "queued")
+                    .values(status="sending")
+                ).rowcount
+                if claimed:
+                    claimed_drops.append(drop)
             db.commit()
 
-            if claimed == 0:
-                # Another worker already claimed this drop — skip
+            if not claimed_drops:
                 continue
 
-            try:
-                voice_provider = template.voice_provider if template else "11labs"
-                voice_id = template.voice_id if template else "paula"
-                voice_speed = template.voice_speed if template else 1.0
-                audio_url = template.audio_url if template else None
+            # Fire Vapi calls concurrently for the batch
+            tasks = [
+                _dispatch_one(d.id, d.phone_number, d.message_text, d.contact_name)
+                for d in claimed_drops
+            ]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
 
-                result = await send_voicemail_via_vapi(
-                    phone_number=drop.phone_number,
-                    message=drop.message_text,
-                    recipient_name=drop.contact_name or "",
-                    user_name=user_name,
-                    voicemail_drop_id=drop.id,
-                    db=db,
-                    voice_provider=voice_provider or "11labs",
-                    voice_id=voice_id or "paula",
-                    voice_speed=voice_speed or 1.0,
-                    audio_url=audio_url,
-                )
-
+            # Process results (DB writes are serial)
+            for drop, result in zip(claimed_drops, results):
                 db.refresh(drop)
-                drop.vapi_call_id = result.get("call_id")
-                sent += 1
-            except Exception as e:
-                db.refresh(drop)
-                drop.status = "failed"
-                drop.error_message = str(e)[:500]
-                failed += 1
-                logger.error(f"Campaign {campaign_id} drop {drop.id} failed: {e}")
-
+                if isinstance(result, Exception):
+                    drop.status = "failed"
+                    drop.error_message = str(result)[:500]
+                    failed += 1
+                    logger.error(f"Campaign {campaign_id} drop {drop.id} failed: {result}")
+                else:
+                    drop.vapi_call_id = result.get("call_id")
+                    sent += 1
             db.commit()
-            await asyncio.sleep(delay_between)
+
+            # Throttle delay per batch (scaled to maintain overall rate)
+            await asyncio.sleep(delay_between * len(claimed_drops))
 
         # Update campaign counts
         db.refresh(campaign)

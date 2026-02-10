@@ -238,7 +238,16 @@ async def generate_voicemail_audio(
 
             if response.status_code == 200:
                 # Save audio to database (base64 encoded)
-                audio_base64 = base64.b64encode(response.content).decode('utf-8')
+                # TODO: Migrate to S3/R2 object storage to avoid DB bloat
+                audio_bytes = response.content
+                MAX_AUDIO_BYTES = 512 * 1024  # 512KB limit
+                if len(audio_bytes) > MAX_AUDIO_BYTES:
+                    logger.warning(
+                        f"Voicemail audio for {tracking_id} is {len(audio_bytes)} bytes "
+                        f"(>{MAX_AUDIO_BYTES}). Truncating. Consider migrating to object storage."
+                    )
+                    audio_bytes = audio_bytes[:MAX_AUDIO_BYTES]
+                audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
 
                 # Create a new session for the background task
                 db_session = SessionLocal()
@@ -249,7 +258,7 @@ async def generate_voicemail_audio(
                         WHERE id = :tracking_id
                     """), {"audio": audio_base64, "tracking_id": tracking_id})
                     db_session.commit()
-                    logger.info(f"Voicemail audio generated and saved for {tracking_id}")
+                    logger.info(f"Voicemail audio saved for {tracking_id} ({len(audio_base64)} chars)")
                 finally:
                     db_session.close()
 
