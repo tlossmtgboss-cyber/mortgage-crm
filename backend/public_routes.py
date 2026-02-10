@@ -4,7 +4,7 @@ Public Routes for Registration, Email Verification, and Onboarding
 These endpoints don't require authentication.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 from typing import Optional, Dict, List
@@ -129,16 +129,25 @@ email_service = EmailService()
 # ============================================================================
 
 @router.post("/api/v1/create-demo-user")
-async def create_demo_user(db: Session = Depends(get_db)):
+async def create_demo_user(
+    admin_key: str = Query(..., description="Admin API key"),
+    db: Session = Depends(get_db),
+):
     """
-    Create or reset a demo user for testing
-    Email: demo@test.com
-    Password: demo123
+    Create or reset a demo user for testing. Requires ADMIN_API_KEY.
+    Password is read from DEMO_USER_PASSWORD env var (defaults to random).
     """
+    import os as _os
+    import secrets as _secrets
+    _admin_api_key = _os.getenv("ADMIN_API_KEY")
+    if not _admin_api_key or admin_key != _admin_api_key:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
     # Lazy imports to avoid circular dependency
     from main import User, Subscription, OnboardingProgress, get_password_hash
 
     demo_email = "demo@test.com"
+    demo_password = _os.getenv("DEMO_USER_PASSWORD") or _secrets.token_urlsafe(16)
 
     # Delete existing demo user if exists
     existing = db.query(User).filter(User.email == demo_email).first()
@@ -149,7 +158,7 @@ async def create_demo_user(db: Session = Depends(get_db)):
     # Create demo user
     demo_user = User(
         email=demo_email,
-        hashed_password=get_password_hash("demo123"),
+        hashed_password=get_password_hash(demo_password),
         full_name="Demo User",
         email_verified=True,
         is_active=True,
@@ -192,7 +201,7 @@ async def create_demo_user(db: Session = Depends(get_db)):
     return {
         "message": "Demo user created successfully",
         "email": demo_email,
-        "password": "demo123",
+        "password": demo_password,
         "note": "Use these credentials to login"
     }
 

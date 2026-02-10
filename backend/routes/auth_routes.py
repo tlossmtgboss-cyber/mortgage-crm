@@ -1108,19 +1108,28 @@ def create_push_notification_routes(app, get_current_user, DeviceToken):
 # =============================================================================
 
 @router.post("/api/v1/setup-admin")
-async def setup_admin_user(db: Session = Depends(get_db)):
+async def setup_admin_user(
+    admin_key: str = Query(..., description="Admin API key for authorization"),
+    db: Session = Depends(get_db),
+):
     """
     One-time setup: Create or reset admin user password.
-    This should be disabled after initial setup.
+    Requires ADMIN_API_KEY and ADMIN_SETUP_PASSWORD env vars.
     """
+    import os as _os
+    _ADMIN_API_KEY = _os.getenv("ADMIN_API_KEY")
+    if not _ADMIN_API_KEY or admin_key != _ADMIN_API_KEY:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
     admin_email = "admin@perenniaai.com"
-    admin_password = "demo123"
+    admin_setup_password = _os.getenv("ADMIN_SETUP_PASSWORD")
+    if not admin_setup_password:
+        raise HTTPException(status_code=500, detail="ADMIN_SETUP_PASSWORD env var not set")
 
     try:
-        # Pre-computed bcrypt hash for "demo123" using passlib with bcrypt 4.1.3
-        new_hash = "$2b$12$okQ2nh4jbjfdA8nmZ7zj4enIL0tFjd3O7s58t2I/0K6bZPNY8nEuy"
-
-        logger.info(f"Using pre-computed hash for admin: {new_hash[:30]}...")
+        from passlib.context import CryptContext
+        _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+        new_hash = _pwd_context.hash(admin_setup_password)
 
         # Use raw SQL to update password directly to avoid ORM issues
         result = db.execute(
@@ -1133,7 +1142,6 @@ async def setup_admin_user(db: Session = Depends(get_db)):
             return {
                 "message": f"Password reset for {admin_email}",
                 "status": "updated",
-                "password": admin_password
             }
 
         # User doesn't exist, create new one
@@ -1149,12 +1157,13 @@ async def setup_admin_user(db: Session = Depends(get_db)):
         return {
             "message": f"Admin user created: {admin_email}",
             "status": "created",
-            "password": admin_password
         }
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         logger.error(f"Setup admin error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Admin setup failed")
 
 
 # =============================================================================

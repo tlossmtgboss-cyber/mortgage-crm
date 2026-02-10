@@ -116,16 +116,29 @@ def configure_middleware(
         logger.info("Dynamic CORS middleware enabled")
     except Exception as e:
         logger.warning(f"Dynamic CORS middleware not loaded: {e}")
-        # Fallback to standard CORS
+        # Fallback to standard CORS with explicit origins (never wildcard)
+        import os as _os
         from fastapi.middleware.cors import CORSMiddleware
+        _fallback_origins = [
+            "http://localhost:3000",
+            "http://localhost:3001",
+            "http://localhost:5173",
+            "https://perenniaai.com",
+            "https://www.perenniaai.com",
+            "https://app.perenniaai.com",
+            "https://api.perenniaai.com",
+        ]
+        _railway_url = _os.getenv("RAILWAY_PUBLIC_DOMAIN")
+        if _railway_url:
+            _fallback_origins.append(f"https://{_railway_url}")
         app.add_middleware(
             CORSMiddleware,
-            allow_origins=["*"],
+            allow_origins=_fallback_origins,
             allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
+            allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+            allow_headers=["Authorization", "Content-Type", "X-CSRF-Token", "X-Request-ID"],
         )
-        logger.info("Standard CORS middleware enabled (fallback)")
+        logger.info("Standard CORS middleware enabled (fallback, explicit origins)")
 
     # =========================================================================
     # Security Middleware Stack

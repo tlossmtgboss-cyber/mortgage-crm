@@ -183,14 +183,27 @@ def _configure_middleware(
 
     except Exception as e:
         logger.warning(f"Middleware configuration incomplete: {e}")
-        # Fallback to basic CORS
+        # Fallback to basic CORS with explicit origins (never wildcard)
         from fastapi.middleware.cors import CORSMiddleware
+        _fallback_origins = [
+            "http://localhost:3000",
+            "http://localhost:3001",
+            "http://localhost:5173",
+            "https://perenniaai.com",
+            "https://www.perenniaai.com",
+            "https://app.perenniaai.com",
+            "https://api.perenniaai.com",
+        ]
+        # Add any Railway deployment URLs
+        _railway_url = os.getenv("RAILWAY_PUBLIC_DOMAIN")
+        if _railway_url:
+            _fallback_origins.append(f"https://{_railway_url}")
         app.add_middleware(
             CORSMiddleware,
-            allow_origins=["*"],
+            allow_origins=_fallback_origins,
             allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
+            allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+            allow_headers=["Authorization", "Content-Type", "X-CSRF-Token", "X-Request-ID"],
         )
 
 

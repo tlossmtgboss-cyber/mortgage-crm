@@ -34,6 +34,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/integrations/salesforce", tags=["Salesforce Integration"])
 
 
+def _require_admin_key(admin_key: str = Query(..., description="Admin API key")):
+    """Dependency that requires ADMIN_API_KEY for debug/diagnostic endpoints."""
+    _key = os.getenv("ADMIN_API_KEY")
+    if not _key or admin_key != _key:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    return True
+
+
 # ============ Database Schema Fix ============
 
 def ensure_salesforce_tables():
@@ -282,11 +290,12 @@ async def ensure_tables_endpoint(
 
 @router.get("/diagnose")
 async def diagnose_salesforce_connection(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth: bool = Depends(_require_admin_key),
 ):
     """
-    Diagnose Salesforce connection issues - no auth required for debugging.
-    Shows all integration profiles and their status.
+    Diagnose Salesforce connection issues.
+    Requires ADMIN_API_KEY.
     """
     try:
         db.rollback()
@@ -359,10 +368,11 @@ async def diagnose_salesforce_connection(
 @router.get("/test-schema/{profile_id}")
 async def test_schema_query(
     profile_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth: bool = Depends(_require_admin_key),
 ):
     """
-    Test endpoint to query schemas for a profile - no auth required for debugging.
+    Test endpoint to query schemas for a profile. Requires ADMIN_API_KEY.
     """
     try:
         db.rollback()
@@ -406,10 +416,11 @@ async def test_schema_query(
 @router.post("/trigger-discovery/{profile_id}")
 async def trigger_discovery_for_profile(
     profile_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth: bool = Depends(_require_admin_key),
 ):
     """
-    Trigger schema discovery for a specific profile - no auth required for debugging.
+    Trigger schema discovery for a specific profile. Requires ADMIN_API_KEY.
     """
     try:
         db.rollback()
@@ -444,10 +455,11 @@ async def trigger_discovery_for_profile(
 @router.post("/test-mapping-debug/{profile_id}")
 async def test_mapping_debug(
     profile_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth: bool = Depends(_require_admin_key),
 ):
     """
-    Test creating a mapping - no auth required for debugging.
+    Test creating a mapping. Requires ADMIN_API_KEY.
     """
     try:
         db.rollback()
@@ -501,10 +513,11 @@ async def test_mapping_debug(
 async def debug_schema_for_object(
     profile_id: int,
     object_name: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth: bool = Depends(_require_admin_key),
 ):
     """
-    Debug endpoint to inspect schema data for a specific object.
+    Debug endpoint to inspect schema data. Requires ADMIN_API_KEY.
     """
     try:
         db.rollback()
@@ -591,10 +604,11 @@ async def debug_create_mapping(
     source_field: str = Query(..., description="Salesforce field name"),
     target_entity: str = Query("loan", description="Target entity"),
     target_field: str = Query(..., description="Target field name"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth: bool = Depends(_require_admin_key),
 ):
     """
-    Debug endpoint to test creating a single mapping with full diagnostics.
+    Debug endpoint to test creating a single mapping. Requires ADMIN_API_KEY.
     """
     try:
         db.rollback()
@@ -666,10 +680,11 @@ async def debug_create_mapping(
 
 @router.get("/loans-status-debug")
 async def get_loans_status_debug(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth: bool = Depends(_require_admin_key),
 ):
     """
-    Get status of loans table - no auth required for debugging.
+    Get status of loans table. Requires ADMIN_API_KEY.
     """
     try:
         db.rollback()
@@ -719,10 +734,11 @@ async def get_loans_status_debug(
 
 @router.post("/import-to-mum-debug")
 async def import_funded_loans_to_mum_debug(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth: bool = Depends(_require_admin_key),
 ):
     """
-    Import funded loans from loans table to MUM clients - no auth required for debugging.
+    Import funded loans to MUM clients. Requires ADMIN_API_KEY.
     """
     try:
         db.rollback()
@@ -1236,9 +1252,10 @@ async def get_connection_status(
 @router.get("/debug-status")
 async def get_debug_status(
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth: bool = Depends(_require_admin_key),
 ):
-    """Debug endpoint to check Salesforce integration status with detailed info."""
+    """Debug Salesforce integration status. Requires ADMIN_API_KEY."""
     try:
         db.rollback()
     except Exception:
@@ -3397,12 +3414,11 @@ async def repair_fix_organization_id(
 @router.get("/diag/lead-visibility")
 async def diag_lead_visibility(
     email: str = Query(..., description="User email to diagnose"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth: bool = Depends(_require_admin_key),
 ):
     """
-    Temporary no-auth diagnostic: check what leads/loans a user can see.
-    Shows stage distribution, org_id status, and simulates what the API returns.
-    DELETE THIS ENDPOINT after debugging is complete.
+    Diagnostic: check what leads/loans a user can see. Requires ADMIN_API_KEY.
     """
     user = db.execute(text("""
         SELECT id, email, organization_id, permission_role
@@ -3533,12 +3549,11 @@ async def diag_lead_visibility(
 @router.get("/diag/fix-stages")
 async def diag_fix_stages(
     email: str = Query(..., description="User email to fix stages for"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth: bool = Depends(_require_admin_key),
 ):
     """
-    Temporary no-auth repair: fix stage case mismatches that break SQLAlchemy enum loading.
-    e.g., 'NEW' -> 'New', 'new' -> 'New', NULL -> 'New'
-    DELETE THIS ENDPOINT after debugging is complete.
+    Diagnostic repair: fix stage case mismatches. Requires ADMIN_API_KEY.
     """
     user = db.execute(text("""
         SELECT id, organization_id FROM users WHERE email = :email

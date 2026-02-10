@@ -553,8 +553,8 @@ async def purchase_phone_number(
         phone_number_id = order.data.phone_numbers[0].id
 
         # Wait for order to complete (in production, use webhooks)
-        import time
-        time.sleep(2)
+        import asyncio
+        await asyncio.sleep(2)
 
         # Configure the number with connection and messaging profile
         connection_id = purchase.connection_id or config.get("connection_id")
