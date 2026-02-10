@@ -174,11 +174,7 @@ async def get_leads(
         query = filter_leads_by_permissions(query, current_user, db)
 
         if stage:
-            try:
-                stage_enum = LeadStage(stage)
-                query = query.filter(Lead.stage == stage_enum)
-            except ValueError:
-                pass
+            query = query.filter(Lead.stage == stage)
 
         leads = query.order_by(Lead.created_at.desc()).offset(skip).limit(limit).all()
 

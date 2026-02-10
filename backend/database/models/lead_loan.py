@@ -69,7 +69,7 @@ class Lead(Base):
     preferred_communication = Column(String)  # email, phone, text, voicemail
 
     # Pipeline status
-    stage = Column(SQLEnum(LeadStage), default=LeadStage.NEW)
+    stage = Column(String, default="New")
     source = Column(String)
     organization_code = Column(String)  # Branch/organization identifier
     referral_partner_id = Column(Integer, ForeignKey("referral_partners.id"))
