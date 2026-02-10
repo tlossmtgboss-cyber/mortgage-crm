@@ -3392,3 +3392,98 @@ async def repair_fix_organization_id(
         "organization_id": org_id,
         "message": f"Fixed org_id on {leads_org_fixed} leads + {loans_org_fixed} loans, fixed stage on {leads_stage_fixed + leads_null_stage_fixed} leads",
     }
+
+
+@router.get("/diag/lead-visibility")
+async def diag_lead_visibility(
+    email: str = Query(..., description="User email to diagnose"),
+    db: Session = Depends(get_db)
+):
+    """
+    Temporary no-auth diagnostic: check what leads/loans a user can see.
+    Shows stage distribution, org_id status, and simulates what the API returns.
+    DELETE THIS ENDPOINT after debugging is complete.
+    """
+    user = db.execute(text("""
+        SELECT id, email, organization_id, permission_role
+        FROM users WHERE email = :email
+    """), {"email": email}).fetchone()
+
+    if not user:
+        return {"error": f"User {email} not found"}
+
+    uid = user.id
+    org_id = user.organization_id
+
+    # Check leads owned by this user
+    leads_data = db.execute(text("""
+        SELECT stage, organization_id, COUNT(*) as cnt
+        FROM leads
+        WHERE owner_id = :uid
+        GROUP BY stage, organization_id
+        ORDER BY cnt DESC
+    """), {"uid": uid}).fetchall()
+
+    # Check leads visible to this user (matching org_id)
+    visible_leads = db.execute(text("""
+        SELECT stage, COUNT(*) as cnt
+        FROM leads
+        WHERE organization_id = :org_id AND owner_id = :uid
+        GROUP BY stage
+        ORDER BY cnt DESC
+    """), {"org_id": org_id, "uid": uid}).fetchall()
+
+    # Total count the main API would return
+    total_api_leads = db.execute(text("""
+        SELECT COUNT(*) FROM leads
+        WHERE organization_id = :org_id AND owner_id = :uid
+    """), {"org_id": org_id, "uid": uid}).scalar() or 0
+
+    # Check loans
+    loans_data = db.execute(text("""
+        SELECT stage, organization_id, COUNT(*) as cnt
+        FROM loans
+        WHERE loan_officer_id = :uid
+        GROUP BY stage, organization_id
+        ORDER BY cnt DESC
+    """), {"uid": uid}).fetchall()
+
+    visible_loans = db.execute(text("""
+        SELECT stage, COUNT(*) as cnt
+        FROM loans
+        WHERE organization_id = :org_id AND loan_officer_id = :uid
+        GROUP BY stage
+        ORDER BY cnt DESC
+    """), {"org_id": org_id, "uid": uid}).fetchall()
+
+    total_api_loans = db.execute(text("""
+        SELECT COUNT(*) FROM loans
+        WHERE organization_id = :org_id AND loan_officer_id = :uid
+    """), {"org_id": org_id, "uid": uid}).scalar() or 0
+
+    # Sample first 5 leads
+    sample_leads = db.execute(text("""
+        SELECT id, name, email, stage, organization_id, salesforce_id, created_at
+        FROM leads
+        WHERE owner_id = :uid
+        ORDER BY created_at DESC LIMIT 5
+    """), {"uid": uid}).fetchall()
+
+    return {
+        "user": {"id": uid, "email": user.email, "org_id": org_id, "permission_role": user.permission_role},
+        "leads": {
+            "all_owned": [{"stage": r.stage, "org_id": r.organization_id, "count": r.cnt} for r in leads_data],
+            "visible_in_api": [{"stage": r.stage, "count": r.cnt} for r in visible_leads],
+            "total_api_would_return": total_api_leads,
+        },
+        "loans": {
+            "all_owned": [{"stage": r.stage, "org_id": r.organization_id, "count": r.cnt} for r in loans_data],
+            "visible_in_api": [{"stage": r.stage, "count": r.cnt} for r in visible_loans],
+            "total_api_would_return": total_api_loans,
+        },
+        "sample_leads": [
+            {"id": r.id, "name": r.name, "email": r.email, "stage": r.stage, "org_id": r.organization_id, "sf_id": r.salesforce_id}
+            for r in sample_leads
+        ],
+        "note": "TEMPORARY DIAGNOSTIC - delete after debugging",
+    }
