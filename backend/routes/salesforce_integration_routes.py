@@ -3489,7 +3489,7 @@ async def diag_lead_visibility(
     }
 
 
-@router.post("/diag/fix-stages")
+@router.get("/diag/fix-stages")
 async def diag_fix_stages(
     email: str = Query(..., description="User email to fix stages for"),
     db: Session = Depends(get_db)
