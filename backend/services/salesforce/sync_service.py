@@ -18,6 +18,7 @@ from typing import Optional, List, Dict, Any
 from urllib.parse import quote
 import httpx
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from salesforce_integration_models import (
@@ -122,6 +123,20 @@ class SalesforceSyncService:
             profile.last_sync_at = datetime.utcnow()
             profile.last_error = None
             db.commit()
+
+            # Backfill organization_id for any records missing it
+            try:
+                from services.tenant_isolation import backfill_organization_id_for_user
+                user_row = db.execute(text("""
+                    SELECT user_id, u.organization_id
+                    FROM integration_profiles ip
+                    JOIN users u ON u.id = ip.user_id
+                    WHERE ip.id = :profile_id
+                """), {"profile_id": integration_profile_id}).fetchone()
+                if user_row and user_row.organization_id:
+                    backfill_organization_id_for_user(db, user_row.user_id, user_row.organization_id)
+            except Exception as backfill_err:
+                logger.warning(f"Post-sync org backfill failed (non-fatal): {backfill_err}")
 
             result.success = True
             result.duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
@@ -449,6 +464,12 @@ class SalesforceSyncService:
         from sqlalchemy import text
         from datetime import datetime, timezone
 
+        # Get user's organization_id for multi-tenant isolation
+        user_row = db.execute(text("""
+            SELECT organization_id FROM users WHERE id = :user_id
+        """), {"user_id": user_id}).fetchone()
+        org_id = user_row.organization_id if user_row else None
+
         # Check if lead exists by salesforce_id or email
         existing = None
         if salesforce_id:
@@ -466,28 +487,33 @@ class SalesforceSyncService:
             """), {"email": data.get('email'), "user_id": user_id}).fetchone()
 
         # Map Salesforce fields to CRM fields
+        first_name = data.get('first_name') or data.get('FirstName', '')
+        last_name = data.get('last_name') or data.get('LastName', '')
         lead_data = {
-            "first_name": data.get('first_name') or data.get('FirstName', ''),
-            "last_name": data.get('last_name') or data.get('LastName', ''),
+            "first_name": first_name,
+            "last_name": last_name,
+            "name": f"{first_name} {last_name}".strip() or 'Unknown',
             "email": data.get('email') or data.get('Email', ''),
             "phone": data.get('phone') or data.get('Phone', ''),
             "company": data.get('company') or data.get('Company', ''),
             "source": data.get('source') or data.get('LeadSource', 'Salesforce'),
         }
 
-        # Remove empty values
+        # Remove empty values but keep 'name'
         lead_data = {k: v for k, v in lead_data.items() if v}
 
         if existing:
-            # Update existing lead
+            # Update existing lead — also backfill organization_id if missing
             lead_id = existing[0]
             set_clauses = ", ".join([f"{k} = :{k}" for k in lead_data.keys()])
             if set_clauses:
                 lead_data['lead_id'] = lead_id
                 lead_data['salesforce_id'] = salesforce_id
+                lead_data['org_id'] = org_id
                 db.execute(text(f"""
                     UPDATE leads SET {set_clauses},
                         salesforce_id = :salesforce_id,
+                        organization_id = COALESCE(organization_id, :org_id),
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = :lead_id
                 """), lead_data)
@@ -498,6 +524,7 @@ class SalesforceSyncService:
             lead_data['owner_id'] = user_id
             lead_data['salesforce_id'] = salesforce_id
             lead_data['stage'] = 'new'
+            lead_data['organization_id'] = org_id
 
             columns = ", ".join(lead_data.keys())
             placeholders = ", ".join([f":{k}" for k in lead_data.keys()])
@@ -512,6 +539,16 @@ class SalesforceSyncService:
             logger.info(f"Created lead {lead_id} from Salesforce {salesforce_id}")
             return lead_id
 
+    # Valid columns on the loans table that can be set from Salesforce sync
+    VALID_LOAN_COLUMNS = {
+        'borrower_name', 'borrower_email', 'borrower_phone',
+        'amount', 'interest_rate', 'loan_type', 'loan_purpose', 'program',
+        'loan_number', 'ltv', 'property_address', 'property_city',
+        'property_state', 'property_zip', 'property_type', 'property_value',
+        'closing_date', 'funded_date', 'application_date', 'lock_expiration_date',
+        'stage',
+    }
+
     async def _upsert_loan(
         self,
         db: Session,
@@ -519,10 +556,15 @@ class SalesforceSyncService:
         salesforce_id: str,
         data: Dict[str, Any]
     ) -> Optional[int]:
-        """Upsert a loan from Salesforce Opportunity"""
+        """Upsert a loan from Salesforce data (Opportunity or Transaction Property)."""
         from sqlalchemy import text
-        from datetime import datetime, timezone
         import uuid
+
+        # Get user's organization_id for multi-tenant isolation
+        user_row = db.execute(text("""
+            SELECT organization_id FROM users WHERE id = :user_id
+        """), {"user_id": user_id}).fetchone()
+        org_id = user_row.organization_id if user_row else None
 
         # Check if loan exists by salesforce_id
         existing = None
@@ -533,60 +575,58 @@ class SalesforceSyncService:
                 LIMIT 1
             """), {"sf_id": salesforce_id}).fetchone()
 
-        # Map Salesforce Opportunity fields to CRM loan fields
-        loan_data = {
-            "borrower_name": data.get('borrower_name') or data.get('Name', ''),
-            "borrower_email": data.get('borrower_email') or data.get('Email__c', ''),
-            "borrower_phone": data.get('borrower_phone') or data.get('Phone__c', ''),
-            "amount": float(data.get('amount') or data.get('Amount', 0) or 0),
-            "property_address": data.get('property_address') or data.get('Property_Address__c', ''),
-            "loan_type": data.get('loan_type') or data.get('Loan_Type__c', ''),
-            "program": data.get('program') or data.get('Loan_Program__c', ''),
-        }
+        # Build borrower_name from first+last if not directly provided
+        if not data.get('borrower_name'):
+            first = data.get('borrower_first_name', '')
+            last = data.get('borrower_last_name', '')
+            combined = f"{first} {last}".strip()
+            if combined:
+                data['borrower_name'] = combined
 
-        # Handle closing date
-        closing_date = data.get('closing_date') or data.get('CloseDate')
-        if closing_date:
-            if isinstance(closing_date, str):
-                try:
-                    loan_data['closing_date'] = closing_date
-                except Exception:
-                    pass
+        # Coerce amount to float
+        if 'amount' in data:
+            try:
+                data['amount'] = float(data['amount'] or 0)
+            except (TypeError, ValueError):
+                data['amount'] = 0
 
-        # Map stage from Salesforce StageName
-        sf_stage = data.get('stage') or data.get('StageName', '')
-        loan_data['stage'] = self._map_salesforce_stage(sf_stage)
+        # Map stage from Salesforce
+        if data.get('stage'):
+            data['stage'] = self._map_salesforce_stage(data['stage'])
 
-        # Remove empty values but keep amount even if 0
-        loan_data = {k: v for k, v in loan_data.items() if v or k == 'amount'}
+        # Filter to only valid loan columns, drop empty values (keep amount even if 0)
+        loan_data = {}
+        for k, v in data.items():
+            if k in self.VALID_LOAN_COLUMNS and (v or v == 0 or k == 'amount'):
+                loan_data[k] = v
 
         if existing:
-            # Update existing loan
+            # Update existing loan — also backfill organization_id if missing
             loan_id = existing[0]
-            set_clauses = ", ".join([f"{k} = :{k}" for k in loan_data.keys() if k != 'amount'])
-            if 'amount' in loan_data:
-                if set_clauses:
-                    set_clauses += ", amount = :amount"
-                else:
-                    set_clauses = "amount = :amount"
 
-            if set_clauses:
-                loan_data['loan_id'] = loan_id
-                loan_data['salesforce_id'] = salesforce_id
-                db.execute(text(f"""
-                    UPDATE loans SET {set_clauses},
-                        salesforce_id = :salesforce_id,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE id = :loan_id
-                """), loan_data)
+            set_parts = [f"{k} = :{k}" for k in loan_data.keys()]
+            set_parts.append("salesforce_id = :salesforce_id")
+            set_parts.append("organization_id = COALESCE(organization_id, :org_id)")
+            set_parts.append("updated_at = CURRENT_TIMESTAMP")
+
+            loan_data['loan_id'] = loan_id
+            loan_data['salesforce_id'] = salesforce_id
+            loan_data['org_id'] = org_id
+
+            db.execute(text(f"""
+                UPDATE loans SET {', '.join(set_parts)}
+                WHERE id = :loan_id
+            """), loan_data)
             logger.info(f"Updated loan {loan_id} from Salesforce {salesforce_id}")
             return loan_id
         else:
-            # Create new loan - need loan_number
-            loan_number = f"SF-{str(uuid.uuid4())[:8].upper()}"
-            loan_data['loan_number'] = loan_number
+            # Use loan_number from Salesforce if provided, else generate one
+            if not loan_data.get('loan_number'):
+                loan_data['loan_number'] = f"SF-{str(uuid.uuid4())[:8].upper()}"
+
             loan_data['loan_officer_id'] = user_id
             loan_data['salesforce_id'] = salesforce_id
+            loan_data['organization_id'] = org_id
 
             # Ensure required fields have defaults
             if not loan_data.get('borrower_name'):
@@ -594,7 +634,7 @@ class SalesforceSyncService:
             if not loan_data.get('amount'):
                 loan_data['amount'] = 0
             if not loan_data.get('stage'):
-                loan_data['stage'] = 'Application'
+                loan_data['stage'] = 'APPLICATION'
 
             columns = ", ".join(loan_data.keys())
             placeholders = ", ".join([f":{k}" for k in loan_data.keys()])
@@ -606,7 +646,7 @@ class SalesforceSyncService:
             """), loan_data)
 
             loan_id = result.fetchone()[0]
-            logger.info(f"Created loan {loan_id} ({loan_number}) from Salesforce {salesforce_id}")
+            logger.info(f"Created loan {loan_id} ({loan_data['loan_number']}) from Salesforce {salesforce_id}")
             return loan_id
 
     def _map_salesforce_stage(self, sf_stage: str) -> str:

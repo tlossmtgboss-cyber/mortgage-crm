@@ -2827,7 +2827,7 @@ async def get_sync_status(
     try:
         events = db.query(IntegrationEvent).filter(
             IntegrationEvent.integration_profile_id == profile.id,
-            IntegrationEvent.event_type.in_(['sync_completed', 'sync_failed', 'record_synced'])
+            IntegrationEvent.event_type.in_(['sync_completed', 'sync_failed'])
         ).order_by(IntegrationEvent.created_at.desc()).limit(20).all()
     except Exception as e:
         logger.warning(f"Could not query integration events: {e}")
@@ -2876,11 +2876,13 @@ async def get_sync_status(
         "recent_events": [
             {
                 "type": e.event_type,
+                "event_type": e.event_type,
                 "status": e.status,
                 "records_processed": e.records_processed,
                 "records_succeeded": e.records_succeeded,
                 "records_failed": e.records_failed,
                 "error": e.error_message[:100] if e.error_message else None,
+                "duration_ms": e.duration_ms,
                 "created_at": e.created_at.isoformat()
             }
             for e in events
@@ -3204,3 +3206,122 @@ async def admin_test_sync_simple(
         import traceback
         logger.error(f"Test sync failed: {traceback.format_exc()}")
         return {"error": str(e)[:500], "status": "failed"}
+
+
+@router.get("/debug/synced-records")
+async def debug_synced_records(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Diagnostic endpoint: show all Salesforce-synced records and their status.
+    Helps debug why synced records might not appear in the UI.
+    """
+    user_id = require_user(request, db)
+
+    # Get user's organization_id
+    user = db.execute(text("""
+        SELECT id, email, organization_id FROM users WHERE id = :uid
+    """), {"uid": user_id}).fetchone()
+
+    org_id = user.organization_id if user else None
+
+    # Find leads with salesforce_id
+    sf_leads = db.execute(text("""
+        SELECT id, name, email, stage, salesforce_id, organization_id, owner_id, created_at
+        FROM leads
+        WHERE salesforce_id IS NOT NULL AND owner_id = :uid
+        ORDER BY created_at DESC
+        LIMIT 100
+    """), {"uid": user_id}).fetchall()
+
+    # Find loans with salesforce_id
+    sf_loans = db.execute(text("""
+        SELECT id, loan_number, borrower_name, borrower_email, stage, amount,
+               salesforce_id, organization_id, loan_officer_id, created_at
+        FROM loans
+        WHERE salesforce_id IS NOT NULL AND loan_officer_id = :uid
+        ORDER BY created_at DESC
+        LIMIT 100
+    """), {"uid": user_id}).fetchall()
+
+    # Check how many are missing organization_id
+    leads_missing_org = len([l for l in sf_leads if l.organization_id is None])
+    loans_missing_org = len([l for l in sf_loans if l.organization_id is None])
+
+    return {
+        "user_id": user_id,
+        "user_email": user.email if user else None,
+        "user_organization_id": org_id,
+        "diagnosis": {
+            "leads_with_salesforce_id": len(sf_leads),
+            "leads_missing_organization_id": leads_missing_org,
+            "loans_with_salesforce_id": len(sf_loans),
+            "loans_missing_organization_id": loans_missing_org,
+            "problem": "Records exist but are invisible due to missing organization_id" if (leads_missing_org + loans_missing_org) > 0 else "Records have organization_id set",
+        },
+        "leads": [
+            {
+                "id": l.id, "name": l.name, "email": l.email,
+                "stage": l.stage, "salesforce_id": l.salesforce_id,
+                "organization_id": l.organization_id,
+                "visible": l.organization_id == org_id if org_id else False,
+            }
+            for l in sf_leads
+        ],
+        "loans": [
+            {
+                "id": l.id, "loan_number": l.loan_number,
+                "borrower_name": l.borrower_name, "borrower_email": l.borrower_email,
+                "stage": l.stage, "amount": float(l.amount) if l.amount else 0,
+                "salesforce_id": l.salesforce_id,
+                "organization_id": l.organization_id,
+                "visible": l.organization_id == org_id if org_id else False,
+            }
+            for l in sf_loans
+        ],
+    }
+
+
+@router.post("/repair/fix-organization-id")
+async def repair_fix_organization_id(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Repair endpoint: backfill organization_id on Salesforce-synced records
+    that are missing it, making them visible in the UI.
+    """
+    user_id = require_user(request, db)
+
+    # Get user's organization_id
+    user = db.execute(text("""
+        SELECT id, organization_id FROM users WHERE id = :uid
+    """), {"uid": user_id}).fetchone()
+
+    if not user or not user.organization_id:
+        raise HTTPException(status_code=400, detail="User has no organization_id set")
+
+    org_id = user.organization_id
+
+    # Fix leads
+    leads_fixed = db.execute(text("""
+        UPDATE leads SET organization_id = :org_id, updated_at = CURRENT_TIMESTAMP
+        WHERE owner_id = :uid AND organization_id IS NULL
+    """), {"org_id": org_id, "uid": user_id}).rowcount
+
+    # Fix loans
+    loans_fixed = db.execute(text("""
+        UPDATE loans SET organization_id = :org_id, updated_at = CURRENT_TIMESTAMP
+        WHERE loan_officer_id = :uid AND organization_id IS NULL
+    """), {"org_id": org_id, "uid": user_id}).rowcount
+
+    db.commit()
+
+    return {
+        "status": "success",
+        "leads_fixed": leads_fixed,
+        "loans_fixed": loans_fixed,
+        "organization_id": org_id,
+        "message": f"Fixed {leads_fixed} leads and {loans_fixed} loans — they should now be visible",
+    }

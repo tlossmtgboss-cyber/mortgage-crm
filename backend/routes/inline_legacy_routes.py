@@ -780,6 +780,14 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.warning(f"⚠️ Could not load Permission System routes: {e}")
 
+    # Include Permission Core routes (user permission endpoints)
+    try:
+        from routes.permission_core_routes import router as permission_core_router
+        app.include_router(permission_core_router, tags=["Permission Core"])
+        logger.info("✅ Permission Core routes loaded")
+    except Exception as e:
+        logger.warning(f"⚠️ Could not load Permission Core routes: {e}")
+
     # Include HR Management routes
     try:
         from routes.hr_management_routes import router as hr_management_router
