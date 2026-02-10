@@ -3249,36 +3249,87 @@ async def debug_synced_records(
     leads_missing_org = len([l for l in sf_leads if l.organization_id is None])
     loans_missing_org = len([l for l in sf_loans if l.organization_id is None])
 
+    # Analyze lead stage distribution (critical for frontend filtering)
+    lead_stage_counts = {}
+    for l in sf_leads:
+        stage = l.stage or "(null)"
+        lead_stage_counts[stage] = lead_stage_counts.get(stage, 0) + 1
+
+    loan_stage_counts = {}
+    for l in sf_loans:
+        stage = l.stage or "(null)"
+        loan_stage_counts[stage] = loan_stage_counts.get(stage, 0) + 1
+
+    # Check total leads/loans visible to this user (not just SF-synced)
+    total_leads = db.execute(text("""
+        SELECT COUNT(*) FROM leads WHERE owner_id = :uid AND organization_id = :org_id
+    """), {"uid": user_id, "org_id": org_id}).scalar() or 0
+
+    total_loans = db.execute(text("""
+        SELECT COUNT(*) FROM loans WHERE loan_officer_id = :uid AND organization_id = :org_id
+    """), {"uid": user_id, "org_id": org_id}).scalar() or 0
+
+    # Check user permissions
+    user_perms = db.execute(text("""
+        SELECT permission_role FROM users WHERE id = :uid
+    """), {"uid": user_id}).scalar()
+
+    # Frontend filter tabs for reference
+    frontend_lead_filters = ['New', 'Attempted Contact', 'Prospect', 'Application',
+                              'Pre-Qualified', 'Pre-Approved', 'Nurture', 'Withdrawn', 'Does Not Qualify']
+
+    # Identify leads with stages that don't match ANY frontend tab
+    invisible_stage_leads = len([l for l in sf_leads
+        if l.stage not in frontend_lead_filters and l.stage != 'Long-Term Nurture'])
+
+    problems = []
+    if leads_missing_org + loans_missing_org > 0:
+        problems.append(f"{leads_missing_org + loans_missing_org} records missing organization_id")
+    if invisible_stage_leads > 0:
+        problems.append(f"{invisible_stage_leads} leads have stage values that don't match any frontend filter tab")
+    bad_case_leads = len([l for l in sf_leads if l.stage and l.stage.lower() == 'new' and l.stage != 'New'])
+    if bad_case_leads > 0:
+        problems.append(f"{bad_case_leads} leads have stage='new' (lowercase) — frontend expects 'New'")
+    null_stage_leads = len([l for l in sf_leads if l.stage is None])
+    if null_stage_leads > 0:
+        problems.append(f"{null_stage_leads} leads have NULL stage — won't match any filter tab")
+
     return {
         "user_id": user_id,
         "user_email": user.email if user else None,
         "user_organization_id": org_id,
-        "diagnosis": {
-            "leads_with_salesforce_id": len(sf_leads),
-            "leads_missing_organization_id": leads_missing_org,
-            "loans_with_salesforce_id": len(sf_loans),
-            "loans_missing_organization_id": loans_missing_org,
-            "problem": "Records exist but are invisible due to missing organization_id" if (leads_missing_org + loans_missing_org) > 0 else "Records have organization_id set",
+        "user_permission_role": user_perms,
+        "totals": {
+            "all_leads_for_user": total_leads,
+            "all_loans_for_user": total_loans,
+            "sf_synced_leads": len(sf_leads),
+            "sf_synced_loans": len(sf_loans),
         },
-        "leads": [
+        "diagnosis": {
+            "problems": problems if problems else ["No obvious problems found — records should be visible"],
+            "lead_stage_distribution": lead_stage_counts,
+            "loan_stage_distribution": loan_stage_counts,
+            "frontend_lead_filter_tabs": frontend_lead_filters,
+            "note": "Frontend Leads page defaults to 'New' tab. Click other tabs to see leads in other stages.",
+        },
+        "leads_sample": [
             {
                 "id": l.id, "name": l.name, "email": l.email,
                 "stage": l.stage, "salesforce_id": l.salesforce_id,
                 "organization_id": l.organization_id,
-                "visible": l.organization_id == org_id if org_id else False,
+                "owner_id": l.owner_id,
             }
-            for l in sf_leads
+            for l in sf_leads[:10]
         ],
-        "loans": [
+        "loans_sample": [
             {
                 "id": l.id, "loan_number": l.loan_number,
                 "borrower_name": l.borrower_name, "borrower_email": l.borrower_email,
                 "stage": l.stage, "amount": float(l.amount) if l.amount else 0,
                 "salesforce_id": l.salesforce_id,
                 "organization_id": l.organization_id,
-                "visible": l.organization_id == org_id if org_id else False,
             }
-            for l in sf_loans
+            for l in sf_loans[:10]
         ],
     }
 
@@ -3304,24 +3355,40 @@ async def repair_fix_organization_id(
 
     org_id = user.organization_id
 
-    # Fix leads
-    leads_fixed = db.execute(text("""
+    # Fix 1: Backfill missing organization_id
+    leads_org_fixed = db.execute(text("""
         UPDATE leads SET organization_id = :org_id, updated_at = CURRENT_TIMESTAMP
         WHERE owner_id = :uid AND organization_id IS NULL
     """), {"org_id": org_id, "uid": user_id}).rowcount
 
-    # Fix loans
-    loans_fixed = db.execute(text("""
+    loans_org_fixed = db.execute(text("""
         UPDATE loans SET organization_id = :org_id, updated_at = CURRENT_TIMESTAMP
         WHERE loan_officer_id = :uid AND organization_id IS NULL
     """), {"org_id": org_id, "uid": user_id}).rowcount
+
+    # Fix 2: Fix stage case mismatch ('new' -> 'New', etc.)
+    # The frontend filters by exact string match, so stages must match LeadStage enum values
+    leads_stage_fixed = db.execute(text("""
+        UPDATE leads SET stage = 'New', updated_at = CURRENT_TIMESTAMP
+        WHERE owner_id = :uid AND lower(stage) = 'new' AND stage != 'New'
+    """), {"uid": user_id}).rowcount
+
+    # Fix 3: Set stage to 'New' for leads with NULL stage
+    leads_null_stage_fixed = db.execute(text("""
+        UPDATE leads SET stage = 'New', updated_at = CURRENT_TIMESTAMP
+        WHERE owner_id = :uid AND stage IS NULL
+    """), {"uid": user_id}).rowcount
 
     db.commit()
 
     return {
         "status": "success",
-        "leads_fixed": leads_fixed,
-        "loans_fixed": loans_fixed,
+        "fixes_applied": {
+            "leads_organization_id_fixed": leads_org_fixed,
+            "loans_organization_id_fixed": loans_org_fixed,
+            "leads_stage_case_fixed": leads_stage_fixed,
+            "leads_null_stage_fixed": leads_null_stage_fixed,
+        },
         "organization_id": org_id,
-        "message": f"Fixed {leads_fixed} leads and {loans_fixed} loans — they should now be visible",
+        "message": f"Fixed org_id on {leads_org_fixed} leads + {loans_org_fixed} loans, fixed stage on {leads_stage_fixed + leads_null_stage_fixed} leads",
     }

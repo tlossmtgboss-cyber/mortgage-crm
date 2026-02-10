@@ -523,7 +523,7 @@ class SalesforceSyncService:
             # Create new lead
             lead_data['owner_id'] = user_id
             lead_data['salesforce_id'] = salesforce_id
-            lead_data['stage'] = 'new'
+            lead_data['stage'] = 'New'
             lead_data['organization_id'] = org_id
 
             columns = ", ".join(lead_data.keys())
