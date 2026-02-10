@@ -3527,7 +3527,7 @@ async def diag_fix_stages(
     fix_details = {}
     errors = []
 
-    # First, check the actual column type and current bad values
+    # First, check current stage distribution
     try:
         bad_values = db.execute(text("""
             SELECT stage, COUNT(*) as cnt FROM leads
@@ -3538,36 +3538,23 @@ async def diag_fix_stages(
     except Exception as e:
         current_stages = {"error": str(e)}
 
-    # Fix specific known bad values one at a time with individual error handling
-    # Target: 'NEW' -> 'New' (the known mismatch from diagnostic)
-    known_bad_exact = ['NEW', 'new', 'attempted_contact', 'ATTEMPTED_CONTACT',
-                       'prospect', 'PROSPECT', 'application', 'APPLICATION',
-                       'pre-qualified', 'PRE-QUALIFIED', 'pre-approved', 'PRE-APPROVED',
-                       'nurture', 'NURTURE', 'withdrawn', 'WITHDRAWN']
-
-    # Map exact bad values to correct enum values
-    exact_fixes = {
-        'NEW': 'New', 'new': 'New',
-        'ATTEMPTED_CONTACT': 'Attempted Contact', 'attempted_contact': 'Attempted Contact',
-        'PROSPECT': 'Prospect', 'prospect': 'Prospect',
-        'APPLICATION': 'Application', 'application': 'Application',
-        'PRE-QUALIFIED': 'Pre-Qualified', 'PRE-APPROVED': 'Pre-Approved',
-        'NURTURE': 'Nurture', 'nurture': 'Nurture',
-        'WITHDRAWN': 'Withdrawn', 'withdrawn': 'Withdrawn',
-    }
-
-    for bad_val, correct_val in exact_fixes.items():
-        try:
-            count = db.execute(text("""
-                UPDATE leads SET stage = :correct, updated_at = CURRENT_TIMESTAMP
-                WHERE owner_id = :uid AND stage = :bad
-            """), {"correct": correct_val, "uid": uid, "bad": bad_val}).rowcount
-            if count > 0:
-                fix_details[f"'{bad_val}' -> '{correct_val}'"] = count
-                total_fixed += count
-        except Exception as e:
-            db.rollback()
-            errors.append(f"Failed to fix '{bad_val}': {str(e)[:100]}")
+    # PostgreSQL enum columns reject comparisons with invalid values.
+    # Use a text cast on the column to safely compare and update.
+    # The UPDATE SET also needs valid enum values.
+    try:
+        # Fix 'NEW' -> 'New' using raw SQL that casts enum to text for WHERE
+        count = db.execute(text("""
+            UPDATE leads
+            SET stage = 'New', updated_at = CURRENT_TIMESTAMP
+            WHERE owner_id = :uid AND stage::text = 'NEW'
+        """), {"uid": uid}).rowcount
+        if count > 0:
+            fix_details["'NEW' -> 'New'"] = count
+            total_fixed += count
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        errors.append(f"Fix NEW: {str(e)[:150]}")
 
     # Fix NULL stages
     try:
@@ -3578,11 +3565,12 @@ async def diag_fix_stages(
         if null_fixed > 0:
             fix_details["NULL -> 'New'"] = null_fixed
             total_fixed += null_fixed
+        db.commit()
     except Exception as e:
         db.rollback()
-        errors.append(f"Failed to fix NULL stages: {str(e)[:100]}")
+        errors.append(f"Fix NULL: {str(e)[:150]}")
 
-    # Also fix org_id while we're at it
+    # Fix org_id
     org_fixed = 0
     if org_id:
         try:
@@ -3590,15 +3578,10 @@ async def diag_fix_stages(
                 UPDATE leads SET organization_id = :org_id, updated_at = CURRENT_TIMESTAMP
                 WHERE owner_id = :uid AND organization_id IS NULL
             """), {"org_id": org_id, "uid": uid}).rowcount
+            db.commit()
         except Exception as e:
             db.rollback()
-            errors.append(f"Failed to fix org_id: {str(e)[:100]}")
-
-    try:
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        errors.append(f"Commit failed: {str(e)[:200]}")
+            errors.append(f"Fix org_id: {str(e)[:150]}")
 
     return {
         "status": "success" if not errors else "partial",
