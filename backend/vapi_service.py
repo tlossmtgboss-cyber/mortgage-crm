@@ -687,12 +687,15 @@ class VapiCRMIntegration:
     def verify_webhook_signature(payload_body: bytes, signature_header: str) -> bool:
         """
         Verify Vapi webhook signature using HMAC-SHA256.
-        Returns True if signature is valid or if no secret is configured (graceful degradation).
+        Returns False if no secret is configured (fail closed).
         """
         secret = os.getenv("VAPI_WEBHOOK_SECRET")
         if not secret:
-            logger.warning("VAPI_WEBHOOK_SECRET not configured — skipping signature verification")
-            return True
+            logger.error(
+                "VAPI_WEBHOOK_SECRET not configured — rejecting webhook. "
+                "Set this env var to the secret from your Vapi dashboard."
+            )
+            return False
 
         if not signature_header:
             logger.warning("Missing X-Vapi-Signature header on webhook request")

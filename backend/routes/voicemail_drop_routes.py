@@ -1739,11 +1739,17 @@ async def _resolve_and_dispatch_campaign(campaign_id: int, user_id: int, user_na
         VoicemailCampaign = get_voicemail_campaign_model()
         VoicemailDrop = get_voicemail_drop_model()
         VoicemailTemplate = get_voicemail_template_model()
+        from sqlalchemy import update as sa_update
 
         campaign = db.query(VoicemailCampaign).filter(
             VoicemailCampaign.id == campaign_id
         ).first()
         if not campaign:
+            return
+
+        # Verify campaign is still in "running" state (prevents double dispatch)
+        if campaign.status != "running":
+            logger.warning(f"Campaign {campaign_id} status is '{campaign.status}', not 'running' — aborting dispatch")
             return
 
         template = db.query(VoicemailTemplate).filter(
@@ -1838,6 +1844,19 @@ async def _resolve_and_dispatch_campaign(campaign_id: int, user_id: int, user_na
                 logger.info(f"Campaign {campaign_id} {campaign.status} — stopping dispatch")
                 break
 
+            # Claim drop atomically: only update if still "queued" (prevents double-send)
+            claimed = db.execute(
+                sa_update(VoicemailDrop)
+                .where(VoicemailDrop.id == drop.id)
+                .where(VoicemailDrop.status == "queued")
+                .values(status="sending")
+            ).rowcount
+            db.commit()
+
+            if claimed == 0:
+                # Another worker already claimed this drop — skip
+                continue
+
             try:
                 voice_provider = template.voice_provider if template else "11labs"
                 voice_id = template.voice_id if template else "paula"
@@ -1857,10 +1876,11 @@ async def _resolve_and_dispatch_campaign(campaign_id: int, user_id: int, user_na
                     audio_url=audio_url,
                 )
 
-                drop.status = "sending"
+                db.refresh(drop)
                 drop.vapi_call_id = result.get("call_id")
                 sent += 1
             except Exception as e:
+                db.refresh(drop)
                 drop.status = "failed"
                 drop.error_message = str(e)[:500]
                 failed += 1
@@ -1912,10 +1932,17 @@ async def start_campaign(
     VoicemailTemplate = get_voicemail_template_model()
 
     try:
-        campaign = db.query(VoicemailCampaign).filter(
-            VoicemailCampaign.id == campaign_id,
-            VoicemailCampaign.user_id == current_user.id,
-        ).first()
+        # Use SELECT FOR UPDATE NOWAIT to prevent two workers from starting the same campaign
+        from sqlalchemy import text as sa_text
+        try:
+            campaign = db.query(VoicemailCampaign).filter(
+                VoicemailCampaign.id == campaign_id,
+                VoicemailCampaign.user_id == current_user.id,
+            ).with_for_update(nowait=True).first()
+        except Exception as lock_err:
+            if "could not obtain lock" in str(lock_err).lower() or "lock" in str(lock_err).lower():
+                raise HTTPException(status_code=409, detail="Campaign is already being started by another request")
+            raise
 
         if not campaign:
             raise HTTPException(status_code=404, detail="Campaign not found")
@@ -1932,10 +1959,18 @@ async def start_campaign(
         if not template:
             raise HTTPException(status_code=404, detail="Campaign template not found")
 
-        # Mark campaign as running immediately (lightweight — no contact resolution here)
-        campaign.status = "running"
-        campaign.started_at = datetime.now(timezone.utc)
+        # Atomic status transition: only update if still in a startable state
+        from sqlalchemy import update
+        rows_updated = db.execute(
+            update(VoicemailCampaign)
+            .where(VoicemailCampaign.id == campaign_id)
+            .where(VoicemailCampaign.status.in_(("draft", "scheduled", "paused")))
+            .values(status="running", started_at=datetime.now(timezone.utc))
+        ).rowcount
         db.commit()
+
+        if rows_updated == 0:
+            raise HTTPException(status_code=409, detail="Campaign was already started by another request")
 
         # Offload all heavy work to background
         user_name = current_user.full_name or "your loan officer"
@@ -2049,6 +2084,36 @@ def _serialize_campaign(campaign) -> dict:
 # Consent Revocation
 # =============================================================================
 
+def _verify_revocation_token(token: str) -> Optional[dict]:
+    """Verify a signed opt-out token (HMAC-SHA256). Returns payload or None."""
+    import hmac as _hmac
+    import hashlib
+    import json
+    import base64
+
+    secret = os.getenv("CONSENT_REVOCATION_SECRET", os.getenv("SECRET_KEY", ""))
+    if not secret:
+        return None
+    try:
+        # Token format: base64(json_payload).base64(signature)
+        parts = token.split(".")
+        if len(parts) != 2:
+            return None
+        payload_b64, sig_b64 = parts
+        expected_sig = _hmac.new(
+            secret.encode(), payload_b64.encode(), hashlib.sha256
+        ).hexdigest()
+        if not _hmac.compare_digest(expected_sig, sig_b64):
+            return None
+        payload = json.loads(base64.urlsafe_b64decode(payload_b64 + "=="))
+        # Check expiration (tokens valid for 30 days)
+        if payload.get("exp") and datetime.fromisoformat(payload["exp"]) < datetime.now(timezone.utc):
+            return None
+        return payload
+    except Exception:
+        return None
+
+
 @router.post("/consent/revoke")
 async def revoke_consent(
     request: Request,
@@ -2058,21 +2123,57 @@ async def revoke_consent(
     Revoke communication consent for a phone number or email.
     TCPA (effective April 2025) requires honoring revocation within 10 business days.
 
-    This endpoint can be called:
-    - By the contact via a public opt-out link
-    - By staff processing a verbal/written revocation request
-    - Automatically by STOP reply processing (SMS webhook)
+    Authentication: requires EITHER:
+    - A valid auth token (staff processing a revocation request), OR
+    - A signed revocation token in the body (public self-service opt-out link)
 
-    Body: { "phone_number": str, "email": str (optional), "method": str }
+    Body: { "phone_number": str, "email": str (optional), "method": str, "token": str (optional) }
     """
     try:
         data = await request.json()
         phone_number = data.get("phone_number", "")
         email = data.get("email", "")
         method = data.get("method", "web_form")  # web_form, sms_stop, email, phone, verbal
+        revocation_token = data.get("token", "")
+
+        # --- Auth check: staff session OR signed revocation token ---
+        is_authenticated = False
+
+        # Try staff auth (bearer token)
+        try:
+            staff_user = await get_current_user(request, db)
+            if staff_user:
+                is_authenticated = True
+                logger.info(f"Consent revocation by staff user {staff_user.id}")
+        except Exception:
+            pass
+
+        # Try signed revocation token (public opt-out link)
+        if not is_authenticated and revocation_token:
+            token_payload = _verify_revocation_token(revocation_token)
+            if token_payload:
+                # Token must match the phone/email being revoked
+                token_phone = token_payload.get("phone", "")
+                token_email = token_payload.get("email", "")
+                if (token_phone and phone_number and _normalize_phone(token_phone) == _normalize_phone(phone_number)) or \
+                   (token_email and email and token_email.lower() == email.lower()):
+                    is_authenticated = True
+                    logger.info(f"Consent revocation via signed token for phone={phone_number}")
+                else:
+                    raise HTTPException(status_code=403, detail="Token does not match the contact being revoked")
+            else:
+                raise HTTPException(status_code=403, detail="Invalid or expired revocation token")
+
+        if not is_authenticated:
+            raise HTTPException(status_code=401, detail="Authentication required — provide a bearer token or signed revocation token")
 
         if not phone_number and not email:
             raise HTTPException(status_code=400, detail="phone_number or email is required")
+
+        # Validate method
+        valid_methods = {"web_form", "sms_stop", "email", "phone", "verbal"}
+        if method not in valid_methods:
+            method = "web_form"
 
         revoked_count = 0
 
