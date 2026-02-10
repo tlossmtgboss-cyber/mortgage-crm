@@ -68,6 +68,30 @@ APPLE_KEY_ID = os.getenv("APPLE_KEY_ID", "")
 APPLE_PRIVATE_KEY = os.getenv("APPLE_PRIVATE_KEY", "")  # Contents of .p8 file
 APPLE_REDIRECT_URI = os.getenv("APPLE_BORROWER_REDIRECT_URI", f"{BACKEND_URL}/api/v1/borrower-auth/apple/callback")
 
+# Cache for Apple's public signing keys (JWKS)
+_apple_jwks_cache: Dict[str, Any] = {"keys": None, "fetched_at": 0.0}
+
+
+async def _get_apple_public_key(kid: str):
+    """Fetch Apple's JWKS and return the public key matching the given kid."""
+    import time
+    # Cache keys for 1 hour
+    if _apple_jwks_cache["keys"] and time.time() - _apple_jwks_cache["fetched_at"] < 3600:
+        keys = _apple_jwks_cache["keys"]
+    else:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get("https://appleid.apple.com/auth/keys", timeout=10.0)
+            resp.raise_for_status()
+            keys = resp.json()["keys"]
+            _apple_jwks_cache["keys"] = keys
+            _apple_jwks_cache["fetched_at"] = time.time()
+
+    for key in keys:
+        if key["kid"] == kid:
+            return jwt.algorithms.RSAAlgorithm.from_jwk(key)
+
+    return None
+
 
 # =============================================================================
 # MODELS
@@ -869,11 +893,19 @@ async def apple_callback(
 
             tokens = token_response.json()
 
-        # Decode ID token to get user info
-        # Note: In production, verify the token signature
+        # Verify and decode Apple ID token
+        token_header = jwt.get_unverified_header(tokens["id_token"])
+        apple_public_key = await _get_apple_public_key(token_header.get("kid", ""))
+        if not apple_public_key:
+            logger.error(f"Apple public key not found for kid: {token_header.get('kid')}")
+            return RedirectResponse(url=f"{FRONTEND_URL}/apply/login?error=token_verification_failed")
+
         id_token_payload = jwt.decode(
             tokens["id_token"],
-            options={"verify_signature": False}  # Should verify in production
+            key=apple_public_key,
+            algorithms=["RS256"],
+            audience=APPLE_CLIENT_ID,
+            issuer="https://appleid.apple.com",
         )
 
         # Parse user data if provided (first sign-in only)
