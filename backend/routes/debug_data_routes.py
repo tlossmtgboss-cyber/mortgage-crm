@@ -15,6 +15,7 @@ import os
 import requests
 
 logger = logging.getLogger(__name__)
+_ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 
 
 def register_debug_data_routes(
@@ -1636,8 +1637,8 @@ def register_debug_data_routes(
     ):
         """Run Salesforce sync fields migration - adds columns to loans and leads tables"""
         # Verify admin secret
-        admin_secret = os.getenv("ADMIN_SECRET", "perennia-admin-2025")
-        if secret != admin_secret:
+        admin_secret = os.getenv("ADMIN_SECRET")
+        if not admin_secret or secret != admin_secret:
             raise HTTPException(status_code=401, detail="Invalid admin secret")
 
         # Columns to add to LOANS table

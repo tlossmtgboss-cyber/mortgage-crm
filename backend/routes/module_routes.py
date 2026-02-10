@@ -411,7 +411,7 @@ async def run_module_migration(
     Creates tables and seeds module definitions.
     """
     # Simple admin key check
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:
@@ -441,7 +441,7 @@ async def check_users_debug(
     admin_key: str = Query(..., description="Admin API key"),
 ):
     """Debug endpoint to check users and their organization associations."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:
@@ -491,7 +491,7 @@ async def debug_modules(
     check_user: int = Query(None, description="Check user info by ID"),
 ):
     """Debug endpoint to check module data and optionally enable all modules."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:
@@ -625,7 +625,7 @@ async def enable_all_modules(
     Enable all premium modules for an organization.
     Removes all UPGRADE badges by enabling every module.
     """
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     org_id = organization_id or 1
@@ -688,7 +688,7 @@ async def check_integrations_config(
     admin_key: str = Query(..., description="Admin API key"),
 ):
     """Check if integration credentials are configured."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     import os
@@ -736,7 +736,7 @@ async def clear_demo_data(
     Removes leads, loans, tasks, MUM data, reconciliation tasks, smart docs, etc.
     Preserves system users and settings.
     """
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     if not confirm:

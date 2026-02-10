@@ -28,6 +28,7 @@ router = APIRouter(prefix="/api/v1/twilio-setup", tags=["Twilio Setup"])
 # Master Twilio credentials from environment
 TWILIO_MASTER_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_MASTER_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
+_ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 
 # Dependency injection placeholders
 User = None
@@ -1042,7 +1043,7 @@ async def make_outbound_ai_call(
         # Determine which user's credentials to use
         user_id = None
 
-        if admin_key == "perennia-admin-2024" and user_email:
+        if _ADMIN_API_KEY and admin_key == _ADMIN_API_KEY and user_email:
             # Admin mode - look up user by email
             user_result = db.execute(text("SELECT id FROM users WHERE email = :email"), {"email": user_email}).fetchone()
             if not user_result:

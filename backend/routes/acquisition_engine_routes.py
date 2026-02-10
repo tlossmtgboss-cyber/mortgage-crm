@@ -1386,7 +1386,7 @@ async def run_migration(
     Run acquisition engine table migration.
     Creates all required tables if they don't exist.
     """
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(403, "Invalid admin key")
 
     try:

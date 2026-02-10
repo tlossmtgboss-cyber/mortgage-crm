@@ -474,7 +474,7 @@ async def run_video_migration(
     db=Depends(get_db)
 ):
     """Run migration to create video messages table."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:
@@ -517,7 +517,7 @@ async def debug_s3(
     video_key: str = Query(default="recruit-videos/20/20260101_171523_5b8d5321376944509318c338e80ec64d.webm")
 ):
     """Debug S3 access for video."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     s3_service = get_s3_service()
@@ -543,7 +543,7 @@ async def fix_video_urls(
     db=Depends(get_db)
 ):
     """Fix existing video URLs by making them public."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     s3_service = get_s3_service()
@@ -596,7 +596,7 @@ async def add_test_video(
     db=Depends(get_db)
 ):
     """Add a test video for a candidate (admin only)."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:

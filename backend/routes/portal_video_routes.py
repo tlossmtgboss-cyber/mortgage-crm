@@ -537,7 +537,7 @@ async def configure_s3_cors(
     admin_key: str = Query(...)
 ):
     """Configure S3 bucket CORS to allow browser-based presigned URL uploads."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:
@@ -586,7 +586,7 @@ async def run_portal_video_migration(
     db=Depends(get_db)
 ):
     """Run migration to create portal_video_messages table."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:

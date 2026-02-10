@@ -651,7 +651,7 @@ async def get_recruiting_dialer_queue(
 @router.post("/admin/run-migration")
 async def run_dialer_migration(admin_key: str = Query(...)):
     """Create call history table if it doesn't exist and add Twilio columns."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     # Step 1: Create table if it doesn't exist (without Twilio columns for backwards compat)

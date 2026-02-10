@@ -475,7 +475,7 @@ async def run_social_migration(
     db: Session = Depends(get_db)
 ):
     """Run migration to create social media tables."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:
@@ -545,7 +545,7 @@ async def seed_sample_posts(
     db: Session = Depends(get_db)
 ):
     """Seed sample social posts for demo purposes."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:

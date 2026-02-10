@@ -1643,7 +1643,7 @@ async def run_partner_recruiting_migration(
     db: Session = Depends(get_db)
 ):
     """Run the partner recruiting tables migration."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:

@@ -25,7 +25,7 @@ _ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 @router.post("/admin/create-tables")
 async def create_intake_tables(admin_key: str = None):
     """Create intake engine database tables"""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=401, detail="Invalid admin key")
 
     import os

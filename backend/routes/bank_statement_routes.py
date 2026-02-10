@@ -422,7 +422,7 @@ async def create_tables(
     """
     Admin endpoint to create bank statement tables.
     """
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     from database import engine

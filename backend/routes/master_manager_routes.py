@@ -1270,7 +1270,7 @@ async def run_migration(
     db: Session = Depends(get_db)
 ):
     """Run the Master Manager database migration."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:
@@ -1287,7 +1287,7 @@ async def run_recruiting_migration(
     db: Session = Depends(get_db)
 ):
     """Run the Phase 2 Recruiting tables migration."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:
@@ -1304,7 +1304,7 @@ async def fix_duplicate_roles(
     db: Session = Depends(get_db)
 ):
     """Remove duplicate role definitions, keeping only one of each role_name."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:
@@ -1349,7 +1349,7 @@ async def assign_role_to_user(
     db: Session = Depends(get_db)
 ):
     """Assign a role to a user's capacity record."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:
@@ -1417,7 +1417,7 @@ async def fix_duplicate_capacities(
     db: Session = Depends(get_db)
 ):
     """Remove duplicate capacity records, keeping one per user."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:
@@ -1449,7 +1449,7 @@ async def initialize_capacities(
     db: Session = Depends(get_db)
 ):
     """Initialize capacity records for all active users."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     # Get all active users without capacity records

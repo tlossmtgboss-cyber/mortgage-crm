@@ -1109,7 +1109,7 @@ async def repair_workflow_tables(
     Safe to run multiple times - skips existing columns.
     Requires admin_key query parameter for access.
     """
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=401, detail="Unauthorized - admin_key required")
     from sqlalchemy import text
 

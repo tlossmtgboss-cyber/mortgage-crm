@@ -250,7 +250,7 @@ async def delete_quiz_template(template_id: int):
 @router.post("/admin/run-assessment-migration")
 async def run_assessment_migration(admin_key: str = Query(...)):
     """Run the assessment tables migration (admin only)."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:

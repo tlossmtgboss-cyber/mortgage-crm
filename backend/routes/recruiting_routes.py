@@ -697,7 +697,7 @@ async def fix_candidate_portals(
     Admin endpoint to fix existing candidates without portal workspaces.
     Creates workspaces and assigns default recruiter if missing.
     """
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     import secrets
@@ -1713,7 +1713,7 @@ async def seed_test_data(
     db: Session = Depends(get_db)
 ):
     """Seed test candidates and job postings."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     import json
@@ -1791,7 +1791,7 @@ async def run_recruiting_migration(
     db: Session = Depends(get_db)
 ):
     """Run the recruiting tables migration."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:
@@ -1808,7 +1808,7 @@ async def add_quiz_templates(
     db: Session = Depends(get_db)
 ):
     """Create quiz tables (templates, responses, scores) and seed with initial data."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:
@@ -1903,7 +1903,7 @@ async def add_social_production_fields(
     db: Session = Depends(get_db)
 ):
     """Add social media and production fields to mm_candidates table."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:

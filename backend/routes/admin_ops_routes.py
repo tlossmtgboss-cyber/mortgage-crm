@@ -22,6 +22,7 @@ from database.models import (
 from database import SessionLocal
 
 logger = logging.getLogger(__name__)
+_ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 
 
 def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_flexible, **kwargs):
@@ -618,7 +619,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         Use this when pool is exhausted and connections are stale.
         Requires admin key for safety.
         """
-        if admin_key != "perennia-admin-2024":
+        if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
             raise HTTPException(status_code=403, detail="Invalid admin key")
 
         try:
@@ -662,7 +663,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         Update Twilio configuration for a user by email.
         Requires admin key for safety.
         """
-        if admin_key != "perennia-admin-2024":
+        if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
             raise HTTPException(status_code=403, detail="Invalid admin key")
 
         try:
@@ -791,7 +792,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         Run essential table migrations using existing connection pool.
         Creates: notifications, user_permissions, permission_templates, ai_tasks tables.
         """
-        if admin_key != "perennia-admin-2024":
+        if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
             raise HTTPException(status_code=403, detail="Invalid admin key")
 
         results = {"created": [], "already_exists": [], "errors": []}
@@ -1780,7 +1781,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         db: Session = Depends(get_db)
     ):
         """Debug endpoint to create a test user for deletion testing"""
-        if admin_key != "perennia-admin-2024":
+        if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
             raise HTTPException(status_code=403, detail="Invalid admin key")
 
         import random
@@ -1824,7 +1825,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         db: Session = Depends(get_db)
     ):
         """Debug endpoint to delete user with admin_key protection"""
-        if admin_key != "perennia-admin-2024":
+        if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
             raise HTTPException(status_code=403, detail="Invalid admin key")
 
         user = db.query(User).filter(User.id == user_id).first()

@@ -2673,14 +2673,14 @@ async def health_check():
 
 @router.get("/admin/s3-test")
 async def s3_test(
-    admin_key: str = Query(default="perennia-admin-2024"),
+    admin_key: str = Query(...),
 ):
     """Direct S3 test without any middleware."""
     import boto3
     import os
     from datetime import datetime
 
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     results = {}
@@ -2724,13 +2724,13 @@ async def s3_test(
 
 @router.get("/admin/upload-diagnostic")
 async def upload_diagnostic(
-    admin_key: str = Query(default="perennia-admin-2024"),
+    admin_key: str = Query(...),
     db: Session = Depends(get_db),
 ):
     """Diagnostic endpoint to test upload capabilities."""
     from sqlalchemy import text
 
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     results = {
@@ -2776,13 +2776,13 @@ async def test_upload(
     file: UploadFile = File(...),
     loan_id: int = Form(146),
     borrower_id: int = Form(574),
-    admin_key: str = Query(default="perennia-admin-2024"),
+    admin_key: str = Query(...),
     db: Session = Depends(get_db),
 ):
     """Test upload endpoint with detailed error logging."""
     from sqlalchemy import text
 
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     steps = {}
@@ -2880,13 +2880,13 @@ async def test_upload(
 
 @router.post("/admin/create-test-loan")
 async def create_test_loan(
-    admin_key: str = Query(default="perennia-admin-2024"),
+    admin_key: str = Query(...),
     db: Session = Depends(get_db),
 ):
     """Create a test loan for Smart Docs testing."""
     from sqlalchemy import text
 
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     # Check if test loan already exists

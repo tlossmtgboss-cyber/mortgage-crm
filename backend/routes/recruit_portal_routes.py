@@ -328,7 +328,7 @@ async def add_portal_columns(
     db: Session = Depends(get_db)
 ):
     """Add portal token columns to mm_candidates table."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     columns = [
@@ -377,7 +377,7 @@ async def create_portal_tables(
     db: Session = Depends(get_db)
 ):
     """Create PURL portal tables."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:
@@ -644,7 +644,7 @@ async def create_purl_portal_workspace(
     db: Session = Depends(get_db)
 ):
     """Create a PURL portal workspace for a candidate (admin)."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:
@@ -666,7 +666,7 @@ async def update_workspace_slug_by_candidate(
     db: Session = Depends(get_db)
 ):
     """Update workspace slug by candidate ID (admin)."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:
@@ -698,7 +698,7 @@ async def get_workspace_by_candidate(
     db: Session = Depends(get_db)
 ):
     """Get workspace info by candidate ID (admin)."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:
@@ -735,7 +735,7 @@ async def list_purl_portal_workspaces(
     db: Session = Depends(get_db)
 ):
     """List all PURL portal workspaces (admin)."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:
@@ -754,7 +754,7 @@ async def update_candidate_email(
     db: Session = Depends(get_db)
 ):
     """Update candidate email address (admin)."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:
@@ -788,7 +788,7 @@ async def create_purl_portal_token(
     db: Session = Depends(get_db)
 ):
     """Create an access token for a PURL portal workspace."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:
@@ -819,7 +819,7 @@ async def create_purl_company_update(
     db: Session = Depends(get_db)
 ):
     """Create a company update/propaganda post (admin)."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:
@@ -845,7 +845,7 @@ async def list_purl_company_updates(
     db: Session = Depends(get_db)
 ):
     """List company updates (admin)."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:
@@ -863,7 +863,7 @@ async def delete_purl_company_update(
     db: Session = Depends(get_db)
 ):
     """Delete a company update (admin)."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:
@@ -891,7 +891,7 @@ async def update_purl_calculator_config(
     db: Session = Depends(get_db)
 ):
     """Update production calculator configuration (admin)."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:
@@ -912,7 +912,7 @@ async def get_purl_calculator_config(
     db: Session = Depends(get_db)
 ):
     """Get production calculator configuration."""
-    if admin_key != "perennia-admin-2024":
+    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:
