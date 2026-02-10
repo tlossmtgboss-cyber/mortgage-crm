@@ -17,11 +17,14 @@ from sqlalchemy import text, func
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 from decimal import Decimal
+import os
 import uuid
 import logging
 
 from database import get_db
 from main import get_current_user, User
+
+_ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 
 from models.acquisition_engine.campaign_models import (
     CampaignBlueprint,

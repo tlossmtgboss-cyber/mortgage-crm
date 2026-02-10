@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import Optional
 from pydantic import BaseModel
 
+import os
 from services.recruit_assessment_service import recruit_assessment_service
 from sqlalchemy.exc import SQLAlchemyError
 from models.recruit_assessment_models import (
@@ -23,6 +24,8 @@ from models.recruit_assessment_models import (
     CalculatorInput,
     CalculatorResult,
 )
+
+_ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 
 router = APIRouter(prefix="/api/v1/recruiting", tags=["Recruiting Assessment"])
 

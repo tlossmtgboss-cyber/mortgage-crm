@@ -26,6 +26,8 @@ from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
+_ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
+
 security = HTTPBearer(auto_error=False)
 
 

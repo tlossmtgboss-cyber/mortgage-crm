@@ -22,6 +22,8 @@ from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
+_ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
+
 @contextmanager
 def get_db_connection():
     """Context manager for database connections."""

@@ -8,6 +8,8 @@ from fastapi import APIRouter, HTTPException, Depends, Header, Request
 from pydantic import BaseModel, Field
 from datetime import datetime
 
+import os
+
 from ..runtime import (
     IntakeEngine,
     create_engine,
@@ -17,6 +19,7 @@ from ..runtime import (
 )
 
 router = APIRouter(prefix="/api/v1/intake", tags=["intake"])
+_ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 
 
 @router.post("/admin/create-tables")

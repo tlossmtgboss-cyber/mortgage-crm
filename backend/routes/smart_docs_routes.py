@@ -10,6 +10,7 @@ REST API endpoints for the intelligent document collection system:
 """
 
 import logging
+import os
 from datetime import datetime
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
@@ -32,6 +33,7 @@ from services.smart_docs.s3_storage_service import get_smart_docs_s3_service
 from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
+_ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 
 router = APIRouter(prefix="/api/v1/smart-docs", tags=["Smart Documents"])
 

@@ -918,6 +918,21 @@ class VapiCRMIntegration:
                 logger.debug("No phone number for SMS follow-up")
                 return
 
+            # --- TCPA Consent Check ---
+            # Only send SMS if we have consent from the lead/contact
+            try:
+                from routes.voicemail_drop_routes import check_dnc_status, check_calling_hours
+                is_blocked, _ = check_dnc_status(vapi_call.phone_number, self.db)
+                if is_blocked:
+                    logger.info(f"Post-call SMS blocked by DNC for {vapi_call.phone_number}")
+                    return
+                is_allowed, _ = check_calling_hours(vapi_call.phone_number)
+                if not is_allowed:
+                    logger.info(f"Post-call SMS blocked by calling hours for {vapi_call.phone_number}")
+                    return
+            except ImportError:
+                logger.warning("Could not import TCPA checks for post-call SMS")
+
             sms_service = AIReceptionistSMSService(self.db)
 
             # Analyze call content to determine follow-up type

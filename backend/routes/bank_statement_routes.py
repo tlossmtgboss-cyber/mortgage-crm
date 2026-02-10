@@ -26,6 +26,8 @@ from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
+_ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
+
 router = APIRouter(prefix="/api/v1/bank-statements", tags=["Bank Statements"])
 
 

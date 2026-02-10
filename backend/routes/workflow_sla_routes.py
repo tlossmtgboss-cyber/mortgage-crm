@@ -21,9 +21,12 @@ from services.workflow_role_assignment import RoleAssignmentService, get_role_as
 from services.workflow_scheduler import WorkflowScheduler, run_scheduled_workflow_tasks
 
 import logging
+import os
 from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
+
+_ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 
 router = APIRouter(prefix="/api/v1/workflow-sla", tags=["Workflow SLA"])
 

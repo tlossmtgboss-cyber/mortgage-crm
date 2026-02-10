@@ -693,6 +693,7 @@ async def create_voicemail_drop(
         # Create voicemail drop record
         voicemail_drop = VoicemailDrop(
             user_id=current_user.id,
+            organization_id=getattr(current_user, 'organization_id', None),
             lead_id=lead_id,
             loan_id=loan_id,
             template_id=template_id,
@@ -1342,8 +1343,13 @@ async def upload_template_audio(
 
 
 @router.get("/audio/{filename}")
-async def serve_voicemail_audio(filename: str):
-    """Serve uploaded voicemail audio files."""
+async def serve_voicemail_audio(
+    filename: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Serve uploaded voicemail audio files (authenticated)."""
     # Sanitize filename to prevent directory traversal
     safe_name = os.path.basename(filename)
     upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", "voicemail_audio")
@@ -1780,9 +1786,17 @@ async def _resolve_and_dispatch_campaign(campaign_id: int, user_id: int, user_na
         # --- Phase 1: Resolve contacts and create drop records ---
         import main
         Lead = main.Lead
+        User = main.User
         contact_filter = campaign.contact_filter or {}
 
+        # Get user's organization for multi-tenant isolation
+        campaign_user = db.query(User).filter(User.id == user_id).first()
+        campaign_org_id = campaign_user.organization_id if campaign_user else None
+
         query = db.query(Lead).filter(Lead.phone != None, Lead.phone != "")
+        # Multi-tenant: only query leads belonging to user's organization
+        if campaign_org_id:
+            query = query.filter(Lead.organization_id == campaign_org_id)
         if contact_filter.get("status"):
             query = query.filter(Lead.status == contact_filter["status"])
         if contact_filter.get("source"):
@@ -1830,6 +1844,7 @@ async def _resolve_and_dispatch_campaign(campaign_id: int, user_id: int, user_na
 
             drop = VoicemailDrop(
                 user_id=user_id,
+                organization_id=campaign_org_id,
                 lead_id=contact.id,
                 campaign_id=campaign.id,
                 template_id=template.id,

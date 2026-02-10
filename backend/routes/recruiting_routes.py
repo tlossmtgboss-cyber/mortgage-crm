@@ -13,6 +13,9 @@ from database import get_db
 from services.recruiting_service import RecruitingService
 from main import get_current_user, User
 from sqlalchemy.exc import SQLAlchemyError
+import os
+
+_ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 
 router = APIRouter(prefix="/api/v1/recruiting", tags=["recruiting"])
 

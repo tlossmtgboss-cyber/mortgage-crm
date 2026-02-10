@@ -18,6 +18,7 @@ from datetime import datetime
 from database import get_db
 import secrets
 import logging
+import os
 
 from services.recruit_portal_service import RecruitPortalService
 from sqlalchemy.exc import SQLAlchemyError
@@ -27,6 +28,8 @@ from models.recruit_portal_models import (
 )
 
 logger = logging.getLogger(__name__)
+
+_ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 
 router = APIRouter(prefix="/api/v1/recruit-portal", tags=["recruit-portal"])
 portal_service = RecruitPortalService()

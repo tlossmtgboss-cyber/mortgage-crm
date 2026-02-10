@@ -21,6 +21,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from services.module_service import ModuleService
 from sqlalchemy.exc import SQLAlchemyError
 
+_ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
+
 router = APIRouter(prefix="/api/v1/modules", tags=["modules"])
 
 # OAuth2 scheme for token extraction

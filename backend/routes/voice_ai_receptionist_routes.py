@@ -320,6 +320,23 @@ async def drop_voicemail(
         if len(clean_number) == 11 and clean_number.startswith('1'):
             clean_number = clean_number[1:]  # Remove leading 1 for Slybroadcast
 
+        # --- TCPA Compliance Checks ---
+        try:
+            from routes.voicemail_drop_routes import run_compliance_checks
+            is_allowed, rejection_reason = run_compliance_checks(
+                phone_number=clean_number,
+                lead_id=lead_id,
+                db=db,
+            )
+            if not is_allowed:
+                logger.warning(
+                    f"Voicemail drop blocked for {clean_number}: {rejection_reason} "
+                    f"(user={current_user.id})"
+                )
+                raise HTTPException(status_code=403, detail=rejection_reason)
+        except ImportError:
+            logger.warning("Could not import TCPA compliance checks — proceeding without")
+
         logger.info(f"Dropping voicemail to {clean_number} for {recipient_name} via {provider}")
 
         # Format the message naturally with context
@@ -1342,9 +1359,12 @@ debug_router = APIRouter(prefix="/api/v1/debug", tags=["Debug"])
 @debug_router.get("/sms-messages")
 async def debug_sms_messages(
     limit: int = 20,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep())
 ):
-    """Debug endpoint to view all SMS messages in the database"""
+    """Debug endpoint to view all SMS messages in the database (admin only)"""
+    if not getattr(current_user, 'is_platform_admin', False) and not getattr(current_user, 'is_site_admin', False):
+        raise HTTPException(status_code=403, detail="Admin access required")
     try:
         main = get_models()
         SMSMessage = main.SMSMessage
@@ -1374,8 +1394,13 @@ async def debug_sms_messages(
 
 
 @debug_router.get("/twilio-config")
-async def debug_twilio_config():
-    """Debug endpoint to check Twilio configuration"""
+async def debug_twilio_config(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep())
+):
+    """Debug endpoint to check Twilio configuration (admin only)"""
+    if not getattr(current_user, 'is_platform_admin', False) and not getattr(current_user, 'is_site_admin', False):
+        raise HTTPException(status_code=403, detail="Admin access required")
     twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
     twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
     twilio_phone = os.getenv("TWILIO_PHONE_NUMBER")
@@ -1395,8 +1420,14 @@ async def debug_twilio_config():
 
 
 @debug_router.get("/twilio-message/{message_sid}")
-async def debug_twilio_message_status(message_sid: str):
-    """Check the delivery status of a specific Twilio message by SID"""
+async def debug_twilio_message_status(
+    message_sid: str,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep())
+):
+    """Check the delivery status of a specific Twilio message by SID (admin only)"""
+    if not getattr(current_user, 'is_platform_admin', False) and not getattr(current_user, 'is_site_admin', False):
+        raise HTTPException(status_code=403, detail="Admin access required")
     try:
         from twilio.rest import Client as TwilioClient
 
@@ -1429,8 +1460,14 @@ async def debug_twilio_message_status(message_sid: str):
 
 
 @debug_router.get("/twilio-recent-messages")
-async def debug_twilio_recent_messages(limit: int = 10):
-    """Get recent messages directly from Twilio API"""
+async def debug_twilio_recent_messages(
+    limit: int = 10,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep())
+):
+    """Get recent messages directly from Twilio API (admin only)"""
+    if not getattr(current_user, 'is_platform_admin', False) and not getattr(current_user, 'is_site_admin', False):
+        raise HTTPException(status_code=403, detail="Admin access required")
     try:
         from twilio.rest import Client as TwilioClient
 
@@ -1519,5 +1556,5 @@ async def debug_send_test_sms(
             "error_message": fetched_msg.error_message
         }
     except Exception as e:
-        import traceback
-        return {"error": str(e), "traceback": traceback.format_exc()}
+        logger.error(f"Debug send-test-sms error: {e}", exc_info=True)
+        return {"error": str(e)}

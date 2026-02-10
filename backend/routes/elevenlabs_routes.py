@@ -13,9 +13,47 @@ import logging
 import os
 import httpx
 
+import base64
+import hashlib
+from cryptography.fernet import Fernet
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/elevenlabs", tags=["ElevenLabs"])
+
+
+# =============================================================================
+# API Key Encryption Helpers
+# =============================================================================
+
+def _get_fernet() -> Fernet:
+    """Get Fernet cipher using SECRET_KEY from environment."""
+    secret = os.getenv("SECRET_KEY", "fallback-secret-key-change-me")
+    # Derive a valid 32-byte Fernet key from SECRET_KEY
+    key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode()).digest())
+    return Fernet(key)
+
+
+def _encrypt_api_key(api_key: str) -> str:
+    """Encrypt an API key for storage."""
+    return _get_fernet().encrypt(api_key.encode()).decode()
+
+
+def _decrypt_api_key(encrypted_key: str) -> str:
+    """Decrypt an API key from storage."""
+    try:
+        return _get_fernet().decrypt(encrypted_key.encode()).decode()
+    except Exception:
+        # If decryption fails, key may be stored in plaintext (pre-migration)
+        # Return as-is so existing keys still work
+        return encrypted_key
+
+
+def _mask_api_key(api_key: str) -> str:
+    """Mask API key for display: show first 4 and last 4 chars."""
+    if len(api_key) <= 12:
+        return api_key[:2] + "..." + api_key[-2:]
+    return api_key[:4] + "..." + api_key[-4:]
 
 # Dependency injection placeholders
 User = None
@@ -222,6 +260,9 @@ async def connect(
             )
         """))
 
+        # Encrypt API key before storing
+        encrypted_key = _encrypt_api_key(request.api_key)
+
         # Upsert config
         db.execute(text("""
             INSERT INTO user_elevenlabs_config
@@ -236,7 +277,7 @@ async def connect(
                 updated_at = NOW()
         """), {
             "user_id": user_id,
-            "api_key": request.api_key,
+            "api_key": encrypted_key,
             "tier": subscription.get("tier"),
             "char_limit": subscription.get("character_limit"),
             "char_count": subscription.get("character_count")
@@ -432,10 +473,12 @@ async def get_config(
         if not result or not result[0]:
             return {"data": {"configured": False}}
 
+        # Decrypt and mask key — never return raw key to frontend
+        decrypted_key = _decrypt_api_key(result[0])
         return {
             "data": {
                 "configured": True,
-                "api_key": result[0],
+                "api_key_masked": _mask_api_key(decrypted_key),
                 "voice_id": result[1],
                 "settings": result[2] or {}
             }
@@ -572,12 +615,17 @@ async def list_phone_numbers(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class ImportTwilioNumberRequest(BaseModel):
+    """Request body for importing a Twilio number — keeps secrets out of query params."""
+    phone_number: str = Field(..., description="Phone number to import")
+    twilio_account_sid: str = Field(..., description="Twilio Account SID")
+    twilio_auth_token: str = Field(..., description="Twilio Auth Token")
+    label: str = Field("Perennia AI", description="Label for this number")
+
+
 @router.post("/phone-numbers/import-twilio")
 async def import_twilio_number(
-    phone_number: str,
-    twilio_account_sid: str,
-    twilio_auth_token: str,
-    label: str = "Perennia AI",
+    request_body: ImportTwilioNumberRequest,
     admin_key: str = None,
     user_email: str = None,
     current_user=None,
@@ -587,11 +635,11 @@ async def import_twilio_number(
     api_key = await _get_elevenlabs_api_key(admin_key, user_email, current_user, db)
 
     payload = {
-        "phone_number": phone_number,
-        "label": label,
+        "phone_number": request_body.phone_number,
+        "label": request_body.label,
         "twilio_config": {
-            "account_sid": twilio_account_sid,
-            "auth_token": twilio_auth_token
+            "account_sid": request_body.twilio_account_sid,
+            "auth_token": request_body.twilio_auth_token
         }
     }
 
@@ -724,7 +772,8 @@ async def _get_elevenlabs_api_key(admin_key: str, user_email: str, current_user,
     """Get ElevenLabs API key for the specified user."""
     user_id = None
 
-    if admin_key == "perennia-admin-2024" and user_email:
+    expected_admin_key = os.getenv("ADMIN_API_KEY")
+    if expected_admin_key and admin_key == expected_admin_key and user_email:
         # Admin mode - look up user by email
         user_result = db.execute(text("SELECT id FROM users WHERE email = :email"), {"email": user_email}).fetchone()
         if not user_result:
@@ -751,4 +800,4 @@ async def _get_elevenlabs_api_key(admin_key: str, user_email: str, current_user,
             return system_key
         raise HTTPException(status_code=400, detail="ElevenLabs not configured for this user")
 
-    return result[0]
+    return _decrypt_api_key(result[0])
