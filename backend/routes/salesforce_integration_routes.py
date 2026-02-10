@@ -3469,18 +3469,59 @@ async def diag_lead_visibility(
         ORDER BY created_at DESC LIMIT 5
     """), {"uid": uid}).fetchall()
 
+    # CRITICAL: With leads.view_all, user sees ALL leads in org, not just their own
+    # Check all leads in org for bad stages that could break SQLAlchemy ORM
+    all_org_leads = db.execute(text("""
+        SELECT stage::text as stage, COUNT(*) as cnt
+        FROM leads
+        WHERE organization_id = :org_id
+        GROUP BY stage::text
+        ORDER BY cnt DESC
+    """), {"org_id": org_id}).fetchall()
+
+    total_org_leads = db.execute(text("""
+        SELECT COUNT(*) FROM leads WHERE organization_id = :org_id
+    """), {"org_id": org_id}).scalar() or 0
+
+    all_org_loans = db.execute(text("""
+        SELECT stage::text as stage, COUNT(*) as cnt
+        FROM loans
+        WHERE organization_id = :org_id
+        GROUP BY stage::text
+        ORDER BY cnt DESC
+    """), {"org_id": org_id}).fetchall()
+
+    total_org_loans = db.execute(text("""
+        SELECT COUNT(*) FROM loans WHERE organization_id = :org_id
+    """), {"org_id": org_id}).scalar() or 0
+
+    # Try to simulate what the ORM query does
+    orm_test_error = None
+    try:
+        from database.models.lead_loan import Lead
+        test_q = db.query(Lead).filter(Lead.organization_id == org_id).limit(5).all()
+        orm_test = f"ORM query OK, returned {len(test_q)} leads"
+    except Exception as e:
+        orm_test = f"ORM QUERY FAILED"
+        orm_test_error = str(e)[:300]
+
     return {
         "user": {"id": uid, "email": user.email, "org_id": org_id, "permission_role": user.permission_role},
-        "leads": {
+        "leads_owned_by_user": {
             "all_owned": [{"stage": r.stage, "org_id": r.organization_id, "count": r.cnt} for r in leads_data],
             "visible_in_api": [{"stage": r.stage, "count": r.cnt} for r in visible_leads],
-            "total_api_would_return": total_api_leads,
+            "total": total_api_leads,
         },
-        "loans": {
-            "all_owned": [{"stage": r.stage, "org_id": r.organization_id, "count": r.cnt} for r in loans_data],
-            "visible_in_api": [{"stage": r.stage, "count": r.cnt} for r in visible_loans],
-            "total_api_would_return": total_api_loans,
+        "all_leads_in_org": {
+            "by_stage": [{"stage": r.stage, "count": r.cnt} for r in all_org_leads],
+            "total": total_org_leads,
         },
+        "all_loans_in_org": {
+            "by_stage": [{"stage": r.stage, "count": r.cnt} for r in all_org_loans],
+            "total": total_org_loans,
+        },
+        "orm_test": orm_test,
+        "orm_test_error": orm_test_error,
         "sample_leads": [
             {"id": r.id, "name": r.name, "email": r.email, "stage": r.stage, "org_id": r.organization_id, "sf_id": r.salesforce_id}
             for r in sample_leads
