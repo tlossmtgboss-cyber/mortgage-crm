@@ -1167,7 +1167,15 @@ async def oauth_callback(
                 logger.warning(f"Initial schema discovery failed (non-fatal): {schema_error}")
 
         frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-        final_redirect = result.get('return_url') or f"{frontend_url}/settings/integrations"
+        # Validate return_url to prevent open redirect
+        raw_return_url = result.get('return_url')
+        if raw_return_url:
+            from urllib.parse import urlparse
+            parsed = urlparse(raw_return_url)
+            frontend_parsed = urlparse(frontend_url)
+            if parsed.scheme and parsed.netloc and parsed.netloc != frontend_parsed.netloc:
+                raw_return_url = None  # Reject external redirect
+        final_redirect = raw_return_url or f"{frontend_url}/settings/integrations"
 
         # Properly append query parameter - avoid double ?
         if '?salesforce=' in final_redirect:

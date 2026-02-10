@@ -32,6 +32,22 @@ from email_service import email_service
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/borrower-auth", tags=["borrower-auth"])
 
+
+def _safe_redirect_path(redirect_to: Optional[str]) -> str:
+    """Validate redirect_to is a safe relative path to prevent open redirect attacks."""
+    if not redirect_to:
+        return "/apply/start"
+    # Must start with / and not with // (protocol-relative URL)
+    if not redirect_to.startswith("/") or redirect_to.startswith("//"):
+        return "/apply/start"
+    # Block @ (credential-based URL bypass) and \ (backslash normalization)
+    if "@" in redirect_to or "\\" in redirect_to:
+        return "/apply/start"
+    # Only allow paths under /apply/
+    if not redirect_to.startswith("/apply/"):
+        return "/apply/start"
+    return redirect_to
+
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
@@ -522,7 +538,7 @@ async def google_callback(
         db.commit()
 
         # Redirect with token
-        redirect_to = state_data.get("redirect_to") or "/apply/start"
+        redirect_to = _safe_redirect_path(state_data.get("redirect_to"))
         lo_id = state_data.get("lo_id")
 
         redirect_url = f"{FRONTEND_URL}{redirect_to}?token={token}"
@@ -651,7 +667,7 @@ async def facebook_callback(
         })
         db.commit()
 
-        redirect_to = state_data.get("redirect_to") or "/apply/start"
+        redirect_to = _safe_redirect_path(state_data.get("redirect_to"))
         lo_id = state_data.get("lo_id")
 
         redirect_url = f"{FRONTEND_URL}{redirect_to}?token={token}"
@@ -774,7 +790,7 @@ async def linkedin_callback(
         })
         db.commit()
 
-        redirect_to = state_data.get("redirect_to") or "/apply/start"
+        redirect_to = _safe_redirect_path(state_data.get("redirect_to"))
         lo_id = state_data.get("lo_id")
 
         redirect_url = f"{FRONTEND_URL}{redirect_to}?token={token}"
@@ -946,7 +962,7 @@ async def apple_callback(
         })
         db.commit()
 
-        redirect_to = state_data.get("redirect_to") or "/apply/start"
+        redirect_to = _safe_redirect_path(state_data.get("redirect_to"))
         lo_id = state_data.get("lo_id")
 
         redirect_url = f"{FRONTEND_URL}{redirect_to}?token={token}"

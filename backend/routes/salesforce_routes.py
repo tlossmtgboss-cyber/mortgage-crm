@@ -26,6 +26,24 @@ import warnings
 
 logger = logging.getLogger(__name__)
 
+
+def _safe_redirect_url(url: Optional[str], frontend_url: str) -> str:
+    """Validate redirect URL to prevent open redirect attacks."""
+    if not url:
+        return f"{frontend_url}/settings/integrations"
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    # Allow relative paths
+    if not parsed.scheme and not parsed.netloc:
+        if url.startswith("/") and not url.startswith("//"):
+            return f"{frontend_url}{url}"
+        return f"{frontend_url}/settings/integrations"
+    # Allow only the frontend URL origin
+    frontend_parsed = urlparse(frontend_url)
+    if parsed.scheme in ("http", "https") and parsed.netloc == frontend_parsed.netloc:
+        return url
+    return f"{frontend_url}/settings/integrations"
+
 # Import Salesforce API version constant for consistency
 try:
     from integrations.salesforce_service import SALESFORCE_API_VERSION
@@ -508,7 +526,7 @@ async def salesforce_callback(
                 # Use the oauth service to handle the callback
                 try:
                     result = await salesforce_oauth.handle_callback(db, code, state)
-                    return_url = result.get('return_url') or f"{frontend_url}/settings/integrations"
+                    return_url = _safe_redirect_url(result.get('return_url'), frontend_url)
                     logger.info(f"Salesforce OAuth successful for user {result['user_id']}")
                     return RedirectResponse(url=f"{return_url}?salesforce=connected")
                 except ValueError as e:
@@ -662,9 +680,9 @@ async def salesforce_callback(
             url=f"{frontend_url}/settings/integrations?error=salesforce_storage_failed"
         )
 
-    # Redirect to frontend
+    # Redirect to frontend (validate URL to prevent open redirect)
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-    final_redirect = redirect_url or f"{frontend_url}/settings/integrations"
+    final_redirect = _safe_redirect_url(redirect_url, frontend_url)
 
     return RedirectResponse(url=f"{final_redirect}?salesforce=connected")
 
