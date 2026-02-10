@@ -3525,24 +3525,49 @@ async def diag_fix_stages(
 
     total_fixed = 0
     fix_details = {}
+    errors = []
 
-    # Fix stage case mismatches - use text cast to handle both enum and varchar columns
-    for bad_stage, correct_stage in stage_fixes.items():
+    # First, check the actual column type and current bad values
+    try:
+        bad_values = db.execute(text("""
+            SELECT stage, COUNT(*) as cnt FROM leads
+            WHERE owner_id = :uid
+            GROUP BY stage
+        """), {"uid": uid}).fetchall()
+        current_stages = {str(r.stage): r.cnt for r in bad_values}
+    except Exception as e:
+        current_stages = {"error": str(e)}
+
+    # Fix specific known bad values one at a time with individual error handling
+    # Target: 'NEW' -> 'New' (the known mismatch from diagnostic)
+    known_bad_exact = ['NEW', 'new', 'attempted_contact', 'ATTEMPTED_CONTACT',
+                       'prospect', 'PROSPECT', 'application', 'APPLICATION',
+                       'pre-qualified', 'PRE-QUALIFIED', 'pre-approved', 'PRE-APPROVED',
+                       'nurture', 'NURTURE', 'withdrawn', 'WITHDRAWN']
+
+    # Map exact bad values to correct enum values
+    exact_fixes = {
+        'NEW': 'New', 'new': 'New',
+        'ATTEMPTED_CONTACT': 'Attempted Contact', 'attempted_contact': 'Attempted Contact',
+        'PROSPECT': 'Prospect', 'prospect': 'Prospect',
+        'APPLICATION': 'Application', 'application': 'Application',
+        'PRE-QUALIFIED': 'Pre-Qualified', 'PRE-APPROVED': 'Pre-Approved',
+        'NURTURE': 'Nurture', 'nurture': 'Nurture',
+        'WITHDRAWN': 'Withdrawn', 'withdrawn': 'Withdrawn',
+    }
+
+    for bad_val, correct_val in exact_fixes.items():
         try:
             count = db.execute(text("""
                 UPDATE leads SET stage = :correct, updated_at = CURRENT_TIMESTAMP
-                WHERE owner_id = :uid AND lower(stage::text) = :bad AND stage::text != :correct
-            """), {"correct": correct_stage, "uid": uid, "bad": bad_stage}).rowcount
-        except Exception:
+                WHERE owner_id = :uid AND stage = :bad
+            """), {"correct": correct_val, "uid": uid, "bad": bad_val}).rowcount
+            if count > 0:
+                fix_details[f"'{bad_val}' -> '{correct_val}'"] = count
+                total_fixed += count
+        except Exception as e:
             db.rollback()
-            # Fallback without cast
-            count = db.execute(text("""
-                UPDATE leads SET stage = :correct, updated_at = CURRENT_TIMESTAMP
-                WHERE owner_id = :uid AND lower(CAST(stage AS text)) = :bad AND CAST(stage AS text) != :correct
-            """), {"correct": correct_stage, "uid": uid, "bad": bad_stage}).rowcount
-        if count > 0:
-            fix_details[f"{bad_stage} -> {correct_stage}"] = count
-            total_fixed += count
+            errors.append(f"Failed to fix '{bad_val}': {str(e)[:100]}")
 
     # Fix NULL stages
     try:
@@ -3550,28 +3575,38 @@ async def diag_fix_stages(
             UPDATE leads SET stage = 'New', updated_at = CURRENT_TIMESTAMP
             WHERE owner_id = :uid AND stage IS NULL
         """), {"uid": uid}).rowcount
-    except Exception:
+        if null_fixed > 0:
+            fix_details["NULL -> 'New'"] = null_fixed
+            total_fixed += null_fixed
+    except Exception as e:
         db.rollback()
-        null_fixed = 0
-    if null_fixed > 0:
-        fix_details["NULL -> New"] = null_fixed
-        total_fixed += null_fixed
+        errors.append(f"Failed to fix NULL stages: {str(e)[:100]}")
 
     # Also fix org_id while we're at it
     org_fixed = 0
     if org_id:
-        org_fixed = db.execute(text("""
-            UPDATE leads SET organization_id = :org_id, updated_at = CURRENT_TIMESTAMP
-            WHERE owner_id = :uid AND organization_id IS NULL
-        """), {"org_id": org_id, "uid": uid}).rowcount
+        try:
+            org_fixed = db.execute(text("""
+                UPDATE leads SET organization_id = :org_id, updated_at = CURRENT_TIMESTAMP
+                WHERE owner_id = :uid AND organization_id IS NULL
+            """), {"org_id": org_id, "uid": uid}).rowcount
+        except Exception as e:
+            db.rollback()
+            errors.append(f"Failed to fix org_id: {str(e)[:100]}")
 
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        errors.append(f"Commit failed: {str(e)[:200]}")
 
     return {
-        "status": "success",
+        "status": "success" if not errors else "partial",
         "user_id": uid,
+        "stages_before_fix": current_stages,
         "total_stage_fixes": total_fixed,
         "fix_details": fix_details,
         "org_id_fixes": org_fixed,
+        "errors": errors,
         "note": "TEMPORARY - delete after debugging",
     }
