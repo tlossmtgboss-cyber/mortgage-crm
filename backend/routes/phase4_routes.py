@@ -1,6 +1,6 @@
 """
 Phase 4 API Routes
-A/B Testing for Voice, AI Learning, and Continuous Improvement
+AI Learning, and Continuous Improvement
 """
 from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import Optional, List, Dict, Any
@@ -11,186 +11,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Import services
-from services.voice_ab_testing_service import (
-    voice_ab_testing_service,
-    VoiceExperimentType,
-    VoiceMetric
-)
 from services.conversation_ai_learning_service import (
     conversation_ai_learning_service,
     ConversationOutcome,
     LearningDataType
 )
 from services.continuous_learning_meta_agent import continuous_learning_meta_agent
-
-
-# =============================================================================
-# Voice A/B Testing Router
-# =============================================================================
-voice_ab_router = APIRouter(prefix="/api/v1/voice-ab")
-
-
-class VoiceExperimentCreate(BaseModel):
-    """Request to create a voice A/B experiment"""
-    name: str
-    description: str
-    experiment_type: str = Field(..., description="greeting, script, voice_persona, call_flow")
-    primary_metric: str = Field(..., description="call_success_rate, booking_conversion, etc.")
-    variants: List[Dict[str, Any]]
-    secondary_metrics: Optional[List[str]] = None
-    target_percentage: float = 100.0
-    min_calls: int = 100
-    target_phone_patterns: Optional[List[str]] = None
-    target_time_windows: Optional[List[Dict]] = None
-
-
-class CallResultRecord(BaseModel):
-    """Request to record a call result"""
-    experiment_id: str
-    variant_id: str
-    call_id: str
-    caller_phone: str
-    call_success: bool = False
-    booking_made: bool = False
-    transferred: bool = False
-    call_duration_seconds: int = 0
-    satisfaction_score: Optional[float] = None
-    voicemail_left: bool = False
-    callback_requested: bool = False
-    escalated: bool = False
-    hang_up_early: bool = False
-    caller_state: Optional[str] = None
-
-
-@voice_ab_router.post("/experiments")
-async def create_voice_experiment(request: VoiceExperimentCreate):
-    """Create a new voice A/B test experiment"""
-    try:
-        experiment_type = VoiceExperimentType(request.experiment_type)
-        primary_metric = VoiceMetric(request.primary_metric)
-        secondary_metrics = [VoiceMetric(m) for m in (request.secondary_metrics or [])]
-
-        experiment = voice_ab_testing_service.create_experiment(
-            name=request.name,
-            description=request.description,
-            experiment_type=experiment_type,
-            primary_metric=primary_metric,
-            variants=request.variants,
-            secondary_metrics=secondary_metrics,
-            target_percentage=request.target_percentage,
-            min_calls=request.min_calls,
-            target_phone_patterns=request.target_phone_patterns,
-            target_time_windows=request.target_time_windows
-        )
-
-        return {
-            "status": "success",
-            "experiment_id": experiment.id,
-            "name": experiment.name,
-            "variants_count": len(experiment.variants),
-            "message": f"Experiment '{experiment.name}' created successfully"
-        }
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Error creating voice experiment: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@voice_ab_router.post("/experiments/{experiment_id}/start")
-async def start_voice_experiment(experiment_id: str):
-    """Start a voice A/B test experiment"""
-    success = voice_ab_testing_service.start_experiment(experiment_id)
-    if not success:
-        raise HTTPException(status_code=400, detail="Failed to start experiment")
-
-    return {"status": "success", "message": f"Experiment {experiment_id} started"}
-
-
-@voice_ab_router.post("/experiments/{experiment_id}/stop")
-async def stop_voice_experiment(
-    experiment_id: str,
-    declare_winner: bool = True
-):
-    """Stop a voice A/B test experiment"""
-    result = voice_ab_testing_service.stop_experiment(experiment_id, declare_winner)
-    if not result:
-        raise HTTPException(status_code=404, detail="Experiment not found")
-
-    return result
-
-
-@voice_ab_router.get("/experiments/{experiment_id}")
-async def get_voice_experiment(experiment_id: str):
-    """Get voice experiment details and analysis"""
-    analysis = voice_ab_testing_service.get_experiment_analysis(experiment_id)
-    if not analysis:
-        raise HTTPException(status_code=404, detail="Experiment not found")
-
-    return analysis
-
-
-@voice_ab_router.get("/variant")
-async def get_variant_for_call(
-    caller_phone: str,
-    experiment_type: Optional[str] = None,
-    area_code: Optional[str] = None,
-    state: Optional[str] = None
-):
-    """Get the active experiment variant for an incoming call"""
-    exp_type = VoiceExperimentType(experiment_type) if experiment_type else None
-
-    context = {}
-    if area_code:
-        context["area_code"] = area_code
-    if state:
-        context["state"] = state
-
-    variant = voice_ab_testing_service.get_active_variant_for_call(
-        caller_phone=caller_phone,
-        experiment_type=exp_type,
-        call_context=context if context else None
-    )
-
-    if not variant:
-        return {"variant": None, "message": "No active experiment for this call"}
-
-    return {"variant": variant}
-
-
-@voice_ab_router.post("/results")
-async def record_call_result(request: CallResultRecord):
-    """Record the result of a call in an experiment"""
-    success = voice_ab_testing_service.record_call_result(
-        experiment_id=request.experiment_id,
-        variant_id=request.variant_id,
-        call_id=request.call_id,
-        caller_phone=request.caller_phone,
-        call_success=request.call_success,
-        booking_made=request.booking_made,
-        transferred=request.transferred,
-        call_duration_seconds=request.call_duration_seconds,
-        satisfaction_score=request.satisfaction_score,
-        voicemail_left=request.voicemail_left,
-        callback_requested=request.callback_requested,
-        escalated=request.escalated,
-        hang_up_early=request.hang_up_early,
-        caller_state=request.caller_state
-    )
-
-    return {"status": "success" if success else "failed", "recorded": success}
-
-
-@voice_ab_router.get("/templates/greetings")
-async def get_greeting_templates():
-    """Get sample greeting variants for A/B testing"""
-    return {"greetings": voice_ab_testing_service.get_greeting_variants()}
-
-
-@voice_ab_router.get("/templates/voices")
-async def get_voice_persona_templates():
-    """Get sample voice persona variants for A/B testing"""
-    return {"voices": voice_ab_testing_service.get_voice_persona_variants()}
 
 
 # =============================================================================

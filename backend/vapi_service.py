@@ -387,22 +387,27 @@ We'll call you at this number at the scheduled time.
         message_lower = message_body.lower()
 
         # Intent patterns for mortgage context
-        if any(word in message_lower for word in ["rate", "rates", "interest", "apr"]):
+        import re
+        def _has_word(text, words):
+            """Match whole words only to avoid false positives (e.g. 'erate' matching 'rate')."""
+            return any(re.search(r'\b' + re.escape(w) + r'\b', text) for w in words)
+
+        if _has_word(message_lower, ["rate", "rates", "interest", "apr"]):
             intent = "rate_inquiry"
             urgency = "medium"
-        elif any(word in message_lower for word in ["schedule", "appointment", "meet", "call"]):
+        elif _has_word(message_lower, ["schedule", "appointment", "meet", "call"]):
             intent = "appointment_request"
             urgency = "high"
-        elif any(word in message_lower for word in ["refinance", "refi", "lower payment"]):
+        elif _has_word(message_lower, ["refinance", "refi", "lower payment"]):
             intent = "refinance_inquiry"
             urgency = "medium"
-        elif any(word in message_lower for word in ["pre-approval", "preapproval", "qualify", "approved"]):
+        elif _has_word(message_lower, ["pre-approval", "preapproval", "qualify", "approved"]):
             intent = "preapproval_inquiry"
             urgency = "high"
-        elif any(word in message_lower for word in ["document", "paperwork", "upload", "send"]):
+        elif _has_word(message_lower, ["document", "paperwork", "upload", "send"]):
             intent = "document_inquiry"
             urgency = "medium"
-        elif any(word in message_lower for word in ["status", "update", "where", "loan"]):
+        elif _has_word(message_lower, ["status", "update", "where", "loan"]):
             intent = "status_inquiry"
             urgency = "medium"
         elif any(word in message_lower for word in ["yes", "ok", "sure", "great", "sounds good"]):
@@ -1281,7 +1286,7 @@ class VapiCRMIntegration:
 
             # 1. Check for existing lead
             lead = self.db.query(Lead).filter(
-                Lead.phone.contains(cleaned_phone)
+                Lead.phone.ilike(f"%{cleaned_phone}")
             ).first()
 
             # 2. Check for active loans (if you have a Loan model)

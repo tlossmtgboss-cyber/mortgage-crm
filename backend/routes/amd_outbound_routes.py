@@ -33,6 +33,27 @@ logger = logging.getLogger(__name__)
 # Determine telephony provider
 TELEPHONY_PROVIDER = os.getenv("TELEPHONY_PROVIDER", "twilio").lower()
 
+
+def _validate_twilio_signature(request: Request, form_data: dict) -> bool:
+    """Validate that a webhook request genuinely came from Twilio."""
+    try:
+        from twilio.request_validator import RequestValidator
+        auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+        if not auth_token:
+            logger.warning("TWILIO_AUTH_TOKEN not set — skipping webhook signature validation")
+            return True  # Can't validate without token; allow but warn
+        validator = RequestValidator(auth_token)
+        # Reconstruct the full URL Twilio used
+        url = str(request.url)
+        signature = request.headers.get("X-Twilio-Signature", "")
+        return validator.validate(url, form_data, signature)
+    except ImportError:
+        logger.warning("twilio package not available for signature validation")
+        return True
+    except Exception as e:
+        logger.error(f"Twilio signature validation error: {e}")
+        return False
+
 router = APIRouter(prefix="/api/v1/voice/amd", tags=["AMD Outbound Calls"])
 
 # API base URL for callbacks
@@ -551,6 +572,12 @@ async def handle_amd_status(
     from twilio.rest import Client as TwilioClient
 
     form_data = await request.form()
+    form_dict = dict(form_data)
+
+    # Validate Twilio webhook signature
+    if not _validate_twilio_signature(request, form_dict):
+        logger.warning(f"Invalid Twilio signature on AMD callback for {tracking_id}")
+        raise HTTPException(status_code=403, detail="Invalid webhook signature")
 
     call_sid = form_data.get("CallSid")
     answered_by = form_data.get("AnsweredBy", "unknown")
@@ -840,6 +867,12 @@ async def handle_call_status(
 ):
     """Handle call status updates from Twilio"""
     form_data = await request.form()
+    form_dict = dict(form_data)
+
+    # Validate Twilio webhook signature
+    if not _validate_twilio_signature(request, form_dict):
+        logger.warning(f"Invalid Twilio signature on call-status callback for {tracking_id}")
+        raise HTTPException(status_code=403, detail="Invalid webhook signature")
 
     call_status = form_data.get("CallStatus")
     call_duration = form_data.get("CallDuration", "0")

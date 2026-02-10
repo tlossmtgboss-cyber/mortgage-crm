@@ -15,7 +15,7 @@ from typing import Optional, Tuple
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, UploadFile, File
 from fastapi.responses import Response
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
@@ -576,36 +576,53 @@ async def send_voicemail_via_vapi(
     if audio_url:
         vapi_payload["assistantOverrides"]["voicemailDetection"]["voicemailAudioUrl"] = audio_url
 
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                "https://api.vapi.ai/call/phone",
-                headers={
-                    "Authorization": f"Bearer {vapi_api_key}",
-                    "Content-Type": "application/json"
-                },
-                json=vapi_payload
-            )
+    max_retries = 3
+    last_error = None
 
-            if response.status_code not in [200, 201]:
-                error_msg = response.text
-                logger.error(f"Vapi API error: {error_msg}")
-                raise HTTPException(status_code=500, detail=f"Vapi error: {error_msg}")
+    for attempt in range(max_retries):
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    "https://api.vapi.ai/call/phone",
+                    headers={
+                        "Authorization": f"Bearer {vapi_api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json=vapi_payload
+                )
 
-            result = response.json()
-            call_id = result.get("id")
+                if response.status_code not in [200, 201]:
+                    error_msg = response.text
+                    # Don't retry client errors (4xx)
+                    if 400 <= response.status_code < 500:
+                        logger.error(f"Vapi API client error (no retry): {error_msg}")
+                        raise HTTPException(status_code=500, detail=f"Vapi error: {error_msg}")
+                    # Retry server errors (5xx)
+                    logger.warning(f"Vapi API server error (attempt {attempt + 1}/{max_retries}): {error_msg}")
+                    last_error = error_msg
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s
+                        continue
+                    raise HTTPException(status_code=500, detail=f"Vapi error after {max_retries} attempts: {error_msg}")
 
-            logger.info(f"Vapi call initiated: {call_id}")
+                result = response.json()
+                call_id = result.get("id")
 
-            return {
-                "success": True,
-                "call_id": call_id,
-                "vapi_response": result
-            }
+                logger.info(f"Vapi call initiated: {call_id}")
 
-    except httpx.HTTPError as e:
-        logger.error(f"HTTP error calling Vapi: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to initiate call: {str(e)}")
+                return {
+                    "success": True,
+                    "call_id": call_id,
+                    "vapi_response": result
+                }
+
+        except httpx.HTTPError as e:
+            last_error = str(e)
+            logger.warning(f"HTTP error calling Vapi (attempt {attempt + 1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                await asyncio.sleep(2 ** attempt)
+                continue
+            raise HTTPException(status_code=500, detail=f"Failed to initiate call after {max_retries} attempts: {last_error}")
 
 
 # =============================================================================
@@ -686,9 +703,14 @@ async def create_voicemail_drop(
                 voice_speed = float(template.voice_speed) if template.voice_speed else voice_speed
                 audio_url = template.audio_url
                 delivery_method = template.delivery_method or delivery_method
-                # Increment usage
-                template.times_used = (template.times_used or 0) + 1
-                template.last_used_at = datetime.now(timezone.utc)
+                # Increment usage atomically
+                db.execute(text("""
+                    UPDATE voicemail_templates
+                    SET times_used = COALESCE(times_used, 0) + 1,
+                        last_used_at = NOW()
+                    WHERE id = :tid
+                """), {"tid": template_id})
+                db.flush()
 
         # Create voicemail drop record
         voicemail_drop = VoicemailDrop(
@@ -1869,7 +1891,7 @@ async def _resolve_and_dispatch_campaign(campaign_id: int, user_id: int, user_na
 
         # --- Phase 2: Dispatch queued drops ---
         throttle_rate = campaign.throttle_rate or 10
-        delay_between = 60.0 / throttle_rate
+        delay_between = 60.0 / max(throttle_rate, 1)
 
         queued_drops = db.query(VoicemailDrop).filter(
             VoicemailDrop.campaign_id == campaign_id,

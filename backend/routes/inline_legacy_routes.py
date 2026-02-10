@@ -1823,11 +1823,10 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
 
     # Phase 4 AI Learning & Optimization routes
     try:
-        from routes.phase4_routes import voice_ab_router, ai_learning_router, meta_agent_router
-        app.include_router(voice_ab_router, tags=["Voice A/B Testing"])
+        from routes.phase4_routes import ai_learning_router, meta_agent_router
         app.include_router(ai_learning_router, tags=["AI Learning"])
         app.include_router(meta_agent_router, tags=["Continuous Learning Meta-Agent"])
-        logger.info("✅ Phase 4 AI Learning & Optimization routes loaded (Voice A/B, AI Learning, Meta-Agent)")
+        logger.info("✅ Phase 4 AI Learning & Optimization routes loaded (AI Learning, Meta-Agent)")
     except Exception as e:
         logger.warning(f"⚠️ Phase 4 routes not loaded: {e}")
 

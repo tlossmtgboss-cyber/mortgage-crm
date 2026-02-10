@@ -1044,7 +1044,7 @@ export const voicemailAPI = {
   // Get voicemail history
   getHistory: async (params = {}) => {
     const response = await api.get('/api/v1/voicemail/history', { params });
-    return ensureArray(response.data, 'history');
+    return ensureArray(response.data, 'voicemails');
   },
 
   // Get voicemail analytics
