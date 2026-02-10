@@ -2065,12 +2065,21 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
 
     # User Profile Settings routes (Comprehensive error handling pattern)
     try:
-        from routes.user_profile_settings_routes import router as user_profile_settings_router, set_dependencies as set_user_profile_deps
+        from routes.user_profile_settings_routes import router as user_profile_settings_router, users_router as users_me_router, set_dependencies as set_user_profile_deps
         set_user_profile_deps(User, get_current_user, pwd_context)
         app.include_router(user_profile_settings_router, tags=["User Profile Settings"])
-        logger.info("User Profile Settings routes loaded")
+        app.include_router(users_me_router, tags=["Users"])
+        logger.info("✅ User Profile Settings routes loaded")
     except Exception as e:
         logger.warning(f"User Profile Settings routes not loaded: {e}")
+
+    # Dashboard routes
+    try:
+        from routes.dashboard_routes import router as dashboard_router
+        app.include_router(dashboard_router, tags=["Dashboard"])
+        logger.info("✅ Dashboard routes loaded")
+    except Exception as e:
+        logger.warning(f"Dashboard routes not loaded: {e}")
 
     # Account Management routes (Master Administrator)
     try:

@@ -1836,6 +1836,15 @@ async def submit_application(
         # CREATE LEAD IN CRM
         # =================================================================
 
+        # Resolve organization_id from loan officer for tenant isolation
+        organization_id = None
+        if submission.loId:
+            lo_org_result = db.execute(text(
+                "SELECT organization_id FROM users WHERE id = :lo_id"
+            ), {"lo_id": submission.loId}).fetchone()
+            if lo_org_result and lo_org_result[0]:
+                organization_id = lo_org_result[0]
+
         # Calculate loan details - use paymentEstimate if available (from budget calculator)
         if submission.paymentEstimate:
             purchase_price = float(submission.paymentEstimate.get("homeValue", 0) or 0)
@@ -1874,6 +1883,7 @@ async def submit_application(
                 annual_income, credit_score, employer_name,
                 stage, source, loan_type, first_time_buyer,
                 ltv, dti, owner_id, referral_partner_id,
+                organization_id,
                 application_completed_date, stage_changed_at,
                 created_at, updated_at
             )
@@ -1884,6 +1894,7 @@ async def submit_application(
                 :annual_income, :credit_score, :employer_name,
                 :stage, :source, :loan_type, :first_time_buyer,
                 :ltv, :dti, :owner_id, :referral_partner_id,
+                :organization_id,
                 :application_completed_date, :stage_changed_at,
                 :created_at, :updated_at
             )
@@ -1913,6 +1924,7 @@ async def submit_application(
             "dti": round(dti, 2),
             "owner_id": submission.loId,
             "referral_partner_id": referral_partner_id,
+            "organization_id": organization_id,
             "application_completed_date": submission_date,
             "stage_changed_at": submission_date,
             "created_at": submission_date,
@@ -1987,6 +1999,7 @@ async def submit_application(
                         stage, program, loan_type, amount,
                         purchase_price, down_payment, rate, term,
                         property_address, loan_officer_id,
+                        organization_id,
                         days_in_stage, sla_status,
                         created_at, updated_at
                     )
@@ -1995,6 +2008,7 @@ async def submit_application(
                         'Processing', :program, :loan_type, :amount,
                         :purchase_price, :down_payment, NULL, 360,
                         :property_address, :loan_officer_id,
+                        :organization_id,
                         0, 'on-track',
                         :created_at, :updated_at
                     )
@@ -2011,6 +2025,7 @@ async def submit_application(
                     "down_payment": down_payment,
                     "property_address": property_address_str.strip(", ") if property_address_str else None,
                     "loan_officer_id": submission.loId if submission.loId else None,
+                    "organization_id": organization_id,
                     "created_at": submission_date,
                     "updated_at": submission_date,
                 })
@@ -2149,13 +2164,8 @@ async def submit_application(
                 import random
                 import string
 
-                # Get organization ID (default to 1 or from LO)
-                org_id = 1
-                if submission.loId:
-                    # Try to get org from LO
-                    lo_result = db.execute(text("SELECT organization_id FROM users WHERE id = :lo_id"), {"lo_id": submission.loId}).fetchone()
-                    if lo_result and lo_result[0]:
-                        org_id = lo_result[0]
+                # Reuse organization_id resolved earlier (default to 1)
+                org_id = organization_id if organization_id else 1
 
                 # Generate a unique slug in format: firstname.lastname.url
                 first_name_clean = re.sub(r'[^a-z]+', '', submission.profileData.get("firstName", "").lower())

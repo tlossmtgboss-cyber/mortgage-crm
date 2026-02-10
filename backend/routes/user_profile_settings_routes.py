@@ -627,3 +627,139 @@ async def get_password_requirements():
         },
         message="Password requirements retrieved"
     )
+
+
+# =============================================================================
+# /api/v1/users/me — Frontend-compatible profile endpoints
+# =============================================================================
+
+users_router = APIRouter(prefix="/api/v1/users", tags=["Users"])
+
+
+class UserMeUpdate(BaseModel):
+    """Update model matching what the frontend Settings.js sends"""
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    nmls_number: Optional[str] = None
+    job_title: Optional[str] = None
+    work_hours_start: Optional[str] = None
+    work_hours_end: Optional[str] = None
+    work_days: Optional[List[str]] = None
+
+
+@users_router.get("/me")
+async def get_current_user_profile(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Get current user's profile — flat JSON for frontend Settings.js"""
+    try:
+        current_user = await get_current_user(request, db)
+
+        business_hours = getattr(current_user, 'business_hours', None) or {}
+
+        return {
+            "id": current_user.id,
+            "slug": getattr(current_user, 'slug', None) or '',
+            "full_name": current_user.full_name or '',
+            "email": current_user.email or '',
+            "phone": getattr(current_user, 'phone', None) or '',
+            "job_title": getattr(current_user, 'job_title', None) or '',
+            "nmls_number": getattr(current_user, 'nmls_number', None) or '',
+            "bio": getattr(current_user, 'bio', None) or '',
+            "timezone": getattr(current_user, 'timezone', 'America/New_York'),
+            "photo_url": getattr(current_user, 'photo_url', None) or getattr(current_user, 'profile_photo', None),
+            "role": current_user.role,
+            "work_hours_start": business_hours.get('start', '09:00'),
+            "work_hours_end": business_hours.get('end', '17:00'),
+            "work_days": business_hours.get('days', ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']),
+        }
+    except Exception as e:
+        logger.error(f"Error fetching user profile: {e}")
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@users_router.put("/me")
+async def update_current_user_profile(
+    updates: UserMeUpdate,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Update current user's profile — accepts flat JSON from frontend Settings.js"""
+    try:
+        current_user = await get_current_user(request, db)
+
+        update_data = updates.dict(exclude_unset=True)
+
+        # Handle full_name
+        if 'full_name' in update_data and update_data['full_name']:
+            current_user.full_name = update_data['full_name'].strip()
+
+        # Update direct fields
+        for field in ['phone', 'job_title', 'nmls_number']:
+            if field in update_data and hasattr(current_user, field):
+                setattr(current_user, field, update_data[field])
+
+        # Update work hours
+        if any(k in update_data for k in ['work_hours_start', 'work_hours_end', 'work_days']):
+            business_hours = getattr(current_user, 'business_hours', None) or {}
+            if 'work_hours_start' in update_data:
+                business_hours['start'] = update_data['work_hours_start']
+            if 'work_hours_end' in update_data:
+                business_hours['end'] = update_data['work_hours_end']
+            if 'work_days' in update_data:
+                business_hours['days'] = update_data['work_days']
+            current_user.business_hours = business_hours
+
+        db.commit()
+        db.refresh(current_user)
+
+        logger.info(f"Profile updated for user {current_user.email}: {list(update_data.keys())}")
+
+        business_hours = getattr(current_user, 'business_hours', None) or {}
+        return {
+            "id": current_user.id,
+            "full_name": current_user.full_name or '',
+            "email": current_user.email or '',
+            "phone": getattr(current_user, 'phone', None) or '',
+            "job_title": getattr(current_user, 'job_title', None) or '',
+            "nmls_number": getattr(current_user, 'nmls_number', None) or '',
+            "work_hours_start": business_hours.get('start', '09:00'),
+            "work_hours_end": business_hours.get('end', '17:00'),
+            "work_days": business_hours.get('days', ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']),
+            "message": "Profile updated successfully",
+        }
+    except Exception as e:
+        logger.error(f"Error updating user profile: {e}")
+        db.rollback()
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@users_router.put("/me/password")
+async def change_user_password(
+    password_data: PasswordChange,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Change password — frontend-compatible path at /api/v1/users/me/password"""
+    try:
+        current_user = await get_current_user(request, db)
+
+        if not pwd_context.verify(password_data.current_password, current_user.hashed_password):
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+        current_user.hashed_password = pwd_context.hash(password_data.new_password)
+        db.commit()
+
+        logger.info(f"Password changed for user {current_user.email}")
+        return {"message": "Password changed successfully"}
+    except Exception as e:
+        if "400" in str(type(e)):
+            raise
+        logger.error(f"Error changing password: {e}")
+        db.rollback()
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=str(e))
