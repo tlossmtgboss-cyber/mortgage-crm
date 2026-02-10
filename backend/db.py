@@ -28,6 +28,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
+from starlette.requests import Request
 
 logger = logging.getLogger(__name__)
 
@@ -166,10 +167,26 @@ def after_cursor_execute(conn, cursor, statement, parameters, context, executema
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-def get_db():
-    """Database session dependency for FastAPI"""
+def get_db(request: Request = None):
+    """Database session dependency for FastAPI.
+
+    If request has tenant context (set by TenantContextMiddleware),
+    sets PostgreSQL RLS session variable for defense-in-depth.
+
+    FastAPI automatically injects Request when this is used as Depends(get_db).
+    Non-FastAPI callers (scripts, tests) pass request=None and skip RLS.
+    """
     db = SessionLocal()
     try:
+        # Set RLS tenant context if available from middleware
+        if request and hasattr(request, 'state'):
+            org_id = getattr(request.state, 'organization_id', None)
+            if org_id and DATABASE_URL.startswith("postgresql"):
+                try:
+                    from database.tenant_mixin import set_tenant_context
+                    set_tenant_context(db, org_id)
+                except Exception as e:
+                    logger.warning(f"Failed to set RLS tenant context: {e}")
         yield db
     finally:
         db.close()

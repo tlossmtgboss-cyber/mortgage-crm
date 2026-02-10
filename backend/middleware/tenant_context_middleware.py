@@ -58,6 +58,34 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
         self.get_db = get_db
         self.user_model = user_model
 
+    def _set_tenant_state(self, request: Request, user) -> None:
+        """Populate request.state with tenant context from a resolved user."""
+        request.state.user = user
+        request.state.organization_id = getattr(user, 'organization_id', None)
+
+        from services.tenant_isolation import TenantContext
+
+        user_role = getattr(user, 'permission_role', 'sales')
+        is_platform_admin = user_role == 'admin'
+
+        request.state.tenant_context = TenantContext(
+            organization_id=request.state.organization_id,
+            user_id=user.id,
+            user_role=user_role,
+            is_platform_admin=is_platform_admin
+        )
+
+        # Set structured logging context for correlation
+        if STRUCTURED_LOGGING_AVAILABLE:
+            set_user_id(user.id)
+            if request.state.organization_id:
+                set_tenant_id(str(request.state.organization_id))
+
+        logger.debug(
+            f"Tenant context set for user {user.id}, "
+            f"org {request.state.organization_id}"
+        )
+
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """Process request and add tenant context if authenticated."""
 
@@ -87,8 +115,29 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
         if auth_header and auth_header.startswith("Bearer "):
             token = auth_header[7:]  # Remove "Bearer " prefix
 
-            # Skip API keys (they start with sk_)
-            if not token.startswith("sk_"):
+            if token.startswith("sk_"):
+                # API key authentication - resolve user and set tenant context
+                try:
+                    if self.get_db and self.user_model:
+                        db = next(self.get_db())
+                        try:
+                            from database.models.core import ApiKey
+                            api_key = db.query(ApiKey).filter(
+                                ApiKey.key == token,
+                                ApiKey.is_active == True
+                            ).first()
+                            if api_key:
+                                user = db.query(self.user_model).filter(
+                                    self.user_model.id == api_key.user_id
+                                ).first()
+                                if user:
+                                    self._set_tenant_state(request, user)
+                        finally:
+                            db.close()
+                except Exception as e:
+                    logger.debug(f"API key tenant context extraction failed: {e}")
+            else:
+                # JWT authentication
                 try:
                     # Decode JWT
                     payload = jwt.decode(
@@ -108,32 +157,7 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                             ).first()
 
                             if user:
-                                request.state.user = user
-                                request.state.organization_id = getattr(user, 'organization_id', None)
-
-                                # Create tenant context
-                                from services.tenant_isolation import TenantContext
-
-                                user_role = getattr(user, 'permission_role', 'sales')
-                                is_platform_admin = user_role == 'admin'
-
-                                request.state.tenant_context = TenantContext(
-                                    organization_id=request.state.organization_id,
-                                    user_id=user.id,
-                                    user_role=user_role,
-                                    is_platform_admin=is_platform_admin
-                                )
-
-                                # Set structured logging context for correlation
-                                if STRUCTURED_LOGGING_AVAILABLE:
-                                    set_user_id(user.id)
-                                    if request.state.organization_id:
-                                        set_tenant_id(str(request.state.organization_id))
-
-                                logger.debug(
-                                    f"Tenant context set for user {user.id}, "
-                                    f"org {request.state.organization_id}"
-                                )
+                                self._set_tenant_state(request, user)
                         finally:
                             db.close()
 

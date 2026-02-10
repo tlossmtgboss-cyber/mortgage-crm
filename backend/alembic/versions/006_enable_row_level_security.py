@@ -97,23 +97,19 @@ def upgrade():
 
         # Create policy for tenant isolation
         # The policy uses current_setting to get the tenant from session context
-        # COALESCE handles the case where current_tenant is not set (returns NULL)
+        # Fail-closed: if app.current_tenant is not set, NULLIF returns NULL,
+        # so organization_id = NULL is FALSE for all rows → zero rows returned
         policy_name = f"tenant_isolation_{table}"
 
         op.execute(f"""
+            DROP POLICY IF EXISTS {policy_name} ON {table};
             CREATE POLICY {policy_name} ON {table}
             FOR ALL
             USING (
-                organization_id = COALESCE(
-                    NULLIF(current_setting('app.current_tenant', true), '')::integer,
-                    organization_id
-                )
+                organization_id = NULLIF(current_setting('app.current_tenant', true), '')::integer
             )
             WITH CHECK (
-                organization_id = COALESCE(
-                    NULLIF(current_setting('app.current_tenant', true), '')::integer,
-                    organization_id
-                )
+                organization_id = NULLIF(current_setting('app.current_tenant', true), '')::integer
             )
         """)
 

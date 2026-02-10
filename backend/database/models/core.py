@@ -142,6 +142,7 @@ class ApiKey(Base):
     key = Column(String, unique=True, index=True, nullable=False)
     name = Column(String, nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     last_used_at = Column(DateTime, nullable=True)

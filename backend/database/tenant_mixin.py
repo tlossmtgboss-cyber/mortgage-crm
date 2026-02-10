@@ -206,11 +206,11 @@ def create_rls_policy(
     DROP POLICY IF EXISTS {policy_name} ON {table_name};
 
     -- Create tenant isolation policy
-    -- This assumes a session variable 'app.current_organization_id' is set
+    -- This assumes a session variable 'app.current_tenant' is set
     CREATE POLICY {policy_name} ON {table_name}
         FOR ALL
         TO PUBLIC
-        USING (organization_id = NULLIF(current_setting('app.current_organization_id', TRUE), '')::INTEGER);
+        USING (organization_id = NULLIF(current_setting('app.current_tenant', TRUE), '')::INTEGER);
     """
 
     with engine.connect() as conn:
@@ -239,8 +239,9 @@ def set_tenant_context(db: Session, organization_id: int) -> None:
 
     # Use parameterized query - PostgreSQL SET doesn't support $1 syntax,
     # but we've validated it's a safe integer above
+    # NOTE: Variable name must match RLS policy in 006_enable_row_level_security.py
     db.execute(
-        text("SET LOCAL app.current_organization_id = :org_id"),
+        text("SET LOCAL app.current_tenant = :org_id"),
         {"org_id": str(organization_id)}
     )
 
@@ -251,7 +252,7 @@ def clear_tenant_context(db: Session) -> None:
 
     Call this at the end of each request or when switching contexts.
     """
-    db.execute(text("RESET app.current_organization_id"))
+    db.execute(text("RESET app.current_tenant"))
 
 
 @contextmanager

@@ -1531,6 +1531,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                 key=zapier_api_key,
                 name="Zapier Integration",
                 user_id=user.id,
+                organization_id=getattr(user, 'organization_id', None),
                 is_active=True
             )
 
