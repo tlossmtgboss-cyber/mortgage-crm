@@ -12,6 +12,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Any
 import logging
 import os
+import asyncio
 import requests
 
 logger = logging.getLogger(__name__)
@@ -1292,7 +1293,7 @@ def register_debug_data_routes(
             # Microsoft Graph API endpoint for calendar events
             graph_url = f"https://graph.microsoft.com/v1.0/me/calendar/calendarView?startDateTime={start_date}&endDateTime={end_date}&$top=100"
 
-            response = requests.get(graph_url, headers=headers)
+            response = await asyncio.to_thread(requests.get, graph_url, headers=headers)
 
             if response.status_code != 200:
                 logger.error(f"Microsoft Calendar API error: {response.status_code} - {response.text}")

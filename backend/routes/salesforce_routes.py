@@ -33,8 +33,14 @@ except ImportError:
     SALESFORCE_API_VERSION = "v58.0"  # Fallback
 
 from sqlalchemy.exc import SQLAlchemyError
+import asyncio
 import requests
 from requests.exceptions import RequestException
+
+
+async def _async_get(*args, **kwargs):
+    """Run blocking requests.get() in thread pool to avoid blocking the event loop."""
+    return await asyncio.to_thread(requests.get, *args, **kwargs)
 
 # Import encryption functions for secure token storage
 try:
@@ -1129,7 +1135,7 @@ async def explore_salesforce_objects(
             "Content-Type": "application/json"
         }
 
-        response = requests.get(
+        response = await _async_get(
             f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/sobjects/",
             headers=headers,
             timeout=30
@@ -1209,7 +1215,7 @@ async def explore_salesforce_object_fields(
         }
 
         # Get object describe (field details)
-        response = requests.get(
+        response = await _async_get(
             f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/sobjects/{object_name}/describe/",
             headers=headers
         )
@@ -1287,7 +1293,7 @@ async def explore_salesforce_query(
 
     try:
         # Get object describe to find queryable fields
-        describe_response = requests.get(
+        describe_response = await _async_get(
             f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/sobjects/{object_name}/describe/",
             headers=headers
         )
@@ -1380,7 +1386,7 @@ async def import_closed_loans(
 
     try:
         # First, discover what objects are available
-        sobjects_response = requests.get(f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/sobjects/", headers=headers)
+        sobjects_response = await _async_get(f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/sobjects/", headers=headers)
         sobjects_response.raise_for_status()
         available_objects = {obj['name']: obj for obj in sobjects_response.json().get('sobjects', [])}
 
@@ -1413,7 +1419,7 @@ async def import_closed_loans(
         logger.info(f"Using Salesforce object: {found_object}")
 
         # Get object fields
-        describe_response = requests.get(
+        describe_response = await _async_get(
             f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/sobjects/{found_object}/describe/",
             headers=headers
         )
@@ -1440,7 +1446,7 @@ async def import_closed_loans(
 
         logger.info(f"Executing SOQL: {soql[:200]}...")
 
-        query_response = requests.get(
+        query_response = await _async_get(
             f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/query/",
             headers=headers,
             params={"q": soql}
@@ -2005,7 +2011,7 @@ async def admin_pull_recent_loans(
         sf_object = "MtgPlanner_CRM__Transaction_Property__c"
 
         # Get object fields first
-        describe_response = requests.get(
+        describe_response = await _async_get(
             f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/sobjects/{sf_object}/describe/",
             headers=headers,
             timeout=30
@@ -2031,7 +2037,7 @@ async def admin_pull_recent_loans(
 
         logger.info(f"Executing SOQL: {soql[:200]}...")
 
-        query_response = requests.get(
+        query_response = await _async_get(
             f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/query/",
             headers=headers,
             params={"q": soql},
@@ -2721,7 +2727,7 @@ async def debug_import_closed_loans_from_sf(
             "Content-Type": "application/json"
         }
 
-        response = requests.get(url, headers=headers, timeout=60)
+        response = await _async_get(url, headers=headers, timeout=60)
 
         if response.status_code != 200:
             return {
@@ -3109,7 +3115,7 @@ async def sync_salesforce_and_import_mum(
 
                 # Get fields
                 describe_url = f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/sobjects/{sf_object}/describe/"
-                describe_resp = requests.get(describe_url, headers=headers, timeout=30)
+                describe_resp = await _async_get(describe_url, headers=headers, timeout=30)
 
                 if describe_resp.status_code == 200:
                     describe_data = describe_resp.json()
@@ -3133,7 +3139,7 @@ async def sync_salesforce_and_import_mum(
                     """
 
                     query_url = f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/query/"
-                    query_resp = requests.get(query_url, headers=headers, params={"q": soql}, timeout=60)
+                    query_resp = await _async_get(query_url, headers=headers, params={"q": soql}, timeout=60)
 
                     if query_resp.status_code == 200:
                         records = query_resp.json().get('records', [])
@@ -3406,7 +3412,7 @@ async def sync_all_loans_from_salesforce(
 
         # Describe object to find available fields
         describe_url = f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/sobjects/{sf_object}/describe/"
-        describe_resp = requests.get(describe_url, headers=headers, timeout=30)
+        describe_resp = await _async_get(describe_url, headers=headers, timeout=30)
         if describe_resp.status_code == 200:
             available_fields = {f['name'] for f in describe_resp.json().get('fields', [])}
             query_fields = [f for f in desired_fields if f in available_fields]
@@ -3425,7 +3431,7 @@ async def sync_all_loans_from_salesforce(
 
         # Use params instead of URL encoding (matches working endpoints)
         query_url = f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/query/"
-        response = requests.get(query_url, headers=headers, params={"q": soql}, timeout=60)
+        response = await _async_get(query_url, headers=headers, params={"q": soql}, timeout=60)
 
         # Handle token expiration with refresh
         if response.status_code == 401 and refresh_token:
@@ -3458,7 +3464,7 @@ async def sync_all_loans_from_salesforce(
                         "Authorization": f"Bearer {access_token}",
                         "Content-Type": "application/json"
                     }
-                    response = requests.get(query_url, headers=headers, params={"q": soql}, timeout=60)
+                    response = await _async_get(query_url, headers=headers, params={"q": soql}, timeout=60)
                 else:
                     logger.error("Token refresh failed - refresh token has expired")
                     # Use 424 (Failed Dependency) instead of 401 to avoid triggering CRM logout
@@ -3894,7 +3900,7 @@ async def debug_test_salesforce_query(
         soql = "SELECT Id, Name FROM MtgPlanner_CRM__Transaction_Property__c LIMIT 1"
         query_url = f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/query/"
 
-        response = requests.get(query_url, headers=headers, params={"q": soql}, timeout=30)
+        response = await _async_get(query_url, headers=headers, params={"q": soql}, timeout=30)
 
         # Handle 401 with token refresh
         token_refreshed = False
@@ -3920,7 +3926,7 @@ async def debug_test_salesforce_query(
 
                     # Retry with new token
                     headers["Authorization"] = f"Bearer {access_token}"
-                    response = requests.get(query_url, headers=headers, params={"q": soql}, timeout=30)
+                    response = await _async_get(query_url, headers=headers, params={"q": soql}, timeout=30)
             except Exception as refresh_error:
                 return {
                     "status": "error",
@@ -4026,7 +4032,7 @@ async def debug_all_statuses(
         """
         query_url = f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/query/"
 
-        response = requests.get(query_url, headers=headers, params={"q": soql}, timeout=60)
+        response = await _async_get(query_url, headers=headers, params={"q": soql}, timeout=60)
 
         # Handle 401 with token refresh
         if response.status_code == 401 and refresh_token:
@@ -4036,7 +4042,7 @@ async def debug_all_statuses(
                 if new_tokens and new_tokens.get('access_token'):
                     access_token = new_tokens['access_token']
                     headers["Authorization"] = f"Bearer {access_token}"
-                    response = requests.get(query_url, headers=headers, params={"q": soql}, timeout=60)
+                    response = await _async_get(query_url, headers=headers, params={"q": soql}, timeout=60)
             except Exception:
                 pass
 

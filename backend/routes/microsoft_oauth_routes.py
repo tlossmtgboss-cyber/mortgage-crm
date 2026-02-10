@@ -18,7 +18,18 @@ from sqlalchemy import text
 import logging
 import os
 import re
+import asyncio
 import requests
+
+
+async def _async_get(*args, **kwargs):
+    """Run blocking requests.get() in thread pool to avoid blocking the event loop."""
+    return await asyncio.to_thread(requests.get, *args, **kwargs)
+
+
+async def _async_post(*args, **kwargs):
+    """Run blocking requests.post() in thread pool to avoid blocking the event loop."""
+    return await asyncio.to_thread(requests.post, *args, **kwargs)
 
 logger = logging.getLogger(__name__)
 
@@ -248,7 +259,7 @@ async def connect_microsoft365(
             "scope": "https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/Calendars.Read offline_access"
         }
 
-        response = requests.post(token_url, data=data)
+        response = await _async_post(token_url, data=data)
 
         if response.status_code != 200:
             error_detail = "Failed to connect to Microsoft 365"
@@ -278,7 +289,7 @@ async def connect_microsoft365(
         # Get user's email address from Microsoft
         access_token = token_data["access_token"]
         headers = {"Authorization": f"Bearer {access_token}"}
-        profile_response = requests.get("https://graph.microsoft.com/v1.0/me", headers=headers)
+        profile_response = await _async_get("https://graph.microsoft.com/v1.0/me", headers=headers)
 
         email_address = None
         if profile_response.status_code == 200:
@@ -758,7 +769,7 @@ async def test_microsoft_fetch(
                 "Content-Type": "application/json"
             }
 
-            response = requests.get(graph_url, headers=headers, timeout=30)
+            response = await _async_get(graph_url, headers=headers, timeout=30)
 
             api_result = {
                 "status_code": response.status_code,

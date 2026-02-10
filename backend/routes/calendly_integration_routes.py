@@ -17,7 +17,18 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Callable
 
+import asyncio
 import requests
+
+
+async def _async_get(*args, **kwargs):
+    """Run blocking requests.get() in thread pool to avoid blocking the event loop."""
+    return await asyncio.to_thread(requests.get, *args, **kwargs)
+
+
+async def _async_post(*args, **kwargs):
+    """Run blocking requests.post() in thread pool to avoid blocking the event loop."""
+    return await asyncio.to_thread(requests.post, *args, **kwargs)
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
@@ -80,7 +91,7 @@ async def connect_calendly(
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
-        test_response = requests.get(
+        test_response = await _async_get(
             "https://api.calendly.com/users/me",
             headers=headers
         )
@@ -158,7 +169,7 @@ async def get_calendly_event_types(
         }
 
         # Get current user info
-        user_response = requests.get(
+        user_response = await _async_get(
             "https://api.calendly.com/users/me",
             headers=headers
         )
@@ -167,7 +178,7 @@ async def get_calendly_event_types(
         user_uri = user_data["resource"]["uri"]
 
         # Get event types for this user
-        event_types_response = requests.get(
+        event_types_response = await _async_get(
             f"https://api.calendly.com/event_types",
             headers=headers,
             params={"user": user_uri}
@@ -225,7 +236,7 @@ async def create_scheduling_link(
             "owner_type": "EventType"
         }
 
-        response = requests.post(
+        response = await _async_post(
             "https://api.calendly.com/scheduling_links",
             headers=headers,
             json=payload
@@ -450,7 +461,7 @@ async def get_availability(
         }
 
         # Get availability from Calendly
-        response = requests.get(
+        response = await _async_get(
             f"https://api.calendly.com/event_type_available_times",
             headers=headers,
             params={
@@ -534,7 +545,7 @@ async def ai_schedule_conversation(
         }
 
         # Fetch available times
-        availability_response = requests.get(
+        availability_response = await _async_get(
             f"https://api.calendly.com/event_type_available_times",
             headers=headers,
             params={
@@ -607,7 +618,7 @@ Rules:
                 "owner_type": "EventType"
             }
 
-            scheduling_response = requests.post(
+            scheduling_response = await _async_post(
                 "https://api.calendly.com/scheduling_links",
                 headers=headers,
                 json=scheduling_payload
