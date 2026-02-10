@@ -3526,20 +3526,33 @@ async def diag_fix_stages(
     total_fixed = 0
     fix_details = {}
 
+    # Fix stage case mismatches - use text cast to handle both enum and varchar columns
     for bad_stage, correct_stage in stage_fixes.items():
-        count = db.execute(text("""
-            UPDATE leads SET stage = :correct, updated_at = CURRENT_TIMESTAMP
-            WHERE owner_id = :uid AND lower(stage) = :bad AND stage != :correct
-        """), {"correct": correct_stage, "uid": uid, "bad": bad_stage}).rowcount
+        try:
+            count = db.execute(text("""
+                UPDATE leads SET stage = :correct, updated_at = CURRENT_TIMESTAMP
+                WHERE owner_id = :uid AND lower(stage::text) = :bad AND stage::text != :correct
+            """), {"correct": correct_stage, "uid": uid, "bad": bad_stage}).rowcount
+        except Exception:
+            db.rollback()
+            # Fallback without cast
+            count = db.execute(text("""
+                UPDATE leads SET stage = :correct, updated_at = CURRENT_TIMESTAMP
+                WHERE owner_id = :uid AND lower(CAST(stage AS text)) = :bad AND CAST(stage AS text) != :correct
+            """), {"correct": correct_stage, "uid": uid, "bad": bad_stage}).rowcount
         if count > 0:
             fix_details[f"{bad_stage} -> {correct_stage}"] = count
             total_fixed += count
 
     # Fix NULL stages
-    null_fixed = db.execute(text("""
-        UPDATE leads SET stage = 'New', updated_at = CURRENT_TIMESTAMP
-        WHERE owner_id = :uid AND stage IS NULL
-    """), {"uid": uid}).rowcount
+    try:
+        null_fixed = db.execute(text("""
+            UPDATE leads SET stage = 'New', updated_at = CURRENT_TIMESTAMP
+            WHERE owner_id = :uid AND stage IS NULL
+        """), {"uid": uid}).rowcount
+    except Exception:
+        db.rollback()
+        null_fixed = 0
     if null_fixed > 0:
         fix_details["NULL -> New"] = null_fixed
         total_fixed += null_fixed
