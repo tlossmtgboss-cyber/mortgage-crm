@@ -93,11 +93,16 @@ class SalesforceImporter:
         field_list = ", ".join(queryable_fields[:50])
 
         # Query for funded/closed/shipped loans
+        # Only include Funded_Date__c filter if the field exists on this object
+        funded_date_filter = ""
+        if 'MtgPlanner_CRM__Funded_Date__c' in queryable_fields:
+            funded_date_filter = "OR MtgPlanner_CRM__Funded_Date__c != null"
+
         soql = f"""
             SELECT {field_list}
             FROM {sf_object}
             WHERE MtgPlanner_CRM__Status__c IN ('Funded', 'Closed', 'Closed Won', 'Shipped')
-               OR MtgPlanner_CRM__Funded_Date__c != null
+               {funded_date_filter}
             ORDER BY LastModifiedDate DESC
             LIMIT {limit}
         """

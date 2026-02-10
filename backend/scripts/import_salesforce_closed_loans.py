@@ -234,6 +234,11 @@ class SalesforceClosedLoansImporter:
 
         if USE_TRANSACTION_PROPERTY:
             # Query MtgPlanner_CRM__Transaction_Property__c for closed/funded/shipped loans
+            # Only include Funded_Date__c filter if the field exists on this object
+            funded_date_filter = ""
+            if 'MtgPlanner_CRM__Funded_Date__c' in available_fields:
+                funded_date_filter = "OR MtgPlanner_CRM__Funded_Date__c != null"
+
             soql = f"""
                 SELECT {fields_str}
                 FROM {SALESFORCE_LOAN_OBJECT}
@@ -241,7 +246,7 @@ class SalesforceClosedLoansImporter:
                    OR MtgPlanner_CRM__Status__c LIKE '%Fund%'
                    OR MtgPlanner_CRM__Status__c LIKE '%Ship%'
                    OR MtgPlanner_CRM__Status__c LIKE '%Close%'
-                   OR MtgPlanner_CRM__Funded_Date__c != null
+                   {funded_date_filter}
                 ORDER BY LastModifiedDate DESC
                 LIMIT 2000
             """

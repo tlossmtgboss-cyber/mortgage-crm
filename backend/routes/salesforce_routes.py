@@ -3118,11 +3118,16 @@ async def sync_salesforce_and_import_mum(
 
                     field_list = ", ".join(queryable_fields[:50])
 
+                    # Only include Funded_Date__c filter if the field exists on this object
+                    funded_date_filter = ""
+                    if 'MtgPlanner_CRM__Funded_Date__c' in queryable_fields:
+                        funded_date_filter = "OR MtgPlanner_CRM__Funded_Date__c != null"
+
                     soql = f"""
                         SELECT {field_list}
                         FROM {sf_object}
                         WHERE MtgPlanner_CRM__Status__c IN ('Funded', 'Closed', 'Closed Won')
-                           OR MtgPlanner_CRM__Funded_Date__c != null
+                           {funded_date_filter}
                         ORDER BY LastModifiedDate DESC
                         LIMIT 200
                     """
@@ -3367,40 +3372,56 @@ async def sync_all_loans_from_salesforce(
     org_id = user_org[0] if user_org and user_org[0] else 1
 
     try:
-        # Query ALL loans from Salesforce (Jungo Transaction_Property)
-        # Include all the fields we need
-        soql = """
-            SELECT Id, Name,
-                   MtgPlanner_CRM__Loan_Amount__c, MtgPlanner_CRM__Loan_Type__c, MtgPlanner_CRM__Loan_Program__c,
-                   MtgPlanner_CRM__Interest_Rate__c, MtgPlanner_CRM__Note_Rate__c,
-                   MtgPlanner_CRM__Property_Address__c, MtgPlanner_CRM__Property_City__c,
-                   MtgPlanner_CRM__Property_State__c, MtgPlanner_CRM__Property_Zip__c,
-                   MtgPlanner_CRM__Purchase_Price__c, MtgPlanner_CRM__Down_Payment__c,
-                   MtgPlanner_CRM__Borrower_Name__c, MtgPlanner_CRM__Borrower_Email__c,
-                   MtgPlanner_CRM__Borrower_Phone__c, MtgPlanner_CRM__CoBorrower_Name__c,
-                   MtgPlanner_CRM__Status__c, MtgPlanner_CRM__Stage__c,
-                   MtgPlanner_CRM__Closing_Date__c, MtgPlanner_CRM__Application_Date__c,
-                   MtgPlanner_CRM__Lock_Date__c, MtgPlanner_CRM__Lock_Expiration__c,
-                   MtgPlanner_CRM__Funded_Date__c, MtgPlanner_CRM__Clear_To_Close_Date__c,
-                   MtgPlanner_CRM__UW_Received_Date__c, MtgPlanner_CRM__Loan_Approved_Date__c,
-                   MtgPlanner_CRM__Appraisal_Ordered_Date__c, MtgPlanner_CRM__Appraisal_Received_Date__c,
-                   MtgPlanner_CRM__CD_Sent_To_Borrower_Date__c, MtgPlanner_CRM__Scheduled_Closing_Date__c,
-                   MtgPlanner_CRM__First_Payment_Date__c, MtgPlanner_CRM__Loan_Purpose__c,
-                   MtgPlanner_CRM__LTV__c, MtgPlanner_CRM__CLTV__c,
-                   MtgPlanner_CRM__Property_Type__c, MtgPlanner_CRM__Occupancy_Type__c,
-                   MtgPlanner_CRM__Mortgage_Ins_1st_TD__c, MtgPlanner_CRM__Property_Tax_1st_TD__c,
-                   MtgPlanner_CRM__Hazard_Ins_1st_TD__c, MtgPlanner_CRM__HOA_1st_TD__c,
-                   MtgPlanner_CRM__Monthly_Payment_1st_TD__c,
-                   CreatedDate, LastModifiedDate
-            FROM MtgPlanner_CRM__Transaction_Property__c
-            ORDER BY LastModifiedDate DESC
-            LIMIT 500
-        """
-
         headers = {
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json"
         }
+
+        # Discover which fields actually exist on the Salesforce object
+        sf_object = "MtgPlanner_CRM__Transaction_Property__c"
+        desired_fields = [
+            'Id', 'Name',
+            'MtgPlanner_CRM__Loan_Amount__c', 'MtgPlanner_CRM__Loan_Type__c', 'MtgPlanner_CRM__Loan_Program__c',
+            'MtgPlanner_CRM__Interest_Rate__c', 'MtgPlanner_CRM__Note_Rate__c',
+            'MtgPlanner_CRM__Property_Address__c', 'MtgPlanner_CRM__Property_City__c',
+            'MtgPlanner_CRM__Property_State__c', 'MtgPlanner_CRM__Property_Zip__c',
+            'MtgPlanner_CRM__Purchase_Price__c', 'MtgPlanner_CRM__Down_Payment__c',
+            'MtgPlanner_CRM__Borrower_Name__c', 'MtgPlanner_CRM__Borrower_Email__c',
+            'MtgPlanner_CRM__Borrower_Phone__c', 'MtgPlanner_CRM__CoBorrower_Name__c',
+            'MtgPlanner_CRM__Status__c', 'MtgPlanner_CRM__Stage__c',
+            'MtgPlanner_CRM__Closing_Date__c', 'MtgPlanner_CRM__Application_Date__c',
+            'MtgPlanner_CRM__Lock_Date__c', 'MtgPlanner_CRM__Lock_Expiration__c',
+            'MtgPlanner_CRM__Funded_Date__c', 'MtgPlanner_CRM__Clear_To_Close_Date__c',
+            'MtgPlanner_CRM__UW_Received_Date__c', 'MtgPlanner_CRM__Loan_Approved_Date__c',
+            'MtgPlanner_CRM__Appraisal_Ordered_Date__c', 'MtgPlanner_CRM__Appraisal_Received_Date__c',
+            'MtgPlanner_CRM__CD_Sent_To_Borrower_Date__c', 'MtgPlanner_CRM__Scheduled_Closing_Date__c',
+            'MtgPlanner_CRM__First_Payment_Date__c', 'MtgPlanner_CRM__Loan_Purpose__c',
+            'MtgPlanner_CRM__LTV__c', 'MtgPlanner_CRM__CLTV__c',
+            'MtgPlanner_CRM__Property_Type__c', 'MtgPlanner_CRM__Occupancy_Type__c',
+            'MtgPlanner_CRM__Mortgage_Ins_1st_TD__c', 'MtgPlanner_CRM__Property_Tax_1st_TD__c',
+            'MtgPlanner_CRM__Hazard_Ins_1st_TD__c', 'MtgPlanner_CRM__HOA_1st_TD__c',
+            'MtgPlanner_CRM__Monthly_Payment_1st_TD__c',
+            'CreatedDate', 'LastModifiedDate',
+        ]
+
+        # Describe object to find available fields
+        describe_url = f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/sobjects/{sf_object}/describe/"
+        describe_resp = requests.get(describe_url, headers=headers, timeout=30)
+        if describe_resp.status_code == 200:
+            available_fields = {f['name'] for f in describe_resp.json().get('fields', [])}
+            query_fields = [f for f in desired_fields if f in available_fields]
+        else:
+            # Fallback: use basic fields only
+            logger.warning(f"Could not describe {sf_object}, using basic fields")
+            query_fields = ['Id', 'Name', 'MtgPlanner_CRM__Status__c', 'CreatedDate', 'LastModifiedDate']
+
+        field_list = ", ".join(query_fields)
+        soql = f"""
+            SELECT {field_list}
+            FROM {sf_object}
+            ORDER BY LastModifiedDate DESC
+            LIMIT 500
+        """
 
         # Use params instead of URL encoding (matches working endpoints)
         query_url = f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/query/"
