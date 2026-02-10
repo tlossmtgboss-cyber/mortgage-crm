@@ -185,7 +185,7 @@ def lookup_user_by_id(db: Session, user_id: int) -> Optional[AuthenticatedUser]:
 def authenticate_websocket(
     websocket: WebSocket,
     db: Session,
-    require_auth: bool = False
+    require_auth: bool = True
 ) -> Tuple[Optional[AuthenticatedUser], Optional[str]]:
     """
     Authenticate a WebSocket connection.
@@ -195,8 +195,7 @@ def authenticate_websocket(
     Args:
         websocket: FastAPI WebSocket connection
         db: SQLAlchemy database session
-        require_auth: If True, returns (None, error) when auth fails
-                     If False, returns default user on auth failure
+        require_auth: Kept for backwards compatibility (always requires auth)
 
     Returns:
         Tuple of (AuthenticatedUser or None, error_message or None)
@@ -205,17 +204,12 @@ def authenticate_websocket(
     token = extract_token_from_websocket(websocket)
 
     if not token:
-        if require_auth:
-            return None, "No authentication token provided"
-        # Return default user for backwards compatibility
-        return _get_default_user(db), None
+        return None, "No authentication token provided"
 
     # Decode token
     payload = decode_jwt_token(token)
     if not payload:
-        if require_auth:
-            return None, "Invalid authentication token"
-        return _get_default_user(db), None
+        return None, "Invalid authentication token"
 
     # Extract user identifier from payload
     # JWT may contain user_id (int) or sub (email)
@@ -237,64 +231,24 @@ def authenticate_websocket(
         user = lookup_user_by_email(db, email)
 
     if not user:
-        if require_auth:
-            return None, "User not found"
-        return _get_default_user(db), None
+        return None, "User not found"
 
     logger.info(f"[WebSocketAuth] Authenticated: {user.email} (ID: {user.id})")
     return user, None
 
 
-def _get_default_user(db: Session) -> Optional[AuthenticatedUser]:
-    """
-    Get a default user for unauthenticated connections.
-    Falls back to admin user if available.
-    """
-    # Try to find an admin user
-    default_emails = [
-        "admin@perenniaai.com",
-        "tim@perenniaai.com",
-        "system@perenniaai.com"
-    ]
-
-    for email in default_emails:
-        user = lookup_user_by_email(db, email)
-        if user:
-            logger.warning(f"[WebSocketAuth] Using default user: {email}")
-            return user
-
-    # Last resort: return first user in system
-    try:
-        result = db.execute(text("SELECT id, email, first_name, last_name, role, organization_id FROM users LIMIT 1"))
-        row = result.fetchone()
-        if row:
-            logger.warning(f"[WebSocketAuth] Using fallback user: {row[1]}")
-            return AuthenticatedUser(
-                id=row[0],
-                email=row[1],
-                first_name=row[2] or "System",
-                last_name=row[3] or "",
-                role=row[4],
-                organization_id=row[5]
-            )
-    except Exception as e:
-        logger.error(f"[WebSocketAuth] Could not get fallback user: {e}")
-
-    return None
-
-
-def get_user_id_from_websocket(websocket: WebSocket, db: Session) -> str:
+def get_user_id_from_websocket(websocket: WebSocket, db: Session) -> Optional[str]:
     """
     Simple helper to get user email from WebSocket.
     For backwards compatibility with existing code that expects email string.
 
     Returns:
-        User email string (falls back to admin@perenniaai.com)
+        User email string or None if not authenticated
     """
-    user, _ = authenticate_websocket(websocket, db, require_auth=False)
+    user, _ = authenticate_websocket(websocket, db)
     if user:
         return user.email
-    return "admin@perenniaai.com"
+    return None
 
 
 def get_authenticated_user_or_raise(websocket: WebSocket, db: Session) -> AuthenticatedUser:

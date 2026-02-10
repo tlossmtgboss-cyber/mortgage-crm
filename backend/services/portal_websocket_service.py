@@ -354,6 +354,7 @@ portal_ws_manager = PortalConnectionManager()
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from database import get_db
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -364,10 +365,11 @@ router = APIRouter(tags=["Portal WebSocket"])
 async def loan_websocket(
     websocket: WebSocket,
     loan_id: int,
-    token: Optional[str] = Query(None)
+    token: str = Query(...)
 ):
     """
     WebSocket endpoint for real-time loan updates.
+    Requires borrower JWT token.
 
     Connect via: ws://host/ws/loan/{loan_id}?token={access_token}
 
@@ -379,6 +381,31 @@ async def loan_websocket(
     - NOTIFICATION: General notification
     - PING: Keep-alive ping
     """
+    # Validate borrower token before accepting connection
+    try:
+        from borrower_auth_routes import verify_borrower_token
+        payload = verify_borrower_token(token)
+        if not payload or payload.get("type") != "borrower":
+            await websocket.close(code=4001, reason="Invalid or expired token")
+            return
+
+        # Verify borrower has access to this loan
+        db = next(get_db())
+        try:
+            borrower_id = payload.get("sub")
+            loan_access = db.execute(text(
+                "SELECT id FROM loans WHERE id = :loan_id AND borrower_id = :borrower_id"
+            ), {"loan_id": loan_id, "borrower_id": borrower_id}).fetchone()
+            if not loan_access:
+                await websocket.close(code=4003, reason="Access denied to this loan")
+                return
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Loan WebSocket auth error: {e}")
+        await websocket.close(code=4001, reason="Authentication failed")
+        return
+
     await portal_ws_manager.connect_borrower(websocket, loan_id, token)
 
     try:

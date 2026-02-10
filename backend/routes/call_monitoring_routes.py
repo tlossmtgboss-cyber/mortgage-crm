@@ -2341,7 +2341,7 @@ async def stream_audio_to_transcript(websocket: WebSocket, session_id: str):
     try:
         # Authenticate
         db = SessionLocal()
-        user, auth_error = authenticate_websocket(websocket, db, require_auth=False)
+        user, auth_error = authenticate_websocket(websocket, db, require_auth=True)
 
         if not user:
             await websocket.send_json({"type": "error", "message": auth_error or "Auth failed"})

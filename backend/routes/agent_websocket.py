@@ -12,6 +12,7 @@ import logging
 from database import get_db
 from models.agent_governance import AgentProfile, AgentMetricsTimeseries, AgentAlert
 from sqlalchemy.exc import SQLAlchemyError
+from utils.websocket_auth import authenticate_websocket
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -27,16 +28,14 @@ class ConnectionManager:
         self.system_connections: List[WebSocket] = []
 
     async def connect_agent(self, websocket: WebSocket, agent_id: int):
-        """Connect to agent-specific updates"""
-        await websocket.accept()
+        """Track agent-specific connection (call websocket.accept() first)"""
         if agent_id not in self.agent_connections:
             self.agent_connections[agent_id] = []
         self.agent_connections[agent_id].append(websocket)
         logger.info(f"WebSocket connected for agent {agent_id}")
 
     async def connect_system(self, websocket: WebSocket):
-        """Connect to system-wide updates"""
-        await websocket.accept()
+        """Track system-wide connection (call websocket.accept() first)"""
         self.system_connections.append(websocket)
         logger.info("WebSocket connected for system health")
 
@@ -177,8 +176,21 @@ async def get_system_health_data(db: Session) -> dict:
 async def agent_metrics_websocket(websocket: WebSocket, agent_id: int):
     """
     Real-time metrics updates for a specific agent.
-    Updates every 5 seconds.
+    Updates every 5 seconds. Requires JWT authentication.
     """
+    await websocket.accept()
+
+    # Authenticate
+    auth_db = next(get_db())
+    try:
+        user, auth_error = authenticate_websocket(websocket, auth_db)
+        if not user:
+            await websocket.send_json({"type": "error", "message": auth_error or "Authentication required"})
+            await websocket.close(code=4001, reason="Authentication required")
+            return
+    finally:
+        auth_db.close()
+
     await manager.connect_agent(websocket, agent_id)
 
     try:
@@ -211,8 +223,21 @@ async def agent_metrics_websocket(websocket: WebSocket, agent_id: int):
 async def system_health_websocket(websocket: WebSocket):
     """
     Real-time system-wide health updates.
-    Updates every 10 seconds.
+    Updates every 10 seconds. Requires JWT authentication.
     """
+    await websocket.accept()
+
+    # Authenticate
+    auth_db = next(get_db())
+    try:
+        user, auth_error = authenticate_websocket(websocket, auth_db)
+        if not user:
+            await websocket.send_json({"type": "error", "message": auth_error or "Authentication required"})
+            await websocket.close(code=4001, reason="Authentication required")
+            return
+    finally:
+        auth_db.close()
+
     await manager.connect_system(websocket)
 
     try:
@@ -244,9 +269,21 @@ async def system_health_websocket(websocket: WebSocket):
 async def alerts_websocket(websocket: WebSocket):
     """
     Real-time alerts feed.
-    Sends new alerts as they arrive.
+    Sends new alerts as they arrive. Requires JWT authentication.
     """
     await websocket.accept()
+
+    # Authenticate
+    auth_db = next(get_db())
+    try:
+        user, auth_error = authenticate_websocket(websocket, auth_db)
+        if not user:
+            await websocket.send_json({"type": "error", "message": auth_error or "Authentication required"})
+            await websocket.close(code=4001, reason="Authentication required")
+            return
+    finally:
+        auth_db.close()
+
     last_check = datetime.utcnow()
 
     try:

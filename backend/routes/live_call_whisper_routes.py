@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from sqlalchemy.exc import SQLAlchemyError
+from utils.websocket_auth import authenticate_websocket
 from services.live_call_whisper_service import (
     LiveCallWhisperService,
     CallContext,
@@ -38,8 +39,9 @@ class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, List[WebSocket]] = {}
 
-    async def connect(self, websocket: WebSocket, call_id: str):
-        await websocket.accept()
+    async def connect(self, websocket: WebSocket, call_id: str, skip_accept: bool = False):
+        if not skip_accept:
+            await websocket.accept()
         if call_id not in self.active_connections:
             self.active_connections[call_id] = []
         self.active_connections[call_id].append(websocket)
@@ -138,6 +140,7 @@ class CallContextResponse(BaseModel):
 async def websocket_endpoint(websocket: WebSocket, call_id: str):
     """
     WebSocket endpoint for real-time whisper communication.
+    Requires JWT authentication.
 
     Connect to receive real-time whispers during a call.
     Send transcript segments to trigger whisper generation.
@@ -150,7 +153,20 @@ async def websocket_endpoint(websocket: WebSocket, call_id: str):
     - Incoming: {"type": "used", "whisper_id": "..."}
     - Incoming: {"type": "ask", "prompt": "..."}
     """
-    await manager.connect(websocket, call_id)
+    await websocket.accept()
+
+    # Authenticate
+    auth_db = next(get_db())
+    try:
+        user, auth_error = authenticate_websocket(websocket, auth_db)
+        if not user:
+            await websocket.send_json({"type": "error", "message": auth_error or "Authentication required"})
+            await websocket.close(code=4001, reason="Authentication required")
+            return
+    finally:
+        auth_db.close()
+
+    await manager.connect(websocket, call_id, skip_accept=True)
 
     try:
         # Send connection confirmation

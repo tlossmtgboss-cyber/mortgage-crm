@@ -29,9 +29,10 @@ class WebSocketManager:
         # Map of agent_id -> set of websocket connections
         self.active_connections: Dict[str, Set[WebSocket]] = {}
 
-    async def connect(self, websocket: WebSocket, agent_id: str):
+    async def connect(self, websocket: WebSocket, agent_id: str, skip_accept: bool = False):
         """Accept a new WebSocket connection for an agent"""
-        await websocket.accept()
+        if not skip_accept:
+            await websocket.accept()
 
         if agent_id not in self.active_connections:
             self.active_connections[agent_id] = set()

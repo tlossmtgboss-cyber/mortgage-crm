@@ -307,7 +307,7 @@ async def voice_agent_websocket(
         logger.info("[VoiceAgent] WebSocket accepted")
 
         # Authenticate user from token (query param, header, or protocol)
-        auth_user, auth_error = authenticate_websocket(websocket, db, require_auth=False)
+        auth_user, auth_error = authenticate_websocket(websocket, db)
 
         if auth_user:
             user_id = auth_user.email

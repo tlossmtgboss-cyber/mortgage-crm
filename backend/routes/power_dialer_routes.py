@@ -24,6 +24,7 @@ from db import get_db
 from telephony.provider import get_telephony_provider
 from telephony.dialer_engine import DialerEngine, click_to_dial
 from telephony.compliance import ComplianceChecker
+from utils.websocket_auth import authenticate_websocket
 from telephony.websocket import ws_manager
 
 logger = logging.getLogger(__name__)
@@ -845,7 +846,8 @@ async def get_call_logs(
 @router.websocket("/dialer/ws/{agent_id}")
 async def websocket_dialer(websocket: WebSocket, agent_id: str):
     """
-    WebSocket connection for real-time dialer updates
+    WebSocket connection for real-time dialer updates.
+    Requires JWT authentication.
 
     Clients should connect with their agent_id to receive:
     - Call status updates (ringing, answered, completed)
@@ -853,7 +855,20 @@ async def websocket_dialer(websocket: WebSocket, agent_id: str):
     - Disposition prompts
     - Error notifications
     """
-    await ws_manager.connect(websocket, agent_id)
+    await websocket.accept()
+
+    # Authenticate
+    db = next(get_db())
+    try:
+        user, auth_error = authenticate_websocket(websocket, db)
+        if not user:
+            await websocket.send_json({"type": "error", "message": auth_error or "Authentication required"})
+            await websocket.close(code=4001, reason="Authentication required")
+            return
+    finally:
+        db.close()
+
+    await ws_manager.connect(websocket, agent_id, skip_accept=True)
     try:
         while True:
             # Keep connection alive, handle incoming messages
