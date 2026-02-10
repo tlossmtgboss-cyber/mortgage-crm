@@ -327,7 +327,7 @@ const DialerSettingsSection = () => {
 
 function Settings() {
   const navigate = useNavigate();
-  const { isAdmin } = usePermissions();
+  const { isAdmin, loading: permissionsLoading } = usePermissions();
 
   // Get current user from localStorage
   const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
@@ -2717,6 +2717,10 @@ const API_BASE_URL = isProduction
             </button>
           </div>
           {sidebarOrder.map((item) => {
+            // While permissions are loading, don't hide adminOnly items yet
+            // This prevents the race condition where tabs flash in after API responds
+            const hideAdminItem = item.adminOnly && !isAdmin && !permissionsLoading;
+
             // Render User Profile parent with children
             if (item.id === 'user-profile') {
               return (
@@ -2749,7 +2753,7 @@ const API_BASE_URL = isProduction
 
             // Render Organizational Settings parent with children (admin-only)
             if (item.id === 'organizational') {
-              if (item.adminOnly && !isAdmin) return null;
+              if (hideAdminItem) return null;
               return (
                 <div key={item.id}>
                   <button
@@ -2781,7 +2785,7 @@ const API_BASE_URL = isProduction
 
             // Render Agent Governance parent with children (admin-only)
             if (item.id === 'agent-governance') {
-              if (item.adminOnly && !isAdmin) return null;
+              if (hideAdminItem) return null;
               return (
                 <div key={item.id}>
                   <button
@@ -2846,7 +2850,7 @@ const API_BASE_URL = isProduction
 
             // Render Master Administrator parent with children (admin-only)
             if (item.id === 'master-admin') {
-              if (item.adminOnly && !isAdmin) return null;
+              if (hideAdminItem) return null;
               return (
                 <div key={item.id}>
                   <button
@@ -2879,7 +2883,7 @@ const API_BASE_URL = isProduction
             }
 
             // Skip adminOnly items if user is not admin/management
-            if (item.adminOnly && !isAdmin) {
+            if (hideAdminItem) {
               return null;
             }
 
