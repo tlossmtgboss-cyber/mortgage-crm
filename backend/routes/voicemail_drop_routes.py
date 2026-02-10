@@ -116,9 +116,9 @@ AREA_CODE_TIMEZONE = {
     # Mountain Time
     "303": "America/Denver", "307": "America/Denver", "385": "America/Denver",
     "406": "America/Denver", "435": "America/Denver", "505": "America/Denver",
-    "575": "America/Denver", "602": "America/Denver", "623": "America/Denver",
-    "720": "America/Denver", "801": "America/Denver", "928": "America/Denver",
-    "970": "America/Denver", "480": "America/Denver",
+    "575": "America/Denver", "602": "America/Phoenix", "623": "America/Phoenix",
+    "720": "America/Denver", "801": "America/Denver", "928": "America/Phoenix",
+    "970": "America/Denver", "480": "America/Phoenix",
     # Pacific Time
     "206": "America/Los_Angeles", "208": "America/Los_Angeles",
     "209": "America/Los_Angeles", "213": "America/Los_Angeles",
@@ -1286,21 +1286,38 @@ async def upload_template_audio(
         if file_ext not in ALLOWED_AUDIO_UPLOAD_EXTS:
             raise HTTPException(status_code=400, detail=f"Invalid file type. Allowed: {', '.join(ALLOWED_AUDIO_UPLOAD_EXTS)}")
 
-        audio_data = await audio_file.read()
-        if len(audio_data) > MAX_TEMPLATE_AUDIO_SIZE:
-            raise HTTPException(status_code=413, detail=f"File too large ({len(audio_data) // (1024*1024)}MB). Max: 10MB")
-        if len(audio_data) == 0:
-            raise HTTPException(status_code=400, detail="Audio file is empty")
-
-        # Save to uploads directory
+        # Stream to disk with size enforcement (prevents DOS from large uploads)
         upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", "voicemail_audio")
         os.makedirs(upload_dir, exist_ok=True)
 
         safe_name = f"{template_id}_{uuid.uuid4().hex[:8]}{file_ext}"
         file_path = os.path.join(upload_dir, safe_name)
 
-        with open(file_path, "wb") as f:
-            f.write(audio_data)
+        total_size = 0
+        _CHUNK_SIZE = 64 * 1024  # 64KB chunks
+        try:
+            with open(file_path, "wb") as f:
+                while True:
+                    chunk = await audio_file.read(_CHUNK_SIZE)
+                    if not chunk:
+                        break
+                    total_size += len(chunk)
+                    if total_size > MAX_TEMPLATE_AUDIO_SIZE:
+                        break
+                    f.write(chunk)
+        except Exception as write_err:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            raise HTTPException(status_code=500, detail=f"Failed to save audio file: {write_err}")
+
+        if total_size > MAX_TEMPLATE_AUDIO_SIZE:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            raise HTTPException(status_code=413, detail="File too large. Max: 10MB")
+        if total_size == 0:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            raise HTTPException(status_code=400, detail="Audio file is empty")
 
         # Generate URL (relative — frontend/proxy will serve)
         audio_url = f"/api/v1/voicemail/audio/{safe_name}"
@@ -1313,7 +1330,7 @@ async def upload_template_audio(
         return {
             "success": True,
             "audio_url": audio_url,
-            "file_size": len(audio_data),
+            "file_size": total_size,
             "filename": safe_name,
         }
 
@@ -1789,6 +1806,15 @@ async def _resolve_and_dispatch_campaign(campaign_id: int, user_id: int, user_na
                 skipped_count += 1
                 continue
 
+            # Dedup: skip if this phone already has a queued/sending drop from any campaign
+            existing_pending = db.query(VoicemailDrop.id).filter(
+                VoicemailDrop.phone_number == contact.phone,
+                VoicemailDrop.status.in_(("queued", "sending")),
+            ).first()
+            if existing_pending:
+                skipped_count += 1
+                continue
+
             # Substitute variables in message
             msg = template.message_text
             first_name = getattr(contact, 'first_name', '') or ''
@@ -1908,8 +1934,21 @@ async def _resolve_and_dispatch_campaign(campaign_id: int, user_id: int, user_na
     except Exception as e:
         logger.error(f"Campaign {campaign_id} dispatch error: {e}", exc_info=True)
         try:
+            db.refresh(campaign)
+            # Preserve partial progress counts before marking failed
+            sent_so_far = db.query(VoicemailDrop).filter(
+                VoicemailDrop.campaign_id == campaign_id,
+                VoicemailDrop.status.in_(("delivered", "sent", "sending")),
+            ).count()
+            failed_so_far = db.query(VoicemailDrop).filter(
+                VoicemailDrop.campaign_id == campaign_id,
+                VoicemailDrop.status == "failed",
+            ).count()
+            campaign.sent_count = sent_so_far
+            campaign.failed_count = failed_so_far
             campaign.status = "failed"
             db.commit()
+            logger.info(f"Campaign {campaign_id} marked failed. Progress: {sent_so_far} sent, {failed_so_far} failed")
         except Exception:
             pass
     finally:

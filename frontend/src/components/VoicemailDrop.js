@@ -20,6 +20,7 @@ function VoicemailDrop({ phoneNumber, recipientName, leadId, loanId, onClose }) 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const streamRef = useRef(null);
+  const isStoppingRef = useRef(false);
 
   // Load templates on mount + cleanup stream on unmount
   useEffect(() => {
@@ -36,6 +37,7 @@ function VoicemailDrop({ phoneNumber, recipientName, leadId, loanId, onClose }) 
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current);
       }
+      audioChunksRef.current = []; // Release accumulated blob chunks
     };
   }, []);
 
@@ -76,6 +78,7 @@ function VoicemailDrop({ phoneNumber, recipientName, leadId, loanId, onClose }) 
 
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
+      isStoppingRef.current = false;
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -85,6 +88,7 @@ function VoicemailDrop({ phoneNumber, recipientName, leadId, loanId, onClose }) 
 
       mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        audioChunksRef.current = []; // Release chunk references to free memory
         await transcribeAudio(audioBlob);
 
         // Stop all tracks
@@ -100,8 +104,9 @@ function VoicemailDrop({ phoneNumber, recipientName, leadId, loanId, onClose }) 
       recordingTimerRef.current = setInterval(() => {
         setRecordingSeconds(prev => {
           if (prev + 1 >= MAX_RECORDING_SECONDS) {
-            // Auto-stop at max duration
-            if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+            // Auto-stop at max duration (guarded to prevent double .stop())
+            if (!isStoppingRef.current && mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+              isStoppingRef.current = true;
               mediaRecorderRef.current.stop();
             }
             setIsRecording(false);
@@ -121,7 +126,8 @@ function VoicemailDrop({ phoneNumber, recipientName, leadId, loanId, onClose }) 
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
+    if (!isStoppingRef.current && mediaRecorderRef.current && isRecording) {
+      isStoppingRef.current = true;
       mediaRecorderRef.current.stop();
       setIsRecording(false);
     }

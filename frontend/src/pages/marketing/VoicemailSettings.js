@@ -49,6 +49,8 @@ function VoicemailSettings() {
   const [previewingId, setPreviewingId] = useState(null);
   const audioRef = useRef(null);
   const previewUrlRef = useRef(null);
+  const historyLoadedRef = useRef(false);
+  const campaignsLoadedRef = useRef(false);
 
   const loadTemplates = useCallback(async () => {
     try {
@@ -101,13 +103,24 @@ function VoicemailSettings() {
 
   useEffect(() => {
     if (!canAccessMarketing) return;
-    Promise.all([loadTemplates(), loadAnalytics()]).finally(() => setLoading(false));
+    Promise.all([loadTemplates(), loadAnalytics()])
+      .catch(err => {
+        console.error('Error loading initial data:', err);
+        setLoadError('Failed to load data. Please refresh the page.');
+      })
+      .finally(() => setLoading(false));
   }, [canAccessMarketing, loadTemplates, loadAnalytics]);
 
   useEffect(() => {
-    if (activeTab === 'history' && history.length === 0) loadHistory();
-    if (activeTab === 'campaigns' && campaigns.length === 0) loadCampaigns();
-  }, [activeTab, history.length, campaigns.length, loadHistory, loadCampaigns]);
+    if (activeTab === 'history' && !historyLoadedRef.current) {
+      historyLoadedRef.current = true;
+      loadHistory();
+    }
+    if (activeTab === 'campaigns' && !campaignsLoadedRef.current) {
+      campaignsLoadedRef.current = true;
+      loadCampaigns();
+    }
+  }, [activeTab, loadHistory, loadCampaigns]);
 
   // Cleanup preview audio on unmount
   useEffect(() => {
