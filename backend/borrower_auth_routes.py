@@ -1397,9 +1397,10 @@ async def parse_mortgage_statement(
         import os
         if 'tmp_path' in locals() and os.path.exists(tmp_path):
             os.unlink(tmp_path)
+        logger.error(f"Error processing document: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail=f"Error processing document: {str(e)}"
+            detail="Error processing document. Please try again."
         )
 
 
@@ -2729,4 +2730,4 @@ async def submit_application(
     except Exception as e:
         logger.exception("Application submission failed")
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Submission failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Submission failed. Please try again.")

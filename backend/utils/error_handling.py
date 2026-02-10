@@ -389,9 +389,43 @@ async def generic_exception_handler(request: Request, exc: Exception) -> JSONRes
     )
 
 
+async def http_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """
+    Handle HTTPException — sanitize 500-level responses in production
+    to prevent leaking stack traces, SQL errors, or internal paths.
+    """
+    import os
+    from fastapi import HTTPException
+    if not isinstance(exc, HTTPException):
+        raise exc
+
+    is_prod = bool(os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("ENVIRONMENT") == "production")
+
+    if exc.status_code >= 500 and is_prod:
+        # Log the real error server-side
+        logger.error(
+            f"HTTP {exc.status_code} on {request.method} {request.url.path}: {exc.detail}",
+            extra={"path": request.url.path, "method": request.method},
+        )
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": "Internal server error"},
+        )
+
+    # For non-500 errors (or non-production), pass through as-is
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+    )
+
+
 def register_exception_handlers(app: FastAPI):
     """Register all exception handlers with the FastAPI app"""
+    from fastapi import HTTPException
     from pydantic import ValidationError
+
+    # Register HTTPException handler to sanitize 500-level details in production
+    app.add_exception_handler(HTTPException, http_exception_handler)
 
     # Register custom exception handlers
     app.add_exception_handler(APIException, api_exception_handler)
