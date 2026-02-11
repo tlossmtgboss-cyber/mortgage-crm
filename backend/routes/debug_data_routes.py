@@ -358,7 +358,7 @@ def register_debug_data_routes(
             traceback.print_exc()
             return {
                 "success": False,
-                "message": f"Failed to analyze error: {str(e)}",
+                "message": "Failed to analyze error",
                 "analysis": None
             }
 

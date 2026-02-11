@@ -503,8 +503,13 @@ async def upload_profile_photo(
                 field_errors={"photo": f"Maximum size is 5MB, got {len(contents) / 1024 / 1024:.1f}MB"}
             )
 
-        # Generate filename
-        ext = photo.filename.split('.')[-1] if '.' in photo.filename else 'jpg'
+        # Generate filename with validated extension
+        import re as _re
+        raw_ext = photo.filename.rsplit('.', 1)[-1] if '.' in (photo.filename or '') else 'jpg'
+        ext = raw_ext.lower() if _re.match(r'^[a-zA-Z0-9]{1,10}$', raw_ext) else 'jpg'
+        allowed_img_exts = {'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'}
+        if ext not in allowed_img_exts:
+            ext = 'jpg'
         filename = f"profile_{current_user.id}_{uuid.uuid4().hex[:8]}.{ext}"
 
         # Save file

@@ -1099,9 +1099,10 @@ async def upload_document(
         raise HTTPException(status_code=400, detail="Empty file.")
     await file.seek(0)
 
-    # Generate unique filename
-    import uuid
-    ext = file.filename.split('.')[-1] if '.' in file.filename else 'pdf'
+    # Generate unique filename with validated extension
+    import uuid, re
+    raw_ext = file.filename.rsplit('.', 1)[-1] if '.' in (file.filename or '') else 'pdf'
+    ext = raw_ext if re.match(r'^[a-zA-Z0-9]{1,10}$', raw_ext) else 'pdf'
     unique_filename = f"{uuid.uuid4()}.{ext}"
 
     # For now, store locally (in production, use S3)
@@ -1217,7 +1218,7 @@ async def analyze_document(
         logger.error(f"Document analysis failed for doc {doc_id}: {e}")
         return {
             "status": "error",
-            "message": str(e),
+            "message": "Document analysis failed",
         }
 
 
@@ -1382,7 +1383,7 @@ async def get_concierge_status(
         logger.error(f"Concierge status error: {e}")
         return {
             "status": "error",
-            "message": str(e)
+            "message": "Failed to retrieve concierge status"
         }
 
 
@@ -1813,7 +1814,7 @@ async def generate_social_content(
         logger.error(f"Social content generation failed: {e}")
         return {
             "status": "error",
-            "message": str(e),
+            "message": "Content generation failed",
             "content": [],
         }
 

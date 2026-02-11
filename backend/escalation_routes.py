@@ -140,8 +140,10 @@ async def create_escalation(
 
             for file in attachments:
                 if file.filename:
-                    # Generate unique filename
-                    file_ext = os.path.splitext(file.filename)[1]
+                    # Generate unique filename — sanitize extension to prevent traversal
+                    import re as _re
+                    raw_ext = os.path.splitext(file.filename)[1]
+                    file_ext = raw_ext if _re.match(r'^\.[a-zA-Z0-9]{1,10}$', raw_ext) else '.bin'
                     unique_filename = f"{uuid.uuid4()}{file_ext}"
                     file_path = os.path.join(upload_dir, unique_filename)
 

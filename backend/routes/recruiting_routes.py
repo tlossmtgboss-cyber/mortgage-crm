@@ -640,9 +640,10 @@ async def create_candidate(
         return result
     except Exception as e:
         import traceback
+        logger.error(f"Recruiting error: {e}\n{traceback.format_exc()}")
         raise HTTPException(
             status_code=500,
-            detail=f"Error: {str(e)}\n\nTraceback: {traceback.format_exc()}"
+            detail="Internal server error"
         )
 
 
@@ -886,9 +887,10 @@ async def create_job_posting(
         return result
     except Exception as e:
         import traceback
+        logger.error(f"Recruiting error: {e}\n{traceback.format_exc()}")
         raise HTTPException(
             status_code=500,
-            detail=f"Error: {str(e)}\n\nTraceback: {traceback.format_exc()}"
+            detail="Internal server error"
         )
 
 

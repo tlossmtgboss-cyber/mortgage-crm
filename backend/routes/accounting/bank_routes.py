@@ -432,7 +432,7 @@ async def create_plaid_link_token(
         error_response = json.loads(e.body)
         raise HTTPException(
             status_code=400,
-            detail=f"Plaid error: {error_response.get('error_message', str(e))}"
+            detail=f"Plaid error: {error_response.get('error_code', 'UNKNOWN_ERROR')}"
         )
 
 
@@ -526,7 +526,7 @@ async def exchange_plaid_public_token(
         error_response = json.loads(e.body)
         raise HTTPException(
             status_code=400,
-            detail=f"Plaid error: {error_response.get('error_message', str(e))}"
+            detail=f"Plaid error: {error_response.get('error_code', 'UNKNOWN_ERROR')}"
         )
 
 
@@ -671,7 +671,7 @@ async def sync_plaid_transactions(
 
         raise HTTPException(
             status_code=400,
-            detail=f"Plaid sync error: {error_response.get('error_message', str(e))}"
+            detail=f"Plaid sync error: {error_response.get('error_code', 'SYNC_ERROR')}"
         )
 
 

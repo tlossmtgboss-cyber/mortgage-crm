@@ -1188,7 +1188,7 @@ async def oauth_callback(
         logger.error(f"OAuth callback error: {e}")
         frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
         return RedirectResponse(
-            url=f"{frontend_url}/settings/integrations?error=auth_failed&message={str(e)}"
+            url=f"{frontend_url}/settings/integrations?error=auth_failed&message=Authentication+failed"
         )
 
 
