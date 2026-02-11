@@ -217,12 +217,44 @@ def register_mum_activity_routes(app, get_db, get_current_user, get_current_user
                 errors.append({"loan_id": loan_id, "error": "Internal server error"})
                 logger.error(f"Batch promote error for loan {loan_id}: {e}")
 
+        # Repair existing MUM clients: fix user_id and organization_id from their linked loan
+        repaired = 0
+        try:
+            repair_rows = db.execute(text("""
+                SELECT mc.id, l.loan_officer_id, l.organization_id
+                FROM mum_clients mc
+                JOIN loans l ON l.loan_number = mc.loan_number
+                WHERE mc.organization_id IS DISTINCT FROM l.organization_id
+                   OR (l.loan_officer_id IS NOT NULL AND mc.user_id != l.loan_officer_id)
+            """)).fetchall()
+            for r in repair_rows:
+                mc_id, lo_id, org_id = r[0], r[1], r[2]
+                updates = {"org_id": org_id, "mc_id": mc_id}
+                if lo_id:
+                    db.execute(text("""
+                        UPDATE mum_clients
+                        SET user_id = :lo_id, organization_id = :org_id
+                        WHERE id = :mc_id
+                    """), {**updates, "lo_id": lo_id})
+                else:
+                    db.execute(text("""
+                        UPDATE mum_clients
+                        SET organization_id = :org_id
+                        WHERE id = :mc_id
+                    """), updates)
+                repaired += 1
+            if repaired:
+                logger.info(f"Repaired user_id/organization_id on {repaired} MUM clients")
+        except Exception as e:
+            logger.warning(f"MUM client repair step failed: {e}")
+
         db.commit()
 
         return {
             "dry_run": False,
             "promoted": promoted,
             "skipped": skipped,
+            "repaired": repaired,
             "errors": errors,
             "total_eligible": len(eligible),
         }
