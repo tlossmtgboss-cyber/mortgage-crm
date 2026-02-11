@@ -3,6 +3,7 @@ Tenant Middleware
 Routes requests to the correct tenant database based on subdomain, header, or JWT token.
 """
 import logging
+import os
 from typing import Optional
 from fastapi import Request, HTTPException, Depends
 from sqlalchemy.orm import Session
@@ -70,11 +71,15 @@ async def get_tenant_from_request(request: Request) -> Optional[Tenant]:
     # except Exception as e:
     #     logger.debug(f"Could not extract tenant from token: {e}")
     
-    # Method 4: Query parameter (for testing/development)
+    # Method 4: Query parameter (for testing/development only)
     tenant_id_param = request.query_params.get("tenant_id")
     if tenant_id_param:
-        tenant_id = tenant_id_param
-        logger.debug(f"Found tenant ID in query param: {tenant_id}")
+        _env = os.getenv("RAILWAY_ENVIRONMENT", os.getenv("ENVIRONMENT", "")).lower()
+        if _env in ("production", "prod"):
+            logger.warning("tenant_id query param rejected in production")
+        else:
+            tenant_id = tenant_id_param
+            logger.debug(f"Found tenant ID in query param: {tenant_id}")
     
     # Look up tenant in master database
     if not tenant_id and not subdomain:

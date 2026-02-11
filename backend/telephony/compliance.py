@@ -29,9 +29,15 @@ class ComplianceError(Exception):
 
 
 # Test mode bypass - set to True to skip calling hours check for testing
-# WARNING: Set back to False before production use!
 import os
 BYPASS_CALLING_HOURS = os.getenv("BYPASS_CALLING_HOURS", "false").lower() == "true"
+if BYPASS_CALLING_HOURS:
+    _env = os.getenv("RAILWAY_ENVIRONMENT", os.getenv("ENVIRONMENT", "")).lower()
+    if _env in ("production", "prod"):
+        logger.critical("BYPASS_CALLING_HOURS=true in PRODUCTION — TCPA violation risk! Ignoring flag.")
+        BYPASS_CALLING_HOURS = False
+    else:
+        logger.warning("BYPASS_CALLING_HOURS is enabled — calling hours checks will be skipped")
 
 
 class ComplianceChecker:

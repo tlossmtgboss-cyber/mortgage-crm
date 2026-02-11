@@ -1031,7 +1031,7 @@ async def connect_to_openai_realtime():
     if not openai_api_key:
         raise Exception("OpenAI API key not configured")
 
-    logger.info(f"Connecting to OpenAI Realtime API (key: {openai_api_key[:10]}...)")
+    logger.info("Connecting to OpenAI Realtime API")
 
     # Use generic model name - points to latest stable version
     url = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview"

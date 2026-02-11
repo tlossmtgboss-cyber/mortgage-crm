@@ -105,8 +105,8 @@ datadog>=0.49.0
 bleach>=6.0.0
 
 # Google Auth
-google-auth
-google-auth-oauthlib
-google-api-python-client
+google-auth>=2.23.0
+google-auth-oauthlib>=1.1.0
+google-api-python-client>=2.100.0
 google-cloud-texttospeech>=2.17.2
 pdf2image>=1.16.0
