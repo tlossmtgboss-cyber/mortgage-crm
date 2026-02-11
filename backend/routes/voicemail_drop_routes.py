@@ -1624,6 +1624,11 @@ async def _generate_audio_from_text(
 
     speed = max(0.25, min(4.0, float(speed)))
 
+    # OpenAI TTS only accepts these voices — map non-OpenAI voice names to a default
+    OPENAI_VOICES = {"alloy", "echo", "fable", "onyx", "nova", "shimmer"}
+    if voice not in OPENAI_VOICES:
+        voice = "nova"
+
     async with httpx.AsyncClient(timeout=60.0) as client:
         response = await client.post(
             "https://api.openai.com/v1/audio/speech",
@@ -1641,7 +1646,7 @@ async def _generate_audio_from_text(
         )
 
         if response.status_code != 200:
-            logger.error(f"OpenAI TTS error: {response.status_code}")
+            logger.error(f"OpenAI TTS error {response.status_code}: {response.text[:500]}")
             raise HTTPException(status_code=500, detail="TTS audio generation failed")
 
         # Save to disk
