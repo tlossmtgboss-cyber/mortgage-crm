@@ -1266,7 +1266,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.info("✅ Video Meeting Signaling (WebRTC) routes loaded")
     except Exception as e:
         import traceback
-        _video_meeting_error = f"{e}\n{traceback.format_exc()}"
+        _video_meeting_error = f"{e}"
         logger.error(f"⚠️ Could not load Video Meeting routes: {e}")
         logger.error(f"Traceback: {traceback.format_exc()}")
 
@@ -1295,7 +1295,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.info("✅ Video Clip (UVIP Async) routes loaded")
     except Exception as e:
         import traceback
-        _video_clip_error = f"{e}\n{traceback.format_exc()}"
+        _video_clip_error = f"{e}"
         logger.error(f"⚠️ Could not load Video Clip routes: {e}")
         logger.error(f"Traceback: {traceback.format_exc()}")
 
@@ -1615,7 +1615,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.info("✅ Carousel Builder routes loaded")
     except Exception as e:
         import traceback
-        _carousel_routes_error = f"{e}\n{traceback.format_exc()}"
+        _carousel_routes_error = f"{e}"
         logger.warning(f"⚠️ Could not load Carousel Builder routes: {e}")
         logger.warning(f"Full traceback: {traceback.format_exc()}")
 

@@ -818,7 +818,7 @@ async def synthesize_text(request: dict):
 
     except Exception as e:
         logger.error(f"[TTS] Error: {e}")
-        raise HTTPException(500, f"TTS synthesis failed: {str(e)}")
+        raise HTTPException(500, "TTS synthesis failed")
 
 
 @router.get("/voices")
@@ -963,4 +963,4 @@ async def save_user_voice_preference(
     except Exception as e:
         db.rollback()
         logger.error(f"[VoicePreference] Error saving preference: {e}")
-        raise HTTPException(500, f"Failed to save voice preference: {str(e)}")
+        raise HTTPException(500, "Failed to save voice preference")

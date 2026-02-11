@@ -3286,8 +3286,7 @@ async def debug_test_identity_resolution(
         import traceback
         return {
             "status": "error",
-            "error": "Internal server error",
-            "traceback": traceback.format_exc()
+            "error": "Internal server error"
         }
 
 

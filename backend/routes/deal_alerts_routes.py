@@ -495,7 +495,7 @@ async def test_funded_loans(
         }
     except Exception as e:
         import traceback
-        return {"status": "error", "error": "Internal server error", "traceback": traceback.format_exc()}
+        return {"status": "error", "error": "Internal server error"}
 
 
 @router.get("/admin/test-predictor-query")
@@ -539,7 +539,7 @@ async def test_predictor_query(
         }
     except Exception as e:
         import traceback
-        return {"status": "error", "error": "Internal server error", "traceback": traceback.format_exc()}
+        return {"status": "error", "error": "Internal server error"}
 
 
 @router.get("/admin/test-query")
@@ -591,8 +591,7 @@ async def test_loan_query(
         import traceback
         return {
             "status": "error",
-            "error": "Internal server error",
-            "traceback": traceback.format_exc()
+            "error": "Internal server error"
         }
 
 

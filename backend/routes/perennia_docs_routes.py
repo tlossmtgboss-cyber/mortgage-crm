@@ -1763,6 +1763,5 @@ async def run_perennia_docs_migration(
         import traceback
         return {
             "success": False,
-            "error": "Internal server error",
-            "traceback": traceback.format_exc()
+            "error": "Internal server error"
         }

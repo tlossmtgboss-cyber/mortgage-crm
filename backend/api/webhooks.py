@@ -1492,7 +1492,7 @@ async def handle_cache_invalidation(
         }
     except Exception as e:
         logger.error(f"Cache invalidation failed: {e}", exc_info=True)
-        raise HTTPException(500, f"Cache invalidation failed: {str(e)}")
+        raise HTTPException(500, "Cache invalidation failed")
 
 
 @router.post("/data-sync")
@@ -1526,7 +1526,7 @@ async def handle_data_sync(
 
     except Exception as e:
         logger.error(f"Data sync cache clear failed: {e}")
-        raise HTTPException(500, str(e))
+        raise HTTPException(500, "Internal server error")
 
 
 # =============================================================================

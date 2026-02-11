@@ -483,8 +483,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             import traceback
             return {
                 "status": "error",
-                "error": "Internal server error",
-                "traceback": traceback.format_exc()
+                "error": "Internal server error"
             }
         finally:
             db.close()

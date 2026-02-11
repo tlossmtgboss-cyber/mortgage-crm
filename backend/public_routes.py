@@ -281,8 +281,7 @@ async def migrate_database(db: Session = Depends(get_db)):
         db.rollback()
         return {
             "status": "error",
-            "error": "Internal server error",
-            "error_type": type(e).__name__
+            "error": "Internal server error"
         }
 
 @router.get("/api/v1/register-test")

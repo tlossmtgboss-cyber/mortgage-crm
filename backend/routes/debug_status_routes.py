@@ -300,8 +300,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             import traceback
             return {
                 "success": False,
-                "error": "Internal server error",
-                "traceback": traceback.format_exc()
+                "error": "Internal server error"
             }
 
     @app.get("/api/v1/debug/purl-auth-flow")

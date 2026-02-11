@@ -1005,9 +1005,9 @@ async def debug_tables(
         result["new_count"] = new_count
 
     except SQLAlchemyError as e:
-        result["test_insert_error"] = str(e)
         import traceback
-        result["traceback"] = traceback.format_exc()
+        logger.error(f"Decision lab test insert error: {traceback.format_exc()}")
+        result["test_insert_error"] = "Database error"
 
     return result
 

@@ -2817,8 +2817,7 @@ async def debug_import_closed_loans_from_sf(
         import traceback
         return {
             "status": "error",
-            "error": "Internal server error",
-            "traceback": traceback.format_exc()
+            "error": "Internal server error"
         }
 
 

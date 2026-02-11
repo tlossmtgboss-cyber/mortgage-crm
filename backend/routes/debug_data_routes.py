@@ -645,7 +645,7 @@ def register_debug_data_routes(
             ).first()
             results["steps"].append({"step": "funded_counts", "status": "ok", "annual": funded_counts.annual or 0})
         except Exception as e:
-            results["steps"].append({"step": "funded_counts", "status": "error", "error": "Internal server error", "traceback": traceback.format_exc()})
+            results["steps"].append({"step": "funded_counts", "status": "error", "error": "Internal server error"})
             return results
 
         try:
@@ -658,7 +658,7 @@ def register_debug_data_routes(
             ).first()
             results["steps"].append({"step": "lead_counts", "status": "ok", "new_leads": lead_counts.new_leads or 0})
         except Exception as e:
-            results["steps"].append({"step": "lead_counts", "status": "error", "error": "Internal server error", "traceback": traceback.format_exc()})
+            results["steps"].append({"step": "lead_counts", "status": "error", "error": "Internal server error"})
             return results
 
         try:
@@ -669,7 +669,7 @@ def register_debug_data_routes(
             ).all()
             results["steps"].append({"step": "active_loans", "status": "ok", "count": len(active_loans)})
         except Exception as e:
-            results["steps"].append({"step": "active_loans", "status": "error", "error": "Internal server error", "traceback": traceback.format_exc()})
+            results["steps"].append({"step": "active_loans", "status": "error", "error": "Internal server error"})
             return results
 
         try:
@@ -681,7 +681,7 @@ def register_debug_data_routes(
             ).limit(10).all()
             results["steps"].append({"step": "tasks_query", "status": "ok", "count": len(tasks_today)})
         except Exception as e:
-            results["steps"].append({"step": "tasks_query", "status": "error", "error": "Internal server error", "traceback": traceback.format_exc()})
+            results["steps"].append({"step": "tasks_query", "status": "error", "error": "Internal server error"})
             return results
 
         try:
@@ -696,7 +696,7 @@ def register_debug_data_routes(
             ).first()
             results["steps"].append({"step": "lead_metrics", "status": "ok", "total_leads": lead_metrics_query.total_leads or 0})
         except Exception as e:
-            results["steps"].append({"step": "lead_metrics", "status": "error", "error": "Internal server error", "traceback": traceback.format_exc()})
+            results["steps"].append({"step": "lead_metrics", "status": "error", "error": "Internal server error"})
             return results
 
         try:
@@ -706,7 +706,7 @@ def register_debug_data_routes(
             ).limit(5).all()
             results["steps"].append({"step": "referral_partners", "status": "ok", "count": len(partners)})
         except Exception as e:
-            results["steps"].append({"step": "referral_partners", "status": "error", "error": "Internal server error", "traceback": traceback.format_exc()})
+            results["steps"].append({"step": "referral_partners", "status": "error", "error": "Internal server error"})
             return results
 
         try:
@@ -718,7 +718,7 @@ def register_debug_data_routes(
             ).scalar() or 0
             results["steps"].append({"step": "ai_colleague_actions", "status": "ok", "count": ai_tasks_count})
         except Exception as e:
-            results["steps"].append({"step": "ai_colleague_actions", "status": "error", "error": "Internal server error", "traceback": traceback.format_exc()})
+            results["steps"].append({"step": "ai_colleague_actions", "status": "error", "error": "Internal server error"})
             return results
 
         results["overall_status"] = "all_steps_passed"
@@ -1812,8 +1812,7 @@ def register_debug_data_routes(
             import traceback
             return {
                 "status": "error",
-                "error": "Internal server error",
-                "traceback": traceback.format_exc()
+                "error": "Internal server error"
             }
 
 
@@ -1928,8 +1927,7 @@ def register_debug_data_routes(
             import traceback
             return {
                 "status": "error",
-                "error": "Internal server error",
-                "traceback": traceback.format_exc()
+                "error": "Internal server error"
             }
 
 
@@ -2355,7 +2353,7 @@ def register_debug_data_routes(
         except Exception as e:
             logger.error(f"SendGrid inbound webhook error: {e}")
             import traceback
-            return {"status": "error", "error": "Internal server error", "traceback": traceback.format_exc()}
+            return {"status": "error", "error": "Internal server error"}
 
 
     @app.post("/api/v1/debug/simulate-email-reply")
@@ -2459,7 +2457,7 @@ def register_debug_data_routes(
         except Exception as e:
             logger.error(f"Simulate reply error: {e}")
             import traceback
-            return {"status": "error", "error": "Internal server error", "traceback": traceback.format_exc()}
+            return {"status": "error", "error": "Internal server error"}
 
 
     @app.post("/api/v1/debug/start-ai-conversation")
@@ -2614,7 +2612,7 @@ def register_debug_data_routes(
         except Exception as e:
             logger.error(f"Test email error: {e}")
             import traceback
-            return {"status": "error", "error": "Internal server error", "traceback": traceback.format_exc()}
+            return {"status": "error", "error": "Internal server error"}
 
 
     @app.post("/api/v1/debug/test-appointment-confirmation-email", tags=["Debug"])

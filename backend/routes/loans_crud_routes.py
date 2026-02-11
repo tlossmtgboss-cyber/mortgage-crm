@@ -221,7 +221,7 @@ async def create_loan(
         Loan, User = get_models()
     except Exception as e:
         logger.error(f"Failed to import models: {e}")
-        return JSONResponse(status_code=422, content={"detail": f"Model import error: {str(e)}"})
+        return JSONResponse(status_code=422, content={"detail": "Model import error"})
 
     try:
         # Check for duplicate loan number unless explicitly skipped

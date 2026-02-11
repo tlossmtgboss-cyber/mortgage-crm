@@ -648,7 +648,7 @@ async def get_dialer_call_tasks_debug(
         return {"debug": True, "total_aitasks": count, "filtered_count": len(call_tasks), "sample": results}
     except Exception as e:
         import traceback
-        return {"debug": True, "error": "Internal server error", "error_type": type(e).__name__, "traceback": traceback.format_exc()}
+        return {"debug": True, "error": "Internal server error"}
 
 
 @router.get("/dialer/call-tasks")
@@ -734,7 +734,7 @@ async def get_dialer_call_tasks(
         import traceback
         traceback.print_exc()
         # Return 200 with error info so we can debug
-        return {"tasks": [], "total": 0, "error": "Internal server error", "error_type": type(e).__name__}
+        return {"tasks": [], "total": 0, "error": "Internal server error"}
 
 
 @router.get("/dialer/callable-contacts")

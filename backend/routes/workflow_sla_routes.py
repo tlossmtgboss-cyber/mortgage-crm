@@ -1384,8 +1384,7 @@ async def debug_imports(
         import traceback
         results["errors"].append({
             "stage": "TaskGeneratorService",
-            "error": "Internal server error",
-            "traceback": traceback.format_exc()
+            "error": "Internal server error"
         })
 
     # Test WorkflowSLAService
@@ -1397,8 +1396,7 @@ async def debug_imports(
         import traceback
         results["errors"].append({
             "stage": "WorkflowSLAService",
-            "error": "Internal server error",
-            "traceback": traceback.format_exc()
+            "error": "Internal server error"
         })
 
     return results
@@ -1625,7 +1623,6 @@ async def workflow_instance_diagnostic(
         import traceback
         return {
             "error": "Internal server error",
-            "traceback": traceback.format_exc(),
             "instance_id": instance_id
         }
 
@@ -1755,9 +1752,9 @@ async def fix_workflow_day_semantics(
 
     except Exception as e:
         import traceback
+        logger.error(f"SLA migration error: {traceback.format_exc()}")
         results["success"] = False
-        results["errors"].append(str(e))
-        results["traceback"] = traceback.format_exc()
+        results["errors"].append("Migration error — check server logs")
         db.rollback()
 
     return results
@@ -1915,9 +1912,9 @@ async def generate_tasks_public(
 
     except SQLAlchemyError as e:
         import traceback
+        logger.error(f"SLA DB migration error: {traceback.format_exc()}")
         results["success"] = False
-        results["errors"].append(str(e))
-        results["traceback"] = traceback.format_exc()
+        results["errors"].append("Database error — check server logs")
         db.rollback()
 
     return results
@@ -1982,7 +1979,7 @@ async def verify_day_semantics(
 
     except Exception as e:
         import traceback
-        return {"error": "Internal server error", "traceback": traceback.format_exc()}
+        return {"error": "Internal server error"}
 
 
 @router.get("/diagnostic/summary")
@@ -2064,7 +2061,7 @@ async def workflow_diagnostic_summary(
 
     except SQLAlchemyError as e:
         import traceback
-        return {"error": "Internal server error", "traceback": traceback.format_exc()}
+        return {"error": "Internal server error"}
 
 
 @router.post("/diagnostic/test-linked-task")
@@ -2135,8 +2132,7 @@ async def test_create_linked_task(
         db.rollback()
         return {
             "success": False,
-            "error": "Internal server error",
-            "traceback": traceback.format_exc()
+            "error": "Internal server error"
         }
 
 
@@ -2194,7 +2190,7 @@ async def get_linked_tasks_diagnostic(
 
     except SQLAlchemyError as e:
         import traceback
-        return {"error": "Internal server error", "traceback": traceback.format_exc()}
+        return {"error": "Internal server error"}
 
 
 @router.get("/diagnostic/task-instance-data/{instance_id}")
@@ -2300,7 +2296,7 @@ async def get_task_instance_data(
 
     except Exception as e:
         import traceback
-        return {"error": "Internal server error", "traceback": traceback.format_exc()}
+        return {"error": "Internal server error"}
 
 
 @router.post("/init/create-missing-linked-tasks")
@@ -2431,7 +2427,7 @@ async def create_missing_linked_tasks(
     except SQLAlchemyError as e:
         db.rollback()
         import traceback
-        return {"success": False, "error": "Internal server error", "traceback": traceback.format_exc()}
+        return {"success": False, "error": "Internal server error"}
 
 
 @router.post("/test/create-workflow-instance")
@@ -2559,7 +2555,6 @@ async def test_create_workflow_instance(
         return {
             "success": False,
             "error": "Internal server error",
-            "traceback": traceback.format_exc(),
             "steps": results["steps"]
         }
 
@@ -2624,7 +2619,7 @@ async def get_tasks_for_user_diagnostic(
 
     except Exception as e:
         import traceback
-        return {"error": "Internal server error", "traceback": traceback.format_exc()}
+        return {"error": "Internal server error"}
 
 
 @router.delete("/test/cleanup-test-instances")
@@ -2698,8 +2693,7 @@ async def cleanup_test_workflow_instances(
         db.rollback()
         return {
             "success": False,
-            "error": "Internal server error",
-            "traceback": traceback.format_exc()
+            "error": "Internal server error"
         }
 
 
@@ -2751,7 +2745,7 @@ async def verify_unified_tasks_for_user(
 
     except Exception as e:
         import traceback
-        return {"error": "Internal server error", "traceback": traceback.format_exc()}
+        return {"error": "Internal server error"}
 
 
 # =============================================================================
@@ -2933,7 +2927,7 @@ async def seed_salesforce_sla_workflows(
         import traceback
         raise HTTPException(
             status_code=500,
-            detail=f"Migration failed: {str(e)}\n{traceback.format_exc()}"
+            detail=f"Migration failed: {str(e)}"
         )
 
 

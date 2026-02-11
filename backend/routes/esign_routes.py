@@ -846,6 +846,5 @@ async def run_esign_migration(
         import traceback
         return {
             "success": False,
-            "error": "Internal server error",
-            "traceback": traceback.format_exc()
+            "error": "Internal server error"
         }

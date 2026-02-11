@@ -447,8 +447,7 @@ async def trigger_discovery_for_profile(
         import traceback
         return {
             "status": "error",
-            "error": "Internal server error",
-            "traceback": traceback.format_exc()
+            "error": "Internal server error"
         }
 
 
@@ -504,8 +503,7 @@ async def test_mapping_debug(
         db.rollback()
         return {
             "status": "error",
-            "error": "Internal server error",
-            "traceback": traceback.format_exc()
+            "error": "Internal server error"
         }
 
 
@@ -727,8 +725,7 @@ async def get_loans_status_debug(
         import traceback
         return {
             "status": "error",
-            "error": "Internal server error",
-            "traceback": traceback.format_exc()
+            "error": "Internal server error"
         }
 
 
@@ -873,8 +870,7 @@ async def import_funded_loans_to_mum_debug(
         db.rollback()
         return {
             "status": "error",
-            "error": "Internal server error",
-            "traceback": traceback.format_exc()
+            "error": "Internal server error"
         }
 
 
@@ -1120,7 +1116,7 @@ async def connect_salesforce(
                 logger.error(f"Retry failed: {type(retry_err).__name__}: {retry_err}")
                 raise HTTPException(
                     status_code=500,
-                    detail="Failed to initialize Salesforce OAuth: {type(e).__name__}"
+                    detail="Failed to initialize Salesforce OAuth"
                 )
     except HTTPException:
         raise  # Re-raise HTTP exceptions as-is

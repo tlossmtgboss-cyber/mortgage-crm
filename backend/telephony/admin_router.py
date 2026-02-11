@@ -129,7 +129,7 @@ def verify_caller_id(
         raise
     except TelephonyError as e:
         logger.error(f"Telephony error during caller ID verification: {e}")
-        raise HTTPException(status_code=503, detail=str(e))
+        raise HTTPException(status_code=503, detail="Telephony service error")
     except Exception as e:
         logger.error(f"Error during caller ID verification: {e}")
         raise HTTPException(status_code=500, detail="Failed to initiate verification")

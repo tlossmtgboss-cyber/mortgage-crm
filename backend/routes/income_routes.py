@@ -1635,7 +1635,6 @@ async def seed_test_income_data(
         return {
             "success": False,
             "error": "Internal server error",
-            "error_type": type(e).__name__,
         }
 
 
@@ -1693,5 +1692,4 @@ async def run_income_migration(
         return {
             "success": False,
             "error": "Internal server error",
-            "error_type": type(e).__name__,
         }

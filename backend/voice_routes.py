@@ -2745,7 +2745,7 @@ async def transcribe_audio(
         raise HTTPException(504, "Transcription timed out")
     except Exception as e:
         logger.error(f"Transcription error: {e}")
-        raise HTTPException(500, f"Transcription failed: {str(e)}")
+        raise HTTPException(500, "Transcription failed")
 
 
 # ============================================================================

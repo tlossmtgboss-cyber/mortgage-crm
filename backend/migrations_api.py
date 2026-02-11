@@ -2218,8 +2218,7 @@ async def test_mum_insert(key: str = "", user_id: int = 118):
         logger.error(f"Test mum insert error: {e}")
         return {
             "status": "error",
-            "error": "Internal server error",
-            "error_type": type(e).__name__
+            "error": "Internal server error"
         }
     finally:
         db.close()
@@ -2342,7 +2341,6 @@ async def test_mum_import_row(key: str = "", user_id: int = 118):
         return {
             "status": "error",
             "error": "Internal server error",
-            "error_type": type(e).__name__,
             "columns_attempted": columns,
             "values_count": len(values)
         }

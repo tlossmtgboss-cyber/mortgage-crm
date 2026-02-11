@@ -2717,7 +2717,7 @@ async def s3_test(
         results["delete_object"] = "ok"
 
     except Exception as e:
-        results["error"] = f"{type(e).__name__}: {str(e)}"
+        results["error"] = "Internal server error"
 
     return results
 
@@ -2853,7 +2853,7 @@ async def test_upload(
         )
         steps["s3_upload"] = f"success - uploaded to {bucket}/{storage_key}"
     except Exception as e:
-        steps["s3_upload"] = f"error: {type(e).__name__}: {str(e)}"
+        steps["s3_upload"] = "error: upload failed"
 
     # Step 5: Process document
     try:

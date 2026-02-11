@@ -348,7 +348,7 @@ class DuplicateDetectionService:
             results['lead_duplicates_found'] = len(lead_duplicates)
             logger.info(f"Found {len(lead_duplicates)} lead duplicates")
         except Exception as e:
-            logger.error(f"Error finding lead duplicates: {e}\n{traceback.format_exc()}")
+            logger.error(f"Error finding lead duplicates: {e}")
             lead_duplicates = []
             results['errors'].append(f"Lead scan error: {str(e)}")
 
@@ -364,7 +364,7 @@ class DuplicateDetectionService:
                     'task': task_result
                 })
             except Exception as e:
-                logger.error(f"Error creating task for lead duplicate: {e}\n{traceback.format_exc()}")
+                logger.error(f"Error creating task for lead duplicate: {e}")
                 results['errors'].append(f"Task creation error: {str(e)}")
 
         # Scan loans
@@ -373,7 +373,7 @@ class DuplicateDetectionService:
             results['loan_duplicates_found'] = len(loan_duplicates)
             logger.info(f"Found {len(loan_duplicates)} loan duplicates")
         except Exception as e:
-            logger.error(f"Error finding loan duplicates: {e}\n{traceback.format_exc()}")
+            logger.error(f"Error finding loan duplicates: {e}")
             loan_duplicates = []
             results['errors'].append(f"Loan scan error: {str(e)}")
 
@@ -389,7 +389,7 @@ class DuplicateDetectionService:
                     'task': task_result
                 })
             except Exception as e:
-                logger.error(f"Error creating task for loan duplicate: {e}\n{traceback.format_exc()}")
+                logger.error(f"Error creating task for loan duplicate: {e}")
                 results['errors'].append(f"Task creation error: {str(e)}")
 
         logger.info(

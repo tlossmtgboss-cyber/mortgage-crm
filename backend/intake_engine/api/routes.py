@@ -237,7 +237,7 @@ async def create_session(
         )
     except Exception as e:
         import traceback
-        raise HTTPException(status_code=500, detail=f"Session creation failed: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail="Session creation failed")
 
 
 @router.get("/sessions/{session_id}", response_model=SessionStatusResponse)
@@ -453,7 +453,7 @@ async def submit_answer(
         raise
     except Exception as e:
         import traceback
-        raise HTTPException(status_code=500, detail=f"Submit failed: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail="Submit failed")
 
     next_response = None
     if result.next:

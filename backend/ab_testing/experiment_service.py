@@ -217,7 +217,7 @@ class ExperimentService:
 
         except Exception as e:
             import traceback
-            error_detail = f"{str(e)}\n{traceback.format_exc()}"
+            error_detail = f"{str(e)}"
             logger.error(f"Error creating experiment: {error_detail}")
             self.db.rollback()
             # Re-raise to let the caller see the actual error

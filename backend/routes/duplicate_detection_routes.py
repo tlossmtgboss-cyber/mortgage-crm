@@ -150,7 +150,7 @@ async def create_duplicate_merge_tasks(
     except Exception as e:
         error_traceback = traceback.format_exc()
         logger.error(f"Error creating duplicate tasks: {e}\n{error_traceback}")
-        raise HTTPException(status_code=500, detail=f"{str(e)} - Check server logs for details")
+        raise HTTPException(status_code=500, detail="Error creating duplicate tasks — check server logs")
 
 
 @router.post("/admin/test-duplicate-task-creation")
@@ -308,7 +308,7 @@ async def check_user_permissions_debug(user_id: int, db: Session = Depends(get_d
             "frontend_should_allow": user.permission_role == 'admin' or user.permission_role == 'management',
         }
     except Exception as e:
-        return {"status": "error", "message": str(e), "traceback": traceback.format_exc()}
+        return {"status": "error", "message": str(e)}
 
 
 @router.post("/admin/fix-user-permission-role")

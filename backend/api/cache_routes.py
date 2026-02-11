@@ -73,7 +73,7 @@ async def get_crm_context_cache_stats():
     except ImportError:
         return {"enabled": False, "reason": "CRM context cache module not available"}
     except Exception as e:
-        raise HTTPException(500, f"Error getting CRM context cache stats: {str(e)}")
+        raise HTTPException(500, "Error getting cache stats")
 
 
 @router.post("/crm-context/invalidate")
@@ -113,4 +113,4 @@ async def invalidate_crm_context_cache(
     except ImportError:
         raise HTTPException(500, "CRM context cache module not available")
     except Exception as e:
-        raise HTTPException(500, f"Error invalidating CRM context cache: {str(e)}")
+        raise HTTPException(500, "Error invalidating cache")

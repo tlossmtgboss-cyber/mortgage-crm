@@ -466,7 +466,7 @@ async def inbound_webhook(
                 db.commit()
             except Exception:
                 db.rollback()
-        raise HTTPException(status_code=500, detail=f"Webhook processing failed: {str(e)[:200]}")
+        raise HTTPException(status_code=500, detail="Webhook processing failed")
 
 
 async def _handle_lead_status_changed(payload: Dict, db: Session) -> Dict:

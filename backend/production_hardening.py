@@ -374,8 +374,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
             content={
                 "error": type(exc).__name__,
                 "request_id": request_id,
-                "message": str(exc),
-                "traceback": traceback.format_exc()
+                "message": str(exc)
             },
             headers=cors_headers
         )

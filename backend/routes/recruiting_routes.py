@@ -1057,8 +1057,6 @@ async def schedule_interview(
         return {
             "success": False,
             "error": "Internal server error",
-            "error_type": type(e).__name__,
-            "user_id": current_user.id if current_user else None,
             "candidate_id": candidate_id
         }
 
