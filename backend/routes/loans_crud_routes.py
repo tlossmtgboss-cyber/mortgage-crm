@@ -348,8 +348,11 @@ async def get_loan(
 ):
     """Get a single loan by ID."""
     Loan, User = get_models()
+    filter_loans_by_permissions = get_permission_functions()
 
-    loan = db.query(Loan).filter(Loan.id == loan_id).first()
+    loan = filter_loans_by_permissions(
+        db.query(Loan), current_user, db
+    ).filter(Loan.id == loan_id).first()
     if not loan:
         raise HTTPException(status_code=404, detail="Loan not found")
 
@@ -365,8 +368,11 @@ async def update_loan(
 ):
     """Update a loan by ID."""
     Loan, User = get_models()
+    filter_loans_by_permissions = get_permission_functions()
 
-    loan = db.query(Loan).filter(Loan.id == loan_id).first()
+    loan = filter_loans_by_permissions(
+        db.query(Loan), current_user, db
+    ).filter(Loan.id == loan_id).first()
     if not loan:
         raise HTTPException(status_code=404, detail="Loan not found")
 
@@ -412,8 +418,11 @@ async def delete_loan(
 ):
     """Delete a loan by ID."""
     Loan, User = get_models()
+    filter_loans_by_permissions = get_permission_functions()
 
-    loan = db.query(Loan).filter(Loan.id == loan_id).first()
+    loan = filter_loans_by_permissions(
+        db.query(Loan), current_user, db
+    ).filter(Loan.id == loan_id).first()
     if not loan:
         raise HTTPException(status_code=404, detail="Loan not found")
 
@@ -436,9 +445,12 @@ async def bulk_delete_loans(
 ):
     """Bulk delete loans by list of IDs."""
     Loan, User = get_models()
+    filter_loans_by_permissions = get_permission_functions()
 
     try:
-        deleted = db.query(Loan).filter(Loan.id.in_(loan_ids)).delete(synchronize_session=False)
+        deleted = filter_loans_by_permissions(
+            db.query(Loan), current_user, db
+        ).filter(Loan.id.in_(loan_ids)).delete(synchronize_session=False)
         db.commit()
         logger.info(f"Bulk deleted {deleted} loans")
         return {"deleted": deleted}

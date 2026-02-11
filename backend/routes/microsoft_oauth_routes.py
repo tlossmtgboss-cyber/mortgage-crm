@@ -164,15 +164,27 @@ async def get_microsoft_auth_url(
             tenant_id = os.getenv("MICROSOFT_TENANT_ID", "common")
 
         # Dynamic redirect URI: Use frontend origin from query param or Referer header
-        frontend_origin = request.query_params.get('origin')
-        if not frontend_origin:
+        # Validate against allowlist to prevent open redirects
+        from urllib.parse import urlparse
+        _ALLOWED_ORIGINS = {"perenniaai.com", "www.perenniaai.com", "localhost", "127.0.0.1"}
+
+        frontend_origin = None
+        raw_origin = request.query_params.get('origin')
+        if not raw_origin:
             referer = request.headers.get('referer', '')
             if referer:
-                from urllib.parse import urlparse
                 parsed = urlparse(referer)
-                frontend_origin = f"{parsed.scheme}://{parsed.netloc}"
+                raw_origin = f"{parsed.scheme}://{parsed.netloc}"
 
-        # Construct redirect URI from frontend origin, or fall back to default
+        if raw_origin:
+            parsed_origin = urlparse(raw_origin)
+            hostname = parsed_origin.hostname or ""
+            if hostname in _ALLOWED_ORIGINS or hostname.endswith(".perenniaai.com") or hostname.endswith(".railway.app"):
+                frontend_origin = raw_origin.rstrip("/")
+            else:
+                logger.warning(f"Rejected OAuth origin: {hostname}")
+
+        # Construct redirect URI from validated frontend origin, or fall back to default
         if frontend_origin:
             redirect_uri = f"{frontend_origin}/oauth/callback"
         else:

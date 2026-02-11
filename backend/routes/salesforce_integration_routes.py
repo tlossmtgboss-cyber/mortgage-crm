@@ -240,7 +240,8 @@ def fix_salesforce_schema(db: Session) -> dict:
 @router.post("/fix-schema")
 async def fix_schema_endpoint(
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth: bool = Depends(_require_admin_key),
 ):
     """Fix missing columns in Salesforce integration tables (admin only)"""
     result = fix_salesforce_schema(db)
@@ -250,7 +251,8 @@ async def fix_schema_endpoint(
 @router.post("/ensure-tables")
 async def ensure_tables_endpoint(
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth: bool = Depends(_require_admin_key),
 ):
     """
     Ensure all Salesforce OAuth tables exist.
