@@ -3610,7 +3610,7 @@ async def fix_loan_id_mismatches(
             logger.error(f"Failed to commit loan ID fixes: {e}")
             return {
                 "success": False,
-                "error": str(e),
+                "error": "Internal server error",
                 "fixes_attempted": len(fixes_applied),
             }
 

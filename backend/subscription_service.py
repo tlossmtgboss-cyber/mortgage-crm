@@ -209,7 +209,7 @@ class SubscriptionService:
         except Exception as e:
             logger.error(f"Error incrementing usage: {e}")
             db.rollback()
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     @staticmethod
     def get_usage_summary(db: Session, organization_id: int) -> Dict[str, Any]:
@@ -400,7 +400,7 @@ class SubscriptionService:
         except Exception as e:
             logger.error(f"Error upgrading tier: {e}")
             db.rollback()
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
 
 class PermissionChecker:

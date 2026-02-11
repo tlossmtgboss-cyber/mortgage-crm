@@ -155,7 +155,7 @@ async def get_page_categories(
         return {"categories": categories}
     except Exception as e:
         logger.error(f"Error fetching page categories: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/my-pages")
@@ -244,7 +244,7 @@ async def get_my_accessible_pages(
         }
     except Exception as e:
         logger.error(f"Error fetching user pages: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/check/{page_path:path}")
@@ -332,7 +332,7 @@ async def check_page_access(
         }
     except Exception as e:
         logger.error(f"Error checking page access: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/pin/{page_id}")
@@ -385,7 +385,7 @@ async def pin_page(
     except SQLAlchemyError as e:
         logger.error(f"Error pinning page: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/pinned")
@@ -424,7 +424,7 @@ async def get_pinned_pages(
         return {"pinned_pages": pinned}
     except Exception as e:
         logger.error(f"Error fetching pinned pages: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -490,7 +490,7 @@ async def get_all_pages(
         return {"pages": pages, "total": len(pages)}
     except Exception as e:
         logger.error(f"Error fetching all pages: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/admin/pages/{page_id}/permissions")
@@ -566,7 +566,7 @@ async def get_page_permissions(
         raise
     except Exception as e:
         logger.error(f"Error fetching page permissions: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/admin/pages/{page_id}/role/{role}")
@@ -634,7 +634,7 @@ async def update_role_permission(
     except SQLAlchemyError as e:
         logger.error(f"Error updating role permission: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/admin/users/{user_id}/pages/{page_id}/override")
@@ -708,7 +708,7 @@ async def create_user_page_override(
     except SQLAlchemyError as e:
         logger.error(f"Error creating user page override: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/admin/users/{user_id}/pages/{page_id}/override")
@@ -734,7 +734,7 @@ async def delete_user_page_override(
     except SQLAlchemyError as e:
         logger.error(f"Error deleting user page override: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/admin/users/{user_id}/overrides")
@@ -782,7 +782,7 @@ async def get_user_overrides(
         return {"user_id": user_id, "overrides": overrides}
     except Exception as e:
         logger.error(f"Error fetching user overrides: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/admin/bulk-update")
@@ -836,7 +836,7 @@ async def bulk_update_permissions(
     except SQLAlchemyError as e:
         logger.error(f"Error bulk updating permissions: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -883,7 +883,7 @@ async def log_page_access(
     except SQLAlchemyError as e:
         logger.error(f"Error logging page access: {e}")
         # Don't fail the request if logging fails
-        return {"logged": False, "error": str(e)}
+        return {"logged": False, "error": "Internal server error"}
 
 
 @router.get("/admin/access-log")
@@ -951,7 +951,7 @@ async def get_access_log(
         return {"logs": logs, "limit": limit, "offset": offset}
     except Exception as e:
         logger.error(f"Error fetching access logs: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -1206,4 +1206,4 @@ async def run_page_permissions_migration(
     except SQLAlchemyError as e:
         logger.error(f"Migration error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

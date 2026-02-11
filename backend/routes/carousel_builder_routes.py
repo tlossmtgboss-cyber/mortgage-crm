@@ -80,7 +80,7 @@ async def carousel_health_check(db: Session = Depends(get_db)):
             count = result.scalar()
             status["tables"][table] = {"exists": True, "count": count}
         except Exception as e:
-            status["tables"][table] = {"exists": False, "error": str(e)}
+            status["tables"][table] = {"exists": False, "error": "Internal server error"}
             status["status"] = "degraded"
 
     # Try to run migration if any table is missing
@@ -524,7 +524,7 @@ async def create_project(
     except Exception as e:
         logger.error(f"Error creating carousel project: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to create carousel: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create carousel")
 
 
 # =============================================================================

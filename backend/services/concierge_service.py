@@ -228,7 +228,7 @@ class ConciergeService:
                 "next_stage": current_stage,
                 "is_complete": False,
                 "confidence": 0.0,
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     def validate_extracted_data(self, data: Dict[str, Any]) -> Dict[str, Any]:

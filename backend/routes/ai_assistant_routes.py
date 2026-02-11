@@ -518,7 +518,7 @@ async def execute_ai_function(
     except Exception as e:
         logger.error(f"Error executing AI function {function_name}: {e}")
         db.rollback()
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 # =============================================================================
@@ -972,7 +972,7 @@ Be proactive, professional, and action-oriented. When asked to perform an action
     except Exception as e:
         logger.error(f"OpenAI API error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"AI service error: {str(e)}")
+        raise HTTPException(status_code=500, detail="AI service error")
 
 
 @router.get("/conversations", response_model=List[ConversationResponse])
@@ -1060,4 +1060,4 @@ async def ai_complete_task(
 
     except Exception as e:
         logger.error(f"AI task completion error: {e}")
-        raise HTTPException(status_code=500, detail=f"AI service error: {str(e)}")
+        raise HTTPException(status_code=500, detail="AI service error")

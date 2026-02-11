@@ -666,7 +666,7 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
 
         except Exception as e:
             db.rollback()
-            raise HTTPException(status_code=500, detail=f"Error creating user: {str(e)}")
+            raise HTTPException(status_code=500, detail="Error creating user")
 
     @router.post("/create/single")
     async def create_single_user(
@@ -742,7 +742,7 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
             }
         except Exception as e:
             db.rollback()
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     @router.post("/create/single/role-builder")
     async def save_role_builder(
@@ -796,7 +796,7 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
             return {"success": True, "data": {"user_id": data.user_id, "role_summary": summary, "next_step": "permissions_builder"}}
         except Exception as e:
             db.rollback()
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     @router.post("/create/single/permissions-builder")
     async def save_permissions(
@@ -843,7 +843,7 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
             return {"success": True, "data": {"user_id": data.user_id, "permission_summary": generate_permission_summary(perms_data), "next_step": "review_confirm"}}
         except Exception as e:
             db.rollback()
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     @router.get("/create/single/review/{user_id}")
     async def get_review_summary(
@@ -976,7 +976,7 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
             }
         except Exception as e:
             db.rollback()
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     @router.post("/users/{user_id}/resend-activation")
     async def resend_activation_email(
@@ -1178,7 +1178,7 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
                 }
             except Exception as e:
                 db.rollback()
-                raise HTTPException(status_code=500, detail=str(e))
+                raise HTTPException(status_code=500, detail="Internal server error")
 
         # Try invitation system (token stored in user_metadata JSON)
         # Use raw SQL to avoid ORM issues with missing columns
@@ -1261,7 +1261,7 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
                         }
                     except Exception as e:
                         db.rollback()
-                        raise HTTPException(status_code=500, detail=str(e))
+                        raise HTTPException(status_code=500, detail="Internal server error")
         except HTTPException:
             raise
         except Exception as e:
@@ -1393,7 +1393,7 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
             return {"success": True, "data": {"user_id": user.id, "status": "active", "redirect_url": "/dashboard", "auth_token": token}}
         except Exception as e:
             db.rollback()
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     # Bulk Upload Endpoints
     @router.post("/bulk/parse")
@@ -1425,7 +1425,7 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
                 "total_rows": len(rows)
             }
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Error parsing file: {str(e)}")
+            raise HTTPException(status_code=400, detail="Error parsing file")
 
     @router.post("/bulk/validate")
     async def bulk_validate(
@@ -1502,7 +1502,7 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
                 "total_rows": len(rows)
             }
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Error validating file: {str(e)}")
+            raise HTTPException(status_code=400, detail="Error validating file")
 
     @router.post("/bulk/process")
     async def bulk_process(
@@ -1619,7 +1619,7 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
                         "row": idx + 1,
                         "email": email,
                         "status": "failed",
-                        "error": str(e)
+                        "error": "Internal server error"
                     })
                     failed_count += 1
 
@@ -1636,6 +1636,6 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
             }
         except Exception as e:
             db.rollback()
-            raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
+            raise HTTPException(status_code=500, detail="Error processing file")
 
     return router

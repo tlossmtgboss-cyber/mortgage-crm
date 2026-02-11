@@ -100,7 +100,7 @@ def register_calculator_settings_routes(app, get_db, get_current_user, **kwargs)
         except Exception as e:
             db.rollback()
             logger.error(f"Error setting up calculator tables: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     @app.get("/api/v1/settings/calculator-types")
     async def get_calculator_settings(
@@ -149,7 +149,7 @@ def register_calculator_settings_routes(app, get_db, get_current_user, **kwargs)
             }
         except Exception as e:
             logger.error(f"Error getting calculator settings: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     @app.put("/api/v1/settings/calculator-types")
     async def update_calculator_assignments(
@@ -187,7 +187,7 @@ def register_calculator_settings_routes(app, get_db, get_current_user, **kwargs)
         except Exception as e:
             db.rollback()
             logger.error(f"Error updating calculator assignments: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     @app.post("/api/v1/settings/calculator-types/buyer-types")
     async def add_custom_buyer_type(
@@ -214,7 +214,7 @@ def register_calculator_settings_routes(app, get_db, get_current_user, **kwargs)
         except Exception as e:
             db.rollback()
             logger.error(f"Error adding custom buyer type: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     @app.delete("/api/v1/settings/calculator-types/buyer-types/{type_id}")
     async def delete_custom_buyer_type(
@@ -237,6 +237,6 @@ def register_calculator_settings_routes(app, get_db, get_current_user, **kwargs)
         except Exception as e:
             db.rollback()
             logger.error(f"Error deleting custom buyer type: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     logger.info("Calculator settings routes registered")

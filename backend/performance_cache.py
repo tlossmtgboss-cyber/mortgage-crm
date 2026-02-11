@@ -182,6 +182,6 @@ def run_parallel_sync(*functions_with_args):
                 results[idx] = future.result()
             except Exception as e:
                 logger.error(f"Parallel execution error: {e}")
-                results[idx] = {"error": str(e)}
+                results[idx] = {"error": "Internal server error"}
 
     return results

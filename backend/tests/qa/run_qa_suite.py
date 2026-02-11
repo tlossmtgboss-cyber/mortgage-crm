@@ -87,7 +87,7 @@ class QASuiteRunner:
         except subprocess.TimeoutExpired:
             return {"success": False, "error": "Test timed out after 10 minutes"}
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def _update_report_from_pytest(self, pytest_report: Dict, category_name: str):
         """Update QA report from pytest results"""
@@ -154,7 +154,7 @@ class QASuiteRunner:
             }
 
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def run_security_tests(self) -> Dict:
         """Run security test suite"""

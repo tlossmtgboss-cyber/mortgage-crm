@@ -1994,7 +1994,7 @@ def seed_test_account():
         logger.error(f"Error seeding test account: {e}")
         import traceback
         traceback.print_exc()
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
     finally:
         db.close()
 

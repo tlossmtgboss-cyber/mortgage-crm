@@ -413,7 +413,7 @@ class ModuleService:
         except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Error enabling module: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     @staticmethod
     def disable_module(db: Session, organization_id: int, module_key: str) -> Dict:
@@ -437,7 +437,7 @@ class ModuleService:
         except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Error disabling module: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     @staticmethod
     def calculate_subscription_total(
@@ -468,7 +468,7 @@ class ModuleService:
             }
         except Exception as e:
             logger.error(f"Error calculating total: {e}")
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
 
 def get_module_service(db: Session) -> ModuleService:

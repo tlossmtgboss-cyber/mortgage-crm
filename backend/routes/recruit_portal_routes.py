@@ -482,7 +482,7 @@ async def create_portal_tables(
         return {"status": "success", "message": "Portal tables created successfully"}
     except SQLAlchemyError as e:
         logger.error(f"Error creating portal tables: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -503,7 +503,7 @@ async def get_purl_portal_data(
         return portal_data
     except Exception as e:
         logger.error(f"Error getting portal data: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/purl/{slug}/updates")
@@ -519,7 +519,7 @@ async def get_purl_company_updates(
         return {"updates": updates}
     except Exception as e:
         logger.error(f"Error getting company updates: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/purl/{slug}/chat", response_model=ChatResponse)
@@ -542,7 +542,7 @@ async def purl_chat_with_assistant(
         return ChatResponse(response=result.get("response", ""), metadata={"timestamp": datetime.now().isoformat()})
     except Exception as e:
         logger.error(f"Error in chat: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/purl/{slug}/availability")
@@ -565,7 +565,7 @@ async def get_purl_availability(
         return {"date": date, "duration_minutes": duration_minutes, "slots": slots}
     except Exception as e:
         logger.error(f"Error getting availability: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/purl/{slug}/schedule")
@@ -592,7 +592,7 @@ async def schedule_purl_appointment(
         return created
     except Exception as e:
         logger.error(f"Error scheduling appointment: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/purl/{slug}/calculator", response_model=CalculatorResult)
@@ -607,7 +607,7 @@ async def calculate_purl_production_impact(
         return result
     except Exception as e:
         logger.error(f"Error calculating production impact: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/purl/{slug}/chat-history")
@@ -629,7 +629,7 @@ async def get_purl_chat_history(
         return {"messages": messages}
     except Exception as e:
         logger.error(f"Error getting chat history: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -655,7 +655,7 @@ async def create_purl_portal_workspace(
         return workspace
     except Exception as e:
         logger.error(f"Error creating workspace: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/admin/workspaces/by-candidate/{candidate_id}/slug")
@@ -688,7 +688,7 @@ async def update_workspace_slug_by_candidate(
         return {"id": row.id, "slug": row.slug, "candidate_id": row.candidate_id}
     except SQLAlchemyError as e:
         logger.error(f"Error updating workspace slug: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/admin/workspaces/by-candidate/{candidate_id}")
@@ -724,7 +724,7 @@ async def get_workspace_by_candidate(
         }
     except Exception as e:
         logger.error(f"Error getting workspace: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/admin/workspaces")
@@ -743,7 +743,7 @@ async def list_purl_portal_workspaces(
         return {"workspaces": workspaces, "limit": limit, "offset": offset}
     except Exception as e:
         logger.error(f"Error listing workspaces: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/admin/candidates/{candidate_id}/email")
@@ -776,7 +776,7 @@ async def update_candidate_email(
         return {"id": row.id, "name": f"{row.first_name} {row.last_name}", "email": row.email}
     except SQLAlchemyError as e:
         logger.error(f"Error updating candidate email: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/admin/workspaces/{workspace_id}/tokens")
@@ -800,7 +800,7 @@ async def create_purl_portal_token(
         return token
     except Exception as e:
         logger.error(f"Error creating token: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 class CompanyUpdateCreate(BaseModel):
@@ -834,7 +834,7 @@ async def create_purl_company_update(
         return created
     except Exception as e:
         logger.error(f"Error creating update: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/admin/updates")
@@ -853,7 +853,7 @@ async def list_purl_company_updates(
         return {"updates": updates}
     except Exception as e:
         logger.error(f"Error listing updates: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/admin/updates/{update_id}")
@@ -871,7 +871,7 @@ async def delete_purl_company_update(
         return {"status": "deleted", "id": update_id}
     except SQLAlchemyError as e:
         logger.error(f"Error deleting update: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 class CalculatorConfigUpdate(BaseModel):
@@ -902,7 +902,7 @@ async def update_purl_calculator_config(
         return updated
     except Exception as e:
         logger.error(f"Error updating calculator config: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/admin/calculator-config")
@@ -920,4 +920,4 @@ async def get_purl_calculator_config(
         return config
     except Exception as e:
         logger.error(f"Error getting calculator config: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

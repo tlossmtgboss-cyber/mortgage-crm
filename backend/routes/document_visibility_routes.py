@@ -214,7 +214,7 @@ async def update_document_visibility(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error updating visibility: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/{document_table}/{document_id}/visibility/history")
@@ -283,7 +283,7 @@ async def bulk_update_visibility(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error in bulk visibility update: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/{document_table}/{document_id}/release")
@@ -326,7 +326,7 @@ async def release_document(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error releasing document: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -408,4 +408,4 @@ async def process_milestone_release(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error processing milestone release: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

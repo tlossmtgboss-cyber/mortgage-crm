@@ -177,7 +177,7 @@ async def get_user_capacity(
             }
         }
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail="Not found")
 
 
 @router.put("/capacity/user/{user_id}/limits")
@@ -199,7 +199,7 @@ async def update_user_capacity_limits(
         )
         return result
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
 
 
 @router.put("/capacity/user/{user_id}/availability")
@@ -881,7 +881,7 @@ async def calculate_daily_performance(
                 "grade": metrics.performance_grade
             }
         except ValueError as e:
-            raise HTTPException(status_code=404, detail=str(e))
+            raise HTTPException(status_code=404, detail="Not found")
     else:
         count = await service.calculate_all_daily_performance(
             target_date=calc_date,
@@ -929,7 +929,7 @@ async def calculate_weekly_performance(
                 "grade": metrics.performance_grade
             }
         except ValueError as e:
-            raise HTTPException(status_code=404, detail=str(e))
+            raise HTTPException(status_code=404, detail="Not found")
     else:
         count = await service.calculate_all_weekly_performance(
             week_start=week_start,
@@ -978,7 +978,7 @@ async def calculate_monthly_performance(
                 "grade": metrics.performance_grade
             }
         except ValueError as e:
-            raise HTTPException(status_code=404, detail=str(e))
+            raise HTTPException(status_code=404, detail="Not found")
     else:
         count = await service.calculate_all_monthly_performance(
             month_start=month_start,
@@ -1085,7 +1085,7 @@ async def get_user_burnout_risk(
             "assessed_at": assessment.assessed_at.isoformat() if assessment.assessed_at else None
         }
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail="Not found")
 
 
 @router.get("/risk/attrition")
@@ -1143,7 +1143,7 @@ async def get_user_attrition_risk(
             "assessed_at": assessment.assessed_at.isoformat() if assessment.assessed_at else None
         }
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail="Not found")
 
 
 @router.get("/risk/spof")
@@ -1257,7 +1257,7 @@ async def calculate_user_risks(
             "calculated_at": datetime.now(timezone.utc).isoformat()
         }
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail="Not found")
 
 
 # =============================================================================
@@ -1278,7 +1278,7 @@ async def run_migration(
         run_migration()
         return {"message": "Migration completed successfully"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/admin/run-recruiting-migration")
@@ -1295,7 +1295,7 @@ async def run_recruiting_migration(
         result = run_migration()
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/admin/fix-duplicate-roles")
@@ -1338,7 +1338,7 @@ async def fix_duplicate_roles(
         }
     except SQLAlchemyError as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/admin/assign-role")
@@ -1408,7 +1408,7 @@ async def assign_role_to_user(
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/admin/fix-duplicate-capacities")
@@ -1439,7 +1439,7 @@ async def fix_duplicate_capacities(
         }
     except SQLAlchemyError as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/admin/initialize-capacities")

@@ -189,7 +189,7 @@ async def generate_ai_response(
 
     except Exception as e:
         logger.error(f"AI generation failed: {e}")
-        return get_fallback_response(context.get('current_phase', 1), context), {"model": "fallback", "error": str(e)}
+        return get_fallback_response(context.get('current_phase', 1), context), {"model": "fallback", "error": "Internal server error"}
 
 
 # =============================================================================
@@ -958,7 +958,7 @@ async def get_availability_status(
             "message": "Available now",
             "next_available": None,
             "call_option": "call_now",
-            "error": str(e),
+            "error": "Internal server error",
         }
 
 
@@ -997,7 +997,7 @@ async def get_schedule_slots(
         }
     except Exception as e:
         logger.error(f"Schedule slots failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================

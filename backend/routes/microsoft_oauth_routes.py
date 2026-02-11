@@ -198,7 +198,7 @@ async def get_microsoft_auth_url(
         raise
     except Exception as e:
         logger.error(f"Error generating Microsoft auth URL: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         db.close()
 
@@ -338,7 +338,7 @@ async def connect_microsoft365(
     except Exception as e:
         logger.error(f"Microsoft connect error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         db.close()
 
@@ -382,7 +382,7 @@ async def get_microsoft_status(
 
     except Exception as e:
         logger.error(f"Microsoft status error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         db.close()
 
@@ -425,7 +425,7 @@ async def disconnect_microsoft365(
     except Exception as e:
         logger.error(f"Microsoft disconnect error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         db.close()
 
@@ -477,7 +477,7 @@ async def cleanup_microsoft_oauth_by_email(
     except Exception as e:
         logger.error(f"Cleanup Microsoft OAuth error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         db.close()
 
@@ -543,7 +543,7 @@ async def get_microsoft_oauth_config(
         )
     except Exception as e:
         logger.error(f"Error getting Microsoft OAuth config: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         db.close()
 
@@ -611,7 +611,7 @@ async def save_microsoft_oauth_config(
     except Exception as e:
         logger.error(f"Error saving Microsoft OAuth config: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         db.close()
 
@@ -713,7 +713,7 @@ async def get_email_sync_diagnostics(
 
     except Exception as e:
         logger.error(f"Sync diagnostics error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         db.close()
 
@@ -802,7 +802,7 @@ async def test_microsoft_fetch(
 
     except Exception as e:
         logger.error(f"Test fetch error: {e}")
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
     finally:
         db.close()
 
@@ -874,7 +874,7 @@ async def force_email_sync(
     except Exception as e:
         logger.error(f"Force sync error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         db.close()
 
@@ -928,7 +928,7 @@ async def fix_microsoft_oauth_config(
     except Exception as e:
         db.rollback()
         logger.error(f"Error fixing Microsoft OAuth config: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         db.close()
 
@@ -966,7 +966,7 @@ async def create_microsoft_app_config_table(
     except Exception as e:
         db.rollback()
         logger.error(f"Error creating microsoft_app_config table: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         db.close()
 
@@ -1078,6 +1078,6 @@ async def create_organizations_table(
     except Exception as e:
         db.rollback()
         logger.error(f"Error creating organizations table: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         db.close()

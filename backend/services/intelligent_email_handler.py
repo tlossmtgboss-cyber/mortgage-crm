@@ -1214,7 +1214,7 @@ AI Mortgage Assistant | Perennia AI"""
             }
         except Exception as e:
             logger.error(f"Error generating pre-approval letter: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def _get_loan_status_update(self, loan_id: int) -> Dict[str, Any]:
         """Get current loan status and next steps."""

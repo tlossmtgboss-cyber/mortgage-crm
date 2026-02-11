@@ -356,7 +356,7 @@ async def handle_send_sms(args: Dict[str, Any], request: Request) -> Dict[str, A
                 else:
                     return {"success": False, "error": f"No contact found with name matching '{recipient_name}'"}
         except Exception as e:
-            return {"success": False, "error": f"Contact lookup failed: {str(e)}"}
+            return {"success": False, "error": "Contact lookup failed"}
         finally:
             db.close()
 
@@ -377,7 +377,7 @@ async def handle_send_sms(args: Dict[str, Any], request: Request) -> Dict[str, A
             }
         }
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 @register_tool_handler("send_email")
@@ -404,7 +404,7 @@ async def handle_send_email(args: Dict[str, Any], request: Request) -> Dict[str,
             }
         }
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 @register_tool_handler("create_task")
@@ -466,7 +466,7 @@ async def handle_create_task(args: Dict[str, Any], request: Request) -> Dict[str
         logger.error(f"Failed to create task: {e}")
         return {
             "success": False,
-            "error": f"Failed to create task: {str(e)}"
+            "error": "Failed to create task"
         }
 
 
@@ -557,7 +557,7 @@ async def handle_search_leads(args: Dict[str, Any], request: Request) -> Dict[st
         logger.error(f"Search leads error: {e}")
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -742,7 +742,7 @@ async def handle_lead_status_insights(args: Dict[str, Any], request: Request) ->
         logger.error(traceback.format_exc())
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -830,7 +830,7 @@ async def handle_get_leads_by_status(args: Dict[str, Any], request: Request) -> 
         logger.error(f"Get leads by status error: {e}")
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -908,7 +908,7 @@ async def handle_get_pipeline_metrics(args: Dict[str, Any], request: Request) ->
         logger.error(f"Get pipeline metrics error: {e}")
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -999,7 +999,7 @@ async def handle_get_tasks(args: Dict[str, Any], request: Request) -> Dict[str, 
         logger.error(f"Get tasks error: {e}")
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -1042,7 +1042,7 @@ async def handle_get_daily_call_list(args: Dict[str, Any], request: Request) -> 
         logger.error(traceback.format_exc())
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -1319,7 +1319,7 @@ async def handle_get_daily_priorities(args: Dict[str, Any], request: Request) ->
         logger.error(traceback.format_exc())
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -1432,7 +1432,7 @@ async def handle_get_stale_leads(args: Dict[str, Any], request: Request) -> Dict
         logger.error(traceback.format_exc())
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -1561,5 +1561,5 @@ async def handle_get_top_leads(args: Dict[str, Any], request: Request) -> Dict[s
         logger.error(traceback.format_exc())
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }

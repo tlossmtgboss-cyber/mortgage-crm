@@ -91,7 +91,7 @@ async def voice_transcribe(
 
     except Exception as e:
         logger.error(f"Voice transcription error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/chat")
@@ -218,7 +218,7 @@ Be natural and helpful. Keep responses under 50 words for voice output."""
 
     except Exception as e:
         logger.error(f"Voice chat error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/synthesize")
@@ -267,7 +267,7 @@ async def voice_synthesize(
 
     except Exception as e:
         logger.error(f"Voice synthesis error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/phone-webhook")
@@ -321,7 +321,7 @@ Keep responses under 30 words for phone conversations."""
 
     except Exception as e:
         logger.error(f"Phone webhook error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 def set_dependencies(get_db_func, get_current_user_func):

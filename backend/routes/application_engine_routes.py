@@ -171,7 +171,7 @@ async def audit_application(
 
     except Exception as e:
         logger.exception(f"Application audit failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/process-transcript", response_model=Dict[str, Any])
@@ -209,7 +209,7 @@ async def process_transcript(
 
     except Exception as e:
         logger.exception(f"Transcript processing failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/process-and-audit", response_model=Dict[str, Any])
@@ -285,7 +285,7 @@ async def process_and_audit(
 
     except Exception as e:
         logger.exception(f"Process and audit failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/modules")
@@ -337,7 +337,7 @@ async def get_loan_audit_status(
 
     except Exception as e:
         logger.exception(f"Error fetching audit status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/module/{module_name}/audit")
@@ -378,7 +378,7 @@ async def audit_single_module(
         raise
     except Exception as e:
         logger.exception(f"Single module audit failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -421,4 +421,4 @@ async def extract_from_transcript(
 
     except Exception as e:
         logger.exception(f"Extraction failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

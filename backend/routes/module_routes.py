@@ -300,7 +300,7 @@ async def enable_module(
         )
         return result
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
 
 
 @router.post("/disable")
@@ -324,7 +324,7 @@ async def disable_module(
         result = ModuleService.disable_module(db, org_id, module_key)
         return result
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
 
 
 # Admin endpoints for managing modules across organizations
@@ -376,7 +376,7 @@ async def admin_enable_module(
         )
         return result
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
 
 
 # Public endpoint for module info (no auth required)
@@ -431,9 +431,9 @@ async def run_module_migration(
         else:
             raise HTTPException(status_code=500, detail="Migration failed")
     except ImportError as e:
-        raise HTTPException(status_code=500, detail=f"Migration import failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Migration import failed")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Migration failed")
 
 
 @router.get("/admin/check-users")
@@ -479,7 +479,7 @@ async def check_users_debug(
                 "org_1_modules": org_modules
             }
     except SQLAlchemyError as e:
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
 
 
 @router.get("/admin/debug")
@@ -613,7 +613,7 @@ async def debug_modules(
                 **results
             }
     except SQLAlchemyError as e:
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
 
 
 @router.post("/admin/enable-all")
@@ -668,7 +668,7 @@ async def enable_all_modules(
                     """), {"org_id": org_id, "module_key": module_key})
                     enabled.append(module_key)
                 except SQLAlchemyError as e:
-                    errors.append({"module": module_key, "error": str(e)})
+                    errors.append({"module": module_key, "error": "Internal server error"})
 
             conn.commit()
 
@@ -680,7 +680,7 @@ async def enable_all_modules(
             "message": f"All {len(enabled)} premium modules enabled for organization {org_id}"
         }
     except SQLAlchemyError as e:
-        raise HTTPException(status_code=500, detail=f"Failed to enable modules: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to enable modules")
 
 
 @router.get("/admin/check-integrations")
@@ -848,4 +848,4 @@ async def clear_demo_data(
             "message": f"Cleared {total_deleted} records from the CRM"
         }
     except SQLAlchemyError as e:
-        raise HTTPException(status_code=500, detail=f"Failed to clear demo data: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to clear demo data")

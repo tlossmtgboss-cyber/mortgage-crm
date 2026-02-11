@@ -1336,7 +1336,7 @@ async def process_weekly_tasks(
         raise HTTPException(status_code=500, detail="Weekly task scheduler not available")
     except Exception as e:
         logger.error(f"Error processing weekly tasks: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/weekly-tasks/status")
@@ -1483,7 +1483,7 @@ async def test_weekly_task_for_loan(
         raise HTTPException(status_code=500, detail="Weekly task scheduler not available")
     except Exception as e:
         logger.error(f"Error testing weekly task: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -1627,7 +1627,7 @@ async def get_lead_workflow_tasks(
         raise
     except Exception as e:
         logger.error(f"Error getting lead workflow tasks: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 def get_all_workflow_tasks_logic(db: Session, current_user, days_ahead: int = 14) -> list:

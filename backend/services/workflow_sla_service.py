@@ -145,7 +145,7 @@ class WorkflowSLAService:
         except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Enrollment failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def enroll_loan(
         self,
@@ -228,7 +228,7 @@ class WorkflowSLAService:
         except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Enrollment failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     # =========================================================================
     # WORKFLOW STATE MANAGEMENT
@@ -259,7 +259,7 @@ class WorkflowSLAService:
         except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Failed to pause workflow: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def resume_workflow(
         self,
@@ -288,7 +288,7 @@ class WorkflowSLAService:
         except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Failed to resume workflow: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def cancel_workflow(
         self,
@@ -323,7 +323,7 @@ class WorkflowSLAService:
         except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Failed to cancel workflow: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def complete_workflow(
         self,
@@ -352,7 +352,7 @@ class WorkflowSLAService:
         except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Failed to complete workflow: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     # =========================================================================
     # TASK COMPLETION & SIBLING CANCELLATION
@@ -425,7 +425,7 @@ class WorkflowSLAService:
         except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Failed to complete task: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def skip_task(
         self,
@@ -462,7 +462,7 @@ class WorkflowSLAService:
         except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Failed to skip task: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     # =========================================================================
     # WORKFLOW STATUS QUERIES

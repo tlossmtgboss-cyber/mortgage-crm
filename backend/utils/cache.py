@@ -408,7 +408,7 @@ class PerenniaCache:
             }
 
         except Exception as e:
-            return {"enabled": True, "error": str(e)}
+            return {"enabled": True, "error": "Internal server error"}
 
 
 # Global cache instance

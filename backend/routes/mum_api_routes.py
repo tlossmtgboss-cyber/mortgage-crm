@@ -90,7 +90,7 @@ async def setup_mum_database(
     except Exception as e:
         logger.error(f"MUM setup error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Setup failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Setup failed")
 
 
 @router.get("/clients")
@@ -281,7 +281,7 @@ async def get_mum_clients_portfolio(
         logger.error(f"Get MUM clients error: {e}")
         import traceback
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/metrics")
@@ -481,4 +481,4 @@ async def get_mum_metrics(
         logger.error(f"Get MUM metrics error: {e}")
         import traceback
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

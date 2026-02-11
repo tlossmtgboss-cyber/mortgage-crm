@@ -159,7 +159,7 @@ class AIAgentService:
             logger.error(f"AI Agent processing failed: {e}", exc_info=True)
             return {
                 "response": "I apologize, but I encountered an error. Please try again.",
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     async def process_message_stream(
@@ -300,7 +300,7 @@ class AIAgentService:
             logger.error(f"Streaming error: {e}", exc_info=True)
             yield {
                 "type": "error",
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     async def chat_streaming(
@@ -519,7 +519,7 @@ class AIAgentService:
             yield {
                 "event": "error",
                 "data": {
-                    "error": str(e),
+                    "error": "Internal server error",
                     "message": "An error occurred while processing your request."
                 }
             }
@@ -853,7 +853,7 @@ Format responses with markdown for clarity."""
             return result
         except Exception as e:
             logger.error(f"Tool execution error ({tool_name}): {e}")
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
     async def _log_interaction(self, message: str, result: Dict[str, Any]):
         """Log the AI interaction for analytics and debugging."""
@@ -970,7 +970,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
         except Exception as e:
             logger.error(f"Error in get_pipeline: {e}")
             db.rollback()
-            return {"error": str(e), "total_leads": 0, "total_loans": 0}
+            return {"error": "Internal server error", "total_leads": 0, "total_loans": 0}
 
     tools["get_pipeline"] = execute_get_pipeline
 
@@ -1075,7 +1075,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
         except Exception as e:
             logger.error(f"Error in search_leads: {e}")
             db.rollback()
-            return {"count": 0, "leads": [], "error": str(e)}
+            return {"count": 0, "leads": [], "error": "Internal server error"}
 
     tools["search_leads"] = execute_search_leads
 
@@ -1124,7 +1124,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
         except Exception as e:
             logger.error(f"Error in search_loans: {e}")
             db.rollback()
-            return {"count": 0, "loans": [], "error": str(e)}
+            return {"count": 0, "loans": [], "error": "Internal server error"}
 
     tools["search_loans"] = execute_search_loans
 
@@ -1184,7 +1184,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
         except Exception as e:
             logger.error(f"Error in create_task: {e}")
             db.rollback()
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     tools["create_task"] = execute_create_task
 
@@ -1224,7 +1224,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
         except Exception as e:
             logger.error(f"Error in get_pipeline_metrics: {e}")
             db.rollback()
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
     tools["get_pipeline_metrics"] = execute_get_pipeline_metrics
 
@@ -1269,7 +1269,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
         except Exception as e:
             logger.error(f"Error in get_rate_lock_advisory: {e}")
             db.rollback()
-            return {"error": str(e), "recommendation": "consult_manager"}
+            return {"error": "Internal server error", "recommendation": "consult_manager"}
 
     tools["get_rate_lock_advisory"] = execute_get_rate_lock_advisory
 
@@ -1400,7 +1400,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
         except Exception as e:
             logger.error(f"Error in get_daily_priorities: {e}")
             db.rollback()  # Roll back to allow subsequent queries
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
     tools["get_daily_priorities"] = execute_get_daily_priorities
 
@@ -1439,7 +1439,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             return insights
         except Exception as e:
             logger.error(f"Error in lead_status_insights: {e}")
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
     tools["lead_status_insights"] = execute_lead_status_insights
 
@@ -1558,7 +1558,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
         except Exception as e:
             logger.error(f"Error in get_leads_by_status: {e}")
             db.rollback()
-            return {"error": str(e), "leads": []}
+            return {"error": "Internal server error", "leads": []}
 
     tools["get_leads_by_status"] = execute_get_leads_by_status
 
@@ -1664,7 +1664,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
         except Exception as e:
             logger.error(f"Error in get_top_leads: {e}")
             db.rollback()
-            return {"error": str(e), "leads": []}
+            return {"error": "Internal server error", "leads": []}
 
     tools["get_top_leads"] = execute_get_top_leads
 
@@ -1781,7 +1781,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
         except Exception as e:
             logger.error(f"Error in get_stale_leads: {e}")
             db.rollback()
-            return {"error": str(e), "leads": []}
+            return {"error": "Internal server error", "leads": []}
 
     tools["get_stale_leads"] = execute_get_stale_leads
 
@@ -1842,7 +1842,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                 }
         except Exception as e:
             logger.error(f"Error in click_to_dial: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     tools["click_to_dial"] = execute_click_to_dial
     tools["make_call"] = execute_click_to_dial  # Alias for natural language
@@ -1913,7 +1913,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                 }
         except Exception as e:
             logger.error(f"Error in send_sms: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     tools["send_sms"] = execute_send_sms
     tools["send_text"] = execute_send_sms  # Alias for natural language
@@ -2049,7 +2049,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
         except Exception as e:
             db.rollback()
             logger.error(f"Error in bulk_lead_outreach: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
         finally:
             db.close()
 
@@ -2401,7 +2401,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
 
         except Exception as e:
             logger.error(f"Error in send_email: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     tools["send_email"] = execute_send_email
 
@@ -2425,7 +2425,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             return result
         except Exception as e:
             logger.error(f"Error in get_performance_by_period: {e}")
-            return {"status": "error", "error": str(e)}
+            return {"status": "error", "error": "Internal server error"}
 
     tools["get_performance_by_period"] = execute_get_performance_by_period
 
@@ -2441,7 +2441,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             return result
         except Exception as e:
             logger.error(f"Error in compare_periods: {e}")
-            return {"status": "error", "error": str(e)}
+            return {"status": "error", "error": "Internal server error"}
 
     tools["compare_periods"] = execute_compare_periods
 
@@ -2454,7 +2454,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             return result
         except Exception as e:
             logger.error(f"Error in get_data_availability: {e}")
-            return {"status": "error", "error": str(e)}
+            return {"status": "error", "error": "Internal server error"}
 
     tools["get_data_availability"] = execute_get_data_availability
 
@@ -2483,7 +2483,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             return result
         except Exception as e:
             logger.error(f"Error in get_emails_needing_response: {e}")
-            return {"status": "error", "error": str(e)}
+            return {"status": "error", "error": "Internal server error"}
 
     tools["get_emails_needing_response"] = execute_get_emails_needing_response
 
@@ -2509,7 +2509,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             return result
         except Exception as e:
             logger.error(f"Error in search_email_inbox: {e}")
-            return {"status": "error", "error": str(e)}
+            return {"status": "error", "error": "Internal server error"}
 
     tools["search_email_inbox"] = execute_search_email_inbox
 
@@ -2541,7 +2541,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             return result
         except Exception as e:
             logger.error(f"Error in create_referral_partner: {e}")
-            return {"status": "error", "error": str(e)}
+            return {"status": "error", "error": "Internal server error"}
 
     tools["create_referral_partner"] = execute_create_referral_partner
 

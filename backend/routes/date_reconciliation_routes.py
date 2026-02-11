@@ -95,7 +95,7 @@ async def get_pending_date_reconciliation_tasks(
         }
     except Exception as e:
         logger.error(f"Error getting pending date reconciliation tasks: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/all")
@@ -157,7 +157,7 @@ async def get_all_date_reconciliation_tasks(
         }
     except Exception as e:
         logger.error(f"Error getting date reconciliation tasks: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/resolve")
@@ -222,7 +222,7 @@ async def resolve_reconciliation_task(
     except Exception as e:
         logger.error(f"Error resolving reconciliation task: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/create-loan")
@@ -305,7 +305,7 @@ async def create_loan_from_reconciliation(
     except Exception as e:
         logger.error(f"Error creating loan from reconciliation: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/date-history/{loan_id}")
@@ -365,7 +365,7 @@ async def get_loan_date_update_history(
         raise
     except Exception as e:
         logger.error(f"Error getting date update history: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/date-mappings")
@@ -436,7 +436,7 @@ async def get_date_field_mappings(
 
     except Exception as e:
         logger.error(f"Error getting date field mappings: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/summary")
@@ -494,4 +494,4 @@ async def get_date_reconciliation_summary(
 
     except Exception as e:
         logger.error(f"Error getting date reconciliation summary: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

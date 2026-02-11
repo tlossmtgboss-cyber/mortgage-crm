@@ -471,7 +471,7 @@ async def trigger_manual_sync(
         results = sync_service.full_sync_from_fub(connection, limit=limit)
     except SQLAlchemyError as e:
         logger.exception(f"Manual FUB sync failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Sync failed")
 
     # Update connection
     connection.last_sync_at = datetime.now(timezone.utc)

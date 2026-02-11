@@ -144,7 +144,7 @@ async def trigger_contract_automation(
 
     except Exception as e:
         logger.error(f"Failed to trigger contract automation for loan {request.loan_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/add-realtor", response_model=AddRealtorResponse)
@@ -197,7 +197,7 @@ async def add_realtor_to_loan(
 
     except Exception as e:
         logger.error(f"Failed to add realtor to loan {request.loan_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/pending-tasks")
@@ -261,7 +261,7 @@ async def get_pending_realtor_tasks(
 
     except Exception as e:
         logger.error(f"Failed to get pending realtor tasks: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/loan/{loan_id}/portal-status")
@@ -396,7 +396,7 @@ async def get_loan_portal_status(
         raise
     except Exception as e:
         logger.error(f"Failed to get portal status for loan {loan_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/resend-invitation")
@@ -481,4 +481,4 @@ async def resend_portal_invitation(
         raise
     except Exception as e:
         logger.error(f"Failed to resend invitation for loan {loan_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

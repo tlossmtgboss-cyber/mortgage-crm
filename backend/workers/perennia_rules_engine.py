@@ -183,7 +183,7 @@ class ActionExecutor:
 
         except Exception as e:
             logger.error(f"Action execution failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def _auto_approve(self, context: Dict[str, Any], params: Dict[str, Any]) -> Dict[str, Any]:
         """Auto-approve a document."""
@@ -321,7 +321,7 @@ class ActionExecutor:
             }
 
         except requests.RequestException as e:
-            return {"success": False, "error": f"Webhook failed: {str(e)}"}
+            return {"success": False, "error": "Webhook failed"}
 
     def _update_field(self, context: Dict[str, Any], params: Dict[str, Any]) -> Dict[str, Any]:
         """Update a document field."""

@@ -122,7 +122,7 @@ async def get_gmail_auth_url(
         }
     except Exception as e:
         logger.error(f"Error generating Gmail auth URL: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/callback")
@@ -203,7 +203,7 @@ async def gmail_oauth_callback(
         raise
     except Exception as e:
         logger.error(f"Error in Gmail callback: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/status")
@@ -243,7 +243,7 @@ async def disconnect_gmail(
         return {"success": True, "message": "Gmail disconnected"}
     except Exception as e:
         logger.error(f"Error disconnecting Gmail: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/emails")
@@ -290,7 +290,7 @@ async def list_emails(
         raise
     except Exception as e:
         logger.error(f"Error listing emails: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/emails/{message_id}")
@@ -317,7 +317,7 @@ async def get_email(
         raise
     except Exception as e:
         logger.error(f"Error getting email: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/send")
@@ -406,7 +406,7 @@ async def send_email(
         raise
     except Exception as e:
         logger.error(f"Error sending email: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/contacts")
@@ -438,7 +438,7 @@ async def list_contacts(
         raise
     except Exception as e:
         logger.error(f"Error listing contacts: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/sync")
@@ -548,7 +548,7 @@ async def sync_emails(
         raise
     except Exception as e:
         logger.error(f"Error syncing emails: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/cron-sync")
@@ -744,7 +744,7 @@ async def cron_sync_all_gmail(
                     "user_id": user_id,
                     "email": user_email,
                     "status": "error",
-                    "error": str(e)
+                    "error": "Internal server error"
                 })
                 db.rollback()
                 continue
@@ -761,4 +761,4 @@ async def cron_sync_all_gmail(
 
     except Exception as e:
         logger.error(f"Cron Gmail sync error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

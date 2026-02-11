@@ -120,7 +120,7 @@ async def scan_for_duplicates(
         }
     except Exception as e:
         logger.error(f"Error scanning for duplicates: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/api/v1/duplicates/create-tasks")
@@ -204,7 +204,7 @@ async def test_duplicate_task_creation(db: Session = Depends(get_db)):
         error_traceback = traceback.format_exc()
         return {
             "status": "error",
-            "error": str(e),
+            "error": "Internal server error",
             "traceback": error_traceback
         }
 
@@ -237,7 +237,7 @@ async def check_duplicate_tasks(db: Session = Depends(get_db)):
             ]
         }
     except Exception as e:
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": "Internal server error"}
 
 
 @router.delete("/admin/clear-duplicate-tasks")
@@ -259,7 +259,7 @@ async def clear_duplicate_tasks(db: Session = Depends(get_db)):
         }
     except Exception as e:
         db.rollback()
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": "Internal server error"}
 
 
 @router.get("/admin/check-user-permissions/{user_id}")
@@ -388,7 +388,7 @@ async def check_single_record_duplicates(
         }
     except Exception as e:
         logger.error(f"Error checking duplicates: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/admin/clear-all-tasks")
@@ -428,7 +428,7 @@ async def clear_all_tasks_endpoint(request: dict, db: Session = Depends(get_db))
     except Exception as e:
         db.rollback()
         logger.error(f"Error clearing tasks: {e}")
-        raise HTTPException(status_code=500, detail=f"Error clearing tasks: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error clearing tasks")
 
 
 @router.post("/api/v1/data/clear-all-demo-data")
@@ -686,7 +686,7 @@ async def clear_old_leads(
     except Exception as e:
         db.rollback()
         logger.error(f"Error clearing old leads: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/api/v1/admin/seed-demo-people")
@@ -859,7 +859,7 @@ async def seed_demo_people(
         db.rollback()
         logger.error(f"Error seeding demo data: {e}")
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Error seeding data: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error seeding data")
 
 
 @router.post("/api/v1/admin/assign-demo-data")
@@ -898,7 +898,7 @@ async def assign_demo_data_to_user(
     except Exception as e:
         db.rollback()
         logger.error(f"Error assigning demo data: {e}")
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error")
 
 
 @router.post("/api/v1/admin/fix-lead-stages")
@@ -957,7 +957,7 @@ async def fix_lead_stages(
     except Exception as e:
         db.rollback()
         logger.error(f"Error fixing lead stages: {e}")
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error")
 
 
 @router.post("/api/v1/admin/fix-loan-stages")
@@ -993,7 +993,7 @@ async def fix_loan_stages(
     except Exception as e:
         db.rollback()
         logger.error(f"Error fixing loan stages: {e}")
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error")
 
 
 @router.post("/api/v1/admin/update-permission-roles")
@@ -1085,7 +1085,7 @@ async def update_permission_roles(
     except Exception as e:
         db.rollback()
         logger.error(f"Error updating permission roles: {e}")
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error")
 
 
 @router.post("/admin/initialize-ai-system")
@@ -1121,7 +1121,7 @@ async def initialize_ai_system_endpoint(request: dict):
     except Exception as e:
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -1158,7 +1158,7 @@ async def run_mission_control_migration_endpoint(request: dict):
     except Exception as e:
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -1197,7 +1197,7 @@ async def run_phase1_migration_endpoint(request: dict):
     except Exception as e:
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -1254,7 +1254,7 @@ async def run_employee_permission_migration_endpoint(request: dict):
     except Exception as e:
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -1292,7 +1292,7 @@ async def run_vapi_migration_endpoint(request: dict):
     except Exception as e:
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -1346,7 +1346,7 @@ async def fix_vapi_metadata_column(request: dict, db: Session = Depends(get_db))
         db.rollback()
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -1465,7 +1465,7 @@ async def run_estimate_parser_migration(request: dict, db: Session = Depends(get
         db.rollback()
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -1502,7 +1502,7 @@ async def setup_demo_impersonation(request: dict, db: Session = Depends(get_db))
     except Exception as e:
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -1542,7 +1542,7 @@ async def verify_phase1_tables(db: Session = Depends(get_db)):
     except Exception as e:
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -1579,7 +1579,7 @@ async def initialize_ai_only_endpoint(request: dict):
     except Exception as e:
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -1659,7 +1659,7 @@ async def get_ai_health(
         }
     except Exception as e:
         logger.error(f"Error getting AI health: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/api/v1/mission-control/metrics")
@@ -1729,7 +1729,7 @@ async def get_ai_metrics(
         }
     except Exception as e:
         logger.error(f"Error getting AI metrics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/api/v1/mission-control/recent-actions")
@@ -1773,7 +1773,7 @@ async def get_recent_actions(
         }
     except Exception as e:
         logger.error(f"Error getting recent actions: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/api/v1/mission-control/log-action")
@@ -1827,7 +1827,7 @@ async def log_ai_action(
     except Exception as e:
         db.rollback()
         logger.error(f"Error logging AI action: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/api/v1/mission-control/update-action")
@@ -1870,7 +1870,7 @@ async def update_ai_action(
     except Exception as e:
         db.rollback()
         logger.error(f"Error updating AI action: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/api/v1/mission-control/insights")
@@ -1910,4 +1910,4 @@ async def get_ai_insights(
         }
     except Exception as e:
         logger.error(f"Error getting AI insights: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

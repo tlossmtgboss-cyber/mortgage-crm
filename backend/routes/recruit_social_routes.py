@@ -108,7 +108,7 @@ async def facebook_oauth_callback(
         }
     except SQLAlchemyError as e:
         logger.error(f"Facebook OAuth error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/oauth/linkedin/callback")
@@ -147,7 +147,7 @@ async def linkedin_oauth_callback(
         }
     except SQLAlchemyError as e:
         logger.error(f"LinkedIn OAuth error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -226,7 +226,7 @@ async def create_social_post(
         return result
     except SQLAlchemyError as e:
         logger.error(f"Error creating social post: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/posts")
@@ -256,7 +256,7 @@ async def get_social_posts(
         return {"posts": posts, "count": len(posts)}
     except SQLAlchemyError as e:
         logger.error(f"Error getting social posts: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/posts/{post_id}/analytics")
@@ -291,7 +291,7 @@ async def get_post_analytics(
         raise
     except Exception as e:
         logger.error(f"Error getting post analytics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -330,7 +330,7 @@ async def enrich_from_linkedin(
         }
     except SQLAlchemyError as e:
         logger.error(f"Error enriching from LinkedIn: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/candidates/{candidate_id}/linkedin-posts")
@@ -385,7 +385,7 @@ async def get_candidate_linkedin_posts(
         raise
     except Exception as e:
         logger.error(f"Error getting candidate LinkedIn posts: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -429,7 +429,7 @@ async def get_social_connections(db: Session = Depends(get_db)):
         return connections
     except Exception as e:
         logger.error(f"Error getting social connections: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/page-info/facebook")
@@ -444,7 +444,7 @@ async def get_facebook_page_info():
         return page_info or {"error": "Could not fetch page info"}
     except Exception as e:
         logger.error(f"Error getting Facebook page info: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/profile/linkedin")
@@ -462,7 +462,7 @@ async def get_linkedin_profile():
         return {"error": "Could not fetch LinkedIn profile"}
     except Exception as e:
         logger.error(f"Error getting LinkedIn profile: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -532,7 +532,7 @@ async def run_social_migration(
         return {"status": "success", "message": "Social media tables created"}
     except SQLAlchemyError as e:
         logger.error(f"Migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -605,7 +605,7 @@ async def seed_sample_posts(
         return {"status": "success", "message": f"Seeded {len(sample_posts)} sample posts"}
     except SQLAlchemyError as e:
         logger.error(f"Error seeding posts: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/public/feed")
@@ -643,4 +643,4 @@ async def get_public_social_feed(
         return {"posts": posts, "count": len(posts)}
     except Exception as e:
         logger.error(f"Error getting public feed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

@@ -202,7 +202,7 @@ class VidyardService:
                 return {"avatars": [], "total": 0, "error": f"HTTP {response.status_code}"}
         except Exception as e:
             logger.exception("Failed to list Vidyard avatars")
-            return {"avatars": [], "total": 0, "error": str(e)}
+            return {"avatars": [], "total": 0, "error": "Internal server error"}
 
     async def _get_stock_avatars(self) -> Dict[str, Any]:
         """Get list of stock avatars (free tier)."""
@@ -298,7 +298,7 @@ class VidyardService:
                 return {"error": f"HTTP {response.status_code}", "message": error_msg}
         except Exception as e:
             logger.exception("Failed to create Vidyard avatar")
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
     async def delete_avatar(self, avatar_id: str) -> bool:
         """Delete a custom avatar."""
@@ -398,7 +398,7 @@ class VidyardService:
                 return {"error": f"HTTP {response.status_code}", "message": error_msg}
         except Exception as e:
             logger.exception("Failed to generate Vidyard video")
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
     async def get_video_status(self, job_id: str) -> Dict[str, Any]:
         """
@@ -437,7 +437,7 @@ class VidyardService:
                 return {"error": f"HTTP {response.status_code}"}
         except Exception as e:
             logger.exception(f"Failed to get video status {job_id}")
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
     async def list_videos(
         self,
@@ -484,7 +484,7 @@ class VidyardService:
             return {"videos": [], "total": 0}
         except Exception as e:
             logger.exception("Failed to list Vidyard videos")
-            return {"videos": [], "total": 0, "error": str(e)}
+            return {"videos": [], "total": 0, "error": "Internal server error"}
 
     # =========================================================================
     # Standard Video API (Dashboard API)
@@ -539,7 +539,7 @@ class VidyardService:
                 return {"error": f"HTTP {response.status_code}", "message": response.text}
         except Exception as e:
             logger.exception("Failed to upload video")
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
     async def get_video(self, video_id: str) -> Optional[Dict[str, Any]]:
         """Get video details by ID."""

@@ -164,7 +164,7 @@ class SEOKeywordService:
         except Exception as e:
             self.db.rollback()
             logger.error(f"Failed to add keyword: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def get_keyword(self, keyword_id: str) -> Optional[SEOKeyword]:
         """Get a keyword by ID."""

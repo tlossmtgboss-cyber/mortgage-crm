@@ -148,7 +148,7 @@ async def create_experiment(
         import traceback
         error_detail = f"{str(e)}\n{traceback.format_exc()}"
         logger.error(f"Error creating experiment: {error_detail}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/{experiment_id}/start")
@@ -170,7 +170,7 @@ async def start_experiment(
         raise
     except Exception as e:
         logger.error(f"Error starting experiment: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/{experiment_id}/stop")
@@ -193,7 +193,7 @@ async def stop_experiment(
         raise
     except Exception as e:
         logger.error(f"Error stopping experiment: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/get-variant")
@@ -229,7 +229,7 @@ async def get_variant(
 
     except Exception as e:
         logger.error(f"Error getting variant: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/record-result")
@@ -263,7 +263,7 @@ async def record_result(
         raise
     except Exception as e:
         logger.error(f"Error recording result: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/{experiment_id}/analyze")
@@ -301,7 +301,7 @@ async def analyze_experiment(
         raise
     except Exception as e:
         logger.error(f"Error analyzing experiment: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/{experiment_id}/summary")
@@ -325,7 +325,7 @@ async def get_experiment_summary(
         raise
     except Exception as e:
         logger.error(f"Error getting experiment summary: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/")
@@ -376,7 +376,7 @@ async def list_experiments(
 
     except Exception as e:
         logger.error(f"Error listing experiments: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/{experiment_id}")
@@ -429,7 +429,7 @@ async def get_experiment(
         raise
     except Exception as e:
         logger.error(f"Error getting experiment: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/{experiment_id}")
@@ -462,4 +462,4 @@ async def delete_experiment(
     except Exception as e:
         logger.error(f"Error deleting experiment: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

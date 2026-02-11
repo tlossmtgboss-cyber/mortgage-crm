@@ -293,7 +293,7 @@ class AIUsageTracker:
                 feature=feature,
                 session_id=session_id,
                 latency_ms=latency_ms,
-                metadata={"error": str(e), "status": "failed"}
+                metadata={"error": "Internal server error", "status": "failed"}
             )
 
             raise
@@ -375,7 +375,7 @@ class AIUsageTracker:
                 feature=feature,
                 session_id=session_id,
                 latency_ms=latency_ms,
-                metadata={"error": str(e), "status": "failed"}
+                metadata={"error": "Internal server error", "status": "failed"}
             )
 
             raise

@@ -164,7 +164,7 @@ def create_feedback(
     except SQLAlchemyError as e:
         logger.error(f"Error creating AI feedback: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/", response_model=List[AIFeedbackResponse])
@@ -235,7 +235,7 @@ def get_feedback_logs(
 
     except Exception as e:
         logger.error(f"Error fetching AI feedback logs: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/stats", response_model=AIFeedbackStats)
@@ -303,7 +303,7 @@ def get_feedback_stats(
 
     except Exception as e:
         logger.error(f"Error fetching AI feedback stats: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.patch("/{feedback_id}", response_model=dict)
@@ -348,7 +348,7 @@ def update_feedback_status(
     except SQLAlchemyError as e:
         logger.error(f"Error updating AI feedback: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/{feedback_id}")
@@ -381,7 +381,7 @@ def delete_feedback(
     except SQLAlchemyError as e:
         logger.error(f"Error deleting AI feedback: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================

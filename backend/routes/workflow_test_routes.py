@@ -176,7 +176,7 @@ async def test_workflow_system(db: Session = Depends(get_db)):
     except Exception as e:
         return {
             "status": "error",
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -284,7 +284,7 @@ async def get_workflow_status(db: Session = Depends(get_db)):
         return {
             "scheduler_running": scheduler.running if scheduler and hasattr(scheduler, 'running') else False,
             "recent_executions": [],
-            "error": str(e),
+            "error": "Internal server error",
             "available_statuses": [s.value for s in LeadStage] if 'LeadStage' in dir() else []
         }
 
@@ -668,7 +668,7 @@ async def create_lead_condition(lead_id: int, condition: ConditionCreate, db: Se
     except Exception as e:
         db.rollback()
         logger.error(f"Error creating condition: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create condition: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create condition")
 
 
 @router.patch("/leads/{lead_id}/conditions/{condition_id}")
@@ -728,7 +728,7 @@ async def update_lead_condition(lead_id: int, condition_id: int, condition_updat
     except Exception as e:
         db.rollback()
         logger.error(f"Error updating condition: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to update condition: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to update condition")
 
 
 @router.delete("/leads/{lead_id}/conditions/{condition_id}")
@@ -757,7 +757,7 @@ async def delete_lead_condition(lead_id: int, condition_id: int, db: Session = D
     except Exception as e:
         db.rollback()
         logger.error(f"Error deleting condition: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to delete condition: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to delete condition")
 
 
 @router.get("/leads/{lead_id}/team-assignments")
@@ -826,7 +826,7 @@ async def get_lead_team_assignments(lead_id: int, db: Session = Depends(get_db))
         }
     except Exception as e:
         logger.error(f"Error getting lead team assignments: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get team assignments: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get team assignments")
 
 
 @router.get("/loans/{loan_id}/stage-history")
@@ -1541,7 +1541,7 @@ async def process_inbound_email(
         return result
     except Exception as e:
         logger.error(f"Error processing document intake: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to process email: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to process email")
 
 
 @router.get("/document-intake/pending")
@@ -1739,11 +1739,11 @@ async def classify_attachment(
         )
         return result
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
     except Exception as e:
         logger.error(f"Error classifying attachment: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Classification failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Classification failed")
 
 
 @router.post("/document-intake/attachments/{attachment_id}/discard")
@@ -1769,11 +1769,11 @@ async def discard_attachment(
         )
         return result
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
     except Exception as e:
         logger.error(f"Error discarding attachment: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Discard failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Discard failed")
 
 
 @router.post("/document-intake/tasks/{task_id}/complete")
@@ -1794,11 +1794,11 @@ async def complete_classification_task(task_id: int, db: Session = Depends(get_d
         )
         return result
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
     except Exception as e:
         logger.error(f"Error completing task: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to complete task: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to complete task")
 
 
 @router.get("/document-intake/doc-types")

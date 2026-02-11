@@ -230,4 +230,4 @@ def get_pool_status():
             "status": "healthy" if pool.checkedout() < (pool.size() + pool._max_overflow) else "saturated"
         }
     except Exception as e:
-        return {"error": str(e), "status": "unknown"}
+        return {"error": "Internal server error", "status": "unknown"}

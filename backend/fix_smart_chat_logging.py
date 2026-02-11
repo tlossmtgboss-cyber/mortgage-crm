@@ -116,7 +116,7 @@ async def smart_chat_with_memory(
                     action_id=action_id,
                     outcome="failure",
                     impact_score=0.0,
-                    metadata={"error": str(e)}
+                    metadata={"error": "Internal server error"}
                 )
             except Exception:
                 pass
@@ -124,7 +124,7 @@ async def smart_chat_with_memory(
         return {
             "success": False,
             "response": "I apologize, but I'm having trouble right now. Please try again.",
-            "error": str(e)
+            "error": "Internal server error"
         }
 '''
 

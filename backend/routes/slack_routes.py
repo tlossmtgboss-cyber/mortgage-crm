@@ -263,7 +263,7 @@ async def slack_status(
         return success_response({
             "connected": False,
             "enabled": slack_client.enabled,
-            "error": str(e)
+            "error": "Internal server error"
         })
 
 
@@ -292,7 +292,7 @@ async def disconnect_slack(
     except SQLAlchemyError as e:
         logger.error(f"Error disconnecting Slack: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # Slack API Endpoints

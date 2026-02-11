@@ -397,7 +397,7 @@ DO NOT just say "I recommend reaching out to your loan officer" - always include
                 "text": "Thank you for your message. Let me look into that and get back to you shortly.",
                 "type": "error_fallback",
                 "ai_generated": False,
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     def generate_email_response_sync(
@@ -490,7 +490,7 @@ DO NOT just say "I recommend reaching out to your loan officer" - always include
             return {
                 "text": "Thank you for your message. Let me look into that and get back to you shortly.",
                 "ai_generated": False,
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     def _build_email_system_prompt(
@@ -671,7 +671,7 @@ Only include fields that are explicitly mentioned. Return valid JSON only."""
             return {"error": "Failed to parse analysis", "ai_analyzed": False}
         except Exception as e:
             logger.error(f"OpenAI analysis failed: {e}")
-            return {"error": str(e), "ai_analyzed": False}
+            return {"error": "Internal server error", "ai_analyzed": False}
 
 
 # Global instance

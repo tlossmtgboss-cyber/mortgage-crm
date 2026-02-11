@@ -176,7 +176,7 @@ async def handle_stripe_webhook(
         mark_event_processed(db, stripe_event, error=str(e))
         db.commit()
         # Return 200 to prevent Stripe retries for processing errors
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": "Internal server error"}
 
 
 # =============================================================================

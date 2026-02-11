@@ -281,7 +281,7 @@ class ClickToCallService:
 
             return {
                 "success": False,
-                "error": str(e),
+                "error": "Internal server error",
                 "status": CallStatus.FAILED.value
             }
 

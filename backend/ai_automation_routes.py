@@ -202,7 +202,7 @@ async def get_ai_authorizations(
         return {"authorizations": authorizations}
     except Exception as e:
         logger.error(f"Error getting authorizations: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/authorizations/{authorization_id}/revoke")
@@ -1157,4 +1157,4 @@ Write only the bio text, no headers or labels."""
 
     except Exception as e:
         logger.error(f"Error generating bio: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to generate bio: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to generate bio")

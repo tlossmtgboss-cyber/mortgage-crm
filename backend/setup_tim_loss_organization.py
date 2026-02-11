@@ -267,7 +267,7 @@ def setup_tim_loss_organization():
         print(f"\nERROR: {e}")
         import traceback
         traceback.print_exc()
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
 
     finally:
         db.close()

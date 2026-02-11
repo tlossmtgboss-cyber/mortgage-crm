@@ -355,7 +355,7 @@ class QueryExecutor:
                 pass
             return {
                 "success": False,
-                "error": str(e),
+                "error": "Internal server error",
                 "query_type": query_type
             }
 

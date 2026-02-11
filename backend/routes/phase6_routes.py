@@ -74,7 +74,7 @@ async def create_workflow(workflow: WorkflowCreate):
         }
     except Exception as e:
         logger.error(f"Failed to create workflow: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @workflow_router.post("/{workflow_id}/steps")
@@ -106,12 +106,12 @@ async def add_workflow_step(workflow_id: str, step: WorkflowStepCreate):
 
         return {"success": True, "step_id": step.step_id}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to add step: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @workflow_router.post("/{workflow_id}/publish")
@@ -130,7 +130,7 @@ async def publish_workflow(workflow_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to publish workflow: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @workflow_router.post("/{workflow_id}/start")
@@ -165,7 +165,7 @@ async def start_workflow(workflow_id: str, request: WorkflowStartRequest):
         raise
     except Exception as e:
         logger.error(f"Failed to start workflow: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @workflow_router.get("/instances/{instance_id}")
@@ -194,7 +194,7 @@ async def get_workflow_instance(instance_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to get instance: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @workflow_router.post("/instances/{instance_id}/pause")
@@ -213,7 +213,7 @@ async def pause_workflow_instance(instance_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to pause instance: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @workflow_router.post("/instances/{instance_id}/resume")
@@ -232,7 +232,7 @@ async def resume_workflow_instance(instance_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to resume instance: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @workflow_router.get("/{workflow_id}/stats")
@@ -245,7 +245,7 @@ async def get_workflow_stats(workflow_id: str):
         return service.get_workflow_stats(workflow_id)
     except Exception as e:
         logger.error(f"Failed to get stats: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -297,7 +297,7 @@ async def predict_conversion(request: PredictionRequest):
         }
     except Exception as e:
         logger.error(f"Failed to predict conversion: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @predictive_router.post("/churn")
@@ -324,7 +324,7 @@ async def predict_churn(request: PredictionRequest):
         }
     except Exception as e:
         logger.error(f"Failed to predict churn: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @predictive_router.post("/contact-time")
@@ -349,7 +349,7 @@ async def predict_contact_time(request: PredictionRequest):
         }
     except Exception as e:
         logger.error(f"Failed to predict contact time: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @predictive_router.post("/deal-velocity")
@@ -375,7 +375,7 @@ async def predict_deal_velocity(request: PredictionRequest):
         }
     except Exception as e:
         logger.error(f"Failed to predict velocity: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @predictive_router.post("/loan-approval")
@@ -402,7 +402,7 @@ async def predict_loan_approval(request: PredictionRequest):
         }
     except Exception as e:
         logger.error(f"Failed to predict approval: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @predictive_router.post("/recommendations")
@@ -435,7 +435,7 @@ async def get_recommendations(request: RecommendationRequest):
         }
     except Exception as e:
         logger.error(f"Failed to get recommendations: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @predictive_router.post("/alerts/generate")
@@ -466,7 +466,7 @@ async def generate_proactive_alerts(request: AlertRequest):
         }
     except Exception as e:
         logger.error(f"Failed to generate alerts: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @predictive_router.get("/alerts/{user_id}")
@@ -493,7 +493,7 @@ async def get_alerts(user_id: int):
         }
     except Exception as e:
         logger.error(f"Failed to get alerts: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -562,10 +562,10 @@ async def register_agent(agent: AgentRegister):
             }
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
     except Exception as e:
         logger.error(f"Failed to register agent: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @agent_coordination_router.put("/{agent_id}/status")
@@ -585,12 +585,12 @@ async def update_agent_status(agent_id: str, status: str):
 
         return {"success": True, "agent_id": agent_id, "status": status}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to update status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @agent_coordination_router.post("/tasks")
@@ -632,7 +632,7 @@ async def submit_task(task: TaskSubmit):
         }
     except Exception as e:
         logger.error(f"Failed to submit task: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @agent_coordination_router.get("/tasks/{task_id}")
@@ -660,7 +660,7 @@ async def get_task(task_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to get task: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @agent_coordination_router.post("/messages")
@@ -687,10 +687,10 @@ async def send_agent_message(message: AgentMessage):
             "message_id": result.id
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
     except Exception as e:
         logger.error(f"Failed to send message: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @agent_coordination_router.post("/collaborations")
@@ -718,7 +718,7 @@ async def start_collaboration(collab: CollaborationStart):
         }
     except Exception as e:
         logger.error(f"Failed to start collaboration: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @agent_coordination_router.get("/status")
@@ -731,7 +731,7 @@ async def get_system_status():
         return service.get_system_status()
     except Exception as e:
         logger.error(f"Failed to get status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @agent_coordination_router.get("/performance")
@@ -744,7 +744,7 @@ async def get_all_agent_performance():
         return {"agents": service.get_all_agents_summary()}
     except Exception as e:
         logger.error(f"Failed to get performance: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -811,10 +811,10 @@ async def register_component(component: ComponentRegister):
             "component_id": component.component_id
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
     except Exception as e:
         logger.error(f"Failed to register component: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @healing_router.get("/health")
@@ -827,7 +827,7 @@ async def get_system_health():
         return service.get_system_health()
     except Exception as e:
         logger.error(f"Failed to get health: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @healing_router.post("/health/check")
@@ -851,7 +851,7 @@ async def run_health_check(component_id: Optional[str] = None):
         }
     except Exception as e:
         logger.error(f"Failed to run health check: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @healing_router.post("/errors/report")
@@ -883,10 +883,10 @@ async def report_error(error: ErrorReport):
             }
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
     except Exception as e:
         logger.error(f"Failed to report error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @healing_router.get("/incidents")
@@ -915,7 +915,7 @@ async def get_active_incidents():
         }
     except Exception as e:
         logger.error(f"Failed to get incidents: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @healing_router.get("/incidents/{incident_id}")
@@ -951,7 +951,7 @@ async def get_incident(incident_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to get incident: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @healing_router.post("/incidents/{incident_id}/acknowledge")
@@ -970,7 +970,7 @@ async def acknowledge_incident(incident_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to acknowledge incident: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @healing_router.post("/incidents/{incident_id}/resolve")
@@ -994,7 +994,7 @@ async def resolve_incident(incident_id: str, resolution: IncidentResolve):
         raise
     except Exception as e:
         logger.error(f"Failed to resolve incident: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @healing_router.get("/circuit-breakers/{component_id}")
@@ -1013,7 +1013,7 @@ async def get_circuit_breaker(component_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to get circuit breaker: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @healing_router.post("/circuit-breakers/{component_id}/reset")
@@ -1032,7 +1032,7 @@ async def reset_circuit_breaker(component_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to reset circuit breaker: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @healing_router.get("/playbooks")
@@ -1045,7 +1045,7 @@ async def list_playbooks():
         return {"playbooks": service.list_playbooks()}
     except Exception as e:
         logger.error(f"Failed to list playbooks: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @healing_router.post("/playbooks")
@@ -1074,10 +1074,10 @@ async def create_playbook(playbook: PlaybookCreate):
 
         return {"success": True, "playbook_id": playbook.id}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
     except Exception as e:
         logger.error(f"Failed to create playbook: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @healing_router.get("/metrics")
@@ -1090,7 +1090,7 @@ async def get_healing_metrics():
         return service.get_healing_metrics()
     except Exception as e:
         logger.error(f"Failed to get metrics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @healing_router.get("/summary")
@@ -1103,4 +1103,4 @@ async def get_incident_summary(days: int = Query(default=7, le=30)):
         return service.get_incident_summary(days)
     except Exception as e:
         logger.error(f"Failed to get summary: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

@@ -226,7 +226,7 @@ class CallSummaryService:
                 await self.generate_summary(recording_id)
                 processed += 1
             except Exception as e:
-                errors.append({"recording_id": recording_id, "error": str(e)})
+                errors.append({"recording_id": recording_id, "error": "Internal server error"})
                 logger.error(f"Failed to generate summary for {recording_id}: {e}")
 
         return {

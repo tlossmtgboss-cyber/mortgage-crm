@@ -153,7 +153,7 @@ async def create_lead(
     except Exception as e:
         logger.error(f"Error creating lead: {e}", exc_info=True)
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to create lead: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create lead")
 
 
 @router.get("/")

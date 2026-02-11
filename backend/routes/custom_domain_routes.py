@@ -509,5 +509,5 @@ async def check_origin(origin: str):
         return {
             "origin": origin,
             "is_allowed": False,
-            "error": str(e)
+            "error": "Internal server error"
         }

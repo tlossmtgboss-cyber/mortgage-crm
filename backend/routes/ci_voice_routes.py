@@ -305,7 +305,7 @@ async def create_recording(
 
     except Exception as e:
         logger.error(f"Error creating recording: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -461,7 +461,7 @@ async def quick_upload_recording(
         raise
     except Exception as e:
         logger.error(f"[QuickUpload] Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 async def transcribe_audio_file(audio_path: str) -> Optional[str]:
@@ -569,7 +569,7 @@ async def get_recording(
         raise
     except Exception as e:
         logger.error(f"Error getting recording: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/recordings")
@@ -653,7 +653,7 @@ async def list_recordings(
             logger.warning(f"CI recordings table not found, returning empty list: {str(e)}")
             return {"recordings": [], "total": 0, "limit": limit, "offset": offset}
         logger.error(f"Error listing recordings: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/recordings/{recording_id}/upload")
@@ -711,7 +711,7 @@ async def upload_audio(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error uploading audio: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -779,7 +779,7 @@ async def transcribe_recording(
         raise
     except Exception as e:
         logger.error(f"Error starting transcription: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 async def process_transcription(
@@ -937,7 +937,7 @@ async def get_transcription(
         raise
     except Exception as e:
         logger.error(f"Error getting transcription: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -1023,7 +1023,7 @@ async def analyze_recording(
         raise
     except Exception as e:
         logger.error(f"Error starting analysis: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 async def process_analysis(
@@ -1127,7 +1127,7 @@ async def process_analysis(
                 UPDATE ci_call_analyses
                 SET status = 'failed', error_message = :error, updated_at = NOW()
                 WHERE id = :id
-            """), {"id": analysis_id, "error": str(e)})
+            """), {"id": analysis_id, "error": "Internal server error"})
             db.commit()
             db.close()
         except Exception:
@@ -1173,7 +1173,7 @@ async def get_analysis(
         raise
     except Exception as e:
         logger.error(f"Error getting analysis: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -1318,7 +1318,7 @@ async def create_qa_scorecard(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error creating QA scorecard: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/recordings/{recording_id}/qa-scorecards")
@@ -1357,7 +1357,7 @@ async def get_qa_scorecards(
 
     except Exception as e:
         logger.error(f"Error getting QA scorecards: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/qa-rubrics")
@@ -1400,7 +1400,7 @@ async def list_qa_rubrics(
             logger.warning(f"CI QA rubrics table not found, returning empty list: {str(e)}")
             return {"rubrics": []}
         logger.error(f"Error listing rubrics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -1465,7 +1465,7 @@ async def create_realtime_session(
 
     except SQLAlchemyError as e:
         logger.error(f"Error creating realtime session: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.websocket("/realtime/sessions/{session_id}/ws")
@@ -1603,7 +1603,7 @@ async def end_realtime_session(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error ending session: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -1672,7 +1672,7 @@ async def create_coaching_clip(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error creating clip: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/coaching/clips")
@@ -1728,7 +1728,7 @@ async def list_coaching_clips(
 
     except Exception as e:
         logger.error(f"Error listing clips: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/coaching/assignments", response_model=CoachingAssignmentResponse)
@@ -1786,7 +1786,7 @@ async def create_coaching_assignment(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error creating assignment: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/coaching/assignments")
@@ -1840,7 +1840,7 @@ async def list_coaching_assignments(
 
     except Exception as e:
         logger.error(f"Error listing assignments: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.patch("/coaching/assignments/{assignment_id}/complete")
@@ -1865,7 +1865,7 @@ async def complete_coaching_assignment(
 
     except SQLAlchemyError as e:
         logger.error(f"Error completing assignment: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -1975,7 +1975,7 @@ async def get_team_dashboard(
 
     except Exception as e:
         logger.error(f"Error getting team dashboard: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/dashboard/agent/{agent_id}")
@@ -2092,7 +2092,7 @@ async def get_agent_dashboard(
 
     except Exception as e:
         logger.error(f"Error getting agent dashboard: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/dashboard/compliance")
@@ -2170,7 +2170,7 @@ async def get_compliance_dashboard(
 
     except Exception as e:
         logger.error(f"Error getting compliance dashboard: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -2262,7 +2262,7 @@ async def export_recordings(
 
     except Exception as e:
         logger.error(f"Error exporting recordings: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -2303,7 +2303,7 @@ async def diagnostic_rubrics(db: Session = Depends(get_db)):
     except SQLAlchemyError as e:
         return {
             "status": "error",
-            "error": str(e),
+            "error": "Internal server error",
             "rubrics_count": 0
         }
 
@@ -2340,7 +2340,7 @@ async def diagnostic_admin_user(db: Session = Depends(get_db)):
     except Exception as e:
         return {
             "status": "error",
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -2420,10 +2420,10 @@ async def generate_call_summary(
         )
 
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail="Not found")
     except Exception as e:
         logger.error(f"Error generating summary: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/recordings/{recording_id}/summary")
@@ -2448,7 +2448,7 @@ async def get_call_summary(
         raise
     except Exception as e:
         logger.error(f"Error getting summary: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/summaries/recent")
@@ -2481,7 +2481,7 @@ async def get_recent_summaries(
 
     except Exception as e:
         logger.error(f"Error getting recent summaries: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/summaries/stats")
@@ -2506,7 +2506,7 @@ async def get_summary_statistics(
 
     except Exception as e:
         logger.error(f"Error getting summary stats: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/summaries/process-pending")
@@ -2533,7 +2533,7 @@ async def process_pending_summaries(
 
     except Exception as e:
         logger.error(f"Error processing pending summaries: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/summaries/feed")
@@ -2615,4 +2615,4 @@ async def get_summary_feed(
 
     except Exception as e:
         logger.error(f"Error getting summary feed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

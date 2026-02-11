@@ -490,7 +490,7 @@ async def initiate_amd_outbound_call(
             db.commit()
         except Exception as db_error:
             logger.error(f"Failed to update call status: {db_error}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 async def _initiate_twilio_amd_call(

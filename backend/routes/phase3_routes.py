@@ -97,7 +97,7 @@ async def get_analytics_summary(
         return service.get_executive_summary(start_date, end_date)
     except Exception as e:
         logger.error(f"Error getting analytics summary: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @bi_router.get("/funnel")
@@ -119,7 +119,7 @@ async def get_conversion_funnel(
         return funnel.to_dict()
     except Exception as e:
         logger.error(f"Error getting conversion funnel: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @bi_router.get("/funnel/trend")
@@ -135,7 +135,7 @@ async def get_funnel_trend(
         return service.get_funnel_trend(days, granularity)
     except Exception as e:
         logger.error(f"Error getting funnel trend: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @bi_router.get("/roi")
@@ -161,7 +161,7 @@ async def get_roi_metrics(
         return roi.to_dict()
     except Exception as e:
         logger.error(f"Error calculating ROI: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @bi_router.get("/roi/trend")
@@ -176,7 +176,7 @@ async def get_roi_trend(
         return service.get_roi_trend(months)
     except Exception as e:
         logger.error(f"Error getting ROI trend: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @bi_router.get("/benchmarks")
@@ -201,7 +201,7 @@ async def get_performance_benchmarks(
         return [b.to_dict() for b in benchmarks]
     except Exception as e:
         logger.error(f"Error getting benchmarks: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -232,7 +232,7 @@ async def get_insights_summary(
         return summary.to_dict()
     except Exception as e:
         logger.error(f"Error getting insights summary: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @insights_router.get("/trending-questions")
@@ -248,7 +248,7 @@ async def get_trending_questions(
         return {"questions": service.get_trending_questions(days, limit)}
     except Exception as e:
         logger.error(f"Error getting trending questions: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @insights_router.get("/objections")
@@ -267,7 +267,7 @@ async def get_objection_analysis(
         return service.get_objection_analysis(days)
     except Exception as e:
         logger.error(f"Error getting objection analysis: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @insights_router.get("/sentiment/trend")
@@ -282,7 +282,7 @@ async def get_sentiment_trend(
         return {"trend": service.get_sentiment_trend(days)}
     except Exception as e:
         logger.error(f"Error getting sentiment trend: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @insights_router.post("/analyze")
@@ -303,7 +303,7 @@ async def analyze_conversation(
         return insight.to_dict()
     except Exception as e:
         logger.error(f"Error analyzing conversation: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -326,7 +326,7 @@ async def get_state_requirements(
         return service.get_state_requirements(state_code)
     except Exception as e:
         logger.error(f"Error getting state requirements: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @compliance_router.get("/states/summary")
@@ -338,7 +338,7 @@ async def get_all_states_summary(db: Session = Depends(get_db)):
         return service.get_state_compliance_summary()
     except Exception as e:
         logger.error(f"Error getting states summary: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @compliance_router.post("/pre-call-check")
@@ -358,7 +358,7 @@ async def pre_call_compliance_check(
         return service.check_call_compliance(phone_number, caller_state)
     except Exception as e:
         logger.error(f"Error in pre-call check: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @compliance_router.post("/consent/record")
@@ -381,7 +381,7 @@ async def record_consent(
         return record.to_dict()
     except Exception as e:
         logger.error(f"Error recording consent: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @compliance_router.post("/dnc/add")
@@ -397,7 +397,7 @@ async def add_to_dnc_list(
         return {"success": success}
     except Exception as e:
         logger.error(f"Error adding to DNC: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @compliance_router.delete("/dnc/remove")
@@ -413,7 +413,7 @@ async def remove_from_dnc_list(
         return {"success": success}
     except SQLAlchemyError as e:
         logger.error(f"Error removing from DNC: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @compliance_router.get("/report")
@@ -434,7 +434,7 @@ async def get_compliance_report(
         return report.to_dict()
     except Exception as e:
         logger.error(f"Error getting compliance report: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -454,7 +454,7 @@ async def list_webhook_endpoints(
         return {"endpoints": [e.to_dict() for e in endpoints]}
     except Exception as e:
         logger.error(f"Error listing endpoints: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @webhook_router.post("/endpoints")
@@ -485,10 +485,10 @@ async def create_webhook_endpoint(
             "secret": endpoint.secret  # Only returned on creation
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid event type: {e}")
+        raise HTTPException(status_code=400, detail="Invalid event type")
     except Exception as e:
         logger.error(f"Error creating endpoint: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @webhook_router.put("/endpoints/{endpoint_id}")
@@ -515,7 +515,7 @@ async def update_webhook_endpoint(
         raise
     except Exception as e:
         logger.error(f"Error updating endpoint: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @webhook_router.delete("/endpoints/{endpoint_id}")
@@ -537,7 +537,7 @@ async def delete_webhook_endpoint(
         raise
     except Exception as e:
         logger.error(f"Error deleting endpoint: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @webhook_router.get("/events")
@@ -553,7 +553,7 @@ async def list_available_events():
         }
     except Exception as e:
         logger.error(f"Error listing events: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @webhook_router.get("/events/{event}/sample")
@@ -567,7 +567,7 @@ async def get_event_sample_payload(event: str):
         raise HTTPException(status_code=400, detail=f"Invalid event type: {event}")
     except Exception as e:
         logger.error(f"Error getting sample payload: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @webhook_router.post("/test/{endpoint_id}")
@@ -603,7 +603,7 @@ async def test_webhook_endpoint(
         raise
     except Exception as e:
         logger.error(f"Error testing endpoint: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @webhook_router.get("/deliveries")
@@ -626,7 +626,7 @@ async def get_delivery_history(
         raise HTTPException(status_code=400, detail=f"Invalid event type: {event}")
     except Exception as e:
         logger.error(f"Error getting delivery history: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @webhook_router.get("/stats")
@@ -638,7 +638,7 @@ async def get_webhook_stats(db: Session = Depends(get_db)):
         return webhook_service.get_delivery_stats()
     except Exception as e:
         logger.error(f"Error getting webhook stats: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # Zapier-specific endpoints
@@ -670,7 +670,7 @@ async def zapier_subscribe(
         raise HTTPException(status_code=400, detail=f"Invalid event type: {event}")
     except Exception as e:
         logger.error(f"Error in Zapier subscribe: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @webhook_router.delete("/zapier/unsubscribe/{endpoint_id}")
@@ -691,4 +691,4 @@ async def zapier_unsubscribe(
         return {"success": success}
     except Exception as e:
         logger.error(f"Error in Zapier unsubscribe: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

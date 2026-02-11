@@ -1073,7 +1073,7 @@ class EmailIdentityResolver:
                 "resolution_rate": 0,
                 "by_method": {},
                 "known_clients_count": 0,
-                "error": str(e),
+                "error": "Internal server error",
             }
 
 

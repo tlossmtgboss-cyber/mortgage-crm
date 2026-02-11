@@ -367,7 +367,7 @@ async def save_application_slides_config(
         logger.error(f"Error saving application slides config: {e}")
         logger.error(f"Traceback: {traceback.format_exc()}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to save configuration: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to save configuration")
 
 
 @router.post("/application-slides/reset")
@@ -410,4 +410,4 @@ async def reset_application_slides_config(
     except SQLAlchemyError as e:
         logger.error(f"Error resetting application slides config: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to reset configuration: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to reset configuration")

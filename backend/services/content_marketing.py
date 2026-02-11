@@ -162,7 +162,7 @@ class BrandVoiceAnalyzerService:
                     "url": str(response.url)
                 }
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     async def analyze_voice(self, content: str, url: Optional[str] = None) -> Dict[str, Any]:
         """Analyze content to extract brand voice characteristics."""

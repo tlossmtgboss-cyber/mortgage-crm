@@ -245,7 +245,7 @@ async def connect_retell(
     except Exception as e:
         logger.error(f"Error connecting Retell: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to connect: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to connect")
 
 
 @router.get("/status")
@@ -851,7 +851,7 @@ async def handle_call_webhook(
 
     except Exception as e:
         logger.exception(f"Webhook processing error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 async def process_call_completion(

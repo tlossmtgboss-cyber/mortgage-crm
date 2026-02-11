@@ -121,7 +121,7 @@ def register_email_management_routes(app, get_db, get_current_user, **kwargs):
         except Exception as e:
             db.rollback()
             logger.error(f"Error completing onboarding: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
 
     # ============================================================================
@@ -270,7 +270,7 @@ def register_email_management_routes(app, get_db, get_current_user, **kwargs):
         except Exception as e:
             db.rollback()
             logger.error(f"Error updating user email: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
 
     @app.post("/api/v1/email-signature", response_model=EmailSignatureResponse)
@@ -306,7 +306,7 @@ def register_email_management_routes(app, get_db, get_current_user, **kwargs):
         except Exception as e:
             db.rollback()
             logger.error(f"Error saving email signature: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     @app.post("/api/v1/email-signature/upload-image")
     async def upload_signature_image(
@@ -352,7 +352,7 @@ def register_email_management_routes(app, get_db, get_current_user, **kwargs):
         except Exception as e:
             db.rollback()
             logger.error(f"Error uploading signature image: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     @app.get("/api/v1/email-signature/html")
     async def get_email_signature_html(
@@ -556,7 +556,7 @@ def register_email_management_routes(app, get_db, get_current_user, **kwargs):
         except Exception as e:
             logger.error(f"Error setting up email_drafts table: {e}")
             db.rollback()
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     @app.post("/api/v1/email-drafts")
     async def create_email_draft(
@@ -595,7 +595,7 @@ def register_email_management_routes(app, get_db, get_current_user, **kwargs):
         except Exception as e:
             logger.error(f"Error creating email draft: {e}")
             db.rollback()
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     @app.get("/api/v1/email-drafts")
     async def get_email_drafts(
@@ -647,7 +647,7 @@ def register_email_management_routes(app, get_db, get_current_user, **kwargs):
             }
         except Exception as e:
             logger.error(f"Error fetching email drafts: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     @app.get("/api/v1/email-drafts/{draft_id}")
     async def get_email_draft(
@@ -812,7 +812,7 @@ def register_email_management_routes(app, get_db, get_current_user, **kwargs):
 
         except Exception as e:
             logger.error(f"Error sending email draft: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     @app.post("/api/v1/email-drafts/generate-call-summary")
     async def generate_call_summary_draft(
@@ -939,7 +939,7 @@ def register_email_management_routes(app, get_db, get_current_user, **kwargs):
         except Exception as e:
             logger.error(f"Error generating call summary: {e}")
             db.rollback()
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     # Return functions that need to be exported for backward compatibility
     return {

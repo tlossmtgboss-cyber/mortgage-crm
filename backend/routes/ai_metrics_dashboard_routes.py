@@ -70,7 +70,7 @@ async def get_ai_metrics_dashboard(
 
     except Exception as e:
         logger.error(f"Error getting AI metrics dashboard: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/performance")
@@ -95,7 +95,7 @@ async def get_ai_performance_metrics(
 
     except Exception as e:
         logger.error(f"Error getting performance metrics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/business")
@@ -120,7 +120,7 @@ async def get_ai_business_metrics(
 
     except Exception as e:
         logger.error(f"Error getting business metrics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/quality")
@@ -145,7 +145,7 @@ async def get_ai_quality_metrics(
 
     except Exception as e:
         logger.error(f"Error getting quality metrics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/response-times")
@@ -171,7 +171,7 @@ async def get_ai_response_time_breakdown(
 
     except Exception as e:
         logger.error(f"Error getting response time breakdown: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/feedback")
@@ -225,7 +225,7 @@ async def submit_ai_feedback(
         raise
     except Exception as e:
         logger.error(f"Error submitting feedback: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/followup-click")
@@ -257,4 +257,4 @@ async def record_followup_click(
 
     except Exception as e:
         logger.error(f"Error recording followup click: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

@@ -116,7 +116,7 @@ async def test_email_send(to_email: str = "tloss@me.com"):
         }
     except Exception as e:
         return {
-            "test_result": {"success": False, "error": str(e)},
+            "test_result": {"success": False, "error": "Internal server error"},
             "exception_type": type(e).__name__,
             "to_email": to_email
         }
@@ -341,7 +341,7 @@ Looking forward to speaking with you!
 
     except Exception as e:
         logger.error(f"Exception in send_appointment_confirmation_email: {e}", exc_info=True)
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 def send_appointment_confirmation_sms(
@@ -535,7 +535,7 @@ An updated calendar invite is attached to this email.
 
     except Exception as e:
         logger.error(f"Exception in send_appointment_update_email: {e}", exc_info=True)
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 def send_appointment_update_sms(
@@ -3741,7 +3741,7 @@ async def run_scheduler_migration(
 
     except Exception as e:
         logger.error(f"Migration error: {e}")
-        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Migration failed")
 
 
 # ============================================================================
@@ -4002,7 +4002,7 @@ async def confirm_website_demo_booking(
         if start_time.tzinfo is None:
             start_time = start_time.replace(tzinfo=pytz.UTC)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid start_time format: {str(e)}")
+        raise HTTPException(status_code=400, detail="Invalid start_time format")
 
     end_time = start_time + timedelta(minutes=request.duration_minutes)
 

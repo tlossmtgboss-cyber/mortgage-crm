@@ -232,7 +232,7 @@ async def submit_quiz(
 
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to submit quiz: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to submit quiz")
 
 
 # =============================================================================
@@ -791,7 +791,7 @@ async def update_candidate_status(
         )
         return result
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail="Not found")
 
 
 class EscalateRequest(BaseModel):
@@ -1056,7 +1056,7 @@ async def schedule_interview(
         # Return error as JSON instead of raising HTTPException so frontend can see details
         return {
             "success": False,
-            "error": str(e),
+            "error": "Internal server error",
             "error_type": type(e).__name__,
             "user_id": current_user.id if current_user else None,
             "candidate_id": candidate_id
@@ -1082,7 +1082,7 @@ async def submit_feedback(
         )
         return result
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail="Not found")
 
 
 @router.patch("/interviews/{interview_id}/status")
@@ -1424,7 +1424,7 @@ async def send_offer(
         )
         return result
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail="Not found")
 
 
 @router.post("/offers/{offer_id}/respond")
@@ -1782,7 +1782,7 @@ async def seed_test_data(
 
     except SQLAlchemyError as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Seed failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Seed failed")
 
 
 @router.post("/admin/run-migration")
@@ -1799,7 +1799,7 @@ async def run_recruiting_migration(
         result = run_migration()
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Migration failed")
 
 
 @router.post("/admin/add-quiz-templates")
@@ -1894,7 +1894,7 @@ async def add_quiz_templates(
 
     except SQLAlchemyError as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Migration failed")
 
 
 @router.post("/admin/add-social-production-fields")
@@ -1962,7 +1962,7 @@ async def add_social_production_fields(
         return {"success": True, "added": added, "skipped": skipped}
     except SQLAlchemyError as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Migration failed")
 
 
 @router.get("/candidates/{candidate_id}/full-profile")

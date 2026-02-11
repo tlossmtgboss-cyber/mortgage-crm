@@ -206,7 +206,7 @@ class SLATaskHookService:
                 except Exception as e:
                     results["errors"].append({
                         "milestone_type": milestone_type,
-                        "error": str(e),
+                        "error": "Internal server error",
                     })
                     logger.error(f"Error creating SLA task for {milestone_type}: {e}")
 
@@ -218,7 +218,7 @@ class SLATaskHookService:
 
         except Exception as e:
             logger.error(f"Error in SLA task hook for loan {loan_id}: {e}")
-            return {"error": str(e), "loan_id": loan_id}
+            return {"error": "Internal server error", "loan_id": loan_id}
         finally:
             if db:
                 db.close()
@@ -259,7 +259,7 @@ class SLATaskHookService:
 
         except SQLAlchemyError as e:
             logger.error(f"Error creating initial SLA tasks for loan {loan_id}: {e}")
-            return {"error": str(e), "loan_id": loan_id}
+            return {"error": "Internal server error", "loan_id": loan_id}
         finally:
             if db:
                 db.close()
@@ -325,7 +325,7 @@ async def backfill_sla_tasks_batch(
             except Exception as e:
                 results["errors"].append({
                     "loan_id": loan_id,
-                    "error": str(e),
+                    "error": "Internal server error",
                 })
 
         logger.info(f"SLA backfill batch complete: {results}")
@@ -333,7 +333,7 @@ async def backfill_sla_tasks_batch(
 
     except Exception as e:
         logger.error(f"Error in SLA backfill batch: {e}")
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
     finally:
         if db:
             db.close()

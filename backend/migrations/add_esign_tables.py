@@ -408,7 +408,7 @@ def run_migration(db=None):
             db.rollback()
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
     finally:
         if should_close:

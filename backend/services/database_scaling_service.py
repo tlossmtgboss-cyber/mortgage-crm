@@ -166,7 +166,7 @@ class DatabaseScalingService:
 
         except Exception as e:
             logger.error(f"[DB_SCALING] Connection status check failed: {e}")
-            return {"error": str(e), "status": "unknown"}
+            return {"error": "Internal server error", "status": "unknown"}
 
     async def _send_alert(self, alert_type: str, message: str):
         """Send alert with cooldown to prevent spam."""
@@ -416,7 +416,7 @@ class DatabaseScalingService:
                 "memory_used": info.get("used_memory_human", "unknown")
             }
         except Exception as e:
-            return {"enabled": True, "error": str(e)}
+            return {"enabled": True, "error": "Internal server error"}
 
     async def get_scaling_report(self, db: Session) -> Dict[str, Any]:
         """

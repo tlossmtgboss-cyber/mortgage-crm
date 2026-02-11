@@ -320,7 +320,7 @@ Return a JSON array of slides, each with:
             logger.error(f"Error generating carousel content: {e}")
             return {
                 "success": False,
-                "error": str(e),
+                "error": "Internal server error",
                 "slides": self._get_fallback_slides(project_type, num_slides),
                 "is_fallback": True,
             }

@@ -153,7 +153,7 @@ class UnderwriterAgent(BaseCallAgent):
         except Exception as e:
             logger.exception(f"Automated underwriting failed: {e}")
             return {
-                "error": str(e),
+                "error": "Internal server error",
                 "decision": "refer",
                 "refer_reasons": [f"Automated analysis failed: {str(e)}"],
                 "fallback_analysis": self._basic_underwriting_analysis(loan_data),
@@ -231,7 +231,7 @@ class UnderwriterAgent(BaseCallAgent):
             }
         except Exception as e:
             logger.exception(f"Income calculation failed: {e}")
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
     def analyze_assets(
         self,
@@ -302,7 +302,7 @@ class UnderwriterAgent(BaseCallAgent):
             }
         except Exception as e:
             logger.exception(f"Asset analysis failed: {e}")
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
     def analyze_credit(
         self,
@@ -361,7 +361,7 @@ class UnderwriterAgent(BaseCallAgent):
             }
         except Exception as e:
             logger.exception(f"Credit analysis failed: {e}")
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
     def check_eligibility(
         self,
@@ -418,7 +418,7 @@ class UnderwriterAgent(BaseCallAgent):
             )
         except Exception as e:
             logger.exception(f"Eligibility check failed: {e}")
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
     def generate_conditions(
         self,
@@ -509,7 +509,7 @@ class UnderwriterAgent(BaseCallAgent):
             return validate_loan_file(loan_data, loan_status, include_fraud_check)
         except Exception as e:
             logger.exception(f"Loan validation failed: {e}")
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
     def _basic_underwriting_analysis(self, loan_data: Dict[str, Any]) -> Dict[str, Any]:
         """Fallback basic analysis when engine is not available."""

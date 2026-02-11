@@ -698,7 +698,7 @@ async def delegate_task(
     except Exception as e:
         logger.error(f"Delegate task error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/tasks/{task_id}/complete-sla")
@@ -741,7 +741,7 @@ async def complete_sla_task(
             else:
                 milestone_date = milestone_date_str
         except ValueError as e:
-            raise HTTPException(status_code=400, detail=f"Invalid date format: {str(e)}")
+            raise HTTPException(status_code=400, detail="Invalid date format")
 
         # Complete the SLA task
         result = complete_sla_task_with_date(
@@ -766,7 +766,7 @@ async def complete_sla_task(
     except Exception as e:
         logger.error(f"Complete SLA task error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/tasks/sla")
@@ -796,7 +796,7 @@ async def get_sla_tasks(
 
     except Exception as e:
         logger.error(f"Get SLA tasks error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/tasks/{task_id}", status_code=204)
@@ -841,7 +841,7 @@ async def delete_task(
     except Exception as e:
         db.rollback()
         logger.error(f"Error deleting task {task_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to delete task: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to delete task")
 
 
 # ============================================================================
@@ -1144,7 +1144,7 @@ async def get_unified_tasks(
 
     except Exception as e:
         logger.error(f"Error getting unified tasks: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/unified-tasks/{task_id}/approve")
@@ -1309,7 +1309,7 @@ async def approve_unified_task(
     except Exception as e:
         logger.error(f"Error approving unified task: {e}", exc_info=True)
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/unified-tasks/{task_id}/reject")
@@ -1412,7 +1412,7 @@ async def reject_unified_task(
     except Exception as e:
         logger.error(f"Error rejecting unified task: {e}", exc_info=True)
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -1449,7 +1449,7 @@ async def create_referral_partner(
     except Exception as e:
         db.rollback()
         logger.error(f"Error creating referral partner: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to create referral partner: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create referral partner")
 
 
 @router.get("/referral-partners")
@@ -1836,7 +1836,7 @@ async def get_loan_team_members(
         }
     except Exception as e:
         logger.error(f"Error fetching loan team members: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/loans/{loan_id}/team-members")
@@ -1977,7 +1977,7 @@ async def create_loan_team_member(
     except Exception as e:
         db.rollback()
         logger.error(f"Error creating loan team member: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.patch("/loans/{loan_id}/team-members/{member_id}")
@@ -2053,7 +2053,7 @@ async def update_loan_team_member(
     except Exception as e:
         db.rollback()
         logger.error(f"Error updating team member: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/loans/{loan_id}/team-members/{member_id}")
@@ -2088,7 +2088,7 @@ async def delete_loan_team_member(
     except Exception as e:
         db.rollback()
         logger.error(f"Error deleting team member: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/loans/{loan_id}/team-members/{member_id}/mark-viewed")

@@ -156,7 +156,7 @@ async def list_pending_reviews(
 
     except Exception as e:
         logger.exception("Failed to list reviews")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/stats", response_model=ReviewStatsResponse)
@@ -177,7 +177,7 @@ async def get_review_stats(
 
     except Exception as e:
         logger.exception("Failed to get review stats")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/loan/{loan_id}", response_model=ReviewListResponse)
@@ -216,7 +216,7 @@ async def get_reviews_for_loan(
 
     except Exception as e:
         logger.exception(f"Failed to get reviews for loan {loan_id}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/{review_id}", response_model=ReviewItemResponse)
@@ -242,7 +242,7 @@ async def get_review(
         raise
     except Exception as e:
         logger.exception(f"Failed to get review {review_id}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/{review_id}/decision", response_model=ReviewDecisionResponse)
@@ -297,7 +297,7 @@ async def submit_review_decision(
         raise
     except Exception as e:
         logger.exception(f"Failed to submit review for {review_id}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/bulk/decision", response_model=Dict[str, Any])
@@ -347,7 +347,7 @@ async def submit_bulk_decisions(
             results["failed"] += 1
             results["errors"].append({
                 "review_id": item.get("review_id", "unknown"),
-                "error": str(e),
+                "error": "Internal server error",
             })
 
     return results
@@ -369,4 +369,4 @@ async def get_reviews_for_call(
 
     except Exception as e:
         logger.exception(f"Failed to get reviews for call {call_id}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

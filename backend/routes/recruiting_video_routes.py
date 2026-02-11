@@ -380,7 +380,7 @@ async def complete_upload(
     except SQLAlchemyError as e:
         logger.error(f"Failed to complete video upload: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/candidate/{candidate_id}")
@@ -440,7 +440,7 @@ async def get_candidate_videos(
 
     except Exception as e:
         logger.error(f"Failed to get candidate videos: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/mark-viewed/{video_id}")
@@ -461,7 +461,7 @@ async def mark_video_viewed(
 
     except SQLAlchemyError as e:
         logger.error(f"Failed to mark video viewed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -508,7 +508,7 @@ async def run_video_migration(
 
     except SQLAlchemyError as e:
         logger.error(f"Migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/admin/debug-s3")
@@ -585,7 +585,7 @@ async def fix_video_urls(
 
     except SQLAlchemyError as e:
         logger.error(f"Fix videos error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/admin/add-test-video")
@@ -653,7 +653,7 @@ async def add_test_video(
     except SQLAlchemyError as e:
         logger.error(f"Failed to add test video: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/portal/{slug}/videos")
@@ -733,4 +733,4 @@ async def get_portal_videos(
         raise
     except Exception as e:
         logger.error(f"Failed to get portal videos: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

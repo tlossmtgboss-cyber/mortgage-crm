@@ -231,7 +231,7 @@ async def execute_agent(
 
     except Exception as e:
         logger.error(f"Agent execution failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/email/analyze", response_model=EmailAnalysisResponse)
@@ -347,7 +347,7 @@ async def analyze_email(
 
     except Exception as e:
         logger.error(f"Email analysis failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -369,7 +369,7 @@ async def get_agent_metrics(
         return AgentMetricsResponse(**metrics)
     except Exception as e:
         logger.error(f"Failed to get agent metrics: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/metrics/{agent_id}/stages", response_model=StageBreakdownResponse)
@@ -387,7 +387,7 @@ async def get_stage_breakdown(
         return StageBreakdownResponse(**breakdown)
     except Exception as e:
         logger.error(f"Failed to get stage breakdown: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/metrics/{agent_id}/tokens", response_model=TokenUsageResponse)
@@ -415,7 +415,7 @@ async def get_token_trends(
         )
     except Exception as e:
         logger.error(f"Failed to get token trends: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/outcomes")
@@ -439,7 +439,7 @@ async def log_outcome(request: OutcomeLogRequest):
         return {"success": True, "outcome_id": outcome_id}
     except Exception as e:
         logger.error(f"Failed to log outcome: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -464,7 +464,7 @@ async def create_ab_test(request: ABTestCreateRequest):
         return {"success": True, "test_id": test_id, "test_name": request.test_name}
     except Exception as e:
         logger.error(f"Failed to create A/B test: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/ab-tests/{test_id}", response_model=ABTestResultsResponse)
@@ -483,7 +483,7 @@ async def get_ab_test_results(test_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to get A/B test results: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/ab-tests/{test_id}/end")
@@ -496,7 +496,7 @@ async def end_ab_test(test_id: str):
         return {"success": True, "test_id": test_id, "status": "completed"}
     except Exception as e:
         logger.error(f"Failed to end A/B test: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -521,7 +521,7 @@ async def analyze_prompt_quality(request: QualityAnalysisRequest):
         return QualityAnalysisResponse(**analysis)
     except Exception as e:
         logger.error(f"Failed to analyze prompt quality: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/quality/report")
@@ -537,7 +537,7 @@ async def generate_prompt_report(request: QualityAnalysisRequest):
         return {"report": report}
     except Exception as e:
         logger.error(f"Failed to generate quality report: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/quality/suggestions/{agent_id}")
@@ -570,7 +570,7 @@ async def get_improvement_suggestions(agent_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to get improvement suggestions: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -592,7 +592,7 @@ async def list_agents():
         return AgentListResponse(agents=agents, total=len(agents))
     except Exception as e:
         logger.error(f"Failed to list agents: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/{agent_id}", response_model=AgentConfigResponse)
@@ -609,7 +609,7 @@ async def get_agent(agent_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to get agent: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/{agent_id}/prompt")
@@ -643,7 +643,7 @@ async def get_agent_prompt(
         }
     except Exception as e:
         logger.error(f"Failed to get agent prompt: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================

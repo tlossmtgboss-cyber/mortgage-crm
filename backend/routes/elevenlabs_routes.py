@@ -300,7 +300,7 @@ async def connect(
     except Exception as e:
         db.rollback()
         logger.error(f"Failed to connect ElevenLabs: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/disconnect")
@@ -325,7 +325,7 @@ async def disconnect(
     except Exception as e:
         db.rollback()
         logger.error(f"Failed to disconnect ElevenLabs: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/voices")
@@ -368,7 +368,7 @@ async def list_voices(
         raise
     except Exception as e:
         logger.error(f"Failed to fetch voices: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/settings")
@@ -403,7 +403,7 @@ async def update_settings(
     except Exception as e:
         db.rollback()
         logger.error(f"Failed to update settings: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/test")
@@ -450,7 +450,7 @@ async def test_voice(
         raise
     except Exception as e:
         logger.error(f"Failed to test voice: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/config")
@@ -537,7 +537,7 @@ async def list_agents(
         raise
     except Exception as e:
         logger.error(f"Failed to list agents: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/agents")
@@ -585,7 +585,7 @@ async def create_agent(
         raise
     except Exception as e:
         logger.error(f"Failed to create agent: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/phone-numbers")
@@ -612,7 +612,7 @@ async def list_phone_numbers(
         raise
     except Exception as e:
         logger.error(f"Failed to list phone numbers: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 class ImportTwilioNumberRequest(BaseModel):
@@ -662,7 +662,7 @@ async def import_twilio_number(
         raise
     except Exception as e:
         logger.error(f"Failed to import Twilio number: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/outbound-call")
@@ -765,7 +765,7 @@ async def make_outbound_call(
         raise
     except Exception as e:
         logger.error(f"Failed to make outbound call: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 async def _get_elevenlabs_api_key(admin_key: str, user_email: str, current_user, db: Session) -> str:

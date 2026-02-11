@@ -591,7 +591,7 @@ class AdvancedWorkflowOrchestrationService:
             result = self._evaluate_condition(condition_expr, instance.context)
             return {"condition_result": result, "branch": str(result)}
         except Exception as e:
-            return {"condition_result": None, "error": str(e)}
+            return {"condition_result": None, "error": "Internal server error"}
 
     async def _execute_parallel(
         self,

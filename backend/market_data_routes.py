@@ -70,7 +70,7 @@ async def get_rate_lock_context(days: int = 30):
 
     except Exception as e:
         print(f"Error fetching rate lock context: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 def get_fallback_data():

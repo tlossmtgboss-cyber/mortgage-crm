@@ -244,7 +244,7 @@ async def complete_upload(
     except SQLAlchemyError as e:
         logger.error(f"Failed to complete video upload: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -327,7 +327,7 @@ async def get_client_portal_videos(
         raise
     except Exception as e:
         logger.error(f"Failed to get client portal videos: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/client/mark-viewed/{video_id}")
@@ -371,7 +371,7 @@ async def mark_client_video_viewed(
 
     except SQLAlchemyError as e:
         logger.error(f"Failed to process video view: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -446,7 +446,7 @@ async def get_realtor_portal_videos(
         raise
     except Exception as e:
         logger.error(f"Failed to get realtor portal videos: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/realtor/mark-viewed/{video_id}")
@@ -490,7 +490,7 @@ async def mark_realtor_video_viewed(
 
     except SQLAlchemyError as e:
         logger.error(f"Failed to process video view: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -577,7 +577,7 @@ async def configure_s3_cors(
 
     except Exception as e:
         logger.error(f"Failed to configure S3 CORS: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/admin/run-migration")
@@ -621,4 +621,4 @@ async def run_portal_video_migration(
 
     except SQLAlchemyError as e:
         logger.error(f"Migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

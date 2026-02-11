@@ -319,7 +319,7 @@ async def track_visitor(
     except Exception as e:
         logger.error(f"Error tracking visitor: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/stats")
@@ -413,7 +413,7 @@ async def get_visitor_stats(
 
     except Exception as e:
         logger.error(f"Error getting visitor stats: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/leads")
@@ -484,7 +484,7 @@ async def get_visitor_leads(
 
     except Exception as e:
         logger.error(f"Error getting visitor leads: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/leads/{visitor_id}/convert")
@@ -530,7 +530,7 @@ async def convert_visitor_to_lead(
     except Exception as e:
         logger.error(f"Error converting visitor: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/admin/run-migration")
@@ -641,4 +641,4 @@ async def run_visitor_tracking_migration(
     except Exception as e:
         logger.error(f"Migration failed: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

@@ -366,7 +366,7 @@ async def handle_send_sms(input_data: Dict[str, Any], context: ToolContext) -> D
     except Exception as e:
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -409,7 +409,7 @@ async def handle_send_email(input_data: Dict[str, Any], context: ToolContext) ->
         return {
             "success": False,
             "message": f"Failed to send email: {str(e)}",
-            "error": str(e)
+            "error": "Internal server error"
         }
 
     # Log the communication if associated with a lead
@@ -480,7 +480,7 @@ Keep it under 160 characters, friendly but professional.
     except Exception as e:
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -528,7 +528,7 @@ Include subject line and body. Keep it concise and professional.
     except Exception as e:
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 

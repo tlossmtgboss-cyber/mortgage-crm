@@ -476,7 +476,7 @@ async def run_orchestrator(
         logger.error(f"[ORCHESTRATOR] FAILED after {processing_time:.2f}s: {e}", exc_info=True)
         return {
             "response": f"I apologize, but I encountered an error processing your request. Please try again.",
-            "error": str(e),
+            "error": "Internal server error",
             "processing_time_seconds": processing_time
         }
 

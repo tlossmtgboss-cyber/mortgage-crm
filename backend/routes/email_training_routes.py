@@ -169,7 +169,7 @@ def log_email_for_training(
     except SQLAlchemyError as e:
         logger.error(f"Error logging email for training: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/emails", response_model=List[EmailTrainingResponse])
@@ -294,7 +294,7 @@ def get_training_emails(
 
     except Exception as e:
         logger.error(f"Error fetching training emails: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/emails/{log_id}", response_model=EmailTrainingResponse)
@@ -366,7 +366,7 @@ def review_training_email(
     except SQLAlchemyError as e:
         logger.error(f"Error submitting review: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/stats", response_model=EmailTrainingStats)
@@ -454,7 +454,7 @@ def get_training_stats(
 
     except Exception as e:
         logger.error(f"Error fetching training stats: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/export", response_model=List[dict])
@@ -504,7 +504,7 @@ def export_training_data(
 
     except Exception as e:
         logger.error(f"Error exporting training data: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/emails/{log_id}")
@@ -529,4 +529,4 @@ def delete_training_log(
     except SQLAlchemyError as e:
         logger.error(f"Error deleting training log: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

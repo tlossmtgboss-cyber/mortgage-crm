@@ -1816,7 +1816,7 @@ async def handle_retr_webhook(
             content=json.dumps({
                 "import_id": import_id,
                 "status": "error",
-                "error": str(e)
+                "error": "Internal server error"
             }),
             status_code=202,
             media_type="application/json"

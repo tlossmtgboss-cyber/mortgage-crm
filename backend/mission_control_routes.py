@@ -128,7 +128,7 @@ async def get_system_health_summary(db: Session = Depends(get_db)):
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get system health: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get system health")
 
 
 @router.get("/ai-metrics")
@@ -177,7 +177,7 @@ async def get_ai_metrics(
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get AI metrics: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get AI metrics")
 
 
 @router.get("/integrations")
@@ -216,7 +216,7 @@ async def get_integrations_status(db: Session = Depends(get_db)):
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get integrations: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get integrations")
 
 
 @router.get("/jobs")
@@ -255,7 +255,7 @@ async def get_system_jobs(db: Session = Depends(get_db)):
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get jobs: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get jobs")
 
 
 @router.get("/alerts")
@@ -307,7 +307,7 @@ async def get_system_alerts(
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get alerts: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get alerts")
 
 
 @router.post("/alerts/{alert_id}/resolve")
@@ -327,7 +327,7 @@ async def resolve_alert(alert_id: int, db: Session = Depends(get_db)):
 
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to resolve alert: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to resolve alert")
 
 
 @router.get("/security")
@@ -370,7 +370,7 @@ async def get_security_snapshot(db: Session = Depends(get_db)):
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get security snapshot: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get security snapshot")
 
 
 @router.get("/changelog")
@@ -401,7 +401,7 @@ async def get_ai_changelog(days: int = 7, db: Session = Depends(get_db)):
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get changelog: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get changelog")
 
 
 @router.post("/refresh")
@@ -597,7 +597,7 @@ async def refresh_system_check(db: Session = Depends(get_db)):
                 except Exception as e:
                     results["integrations"][name] = {
                         "status": "error",
-                        "error": str(e)[:200],
+                        "error": "Internal server error"[:200],
                         "checked_at": datetime.utcnow().isoformat()
                     }
 
@@ -620,4 +620,4 @@ async def refresh_system_check(db: Session = Depends(get_db)):
         return results
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to trigger system check: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to trigger system check")

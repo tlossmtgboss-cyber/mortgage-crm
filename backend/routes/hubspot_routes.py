@@ -244,7 +244,7 @@ async def hubspot_status(
         return success_response({
             "connected": False,
             "enabled": hubspot_client.enabled,
-            "error": str(e)
+            "error": "Internal server error"
         })
 
 
@@ -303,7 +303,7 @@ async def refresh_hubspot_token(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error refreshing HubSpot token: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/disconnect")
@@ -331,7 +331,7 @@ async def disconnect_hubspot(
     except SQLAlchemyError as e:
         logger.error(f"Error disconnecting HubSpot: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # CRM Sync Endpoints

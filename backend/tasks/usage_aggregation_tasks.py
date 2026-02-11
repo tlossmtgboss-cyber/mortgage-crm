@@ -851,7 +851,7 @@ def backfill_aggregation(
             results.append({
                 "snapshot_date": str(current_date),
                 "status": "failed",
-                "error": str(e)
+                "error": "Internal server error"
             })
 
         current_date += timedelta(days=1)

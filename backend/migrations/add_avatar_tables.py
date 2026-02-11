@@ -238,7 +238,7 @@ def run_migration():
 
     except Exception as e:
         logger.error(f"Avatar migration failed: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 if __name__ == "__main__":

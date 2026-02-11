@@ -108,7 +108,7 @@ async def get_state_disclosure(
 
     except Exception as e:
         logger.error(f"Error getting state disclosure for {state_code}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/all-party-states")
@@ -142,7 +142,7 @@ async def get_all_party_consent_states(
 
     except Exception as e:
         logger.error(f"Error getting all-party states: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/")
@@ -200,7 +200,7 @@ async def list_all_rules(
 
     except SQLAlchemyError as e:
         logger.error(f"Error listing state rules: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -258,7 +258,7 @@ async def create_or_update_rule(
     except SQLAlchemyError as e:
         logger.error(f"Error saving state rule: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.patch("/{state_code}")
@@ -322,7 +322,7 @@ async def update_rule(
     except Exception as e:
         logger.error(f"Error updating state rule: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/{state_code}")
@@ -360,7 +360,7 @@ async def delete_rule(
     except Exception as e:
         logger.error(f"Error deleting state rule: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================

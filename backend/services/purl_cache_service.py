@@ -463,7 +463,7 @@ class PURLCacheService:
             }
         except redis.RedisError as e:
             logger.error(f"Failed to get cache stats: {e}")
-            return {"enabled": True, "error": str(e)}
+            return {"enabled": True, "error": "Internal server error"}
 
     def flush_all(self) -> bool:
         """

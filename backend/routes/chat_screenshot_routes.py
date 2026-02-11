@@ -142,7 +142,7 @@ async def simple_chat(
             "confidence": 0,
             "cached": False,
             "response_time": round(time.time() - start_time, 3),
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -309,7 +309,7 @@ If you cannot identify a partner or lead, set those fields to null but still ret
                 if json_match:
                     extracted_data = json.loads(json_match.group())
                 else:
-                    raise HTTPException(status_code=500, detail=f"Failed to parse extracted data: {e}")
+                    raise HTTPException(status_code=500, detail="Failed to parse extracted data")
 
         logger.info(f"[SCREENSHOT] Extracted data: {json.dumps(extracted_data, indent=2)}")
 
@@ -576,7 +576,7 @@ If you cannot identify a partner or lead, set those fields to null but still ret
     except Exception as e:
         logger.exception(f"[SCREENSHOT] Error processing screenshot: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to process screenshot: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to process screenshot")
 
 
 @router.post("/ai/complete-lead-from-screenshot")
@@ -729,7 +729,7 @@ async def complete_lead_from_screenshot(
     except Exception as e:
         logger.exception(f"[SCREENSHOT] Error completing lead creation: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to create lead: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create lead")
 
 
 @router.get("/ai/langgraph-status")
@@ -750,7 +750,7 @@ async def langgraph_status():
     except ImportError as e:
         return {
             "available": False,
-            "error": str(e),
+            "error": "Internal server error",
             "message": "LangGraph dependencies not installed"
         }
 

@@ -170,7 +170,7 @@ async def create_content_calendar(
 
     except Exception as e:
         logger.error(f"Error creating calendar: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
     finally:
         db.close()
 
@@ -203,7 +203,7 @@ async def get_content_calendar(
 
     except Exception as e:
         logger.error(f"Error getting calendar: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
     finally:
         db.close()
 
@@ -234,7 +234,7 @@ async def list_content_calendars(
 
     except Exception as e:
         logger.error(f"Error listing calendars: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
     finally:
         db.close()
 
@@ -265,7 +265,7 @@ async def generate_content_briefs(
 
     except Exception as e:
         logger.error(f"Error generating briefs: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
     finally:
         db.close()
 
@@ -297,7 +297,7 @@ async def analyze_brand_voice(
 
     except Exception as e:
         logger.error(f"Error analyzing brand voice: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
     finally:
         db.close()
 
@@ -330,7 +330,7 @@ async def get_brand_voice(
 
     except Exception as e:
         logger.error(f"Error getting brand voice: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
     finally:
         db.close()
 
@@ -367,7 +367,7 @@ async def publish_content(
 
     except Exception as e:
         logger.error(f"Error publishing content: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
     finally:
         db.close()
 
@@ -398,7 +398,7 @@ async def get_publishing_analytics(
 
     except Exception as e:
         logger.error(f"Error getting analytics: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
     finally:
         db.close()
 
@@ -430,7 +430,7 @@ async def track_keyword(
 
     except Exception as e:
         logger.error(f"Error tracking keyword: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
     finally:
         db.close()
 
@@ -460,7 +460,7 @@ async def get_keyword_suggestions(
 
     except Exception as e:
         logger.error(f"Error getting keyword suggestions: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
     finally:
         db.close()
 
@@ -490,7 +490,7 @@ async def get_keyword_opportunities(
 
     except Exception as e:
         logger.error(f"Error finding opportunities: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
     finally:
         db.close()
 
@@ -564,7 +564,7 @@ async def create_carousel_project(
     except Exception as e:
         db.rollback()
         logger.error(f"Error creating carousel: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
     finally:
         db.close()
 
@@ -619,7 +619,7 @@ async def generate_carousel_content(
 
     except Exception as e:
         logger.error(f"Error generating carousel content: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
     finally:
         db.close()
 
@@ -689,7 +689,7 @@ async def get_carousel_templates(
 
     except Exception as e:
         logger.error(f"Error getting templates: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
     finally:
         db.close()
 
@@ -720,7 +720,7 @@ async def preview_personalization(
 
     except Exception as e:
         logger.error(f"Error previewing personalization: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
     finally:
         db.close()
 
@@ -749,7 +749,7 @@ async def get_personalization_tokens(
 
     except Exception as e:
         logger.error(f"Error getting tokens: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
     finally:
         db.close()
 

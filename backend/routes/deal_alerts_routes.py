@@ -107,7 +107,7 @@ async def scan_pipeline(
         }
     except Exception as e:
         logger.error(f"Error scanning pipeline: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/summary", response_model=AlertSummaryResponse)
@@ -137,7 +137,7 @@ async def get_alert_summary(
         )
     except Exception as e:
         logger.error(f"Error getting summary: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/", response_model=List[AlertResponse])
@@ -187,10 +187,10 @@ async def get_alerts(
             for a in alerts
         ]
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid filter value: {e}")
+        raise HTTPException(status_code=400, detail="Invalid filter value")
     except Exception as e:
         logger.error(f"Error getting alerts: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/priority-actions")
@@ -209,7 +209,7 @@ async def get_priority_actions(
         return {"priority_actions": actions}
     except Exception as e:
         logger.error(f"Error getting priority actions: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/types")
@@ -255,7 +255,7 @@ async def get_alerts_for_loan(loan_id: str, db: Session = Depends(get_db)):
         }
     except Exception as e:
         logger.error(f"Error getting loan alerts: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # Dynamic routes with {alert_id} path parameter MUST be after all static routes
@@ -291,7 +291,7 @@ async def get_alert(alert_id: str, db: Session = Depends(get_db)):
         raise
     except Exception as e:
         logger.error(f"Error getting alert: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/{alert_id}/acknowledge")
@@ -317,7 +317,7 @@ async def acknowledge_alert(alert_id: str, db: Session = Depends(get_db)):
         raise
     except Exception as e:
         logger.error(f"Error acknowledging alert: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/{alert_id}/resolve")
@@ -343,7 +343,7 @@ async def resolve_alert(alert_id: str, request: ResolveRequest, db: Session = De
         raise
     except Exception as e:
         logger.error(f"Error resolving alert: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/{alert_id}/snooze")
@@ -369,7 +369,7 @@ async def snooze_alert(alert_id: str, request: SnoozeRequest, db: Session = Depe
         raise
     except Exception as e:
         logger.error(f"Error snoozing alert: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/bulk-acknowledge")
@@ -388,7 +388,7 @@ async def bulk_acknowledge(request: BulkAcknowledgeRequest, db: Session = Depend
         }
     except Exception as e:
         logger.error(f"Error bulk acknowledging: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -454,7 +454,7 @@ async def debug_loans_data(
     except Exception as e:
         return {
             "status": "error",
-            "error": str(e),
+            "error": "Internal server error",
             "database_connected": False
         }
 
@@ -495,7 +495,7 @@ async def test_funded_loans(
         }
     except Exception as e:
         import traceback
-        return {"status": "error", "error": str(e), "traceback": traceback.format_exc()}
+        return {"status": "error", "error": "Internal server error", "traceback": traceback.format_exc()}
 
 
 @router.get("/admin/test-predictor-query")
@@ -539,7 +539,7 @@ async def test_predictor_query(
         }
     except Exception as e:
         import traceback
-        return {"status": "error", "error": str(e), "traceback": traceback.format_exc()}
+        return {"status": "error", "error": "Internal server error", "traceback": traceback.format_exc()}
 
 
 @router.get("/admin/test-query")
@@ -591,7 +591,7 @@ async def test_loan_query(
         import traceback
         return {
             "status": "error",
-            "error": str(e),
+            "error": "Internal server error",
             "traceback": traceback.format_exc()
         }
 
@@ -757,7 +757,7 @@ async def run_deal_alerts_migration(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Migration failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Migration failed")
 
 
 @router.post("/seed-sample-alerts")
@@ -894,4 +894,4 @@ async def seed_sample_alerts(db: Session = Depends(get_db)):
 
     except Exception as e:
         logger.error(f"Error seeding sample alerts: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

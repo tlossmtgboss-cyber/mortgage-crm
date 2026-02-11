@@ -123,7 +123,7 @@ class NotificationService:
 
         except Exception as e:
             logger.error(f"Failed to send email to {to_email}: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def send_application_confirmation(
         self,
@@ -755,7 +755,7 @@ class NotificationService:
 
         except Exception as e:
             logger.error(f"Failed to send SMS to {to_phone}: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def send_application_confirmation_sms(
         self,

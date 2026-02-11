@@ -160,9 +160,9 @@ async def get_loan_probability(
 
         return ProbabilityScoreResponse(**score.to_dict())
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail="Not found")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to calculate probability: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to calculate probability")
 
 
 @router.get("/pipeline", response_model=List[ProbabilityScoreResponse])
@@ -370,7 +370,7 @@ async def get_loan_recommendations(
             ],
         }
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail="Not found")
 
 
 @router.get("/distribution")

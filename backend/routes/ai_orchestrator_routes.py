@@ -132,7 +132,7 @@ Be concise and helpful. When asked about data, provide specific numbers when ava
 
     except Exception as e:
         logger.error(f"Orchestrator chat error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/orchestrator-chat-stream")

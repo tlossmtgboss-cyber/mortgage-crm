@@ -557,7 +557,7 @@ async def send_bulk_surveys(
                 intro_message=template.intro_message,
             )
         except Exception as e:
-            errors.append({"email": recipient.email, "error": str(e)})
+            errors.append({"email": recipient.email, "error": "Internal server error"})
 
     db.commit()
 

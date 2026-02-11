@@ -149,7 +149,7 @@ async def calculate_income(
 
     except Exception as e:
         logger.exception(f"Income calculation failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/recalculate-with-override", response_model=IncomeCalculationResponse)
@@ -260,7 +260,7 @@ async def recalculate_with_override(
         raise
     except Exception as e:
         logger.exception(f"Override calculation failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/validate-documents", response_model=ValidationResult)
@@ -287,7 +287,7 @@ async def validate_documents(
 
     except Exception as e:
         logger.exception(f"Document validation failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/supported-types", response_model=List[SupportedIncomeType])
@@ -345,7 +345,7 @@ async def get_income_summary(
         raise
     except Exception as e:
         logger.exception(f"Failed to get income summary: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/loan/{loan_id}/streams")
@@ -395,7 +395,7 @@ async def get_income_streams(
         raise
     except Exception as e:
         logger.exception(f"Failed to get income streams: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/loan/{loan_id}/flags")
@@ -441,7 +441,7 @@ async def get_income_flags(
 
     except Exception as e:
         logger.exception(f"Failed to get income flags: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/loan/{loan_id}/flags/{flag_id}/resolve")
@@ -485,7 +485,7 @@ async def resolve_income_flag(
     except Exception as e:
         logger.exception(f"Failed to resolve flag: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/loan/{loan_id}/worksheets")
@@ -524,7 +524,7 @@ async def get_income_worksheets(
 
     except Exception as e:
         logger.exception(f"Failed to get worksheets: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================

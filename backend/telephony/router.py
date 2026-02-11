@@ -615,7 +615,7 @@ async def setup_demo_caller_id(
         db.rollback()
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -1281,7 +1281,7 @@ async def webhook_recording_complete(
 
     except Exception as e:
         logger.error(f"Error processing recording webhook: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 async def process_call_recording_for_ci(

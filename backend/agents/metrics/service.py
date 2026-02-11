@@ -973,6 +973,6 @@ class AIMetricsService:
         except Exception as e:
             logger.error(f"Error getting dashboard summary: {e}")
             return {
-                "error": str(e),
+                "error": "Internal server error",
                 "generated_at": datetime.now(timezone.utc).isoformat()
             }

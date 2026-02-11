@@ -111,7 +111,7 @@ async def create_project(
         return success_response(data=project, message="Project created")
     except Exception as e:
         logger.exception("Failed to create project")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/projects", response_model=dict)
@@ -144,7 +144,7 @@ async def list_projects(
         })
     except Exception as e:
         logger.exception("Failed to list projects")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/projects/{project_id}", response_model=dict)
@@ -170,7 +170,7 @@ async def get_project(
         raise
     except Exception as e:
         logger.exception("Failed to get project")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.patch("/projects/{project_id}", response_model=dict)
@@ -191,7 +191,7 @@ async def update_project(
         raise
     except Exception as e:
         logger.exception("Failed to update project")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/projects/{project_id}", response_model=dict)
@@ -207,7 +207,7 @@ async def delete_project(
         return success_response(message="Project archived")
     except SQLAlchemyError as e:
         logger.exception("Failed to delete project")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -232,7 +232,7 @@ async def generate_script(
         return success_response(data=result, message="Script generated")
     except Exception as e:
         logger.exception("Failed to generate script")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/projects/{project_id}/generate-blog", response_model=dict)
@@ -248,7 +248,7 @@ async def generate_blog(
         return success_response(data=result, message="Blog post generated")
     except Exception as e:
         logger.exception("Failed to generate blog")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/projects/{project_id}/generate-storyboard", response_model=dict)
@@ -269,7 +269,7 @@ async def generate_storyboard(
         return success_response(data={"scenes": scenes}, message="Storyboard generated")
     except Exception as e:
         logger.exception("Failed to generate storyboard")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -289,7 +289,7 @@ async def list_scenes(
         return success_response(data={"scenes": scenes})
     except Exception as e:
         logger.exception("Failed to list scenes")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/projects/{project_id}/scenes", response_model=dict)
@@ -306,7 +306,7 @@ async def create_scene(
         return success_response(data=scene, message="Scene created")
     except Exception as e:
         logger.exception("Failed to create scene")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.patch("/scenes/{scene_id}", response_model=dict)
@@ -327,7 +327,7 @@ async def update_scene(
         raise
     except Exception as e:
         logger.exception("Failed to update scene")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/scenes/{scene_id}", response_model=dict)
@@ -343,7 +343,7 @@ async def delete_scene(
         return success_response(message="Scene deleted")
     except SQLAlchemyError as e:
         logger.exception("Failed to delete scene")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/scenes/reorder", response_model=dict)
@@ -359,7 +359,7 @@ async def reorder_scenes(
         return success_response(message="Scenes reordered")
     except Exception as e:
         logger.exception("Failed to reorder scenes")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -393,7 +393,7 @@ async def start_render(
         )
     except Exception as e:
         logger.exception("Failed to start render")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/render-jobs", response_model=dict)
@@ -424,7 +424,7 @@ async def list_render_jobs(
         })
     except Exception as e:
         logger.exception("Failed to list render jobs")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/render-jobs/{job_id}", response_model=dict)
@@ -450,7 +450,7 @@ async def get_render_job(
         raise
     except Exception as e:
         logger.exception("Failed to get render job")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/render-jobs/{job_id}/cancel", response_model=dict)
@@ -470,7 +470,7 @@ async def cancel_render_job(
         raise
     except Exception as e:
         logger.exception("Failed to cancel render job")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/render-jobs/{job_id}/retry", response_model=dict)
@@ -490,7 +490,7 @@ async def retry_render_job(
         raise
     except Exception as e:
         logger.exception("Failed to retry render job")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -530,7 +530,7 @@ async def list_videos(
         })
     except Exception as e:
         logger.exception("Failed to list videos")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/library", response_model=dict)
@@ -585,7 +585,7 @@ async def publish_video(
         raise
     except Exception as e:
         logger.exception("Failed to publish video")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/library/{video_id}", response_model=dict)
@@ -611,7 +611,7 @@ async def get_video(
         raise
     except Exception as e:
         logger.exception("Failed to get video")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.patch("/library/{video_id}", response_model=dict)
@@ -636,7 +636,7 @@ async def update_video(
         raise
     except Exception as e:
         logger.exception("Failed to update video")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/library/{video_id}", response_model=dict)
@@ -652,7 +652,7 @@ async def delete_video(
         return success_response(message="Video deleted")
     except SQLAlchemyError as e:
         logger.exception("Failed to delete video")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/library/{video_id}/share", response_model=dict)
@@ -683,7 +683,7 @@ async def get_share_info(
         raise
     except Exception as e:
         logger.exception("Failed to get share info")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/library/{video_id}/regenerate-token", response_model=dict)
@@ -699,7 +699,7 @@ async def regenerate_share_token(
         return success_response(data={"share_token": new_token}, message="Share token regenerated")
     except Exception as e:
         logger.exception("Failed to regenerate token")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -723,7 +723,7 @@ async def get_analytics_overview(
         return success_response(data=stats)
     except Exception as e:
         logger.exception("Failed to get analytics overview")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/analytics/videos/{video_id}", response_model=dict)
@@ -750,7 +750,7 @@ async def get_video_analytics(
         return success_response(data=analytics)
     except Exception as e:
         logger.exception("Failed to get video analytics")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/analytics/videos/{video_id}/heatmap", response_model=dict)
@@ -771,7 +771,7 @@ async def get_video_heatmap(
         return success_response(data=heatmap)
     except Exception as e:
         logger.exception("Failed to get heatmap")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/analytics/viewers", response_model=dict)
@@ -795,7 +795,7 @@ async def get_viewer_engagement(
         return success_response(data={"viewers": engagement})
     except Exception as e:
         logger.exception("Failed to get viewer engagement")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -819,7 +819,7 @@ async def list_cta_overlays(
         return success_response(data={"overlays": overlays})
     except Exception as e:
         logger.exception("Failed to list CTA overlays")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/cta-overlays", response_model=dict)
@@ -841,7 +841,7 @@ async def create_cta_overlay(
         return success_response(data=overlay, message="CTA overlay created")
     except Exception as e:
         logger.exception("Failed to create CTA overlay")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/cta-overlays/{cta_id}", response_model=dict)
@@ -861,7 +861,7 @@ async def get_cta_overlay(
         raise
     except Exception as e:
         logger.exception("Failed to get CTA overlay")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -883,7 +883,7 @@ async def list_brand_templates(
         return success_response(data={"templates": templates})
     except Exception as e:
         logger.exception("Failed to list brand templates")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/brand-templates", response_model=dict)
@@ -903,7 +903,7 @@ async def create_brand_template(
         return success_response(data=template, message="Brand template created")
     except Exception as e:
         logger.exception("Failed to create brand template")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/brand-templates/{template_id}", response_model=dict)
@@ -923,7 +923,7 @@ async def get_brand_template(
         raise
     except Exception as e:
         logger.exception("Failed to get brand template")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.patch("/brand-templates/{template_id}", response_model=dict)
@@ -944,7 +944,7 @@ async def update_brand_template(
         raise
     except Exception as e:
         logger.exception("Failed to update brand template")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -966,7 +966,7 @@ async def list_voice_profiles(
         return success_response(data={"profiles": profiles})
     except Exception as e:
         logger.exception("Failed to list voice profiles")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/voice-profiles", response_model=dict)
@@ -987,7 +987,7 @@ async def create_voice_profile(
         return success_response(data=profile, message="Voice profile created")
     except Exception as e:
         logger.exception("Failed to create voice profile")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/voice-profiles/{profile_id}", response_model=dict)
@@ -1007,7 +1007,7 @@ async def get_voice_profile(
         raise
     except Exception as e:
         logger.exception("Failed to get voice profile")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -1131,7 +1131,7 @@ async def create_viewer_session(
         return success_response(data=session)
     except Exception as e:
         logger.exception("Failed to create viewer session")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/sessions/{session_id}/identify", response_model=dict)
@@ -1155,7 +1155,7 @@ async def identify_viewer(
         return success_response(data={"identified": success})
     except Exception as e:
         logger.exception("Failed to identify viewer")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/sessions/{session_id}/end", response_model=dict)
@@ -1170,7 +1170,7 @@ async def end_viewer_session(
         return success_response(message="Session ended")
     except SQLAlchemyError as e:
         logger.exception("Failed to end session")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -1327,4 +1327,4 @@ async def run_video_os_migration(
         return success_response(result, "Video OS migration completed successfully")
     except Exception as e:
         logger.error(f"Video OS migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

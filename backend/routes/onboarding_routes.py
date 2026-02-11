@@ -273,7 +273,7 @@ async def get_onboarding_steps(
 
     except Exception as e:
         logger.error(f"Get onboarding steps error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/steps")
@@ -317,7 +317,7 @@ async def update_onboarding_steps(
     except Exception as e:
         db.rollback()
         logger.error(f"Update onboarding steps error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/progress")
@@ -360,7 +360,7 @@ async def get_onboarding_progress(
 
     except Exception as e:
         logger.error(f"Get onboarding progress error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/progress")
@@ -405,7 +405,7 @@ async def update_onboarding_progress(
     except Exception as e:
         db.rollback()
         logger.error(f"Update onboarding progress error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/complete")
@@ -440,7 +440,7 @@ async def complete_onboarding(
     except Exception as e:
         db.rollback()
         logger.error(f"Complete onboarding error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/reset")
@@ -475,7 +475,7 @@ async def reset_onboarding(
     except Exception as e:
         db.rollback()
         logger.error(f"Reset onboarding error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/parse-documents")
@@ -572,7 +572,7 @@ async def parse_onboarding_documents(
                 raise HTTPException(status_code=500, detail="AI returned invalid JSON")
             except Exception as e:
                 logger.error(f"OpenAI parsing error: {e}")
-                raise HTTPException(status_code=500, detail=f"AI parsing failed: {str(e)}")
+                raise HTTPException(status_code=500, detail="AI parsing failed")
         else:
             # Fallback: Use basic text parsing when OpenAI is not available
             logger.info("Using fallback text-based parsing (no OpenAI API key configured)")
@@ -652,7 +652,7 @@ async def parse_onboarding_documents(
     except Exception as e:
         db.rollback()
         logger.error(f"Parse documents error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/roles")
@@ -679,7 +679,7 @@ async def get_process_roles(
 
     except Exception as e:
         logger.error(f"Get roles error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/milestones")
@@ -706,7 +706,7 @@ async def get_process_milestones(
 
     except Exception as e:
         logger.error(f"Get milestones error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/tasks")
@@ -743,7 +743,7 @@ async def get_process_tasks(
 
     except Exception as e:
         logger.error(f"Get tasks error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -858,7 +858,7 @@ async def get_team_members(
 
     except Exception as e:
         logger.error(f"Get team members error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @team_router.get("/members/{user_id}")
@@ -931,7 +931,7 @@ async def get_team_member_detail(
         raise
     except Exception as e:
         logger.error(f"Get team member detail error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @team_router.get("/members/{user_id}/work-hours")
@@ -970,7 +970,7 @@ async def get_team_member_work_hours(
 
     except Exception as e:
         logger.error(f"Get team member work hours error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @team_router.post("/members")
@@ -1040,7 +1040,7 @@ async def create_team_member(
     except Exception as e:
         db.rollback()
         logger.error(f"Create team member error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @team_router.patch("/members/{member_id}")
@@ -1113,7 +1113,7 @@ async def update_team_member(
     except Exception as e:
         db.rollback()
         logger.error(f"Update team member error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @team_router.delete("/members/{member_id}")
@@ -1144,7 +1144,7 @@ async def delete_team_member(
     except Exception as e:
         db.rollback()
         logger.error(f"Delete team member error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -1228,7 +1228,7 @@ async def start_impersonation(
     except Exception as e:
         db.rollback()
         logger.error(f"Start impersonation error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @impersonation_router.post("/end")
@@ -1276,7 +1276,7 @@ async def end_impersonation(
     except Exception as e:
         db.rollback()
         logger.error(f"End impersonation error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @impersonation_router.get("/current")
@@ -1336,4 +1336,4 @@ async def get_current_impersonation(
 
     except Exception as e:
         logger.error(f"Get current impersonation error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

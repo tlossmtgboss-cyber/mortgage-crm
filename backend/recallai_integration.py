@@ -150,7 +150,7 @@ async def start_recording(
         raise HTTPException(status_code=503, detail="Failed to connect to Recall.ai service")
     except Exception as e:
         logger.error(f"Error starting recording: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/bot/{bot_id}")
@@ -202,7 +202,7 @@ async def get_bot_status(
         raise
     except Exception as e:
         logger.error(f"Error fetching bot status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/webhook")
@@ -322,7 +322,7 @@ async def list_bots(
 
     except Exception as e:
         logger.error(f"Error listing bots: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 async def process_video_call_recording(

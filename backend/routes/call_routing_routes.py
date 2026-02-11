@@ -370,7 +370,7 @@ async def get_routing_logs(
         }
     except Exception as e:
         logger.error(f"Error fetching logs: {e}")
-        return {"logs": [], "error": str(e)}
+        return {"logs": [], "error": "Internal server error"}
 
 
 @router.post("/configure-phone")
@@ -416,7 +416,7 @@ async def configure_phone_routing(
 
     except Exception as e:
         logger.error(f"Phone configuration error: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 @router.post("/migrate")
@@ -455,7 +455,7 @@ async def run_routing_migration(
 
     except SQLAlchemyError as e:
         logger.error(f"Migration error: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 @router.get("/status")
@@ -510,4 +510,4 @@ async def get_routing_status(
 
     except Exception as e:
         logger.error(f"Status check error: {e}")
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": "Internal server error"}

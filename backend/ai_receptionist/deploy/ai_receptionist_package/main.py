@@ -295,7 +295,7 @@ async def get_recent_calls(limit: int = 20):
             }
     except Exception as e:
         logger.error(f"Failed to get recent calls: {e}")
-        return {"calls": [], "total": 0, "error": str(e)}
+        return {"calls": [], "total": 0, "error": "Internal server error"}
 
 
 @app.get("/api/calls/{call_sid}")
@@ -353,7 +353,7 @@ async def get_call_details(call_sid: str):
         raise
     except Exception as e:
         logger.error(f"Failed to get call details: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.get("/api/callbacks")
@@ -402,7 +402,7 @@ async def get_pending_callbacks():
             }
     except Exception as e:
         logger.error(f"Failed to get pending callbacks: {e}")
-        return {"callbacks": [], "total": 0, "error": str(e)}
+        return {"callbacks": [], "total": 0, "error": "Internal server error"}
 
 
 @app.get("/api/metrics")

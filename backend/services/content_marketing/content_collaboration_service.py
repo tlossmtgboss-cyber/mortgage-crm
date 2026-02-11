@@ -103,7 +103,7 @@ class ContentCollaborationService:
         except Exception as e:
             self.db.rollback()
             logger.error(f"Failed to add comment: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def get_comment(self, comment_id: str) -> Optional[ContentComment]:
         """Get a comment by ID."""
@@ -311,7 +311,7 @@ class ContentCollaborationService:
         except Exception as e:
             self.db.rollback()
             logger.error(f"Failed to create approval request: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def get_approval(self, approval_id: str) -> Optional[ContentApproval]:
         """Get an approval by ID."""

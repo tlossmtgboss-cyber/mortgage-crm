@@ -71,7 +71,7 @@ class WorkflowActionExecutor:
                 results["failed"] += 1
                 results["details"].append({
                     "action_type": action.get("action_type"),
-                    "result": {"success": False, "error": str(e)}
+                    "result": {"success": False, "error": "Internal server error"}
                 })
 
         return results
@@ -122,7 +122,7 @@ class WorkflowActionExecutor:
 
         except Exception as e:
             logger.error(f"SMS error: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     async def _send_email(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Send email"""
@@ -152,7 +152,7 @@ class WorkflowActionExecutor:
 
         except Exception as e:
             logger.error(f"Email error: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def _generate_email_html(self, template: str, data: Dict[str, Any]) -> str:
         """Generate HTML email content based on template"""

@@ -198,7 +198,7 @@ async def create_permission_request(
     except Exception as e:
         logger.error(f"Create permission request error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/permission-requests")
@@ -276,7 +276,7 @@ async def get_permission_requests(
 
     except Exception as e:
         logger.error(f"Get permission requests error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/permission-requests/{request_id}/approve")
@@ -366,7 +366,7 @@ async def approve_permission_request(
     except Exception as e:
         logger.error(f"Approve permission request error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/permission-requests/{request_id}/deny")
@@ -441,7 +441,7 @@ async def deny_permission_request(
     except Exception as e:
         logger.error(f"Deny permission request error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -550,7 +550,7 @@ async def mark_notification_read(
     except Exception as e:
         logger.error(f"Mark notification read error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/notifications/read-all")
@@ -577,7 +577,7 @@ async def mark_all_notifications_read(
     except Exception as e:
         logger.error(f"Mark all notifications read error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -662,7 +662,7 @@ async def get_due_certifications(
 
     except Exception as e:
         logger.error(f"Get due certifications error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/certifications/{cert_id}")
@@ -728,7 +728,7 @@ async def get_certification_details(
         raise
     except Exception as e:
         logger.error(f"Get certification details error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/certifications/{cert_id}/certify")
@@ -824,7 +824,7 @@ async def certify_employee_access(
     except Exception as e:
         logger.error(f"Certify access error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/certifications/{cert_id}/skip")
@@ -880,7 +880,7 @@ async def skip_certification(
     except Exception as e:
         logger.error(f"Skip certification error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/users/{user_id}/certifications/history")
@@ -917,7 +917,7 @@ async def get_certification_history(
 
     except Exception as e:
         logger.error(f"Get certification history error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -1003,7 +1003,7 @@ async def get_compliance_overview(
         raise
     except Exception as e:
         logger.error(f"Get compliance overview error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/compliance/certifications/by-department")
@@ -1083,7 +1083,7 @@ async def get_certifications_by_department(
         raise
     except Exception as e:
         logger.error(f"Get certifications by department error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/compliance/export")
@@ -1142,7 +1142,7 @@ async def export_compliance_report(
         raise
     except Exception as e:
         logger.error(f"Export compliance report error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -1185,7 +1185,7 @@ async def run_create_certifications(
         raise
     except Exception as e:
         logger.error(f"Run create certifications error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/admin/certification-jobs/reminders")
@@ -1224,7 +1224,7 @@ async def run_certification_reminders(
         raise
     except Exception as e:
         logger.error(f"Run certification reminders error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # Endpoint to verify admin user exists
@@ -1255,7 +1255,7 @@ async def verify_admin_user(db: Session = Depends(get_db_dep())):
         raise
     except Exception as e:
         logger.error(f"Verify admin user error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/admin/run-compliance-migrations")
@@ -1371,7 +1371,7 @@ async def run_compliance_migrations(db: Session = Depends(get_db_dep())):
     except Exception as e:
         db.rollback()
         logger.error(f"Migration error: {e}")
-        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Migration failed")
 
 
 # ============================================================================
@@ -1463,7 +1463,7 @@ async def get_user_audit_log(
         raise
     except Exception as e:
         logger.error(f"Get audit log error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/users/{user_id}/impersonation-history")
@@ -1572,7 +1572,7 @@ async def get_impersonation_history(
         raise
     except Exception as e:
         logger.error(f"Get impersonation history error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/users/{user_id}/active-sessions")
@@ -1620,7 +1620,7 @@ async def get_active_sessions(
         raise
     except Exception as e:
         logger.error(f"Get active sessions error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/users/{user_id}/sessions/{session_id}")
@@ -1670,4 +1670,4 @@ async def revoke_user_session(
     except Exception as e:
         logger.error(f"Revoke session error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

@@ -115,7 +115,7 @@ def register_debug_data_routes(
             logger.error(f"Debug endpoint failed: {e}")
             return {
                 "success": False,
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     @app.post("/api/v1/create-sample-tasks")
@@ -243,7 +243,7 @@ def register_debug_data_routes(
             db.rollback()
             return {
                 "success": False,
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     @app.post("/api/v1/auto-fix-error")
@@ -509,7 +509,7 @@ def register_debug_data_routes(
             logger.error(f"Microsoft sync error: {e}")
             import traceback
             traceback.print_exc()
-            raise HTTPException(status_code=500, detail=f"Sync error: {str(e)}")
+            raise HTTPException(status_code=500, detail="Sync error")
 
     @app.get("/api/v1/reconciliation/debug")
     async def debug_reconciliation(
@@ -562,7 +562,7 @@ def register_debug_data_routes(
             }
         except Exception as e:
             logger.error(f"Debug error: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
 
     @app.get("/api/v1/debug/all-loans")
@@ -599,7 +599,7 @@ def register_debug_data_routes(
             }
         except Exception as e:
             logger.error(f"Debug all loans error: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
 
     @app.get("/api/v1/debug/dashboard-diagnosis")
@@ -622,7 +622,7 @@ def register_debug_data_routes(
             start_of_month = today.replace(day=1)
             results["steps"].append({"step": "date_setup", "status": "ok", "today": str(today)})
         except Exception as e:
-            results["steps"].append({"step": "date_setup", "status": "error", "error": str(e)})
+            results["steps"].append({"step": "date_setup", "status": "error", "error": "Internal server error"})
             return results
 
         try:
@@ -631,7 +631,7 @@ def register_debug_data_routes(
             goals = user_metadata.get('goals', {})
             results["steps"].append({"step": "user_metadata", "status": "ok", "has_goals": bool(goals)})
         except Exception as e:
-            results["steps"].append({"step": "user_metadata", "status": "error", "error": str(e)})
+            results["steps"].append({"step": "user_metadata", "status": "error", "error": "Internal server error"})
             return results
 
         try:
@@ -645,7 +645,7 @@ def register_debug_data_routes(
             ).first()
             results["steps"].append({"step": "funded_counts", "status": "ok", "annual": funded_counts.annual or 0})
         except Exception as e:
-            results["steps"].append({"step": "funded_counts", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+            results["steps"].append({"step": "funded_counts", "status": "error", "error": "Internal server error", "traceback": traceback.format_exc()})
             return results
 
         try:
@@ -658,7 +658,7 @@ def register_debug_data_routes(
             ).first()
             results["steps"].append({"step": "lead_counts", "status": "ok", "new_leads": lead_counts.new_leads or 0})
         except Exception as e:
-            results["steps"].append({"step": "lead_counts", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+            results["steps"].append({"step": "lead_counts", "status": "error", "error": "Internal server error", "traceback": traceback.format_exc()})
             return results
 
         try:
@@ -669,7 +669,7 @@ def register_debug_data_routes(
             ).all()
             results["steps"].append({"step": "active_loans", "status": "ok", "count": len(active_loans)})
         except Exception as e:
-            results["steps"].append({"step": "active_loans", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+            results["steps"].append({"step": "active_loans", "status": "error", "error": "Internal server error", "traceback": traceback.format_exc()})
             return results
 
         try:
@@ -681,7 +681,7 @@ def register_debug_data_routes(
             ).limit(10).all()
             results["steps"].append({"step": "tasks_query", "status": "ok", "count": len(tasks_today)})
         except Exception as e:
-            results["steps"].append({"step": "tasks_query", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+            results["steps"].append({"step": "tasks_query", "status": "error", "error": "Internal server error", "traceback": traceback.format_exc()})
             return results
 
         try:
@@ -696,7 +696,7 @@ def register_debug_data_routes(
             ).first()
             results["steps"].append({"step": "lead_metrics", "status": "ok", "total_leads": lead_metrics_query.total_leads or 0})
         except Exception as e:
-            results["steps"].append({"step": "lead_metrics", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+            results["steps"].append({"step": "lead_metrics", "status": "error", "error": "Internal server error", "traceback": traceback.format_exc()})
             return results
 
         try:
@@ -706,7 +706,7 @@ def register_debug_data_routes(
             ).limit(5).all()
             results["steps"].append({"step": "referral_partners", "status": "ok", "count": len(partners)})
         except Exception as e:
-            results["steps"].append({"step": "referral_partners", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+            results["steps"].append({"step": "referral_partners", "status": "error", "error": "Internal server error", "traceback": traceback.format_exc()})
             return results
 
         try:
@@ -718,7 +718,7 @@ def register_debug_data_routes(
             ).scalar() or 0
             results["steps"].append({"step": "ai_colleague_actions", "status": "ok", "count": ai_tasks_count})
         except Exception as e:
-            results["steps"].append({"step": "ai_colleague_actions", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+            results["steps"].append({"step": "ai_colleague_actions", "status": "error", "error": "Internal server error", "traceback": traceback.format_exc()})
             return results
 
         results["overall_status"] = "all_steps_passed"
@@ -794,7 +794,7 @@ def register_debug_data_routes(
         except Exception as e:
             logger.error(f"Email reprocessing error: {e}")
             db.rollback()
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
 
     @app.get("/api/v1/microsoft/synced-emails-status")
@@ -847,7 +847,7 @@ def register_debug_data_routes(
 
         except Exception as e:
             logger.error(f"Synced emails status error: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
 
     @app.post("/api/v1/microsoft/clear-sync-history")
@@ -886,7 +886,7 @@ def register_debug_data_routes(
         except Exception as e:
             logger.error(f"Clear sync history error: {e}")
             db.rollback()
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
 
     @app.post("/api/v1/reconciliation/reextract/{extracted_data_id}")
@@ -983,7 +983,7 @@ def register_debug_data_routes(
         except Exception as e:
             logger.error(f"Re-extraction error: {e}")
             db.rollback()
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
 
     @app.post("/api/v1/reconciliation/reextract-all-pending")
@@ -1077,7 +1077,7 @@ def register_debug_data_routes(
         except Exception as e:
             logger.error(f"Bulk re-extraction error: {e}")
             db.rollback()
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
 
     @app.post("/api/v1/reconciliation/create-test-item")
@@ -1148,7 +1148,7 @@ def register_debug_data_routes(
         except Exception as e:
             logger.error(f"Error creating test item: {e}")
             db.rollback()
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
 
     @app.post("/api/v1/reconciliation/test-match")
@@ -1196,7 +1196,7 @@ def register_debug_data_routes(
             }
         except Exception as e:
             logger.error(f"Error testing match: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
 
     @app.post("/api/v1/reconciliation/rematch-all")
@@ -1246,7 +1246,7 @@ def register_debug_data_routes(
         except Exception as e:
             logger.error(f"Error rematching: {e}")
             db.rollback()
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
 
     @app.post("/api/v1/microsoft/sync-calendar")
@@ -1368,7 +1368,7 @@ def register_debug_data_routes(
             logger.error(f"Calendar sync error: {e}")
             import traceback
             traceback.print_exc()
-            raise HTTPException(status_code=500, detail=f"Calendar sync error: {str(e)}")
+            raise HTTPException(status_code=500, detail="Calendar sync error")
 
     @app.patch("/api/v1/microsoft/settings")
     async def update_microsoft_settings(
@@ -1413,7 +1413,7 @@ def register_debug_data_routes(
         except Exception as e:
             logger.error(f"Microsoft settings update error: {e}")
             db.rollback()
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     # Extracted to routes/health_routes.py
     # (/, /prd)
@@ -1754,7 +1754,7 @@ def register_debug_data_routes(
         except Exception as e:
             db.rollback()
             logger.error(f"Migration failed: {e}")
-            raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+            raise HTTPException(status_code=500, detail="Migration failed")
 
 
     @app.post("/api/v1/debug/test-two-way-email")
@@ -1812,7 +1812,7 @@ def register_debug_data_routes(
             import traceback
             return {
                 "status": "error",
-                "error": str(e),
+                "error": "Internal server error",
                 "traceback": traceback.format_exc()
             }
 
@@ -1928,7 +1928,7 @@ def register_debug_data_routes(
             import traceback
             return {
                 "status": "error",
-                "error": str(e),
+                "error": "Internal server error",
                 "traceback": traceback.format_exc()
             }
 
@@ -2355,7 +2355,7 @@ def register_debug_data_routes(
         except Exception as e:
             logger.error(f"SendGrid inbound webhook error: {e}")
             import traceback
-            return {"status": "error", "error": str(e), "traceback": traceback.format_exc()}
+            return {"status": "error", "error": "Internal server error", "traceback": traceback.format_exc()}
 
 
     @app.post("/api/v1/debug/simulate-email-reply")
@@ -2459,7 +2459,7 @@ def register_debug_data_routes(
         except Exception as e:
             logger.error(f"Simulate reply error: {e}")
             import traceback
-            return {"status": "error", "error": str(e), "traceback": traceback.format_exc()}
+            return {"status": "error", "error": "Internal server error", "traceback": traceback.format_exc()}
 
 
     @app.post("/api/v1/debug/start-ai-conversation")
@@ -2549,7 +2549,7 @@ def register_debug_data_routes(
         except Exception as e:
             logger.error(f"Start AI conversation error: {e}")
             import traceback
-            return {"status": "error", "error": str(e)}
+            return {"status": "error", "error": "Internal server error"}
 
 
     @app.post("/api/v1/debug/test-email-delivery")
@@ -2614,7 +2614,7 @@ def register_debug_data_routes(
         except Exception as e:
             logger.error(f"Test email error: {e}")
             import traceback
-            return {"status": "error", "error": str(e), "traceback": traceback.format_exc()}
+            return {"status": "error", "error": "Internal server error", "traceback": traceback.format_exc()}
 
 
     @app.post("/api/v1/debug/test-appointment-confirmation-email", tags=["Debug"])
@@ -2672,7 +2672,7 @@ def register_debug_data_routes(
 
         except Exception as e:
             logger.error(f"Test appointment confirmation email error: {e}")
-            return {"status": "error", "error": str(e)}
+            return {"status": "error", "error": "Internal server error"}
 
 
     @app.get("/debug/test-import")

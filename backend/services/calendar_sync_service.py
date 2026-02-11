@@ -733,7 +733,7 @@ class CalendarSyncService:
                     logger.error(f"Error processing SF event {sf_event.get('Id')}: {e}")
                     results["errors"].append({
                         "sf_event_id": sf_event.get("Id"),
-                        "error": str(e)
+                        "error": "Internal server error"
                     })
 
             # Update last poll watermark
@@ -1440,7 +1440,7 @@ class CalendarSyncService:
 
             except Exception as e:
                 logger.error(f"Error processing CDC record: {e}")
-                results["errors"].append({"record_id": record.get("Id"), "error": str(e)})
+                results["errors"].append({"record_id": record.get("Id"), "error": "Internal server error"})
 
         return results
 

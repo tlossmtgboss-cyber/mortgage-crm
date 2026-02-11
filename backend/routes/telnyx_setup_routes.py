@@ -286,7 +286,7 @@ async def save_credentials(
         logger.error(f"Telnyx API key validation failed: {e}")
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid API key: {str(e)}"
+            detail="Invalid API key"
         )
 
 
@@ -319,7 +319,7 @@ async def list_connections(
 
     except Exception as e:
         logger.error(f"Error listing Telnyx connections: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/connections")
@@ -364,7 +364,7 @@ async def create_connection(
 
     except Exception as e:
         logger.error(f"Error creating Telnyx connection: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/connections/{connection_id}/select")
@@ -415,7 +415,7 @@ async def list_messaging_profiles(
 
     except Exception as e:
         logger.error(f"Error listing messaging profiles: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/messaging-profiles")
@@ -456,7 +456,7 @@ async def create_messaging_profile(
 
     except Exception as e:
         logger.error(f"Error creating messaging profile: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/messaging-profiles/{profile_id}/select")
@@ -528,7 +528,7 @@ async def search_phone_numbers(
 
     except Exception as e:
         logger.error(f"Error searching phone numbers: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/phone-numbers/purchase")
@@ -588,7 +588,7 @@ async def purchase_phone_number(
 
     except Exception as e:
         logger.error(f"Error purchasing phone number: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/phone-numbers")
@@ -621,7 +621,7 @@ async def list_phone_numbers(
 
     except Exception as e:
         logger.error(f"Error listing phone numbers: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/phone-numbers/{phone_number_id}/configure")
@@ -656,7 +656,7 @@ async def configure_phone_number(
 
     except Exception as e:
         logger.error(f"Error configuring phone number: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/credentials")
@@ -685,4 +685,4 @@ async def remove_credentials(
     except Exception as e:
         logger.error(f"Error removing Telnyx config: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

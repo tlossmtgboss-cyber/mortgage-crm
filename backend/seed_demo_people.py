@@ -1269,7 +1269,7 @@ def seed_all_demo_data():
         logger.error(f"❌ Error seeding demo data: {e}")
         import traceback
         traceback.print_exc()
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
     finally:
         db.close()
 

@@ -76,7 +76,7 @@ async def get_ai_receptionist_config(
         }
     except Exception as e:
         logger.error(f"Error getting AI receptionist config: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/ai-receptionist-config")
@@ -107,7 +107,7 @@ async def update_ai_receptionist_config(
     except Exception as e:
         logger.error(f"Error updating AI receptionist config: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/call-stats")
@@ -156,7 +156,7 @@ async def get_call_stats(
             "inbound_calls": 0,
             "outbound_calls": 0,
             "leads_generated": 0,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -196,7 +196,7 @@ async def get_call_history(
         return {"calls": calls}
     except Exception as e:
         logger.error(f"Error getting call history: {e}")
-        return {"calls": [], "error": str(e)}
+        return {"calls": [], "error": "Internal server error"}
 
 
 @router.post("/make-call")
@@ -279,7 +279,7 @@ async def make_outbound_call(
         logger.error(f"Error making outbound call: {e}")
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -613,7 +613,7 @@ async def drop_voicemail(
         logger.error(f"Error dropping voicemail: {e}", exc_info=True)
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -1278,7 +1278,7 @@ async def send_sms_in_conversation(
 
     except Exception as e:
         logger.error(f"Error sending SMS: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @sms_router.put("/conversations/{conversation_id}/ai-toggle")
@@ -1351,7 +1351,7 @@ async def submit_sms_message_feedback(
         raise
     except Exception as e:
         logger.error(f"Error submitting feedback: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -1396,7 +1396,7 @@ async def debug_sms_messages(
         }
     except Exception as e:
         logger.error(f"Debug SMS error: {e}")
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
 
 
 @debug_router.get("/twilio-config")
@@ -1462,7 +1462,7 @@ async def debug_twilio_message_status(
             "price_unit": message.price_unit
         }
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
 
 
 @debug_router.get("/twilio-recent-messages")
@@ -1503,7 +1503,7 @@ async def debug_twilio_recent_messages(
             ]
         }
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
 
 
 @debug_router.post("/send-test-sms")
@@ -1563,4 +1563,4 @@ async def debug_send_test_sms(
         }
     except Exception as e:
         logger.error(f"Debug send-test-sms error: {e}", exc_info=True)
-        return {"error": str(e)}
+        return {"error": "Internal server error"}

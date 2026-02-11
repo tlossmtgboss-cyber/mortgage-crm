@@ -113,7 +113,7 @@ def check_migration_status():
         }
 
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
 
 
 def run_sample_data_cleanup():

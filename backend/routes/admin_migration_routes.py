@@ -77,7 +77,7 @@ async def run_ai_migration_endpoint(request: dict):
     except Exception as e:
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 

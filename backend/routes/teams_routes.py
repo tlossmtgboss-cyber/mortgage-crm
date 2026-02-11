@@ -218,7 +218,7 @@ async def get_user_availability(
 
     except Exception as e:
         logger.error(f"Error getting availability: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/status")
@@ -261,7 +261,7 @@ async def get_teams_integration_status(
         logger.error(f"Error checking Teams status: {e}")
         return {
             "connected": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -307,7 +307,7 @@ async def cancel_teams_meeting(
         raise
     except Exception as e:
         logger.error(f"Error cancelling meeting: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================

@@ -228,7 +228,7 @@ class RedisCache:
             return {
                 "enabled": self._enabled,
                 "connected": False,
-                "error": str(e)
+                "error": "Internal server error"
             }
 
 

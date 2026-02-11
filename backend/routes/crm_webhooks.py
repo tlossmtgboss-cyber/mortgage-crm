@@ -252,7 +252,7 @@ async def handle_milestone_update(
 
     except Exception as e:
         logger.error(f"Error handling milestone update: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/milestone/bulk-update", response_model=WebhookResponse)
@@ -299,7 +299,7 @@ async def handle_bulk_milestone_update(
 
     except Exception as e:
         logger.error(f"Error handling bulk milestone update: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -398,7 +398,7 @@ async def handle_close_on_time_milestone(
 
     except Exception as e:
         logger.error(f"Error handling Close On Time milestone: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/close-on-time/schedule", response_model=WebhookResponse)
@@ -445,7 +445,7 @@ async def handle_close_schedule_update(
 
     except Exception as e:
         logger.error(f"Error handling close schedule update: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -520,7 +520,7 @@ async def handle_lifecycle_change(
 
     except Exception as e:
         logger.error(f"Error handling lifecycle change: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -587,7 +587,7 @@ async def handle_document_upload(
 
     except Exception as e:
         logger.error(f"Error handling document upload: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/document/status", response_model=WebhookResponse)
@@ -636,7 +636,7 @@ async def handle_document_status_change(
 
     except Exception as e:
         logger.error(f"Error handling document status change: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -716,7 +716,7 @@ async def handle_full_sync(
 
     except Exception as e:
         logger.error(f"Error handling full sync: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================

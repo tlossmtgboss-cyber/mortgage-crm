@@ -159,7 +159,7 @@ async def get_my_warnings(
         return {"warnings": warnings}
     except Exception as e:
         logger.error(f"Error getting warnings: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/acknowledge-warning/{warning_id}")
@@ -179,7 +179,7 @@ async def acknowledge_warning(
         return {"success": True}
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # === Admin Endpoints ===
@@ -244,7 +244,7 @@ async def admin_list_subscriptions(
 
     except Exception as e:
         logger.error(f"Error listing subscriptions: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/admin/create")
@@ -313,7 +313,7 @@ async def admin_create_subscription(
     except Exception as e:
         db.rollback()
         logger.error(f"Error creating subscription: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/admin/upgrade/{organization_id}")
@@ -383,7 +383,7 @@ async def admin_set_subscription_status(
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/admin/toggle-addon/{organization_id}")
@@ -440,7 +440,7 @@ async def admin_toggle_addon(
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/admin/usage/{organization_id}")
@@ -502,4 +502,4 @@ async def admin_get_action_log(
 
     except Exception as e:
         logger.error(f"Error getting action log: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

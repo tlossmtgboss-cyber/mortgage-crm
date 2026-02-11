@@ -550,7 +550,7 @@ class WebhookHandler:
 
             self._processing_jobs[processing_id].update({
                 "status": "failed",
-                "error": str(e),
+                "error": "Internal server error",
                 "failed_at": datetime.utcnow().isoformat(),
             })
 
@@ -560,7 +560,7 @@ class WebhookHandler:
                 {
                     "processing_id": processing_id,
                     "call_id": call_id,
-                    "error": str(e),
+                    "error": "Internal server error",
                     "failed_at": datetime.utcnow().isoformat(),
                 },
                 callback_id=callback_id,

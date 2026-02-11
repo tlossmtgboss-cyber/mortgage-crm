@@ -97,7 +97,7 @@ async def get_available_roles(
         return {"roles": roles, "count": len(roles)}
     except Exception as e:
         logger.error(f"Error fetching roles: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/loans/{loan_id}/roles")
@@ -131,7 +131,7 @@ async def get_loan_role_assignments(
         raise
     except Exception as e:
         logger.error(f"Error fetching loan role assignments: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/loans/{loan_id}/roles/{role_id}/assign")
@@ -165,7 +165,7 @@ async def assign_role_to_loan(
         raise
     except Exception as e:
         logger.error(f"Error assigning role to loan: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/loans/{loan_id}/roles/{role_id}")
@@ -193,7 +193,7 @@ async def remove_role_from_loan(
         raise
     except Exception as e:
         logger.error(f"Error removing role from loan: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/leads/{lead_id}/roles")
@@ -227,7 +227,7 @@ async def get_lead_role_assignments(
         raise
     except Exception as e:
         logger.error(f"Error fetching lead role assignments: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/leads/{lead_id}/roles/{role_id}/assign")
@@ -261,7 +261,7 @@ async def assign_role_to_lead(
         raise
     except Exception as e:
         logger.error(f"Error assigning role to lead: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/leads/{lead_id}/roles/{role_id}")
@@ -289,7 +289,7 @@ async def remove_role_from_lead(
         raise
     except Exception as e:
         logger.error(f"Error removing role from lead: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/loans/{loan_id}/roles/copy-from-lead/{lead_id}")
@@ -317,7 +317,7 @@ async def copy_role_assignments_to_loan(
         raise
     except Exception as e:
         logger.error(f"Error copying role assignments: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/loans/{loan_id}/roles/{role_id}/resolve")
@@ -361,7 +361,7 @@ async def resolve_user_for_loan_role(
             }
     except Exception as e:
         logger.error(f"Error resolving role: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -413,7 +413,7 @@ async def get_default_role_assignments(
         }
     except Exception as e:
         logger.error(f"Error fetching default role assignments: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/settings/team-roles/{role_id}")
@@ -496,7 +496,7 @@ async def set_default_role_assignment(
     except Exception as e:
         db.rollback()
         logger.error(f"Error setting default role assignment: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/settings/team-roles/{role_id}")
@@ -526,7 +526,7 @@ async def remove_default_role_assignment(
     except Exception as e:
         db.rollback()
         logger.error(f"Error removing default role assignment: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -631,4 +631,4 @@ async def seed_workflow_roles(
     except Exception as e:
         db.rollback()
         logger.error(f"Error seeding workflow roles: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

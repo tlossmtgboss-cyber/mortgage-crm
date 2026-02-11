@@ -213,7 +213,7 @@ async def create_queue(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error creating queue: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("")
@@ -263,7 +263,7 @@ async def list_queues(
 
     except Exception as e:
         logger.error(f"Error listing queues: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/{queue_id}")
@@ -349,7 +349,7 @@ async def get_queue(
         raise
     except Exception as e:
         logger.error(f"Error getting queue: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/{queue_id}")
@@ -409,7 +409,7 @@ async def update_queue(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error updating queue: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/{queue_id}")
@@ -437,7 +437,7 @@ async def delete_queue(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error deleting queue: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -502,7 +502,7 @@ async def add_queue_member(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error adding queue member: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/{queue_id}/members/{user_id}")
@@ -531,7 +531,7 @@ async def remove_queue_member(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error removing queue member: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -671,7 +671,7 @@ async def get_queue_stats(
         raise
     except Exception as e:
         logger.error(f"Error getting queue stats: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -1040,7 +1040,7 @@ async def take_next_call(
         raise
     except Exception as e:
         logger.error(f"Error taking next call: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/twiml/connect-agent")

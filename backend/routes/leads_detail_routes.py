@@ -57,7 +57,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
                 lead_ids = []
             lead_ids = [int(id) for id in lead_ids]  # Ensure integers
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Invalid request body: {str(e)}")
+            raise HTTPException(status_code=400, detail="Invalid request body")
 
         # PHASE 3: Check delete permission (delete or delete_all)
         is_master = current_user.id == 1 or current_user.email == 'admin@perenniaai.com'
@@ -168,7 +168,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
             logger.info(f"[bulk-update-status] Parsed {len(lead_ids)} lead IDs, new_status={new_status}")
         except Exception as e:
             logger.error(f"[bulk-update-status] Failed to parse request: {e}")
-            raise HTTPException(status_code=400, detail=f"Invalid request body: {str(e)}")
+            raise HTTPException(status_code=400, detail="Invalid request body")
 
         if not lead_ids:
             raise HTTPException(status_code=400, detail="No lead IDs provided")
@@ -229,7 +229,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
         except Exception as e:
             db.rollback()
             logger.error(f"[bulk-update-status] Failed to commit: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to save changes: {str(e)}")
+            raise HTTPException(status_code=500, detail="Failed to save changes")
 
         cascade_msg = ""
         if cascade_totals["loans_updated"] or cascade_totals["mum_clients_updated"]:
@@ -669,7 +669,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
             logger.error(f"Error deleting lead {lead_id}: {str(e)}")
             import traceback
             traceback.print_exc()
-            raise HTTPException(status_code=500, detail=f"Failed to delete lead: {str(e)}")
+            raise HTTPException(status_code=500, detail="Failed to delete lead")
 
 
     @app.post("/api/v1/leads/claim-orphans")
@@ -735,6 +735,6 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
         except Exception as e:
             db.rollback()
             logger.error(f"Error claiming orphan leads: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"Failed to claim orphan leads: {str(e)}")
+            raise HTTPException(status_code=500, detail="Failed to claim orphan leads")
 
     logger.info("Leads detail/CRUD routes loaded")

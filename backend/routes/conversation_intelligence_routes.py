@@ -178,7 +178,7 @@ async def process_message(
 
     except Exception as e:
         logger.error(f"Error processing message: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/analyze-tone", response_model=ToneAnalysisResponse)
@@ -198,7 +198,7 @@ async def analyze_tone_endpoint(request: ToneAnalysisRequest):
         return ToneAnalysisResponse(**analysis)
     except Exception as e:
         logger.error(f"Error analyzing tone: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/conversation/{conversation_id}", response_model=ConversationSummaryResponse)
@@ -224,7 +224,7 @@ async def get_conversation_summary(conversation_id: str):
         raise
     except Exception as e:
         logger.error(f"Error getting conversation summary: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/extract-data")
@@ -246,7 +246,7 @@ async def extract_data_from_text(request: ExtractDataRequest):
         }
     except Exception as e:
         logger.error(f"Error extracting data: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/conversation/{conversation_id}/create-lead")
@@ -399,7 +399,7 @@ async def create_lead_from_conversation(
         raise
     except Exception as e:
         logger.error(f"Error creating lead: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/conversation/{conversation_id}/toggle-ai")
@@ -431,7 +431,7 @@ async def toggle_conversation_ai(
         raise
     except Exception as e:
         logger.error(f"Error toggling AI: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/stats")
@@ -472,7 +472,7 @@ async def get_conversation_stats():
         return stats
     except Exception as e:
         logger.error(f"Error getting stats: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -534,7 +534,7 @@ async def process_email_webhook(
 
     except Exception as e:
         logger.error(f"Error processing email webhook: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -592,7 +592,7 @@ async def process_sms_webhook(
 
     except Exception as e:
         logger.error(f"Error processing SMS webhook: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================

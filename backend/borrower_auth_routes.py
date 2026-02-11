@@ -1272,7 +1272,7 @@ async def check_followup_trigger(request: FollowupCheckRequest):
         return {
             "needs_followup": False,
             "questions": [],
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 

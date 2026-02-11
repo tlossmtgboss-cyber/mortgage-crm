@@ -36,7 +36,7 @@ def register_cache_routes(app, get_db, get_current_user, **kwargs):
         except ImportError:
             return {"cache": {"enabled": False}, "timestamp": datetime.now(timezone.utc).isoformat()}
         except Exception as e:
-            return {"error": str(e), "timestamp": datetime.now(timezone.utc).isoformat()}
+            return {"error": "Internal server error", "timestamp": datetime.now(timezone.utc).isoformat()}
 
     @app.get("/api/v1/cache/metrics")
     async def cache_metrics_endpoint():
@@ -55,7 +55,7 @@ def register_cache_routes(app, get_db, get_current_user, **kwargs):
                 "timestamp": datetime.now(timezone.utc).isoformat()
             }
         except Exception as e:
-            return {"error": str(e), "timestamp": datetime.now(timezone.utc).isoformat()}
+            return {"error": "Internal server error", "timestamp": datetime.now(timezone.utc).isoformat()}
 
     # Note: POST /api/v1/cache/clear is handled by api/cache_routes.py
 
@@ -79,4 +79,4 @@ def register_cache_routes(app, get_db, get_current_user, **kwargs):
         except ImportError:
             return {"success": False, "message": "Cache module not available"}
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")

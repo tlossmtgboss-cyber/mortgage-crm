@@ -587,7 +587,7 @@ async def run_migration(
         return success_response("Migration completed successfully", {"migrated": True})
     except Exception as e:
         logger.error(f"Migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/admin/trigger-weekly-updates")
@@ -615,7 +615,7 @@ async def trigger_weekly_updates(
 
     except Exception as e:
         logger.error(f"Weekly updates trigger error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/admin/scheduler-status")
@@ -644,4 +644,4 @@ async def get_scheduler_status(
 
     except Exception as e:
         logger.error(f"Scheduler status error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

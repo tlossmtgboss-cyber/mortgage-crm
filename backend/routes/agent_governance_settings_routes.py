@@ -737,7 +737,7 @@ async def bulk_update_status(
                 failed.append({"id": agent_id, "error": "Agent not found"})
 
         except Exception as e:
-            failed.append({"id": agent_id, "error": str(e)})
+            failed.append({"id": agent_id, "error": "Internal server error"})
 
     db.commit()
 

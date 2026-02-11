@@ -383,7 +383,7 @@ class TaskProcessor:
                 UPDATE sequence_steps
                 SET status = 'failed', error = :error
                 WHERE id = :step_id
-            """), {"error": str(e), "step_id": step_id})
+            """), {"error": "Internal server error", "step_id": step_id})
             self.db.commit()
             raise
 

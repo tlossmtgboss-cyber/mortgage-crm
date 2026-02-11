@@ -1346,7 +1346,7 @@ async def concierge_conversation(
             "extracted_data": {},
             "next_stage": data.current_stage,
             "is_complete": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -1523,7 +1523,7 @@ async def schedule_review_call(
 
     except Exception as e:
         logger.error(f"Failed to schedule review call: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/api/v1/apply/{token}/review-call")
@@ -1601,7 +1601,7 @@ async def export_mismo_xml(
 
     except Exception as e:
         logger.error(f"MISMO export failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Export failed")
 
 
 @router.get("/api/v1/admin/applications/{application_id}/export/mismo")
@@ -1652,7 +1652,7 @@ async def admin_export_mismo_xml(
 
     except Exception as e:
         logger.error(f"MISMO export failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Export failed")
 
 
 # ============================================================================

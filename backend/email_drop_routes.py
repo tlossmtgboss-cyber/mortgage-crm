@@ -269,7 +269,7 @@ async def parse_email(
         raise
     except Exception as e:
         logger.error(f"Email parse error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/process", response_model=ProcessEmailResponse)
@@ -336,7 +336,7 @@ async def process_email(
         logger.error(f"Email process error: {e}")
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/search-matches", response_model=SearchMatchResponse)
@@ -410,7 +410,7 @@ async def search_matches(
 
     except Exception as e:
         logger.error(f"Search matches error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================

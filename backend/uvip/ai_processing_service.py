@@ -99,7 +99,7 @@ class AIProcessingService:
 
         except Exception as e:
             logger.error(f"Transcription failed: {e}")
-            return {"error": str(e), "transcript": "", "segments": []}
+            return {"error": "Internal server error", "transcript": "", "segments": []}
 
     async def analyze_meeting(
         self,
@@ -145,7 +145,7 @@ class AIProcessingService:
 
         except Exception as e:
             logger.error(f"Meeting analysis failed: {e}")
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
     def _build_analysis_prompt(
         self,
@@ -267,7 +267,7 @@ IMPORTANT:
                 "key_topics": [],
                 "action_items": [],
                 "decisions_made": [],
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     async def generate_meeting_summary_email(

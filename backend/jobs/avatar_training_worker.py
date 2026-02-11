@@ -160,7 +160,7 @@ class AvatarTrainingWorker:
             )
             avatar_service.log_analytics_event(
                 db, avatar_id, "training_failed",
-                {"error": str(e)}
+                {"error": "Internal server error"}
             )
             return False
 

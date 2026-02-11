@@ -170,7 +170,7 @@ async def search_emails_by_client(
 
     except Exception as e:
         logger.error(f"Error in search by client: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/search/by-content")
@@ -202,7 +202,7 @@ async def search_emails_by_content(
 
     except Exception as e:
         logger.error(f"Error in search by content: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/identify")
@@ -230,7 +230,7 @@ async def identify_email_sender(
 
     except Exception as e:
         logger.error(f"Error identifying sender: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/thread")
@@ -259,7 +259,7 @@ async def get_email_thread(
 
     except Exception as e:
         logger.error(f"Error getting thread: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/priority")
@@ -289,7 +289,7 @@ async def get_priority_emails(
 
     except Exception as e:
         logger.error(f"Error getting priority emails: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/context")
@@ -319,7 +319,7 @@ async def get_email_context(
 
     except Exception as e:
         logger.error(f"Error getting email context: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/query")
@@ -399,7 +399,7 @@ async def natural_language_query(
 
     except SQLAlchemyError as e:
         logger.error(f"Error processing query: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ================================================================
@@ -428,7 +428,7 @@ async def get_morning_briefing(
 
     except Exception as e:
         logger.error(f"Error generating briefing: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/stats")
@@ -477,7 +477,7 @@ async def get_email_stats(
 
     except Exception as e:
         logger.error(f"Error getting stats: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/tools-schema")

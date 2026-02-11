@@ -708,7 +708,7 @@ def register_health_routes(app, get_db, **kwargs):
             logger.error(f"Health check failed: {e}")
             return JSONResponse(
                 status_code=503,
-                content={"status": "unhealthy", "error": str(e)}
+                content={"status": "unhealthy", "error": "Internal server error"}
             )
 
     # ========================================================================
@@ -786,7 +786,7 @@ def register_health_routes(app, get_db, **kwargs):
             logger.error(f"API health check failed: {e}")
             return JSONResponse(
                 status_code=503,
-                content={"status": "unhealthy", "error": str(e)}
+                content={"status": "unhealthy", "error": "Internal server error"}
             )
 
     # ========================================================================
@@ -987,7 +987,7 @@ def register_health_routes(app, get_db, **kwargs):
 
             return pool_info
         except Exception as e:
-            return {"error": str(e), "status": "unknown"}
+            return {"error": "Internal server error", "status": "unknown"}
 
     # ========================================================================
     # Health cache (lines ~16979-16992 in inline_legacy_routes.py)
@@ -1006,4 +1006,4 @@ def register_health_routes(app, get_db, **kwargs):
         except ImportError:
             return {"status": "disabled", "message": "Cache module not available"}
         except Exception as e:
-            return {"status": "error", "error": str(e)}
+            return {"status": "error", "error": "Internal server error"}

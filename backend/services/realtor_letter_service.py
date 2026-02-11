@@ -348,7 +348,7 @@ class LetterGenerationService:
         except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Error generating letter: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def generate_pdf(self, letter_id: int) -> Optional[bytes]:
         """
@@ -554,7 +554,7 @@ class LetterGenerationService:
         except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Error voiding letter: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def record_download(self, letter_id: int):
         """Record that a letter was downloaded."""

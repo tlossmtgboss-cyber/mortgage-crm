@@ -398,7 +398,7 @@ async def voice_workflow_websocket(
                 try:
                     await websocket.send_json({
                         "type": WebSocketMessageType.ERROR.value,
-                        "error": str(e)
+                        "error": "Internal server error"
                     })
                 except Exception:
                     pass  # Connection might be closed
@@ -442,7 +442,7 @@ async def create_workflow_session(
         }
     except SQLAlchemyError as e:
         logger.error(f"Error creating workflow session: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to create session: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create session")
 
 
 @router.get("/sessions/{user_id}")
@@ -512,7 +512,7 @@ async def get_session_details(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error getting session details: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to get session: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get session")
 
 
 @router.post("/session/{workflow_id}/input")
@@ -610,7 +610,7 @@ async def debug_test_session(
                     user_id = result[0]
                     results["steps"].append({"step": "auth", "status": "ok", "user_id": user_id, "email": email})
         except SQLAlchemyError as e:
-            results["steps"].append({"step": "auth", "status": "error", "error": str(e)})
+            results["steps"].append({"step": "auth", "status": "error", "error": "Internal server error"})
 
         if not user_id:
             return {"success": False, "error": "Auth failed", "results": results}
@@ -633,7 +633,7 @@ async def debug_test_session(
                 "loans": [{"id": l[0], "name": l[1], "amount": float(l[2]) if l[2] else 0, "program": l[3], "stage": l[4]} for l in loans]
             })
         except SQLAlchemyError as e:
-            results["steps"].append({"step": "loans_query", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+            results["steps"].append({"step": "loans_query", "status": "error", "error": "Internal server error", "traceback": traceback.format_exc()})
 
         # Step 3: Test response generator import
         try:
@@ -641,7 +641,7 @@ async def debug_test_session(
             gen = get_response_generator()
             results["steps"].append({"step": "response_generator", "status": "ok"})
         except Exception as e:
-            results["steps"].append({"step": "response_generator", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+            results["steps"].append({"step": "response_generator", "status": "error", "error": "Internal server error", "traceback": traceback.format_exc()})
 
         # Step 4: Test slot extractor import
         try:
@@ -649,7 +649,7 @@ async def debug_test_session(
             ext = get_slot_extractor()
             results["steps"].append({"step": "slot_extractor", "status": "ok"})
         except Exception as e:
-            results["steps"].append({"step": "slot_extractor", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+            results["steps"].append({"step": "slot_extractor", "status": "error", "error": "Internal server error", "traceback": traceback.format_exc()})
 
         # Step 5: Test workflow service import
         try:
@@ -657,12 +657,12 @@ async def debug_test_session(
             svc = get_workflow_service(db)
             results["steps"].append({"step": "workflow_service", "status": "ok"})
         except Exception as e:
-            results["steps"].append({"step": "workflow_service", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+            results["steps"].append({"step": "workflow_service", "status": "error", "error": "Internal server error", "traceback": traceback.format_exc()})
 
         return {"success": True, "results": results}
 
     except Exception as e:
-        return {"success": False, "error": str(e), "traceback": traceback.format_exc(), "results": results}
+        return {"success": False, "error": "Internal server error", "traceback": traceback.format_exc(), "results": results}
 
 
 @router.get("/debug/test-noauth")
@@ -686,7 +686,7 @@ async def debug_test_noauth(
             else:
                 return {"success": False, "error": "No users found in database", "results": results}
         except SQLAlchemyError as e:
-            return {"success": False, "error": f"Failed to find users: {str(e)}", "results": results}
+            return {"success": False, "error": "Failed to find users", "results": results}
 
     results["user_id"] = user_id
 
@@ -708,7 +708,7 @@ async def debug_test_noauth(
                 "loans": [{"id": l[0], "name": l[1], "amount": float(l[2]) if l[2] else 0, "program": l[3], "stage": l[4]} for l in loans]
             })
         except SQLAlchemyError as e:
-            results["steps"].append({"step": "loans_query", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+            results["steps"].append({"step": "loans_query", "status": "error", "error": "Internal server error", "traceback": traceback.format_exc()})
             return {"success": False, "results": results}
 
         # Step 2: Test workflow service creation
@@ -734,15 +734,15 @@ async def debug_test_noauth(
                     "available_applicants": len(session.available_applicants) if hasattr(session, 'available_applicants') and session.available_applicants else 0,
                 })
             except SQLAlchemyError as e:
-                results["steps"].append({"step": "create_session", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+                results["steps"].append({"step": "create_session", "status": "error", "error": "Internal server error", "traceback": traceback.format_exc()})
 
         except SQLAlchemyError as e:
-            results["steps"].append({"step": "workflow_service", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+            results["steps"].append({"step": "workflow_service", "status": "error", "error": "Internal server error", "traceback": traceback.format_exc()})
 
         return {"success": True, "results": results}
 
     except SQLAlchemyError as e:
-        return {"success": False, "error": str(e), "traceback": traceback.format_exc(), "results": results}
+        return {"success": False, "error": "Internal server error", "traceback": traceback.format_exc(), "results": results}
 
 
 def _get_workflow_description(wt: WorkflowType) -> str:

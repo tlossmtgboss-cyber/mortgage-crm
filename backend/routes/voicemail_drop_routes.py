@@ -811,7 +811,7 @@ async def create_voicemail_drop(
             failed_event = VoicemailEvent(
                 voicemail_drop_id=voicemail_drop.id,
                 event_type='failed',
-                event_data={"error": str(e)}
+                event_data={"error": "Internal server error"}
             )
             db.add(failed_event)
             db.commit()

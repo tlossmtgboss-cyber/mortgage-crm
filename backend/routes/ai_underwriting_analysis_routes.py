@@ -174,7 +174,7 @@ Provide your analysis in JSON format:
 
     except Exception as e:
         logger.error(f"AI Underwriting error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/guidelines")
@@ -373,7 +373,7 @@ async def calculate_risk_score(
 
     except Exception as e:
         logger.error(f"Risk score calculation error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/checklist/{loan_type}")

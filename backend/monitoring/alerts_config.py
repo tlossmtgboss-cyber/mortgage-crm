@@ -340,7 +340,7 @@ def create_monitors_via_api(api_key: str = None, app_key: str = None) -> Dict[st
     except Exception as e:
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 

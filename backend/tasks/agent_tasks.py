@@ -90,7 +90,7 @@ def run_agent_health_checks():
         logger.error(f"Error in agent health check task: {e}")
         if db:
             db.rollback()
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
     finally:
         if db:
             db.close()
@@ -249,7 +249,7 @@ def aggregate_agent_metrics():
         logger.error(f"Error in agent metrics aggregation task: {e}")
         if db:
             db.rollback()
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
     finally:
         if db:
             db.close()
@@ -374,7 +374,7 @@ def cleanup_old_alerts():
         logger.error(f"Error in alert cleanup task: {e}")
         if db:
             db.rollback()
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
     finally:
         if db:
             db.close()
@@ -417,7 +417,7 @@ def cleanup_stale_executions():
         logger.error(f"Error in stale execution cleanup task: {e}")
         if db:
             db.rollback()
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
     finally:
         if db:
             db.close()
@@ -458,7 +458,7 @@ def cleanup_inactive_sessions():
         logger.error(f"Error in inactive session cleanup task: {e}")
         if db:
             db.rollback()
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
     finally:
         if db:
             db.close()
@@ -519,7 +519,7 @@ def create_daily_performance_snapshot():
         logger.error(f"Error in daily performance snapshot task: {e}")
         if db:
             db.rollback()
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
     finally:
         if db:
             db.close()

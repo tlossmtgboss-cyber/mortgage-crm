@@ -176,7 +176,7 @@ async def get_candidate_assessment(
 
     except Exception as e:
         logger.exception(f"Error getting assessment for candidate {candidate_id}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/{candidate_id}/assessment")
@@ -217,7 +217,7 @@ async def create_candidate_assessment(
 
     except Exception as e:
         logger.exception(f"Error creating assessment for candidate {candidate_id}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/{candidate_id}/assessment")
@@ -255,7 +255,7 @@ async def update_candidate_assessment(
         raise
     except Exception as e:
         logger.exception(f"Error updating assessment for candidate {candidate_id}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/{candidate_id}/assessment/history")
@@ -280,7 +280,7 @@ async def get_assessment_history(
 
     except Exception as e:
         logger.exception(f"Error getting assessment history for candidate {candidate_id}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/{candidate_id}/assessment/breakdown")
@@ -355,7 +355,7 @@ async def get_assessment_breakdown(
         raise
     except Exception as e:
         logger.exception(f"Error getting assessment breakdown for candidate {candidate_id}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -428,7 +428,7 @@ async def update_disc_scores(
         raise
     except Exception as e:
         logger.exception(f"Error updating DISC scores for candidate {candidate_id}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/{candidate_id}/assessment/character")
@@ -480,7 +480,7 @@ async def update_character_scores(
         raise
     except Exception as e:
         logger.exception(f"Error updating character scores for candidate {candidate_id}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/{candidate_id}/assessment/skills")
@@ -532,7 +532,7 @@ async def update_skills_scores(
         raise
     except Exception as e:
         logger.exception(f"Error updating skills scores for candidate {candidate_id}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/{candidate_id}/assessment/culture-fit")
@@ -584,7 +584,7 @@ async def update_culture_fit_scores(
         raise
     except Exception as e:
         logger.exception(f"Error updating culture fit scores for candidate {candidate_id}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -636,7 +636,7 @@ async def override_assessment_scores(
         raise
     except Exception as e:
         logger.exception(f"Error overriding scores for candidate {candidate_id}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -893,7 +893,7 @@ async def run_grading_migration(
     except SQLAlchemyError as e:
         logger.exception("Error running grading migration")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -1020,10 +1020,10 @@ async def run_ai_analysis(
         }
 
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail="Not found")
     except Exception as e:
         logger.exception(f"Error running AI analysis for candidate {candidate_id}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/{candidate_id}/assessment/ai-apply")
@@ -1091,7 +1091,7 @@ async def apply_ai_suggestions(
         raise
     except Exception as e:
         logger.exception(f"Error applying AI suggestions for candidate {candidate_id}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/{candidate_id}/assessment/ai-status")
@@ -1134,4 +1134,4 @@ async def get_ai_analysis_status(
 
     except Exception as e:
         logger.exception(f"Error getting AI analysis status for candidate {candidate_id}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

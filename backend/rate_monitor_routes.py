@@ -1057,7 +1057,7 @@ async def migrate_rate_monitor_tables(
             results.append({"table": "rate_monitor_history", "status": "OK"})
         except Exception as e:
             db.rollback()
-            results.append({"table": "rate_monitor_history", "status": "SKIP", "error": str(e)[:100]})
+            results.append({"table": "rate_monitor_history", "status": "SKIP", "error": "Internal server error"[:100]})
 
         # Create alerts table
         try:
@@ -1066,7 +1066,7 @@ async def migrate_rate_monitor_tables(
             results.append({"table": "rate_monitor_alerts", "status": "OK"})
         except Exception as e:
             db.rollback()
-            results.append({"table": "rate_monitor_alerts", "status": "SKIP", "error": str(e)[:100]})
+            results.append({"table": "rate_monitor_alerts", "status": "SKIP", "error": "Internal server error"[:100]})
 
         # Create indexes
         for idx_sql in indexes_sql:
@@ -1076,7 +1076,7 @@ async def migrate_rate_monitor_tables(
                 results.append({"index": idx_sql.split("IF NOT EXISTS ")[1].split(" ON")[0], "status": "OK"})
             except Exception as e:
                 db.rollback()
-                results.append({"index": idx_sql[:50], "status": "SKIP", "error": str(e)[:50]})
+                results.append({"index": idx_sql[:50], "status": "SKIP", "error": "Internal server error"[:50]})
 
         return {
             "success": True,
@@ -1086,7 +1086,7 @@ async def migrate_rate_monitor_tables(
 
     except Exception as e:
         logger.error(f"Rate monitor tables migration failed: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 # =============================================================================

@@ -492,7 +492,7 @@ async def create_voice_profile(
     except Exception as e:
         db.rollback()
         logger.error(f"Failed to create voice profile: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create voice profile: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create voice profile")
 
 
 @router.put("/voice-profiles/{profile_id}")
@@ -654,7 +654,7 @@ async def repair_blog_tables():
         }
     except Exception as e:
         logger.error(f"Repair failed: {e}")
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": "Internal server error"}
 
 
 # ============ Trending Topics Endpoint ============
@@ -771,7 +771,7 @@ async def upload_source_document(
         with open(file_path, "wb") as f:
             f.write(content)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save file")
 
     # Create document record
     doc = BlogSourceDocument(
@@ -1060,7 +1060,7 @@ async def generate_content(
         logger.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=500,
-            detail=f"Content generation failed: {str(e)}"
+            detail="Content generation failed"
         )
 
 

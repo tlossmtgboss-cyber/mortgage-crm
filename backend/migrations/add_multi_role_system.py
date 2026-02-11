@@ -138,7 +138,7 @@ def check_migration_status():
                 "missing": [t for t in ['user_assigned_roles', 'user_active_role'] if t not in tables]
             }
     except Exception as e:
-        return {"applied": False, "error": str(e)}
+        return {"applied": False, "error": "Internal server error"}
 
 
 if __name__ == "__main__":

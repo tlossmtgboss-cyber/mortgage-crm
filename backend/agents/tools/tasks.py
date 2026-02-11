@@ -787,7 +787,7 @@ def bulk_update_tasks(
             results["results"].append({
                 "task_id": task_id,
                 "status": "failed",
-                "error": str(e),
+                "error": "Internal server error",
             })
             results["failed"] += 1
 

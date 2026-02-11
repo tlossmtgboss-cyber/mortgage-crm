@@ -276,7 +276,7 @@ async def reconcile_calendar(
             except Exception as e:
                 results["errors"].append({
                     "event_id": event.id,
-                    "error": str(e)
+                    "error": "Internal server error"
                 })
 
         db.commit()
@@ -475,7 +475,7 @@ async def poll_salesforce_events() -> dict:
                 logger.error(f"Error polling for user {profile.user_id}: {e}")
                 results["errors"].append({
                     "user_id": profile.user_id,
-                    "error": str(e)
+                    "error": "Internal server error"
                 })
 
         logger.info(

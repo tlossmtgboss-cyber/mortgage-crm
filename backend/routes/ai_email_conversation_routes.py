@@ -493,7 +493,7 @@ async def debug_conversation_history(
         return result
     except Exception as e:
         logger.error(f"Error in debug history: {e}")
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
 
 
 @router.get("/conversations", response_model=List[dict])

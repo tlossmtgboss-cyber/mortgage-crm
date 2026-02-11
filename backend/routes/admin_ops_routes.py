@@ -68,7 +68,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                 "timestamp": datetime.now(timezone.utc).isoformat()
             }
         except Exception as e:
-            return {"status": "error", "error": str(e)}
+            return {"status": "error", "error": "Internal server error"}
 
 
     @app.get("/api/v1/admin/salesforce-sync-status")
@@ -344,7 +344,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             logger.error(f"Salesforce sync status check failed: {e}")
             return {
                 "status": "error",
-                "error": str(e),
+                "error": "Internal server error",
                 "timestamp": datetime.now(timezone.utc).isoformat()
             }
         finally:
@@ -378,7 +378,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             logger.error(f"Manual Salesforce sync trigger failed: {e}")
             return {
                 "status": "error",
-                "error": str(e),
+                "error": "Internal server error",
                 "timestamp": datetime.now(timezone.utc).isoformat()
             }
 
@@ -483,7 +483,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             import traceback
             return {
                 "status": "error",
-                "error": str(e),
+                "error": "Internal server error",
                 "traceback": traceback.format_exc()
             }
         finally:
@@ -613,7 +613,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         except Exception as e:
             return {
                 "status": "error",
-                "error": str(e),
+                "error": "Internal server error",
                 "timestamp": datetime.now(timezone.utc).isoformat()
             }
         finally:
@@ -654,7 +654,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             logger.error(f"Pool reset failed: {e}")
             return JSONResponse(
                 status_code=500,
-                content={"status": "error", "error": str(e)}
+                content={"status": "error", "error": "Internal server error"}
             )
 
 
@@ -754,7 +754,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         except Exception as e:
             db.rollback()
             logger.error(f"Failed to update Twilio config: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     # ========================================================================
     # AUTHENTICATION TEST & ADMIN SETUP / MIGRATION ENDPOINTS
@@ -1453,7 +1453,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         except Exception as e:
             db.rollback()
             logger.error(f"Failed to create loan_team_members table: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
 
     @app.post("/admin/populate-loan-team-members")
@@ -2118,7 +2118,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                     deleted_users.append(user_info)
 
                 except Exception as e:
-                    errors.append({"user": user.email, "error": str(e)[:100]})
+                    errors.append({"user": user.email, "error": "Internal server error"[:100]})
 
             db.commit()
 
@@ -2134,7 +2134,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         except Exception as e:
             db.rollback()
             logger.error(f"Sample user cleanup failed: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
 
     async def _get_deletion_blockers(user_id: int, db: Session):
@@ -2179,7 +2179,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                     pass  # Table might not exist
 
         except Exception as e:
-            return {"error": str(e), "blockers": []}
+            return {"error": "Internal server error", "blockers": []}
 
         return {
             "user_id": user_id,
@@ -2298,7 +2298,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             }
         except Exception as e:
             logger.error(f"Loan check failed: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
 
     @app.get("/api/v1/admin/debug-data")
@@ -2337,7 +2337,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                 "users": users
             }
         except Exception as e:
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
 
     @app.get("/api/v1/admin/task-check")
@@ -2391,7 +2391,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                 "recent_tasks": tasks[:20]
             }
         except Exception as e:
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
 
     @app.delete("/api/v1/admin/clear-imported-loans")
@@ -2413,7 +2413,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             return {"status": "success", "deleted": deleted}
         except Exception as e:
             logger.error(f"Clear imported loans failed: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
 
     @app.post("/api/v1/admin/import-loans")
@@ -2575,4 +2575,4 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             }
         except Exception as e:
             logger.error(f"Admin import loans failed: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")

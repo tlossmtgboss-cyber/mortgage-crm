@@ -156,7 +156,7 @@ class TaskGeneratorService:
         except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Task generation failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def generate_scheduled_tasks(self) -> Dict[str, Any]:
         """
@@ -195,7 +195,7 @@ class TaskGeneratorService:
 
         except Exception as e:
             logger.error(f"Scheduled task generation failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def _generate_day_tasks(
         self,

@@ -196,7 +196,7 @@ async def get_executive_dashboard(
     except Exception as e:
         logger.error(f"Executive dashboard error: {e}", exc_info=True)
         return {
-            "error": str(e),
+            "error": "Internal server error",
             "message": "Financial intelligence data unavailable",
             "generated_at": datetime.now(timezone.utc).isoformat()
         }
@@ -273,7 +273,7 @@ async def get_cost_per_loan(
     except Exception as e:
         logger.error(f"Cost per loan error: {e}", exc_info=True)
         return {
-            "error": str(e),
+            "error": "Internal server error",
             "total_cost_per_loan": 0,
             "breakdown": {"labor": 0, "tech_stack": 0, "fulfillment": 0, "overhead": 0},
             "loans_closed": 0,

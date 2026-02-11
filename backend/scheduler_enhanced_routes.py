@@ -1261,4 +1261,4 @@ async def run_enhanced_migration(
 
     except Exception as e:
         logger.error(f"Enhanced migration error: {e}")
-        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Migration failed")

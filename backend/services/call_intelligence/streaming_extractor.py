@@ -339,7 +339,7 @@ class StreamingExtractor:
                 logger.exception(f"Final extraction failed for {call_id}: {e}")
                 final_result = {
                     "call_id": call_id,
-                    "error": str(e),
+                    "error": "Internal server error",
                     "partial_extractions": {
                         k: {"value": v.value, "confidence": v.confidence}
                         for k, v in session.extractions.items()
@@ -479,7 +479,7 @@ class StreamingExtractor:
             yield ExtractionEvent(
                 event_type=ExtractionEventType.ERROR,
                 call_id=session.call_id,
-                data={"error": str(e)},
+                data={"error": "Internal server error"},
             )
 
     async def _emit_event(self, call_id: str, event: ExtractionEvent) -> None:

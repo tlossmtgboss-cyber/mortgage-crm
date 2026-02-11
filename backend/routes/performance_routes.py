@@ -239,7 +239,7 @@ async def check_database_health(db: Session = Depends(get_db)):
         logger.error(f"Database health check failed: {e}")
         return {
             "status": "unhealthy",
-            "error": str(e),
+            "error": "Internal server error",
             "pool": get_pool_status()
         }
 
@@ -285,7 +285,7 @@ async def get_database_dashboard(db: Session = Depends(get_db)):
     except Exception as e:
         dashboard["connectivity"] = {
             "status": "error",
-            "error": str(e)
+            "error": "Internal server error"
         }
         dashboard["recommendations"].append("DATABASE UNREACHABLE - Check connection settings")
         return dashboard
@@ -339,7 +339,7 @@ async def get_database_dashboard(db: Session = Depends(get_db)):
                 )
 
     except Exception as e:
-        dashboard["statistics"] = {"error": str(e)}
+        dashboard["statistics"] = {"error": "Internal server error"}
 
     # Get active/long-running queries
     try:
@@ -387,7 +387,7 @@ async def get_database_dashboard(db: Session = Depends(get_db)):
             )
 
     except Exception as e:
-        dashboard["active_queries"] = {"error": str(e)}
+        dashboard["active_queries"] = {"error": "Internal server error"}
 
     # Get background job status
     try:
@@ -398,7 +398,7 @@ async def get_database_dashboard(db: Session = Depends(get_db)):
             "jobs": jobs[:10]  # Limit to first 10
         }
     except Exception as e:
-        dashboard["background_jobs"] = {"error": str(e)}
+        dashboard["background_jobs"] = {"error": "Internal server error"}
 
     # Overall health status
     pool_status = dashboard["pool"].get("status", "unknown")
@@ -491,7 +491,7 @@ async def get_connection_details(db: Session = Depends(get_db)):
 
     except Exception as e:
         logger.error(f"Failed to get connection details: {e}")
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
 
 
 @router.post("/database/terminate-idle")
@@ -529,7 +529,7 @@ async def terminate_idle_connections(
 
     except Exception as e:
         logger.error(f"Failed to terminate idle connections: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 # ============================================================================
@@ -554,7 +554,7 @@ async def get_scaling_status(db: Session = Depends(get_db)):
         return await db_scaling.get_health_status(db)
     except Exception as e:
         logger.error(f"Scaling status check failed: {e}")
-        return {"error": str(e), "status": "unknown"}
+        return {"error": "Internal server error", "status": "unknown"}
 
 
 @router.get("/scaling/report")
@@ -574,7 +574,7 @@ async def get_scaling_report(db: Session = Depends(get_db)):
         return await db_scaling.get_scaling_report(db)
     except Exception as e:
         logger.error(f"Scaling report generation failed: {e}")
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
 
 
 @router.get("/scaling/alerts")
@@ -606,7 +606,7 @@ async def get_scaling_alerts():
         }
     except Exception as e:
         logger.error(f"Failed to get scaling alerts: {e}")
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
 
 
 @router.post("/scaling/cache/invalidate")
@@ -638,7 +638,7 @@ async def invalidate_scaling_cache(
 
     except Exception as e:
         logger.error(f"Cache invalidation failed: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 # ============================================================================
@@ -677,7 +677,7 @@ async def export_alerts_config(filename: str = Query("datadog_monitors.json")):
     except Exception as e:
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 

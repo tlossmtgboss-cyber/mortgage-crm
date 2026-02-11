@@ -149,7 +149,7 @@ async def get_hallucination_metrics(
 
     except Exception as e:
         logger.error(f"Error getting hallucination metrics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/performance", response_model=AgentPerformanceResponse)
@@ -180,7 +180,7 @@ async def get_agent_performance(
 
     except Exception as e:
         logger.error(f"Error getting agent performance metrics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/quality", response_model=AIQualityResponse)
@@ -210,7 +210,7 @@ async def get_ai_quality_metrics(
 
     except Exception as e:
         logger.error(f"Error getting AI quality metrics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/dashboard", response_model=DashboardSummaryResponse)
@@ -240,7 +240,7 @@ async def get_dashboard_summary(
 
     except Exception as e:
         logger.error(f"Error getting dashboard summary: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/response-time")
@@ -268,7 +268,7 @@ async def get_response_time_breakdown(
 
     except Exception as e:
         logger.error(f"Error getting response time breakdown: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/business")
@@ -298,7 +298,7 @@ async def get_business_metrics(
 
     except Exception as e:
         logger.error(f"Error getting business metrics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -376,4 +376,4 @@ async def manually_verify_response(
 
     except Exception as e:
         logger.error(f"Error verifying response: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

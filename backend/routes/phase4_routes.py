@@ -74,10 +74,10 @@ async def analyze_conversation(request: ConversationAnalysisRequest):
             "recommendations": analysis.recommendations
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
     except Exception as e:
         logger.error(f"Error analyzing conversation: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @ai_learning_router.get("/training-data")

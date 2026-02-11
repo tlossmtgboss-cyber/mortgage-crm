@@ -271,7 +271,7 @@ async def get_contacts_for_outreach(
         }
     except Exception as e:
         logger.error(f"Error fetching contacts: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/start")
@@ -330,7 +330,7 @@ async def start_ai_outreach(
         raise
     except Exception as e:
         logger.error(f"Error starting outreach: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 async def _send_email_outreach(email: str, first_name: str, subject: str, message: str, db: Session):
@@ -522,7 +522,7 @@ This is an AI-assisted conversation. Simply reply to this email to continue chat
 
     except Exception as e:
         logger.error(f"Email outreach error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 async def _send_sms_outreach(phone: str, first_name: str, message: str, db: Session):
@@ -593,7 +593,7 @@ async def _send_sms_outreach(phone: str, first_name: str, message: str, db: Sess
 
     except SQLAlchemyError as e:
         logger.error(f"SMS outreach error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/conversations")
@@ -691,7 +691,7 @@ async def get_conversation_detail(
         }
     except Exception as e:
         logger.error(f"Error fetching conversation: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/stats")

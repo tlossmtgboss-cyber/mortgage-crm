@@ -189,7 +189,7 @@ class CalendlyService:
             }
         except httpx.HTTPError as e:
             logger.error(f"Failed to exchange code: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     async def refresh_access_token(self, refresh_token: str) -> Dict[str, Any]:
         """
@@ -224,7 +224,7 @@ class CalendlyService:
             }
         except httpx.HTTPError as e:
             logger.error(f"Failed to refresh token: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     # =========================================================================
     # User & Organization Info
@@ -262,7 +262,7 @@ class CalendlyService:
             }
         except httpx.HTTPError as e:
             logger.error(f"Failed to get current user: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     async def get_organization(self, access_token: str, org_uri: str) -> Dict[str, Any]:
         """
@@ -292,7 +292,7 @@ class CalendlyService:
             }
         except httpx.HTTPError as e:
             logger.error(f"Failed to get organization: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     # =========================================================================
     # Event Types
@@ -354,7 +354,7 @@ class CalendlyService:
             }
         except httpx.HTTPError as e:
             logger.error(f"Failed to get event types: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     # =========================================================================
     # Availability
@@ -419,7 +419,7 @@ class CalendlyService:
             return result
         except httpx.HTTPError as e:
             logger.error(f"Failed to get availability: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     async def get_busy_times(
         self,
@@ -470,7 +470,7 @@ class CalendlyService:
             }
         except httpx.HTTPError as e:
             logger.error(f"Failed to get busy times: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     # =========================================================================
     # Scheduled Events
@@ -547,7 +547,7 @@ class CalendlyService:
             }
         except httpx.HTTPError as e:
             logger.error(f"Failed to get scheduled events: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     async def get_event(self, access_token: str, event_uri: str) -> Dict[str, Any]:
         """
@@ -576,7 +576,7 @@ class CalendlyService:
             }
         except httpx.HTTPError as e:
             logger.error(f"Failed to get event: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     async def get_event_invitees(
         self,
@@ -625,7 +625,7 @@ class CalendlyService:
             }
         except httpx.HTTPError as e:
             logger.error(f"Failed to get event invitees: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     # =========================================================================
     # Cancellation
@@ -676,7 +676,7 @@ class CalendlyService:
             }
         except httpx.HTTPError as e:
             logger.error(f"Failed to cancel event: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     # =========================================================================
     # Webhooks
@@ -741,7 +741,7 @@ class CalendlyService:
             }
         except httpx.HTTPError as e:
             logger.error(f"Failed to create webhook: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     async def delete_webhook_subscription(
         self,
@@ -769,7 +769,7 @@ class CalendlyService:
             return {"success": True}
         except httpx.HTTPError as e:
             logger.error(f"Failed to delete webhook: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     async def list_webhook_subscriptions(
         self,
@@ -807,7 +807,7 @@ class CalendlyService:
             }
         except httpx.HTTPError as e:
             logger.error(f"Failed to list webhooks: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
 
 # =============================================================================

@@ -173,7 +173,7 @@ async def list_agents(
 
     except Exception as e:
         logger.error(f"Error listing agents: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/agents/{agent_id}")
@@ -227,7 +227,7 @@ async def get_agent(request: Request, agent_id: str, db: Session = Depends(get_d
         raise
     except Exception as e:
         logger.error(f"Error getting agent: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/agents")
@@ -286,7 +286,7 @@ async def create_agent(request: Request, agent: AgentCreate, db: Session = Depen
     except Exception as e:
         db.rollback()
         logger.error(f"Error creating agent: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.patch("/agents/{agent_id}")
@@ -341,7 +341,7 @@ async def update_agent(request: Request, agent_id: str, updates: AgentUpdate, db
     except Exception as e:
         db.rollback()
         logger.error(f"Error updating agent: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/agents/{agent_id}")
@@ -380,7 +380,7 @@ async def delete_agent(request: Request, agent_id: str, db: Session = Depends(ge
     except Exception as e:
         db.rollback()
         logger.error(f"Error deleting agent: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -436,7 +436,7 @@ async def list_phone_numbers(
 
     except Exception as e:
         logger.error(f"Error listing phone numbers: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/phone-numbers")
@@ -468,7 +468,7 @@ async def assign_phone_number(request: Request, data: PhoneNumberAssign, db: Ses
     except Exception as e:
         db.rollback()
         logger.error(f"Error assigning phone number: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/phone-numbers/{phone_id}")
@@ -493,7 +493,7 @@ async def unassign_phone_number(request: Request, phone_id: str, db: Session = D
     except Exception as e:
         db.rollback()
         logger.error(f"Error removing phone number: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -593,7 +593,7 @@ async def list_call_sessions(
 
     except Exception as e:
         logger.error(f"Error listing call sessions: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/calls/live")
@@ -646,7 +646,7 @@ async def get_live_calls(request: Request, db: Session = Depends(get_db), curren
 
     except Exception as e:
         logger.error(f"Error getting live calls: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/calls/{call_id}")
@@ -715,7 +715,7 @@ async def get_call_session(request: Request, call_id: str, db: Session = Depends
         raise
     except Exception as e:
         logger.error(f"Error getting call session: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.patch("/calls/{call_id}")
@@ -753,7 +753,7 @@ async def update_call_session(request: Request, call_id: str, updates: CallSessi
     except Exception as e:
         db.rollback()
         logger.error(f"Error updating call session: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -860,7 +860,7 @@ async def get_voice_analytics(
 
     except Exception as e:
         logger.error(f"Error getting analytics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/agents/{agent_id}/analytics")
@@ -944,7 +944,7 @@ async def get_agent_analytics(request: Request, agent_id: str, days: int = Query
         raise
     except Exception as e:
         logger.error(f"Error getting agent analytics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/performance")
@@ -974,4 +974,4 @@ async def get_agent_performance_view(request: Request, db: Session = Depends(get
 
     except Exception as e:
         logger.error(f"Error getting performance view: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

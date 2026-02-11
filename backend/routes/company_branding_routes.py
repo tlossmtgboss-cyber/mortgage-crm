@@ -311,7 +311,7 @@ async def get_company_info(current_user = None):
     try:
         return success_response(company_info_store, "Company information retrieved")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/company")
@@ -323,7 +323,7 @@ async def update_company_info(data: CompanyInfo, current_user = None):
         company_info_store["updated_at"] = datetime.utcnow().isoformat()
         return success_response(company_info_store, "Company information updated successfully")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -336,7 +336,7 @@ async def get_brand_colors(current_user = None):
     try:
         return success_response(brand_colors_store, "Brand colors retrieved")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/colors")
@@ -348,7 +348,7 @@ async def update_brand_colors(data: BrandColors, current_user = None):
         brand_colors_store["updated_at"] = datetime.utcnow().isoformat()
         return success_response(brand_colors_store, "Brand colors updated successfully")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/colors/reset")
@@ -371,7 +371,7 @@ async def reset_brand_colors(current_user = None):
         }
         return success_response(brand_colors_store, "Brand colors reset to defaults")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -384,7 +384,7 @@ async def get_typography(current_user = None):
     try:
         return success_response(brand_typography_store, "Typography settings retrieved")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/typography")
@@ -396,7 +396,7 @@ async def update_typography(data: BrandTypography, current_user = None):
         brand_typography_store["updated_at"] = datetime.utcnow().isoformat()
         return success_response(brand_typography_store, "Typography settings updated successfully")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -409,7 +409,7 @@ async def get_brand_assets(current_user = None):
     try:
         return success_response(brand_assets_store, "Brand assets retrieved")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/assets")
@@ -421,7 +421,7 @@ async def update_brand_assets(data: BrandAssets, current_user = None):
         brand_assets_store["updated_at"] = datetime.utcnow().isoformat()
         return success_response(brand_assets_store, "Brand assets updated successfully")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/assets/upload")
@@ -470,7 +470,7 @@ async def upload_brand_asset(
     except ValidationException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -483,7 +483,7 @@ async def get_email_branding(current_user = None):
     try:
         return success_response(email_branding_store, "Email branding retrieved")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/email")
@@ -495,7 +495,7 @@ async def update_email_branding(data: EmailBranding, current_user = None):
         email_branding_store["updated_at"] = datetime.utcnow().isoformat()
         return success_response(email_branding_store, "Email branding updated successfully")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/email/preview")
@@ -519,7 +519,7 @@ async def preview_email_branding(current_user = None):
         """
         return success_response({"preview_html": preview_html}, "Email preview generated")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -532,7 +532,7 @@ async def get_document_branding(current_user = None):
     try:
         return success_response(document_branding_store, "Document branding retrieved")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/documents")
@@ -544,7 +544,7 @@ async def update_document_branding(data: DocumentBranding, current_user = None):
         document_branding_store["updated_at"] = datetime.utcnow().isoformat()
         return success_response(document_branding_store, "Document branding updated successfully")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -557,7 +557,7 @@ async def get_white_label_settings(current_user = None):
     try:
         return success_response(white_label_store, "White-label settings retrieved")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/white-label")
@@ -569,7 +569,7 @@ async def update_white_label_settings(data: WhiteLabelSettings, current_user = N
         white_label_store["updated_at"] = datetime.utcnow().isoformat()
         return success_response(white_label_store, "White-label settings updated successfully")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/white-label/verify-domain")
@@ -587,7 +587,7 @@ async def verify_custom_domain(domain: str, current_user = None):
             "message": "Add these DNS records to verify your domain"
         }, "Domain verification initiated")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -600,7 +600,7 @@ async def get_social_media(current_user = None):
     try:
         return success_response(social_media_store, "Social media links retrieved")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/social")
@@ -612,7 +612,7 @@ async def update_social_media(data: SocialMedia, current_user = None):
         social_media_store["updated_at"] = datetime.utcnow().isoformat()
         return success_response(social_media_store, "Social media links updated successfully")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -636,7 +636,7 @@ async def export_all_settings(current_user = None):
         }
         return success_response(all_settings, "Settings exported successfully")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/import")
@@ -666,4 +666,4 @@ async def import_all_settings(settings: Dict[str, Any], current_user = None):
 
         return success_response({"imported_at": datetime.utcnow().isoformat()}, "Settings imported successfully")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

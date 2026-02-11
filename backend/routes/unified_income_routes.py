@@ -538,7 +538,7 @@ async def perform_review_action(request: ReviewActionRequest):
         return item.to_dict()
 
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail="Not found")
 
 
 @router.post("/review/assign")
@@ -553,7 +553,7 @@ async def assign_reviewer(
         item = workflow.assign_reviewer(item_id, reviewer, assigned_by)
         return item.to_dict()
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail="Not found")
 
 
 # =============================================================================

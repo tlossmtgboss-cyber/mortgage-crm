@@ -80,7 +80,7 @@ async def submit_quiz_responses(
         )
         return scores
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/candidates/{candidate_id}/quiz-completed/{disposition}")
@@ -258,4 +258,4 @@ async def run_assessment_migration(admin_key: str = Query(...)):
         run_migration()
         return {"status": "success", "message": "Migration completed"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

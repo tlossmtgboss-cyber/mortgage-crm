@@ -624,7 +624,7 @@ class CallMonitoringOrchestrator:
                     completed_at = NOW(),
                     updated_at = NOW()
                 WHERE id = :id
-            """), {"id": run_id, "error": str(e)})
+            """), {"id": run_id, "error": "Internal server error"})
             self.db.commit()
 
             self._log_event(session_id, 'agent_failed', {
@@ -1345,13 +1345,13 @@ class CallMonitoringOrchestrator:
                     WHERE id = :id
                 """), {
                     "id": artifact_id,
-                    "result": json.dumps({"error": str(e)}),
+                    "result": json.dumps({"error": "Internal server error"}),
                 })
 
                 results["failed"].append({
                     "artifact_id": artifact_id,
                     "artifact_type": artifact_type,
-                    "error": str(e),
+                    "error": "Internal server error",
                 })
 
         self.db.commit()

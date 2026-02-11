@@ -300,7 +300,7 @@ async def upload_document(
         logger.error(f"Document upload error: {e}")
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/classify", response_model=DocumentClassifyResponse)
@@ -371,7 +371,7 @@ async def get_documents(
 
     except Exception as e:
         logger.error(f"Get documents error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/health")

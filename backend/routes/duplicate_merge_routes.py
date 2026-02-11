@@ -354,7 +354,7 @@ async def get_duplicate_leads(
 
     except Exception as e:
         logger.error(f"Error finding duplicates: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/execute")
@@ -487,7 +487,7 @@ async def execute_merge(
     except Exception as e:
         logger.error(f"Error executing merge: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/dismiss")
@@ -519,7 +519,7 @@ async def dismiss_duplicate(
         raise
     except Exception as e:
         logger.error(f"Error dismissing duplicate: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/completed")
@@ -589,7 +589,7 @@ async def get_completed_merges(
 
     except Exception as e:
         logger.error(f"Error fetching completed merges: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/feedback")
@@ -640,4 +640,4 @@ async def submit_merge_feedback(
         raise
     except Exception as e:
         logger.error(f"Error submitting feedback: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

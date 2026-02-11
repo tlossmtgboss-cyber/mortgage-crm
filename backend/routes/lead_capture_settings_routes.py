@@ -320,7 +320,7 @@ async def get_lead_capture_settings(
         raise
     except Exception as e:
         logger.exception("Error fetching lead capture settings")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("")
@@ -381,7 +381,7 @@ async def update_lead_capture_settings(
         raise
     except Exception as e:
         logger.exception("Error updating lead capture settings")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/lead-sources")
@@ -415,7 +415,7 @@ async def get_lead_source_options(
         raise
     except Exception as e:
         logger.exception("Error fetching lead source options")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/scoring-fields")
@@ -461,7 +461,7 @@ async def get_scoring_field_options(
         raise
     except Exception as e:
         logger.exception("Error fetching scoring field options")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/assignable-users")
@@ -529,7 +529,7 @@ async def get_assignable_users(
         raise
     except SQLAlchemyError as e:
         logger.exception("Error fetching assignable users")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/statistics")
@@ -607,7 +607,7 @@ async def get_lead_statistics(
         raise
     except SQLAlchemyError as e:
         logger.exception("Error fetching lead statistics")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/test-scoring")
@@ -679,7 +679,7 @@ async def test_scoring_rules(
         raise
     except Exception as e:
         logger.exception("Error testing scoring rules")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/reset-defaults")
@@ -708,4 +708,4 @@ async def reset_to_defaults(
         raise
     except Exception as e:
         logger.exception("Error resetting lead capture settings")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

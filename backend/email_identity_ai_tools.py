@@ -169,7 +169,7 @@ class EmailSearchTools:
             logger.error(f"Email search failed: {e}")
             return {
                 "success": False,
-                "error": str(e),
+                "error": "Internal server error",
                 "emails": []
             }
 
@@ -269,7 +269,7 @@ class EmailSearchTools:
             logger.error(f"Thread retrieval failed: {e}")
             return {
                 "success": False,
-                "error": str(e),
+                "error": "Internal server error",
                 "thread": []
             }
 
@@ -323,7 +323,7 @@ class EmailSearchTools:
             logger.error(f"Identity resolution failed: {e}")
             return {
                 "success": False,
-                "error": str(e),
+                "error": "Internal server error",
                 "email_address": email_address,
                 "matched": False
             }
@@ -422,7 +422,7 @@ class EmailSearchTools:
             logger.error(f"Priority email retrieval failed: {e}")
             return {
                 "success": False,
-                "error": str(e),
+                "error": "Internal server error",
                 "emails": []
             }
 
@@ -536,7 +536,7 @@ class EmailSearchTools:
             logger.error(f"Content search failed: {e}")
             return {
                 "success": False,
-                "error": str(e),
+                "error": "Internal server error",
                 "emails": []
             }
 
@@ -645,7 +645,7 @@ class EmailSearchTools:
             logger.error(f"Email context retrieval failed: {e}")
             return {
                 "success": False,
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     # ================================================================

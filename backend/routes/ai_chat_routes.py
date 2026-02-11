@@ -920,7 +920,7 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
                 )
                 return {"success": True, "message_sid": msg.sid, "sent_to": phone}
             except Exception as e:
-                return {"success": False, "error": str(e)}
+                return {"success": False, "error": "Internal server error"}
 
         async def execute_create_task(args):
             """Create a new task"""
@@ -2121,7 +2121,7 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
                     "media_url": media_url
                 }
             except Exception as e:
-                return {"success": False, "error": str(e)}
+                return {"success": False, "error": "Internal server error"}
 
         async def execute_transcribe_call(args):
             """Transcribe a call recording using AI"""
@@ -2196,7 +2196,7 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
                         }
                 except Exception as e:
                     logger.error(f"Transcription error: {e}")
-                    return {"success": False, "error": f"Transcription failed: {str(e)}"}
+                    return {"success": False, "error": "Transcription failed"}
 
             # Fallback - return placeholder
             return {
@@ -3067,7 +3067,7 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
                 return result
             except Exception as e:
                 logger.error(f"check_email_sync_status error: {e}")
-                return {"success": False, "error": str(e), "summary": f"Error checking email sync: {str(e)}"}
+                return {"success": False, "error": "Internal server error", "summary": f"Error checking email sync: {str(e)}"}
 
         tool_functions = {
             "get_tasks": execute_get_tasks,
@@ -4022,7 +4022,7 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
                                         "timestamp": datetime.now().isoformat()
                                     })
                             except Exception as e:
-                                tool_result = {"success": False, "error": str(e)}
+                                tool_result = {"success": False, "error": "Internal server error"}
 
                         elif function_name == "schedule_appointment":
                             # Create calendar appointment
@@ -4053,7 +4053,7 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
                                     "timestamp": datetime.now().isoformat()
                                 })
                             except Exception as e:
-                                tool_result = {"success": False, "error": str(e)}
+                                tool_result = {"success": False, "error": "Internal server error"}
 
                         elif function_name == "create_task":
                             # Create follow-up task
@@ -4084,7 +4084,7 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
                                     "timestamp": datetime.now().isoformat()
                                 })
                             except Exception as e:
-                                tool_result = {"success": False, "error": str(e)}
+                                tool_result = {"success": False, "error": "Internal server error"}
 
                         # Add tool result to messages
                         messages.append({
@@ -4131,12 +4131,12 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
                         db=db,
                         action_id=action_id,
                         outcome="failure",
-                        metadata={"error": str(e)}
+                        metadata={"error": "Internal server error"}
                     )
             except Exception:
                 pass  # Don't fail main response if logging fails
 
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
 
     logger.info("AI orchestrator chat routes loaded")

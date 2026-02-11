@@ -258,7 +258,7 @@ class ContextAwareAI:
             return {
                 "response": "I apologize, but I'm having trouble generating a response right now. Please try again.",
                 "context_used": False,
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     def _build_system_prompt(

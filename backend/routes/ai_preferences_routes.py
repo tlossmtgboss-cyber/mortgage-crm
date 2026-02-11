@@ -71,7 +71,7 @@ async def get_ai_user_context(
 
     except Exception as e:
         logger.error(f"Error getting AI user context: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/preferences")
@@ -111,7 +111,7 @@ async def update_ai_preferences(
     except Exception as e:
         logger.error(f"Error updating AI preferences: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/preferences")
@@ -141,7 +141,7 @@ async def get_ai_preferences(
 
     except Exception as e:
         logger.error(f"Error getting AI preferences: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 def set_dependencies(get_db_func, get_current_user_func):

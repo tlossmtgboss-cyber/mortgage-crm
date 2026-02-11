@@ -43,7 +43,7 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
             logger.info(f"Scorecard request: {start_date_str} to {end_date_str} for user {current_user.id}")
         except Exception as e:
             logger.error(f"Error in scorecard endpoint (date setup): {str(e)}", exc_info=True)
-            raise HTTPException(status_code=500, detail=f"Error processing scorecard data: {str(e)}")
+            raise HTTPException(status_code=500, detail="Error processing scorecard data")
 
         try:
             # LOAN STARTS VS. ACTIVITY TOTALS
@@ -237,6 +237,6 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
             }
         except Exception as e:
             logger.error(f"Error in scorecard endpoint: {str(e)}", exc_info=True)
-            raise HTTPException(status_code=500, detail=f"Error generating scorecard: {str(e)}")
+            raise HTTPException(status_code=500, detail="Error generating scorecard")
 
     logger.info("✅ Scorecard routes loaded")

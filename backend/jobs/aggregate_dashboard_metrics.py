@@ -204,7 +204,7 @@ def aggregate_metrics_range(db: Session, days: int = 30) -> dict:
         except Exception as e:
             results[str(target_date)] = {
                 "success": False,
-                "error": str(e)
+                "error": "Internal server error"
             }
             logger.error(f"Failed to aggregate {target_date}: {e}")
 

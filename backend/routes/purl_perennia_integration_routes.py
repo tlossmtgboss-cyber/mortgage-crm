@@ -362,7 +362,7 @@ async def initialize_workspace_documents(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Failed to initialize documents: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/workspaces/{workspace_id}/document-status", response_model=WorkspaceDocumentStatus)
@@ -789,7 +789,7 @@ async def update_workspace_milestone(
     except Exception as e:
         db.rollback()
         logger.error(f"Failed to update milestone: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================

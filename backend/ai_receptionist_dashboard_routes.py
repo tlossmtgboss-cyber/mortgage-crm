@@ -215,7 +215,7 @@ async def create_activity(
     except Exception as e:
         logger.error(f"Error creating activity: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/activity/feed", response_model=List[ActivityFeedItem])
@@ -255,7 +255,7 @@ async def get_activity_feed(
 
     except Exception as e:
         logger.error(f"Error fetching activity feed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/activity/count")
@@ -282,7 +282,7 @@ async def get_activity_count(
 
     except Exception as e:
         logger.error(f"Error counting activities: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -311,7 +311,7 @@ async def get_daily_metrics(
 
     except Exception as e:
         logger.error(f"Error fetching daily metrics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/metrics/realtime", response_model=RealtimeMetrics)
@@ -390,7 +390,7 @@ async def get_realtime_metrics(db: Session = Depends(get_db)):
 
     except Exception as e:
         logger.error(f"Error fetching realtime metrics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -418,7 +418,7 @@ async def get_skills_performance(
 
     except Exception as e:
         logger.error(f"Error fetching skills: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/skills/{skill_name}", response_model=SkillPerformance)
@@ -441,7 +441,7 @@ async def get_skill_detail(
         raise
     except Exception as e:
         logger.error(f"Error fetching skill detail: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -544,7 +544,7 @@ async def get_roi_metrics(
 
     except Exception as e:
         logger.error(f"Error calculating ROI: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -580,7 +580,7 @@ async def get_errors(
 
     except Exception as e:
         logger.error(f"Error fetching error log: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/errors/{error_id}/approve-fix")
@@ -616,7 +616,7 @@ async def approve_auto_fix(
     except Exception as e:
         logger.error(f"Error approving fix: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -636,7 +636,7 @@ async def get_system_health(db: Session = Depends(get_db)):
 
     except Exception as e:
         logger.error(f"Error fetching system health: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/system-health/{component_name}", response_model=SystemHealthStatus)
@@ -659,7 +659,7 @@ async def get_component_health(
         raise
     except Exception as e:
         logger.error(f"Error fetching component health: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -689,7 +689,7 @@ async def get_conversation_detail(
         raise
     except Exception as e:
         logger.error(f"Error fetching conversation: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/conversations", response_model=List[ConversationDetail])
@@ -721,7 +721,7 @@ async def get_conversations(
 
     except Exception as e:
         logger.error(f"Error fetching conversations: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -874,7 +874,7 @@ async def seed_dashboard_data(db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Error seeding data: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/admin/aggregate-metrics")
@@ -908,4 +908,4 @@ async def trigger_metrics_aggregation(
 
     except Exception as e:
         logger.error(f"Error aggregating metrics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

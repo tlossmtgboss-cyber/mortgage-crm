@@ -222,7 +222,7 @@ def standardized_response(func: Callable) -> Callable:
             return {
                 "success": False,
                 "data": None,
-                "error": str(e),
+                "error": "Internal server error",
                 "meta": {
                     "tool": tool_name,
                     "request_id": request_id,

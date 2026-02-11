@@ -270,7 +270,7 @@ async def get_lead_info_function(
 
     except Exception as e:
         logger.error(f"Error in get_lead_info_function: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 @router.post("/functions/update-lead-status")
@@ -354,7 +354,7 @@ async def update_lead_status_function(
     except Exception as e:
         logger.error(f"Error in update_lead_status_function: {e}")
         db.rollback()
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 @router.post("/functions/create-task")
@@ -471,7 +471,7 @@ async def create_task_function(
     except Exception as e:
         logger.error(f"Error in create_task_function: {e}")
         db.rollback()
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 @router.post("/functions/schedule-appointment")
@@ -606,7 +606,7 @@ async def schedule_appointment_function(
     except Exception as e:
         logger.error(f"Error in schedule_appointment_function: {e}")
         db.rollback()
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 @router.get("/functions/available-time-slots")
@@ -654,7 +654,7 @@ async def available_time_slots_function(
 
     except Exception as e:
         logger.error(f"Error in available_time_slots_function: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 @router.post("/functions/submit-preapproval-application")
@@ -790,7 +790,7 @@ async def submit_preapproval_application_function(
     except Exception as e:
         logger.error(f"Error in submit_preapproval_application_function: {e}")
         db.rollback()
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 @router.post("/functions/schedule-calendly-appointment")
@@ -897,7 +897,7 @@ async def schedule_calendly_appointment_function(
     except Exception as e:
         logger.error(f"Error in schedule_calendly_appointment_function: {e}")
         db.rollback()
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 # ============================================================================
@@ -931,7 +931,7 @@ async def identify_caller_function(
 
     except Exception as e:
         logger.error(f"Error in identify_caller_function: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 @router.post("/functions/transfer-to-production-assistant")
@@ -1015,7 +1015,7 @@ async def transfer_to_production_assistant_function(
     except Exception as e:
         logger.error(f"Error in transfer_to_production_assistant_function: {e}")
         db.rollback()
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 @router.post("/functions/transfer-to-loan-officer")
@@ -1106,7 +1106,7 @@ async def transfer_to_loan_officer_function(
     except Exception as e:
         logger.error(f"Error in transfer_to_loan_officer_function: {e}")
         db.rollback()
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 @router.post("/functions/transfer-to-processor")
@@ -1195,7 +1195,7 @@ async def transfer_to_processor_function(
     except Exception as e:
         logger.error(f"Error in transfer_to_processor_function: {e}")
         db.rollback()
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 # ============================================================================
@@ -1240,7 +1240,7 @@ async def get_available_staff(
 
     except Exception as e:
         logger.error(f"Error getting available staff: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 @router.get("/receptionist/routing-log")
@@ -1279,7 +1279,7 @@ async def get_routing_log(
 
     except Exception as e:
         logger.error(f"Error getting routing log: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 @router.post("/receptionist/staff-availability")
@@ -1345,7 +1345,7 @@ async def update_staff_availability(
     except Exception as e:
         logger.error(f"Error updating staff availability: {e}")
         db.rollback()
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 # Authenticated Endpoints
@@ -1454,10 +1454,10 @@ async def create_outbound_call(
         }
 
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
     except Exception as e:
         logger.error(f"Outbound call error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to create call: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create call")
 
 
 @router.get("/stats/daily")
@@ -1570,7 +1570,7 @@ async def create_assistant(
 
     except Exception as e:
         logger.error(f"Create assistant error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to create assistant: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create assistant")
 
 
 @router.get("/assistants")
@@ -1748,7 +1748,7 @@ async def diagnose_vapi_assistant(full: bool = False):
 
     except Exception as e:
         logger.error(f"Diagnostic error: {str(e)}")
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
 
 
 @router.post("/diagnostic/fix-greeting")
@@ -1801,7 +1801,7 @@ async def fix_vapi_greeting(
 
     except Exception as e:
         logger.error(f"Fix greeting error: {str(e)}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 @router.post("/diagnostic/change-voice")
@@ -1884,7 +1884,7 @@ async def change_voice_provider(
 
     except Exception as e:
         logger.error(f"Change voice error: {str(e)}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 @router.get("/diagnostic/phone-numbers")
@@ -1939,7 +1939,7 @@ async def diagnose_phone_numbers():
 
     except Exception as e:
         logger.error(f"Phone diagnostic error: {str(e)}")
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
 
 
 @router.get("/diagnostic/account")
@@ -1997,7 +1997,7 @@ async def diagnose_vapi_account():
 
     except Exception as e:
         logger.error(f"Account diagnostic error: {str(e)}")
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
 
 
 @router.post("/diagnostic/test-call")
@@ -2081,7 +2081,7 @@ async def test_vapi_call(
 
     except Exception as e:
         logger.error(f"Test call error: {str(e)}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 @router.get("/diagnostic/recent-calls")
@@ -2138,7 +2138,7 @@ async def get_recent_vapi_calls(limit: int = 10):
 
     except Exception as e:
         logger.error(f"Recent calls error: {str(e)}")
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
 
 
 @router.post("/migrate")
@@ -2250,7 +2250,7 @@ async def run_vapi_migration(
                 results.append({"command": idx, "status": "success"})
                 logger.info(f"✅ Command {idx}/{len(sql_commands)} executed successfully")
             except Exception as e:
-                results.append({"command": idx, "status": "error", "error": str(e)})
+                results.append({"command": idx, "status": "error", "error": "Internal server error"})
                 logger.error(f"❌ Error executing command {idx}: {e}")
                 continue
 
@@ -2262,7 +2262,7 @@ async def run_vapi_migration(
 
     except Exception as e:
         logger.error(f"Migration error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Migration failed")
 
 
 # ============================================================================
@@ -2373,7 +2373,7 @@ async def send_calendly_sms(
 
     except Exception as e:
         logger.error(f"Error sending Calendly SMS: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 @router.post("/sms/send-followup")
@@ -2437,7 +2437,7 @@ async def send_followup_sms(
 
     except Exception as e:
         logger.error(f"Error sending follow-up SMS: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 @router.get("/sms/config")
@@ -2506,6 +2506,6 @@ async def send_sms_calendly_link_function(
         logger.error(f"Error in send_sms_calendly_link_function: {e}")
         return {
             "success": False,
-            "error": str(e),
+            "error": "Internal server error",
             "message": "I'm having some technical difficulties. Let me get your information and have someone follow up with the booking link."
         }

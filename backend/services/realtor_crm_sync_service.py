@@ -621,7 +621,7 @@ class CRMWebhookProcessor:
             return {"success": True, "result": result}
         except Exception as e:
             logger.error(f"Error processing webhook {webhook_type}: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     async def _handle_status_change(self, payload: Dict) -> Dict:
         """Handle loan status change webhook."""

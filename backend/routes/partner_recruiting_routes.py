@@ -1651,4 +1651,4 @@ async def run_partner_recruiting_migration(
         result = run_migration()
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Migration failed")

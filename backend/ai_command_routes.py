@@ -4271,7 +4271,7 @@ async def process_command(
 
     except Exception as e:
         logger.error(f"Error processing command: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/execute-action", response_model=ActionExecuteResponse)
@@ -4361,7 +4361,7 @@ async def execute_action(
         raise
     except Exception as e:
         logger.error(f"Error executing action: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -4706,7 +4706,7 @@ NMLS# {lo_nmls or settings.signature_nmls or 'N/A'}
         return {
             "success": False,
             "message": f"Failed to send pre-approval letter: {str(e)}",
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -4793,7 +4793,7 @@ async def send_daily_priorities_email(
         raise
     except Exception as e:
         logger.error(f"Error sending daily priorities email: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to send email")
 
 
 # ============================================================================
@@ -4959,7 +4959,7 @@ Return ONLY the JSON object, no additional text."""
 
     except Exception as e:
         logger.error(f"Error parsing screenshot: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to process screenshot: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to process screenshot")
 
 
 @router.post("/create-lead-from-screenshot")
@@ -5017,7 +5017,7 @@ async def create_lead_from_screenshot(
     except Exception as e:
         db.rollback()
         logger.error(f"Error creating lead from screenshot: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to create lead: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create lead")
 
 
 # ============================================================================
@@ -5216,7 +5216,7 @@ Generate the email now:"""
 
     except Exception as e:
         logger.error(f"Error generating email: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to generate email: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to generate email")
 
 
 @router.post("/send-composed-email")
@@ -5373,4 +5373,4 @@ async def send_composed_email(
         raise
     except Exception as e:
         logger.error(f"Error sending email: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to send email")

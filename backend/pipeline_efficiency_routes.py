@@ -196,7 +196,7 @@ async def get_pipeline_efficiency(
     except Exception as e:
         logger.error(f"Pipeline efficiency error: {e}")
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Pipeline efficiency error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Pipeline efficiency error")
 
 
 @router.get("/stages")

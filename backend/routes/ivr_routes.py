@@ -147,7 +147,7 @@ async def create_ivr_menu(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error creating IVR menu: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/menus")
@@ -274,7 +274,7 @@ async def get_ivr_menu(
         raise
     except Exception as e:
         logger.error(f"Error getting IVR menu: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/menus/{menu_id}")
@@ -344,7 +344,7 @@ async def update_ivr_menu(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error updating IVR menu: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/menus/{menu_id}")
@@ -372,7 +372,7 @@ async def delete_ivr_menu(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error deleting IVR menu: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -444,7 +444,7 @@ async def create_ivr_option(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error creating IVR option: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/menus/{menu_id}/options/{option_id}")
@@ -500,7 +500,7 @@ async def update_ivr_option(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error updating IVR option: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/menus/{menu_id}/options/{option_id}")
@@ -529,7 +529,7 @@ async def delete_ivr_option(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error deleting IVR option: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -959,4 +959,4 @@ async def apply_ivr_template(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error applying template: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

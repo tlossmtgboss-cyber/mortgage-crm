@@ -136,7 +136,7 @@ class RoleAssignmentService:
         except Exception as e:
             self.db.rollback()
             logger.error(f"Failed to assign role: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def remove_role_from_lead(
         self,
@@ -161,7 +161,7 @@ class RoleAssignmentService:
         except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Failed to remove role: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def get_lead_role_assignments(self, lead_id: int) -> List[Dict[str, Any]]:
         """Get all active role assignments for a lead."""
@@ -289,7 +289,7 @@ class RoleAssignmentService:
         except Exception as e:
             self.db.rollback()
             logger.error(f"Failed to assign role: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def remove_role_from_loan(
         self,
@@ -314,7 +314,7 @@ class RoleAssignmentService:
         except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Failed to remove role: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def get_loan_role_assignments(self, loan_id: int) -> List[Dict[str, Any]]:
         """Get all active role assignments for a loan."""
@@ -531,7 +531,7 @@ class RoleAssignmentService:
         except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Failed to copy assignments: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def get_available_roles(self) -> List[Dict[str, Any]]:
         """Get all available roles for assignment."""

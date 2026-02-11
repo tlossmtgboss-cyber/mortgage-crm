@@ -364,7 +364,7 @@ class SalesforceSLATriggerService:
 
         except Exception as e:
             logger.error(f"Error processing Salesforce SLA triggers: {e}")
-            results["errors"].append({"error": str(e)})
+            results["errors"].append({"error": "Internal server error"})
 
         return results
 
@@ -530,7 +530,7 @@ class SalesforceSLATriggerService:
             return {
                 "success": False,
                 "workflow_key": workflow_key,
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     def _process_status_change(
@@ -594,7 +594,7 @@ class SalesforceSLATriggerService:
             return {
                 "success": False,
                 "workflow_key": workflow_key,
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     def _get_active_workflow(

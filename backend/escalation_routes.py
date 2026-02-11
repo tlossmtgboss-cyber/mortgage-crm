@@ -90,7 +90,7 @@ async def search_leads(
 
     except Exception as e:
         logger.error(f"Error searching leads: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/escalations")
@@ -210,4 +210,4 @@ async def create_escalation(
     except Exception as e:
         logger.error(f"Error creating escalation: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

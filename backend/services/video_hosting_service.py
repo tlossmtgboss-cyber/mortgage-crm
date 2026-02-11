@@ -177,7 +177,7 @@ class VideoS3Service:
 
         except ClientError as e:
             logger.error(f"Error uploading video: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def upload_file_content(
         self,
@@ -227,7 +227,7 @@ class VideoS3Service:
 
         except ClientError as e:
             logger.error(f"Error uploading content: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def get_presigned_url(
         self,
@@ -264,7 +264,7 @@ class VideoS3Service:
 
         except ClientError as e:
             logger.error(f"Error generating presigned URL: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def delete_video(self, storage_key: str) -> Dict[str, Any]:
         """Delete a video from S3."""
@@ -279,7 +279,7 @@ class VideoS3Service:
 
         except ClientError as e:
             logger.error(f"Error deleting video: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def get_public_url(self, storage_key: str) -> str:
         """Get the public URL for a video (CDN or S3 direct)."""

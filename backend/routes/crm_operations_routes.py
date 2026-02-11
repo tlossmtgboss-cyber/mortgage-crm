@@ -443,7 +443,7 @@ async def get_pipeline_analytics(
         }
     except Exception as e:
         logger.error(f"Error in pipeline analytics: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Database error")
 
 
 @router.get("/analytics/scorecard")

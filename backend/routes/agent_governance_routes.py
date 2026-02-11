@@ -222,7 +222,7 @@ async def run_agent_migration(db: Session = Depends(get_db)):
         }
     except Exception as e:
         logger.error(f"Migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -274,7 +274,7 @@ async def list_agent_profiles(
         return profiles
     except Exception as e:
         logger.error(f"Error listing agent profiles: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/profiles/{agent_id}", response_model=AgentProfileResponse)
@@ -309,7 +309,7 @@ async def create_agent_profile(
         return agent
     except Exception as e:
         logger.error(f"Error creating agent profile: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/profiles/{agent_id}", response_model=AgentProfileResponse)
@@ -400,10 +400,10 @@ async def start_execution(
             "session_id": exec_record.session_id
         }
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail="Not found")
     except Exception as e:
         logger.error(f"Error starting execution: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/executions/{execution_id}/complete")
@@ -429,10 +429,10 @@ async def complete_execution(
             "execution_time_ms": exec_record.execution_time_ms
         }
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail="Not found")
     except Exception as e:
         logger.error(f"Error completing execution: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/profiles/{agent_id}/executions", response_model=List[AgentExecutionResponse])
@@ -518,10 +518,10 @@ async def record_metric(
             "metric_id": metric_record.id
         }
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail="Not found")
     except Exception as e:
         logger.error(f"Error recording metric: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/profiles/{agent_id}/metrics")
@@ -588,10 +588,10 @@ async def create_alert(
             "alert_id": alert_record.id
         }
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail="Not found")
     except Exception as e:
         logger.error(f"Error creating alert: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/alerts", response_model=List[AgentAlertResponse])
@@ -691,7 +691,7 @@ async def get_agent_dashboard(
             "alerts": {"total_active": 0, "critical": 0, "high": 0, "medium": 0, "low": 0},
             "top_agents": [],
             "updated_at": datetime.now(timezone.utc).isoformat(),
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -807,7 +807,7 @@ async def get_agent_statistics(
                 "resolved": 0,
                 "by_severity": {"critical": 0, "high": 0, "medium": 0, "low": 0}
             },
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -833,7 +833,7 @@ async def bulk_pause_agents(
             else:
                 results["failed"].append({"id": agent_id, "error": "Not found"})
         except Exception as e:
-            results["failed"].append({"id": agent_id, "error": str(e)})
+            results["failed"].append({"id": agent_id, "error": "Internal server error"})
 
     return results
 
@@ -855,7 +855,7 @@ async def bulk_activate_agents(
             else:
                 results["failed"].append({"id": agent_id, "error": "Not found"})
         except Exception as e:
-            results["failed"].append({"id": agent_id, "error": str(e)})
+            results["failed"].append({"id": agent_id, "error": "Internal server error"})
 
     return results
 
@@ -1356,7 +1356,7 @@ async def setup_agent_tables(db: Session = Depends(get_db)):
     except SQLAlchemyError as e:
         logger.error(f"Error creating tables: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error creating tables: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error creating tables")
 
 
 @router.post("/governance/seed-missing-agents")
@@ -1443,4 +1443,4 @@ async def seed_missing_agents(db: Session = Depends(get_db)):
     except SQLAlchemyError as e:
         logger.error(f"Error seeding agents: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error seeding agents: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error seeding agents")

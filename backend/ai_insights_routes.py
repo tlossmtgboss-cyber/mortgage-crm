@@ -69,7 +69,7 @@ async def query_profitability(
         result = service.query_natural_language(request.question, month)
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI query failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="AI query failed")
 
 
 @router.get("/recommendations")
@@ -96,7 +96,7 @@ async def get_recommendations(
             "generated_at": datetime.utcnow().isoformat()
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to generate recommendations: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to generate recommendations")
 
 
 @router.post("/hiring-analysis")
@@ -128,7 +128,7 @@ async def analyze_hiring(
         )
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Hiring analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Hiring analysis failed")
 
 
 @router.get("/executive-digest")
@@ -154,7 +154,7 @@ async def get_executive_digest(
         digest = service.generate_executive_digest(month_date)
         return digest
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to generate digest: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to generate digest")
 
 
 @router.get("/anomalies")
@@ -186,7 +186,7 @@ async def detect_anomalies(
             "generated_at": datetime.utcnow().isoformat()
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Anomaly detection failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Anomaly detection failed")
 
 
 @router.post("/compare-scenarios")
@@ -215,7 +215,7 @@ async def compare_scenarios(
         result = service.compare_scenarios(request.scenarios, month_date)
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Scenario comparison failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Scenario comparison failed")
 
 
 # ============ Quick Insights Endpoints ============
@@ -255,7 +255,7 @@ async def get_quick_insights(
             "generated_at": datetime.utcnow().isoformat()
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get quick insights: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get quick insights")
 
 
 @router.get("/suggested-questions")

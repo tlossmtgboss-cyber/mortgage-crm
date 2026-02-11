@@ -218,7 +218,7 @@ async def get_tickets(
         }
     except Exception as e:
         logger.error(f"Error fetching tickets: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/tickets")
@@ -283,7 +283,7 @@ async def create_ticket(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error creating ticket: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/tickets/{ticket_id}")
@@ -324,7 +324,7 @@ async def get_ticket(
         raise
     except Exception as e:
         logger.error(f"Error fetching ticket: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.patch("/tickets/{ticket_id}")
@@ -376,7 +376,7 @@ async def update_ticket(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error updating ticket: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.patch("/tickets/{ticket_id}/complete")
@@ -417,7 +417,7 @@ async def complete_ticket(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error completing ticket: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/tickets/{ticket_id}")
@@ -449,7 +449,7 @@ async def delete_ticket(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error deleting ticket: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/metrics")
@@ -619,4 +619,4 @@ async def get_ticket_analytics(
         raise
     except Exception as e:
         logger.error(f"Error fetching analytics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

@@ -384,10 +384,10 @@ async def analyze_file(
         }
 
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
     except Exception as e:
         logger.error(f"Error analyzing file: {e}")
-        raise HTTPException(status_code=500, detail=f"Error analyzing file: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error analyzing file")
 
 
 def normalize_stage_value(stage_value: str, destination: str) -> str:
@@ -1119,12 +1119,12 @@ async def execute_import(
         }
 
     except json.JSONDecodeError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid JSON in form data: {str(e)}")
+        raise HTTPException(status_code=400, detail="Invalid JSON in form data")
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
     except Exception as e:
         logger.error(f"Error executing import: {e}")
-        raise HTTPException(status_code=500, detail=f"Error importing data: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error importing data")
     finally:
         # CRITICAL: Always close connections to prevent leaks
         # This handles cases where exception occurs after conn is created but before inner try
@@ -1163,7 +1163,7 @@ async def get_all_stage_values(
         }
     except Exception as e:
         logger.error(f"Error getting stage values: {e}")
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
     finally:
         if cursor:
             try:
@@ -1260,7 +1260,7 @@ async def fix_lead_stage_values(
         return {
             "success": False,
             "message": f"Fix failed: {str(e)}",
-            "error": str(e)
+            "error": "Internal server error"
         }
     finally:
         if cursor:
@@ -1350,7 +1350,7 @@ async def fix_owner_assignment(
         return {
             "success": False,
             "message": f"Fix failed: {str(e)}",
-            "error": str(e)
+            "error": "Internal server error"
         }
     finally:
         # CRITICAL: Always close connections to prevent leaks
@@ -1425,7 +1425,7 @@ async def check_unassigned_records():
         logger.error(f"Check unassigned failed: {e}")
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
     finally:
         # CRITICAL: Always close connections to prevent leaks

@@ -148,7 +148,7 @@ class RecruitSocialService:
                     return {"error": response.text}
         except Exception as e:
             logger.error(f"Error posting to Facebook: {e}")
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
     async def get_instagram_business_account(self, fb_page_id: str) -> Optional[str]:
         """Get Instagram business account ID linked to a Facebook page."""
@@ -216,7 +216,7 @@ class RecruitSocialService:
                     return {"error": publish_response.text}
         except Exception as e:
             logger.error(f"Error posting to Instagram: {e}")
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
     async def get_facebook_post_engagement(self, post_id: str) -> Dict[str, int]:
         """Get engagement metrics for a Facebook post."""
@@ -350,7 +350,7 @@ class RecruitSocialService:
                     return {"error": response.text}
         except Exception as e:
             logger.error(f"Error posting to LinkedIn: {e}")
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
     async def search_linkedin_people(
         self,

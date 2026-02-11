@@ -233,7 +233,7 @@ async def get_api_keys(current_user = None):
 
         return success_response(keys, f"Retrieved {len(keys)} API keys")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("")
@@ -272,7 +272,7 @@ async def create_api_key(key_data: APIKeyCreate, current_user = None):
             "message": "Save this key securely. It will not be shown again."
         }, "API key created successfully")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/{key_id}")
@@ -302,7 +302,7 @@ async def get_api_key(key_id: str, current_user = None):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/{key_id}")
@@ -337,7 +337,7 @@ async def update_api_key(key_id: str, update_data: APIKeyUpdate, current_user = 
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/{key_id}")
@@ -353,7 +353,7 @@ async def delete_api_key(key_id: str, current_user = None):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/{key_id}/rotate")
@@ -381,7 +381,7 @@ async def rotate_api_key(key_id: str, current_user = None):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -425,7 +425,7 @@ async def get_api_key_usage(key_id: str, days: int = 30, current_user = None):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -439,7 +439,7 @@ async def get_webhook_endpoints(current_user = None):
         webhooks = list(webhooks_store.values())
         return success_response(webhooks, f"Retrieved {len(webhooks)} webhook endpoints")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/webhooks/endpoints")
@@ -471,7 +471,7 @@ async def create_webhook_endpoint(webhook: WebhookEndpoint, current_user = None)
             "message": "Save this secret securely. It will not be shown again."
         }, "Webhook endpoint created successfully")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/webhooks/endpoints/{webhook_id}")
@@ -495,7 +495,7 @@ async def update_webhook_endpoint(webhook_id: str, webhook: WebhookEndpoint, cur
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/webhooks/endpoints/{webhook_id}")
@@ -511,7 +511,7 @@ async def delete_webhook_endpoint(webhook_id: str, current_user = None):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/webhooks/endpoints/{webhook_id}/test")
@@ -534,7 +534,7 @@ async def test_webhook_endpoint(webhook_id: str, current_user = None):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/webhooks/endpoints/{webhook_id}/logs")
@@ -577,7 +577,7 @@ async def get_webhook_logs(webhook_id: str, limit: int = 50, current_user = None
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -590,7 +590,7 @@ async def get_rate_limit_settings(current_user = None):
     try:
         return success_response(rate_limit_settings, "Rate limit settings retrieved")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/rate-limits")
@@ -611,7 +611,7 @@ async def update_rate_limit_settings(settings: RateLimitSettings, current_user =
 
         return success_response(rate_limit_settings, "Rate limit settings updated successfully")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -644,7 +644,7 @@ async def get_available_scopes(current_user = None):
 
         return success_response(scopes, f"Retrieved {len(scopes)} available scopes")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -678,4 +678,4 @@ async def get_available_events(current_user = None):
 
         return success_response(events, f"Retrieved {len(events)} available events")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

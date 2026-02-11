@@ -129,7 +129,7 @@ async def get_production_summary(
         return summary
     except Exception as e:
         logger.error(f"Error getting production summary: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/forecast", response_model=ForecastResponse)
@@ -182,7 +182,7 @@ async def get_forecast(request: ForecastRequest, db: Session = Depends(get_db)):
         )
     except Exception as e:
         logger.error(f"Error generating forecast: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/trend/{entity_id}", response_model=TrendResponse)
@@ -214,7 +214,7 @@ async def get_trend_analysis(
         )
     except Exception as e:
         logger.error(f"Error analyzing trend: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/goal-attainment", response_model=GoalAttainmentResponse)
@@ -297,7 +297,7 @@ async def get_team_forecast(request: TeamForecastRequest, db: Session = Depends(
         return forecast
     except Exception as e:
         logger.error(f"Error generating team forecast: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/conversions/{entity_id}", response_model=ConversionAnalysisResponse)
@@ -325,7 +325,7 @@ async def get_conversion_analysis(
         )
     except Exception as e:
         logger.error(f"Error analyzing conversions: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/history/{entity_id}")
@@ -362,7 +362,7 @@ async def get_production_history(
         }
     except Exception as e:
         logger.error(f"Error getting history: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/leaderboard")
@@ -408,7 +408,7 @@ async def get_production_leaderboard(
         }
     except Exception as e:
         logger.error(f"Error getting leaderboard: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/health")

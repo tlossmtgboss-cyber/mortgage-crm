@@ -296,7 +296,7 @@ class TaskSLABridgeService:
         except Exception as e:
             self.db.rollback()
             logger.error(f"Failed to create SLA task: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def create_loan_sla_tasks(
         self,
@@ -347,7 +347,7 @@ class TaskSLABridgeService:
 
         except Exception as e:
             logger.error(f"Failed to create loan SLA tasks: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     # =========================================================================
     # SLA STATUS TRACKING
@@ -422,7 +422,7 @@ class TaskSLABridgeService:
         except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Failed to update SLA statuses: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def get_sla_summary(
         self,
@@ -510,7 +510,7 @@ class TaskSLABridgeService:
 
         except Exception as e:
             logger.error(f"Failed to get SLA summary: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def get_overdue_sla_tasks(
         self,
@@ -586,7 +586,7 @@ class TaskSLABridgeService:
 
         except Exception as e:
             logger.error(f"Failed to get overdue SLA tasks: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     # =========================================================================
     # MILESTONE COMPLETION
@@ -674,7 +674,7 @@ class TaskSLABridgeService:
         except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Failed to complete SLA milestone: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     # =========================================================================
     # PRIVATE HELPER METHODS

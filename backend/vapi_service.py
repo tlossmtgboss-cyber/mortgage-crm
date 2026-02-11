@@ -144,7 +144,7 @@ Or just reply to this text with any questions!
 
         except Exception as e:
             logger.error(f"Error sending post-call SMS: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     async def send_calendly_link(
         self,
@@ -210,7 +210,7 @@ Pick a time that works best for you!
 
         except Exception as e:
             logger.error(f"Error sending Calendly SMS: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     async def send_appointment_confirmation(
         self,
@@ -271,7 +271,7 @@ We'll call you at this number at the scheduled time.
 
         except Exception as e:
             logger.error(f"Error sending appointment confirmation SMS: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     async def handle_inbound_sms(
         self,
@@ -349,7 +349,7 @@ We'll call you at this number at the scheduled time.
 
         except Exception as e:
             logger.error(f"Error handling inbound SMS: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     async def _find_lead_by_phone(self, phone_number: str):
         """Find lead by phone number."""
@@ -1343,7 +1343,7 @@ class VapiCRMIntegration:
             logger.error(f"Error identifying caller: {e}")
             return {
                 "found": False,
-                "error": str(e),
+                "error": "Internal server error",
                 "caller_type": "unknown",
                 "routing_recommendation": "transfer_to_production_assistant"
             }
@@ -1479,5 +1479,5 @@ Status: {whisper_data.get('caller_type', 'Unknown')}.
             return {
                 "success": False,
                 "reason": "system_error",
-                "error": str(e)
+                "error": "Internal server error"
             }

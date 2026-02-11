@@ -631,7 +631,7 @@ async def assign_role_to_user(
         raise
     except Exception as e:
         logger.error(f"Assign role error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/users/{user_id}/permissions")
@@ -749,7 +749,7 @@ async def get_permission_templates(
         raise
     except Exception as e:
         logger.error(f"Get templates error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/users/{user_id}/permissions/template")
@@ -786,7 +786,7 @@ async def get_user_permission_template(
         raise
     except Exception as e:
         logger.error(f"Get user template error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/permissions/available")
@@ -929,7 +929,7 @@ async def get_available_permissions(
         raise
     except Exception as e:
         logger.error(f"Get available permissions error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/users/{user_id}/permissions/apply-template")
@@ -1019,7 +1019,7 @@ async def apply_permission_template(
         raise
     except Exception as e:
         logger.error(f"Apply template error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/users/{user_id}/permissions")
@@ -1117,4 +1117,4 @@ async def update_user_permissions(
     except Exception as e:
         logger.error(f"Update permissions error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

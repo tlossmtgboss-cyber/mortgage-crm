@@ -380,7 +380,7 @@ async def initiate_cold_transfer(
     except SQLAlchemyError as e:
         logger.error(f"Error initiating cold transfer: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/twiml/cold-connect")
@@ -600,7 +600,7 @@ async def initiate_warm_transfer(
     except SQLAlchemyError as e:
         logger.error(f"Error initiating warm transfer: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/warm/complete")
@@ -703,7 +703,7 @@ async def complete_warm_transfer(
     except SQLAlchemyError as e:
         logger.error(f"Error completing warm transfer: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -1192,7 +1192,7 @@ async def list_transfers(
 
     except Exception as e:
         logger.error(f"Error listing transfers: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/available-recipients")
@@ -1227,7 +1227,7 @@ async def get_available_recipients(
 
     except Exception as e:
         logger.error(f"Error getting recipients: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/{transfer_id}")
@@ -1276,4 +1276,4 @@ async def get_transfer(
         raise
     except Exception as e:
         logger.error(f"Error getting transfer: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

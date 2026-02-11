@@ -585,7 +585,7 @@ async def get_callback_logs(
 
     except Exception as e:
         logger.error(f"Error getting callback logs: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/call-attempts/{call_sid}")
@@ -635,7 +635,7 @@ async def get_call_attempt(
         raise
     except Exception as e:
         logger.error(f"Error getting call attempt: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/call-attempts/{attempt_id}/outcome")
@@ -698,4 +698,4 @@ async def set_agent_outcome(
     except SQLAlchemyError as e:
         logger.error(f"Error setting agent outcome: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

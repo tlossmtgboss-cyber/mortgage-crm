@@ -28,7 +28,7 @@ async def cache_health():
     except ImportError:
         response_stats = {"enabled": False, "error": "Module not available"}
     except Exception as e:
-        response_stats = {"enabled": False, "error": str(e)}
+        response_stats = {"enabled": False, "error": "Internal server error"}
 
     try:
         from core.cache import cache as tool_cache
@@ -36,7 +36,7 @@ async def cache_health():
     except ImportError:
         tool_stats = {"enabled": False, "error": "Module not available"}
     except Exception as e:
-        tool_stats = {"enabled": False, "error": str(e)}
+        tool_stats = {"enabled": False, "error": "Internal server error"}
 
     response_enabled = response_stats.get("enabled", False)
     tool_enabled = tool_stats.get("enabled", False) or tool_stats.get("connected", False)
@@ -73,7 +73,7 @@ async def cache_performance():
         response_stats = await response_cache.get_stats()
     except Exception as e:
         return {
-            "error": str(e),
+            "error": "Internal server error",
             "message": "Could not retrieve cache stats"
         }
 
@@ -180,7 +180,7 @@ async def cache_keys_summary():
 
     except Exception as e:
         logger.error(f"Error getting cache keys summary: {e}")
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
 
 
 @router.get("/health")

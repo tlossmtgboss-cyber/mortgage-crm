@@ -154,7 +154,7 @@ class WorkflowAIExecutor:
 
         except Exception as e:
             logger.error(f"AI task execution failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def execute_batch(
         self,
@@ -208,7 +208,7 @@ class WorkflowAIExecutor:
             except Exception as e:
                 results["failed"].append({
                     "task_instance_id": task_id,
-                    "error": str(e)
+                    "error": "Internal server error"
                 })
 
         results["executed_count"] = len(results["executed"])
@@ -348,7 +348,7 @@ class WorkflowAIExecutor:
 
         except SQLAlchemyError as e:
             logger.error(f"Autonomous execution failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def _get_task_details(self, task_instance_id: int) -> Optional[Dict[str, Any]]:
         """Get task details for execution."""
@@ -443,7 +443,7 @@ class WorkflowAIExecutor:
                 "simulated": True
             }
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def _execute_email_task(
         self,
@@ -491,7 +491,7 @@ class WorkflowAIExecutor:
                 "simulated": True
             }
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def _execute_generic_ai_task(
         self,
@@ -523,7 +523,7 @@ class WorkflowAIExecutor:
 
         except Exception as e:
             logger.error(f"Generic AI task execution failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def _generate_text_content(
         self,

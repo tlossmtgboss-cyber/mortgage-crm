@@ -564,7 +564,7 @@ async def run_automated_underwriting(
         raise
     except Exception as e:
         logger.exception(f"Automated underwriting failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Underwriting analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Underwriting analysis failed")
 
 
 # =============================================================================
@@ -625,7 +625,7 @@ async def calculate_qualifying_income(
         raise
     except Exception as e:
         logger.exception(f"Income calculation failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Income calculation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Income calculation failed")
 
 
 # =============================================================================
@@ -702,7 +702,7 @@ async def analyze_assets(
         raise
     except Exception as e:
         logger.exception(f"Asset analysis failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Asset analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Asset analysis failed")
 
 
 # =============================================================================
@@ -783,7 +783,7 @@ async def analyze_credit(
         raise
     except Exception as e:
         logger.exception(f"Credit analysis failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Credit analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Credit analysis failed")
 
 
 # =============================================================================
@@ -859,7 +859,7 @@ async def check_loan_eligibility(
         raise
     except Exception as e:
         logger.exception(f"Eligibility check failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Eligibility check failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Eligibility check failed")
 
 
 # =============================================================================
@@ -918,7 +918,7 @@ async def generate_conditions(
         raise
     except Exception as e:
         logger.exception(f"Condition generation failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Condition generation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Condition generation failed")
 
 
 # =============================================================================
@@ -979,7 +979,7 @@ async def validate_loan_file(
         raise
     except Exception as e:
         logger.exception(f"Loan validation failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Loan validation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Loan validation failed")
 
 
 # =============================================================================

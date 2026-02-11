@@ -516,7 +516,7 @@ class RealtorAccessValidator:
         except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Error granting access: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def revoke_access(
         self,
@@ -538,7 +538,7 @@ class RealtorAccessValidator:
         except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Error revoking access: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def record_view(self, realtor_id: int, loan_id: int):
         """Record that a realtor viewed a loan."""

@@ -69,7 +69,7 @@ def get_health_router(
                 content={
                     "status": "unhealthy",
                     "database": "disconnected",
-                    "error": str(e),
+                    "error": "Internal server error",
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 },
             )
@@ -160,7 +160,7 @@ def get_health_router(
         except ImportError:
             return {"status": "disabled", "message": "Redis module not available"}
         except Exception as e:
-            return {"status": "error", "error": str(e)}
+            return {"status": "error", "error": "Internal server error"}
 
     return router
 

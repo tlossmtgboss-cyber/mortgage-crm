@@ -1188,10 +1188,10 @@ async def explore_salesforce_objects(
 
     except requests.exceptions.HTTPError as e:
         logger.error(f"Salesforce API error: {e}")
-        raise HTTPException(status_code=502, detail=f"Salesforce API error: {str(e)}")
+        raise HTTPException(status_code=502, detail="Salesforce API error")
     except Exception as e:
         logger.error(f"Failed to explore Salesforce objects: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/explore/objects/{object_name}")
@@ -1263,10 +1263,10 @@ async def explore_salesforce_object_fields(
 
     except requests.exceptions.HTTPError as e:
         logger.error(f"Salesforce API error: {e}")
-        raise HTTPException(status_code=502, detail=f"Salesforce API error: {str(e)}")
+        raise HTTPException(status_code=502, detail="Salesforce API error")
     except Exception as e:
         logger.error(f"Failed to describe object: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/explore/query")
@@ -1346,10 +1346,10 @@ async def explore_salesforce_query(
 
     except requests.exceptions.HTTPError as e:
         logger.error(f"Salesforce API error: {e}")
-        raise HTTPException(status_code=502, detail=f"Salesforce API error: {str(e)}")
+        raise HTTPException(status_code=502, detail="Salesforce API error")
     except Exception as e:
         logger.error(f"Query failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============ Import Loans Endpoint ============
@@ -1592,7 +1592,7 @@ async def import_closed_loans(
     except Exception as e:
         logger.error(f"Import failed: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============ Outbound Sync (Push) Endpoints ============
@@ -2380,7 +2380,7 @@ async def debug_salesforce_objects(
 
     except Exception as e:
         logger.error(f"Debug objects failed: {e}")
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": "Internal server error"}
 
 
 @router.get("/debug/salesforce-query")
@@ -2438,7 +2438,7 @@ async def debug_salesforce_query(
 
     except Exception as e:
         logger.error(f"Debug query failed: {e}")
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": "Internal server error"}
 
 
 @router.post("/import-closed-loans")
@@ -2566,7 +2566,7 @@ async def check_imported_loans(
 
     except Exception as e:
         logger.error(f"Check imported loans failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============ Debug: Database Stats (No Auth) ============
@@ -2657,7 +2657,7 @@ async def get_db_stats(db: Session = Depends(get_db)):
 
     except Exception as e:
         logger.error(f"DB stats failed: {e}")
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
 
 
 # ============ Debug: Import Closed Loans from Salesforce (No Auth) ============
@@ -2817,7 +2817,7 @@ async def debug_import_closed_loans_from_sf(
         import traceback
         return {
             "status": "error",
-            "error": str(e),
+            "error": "Internal server error",
             "traceback": traceback.format_exc()
         }
 
@@ -2916,7 +2916,7 @@ async def debug_import_to_mum(db: Session = Depends(get_db)):
 
     except Exception as e:
         logger.error(f"Debug import to MUM failed: {e}")
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
 
 
 # ============ Import Funded Loans to MUM Clients ============
@@ -3037,7 +3037,7 @@ async def import_funded_loans_to_mum(
     except SQLAlchemyError as e:
         logger.error(f"Import to MUM failed: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/fix-mum-user-ids")
@@ -3077,7 +3077,7 @@ async def fix_mum_client_user_ids(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Failed to fix MUM user IDs: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/sync-and-import-mum")
@@ -3353,7 +3353,7 @@ async def sync_all_loans_from_salesforce(
         """), {"user_id": user_id}).fetchone()
     except Exception as e:
         logger.error(f"Database error querying Salesforce integration: {e}")
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Database error")
 
     if not integration or not integration[0]:
         # Check if table exists and has any rows
@@ -3674,7 +3674,7 @@ async def sync_all_loans_from_salesforce(
 
     except requests.RequestException as e:
         logger.error(f"Salesforce request error: {e}")
-        raise HTTPException(status_code=500, detail=f"Salesforce connection error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Salesforce connection error")
 
 
 @router.get("/debug/connection")
@@ -3758,7 +3758,7 @@ async def debug_salesforce_connection(
     except Exception as e:
         return {
             "status": "error",
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -3871,7 +3871,7 @@ async def debug_token_refresh(
     except Exception as e:
         return {
             "status": "error",
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -3972,7 +3972,7 @@ async def debug_test_salesforce_query(
     except Exception as e:
         return {
             "status": "error",
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -4104,4 +4104,4 @@ async def debug_all_statuses(
 
     except Exception as e:
         logger.error(f"Debug all-statuses failed: {e}")
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": "Internal server error"}

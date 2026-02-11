@@ -352,7 +352,7 @@ Context:
             return {
                 "action": action_type.value,
                 "status": "error",
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     def _format_context(self, context: Dict[str, Any]) -> str:

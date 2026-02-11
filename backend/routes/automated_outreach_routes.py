@@ -208,7 +208,7 @@ async def get_campaigns(
         return {"campaigns": campaigns}
     except SQLAlchemyError as e:
         logger.error(f"Error fetching campaigns: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/campaigns")
@@ -259,7 +259,7 @@ async def create_campaign(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error creating campaign: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/campaigns/{campaign_id}")
@@ -305,7 +305,7 @@ async def get_campaign_detail(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error fetching campaign: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/campaigns/{campaign_id}/status")
@@ -326,7 +326,7 @@ async def update_campaign_status(
         return {"success": True, "message": f"Campaign status updated to {status.value}"}
     except SQLAlchemyError as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/campaigns/{campaign_id}/assign")
@@ -387,7 +387,7 @@ async def assign_leads_to_campaign(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error assigning leads: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -421,7 +421,7 @@ async def get_triggers(
         return {"triggers": triggers}
     except SQLAlchemyError as e:
         logger.error(f"Error fetching triggers: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/triggers")
@@ -461,7 +461,7 @@ async def create_trigger(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error creating trigger: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/triggers/{trigger_id}")
@@ -501,7 +501,7 @@ async def update_trigger(
         return {"success": True, "message": "Trigger updated"}
     except SQLAlchemyError as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/triggers/{trigger_id}")
@@ -516,7 +516,7 @@ async def delete_trigger(
         return {"success": True, "message": "Trigger deleted"}
     except SQLAlchemyError as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -756,7 +756,7 @@ async def setup_default_triggers(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error setting up defaults: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -899,4 +899,4 @@ async def execute_trigger(
 
     except SQLAlchemyError as e:
         logger.error(f"Error in execute_trigger: {e}")
-        return {"executed": 0, "error": str(e)}
+        return {"executed": 0, "error": "Internal server error"}

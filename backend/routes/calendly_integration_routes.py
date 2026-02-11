@@ -133,7 +133,7 @@ async def connect_calendly(
     except Exception as e:
         db.rollback()
         logger.error(f"Error connecting Calendly: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/event-types")
@@ -193,7 +193,7 @@ async def get_calendly_event_types(
 
     except requests.exceptions.RequestException as e:
         logger.error(f"Calendly API error: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch event types: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to fetch event types")
 
 
 @router.post("/scheduling-link")
@@ -262,7 +262,7 @@ async def create_scheduling_link(
 
     except requests.exceptions.RequestException as e:
         logger.error(f"Calendly API error: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create scheduling link: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create scheduling link")
 
 
 @router.post("/webhook")
@@ -357,7 +357,7 @@ async def calendly_webhook(request: Request, db: Session = Depends(get_db)):
 
     except Exception as e:
         logger.error(f"Calendly webhook error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/calendar-mappings")
@@ -480,7 +480,7 @@ async def get_availability(
 
     except requests.exceptions.RequestException as e:
         logger.error(f"Calendly availability API error: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch availability: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to fetch availability")
 
 
 @router.post("/ai-schedule")
@@ -656,4 +656,4 @@ Rules:
 
     except Exception as e:
         logger.error(f"AI scheduling error: {e}")
-        raise HTTPException(status_code=500, detail=f"AI scheduling failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="AI scheduling failed")

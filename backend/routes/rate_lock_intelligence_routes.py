@@ -311,7 +311,7 @@ async def get_quick_recommendation(request: QuickRecommendationRequest):
 
     except Exception as e:
         logger.error(f"Error generating recommendation: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/v1/market/snapshot")
@@ -354,7 +354,7 @@ async def get_market_snapshot():
 
     except Exception as e:
         logger.error(f"Error fetching market snapshot: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/health")

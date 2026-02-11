@@ -368,7 +368,7 @@ async def create_scheduled_workflow(
 
     except Exception as e:
         logger.error(f"Create workflow error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/workflows")
@@ -508,7 +508,7 @@ Keep it under 150 words. Be encouraging and informative."""
                     targets_succeeded += 1
 
                 except Exception as e:
-                    errors.append({"loan_id": loan.id, "error": str(e)})
+                    errors.append({"loan_id": loan.id, "error": "Internal server error"})
 
         elif workflow.workflow_type == "daily_task_summary":
             # Get today's tasks
@@ -597,7 +597,7 @@ Keep it under 150 words. Be encouraging and informative."""
 
     except Exception as e:
         logger.error(f"Workflow execution error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/workflows/{workflow_id}/executions")
@@ -971,7 +971,7 @@ async def trigger_event_workflow(
 
     except Exception as e:
         logger.error(f"Event trigger error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/events/triggers")
@@ -1104,7 +1104,7 @@ async def run_due_workflows(
                     "workflow_id": workflow.id,
                     "name": workflow.name,
                     "status": "failed",
-                    "error": str(e)
+                    "error": "Internal server error"
                 })
 
         db.commit()
@@ -1119,7 +1119,7 @@ async def run_due_workflows(
         raise
     except Exception as e:
         logger.error(f"Scheduler error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/scheduler/status")

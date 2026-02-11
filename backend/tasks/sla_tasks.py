@@ -71,7 +71,7 @@ def update_milestone_statuses_task():
 
     except Exception as e:
         logger.error(f"Error in milestone status update task: {e}")
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
     finally:
         if db:
             db.close()
@@ -99,7 +99,7 @@ def create_risk_alerts_task():
 
     except Exception as e:
         logger.error(f"Error in risk alert creation task: {e}")
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
     finally:
         if db:
             db.close()
@@ -126,7 +126,7 @@ def reactivate_snoozed_alerts_task():
 
     except Exception as e:
         logger.error(f"Error in snoozed alert reactivation task: {e}")
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
     finally:
         if db:
             db.close()
@@ -372,7 +372,7 @@ def generate_run_rate_report(organization_id: int = 1) -> Dict[str, Any]:
 
     except Exception as e:
         logger.error(f"Error generating run rate report: {e}")
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
     finally:
         if db:
             db.close()
@@ -475,7 +475,7 @@ def create_snapshot_with_run_rates(snapshot_time: str = "morning"):
 
     except Exception as e:
         logger.error(f"Error in {snapshot_time} snapshot task: {e}")
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
     finally:
         if db:
             db.close()
@@ -529,7 +529,7 @@ def generate_weekly_report_task():
 
     except Exception as e:
         logger.error(f"Error in weekly report task: {e}")
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
     finally:
         if db:
             db.close()

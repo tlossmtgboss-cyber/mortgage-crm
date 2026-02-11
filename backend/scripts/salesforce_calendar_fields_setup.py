@@ -213,7 +213,7 @@ async def setup_fields(user_id: int) -> Dict[str, Any]:
         logger.info(f"   ✅ Connected to: {instance_url}")
     except Exception as e:
         logger.error(f"   ❌ Failed: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
     # Check existing fields
     logger.info("\n2. Checking existing fields on Event object...")
@@ -224,7 +224,7 @@ async def setup_fields(user_id: int) -> Dict[str, Any]:
             logger.info(f"   {status}: {field}")
     except Exception as e:
         logger.error(f"   ❌ Failed to check fields: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
     # Determine which fields to create
     fields_to_create = [
@@ -262,7 +262,7 @@ async def setup_fields(user_id: int) -> Dict[str, Any]:
 
     except Exception as e:
         logger.error(f"   ❌ Failed to create fields: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 async def check_fields(user_id: int):

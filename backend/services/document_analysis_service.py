@@ -629,7 +629,7 @@ Important:
             logger.error(f"Mortgage statement parsing failed: {e}")
             return {
                 "success": False,
-                "error": str(e),
+                "error": "Internal server error",
                 "data": {}
             }
 

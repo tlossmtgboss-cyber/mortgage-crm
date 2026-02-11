@@ -214,7 +214,7 @@ def register_mum_activity_routes(app, get_db, get_current_user, get_current_user
                 else:
                     skipped += 1
             except Exception as e:
-                errors.append({"loan_id": loan_id, "error": str(e)})
+                errors.append({"loan_id": loan_id, "error": "Internal server error"})
                 logger.error(f"Batch promote error for loan {loan_id}: {e}")
 
         db.commit()
@@ -283,7 +283,7 @@ def register_mum_activity_routes(app, get_db, get_current_user, get_current_user
             import traceback
             logger.error(traceback.format_exc())
             db.rollback()
-            raise HTTPException(status_code=500, detail=f"Error creating MUM client: {str(e)}")
+            raise HTTPException(status_code=500, detail="Error creating MUM client")
 
     @app.get("/api/v1/mum-clients/")
     async def get_mum_clients(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):

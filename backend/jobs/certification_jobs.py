@@ -118,7 +118,7 @@ def create_quarterly_certifications():
     except Exception as e:
         db.rollback()
         logger.error(f"❌ Error creating certifications: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
     finally:
         db.close()
 
@@ -223,7 +223,7 @@ def send_certification_reminders():
     except Exception as e:
         db.rollback()
         logger.error(f"❌ Error sending reminders: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
     finally:
         db.close()
 

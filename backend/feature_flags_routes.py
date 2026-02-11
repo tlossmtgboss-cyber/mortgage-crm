@@ -492,7 +492,7 @@ async def create_feature_tables(db: Session = Depends(get_db)):
             "tables": ["system_features", "company_feature_access", "feature_audit_log"]
         }
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 @router.post("/migrate/seed-features")
@@ -530,7 +530,7 @@ async def seed_default_features(db: Session = Depends(get_db)):
         }
     except Exception as e:
         db.rollback()
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 @router.post("/migrate/full-setup")

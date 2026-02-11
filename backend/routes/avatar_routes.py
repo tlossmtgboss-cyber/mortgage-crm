@@ -97,7 +97,7 @@ async def create_avatar(
         return {"success": True, "avatar": profile}
     except Exception as e:
         logger.error(f"Failed to create avatar: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("", response_model=AvatarListResponse)
@@ -127,7 +127,7 @@ async def list_avatars(
         )
     except Exception as e:
         logger.error(f"Failed to list avatars: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/{avatar_id}", response_model=dict)
@@ -432,10 +432,10 @@ async def generate_avatar_video(
             "estimated_completion_seconds": estimated_completion
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
     except Exception as e:
         logger.error(f"Failed to create generation job: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/quick-generate", response_model=dict)
@@ -471,7 +471,7 @@ async def quick_generate(
             estimated_completion_seconds=estimated_duration * 0.5 + 30
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
 
 
 @router.get("/jobs", response_model=AvatarJobListResponse)
@@ -544,7 +544,7 @@ async def test_create_avatar(
         return {"success": True, "avatar": profile, "message": "Test avatar created"}
     except Exception as e:
         logger.error(f"Failed to create test avatar: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/test/list", response_model=dict)
@@ -565,7 +565,7 @@ async def test_list_avatars(
         return {"success": True, "avatars": avatars, "total": total}
     except Exception as e:
         logger.error(f"Failed to list test avatars: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/test/{avatar_id}", response_model=dict)
@@ -583,4 +583,4 @@ async def test_get_avatar(
         raise
     except Exception as e:
         logger.error(f"Failed to get test avatar: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

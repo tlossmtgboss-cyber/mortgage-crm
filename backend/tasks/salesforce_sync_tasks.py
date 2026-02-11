@@ -440,7 +440,7 @@ def sync_all_users_salesforce_sync(**kwargs) -> Dict[str, Any]:
         return result
     except Exception as e:
         logger.error(f"❌ Salesforce sync task FAILED: {e}", exc_info=True)
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
 
 
 # ============================================================================

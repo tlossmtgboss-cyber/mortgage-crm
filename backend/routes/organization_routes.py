@@ -585,7 +585,7 @@ async def bulk_assign_users_to_organization(
             try:
                 backfill_organization_id_for_user(db, user.id, org_id)
             except Exception as e:
-                errors.append({"user_id": user_id, "error": f"Backfill failed: {str(e)}"})
+                errors.append({"user_id": user_id, "error": "Backfill failed"})
 
         assigned.append({"user_id": user_id, "email": user.email})
 

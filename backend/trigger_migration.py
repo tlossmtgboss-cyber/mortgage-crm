@@ -56,7 +56,7 @@ async def run_ai_migration_endpoint(secret: str):
     except Exception as e:
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 @app.post("/admin/initialize-ai-system")
@@ -95,7 +95,7 @@ async def initialize_ai_system_endpoint(secret: str):
     except Exception as e:
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 '''
 

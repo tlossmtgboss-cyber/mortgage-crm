@@ -430,7 +430,7 @@ class ContentPersonalizationService:
                 results.append({
                     "record_id": record_id,
                     "success": False,
-                    "error": str(e)
+                    "error": "Internal server error"
                 })
 
         return results

@@ -625,7 +625,7 @@ async def kill_idle_connections():
             "killed_idle_in_tx": len(killed_tx)
         }
     except Exception as e:
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": "Internal server error"}
 
 
 @router.post("/api/v1/admin/normalize-loan-stages")
@@ -672,7 +672,7 @@ async def normalize_loan_stages(db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         logger.error(f"Failed to normalize stages: {e}")
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": "Internal server error"}
 
 
 # =============================================================================

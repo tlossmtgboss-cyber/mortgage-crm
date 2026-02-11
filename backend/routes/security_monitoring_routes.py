@@ -111,7 +111,7 @@ async def get_security_dashboard(
         }
     except Exception as e:
         logger.exception("Error fetching security dashboard")
-        raise HTTPException(status_code=500, detail=f"Error fetching security data: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error fetching security data")
 
 
 @router.get("/rate-limits")
@@ -144,7 +144,7 @@ async def get_rate_limit_details(
         }
     except Exception as e:
         logger.exception("Error fetching rate limit details")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/blocked-ips")
@@ -177,7 +177,7 @@ async def get_blocked_ips(
         return {
             "count": 0,
             "blocked_ips": [],
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -208,7 +208,7 @@ async def unblock_ip(
 
     except Exception as e:
         logger.exception(f"Error unblocking IP {ip_address}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/clear-rate-limit/{identifier}")
@@ -236,7 +236,7 @@ async def clear_rate_limit(
 
     except Exception as e:
         logger.exception(f"Error clearing rate limit for {identifier}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/events")
@@ -255,7 +255,7 @@ async def get_security_events(
         }
     except Exception as e:
         logger.exception("Error fetching security events")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/health")
@@ -302,7 +302,7 @@ async def get_security_health(
         }
     except Exception as e:
         logger.exception("Error checking security health")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # Helper functions

@@ -280,7 +280,7 @@ async def get_workspace_data(
         logger.error(f"get_workspace_data failed for {slug}: {e}\n{error_tb}")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to get workspace data: {str(e)}"
+            detail="Failed to get workspace data"
         )
 
 
@@ -425,7 +425,7 @@ async def submit_application(
             workspace_id=context.workspace_id
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
 
     # Construct portal URL with the same token used for submission
     base_domain = os.getenv("PURL_BASE_DOMAIN", "perenniaai.com")
@@ -865,7 +865,7 @@ async def list_conditions(
         }
     except Exception as e:
         logger.error(f"Failed to fetch conditions: {e}")
-        return {"conditions": [], "message": "Failed to fetch conditions", "error": str(e)}
+        return {"conditions": [], "message": "Failed to fetch conditions", "error": "Internal server error"}
 
 
 @purl_router.patch(
@@ -1295,7 +1295,7 @@ async def create_workspace(
             last_name=borrower_last      # For firstname.lastname slug format
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
 
     # Add borrower as primary contact
 
@@ -1623,7 +1623,7 @@ async def create_token(
     except Exception as e:
         logger.error(f"Failed to create token: {e}")
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Token creation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Token creation failed")
 
 
 # Temporary endpoint to regenerate token for workspace (remove after use)
@@ -1814,7 +1814,7 @@ async def add_contact(
             data=contact
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
 
     return {"success": True, "contact": result}
 
@@ -2587,7 +2587,7 @@ async def resend_portal_invite_by_slug(
         raise
     except Exception as e:
         logger.exception(f"Resend invite failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal error")
 
 
 # =============================================================================

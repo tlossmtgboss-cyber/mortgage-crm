@@ -324,7 +324,7 @@ async def microsoft_status(
         return success_response("Error checking status", {
             "connected": False,
             "enabled": microsoft_outlook_client.enabled,
-            "error": str(e)
+            "error": "Internal server error"
         })
 
 
@@ -388,7 +388,7 @@ async def refresh_microsoft_token(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error refreshing Microsoft {provider} token: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/disconnect/{provider}")
@@ -420,7 +420,7 @@ async def disconnect_microsoft(
     except SQLAlchemyError as e:
         logger.error(f"Error disconnecting Microsoft {provider}: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # Calendar API Endpoints

@@ -201,7 +201,7 @@ class ContentPublisherService:
 
         except Exception as e:
             logger.error(f"Error publishing to {channel}: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     async def _publish_to_blog(
         self,
@@ -251,7 +251,7 @@ class ContentPublisherService:
             }
 
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     async def _publish_to_facebook(
         self,
@@ -284,7 +284,7 @@ class ContentPublisherService:
                 }
 
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     async def _publish_to_instagram(
         self,

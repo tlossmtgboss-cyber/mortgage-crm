@@ -1630,7 +1630,7 @@ async def import_email_to_queue(
             logger.error(f"Email identity resolution failed: {e}")
             import traceback
             logger.error(traceback.format_exc())
-            identity_resolution_result = {"attempted": True, "error": str(e)}
+            identity_resolution_result = {"attempted": True, "error": "Internal server error"}
 
     # Run AI analysis if requested
     analysis = None
@@ -1741,7 +1741,7 @@ async def migrate_email_intelligence_tables(
         ensure_email_intelligence_tables_exist()
         return {"status": "success", "message": "Email intelligence tables created/updated"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ================================================================
@@ -2141,7 +2141,7 @@ async def queue_email_for_intelligence(
     except Exception as e:
         logger.error(f"Error queuing email for intelligence: {e}")
         db.rollback()
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": "Internal server error"}
 
 
 @router.post("/batch-import")
@@ -2271,7 +2271,7 @@ async def cron_sync_emails_to_queue(
 
     except SQLAlchemyError as e:
         logger.error(f"Error in cron sync: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ================================================================
@@ -2959,7 +2959,7 @@ async def process_email_with_intelligence(
         logger.error(f"Error processing email {email_id} with intelligence: {e}")
         import traceback
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/batch-process-with-intelligence")
@@ -3033,7 +3033,7 @@ async def batch_process_emails_with_intelligence(
             results["errors"] += 1
             results["details"].append({
                 "email_id": email_id,
-                "error": str(e)
+                "error": "Internal server error"
             })
 
     return results
@@ -3145,7 +3145,7 @@ async def get_sla_tracking(
     except SQLAlchemyError as e:
         logger.error(f"Error fetching SLA tracking: {e}")
         # Return empty result instead of crashing
-        return {"slas": [], "total": 0, "error": str(e)}
+        return {"slas": [], "total": 0, "error": "Internal server error"}
 
     slas = []
     for row in result:
@@ -3252,7 +3252,7 @@ async def debug_email_queue_schema(db: Session = Depends(get_db)):
             "all_identity_columns_exist": all(identity_columns.values())
         }
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
 
 
 @router.post("/debug/test-identity-resolution")
@@ -3286,7 +3286,7 @@ async def debug_test_identity_resolution(
         import traceback
         return {
             "status": "error",
-            "error": str(e),
+            "error": "Internal server error",
             "traceback": traceback.format_exc()
         }
 
@@ -3324,4 +3324,4 @@ async def debug_add_missing_columns(db: Session = Depends(get_db)):
         }
     except SQLAlchemyError as e:
         db.rollback()
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": "Internal server error"}

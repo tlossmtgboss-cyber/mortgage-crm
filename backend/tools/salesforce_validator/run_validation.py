@@ -866,7 +866,7 @@ class FieldExistenceValidator:
                         details={
                             "sf_object": sf_object,
                             "sf_field": sf_field,
-                            "error": str(e),
+                            "error": "Internal server error",
                             "error_type": "API_ERROR",
                             "is_sla_field": is_sla,
                             "is_byte_mapped": is_byte_mapped,
@@ -1213,7 +1213,7 @@ class ByteMappingValidator:
                 issues.append(
                     {
                         "record_id": record_id,
-                        "error": f"Byte decode error: {e}",
+                        "error": "Byte decode error",
                         "error_type": "BYTE_DECODE_ERROR",
                         "raw_bytes": str(byte_data),
                     }

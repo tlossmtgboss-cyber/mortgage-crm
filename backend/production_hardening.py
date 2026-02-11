@@ -452,7 +452,7 @@ class HealthChecker:
             except Exception as e:
                 results["checks"][name] = {
                     "status": "unhealthy",
-                    "error": str(e)
+                    "error": "Internal server error"
                 }
                 overall_healthy = False
 

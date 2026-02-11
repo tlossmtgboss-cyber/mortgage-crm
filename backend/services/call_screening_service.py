@@ -359,7 +359,7 @@ class CallScreeningService:
             }
         except Exception as e:
             logger.error(f"Twilio Lookup error: {e}")
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
     async def _cache_lookup_result(self, phone: str, result: Dict[str, Any]):
         """Cache lookup result to avoid repeated API calls."""

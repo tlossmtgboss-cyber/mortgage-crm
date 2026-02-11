@@ -74,7 +74,7 @@ class EsignPDFService:
             logger.error(f"Error extracting PDF metadata: {e}")
             return {
                 "success": False,
-                "error": str(e),
+                "error": "Internal server error",
             }
 
     def flatten_signed_pdf(
@@ -613,7 +613,7 @@ class EsignPDFService:
             logger.error(f"Error generating signed PDF for envelope {envelope_id}: {e}")
             return {
                 "success": False,
-                "error": str(e),
+                "error": "Internal server error",
             }
 
     def generate_preview_pages(

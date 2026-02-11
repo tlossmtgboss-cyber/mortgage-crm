@@ -202,7 +202,7 @@ class ContentCalendarService:
         except Exception as e:
             self.db.rollback()
             logger.error(f"Failed to create calendar: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def _calculate_channel_posts(self, channels: List[str], channel: str) -> int:
         """Calculate posts per week for a specific channel."""

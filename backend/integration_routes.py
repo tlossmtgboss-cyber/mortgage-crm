@@ -187,7 +187,7 @@ async def send_sms(
 
     except Exception as e:
         logger.error(f"Error sending SMS: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/sms/history")
@@ -444,7 +444,7 @@ async def send_email(
 
     except Exception as e:
         logger.error(f"Error sending email: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/email/inbox")
@@ -468,7 +468,7 @@ async def get_inbox(
 
     except Exception as e:
         logger.error(f"Error getting inbox: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/email/webhook")
@@ -567,7 +567,7 @@ async def send_teams_message(
 
     except Exception as e:
         logger.error(f"Error sending Teams message: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -604,7 +604,7 @@ async def execute_agentic_task(
         raise HTTPException(status_code=400, detail=f"Invalid trigger type: {request.trigger}")
     except Exception as e:
         logger.error(f"Error executing agentic task: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/status")

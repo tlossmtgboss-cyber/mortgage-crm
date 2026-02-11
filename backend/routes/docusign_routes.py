@@ -288,7 +288,7 @@ async def docusign_status(
         return success_response({
             "connected": False,
             "enabled": docusign_client.enabled,
-            "error": str(e)
+            "error": "Internal server error"
         })
 
 
@@ -347,7 +347,7 @@ async def refresh_docusign_token(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error refreshing DocuSign token: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/disconnect")
@@ -375,7 +375,7 @@ async def disconnect_docusign(
     except SQLAlchemyError as e:
         logger.error(f"Error disconnecting DocuSign: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # DocuSign API Endpoints

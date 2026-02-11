@@ -135,7 +135,7 @@ async def process_drip_campaigns(db_session):
 
     except Exception as e:
         logger.error(f"Error in process_drip_campaigns: {e}")
-        return {"processed": 0, "error": str(e)}
+        return {"processed": 0, "error": "Internal server error"}
 
 
 async def process_no_activity_triggers(db_session):
@@ -197,7 +197,7 @@ async def process_no_activity_triggers(db_session):
 
     except Exception as e:
         logger.error(f"Error in process_no_activity_triggers: {e}")
-        return {"processed": 0, "error": str(e)}
+        return {"processed": 0, "error": "Internal server error"}
 
 
 def setup_outreach_scheduler(scheduler, SessionLocal):

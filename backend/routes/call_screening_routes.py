@@ -116,7 +116,7 @@ async def get_blocklist(
 
     except SQLAlchemyError as e:
         logger.error(f"Error getting blocklist: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/blocklist")
@@ -145,7 +145,7 @@ async def add_to_blocklist(
 
     except Exception as e:
         logger.error(f"Error adding to blocklist: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/blocklist/{phone_number}")
@@ -187,7 +187,7 @@ async def remove_from_blocklist(
     except SQLAlchemyError as e:
         logger.error(f"Error removing from blocklist: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -255,7 +255,7 @@ async def get_whitelist(
 
     except SQLAlchemyError as e:
         logger.error(f"Error getting whitelist: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/whitelist")
@@ -284,7 +284,7 @@ async def add_to_whitelist(
 
     except Exception as e:
         logger.error(f"Error adding to whitelist: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/whitelist/{phone_number}")
@@ -325,7 +325,7 @@ async def remove_from_whitelist(
     except SQLAlchemyError as e:
         logger.error(f"Error removing from whitelist: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -372,7 +372,7 @@ async def get_screening_stats(
 
     except Exception as e:
         logger.error(f"Error getting screening stats: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/log")
@@ -437,7 +437,7 @@ async def get_screening_log(
 
     except SQLAlchemyError as e:
         logger.error(f"Error getting screening log: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -488,7 +488,7 @@ async def get_lookup_cache(
 
     except Exception as e:
         logger.error(f"Error getting lookup cache: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/lookup-cache/{phone_number}")
@@ -531,7 +531,7 @@ async def clear_lookup_cache(
     except SQLAlchemyError as e:
         logger.error(f"Error clearing lookup cache: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/lookup-cache/clear-expired")
@@ -553,7 +553,7 @@ async def clear_expired_cache(db: Session = Depends(get_db)):
     except SQLAlchemyError as e:
         logger.error(f"Error clearing expired cache: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -636,4 +636,4 @@ async def lookup_phone(
         raise
     except Exception as e:
         logger.error(f"Error performing lookup: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

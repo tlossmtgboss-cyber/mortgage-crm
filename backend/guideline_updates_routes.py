@@ -115,7 +115,7 @@ async def get_sidebar_updates(
 
     except Exception as e:
         logger.error(f"Error fetching sidebar updates: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/check-new", response_model=NewUpdatesCheckResponse)
@@ -152,7 +152,7 @@ async def check_for_new_updates(
 
     except Exception as e:
         logger.error(f"Error checking new updates: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/mark-viewed/{update_id}")
@@ -187,7 +187,7 @@ async def mark_update_viewed(
     except Exception as e:
         db.rollback()
         logger.error(f"Error marking update as viewed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/mark-all-viewed")
@@ -235,7 +235,7 @@ async def mark_all_viewed(
     except Exception as e:
         db.rollback()
         logger.error(f"Error marking all as viewed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # Helper Functions

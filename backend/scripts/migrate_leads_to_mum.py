@@ -227,7 +227,7 @@ def migrate_leads_to_mum(source_filter: str = "Auto Import", delete_after: bool 
                 errors.append({
                     "lead_id": lead['id'],
                     "name": lead['name'],
-                    "error": str(e)
+                    "error": "Internal server error"
                 })
                 print(f"  ERROR on Lead #{lead['id']}: {e}")
 

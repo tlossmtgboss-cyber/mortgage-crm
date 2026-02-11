@@ -309,7 +309,7 @@ async def validate_invite(token: str, db: Session = Depends(get_db)):
 
     except Exception as e:
         logger.error(f"Error validating invite: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/start")
@@ -461,7 +461,7 @@ async def start_onboarding(
     except Exception as e:
         db.rollback()
         logger.error(f"Error starting onboarding: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/company-profile")
@@ -527,7 +527,7 @@ async def save_company_profile(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error saving company profile: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/user-profile")
@@ -588,7 +588,7 @@ async def save_user_profile(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error saving user profile: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/invite-team")
@@ -673,7 +673,7 @@ async def queue_team_invites(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error queueing team invites: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/create-subscription")
@@ -883,7 +883,7 @@ async def create_subscription(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error creating subscription: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/complete")
@@ -991,7 +991,7 @@ async def complete_onboarding(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error completing onboarding: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/plan-pricing")

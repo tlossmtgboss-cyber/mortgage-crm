@@ -196,7 +196,7 @@ async def request_certificate(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to request certificate: {str(e)}"
+            detail="Failed to request certificate"
         )
 
 
@@ -241,13 +241,13 @@ async def complete_certificate(
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail="Invalid request"
         )
     except Exception as e:
         await update_ssl_status(domain, "failed", db)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to complete certificate: {str(e)}"
+            detail="Failed to complete certificate"
         )
 
 
@@ -283,7 +283,7 @@ async def get_certificate_status(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get certificate status: {str(e)}"
+            detail="Failed to get certificate status"
         )
 
 
@@ -359,7 +359,7 @@ async def renew_certificate(
         await update_ssl_status(domain, "failed", db)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to renew certificate: {str(e)}"
+            detail="Failed to renew certificate"
         )
 
 
@@ -390,7 +390,7 @@ async def renew_all_expiring(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to renew certificates: {str(e)}"
+            detail="Failed to renew certificates"
         )
 
 

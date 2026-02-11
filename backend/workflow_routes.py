@@ -87,7 +87,7 @@ async def get_workflow_tasks(
 
     except Exception as e:
         logger.error(f"Get tasks error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/tasks/{task_id}/complete")
@@ -107,7 +107,7 @@ async def complete_workflow_task(
         return {"success": True}
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/alerts")
@@ -156,7 +156,7 @@ async def get_workflow_alerts(
 
     except Exception as e:
         logger.error(f"Get alerts error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/alerts/{alert_id}/acknowledge")
@@ -175,7 +175,7 @@ async def acknowledge_alert(
         return {"success": True}
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============== Theme Days ==============
@@ -247,7 +247,7 @@ async def get_scheduled_messages(
 
     except Exception as e:
         logger.error(f"Get scheduled messages error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============== Last Mile ==============
@@ -318,7 +318,7 @@ async def get_last_mile_status(
 
     except Exception as e:
         logger.error(f"Get Last Mile status error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============== Post-Closing ==============
@@ -371,7 +371,7 @@ async def get_post_closing_calls(
 
     except Exception as e:
         logger.error(f"Get post-closing calls error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============== AI Analysis ==============
@@ -427,7 +427,7 @@ async def get_loan_analysis(
 
     except Exception as e:
         logger.error(f"Get analysis error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============== Dashboard ==============
@@ -481,7 +481,7 @@ async def get_workflow_dashboard(
 
     except Exception as e:
         logger.error(f"Dashboard error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============== Workflow Definitions ==============
@@ -874,7 +874,7 @@ async def get_all_upcoming_tasks(
             "tasks_by_day": {},
             "user_capacity": [],
             "total_tasks": 0,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -1023,7 +1023,7 @@ async def generate_tasks_for_pipeline(
         logger.error(f"Generate tasks error: {e}")
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -1195,5 +1195,5 @@ async def get_upcoming_tasks_by_workflow(
             "tasks_by_day": {},
             "user_capacity": [],
             "total_tasks": 0,
-            "error": str(e)
+            "error": "Internal server error"
         }

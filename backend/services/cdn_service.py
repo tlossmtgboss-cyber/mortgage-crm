@@ -266,7 +266,7 @@ class CDNService:
             logger.error(f"Error creating cache invalidation: {e}")
             return {
                 "success": False,
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     def invalidate_document(self, s3_key: str) -> Dict[str, Any]:
@@ -329,7 +329,7 @@ class CDNService:
             logger.error(f"Error getting distribution status: {e}")
             return {
                 "enabled": True,
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     def get_cache_statistics(self, days: int = 7) -> Dict[str, Any]:
@@ -390,7 +390,7 @@ class CDNService:
             logger.error(f"Error getting cache statistics: {e}")
             return {
                 "enabled": True,
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     def get_document_cdn_url(

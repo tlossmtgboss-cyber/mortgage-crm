@@ -184,7 +184,7 @@ async def submit_it_ticket(
     except Exception as e:
         logger.error(f"Error submitting IT ticket: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/tickets")
@@ -233,7 +233,7 @@ async def get_it_tickets(
 
     except Exception as e:
         logger.error(f"Error fetching IT tickets: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/tickets/{ticket_id}")
@@ -283,7 +283,7 @@ async def get_it_ticket(
         raise
     except Exception as e:
         logger.error(f"Error fetching IT ticket {ticket_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/tickets/{ticket_id}/approve")
@@ -323,7 +323,7 @@ async def approve_it_fix(
     except Exception as e:
         logger.error(f"Error approving IT ticket {ticket_id}: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/tickets/{ticket_id}/resolve")
@@ -365,7 +365,7 @@ async def resolve_it_ticket(
     except Exception as e:
         logger.error(f"Error resolving IT ticket {ticket_id}: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -456,7 +456,7 @@ async def get_all_it_tickets_admin(
 
     except Exception as e:
         logger.error(f"Error fetching admin IT tickets: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/admin/tickets/{ticket_id}/status")
@@ -496,7 +496,7 @@ async def update_ticket_status_admin(
     except Exception as e:
         logger.error(f"Error updating IT ticket status {ticket_id}: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/admin/tickets/{ticket_id}/assign")
@@ -545,7 +545,7 @@ async def assign_ticket_admin(
     except Exception as e:
         logger.error(f"Error assigning IT ticket {ticket_id}: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/admin/tickets/{ticket_id}/notes")
@@ -595,4 +595,4 @@ async def add_admin_note(
     except Exception as e:
         logger.error(f"Error adding note to IT ticket {ticket_id}: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

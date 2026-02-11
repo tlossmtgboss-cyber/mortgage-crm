@@ -319,7 +319,7 @@ async def get_pending_email_responses(
         }
     except Exception as e:
         logger.error(f"Error getting pending email responses: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/email-response-queue/approve")
@@ -460,7 +460,7 @@ async def approve_email_response(
     except Exception as e:
         logger.error(f"Error approving email response: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/email-response-queue/reject")
@@ -544,7 +544,7 @@ async def reject_email_response(
     except Exception as e:
         logger.error(f"Error rejecting email response: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/email-response-patterns")
@@ -601,7 +601,7 @@ async def get_email_response_patterns(
         }
     except Exception as e:
         logger.error(f"Error getting email response patterns: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/email-response-patterns/{pattern_id}")
@@ -656,7 +656,7 @@ async def update_email_response_pattern(
     except Exception as e:
         logger.error(f"Error updating email response pattern: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/email-response-patterns/{pattern_id}")
@@ -687,7 +687,7 @@ async def delete_email_response_pattern(
     except Exception as e:
         logger.error(f"Error deleting email response pattern: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/email-response-queue/stats")
@@ -753,7 +753,7 @@ async def get_email_response_stats(
         }
     except Exception as e:
         logger.error(f"Error getting email response stats: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/email-response-queue/test-item")
@@ -809,4 +809,4 @@ async def create_test_email_response_item(
     except Exception as e:
         logger.error(f"Error creating test item: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

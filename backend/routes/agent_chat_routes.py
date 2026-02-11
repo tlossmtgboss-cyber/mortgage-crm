@@ -147,7 +147,7 @@ async def create_chat_session(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error creating chat session: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/sessions")
@@ -201,7 +201,7 @@ async def list_chat_sessions(
 
     except SQLAlchemyError as e:
         logger.error(f"Error listing chat sessions: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/sessions/{session_id}")
@@ -332,7 +332,7 @@ async def send_message(
         raise
     except Exception as e:
         logger.error(f"Error sending message: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/sessions/{session_id}/messages/stream")
@@ -417,7 +417,7 @@ async def send_message_stream(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error in streaming message: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/sessions/{session_id}")
@@ -526,7 +526,7 @@ async def quick_agent_action(
         raise
     except Exception as e:
         logger.error(f"Error in quick action: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================

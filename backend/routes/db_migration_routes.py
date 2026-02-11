@@ -216,7 +216,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
                 "errors": errors if errors else None
             }
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
 
     # Email Monitor Migration Endpoint
@@ -272,7 +272,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
                 "errors": results if results else None
             }
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     # Morning Check-in Migration Endpoint
     @app.post("/api/v1/migrations/add-morning-checkin")
@@ -297,7 +297,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
         except Exception as e:
             db.rollback()
             logger.error(f"Migration error: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     # Rate Sheet Migration Endpoint
     @app.post("/api/v1/migrations/add-rate-sheets")
@@ -332,7 +332,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             }
         except Exception as e:
             logger.error(f"Rate sheet migration error: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
 
     @app.post("/api/v1/migrations/add-external-message-id")
@@ -391,7 +391,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             return {
                 "success": False,
                 "message": f"Migration failed: {str(e)}",
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     @app.post("/api/v1/migrations/add-conversation-memory")
@@ -499,7 +499,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             return {
                 "success": False,
                 "message": f"Migration failed: {str(e)}",
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     @app.post("/api/v1/migrations/add-permanent-memory")
@@ -598,7 +598,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             return {
                 "success": False,
                 "message": f"Migration failed: {str(e)}",
-                "error": str(e)
+                "error": "Internal server error"
             }
 
 
@@ -647,7 +647,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             return {
                 "success": False,
                 "message": f"Migration failed: {str(e)}",
-                "error": str(e)
+                "error": "Internal server error"
             }
 
 
@@ -697,7 +697,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             return {
                 "success": False,
                 "message": f"Migration failed: {str(e)}",
-                "error": str(e)
+                "error": "Internal server error"
             }
 
 
@@ -746,7 +746,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             return {
                 "success": False,
                 "message": f"Migration failed: {str(e)}",
-                "error": str(e)
+                "error": "Internal server error"
             }
 
 
@@ -793,7 +793,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             return {
                 "success": False,
                 "message": f"Migration failed: {str(e)}",
-                "error": str(e)
+                "error": "Internal server error"
             }
 
 
@@ -861,7 +861,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             return {
                 "success": False,
                 "message": f"Migration failed: {str(e)}",
-                "error": str(e)
+                "error": "Internal server error"
             }
 
 
@@ -934,7 +934,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             return {
                 "success": False,
                 "message": f"Migration failed: {str(e)}",
-                "error": str(e)
+                "error": "Internal server error"
             }
 
 
@@ -1133,7 +1133,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             return {
                 "success": False,
                 "message": f"Migration failed: {str(e)}",
-                "error": str(e)
+                "error": "Internal server error"
             }
 
 
@@ -1308,7 +1308,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             return {
                 "success": False,
                 "message": f"Migration failed: {str(e)}",
-                "error": str(e)
+                "error": "Internal server error"
             }
 
 
@@ -1335,7 +1335,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
                     results.append({"sql": sql[:50] + "...", "status": "OK"})
                 except Exception as e:
                     db.rollback()
-                    results.append({"sql": sql[:50] + "...", "status": "SKIP", "error": str(e)[:100]})
+                    results.append({"sql": sql[:50] + "...", "status": "SKIP", "error": "Internal server error"[:100]})
 
             return {
                 "success": True,
@@ -1344,7 +1344,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             }
         except Exception as e:
             logger.error(f"Rate Monitor columns migration failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
 
     @app.post("/api/v1/migrations/add-workflow-system")
@@ -1684,7 +1684,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             return {
                 "success": False,
                 "message": f"Migration failed: {str(e)}",
-                "error": str(e)
+                "error": "Internal server error"
             }
 
 
@@ -1750,7 +1750,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             db.rollback()
             return {
                 "success": False,
-                "error": str(e)
+                "error": "Internal server error"
             }
 
 
@@ -1839,7 +1839,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
         except Exception as e:
             logger.error(f"Workflow rules seeding failed: {e}")
             db.rollback()
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
 
     @app.post("/api/v1/migrations/add-workflow-sla-system")
@@ -1901,7 +1901,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             return {
                 "success": False,
                 "message": f"Migration failed: {str(e)}",
-                "error": str(e)
+                "error": "Internal server error"
             }
 
 
@@ -2074,7 +2074,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             return {
                 "success": False,
                 "message": f"Migration failed: {str(e)}",
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     @app.post("/api/v1/migrations/add-onboarding-tables")
@@ -2201,7 +2201,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             return {
                 "success": False,
                 "message": f"Migration failed: {str(e)}",
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     @app.post("/api/v1/migrations/add-ai-receptionist-dashboard-tables")
@@ -2434,7 +2434,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             return {
                 "success": False,
                 "message": f"Migration failed: {str(e)}",
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     @app.post("/api/v1/migrations/add-voicemail-system")
@@ -2507,7 +2507,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             return {
                 "success": False,
                 "message": f"Migration failed: {str(e)}",
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     @app.post("/api/v1/migrations/fix-voicemail-drops-columns")
@@ -2544,7 +2544,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             return {
                 "success": False,
                 "message": f"Migration failed: {str(e)}",
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     # ========================================================================
@@ -2585,7 +2585,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             return {"status": "success", "migration": migration_name, "message": "Migration completed successfully"}
         except Exception as e:
             logger.error(f"Migration failed: {e}")
-            raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+            raise HTTPException(status_code=500, detail="Migration failed")
 
 
     @app.post("/api/v1/public/migrations/add-followupboss-tables", response_model=None)
@@ -2705,7 +2705,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
 
         except Exception as e:
             logger.error(f"FUB migration error: {e}")
-            raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+            raise HTTPException(status_code=500, detail="Migration failed")
 
 
     @app.post("/api/v1/admin/add-loans-organization-column")
@@ -2739,7 +2739,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             return {"status": "success", "message": "Column added successfully", "action": "created"}
         except Exception as e:
             logger.error(f"Add organization_id column failed: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
 
     @app.post("/api/v1/admin/fix-loan-associations")
@@ -2799,7 +2799,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             }
         except Exception as e:
             logger.error(f"Fix loan associations failed: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
 
 
     @app.post("/api/v1/admin/fix-task-assignments")
@@ -2874,4 +2874,4 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             }
         except Exception as e:
             logger.error(f"Fix task assignments failed: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")

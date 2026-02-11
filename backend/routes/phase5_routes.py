@@ -78,7 +78,7 @@ async def register_agent(registration: AgentRegistration):
         }
     except Exception as e:
         logger.error(f"Failed to register agent: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @escalation_router.put("/agents/{agent_id}/status")
@@ -97,7 +97,7 @@ async def update_agent_status(agent_id: str, status: str):
         raise
     except Exception as e:
         logger.error(f"Failed to update agent status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @escalation_router.post("/check-triggers")
@@ -121,7 +121,7 @@ async def check_escalation_triggers(check: EscalationTriggerCheck):
         }
     except Exception as e:
         logger.error(f"Failed to check triggers: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @escalation_router.post("/request")
@@ -149,7 +149,7 @@ async def request_escalation(request: EscalationRequest):
         }
     except Exception as e:
         logger.error(f"Failed to request escalation: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @escalation_router.post("/escalations/{escalation_id}/complete")
@@ -172,7 +172,7 @@ async def complete_escalation(
         raise
     except Exception as e:
         logger.error(f"Failed to complete escalation: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @escalation_router.get("/dashboard")
@@ -185,7 +185,7 @@ async def get_escalation_dashboard():
         return service.get_agent_dashboard()
     except Exception as e:
         logger.error(f"Failed to get dashboard: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @escalation_router.get("/queue")
@@ -198,7 +198,7 @@ async def get_escalation_queue():
         return service.get_queue_status()
     except Exception as e:
         logger.error(f"Failed to get queue: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -260,7 +260,7 @@ async def score_call_automated(data: QATranscript):
         }
     except Exception as e:
         logger.error(f"Failed to score call: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @qa_router.post("/reviews/create")
@@ -290,7 +290,7 @@ async def create_review_request(request: QAReviewRequest):
         }
     except Exception as e:
         logger.error(f"Failed to create review: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @qa_router.post("/reviews/submit")
@@ -324,7 +324,7 @@ async def submit_human_review(review: QAHumanReview):
         raise
     except Exception as e:
         logger.error(f"Failed to submit review: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @qa_router.get("/reviews/pending")
@@ -355,7 +355,7 @@ async def get_pending_reviews(
         }
     except Exception as e:
         logger.error(f"Failed to get pending reviews: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @qa_router.get("/scorecards/{call_id}")
@@ -385,7 +385,7 @@ async def get_call_scorecard(call_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to get scorecard: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @qa_router.get("/calibration")
@@ -398,7 +398,7 @@ async def get_calibration_report():
         return service.get_calibration_report()
     except Exception as e:
         logger.error(f"Failed to get calibration report: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @qa_router.get("/agent/{agent_id}/performance")
@@ -411,7 +411,7 @@ async def get_agent_performance(agent_id: str, days: int = Query(default=30, le=
         return service.get_agent_performance(agent_id, days)
     except Exception as e:
         logger.error(f"Failed to get agent performance: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -465,7 +465,7 @@ async def enroll_voiceprint(enrollment: VoiceprintEnrollment):
         }
     except Exception as e:
         logger.error(f"Failed to enroll voiceprint: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @biometrics_router.post("/verify")
@@ -487,7 +487,7 @@ async def verify_voiceprint(verification: VoiceprintVerification):
         }
     except Exception as e:
         logger.error(f"Failed to verify voiceprint: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @biometrics_router.post("/recognize")
@@ -514,7 +514,7 @@ async def recognize_caller(recognition: CallerRecognition):
         }
     except Exception as e:
         logger.error(f"Failed to recognize caller: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @biometrics_router.get("/voiceprint/{voiceprint_id}")
@@ -543,7 +543,7 @@ async def get_voiceprint(voiceprint_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to get voiceprint: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @biometrics_router.delete("/voiceprint/{voiceprint_id}")
@@ -562,7 +562,7 @@ async def delete_voiceprint(voiceprint_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to delete voiceprint: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @biometrics_router.get("/caller/{caller_id}/profile")
@@ -592,7 +592,7 @@ async def get_caller_profile(caller_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to get caller profile: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -669,10 +669,10 @@ async def create_tenant(tenant: TenantCreate):
             }
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
     except Exception as e:
         logger.error(f"Failed to create tenant: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @tenant_router.get("/{tenant_id}")
@@ -702,7 +702,7 @@ async def get_tenant(tenant_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to get tenant: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @tenant_router.put("/{tenant_id}")
@@ -723,7 +723,7 @@ async def update_tenant(tenant_id: str, updates: TenantUpdate):
         raise
     except Exception as e:
         logger.error(f"Failed to update tenant: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @tenant_router.post("/{tenant_id}/upgrade")
@@ -751,12 +751,12 @@ async def upgrade_tenant(tenant_id: str, upgrade: TierUpgrade):
             "new_tier": new_tier.value
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to upgrade tenant: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @tenant_router.post("/{tenant_id}/suspend")
@@ -775,7 +775,7 @@ async def suspend_tenant(tenant_id: str, reason: str = ""):
         raise
     except Exception as e:
         logger.error(f"Failed to suspend tenant: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @tenant_router.post("/{tenant_id}/reactivate")
@@ -794,7 +794,7 @@ async def reactivate_tenant(tenant_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to reactivate tenant: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @tenant_router.put("/{tenant_id}/branding")
@@ -818,12 +818,12 @@ async def update_branding(tenant_id: str, branding: BrandingUpdate):
 
         return {"success": True, "branding_type": branding_type.value}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to update branding: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @tenant_router.get("/{tenant_id}/branding")
@@ -854,7 +854,7 @@ async def get_branding(tenant_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to get branding: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @tenant_router.get("/{tenant_id}/features")
@@ -873,7 +873,7 @@ async def get_feature_matrix(tenant_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to get features: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @tenant_router.get("/{tenant_id}/usage")
@@ -892,7 +892,7 @@ async def get_usage_summary(tenant_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to get usage: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @tenant_router.get("/{tenant_id}/limits")
@@ -905,7 +905,7 @@ async def check_usage_limits(tenant_id: str):
         return service.check_usage_limits(tenant_id)
     except Exception as e:
         logger.error(f"Failed to check limits: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @tenant_router.post("/{tenant_id}/api-key/regenerate")
@@ -928,7 +928,7 @@ async def regenerate_api_key(tenant_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to regenerate API key: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @tenant_router.get("/admin/dashboard")
@@ -941,7 +941,7 @@ async def get_admin_dashboard():
         return service.get_admin_dashboard()
     except Exception as e:
         logger.error(f"Failed to get admin dashboard: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -987,4 +987,4 @@ async def get_tenant_context(
         raise
     except Exception as e:
         logger.error(f"Failed to get tenant context: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

@@ -77,7 +77,7 @@ class WorkflowScheduler:
 
         except Exception as e:
             logger.error(f"Task generation failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def generate_tasks_for_workflow(self, instance_id: int) -> Dict[str, Any]:
         """Generate tasks for a specific workflow instance."""
@@ -87,7 +87,7 @@ class WorkflowScheduler:
 
         except Exception as e:
             logger.error(f"Task generation for instance {instance_id} failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     # =========================================================================
     # STATUS CHANGE DETECTION
@@ -126,7 +126,7 @@ class WorkflowScheduler:
 
         except Exception as e:
             logger.error(f"Status change processing failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def _process_lead_status_changes(self, workflow_service) -> Dict[str, Any]:
         """Process lead status changes for workflow enrollment."""
@@ -357,7 +357,7 @@ class WorkflowScheduler:
         except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Task escalation failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def _send_escalation_notification(
         self,
@@ -500,7 +500,7 @@ class WorkflowScheduler:
         except Exception as e:
             self.db.rollback()
             logger.error(f"Workflow completion check failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     # =========================================================================
     # SCHEDULED RUN

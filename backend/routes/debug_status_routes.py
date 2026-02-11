@@ -122,7 +122,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
                     blocking_tables.append({
                         "table": table_name,
                         "column": column_name,
-                        "error": str(e)[:100]
+                        "error": "Internal server error"[:100]
                     })
 
         return {
@@ -300,7 +300,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             import traceback
             return {
                 "success": False,
-                "error": str(e),
+                "error": "Internal server error",
                 "traceback": traceback.format_exc()
             }
 
@@ -604,7 +604,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             return result
 
         except Exception as e:
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
 
     @app.post("/api/v1/debug/create-test-appointment", tags=["Debug"])
@@ -668,7 +668,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
 
         except Exception as e:
             db.rollback()
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
 
     @app.post("/api/v1/debug/send-test-sms", tags=["Debug"])
@@ -716,7 +716,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             }
 
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
 
     @app.post("/api/v1/debug/trigger-appointment-reminders", tags=["Debug"])
@@ -727,7 +727,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             scheduler_service.send_appointment_reminders()
             return {"success": True, "message": "Reminder job executed"}
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
 
     @app.get("/api/v1/debug/cache-stats", tags=["Debug"])
@@ -774,7 +774,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
                 "cache_enabled": False,
                 "redis_connected": False,
                 "stats": None,
-                "error": str(e),
+                "error": "Internal server error",
                 "message": f"Error checking cache: {str(e)}"
             }
 
@@ -820,7 +820,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
         except Exception as e:
             return {
                 "datadog_enabled": False,
-                "error": str(e),
+                "error": "Internal server error",
                 "message": f"Error checking DataDog status: {str(e)}"
             }
 
@@ -839,7 +839,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
         except ImportError:
             return {"error": "DataDog monitoring module not available"}
         except Exception as e:
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
 
     @app.post("/api/v1/debug/datadog-test-metrics", tags=["Debug"])
@@ -874,7 +874,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
         except ImportError:
             return {"success": False, "error": "DataDog monitoring module not available"}
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
 
     @app.get("/api/v1/debug/cdn-status", tags=["Debug"])
@@ -906,7 +906,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
         except Exception as e:
             return {
                 "cdn_enabled": False,
-                "error": str(e),
+                "error": "Internal server error",
                 "message": f"Error checking CDN status: {str(e)}"
             }
 
@@ -933,7 +933,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
         except ImportError:
             return {"success": False, "error": "CDN service module not available"}
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
 
     @app.post("/api/v1/debug/add-missing-roles", tags=["Debug"])
@@ -1009,7 +1009,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
 
         except Exception as e:
             db.rollback()
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
 
     logger.info("Debug status routes loaded")

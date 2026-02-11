@@ -79,4 +79,4 @@ def register_api_key_routes(app, get_db, get_current_user, **kwargs):
 
         except Exception as e:
             logger.error(f"Error searching contacts: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")

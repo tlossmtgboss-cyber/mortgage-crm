@@ -677,7 +677,7 @@ async def get_current_user_profile(
     except Exception as e:
         logger.error(f"Error fetching user profile: {e}")
         from fastapi import HTTPException
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @users_router.put("/me")
@@ -734,7 +734,7 @@ async def update_current_user_profile(
         logger.error(f"Error updating user profile: {e}")
         db.rollback()
         from fastapi import HTTPException
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @users_router.put("/me/password")
@@ -762,4 +762,4 @@ async def change_user_password(
         logger.error(f"Error changing password: {e}")
         db.rollback()
         from fastapi import HTTPException
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

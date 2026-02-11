@@ -126,7 +126,7 @@ async def execute_agent_manually(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Execution failed: {str(e)}"
+            detail="Execution failed"
         )
 
 
@@ -172,7 +172,7 @@ async def dispatch_event(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Event dispatch failed: {str(e)}"
+            detail="Event dispatch failed"
         )
 
 

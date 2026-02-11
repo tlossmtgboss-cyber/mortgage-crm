@@ -904,7 +904,7 @@ async def get_sms_queue(
 
     except Exception as e:
         logger.error(f"Error getting SMS queue: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/queue/{sms_id}")
@@ -959,7 +959,7 @@ async def get_sms_detail(sms_id: int, db: Session = Depends(get_db)):
         raise
     except Exception as e:
         logger.error(f"Error getting SMS detail: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/queue/{sms_id}")
@@ -986,7 +986,7 @@ async def delete_sms_from_queue(sms_id: int, db: Session = Depends(get_db)):
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error deleting SMS: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/queue/{sms_id}/analyze")
@@ -1037,7 +1037,7 @@ async def analyze_sms(sms_id: int, db: Session = Depends(get_db)):
     except SQLAlchemyError as e:
         logger.error(f"Error analyzing SMS: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/queue/{sms_id}/disposition")
@@ -1074,7 +1074,7 @@ async def update_sms_disposition(
     except SQLAlchemyError as e:
         logger.error(f"Error updating SMS disposition: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/conversation/{phone_number}")
@@ -1130,7 +1130,7 @@ async def get_sms_conversation(
 
     except Exception as e:
         logger.error(f"Error getting SMS conversation: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/templates")
@@ -1169,7 +1169,7 @@ async def get_sms_templates(
 
     except Exception as e:
         logger.error(f"Error getting SMS templates: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/templates")
@@ -1197,7 +1197,7 @@ async def create_sms_template(
     except SQLAlchemyError as e:
         logger.error(f"Error creating SMS template: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/opt-out/check/{phone_number}")
@@ -1228,7 +1228,7 @@ async def check_opt_out(phone_number: str, db: Session = Depends(get_db)):
 
     except Exception as e:
         logger.error(f"Error checking opt-out: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/opt-outs")
@@ -1268,7 +1268,7 @@ async def get_opt_outs(
 
     except SQLAlchemyError as e:
         logger.error(f"Error getting opt-outs: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/opt-out/{phone_number}")
@@ -1293,7 +1293,7 @@ async def add_opt_out(
     except SQLAlchemyError as e:
         logger.error(f"Error adding opt-out: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/opt-out/{phone_number}")
@@ -1312,7 +1312,7 @@ async def remove_opt_out(phone_number: str, db: Session = Depends(get_db)):
     except SQLAlchemyError as e:
         logger.error(f"Error removing opt-out: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/document-mentions")
@@ -1376,7 +1376,7 @@ async def get_document_mentions(
 
     except Exception as e:
         logger.error(f"Error getting document mentions: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/sla/pending")
@@ -1416,7 +1416,7 @@ async def get_pending_sla(db: Session = Depends(get_db)):
 
     except Exception as e:
         logger.error(f"Error getting pending SLA: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/stats")
@@ -1489,7 +1489,7 @@ async def get_sms_stats(
 
     except Exception as e:
         logger.error(f"Error getting SMS stats: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/webhook/twilio")
@@ -1554,7 +1554,7 @@ async def twilio_sms_webhook(
     except SQLAlchemyError as e:
         logger.error(f"Error processing Twilio webhook: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 async def process_incoming_sms(sms_id: int):
@@ -1871,7 +1871,7 @@ async def send_sms(
     except SQLAlchemyError as e:
         logger.error(f"Error sending SMS: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/send/loan/{loan_id}")
@@ -1914,7 +1914,7 @@ async def send_sms_to_loan_borrower(
         raise
     except Exception as e:
         logger.error(f"Error sending SMS to loan borrower: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/send/lead/{lead_id}")
@@ -1957,7 +1957,7 @@ async def send_sms_to_lead(
         raise
     except Exception as e:
         logger.error(f"Error sending SMS to lead: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/send/bulk")
@@ -2084,4 +2084,4 @@ async def send_bulk_sms(
     except SQLAlchemyError as e:
         logger.error(f"Error sending bulk SMS: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

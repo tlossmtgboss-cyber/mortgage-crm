@@ -243,7 +243,7 @@ async def google_calendar_status(
         return success_response({
             "connected": False,
             "enabled": google_calendar_client.enabled,
-            "error": str(e)
+            "error": "Internal server error"
         })
 
 
@@ -302,7 +302,7 @@ async def refresh_google_calendar_token(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error refreshing Google Calendar token: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/disconnect")
@@ -330,7 +330,7 @@ async def disconnect_google_calendar(
     except SQLAlchemyError as e:
         logger.error(f"Error disconnecting Google Calendar: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # Calendar API Endpoints

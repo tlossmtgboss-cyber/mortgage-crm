@@ -231,7 +231,7 @@ class SmartDocsS3Service:
             logger.error(f"Unexpected error uploading to S3: {e}")
             return {
                 "success": False,
-                "error": str(e),
+                "error": "Internal server error",
                 "storage_key": storage_key,
                 "stored": False
             }
@@ -336,7 +336,7 @@ class SmartDocsS3Service:
             logger.error(f"Error generating presigned download URL: {e}")
             return {
                 "success": False,
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     def delete_file(self, storage_key: str) -> Dict[str, Any]:
@@ -372,7 +372,7 @@ class SmartDocsS3Service:
             logger.error(f"Error deleting document: {e}")
             return {
                 "success": False,
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     def file_exists(self, storage_key: str) -> bool:

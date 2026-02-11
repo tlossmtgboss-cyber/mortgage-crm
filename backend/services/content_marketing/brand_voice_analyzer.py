@@ -108,7 +108,7 @@ class BrandVoiceAnalyzerService:
             logger.error(f"Error fetching website content: {e}")
             return {
                 "success": False,
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     def _extract_text_content(self, soup: BeautifulSoup) -> str:
@@ -225,7 +225,7 @@ Provide accurate analysis based solely on the content provided. Be specific abou
 
         except Exception as e:
             logger.error(f"Voice analysis failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def _parse_voice_analysis(self, response_text: str) -> Dict[str, Any]:
         """Parse voice analysis response."""
@@ -243,7 +243,7 @@ Provide accurate analysis based solely on the content provided. Be specific abou
 
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse voice analysis: {e}")
-            return {"success": False, "error": f"Parse error: {e}"}
+            return {"success": False, "error": "Parse error"}
 
     # =========================================================================
     # System Prompt Generation
@@ -456,7 +456,7 @@ AVOID:
         except Exception as e:
             self.db.rollback()
             logger.error(f"Failed to create voice profile: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def get_voice_profile(self, profile_id: str) -> Optional[ContentBrandVoice]:
         """Get a voice profile by ID."""

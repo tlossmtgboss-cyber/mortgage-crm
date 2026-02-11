@@ -277,7 +277,7 @@ async def initiate_document_upload(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Failed to initiate upload: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/upload/confirm")
@@ -369,7 +369,7 @@ async def confirm_document_upload(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Failed to confirm upload: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -593,7 +593,7 @@ async def review_document(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Failed to review document: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 def _update_request_completion(db: Session, request_id: int):

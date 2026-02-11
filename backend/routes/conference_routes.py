@@ -202,7 +202,7 @@ async def create_conference(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error creating conference: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("")
@@ -265,7 +265,7 @@ async def list_conferences(
 
     except Exception as e:
         logger.error(f"Error listing conferences: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/{conference_id}")
@@ -336,7 +336,7 @@ async def get_conference(
         raise
     except Exception as e:
         logger.error(f"Error getting conference: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/{conference_id}")
@@ -392,7 +392,7 @@ async def update_conference(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error updating conference: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/{conference_id}")
@@ -420,7 +420,7 @@ async def delete_conference(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error deleting conference: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -463,7 +463,7 @@ async def start_conference(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error starting conference: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/{conference_id}/end")
@@ -518,7 +518,7 @@ async def end_conference(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error ending conference: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -641,7 +641,7 @@ async def add_participant(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error adding participant: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/{conference_id}/participants/{participant_id}/action")
@@ -728,7 +728,7 @@ async def participant_action(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error on participant action: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/{conference_id}/mute-all")
@@ -776,7 +776,7 @@ async def mute_all_participants(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error muting all: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -1133,7 +1133,7 @@ async def create_quick_conference(
                 added.append(result)
             except SQLAlchemyError as e:
                 logger.warning(f"Could not add participant {p}: {e}")
-                added.append({"success": False, "participant": p, "error": str(e)})
+                added.append({"success": False, "participant": p, "error": "Internal server error"})
 
         return {
             "success": True,
@@ -1146,4 +1146,4 @@ async def create_quick_conference(
     except Exception as e:
         db.rollback()
         logger.error(f"Error creating quick conference: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

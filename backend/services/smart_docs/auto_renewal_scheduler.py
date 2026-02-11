@@ -136,7 +136,7 @@ class AutoRenewalScheduler:
                 logger.error(f"Error processing renewal for request {request.id}: {e}")
                 errors.append({
                     "request_id": request.id,
-                    "error": str(e),
+                    "error": "Internal server error",
                 })
 
         logger.info(
@@ -867,14 +867,14 @@ class AutoRenewalScheduler:
                 except Exception as e:
                     errors.append({
                         "paystub_extraction_id": paystub[0],
-                        "error": str(e),
+                        "error": "Internal server error",
                     })
 
             self.db.commit()
 
         except Exception as e:
             logger.error(f"Error checking paystub expirations: {e}")
-            errors.append({"error": str(e)})
+            errors.append({"error": "Internal server error"})
 
         logger.info(
             f"Paystub expiration check: {len(renewals_created)} renewals, "

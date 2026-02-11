@@ -106,7 +106,7 @@ async def list_template_packs(
             logger.warning(f"Microsite templates table not found, returning empty list: {str(e)}")
             return []
         logger.error(f"Error fetching microsite templates: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Database error")
 
 
 @router.get("/templates/{template_id}", response_model=TemplatePackResponse)

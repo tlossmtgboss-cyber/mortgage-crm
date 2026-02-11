@@ -1248,10 +1248,10 @@ def get_calendly_time_slots_for_user(user_id: int, db: Session, num_slots: int =
 
     except requests.exceptions.RequestException as e:
         logger.error(f"Calendly API request error: {e}")
-        return {"success": False, "error": str(e), "slots": []}
+        return {"success": False, "error": "Internal server error", "slots": []}
     except Exception as e:
         logger.error(f"Error fetching Calendly slots: {e}")
-        return {"success": False, "error": str(e), "slots": []}
+        return {"success": False, "error": "Internal server error", "slots": []}
 
 
 def generate_scheduling_email_draft(
@@ -1933,7 +1933,7 @@ async def refresh_microsoft_token(oauth_record, db: Session) -> dict:
 
     except Exception as e:
         logger.error(f"Error refreshing Microsoft token: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 async def fetch_microsoft_emails(oauth_record, db: Session, limit: int = 50):
@@ -2002,7 +2002,7 @@ async def fetch_microsoft_emails(oauth_record, db: Session, limit: int = 50):
 
     except Exception as e:
         logger.error(f"Error fetching Microsoft emails: {e}")
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
 
 
 async def delete_microsoft_email(oauth_record, message_id: str, db: Session):
@@ -2068,7 +2068,7 @@ async def delete_microsoft_email(oauth_record, message_id: str, db: Session):
 
     except Exception as e:
         logger.error(f"Error deleting Microsoft email: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Session):
@@ -2336,4 +2336,4 @@ async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Ses
     except Exception as e:
         logger.error(f"Error processing Microsoft email: {e}")
         db.rollback()
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": "Internal server error"}

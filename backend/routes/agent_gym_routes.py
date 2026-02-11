@@ -158,7 +158,7 @@ async def list_scenarios(
         return scenarios
     except Exception as e:
         logger.error(f"Error listing scenarios: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/scenarios/{scenario_id}", response_model=ScenarioResponse)
@@ -197,7 +197,7 @@ async def create_scenario(
         return new_scenario
     except Exception as e:
         logger.error(f"Error creating scenario: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/scenarios/{scenario_id}", response_model=ScenarioResponse)
@@ -267,10 +267,10 @@ async def start_training_session(
             "started_at": session.started_at
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
     except SQLAlchemyError as e:
         logger.error(f"Error starting session: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/sessions/{session_id}/complete")
@@ -297,10 +297,10 @@ async def complete_training_session(
             "duration_seconds": session.duration_seconds
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
     except SQLAlchemyError as e:
         logger.error(f"Error completing session: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/sessions/{session_id}/fail")
@@ -319,10 +319,10 @@ async def fail_training_session(
             "session_status": session.status
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
     except SQLAlchemyError as e:
         logger.error(f"Error failing session: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/sessions", response_model=List[SessionResponse])
@@ -459,7 +459,7 @@ async def generate_scenario_from_execution(
         }
     except Exception as e:
         logger.error(f"Error generating scenario: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================

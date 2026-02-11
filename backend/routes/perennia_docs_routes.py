@@ -355,7 +355,7 @@ async def create_document_request(
 
     except SQLAlchemyError as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
 
 
 @router.get("/requests")
@@ -500,7 +500,7 @@ async def update_document_request(
 
     except SQLAlchemyError as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
 
 
 @router.delete("/requests/{request_id}")
@@ -526,7 +526,7 @@ async def delete_document_request(
 
     except SQLAlchemyError as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
 
 
 # =============================================================================
@@ -630,7 +630,7 @@ async def create_template_pack(
 
     except SQLAlchemyError as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
 
 
 @router.patch("/templates/{template_id}")
@@ -678,7 +678,7 @@ async def update_template_pack(
 
     except SQLAlchemyError as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
 
 
 @router.post("/templates/apply")
@@ -776,7 +776,7 @@ async def apply_template_pack(
 
     except SQLAlchemyError as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
 
 
 # =============================================================================
@@ -933,7 +933,7 @@ async def bulk_approve_documents(
         }
     except SQLAlchemyError as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
 
 
 @router.post("/review/reject")
@@ -969,7 +969,7 @@ async def bulk_reject_documents(
         }
     except SQLAlchemyError as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
 
 
 @router.get("/documents/{document_id}")
@@ -1064,7 +1064,7 @@ async def approve_or_reject_document(
 
     except SQLAlchemyError as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
 
 
 @router.post("/documents/{document_id}/classify")
@@ -1098,7 +1098,7 @@ async def override_document_classification(
 
     except SQLAlchemyError as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
 
 
 def _update_request_status(db: Session, request_id: int):
@@ -1212,7 +1212,7 @@ async def get_upload_presigned_url(
 
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
 
 
 @router.post("/upload/complete/{document_id}")
@@ -1285,7 +1285,7 @@ async def complete_upload(
 
     except SQLAlchemyError as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
 
 
 # =============================================================================
@@ -1334,7 +1334,7 @@ async def generate_magic_link(
 
     except SQLAlchemyError as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
 
 
 @router.post("/portal/validate")
@@ -1578,7 +1578,7 @@ async def create_notification(
 
     except SQLAlchemyError as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
 
 
 # =============================================================================
@@ -1647,7 +1647,7 @@ async def create_document_rule(
 
     except SQLAlchemyError as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
 
 
 @router.patch("/rules/{rule_id}/toggle")
@@ -1674,7 +1674,7 @@ async def toggle_document_rule(
 
     except SQLAlchemyError as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
 
 
 # =============================================================================
@@ -1743,7 +1743,7 @@ async def get_docs_system_summary(
         return {
             "system": "perennia_docs_ai",
             "status": "error",
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -1763,6 +1763,6 @@ async def run_perennia_docs_migration(
         import traceback
         return {
             "success": False,
-            "error": str(e),
+            "error": "Internal server error",
             "traceback": traceback.format_exc()
         }

@@ -124,7 +124,7 @@ class PlacesService:
             return {"error": f"API error: {e.response.status_code}", "suggestions": []}
         except Exception as e:
             logger.error(f"Places autocomplete error: {e}")
-            return {"error": str(e), "suggestions": []}
+            return {"error": "Internal server error", "suggestions": []}
 
     async def get_place_details(
         self,
@@ -202,7 +202,7 @@ class PlacesService:
             return {"error": f"API error: {e.response.status_code}"}
         except Exception as e:
             logger.error(f"Places details error: {e}")
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
     async def text_search(
         self,
@@ -283,7 +283,7 @@ class PlacesService:
             return {"error": f"API error: {e.response.status_code}", "places": []}
         except Exception as e:
             logger.error(f"Places text search error: {e}")
-            return {"error": str(e), "places": []}
+            return {"error": "Internal server error", "places": []}
 
     def _parse_address_components(self, components: List[Dict]) -> Dict[str, str]:
         """Parse Google address components into a structured format"""

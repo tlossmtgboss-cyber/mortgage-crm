@@ -426,4 +426,4 @@ async def get_workspace_documents(
 
     except Exception as e:
         logger.exception(f"Error getting workspace documents: {e}")
-        return {"success": False, "documents": [], "error": str(e)}
+        return {"success": False, "documents": [], "error": "Internal server error"}

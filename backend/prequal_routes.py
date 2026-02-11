@@ -458,7 +458,7 @@ async def get_public_available_slots(
         }
     except Exception as e:
         logger.error(f"Failed to get available slots: {str(e)}")
-        return {"available_slots": [], "error": str(e)}
+        return {"available_slots": [], "error": "Internal server error"}
 
 
 def generate_default_slots(start_date: str, end_date: str, duration: int) -> List[Dict]:

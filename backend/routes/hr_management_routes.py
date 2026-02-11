@@ -114,7 +114,7 @@ async def get_user_job_description(
         raise
     except Exception as e:
         logger.error(f"Get job description error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/users/{user_id}/job-description")
@@ -173,7 +173,7 @@ async def update_user_job_description(
     except Exception as e:
         logger.error(f"Update job description error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -201,7 +201,7 @@ async def get_skills_library(
 
     except Exception as e:
         logger.error(f"Get skills library error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/skills/library", response_model=SkillResponse)
@@ -243,7 +243,7 @@ async def create_skill(
     except Exception as e:
         logger.error(f"Create skill error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -325,7 +325,7 @@ async def get_user_responsibilities(
         raise
     except Exception as e:
         logger.error(f"Get responsibilities error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/users/{user_id}/responsibilities")
@@ -428,7 +428,7 @@ async def create_responsibility(
     except Exception as e:
         logger.error(f"Create responsibility error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/users/{user_id}/responsibilities/{resp_id}")
@@ -536,7 +536,7 @@ async def update_responsibility(
     except Exception as e:
         logger.error(f"Update responsibility error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/users/{user_id}/responsibilities/{resp_id}")
@@ -576,7 +576,7 @@ async def archive_responsibility(
     except Exception as e:
         logger.error(f"Archive responsibility error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/users/{user_id}/responsibilities/archived")
@@ -634,7 +634,7 @@ async def get_archived_responsibilities(
         raise
     except Exception as e:
         logger.error(f"Get archived responsibilities error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/users/{user_id}/responsibilities/{resp_id}/restore")
@@ -674,7 +674,7 @@ async def restore_responsibility(
     except Exception as e:
         logger.error(f"Restore responsibility error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/users/{user_id}/responsibilities/reorder")
@@ -713,7 +713,7 @@ async def reorder_responsibilities(
     except Exception as e:
         logger.error(f"Reorder responsibilities error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -856,7 +856,7 @@ async def get_user_goals(
         raise
     except Exception as e:
         logger.error(f"Get goals error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/users/{user_id}/goals")
@@ -957,7 +957,7 @@ async def create_goal(
     except Exception as e:
         logger.error(f"Create goal error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/users/{user_id}/goals/{goal_id}")
@@ -1013,7 +1013,7 @@ async def update_goal(
     except Exception as e:
         logger.error(f"Update goal error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/users/{user_id}/goals/{goal_id}")
@@ -1052,7 +1052,7 @@ async def delete_goal(
     except Exception as e:
         logger.error(f"Delete goal error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/users/{user_id}/goals/{goal_id}/key-results/{kr_id}")
@@ -1123,7 +1123,7 @@ async def update_key_result(
     except Exception as e:
         logger.error(f"Update key result error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/users/{user_id}/goals/{goal_id}/self-assess")
@@ -1207,7 +1207,7 @@ async def employee_self_assess(
     except Exception as e:
         logger.error(f"Self-assess error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/users/{user_id}/goals/{goal_id}/manager-assess")
@@ -1266,7 +1266,7 @@ async def manager_assess(
     except Exception as e:
         logger.error(f"Manager assess error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -1346,7 +1346,7 @@ async def get_user_skills(
         raise
     except Exception as e:
         logger.error(f"Get user skills error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/users/{user_id}/skills")
@@ -1414,7 +1414,7 @@ async def add_user_skill(
     except Exception as e:
         logger.error(f"Add user skill error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/users/{user_id}/skills/{skill_id}/assess")
@@ -1483,7 +1483,7 @@ async def assess_skill(
     except Exception as e:
         logger.error(f"Assess skill error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/users/{user_id}/skills/{skill_id}")
@@ -1522,4 +1522,4 @@ async def remove_user_skill(
     except Exception as e:
         logger.error(f"Remove user skill error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

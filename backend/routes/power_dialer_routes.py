@@ -233,7 +233,7 @@ async def update_dialer_settings(
     except Exception as e:
         logger.error(f"Error updating dialer settings: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to update settings: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to update settings")
 
 
 # =============================================================================
@@ -322,7 +322,7 @@ async def api_click_to_dial(
         raise
     except Exception as e:
         logger.error(f"Click-to-dial error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Click-to-dial failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Click-to-dial failed")
 
 
 # =============================================================================
@@ -648,7 +648,7 @@ async def get_dialer_call_tasks_debug(
         return {"debug": True, "total_aitasks": count, "filtered_count": len(call_tasks), "sample": results}
     except Exception as e:
         import traceback
-        return {"debug": True, "error": str(e), "error_type": type(e).__name__, "traceback": traceback.format_exc()}
+        return {"debug": True, "error": "Internal server error", "error_type": type(e).__name__, "traceback": traceback.format_exc()}
 
 
 @router.get("/dialer/call-tasks")
@@ -734,7 +734,7 @@ async def get_dialer_call_tasks(
         import traceback
         traceback.print_exc()
         # Return 200 with error info so we can debug
-        return {"tasks": [], "total": 0, "error": str(e), "error_type": type(e).__name__}
+        return {"tasks": [], "total": 0, "error": "Internal server error", "error_type": type(e).__name__}
 
 
 @router.get("/dialer/callable-contacts")
@@ -802,7 +802,7 @@ async def get_callable_contacts(
         return {"contacts": contacts, "total": len(contacts)}
     except Exception as e:
         logger.error(f"Error fetching callable contacts: {e}")
-        return {"contacts": [], "total": 0, "error": str(e)}
+        return {"contacts": [], "total": 0, "error": "Internal server error"}
 
 
 @router.get("/dialer/call-logs")

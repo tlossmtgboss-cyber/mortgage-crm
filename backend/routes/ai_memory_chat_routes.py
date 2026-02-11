@@ -271,7 +271,7 @@ async def smart_chat_with_memory(
                     action_id=action_id,
                     outcome="failure",
                     impact_score=0.0,
-                    metadata={"error": str(e)}
+                    metadata={"error": "Internal server error"}
                 )
             except Exception:
                 pass
@@ -279,7 +279,7 @@ async def smart_chat_with_memory(
         return {
             "success": False,
             "response": "I apologize, but I'm having trouble right now. Please try again.",
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -327,7 +327,7 @@ async def get_memory_stats(
             "total_memories": 0,
             "vector_count": 0,
             "memory_enabled": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -413,7 +413,7 @@ async def send_task_summary_email(
 
     except Exception as e:
         logger.error(f"Error sending task summary email: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 class GenericEmailRequest(BaseModel):
@@ -463,7 +463,7 @@ async def send_generic_email(
         raise
     except Exception as e:
         logger.error(f"Error sending email: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 def set_dependencies(get_db_func, get_current_user_func):

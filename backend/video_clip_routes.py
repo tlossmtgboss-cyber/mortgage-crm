@@ -301,7 +301,7 @@ async def create_clip(
 
     except Exception as e:
         logger.error(f"Error creating clip: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/{clip_id}/upload-complete")
@@ -354,7 +354,7 @@ async def complete_upload(
 
     except Exception as e:
         logger.error(f"Error completing upload: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/")
@@ -392,7 +392,7 @@ async def list_clips(
 
     except Exception as e:
         logger.error(f"Error listing clips: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/{clip_id}")
@@ -505,7 +505,7 @@ async def delete_clip(
         raise
     except Exception as e:
         logger.error(f"Error deleting clip: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -558,7 +558,7 @@ async def create_share(
 
     except Exception as e:
         logger.error(f"Error creating share: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/{clip_id}/shares")
@@ -752,7 +752,7 @@ async def track_view(
 
     except Exception as e:
         logger.error(f"Error tracking view: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/views/{view_id}/progress")
@@ -806,7 +806,7 @@ async def update_view_progress(
 
     except Exception as e:
         logger.error(f"Error updating view progress: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -936,7 +936,7 @@ async def get_clip_analytics(
 
     except Exception as e:
         logger.error(f"Error getting analytics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/analytics/summary")

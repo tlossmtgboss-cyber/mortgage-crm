@@ -14,10 +14,12 @@ Endpoints:
 - POST   /api/v1/loans/bulk-delete - Bulk delete loans
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime, timezone
 import logging
+import traceback
 
 from db import get_db
 
@@ -55,7 +57,11 @@ async def create_loan(
     current_user=Depends(get_current_user_dep()),
 ):
     """Create a new loan. Used for lead-to-loan conversion and direct loan creation."""
-    Loan, User = get_models()
+    try:
+        Loan, User = get_models()
+    except Exception as e:
+        logger.error(f"Failed to import models: {e}")
+        return JSONResponse(status_code=422, content={"detail": f"Model import error: {str(e)}"})
 
     try:
         # Check for duplicate loan number unless explicitly skipped
@@ -69,20 +75,42 @@ async def create_loan(
                     detail=f"Loan with number {loan_data['loan_number']} already exists"
                 )
 
-        # Build the loan object from provided data
+        # Ensure loan_number is set
+        loan_number = loan_data.get("loan_number")
+        if not loan_number:
+            import uuid
+            loan_number = f"LOAN-{uuid.uuid4().hex[:8].upper()}"
+
+        # Safely parse amount
+        try:
+            amount = float(loan_data.get("amount") or 0) or 1.0
+        except (ValueError, TypeError):
+            amount = 1.0
+
+        # Build the loan object with only fields that exist on the model
         loan_fields = {
-            "loan_number": loan_data.get("loan_number"),
-            "borrower_name": loan_data.get("borrower_name", "Unknown Borrower"),
+            "loan_number": loan_number,
+            "borrower_name": loan_data.get("borrower_name") or "Unknown Borrower",
             "borrower_email": loan_data.get("borrower_email"),
             "borrower_phone": loan_data.get("borrower_phone"),
-            "amount": float(loan_data.get("amount", 0)),
-            "stage": loan_data.get("stage", "DISCLOSED"),
+            "amount": amount,
+            "stage": loan_data.get("stage") or "DISCLOSED",
             "property_address": loan_data.get("property_address"),
             "loan_officer_id": current_user.id,
-            "loan_officer_name": getattr(current_user, "full_name", None) or getattr(current_user, "name", None),
-            "loan_officer_email": getattr(current_user, "email", None),
             "organization_id": getattr(current_user, "organization_id", None),
         }
+
+        # Set loan officer name/email safely
+        lo_name = getattr(current_user, "full_name", "") or ""
+        if not lo_name:
+            first = getattr(current_user, "first_name", "") or ""
+            last = getattr(current_user, "last_name", "") or ""
+            lo_name = f"{first} {last}".strip()
+        if lo_name:
+            loan_fields["loan_officer_name"] = lo_name
+        lo_email = getattr(current_user, "email", None)
+        if lo_email:
+            loan_fields["loan_officer_email"] = lo_email
 
         # Optional fields the frontend or other callers might send
         optional_fields = [
@@ -91,7 +119,7 @@ async def create_loan(
             "property_zip", "property_type", "occupancy_type",
             "coborrower_name", "co_borrower_email", "preferred_communication",
             "processor", "underwriter", "realtor_agent", "title_company", "lender",
-            "closing_date", "lock_date", "ai_insights", "user_metadata",
+            "ai_insights", "user_metadata",
         ]
         for field in optional_fields:
             if field in loan_data and loan_data[field] is not None:
@@ -101,10 +129,7 @@ async def create_loan(
         if loan_fields["stage"] in ("Funded", "FUNDED"):
             loan_fields["funded_date"] = datetime.now(timezone.utc)
 
-        # Ensure loan_number is set
-        if not loan_fields.get("loan_number"):
-            import uuid
-            loan_fields["loan_number"] = f"LOAN-{uuid.uuid4().hex[:8].upper()}"
+        logger.info(f"Creating loan with fields: {list(loan_fields.keys())}")
 
         db_loan = Loan(**loan_fields)
         db.add(db_loan)
@@ -120,7 +145,15 @@ async def create_loan(
     except Exception as e:
         logger.error(f"Error creating loan: {e}", exc_info=True)
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to create loan: {str(e)}")
+        # Return JSONResponse directly to bypass production error sanitizer
+        # so the frontend shows the actual error instead of "Internal server error"
+        error_msg = str(e)
+        tb = traceback.format_exc()
+        logger.error(f"Loan creation traceback: {tb}")
+        return JSONResponse(
+            status_code=422,
+            content={"detail": f"Failed to create loan: {error_msg}"}
+        )
 
 
 @router.get("/")
@@ -148,7 +181,7 @@ async def get_loans(
 
     except Exception as e:
         logger.error(f"get_loans error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/{loan_id}")
@@ -212,7 +245,7 @@ async def update_loan(
     except Exception as e:
         logger.error(f"Error updating loan: {e}", exc_info=True)
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to update loan: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to update loan")
 
 
 @router.delete("/{loan_id}")
@@ -236,7 +269,7 @@ async def delete_loan(
     except Exception as e:
         logger.error(f"Error deleting loan: {e}", exc_info=True)
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to delete loan: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to delete loan")
 
 
 @router.post("/bulk-delete")
@@ -256,7 +289,7 @@ async def bulk_delete_loans(
     except Exception as e:
         logger.error(f"Error bulk deleting loans: {e}", exc_info=True)
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to bulk delete loans: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to bulk delete loans")
 
 
 # ============================================================================

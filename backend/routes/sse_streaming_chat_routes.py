@@ -258,7 +258,7 @@ async def chat_stream(
             yield {
                 "event": "error",
                 "data": json.dumps({
-                    "error": str(e)
+                    "error": "Internal server error"
                 })
             }
 

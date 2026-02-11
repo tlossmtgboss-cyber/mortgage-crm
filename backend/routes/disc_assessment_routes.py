@@ -822,7 +822,7 @@ async def run_disc_migration(admin_key: str = Query(...)):
         run_migration()
         return {"success": True, "message": "Migration completed"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================

@@ -110,7 +110,7 @@ async def create_intake_tables(admin_key: str = None):
             return {"status": "success", "results": results}
         except Exception as e:
             db.rollback()
-            raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+            raise HTTPException(status_code=500, detail="Migration failed")
 
 # Engine instance (singleton)
 _engine: Optional[IntakeEngine] = None

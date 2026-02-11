@@ -281,7 +281,7 @@ async def migrate_database(db: Session = Depends(get_db)):
         db.rollback()
         return {
             "status": "error",
-            "error": str(e),
+            "error": "Internal server error",
             "error_type": type(e).__name__
         }
 
@@ -517,7 +517,7 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
         event = stripe_service.verify_webhook_signature(payload, sig_header)
     except Exception as e:
         logger.error(f"Webhook signature verification failed: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
 
     # Handle different event types
     event_type = event['type']

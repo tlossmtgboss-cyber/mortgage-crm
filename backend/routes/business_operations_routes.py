@@ -1570,4 +1570,4 @@ async def run_business_ops_migration(
         }
 
     except SQLAlchemyError as e:
-        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Migration failed")

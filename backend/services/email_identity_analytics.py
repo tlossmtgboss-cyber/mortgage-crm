@@ -590,7 +590,7 @@ class MonitoringAlerts:
             return HealthCheckResult(
                 status="critical",
                 checks={"error": False},
-                metrics={"error": str(e)},
+                metrics={"error": "Internal server error"},
                 recommendations=["Health check failed - check database connection"]
             )
 

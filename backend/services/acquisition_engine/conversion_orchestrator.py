@@ -164,7 +164,7 @@ class ConversionOrchestrator:
             except Exception as e:
                 results["errors"].append({
                     "action": action.action_type,
-                    "error": str(e),
+                    "error": "Internal server error",
                 })
                 logger.error(f"Failed to execute action {action.action_type}: {e}")
 
@@ -308,7 +308,7 @@ class ConversionOrchestrator:
                 return {"sent": success, "channel": "email", "sequence": sequence_type.value}
 
             except Exception as e:
-                return {"error": str(e)}
+                return {"error": "Internal server error"}
 
         elif channel == "sms":
             try:
@@ -325,7 +325,7 @@ class ConversionOrchestrator:
                 return {"skipped": "no phone"}
 
             except Exception as e:
-                return {"error": str(e)}
+                return {"error": "Internal server error"}
 
         return {"skipped": f"unknown channel: {channel}"}
 
@@ -382,7 +382,7 @@ class ConversionOrchestrator:
             return {"created": True, "task_id": task_id[0] if task_id else None}
 
         except Exception as e:
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
     async def _queue_urgent_call(
         self,

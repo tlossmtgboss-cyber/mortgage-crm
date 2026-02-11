@@ -650,7 +650,7 @@ async def run_account_management_migration(
         except HTTPException:
             raise
         except SQLAlchemyError as e:
-            raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(e)}")
+            raise HTTPException(status_code=500, detail="Cleanup failed")
 
     # Default: migration action
     try:
@@ -805,7 +805,7 @@ async def run_account_management_migration(
     except SQLAlchemyError as e:
         logger.error(f"Migration failed: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Migration failed")
 
 
 @router.post("/run-cleanup-migration")
@@ -966,7 +966,7 @@ async def run_cleanup_migration(
     except SQLAlchemyError as e:
         logger.error(f"Cleanup migration failed: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Cleanup failed")
 
 
 @router.post("/run-invitations-migration")
@@ -1029,7 +1029,7 @@ async def run_invitations_migration(
     except SQLAlchemyError as e:
         logger.error(f"Invitations migration failed: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Migration failed")
 
 
 # =============================================================================

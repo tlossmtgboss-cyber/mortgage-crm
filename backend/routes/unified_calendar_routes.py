@@ -151,5 +151,5 @@ async def get_unified_calendar(
         logger.error(f"Unified calendar error: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to fetch unified calendar: {str(e)}"
+            detail="Failed to fetch unified calendar"
         )

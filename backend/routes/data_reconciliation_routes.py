@@ -221,7 +221,7 @@ async def ingest_email_data(
     except Exception as e:
         logger.error(f"Ingest error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/extract/{event_id}")
@@ -444,7 +444,7 @@ Please:
     except Exception as e:
         logger.error(f"Extraction error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/pending")
@@ -652,7 +652,7 @@ async def get_completed_reconciliation(
         }
     except Exception as e:
         logger.error(f"Get completed error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/pre-approval-check/{item_id}")
@@ -807,7 +807,7 @@ async def pre_approval_check(
         raise
     except Exception as e:
         logger.error(f"Pre-approval check error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/approve")
@@ -1268,7 +1268,7 @@ async def approve_reconciliation(
     except Exception as e:
         logger.error(f"Approval error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/reject")
@@ -1369,7 +1369,7 @@ async def reject_reconciliation(
     except Exception as e:
         logger.error(f"Rejection error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/{extracted_data_id}/rematch")
@@ -1433,7 +1433,7 @@ async def rematch_single_item(
     except Exception as e:
         logger.error(f"Rematch error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/rematch-all")
@@ -1505,7 +1505,7 @@ async def rematch_all_pending(
     except Exception as e:
         logger.error(f"Rematch all error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/items/bulk")
@@ -1564,7 +1564,7 @@ async def bulk_delete_reconciliation_items(
     except Exception as e:
         logger.error(f"Bulk delete error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/items/{extracted_data_id}")
@@ -1657,7 +1657,7 @@ async def delete_reconciliation_item(
     except Exception as e:
         logger.error(f"Delete error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/block-sender")
@@ -1703,7 +1703,7 @@ async def block_sender(
     except Exception as e:
         logger.error(f"Error blocking sender: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/blocked-senders")
@@ -1733,7 +1733,7 @@ async def get_blocked_senders(
         }
     except Exception as e:
         logger.error(f"Error fetching blocked senders: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/blocked-senders/{sender_id}")
@@ -1771,7 +1771,7 @@ async def unblock_sender(
     except Exception as e:
         logger.error(f"Error unblocking sender: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/create-lead")
@@ -1873,7 +1873,7 @@ async def create_lead_from_extracted(
     except Exception as e:
         logger.error(f"Error creating lead from extracted data: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/check-match/{extracted_id}")
@@ -1921,7 +1921,7 @@ async def check_match_status(
         raise
     except Exception as e:
         logger.error(f"Error checking match status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/correct")
@@ -1991,4 +1991,4 @@ async def correct_and_train(
     except Exception as e:
         logger.error(f"Correction error: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

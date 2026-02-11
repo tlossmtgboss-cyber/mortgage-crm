@@ -199,7 +199,7 @@ class PerenniaS3Service:
             logger.error(f"Error generating presigned upload URL: {e}")
             return {
                 "success": False,
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     def get_presigned_put_url(
@@ -245,7 +245,7 @@ class PerenniaS3Service:
             logger.error(f"Error generating presigned PUT URL: {e}")
             return {
                 "success": False,
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     def get_presigned_download_url(
@@ -292,7 +292,7 @@ class PerenniaS3Service:
             logger.error(f"Error generating presigned download URL: {e}")
             return {
                 "success": False,
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     def verify_upload(self, storage_key: str) -> Dict[str, Any]:
@@ -330,7 +330,7 @@ class PerenniaS3Service:
             logger.error(f"Error verifying upload: {e}")
             return {
                 "success": False,
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     def make_public_and_get_url(self, storage_key: str) -> Dict[str, Any]:
@@ -395,7 +395,7 @@ class PerenniaS3Service:
             logger.error(f"Error deleting document: {e}")
             return {
                 "success": False,
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     def copy_document(
@@ -443,7 +443,7 @@ class PerenniaS3Service:
             logger.error(f"Error copying document: {e}")
             return {
                 "success": False,
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     def get_file_metadata(self, storage_key: str) -> Dict[str, Any]:
@@ -526,7 +526,7 @@ class PerenniaS3Service:
             logger.error(f"Error uploading file to S3: {e}")
             return {
                 "success": False,
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     def download_file(self, storage_key: str) -> Dict[str, Any]:
@@ -615,7 +615,7 @@ class PerenniaS3Service:
             logger.error(f"Error moving file: {e}")
             return {
                 "success": False,
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     def generate_intake_key(
@@ -717,7 +717,7 @@ class PerenniaS3Service:
             logger.error(f"Error listing documents: {e}")
             return {
                 "success": False,
-                "error": str(e)
+                "error": "Internal server error"
             }
 
 

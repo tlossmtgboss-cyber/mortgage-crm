@@ -176,7 +176,7 @@ async def start_onboarding(
     except Exception as e:
         logger.error(f"Start onboarding error for user {current_user.id}: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/progress")
@@ -211,7 +211,7 @@ async def get_onboarding_progress(
         raise
     except Exception as e:
         logger.error(f"Get onboarding progress error for user {current_user.id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/resume")
@@ -246,7 +246,7 @@ async def should_resume_onboarding(
 
     except Exception as e:
         logger.error(f"Check resume onboarding error for user {current_user.id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/step-1/save")
@@ -281,7 +281,7 @@ async def save_step_1(
     except Exception as e:
         logger.error(f"Save Step 1 error for user {current_user.id}: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/auto-save")
@@ -330,7 +330,7 @@ async def auto_save_step(
     except Exception as e:
         logger.error(f"Auto-save error for user {current_user.id}: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/step/{step_number}/complete")
@@ -392,7 +392,7 @@ async def complete_step(
     except Exception as e:
         logger.error(f"Complete step error for user {current_user.id}, step {step_number}: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/step-1/send-email-verification")
@@ -525,7 +525,7 @@ If you didn't request this code, you can safely ignore this email.
     except Exception as e:
         logger.error(f"Send email verification error for user {current_user.id}: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/step-1/verify-email")
@@ -597,7 +597,7 @@ async def verify_email(
     except Exception as e:
         logger.error(f"Verify email error for user {current_user.id}: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/step-1/send-sms-verification")
@@ -669,7 +669,7 @@ async def send_sms_verification(
     except Exception as e:
         logger.error(f"Send SMS verification error for user {current_user.id}: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/step-1/verify-sms")
@@ -738,7 +738,7 @@ async def verify_sms(
     except Exception as e:
         logger.error(f"Verify SMS error for user {current_user.id}: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -990,7 +990,7 @@ async def update_workflow_stage(
     except Exception as e:
         db.rollback()
         logger.error(f"Error saving workflow: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================

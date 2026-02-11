@@ -558,7 +558,7 @@ Be thorough but objective. Base scores only on available evidence. If data is li
             # Return minimal valid structure
             return {
                 "overall_confidence": 0,
-                "error": str(e),
+                "error": "Internal server error",
                 "raw_response": response_text
             }
 

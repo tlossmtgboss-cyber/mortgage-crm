@@ -85,7 +85,7 @@ class CIIntegrationService:
 
         except Exception as e:
             logger.error(f"Error processing transcription: {e}")
-            return {"error": str(e), "recording_id": recording_id}
+            return {"error": "Internal server error", "recording_id": recording_id}
 
     def _get_recording(self, recording_id: str) -> Optional[Dict[str, Any]]:
         """Get CI recording details."""
@@ -400,6 +400,6 @@ async def trigger_call_monitoring_agents(
         return result
     except Exception as e:
         logger.error(f"Error in trigger_call_monitoring_agents: {e}")
-        return {"error": str(e), "recording_id": recording_id}
+        return {"error": "Internal server error", "recording_id": recording_id}
     finally:
         db_session.close()

@@ -720,7 +720,7 @@ async def generate_signed_document(
         logger.error(f"Error generating signed document for envelope {envelope_id}: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Document generation failed: {str(e)}"
+            detail="Document generation failed"
         )
 
 
@@ -826,7 +826,7 @@ async def get_esign_system_summary(
         return {
             "system": "esign",
             "status": "error",
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -846,6 +846,6 @@ async def run_esign_migration(
         import traceback
         return {
             "success": False,
-            "error": str(e),
+            "error": "Internal server error",
             "traceback": traceback.format_exc()
         }

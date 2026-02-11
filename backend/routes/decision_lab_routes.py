@@ -314,7 +314,7 @@ async def calculate_score(
         # Re-raise with more details for debugging
         raise HTTPException(
             status_code=500,
-            detail=f"Score calculation failed: {str(e)}"
+            detail="Score calculation failed"
         )
 
 
@@ -941,7 +941,7 @@ async def seed_questions(
         }
     except SQLAlchemyError as e:
         logger.error(f"Seed error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/admin/debug-tables")
@@ -1050,7 +1050,7 @@ async def run_migration(
         logger.error(f"Migration error: {e}")
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/track")

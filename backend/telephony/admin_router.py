@@ -54,7 +54,7 @@ def list_caller_ids(
             db.close()
     except Exception as e:
         logger.error(f"Error listing caller IDs: {e}")
-        return {"caller_ids": [], "error": str(e)}
+        return {"caller_ids": [], "error": "Internal server error"}
 
 
 @router.post("/admin/caller-ids/verify")
@@ -74,7 +74,7 @@ def verify_caller_id(
         try:
             normalized_phone = validate_phone_number(phone_number)
         except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+            raise HTTPException(status_code=400, detail="Bad request")
 
         db = SessionLocal()
         try:
@@ -132,7 +132,7 @@ def verify_caller_id(
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.error(f"Error during caller ID verification: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to initiate verification: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to initiate verification")
 
 
 @router.delete("/admin/caller-ids/{caller_id_id}")
@@ -171,7 +171,7 @@ def delete_caller_id(caller_id_id: int):
         raise
     except Exception as e:
         logger.error(f"Error deleting caller ID: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/admin/caller-ids/{caller_id_id}/set-default")
@@ -205,7 +205,7 @@ def set_default_caller_id(caller_id_id: int):
         raise
     except Exception as e:
         logger.error(f"Error setting default caller ID: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -266,7 +266,7 @@ def get_telephony_status():
         return {
             "twilio": {
                 "configured": bool(os.getenv("TWILIO_ACCOUNT_SID")),
-                "error": str(e)
+                "error": "Internal server error"
             },
             "caller_ids": {"verified": 0, "pending": 0},
             "usage": {"calls_today": 0}

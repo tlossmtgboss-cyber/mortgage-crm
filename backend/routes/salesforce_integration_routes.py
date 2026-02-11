@@ -272,7 +272,7 @@ async def ensure_tables_endpoint(
                 count = result.scalar()
                 tables_status[table] = {"exists": True, "count": count}
             except SQLAlchemyError as e:
-                tables_status[table] = {"exists": False, "error": str(e)[:100]}
+                tables_status[table] = {"exists": False, "error": "Internal server error"[:100]}
 
         return {
             "status": "success" if success else "partial",
@@ -283,7 +283,7 @@ async def ensure_tables_endpoint(
         logger.error(f"ensure-tables failed: {e}")
         return {
             "status": "error",
-            "error": str(e),
+            "error": "Internal server error",
             "message": "Failed to ensure tables exist"
         }
 
@@ -447,7 +447,7 @@ async def trigger_discovery_for_profile(
         import traceback
         return {
             "status": "error",
-            "error": str(e),
+            "error": "Internal server error",
             "traceback": traceback.format_exc()
         }
 
@@ -504,7 +504,7 @@ async def test_mapping_debug(
         db.rollback()
         return {
             "status": "error",
-            "error": str(e),
+            "error": "Internal server error",
             "traceback": traceback.format_exc()
         }
 
@@ -727,7 +727,7 @@ async def get_loans_status_debug(
         import traceback
         return {
             "status": "error",
-            "error": str(e),
+            "error": "Internal server error",
             "traceback": traceback.format_exc()
         }
 
@@ -873,7 +873,7 @@ async def import_funded_loans_to_mum_debug(
         db.rollback()
         return {
             "status": "error",
-            "error": str(e),
+            "error": "Internal server error",
             "traceback": traceback.format_exc()
         }
 
@@ -1295,7 +1295,7 @@ async def get_debug_status(
             count = result.scalar()
             debug_info["tables_exist"][table] = {"exists": True, "count": count}
         except SQLAlchemyError as e:
-            debug_info["tables_exist"][table] = {"exists": False, "error": str(e)}
+            debug_info["tables_exist"][table] = {"exists": False, "error": "Internal server error"}
 
     # Check profile
     try:
@@ -2771,7 +2771,7 @@ async def full_sync_pipeline(
             results["mapping"] = {"status": "no_schema", "message": "Schema not found"}
 
     except SQLAlchemyError as e:
-        results["mapping"] = {"status": "error", "error": str(e)[:100]}
+        results["mapping"] = {"status": "error", "error": "Internal server error"[:100]}
 
     # Step 2: Sync from Salesforce
     try:
@@ -2789,7 +2789,7 @@ async def full_sync_pipeline(
             "records_failed": sync_result.records_failed
         }
     except Exception as e:
-        results["sync"] = {"status": "error", "error": str(e)[:100]}
+        results["sync"] = {"status": "error", "error": "Internal server error"[:100]}
         results["success"] = False
 
     # Step 3: Sync funded loans to MUM
@@ -2828,7 +2828,7 @@ async def full_sync_pipeline(
         results["mum_sync"] = {"status": "success", "imported": mum_result.rowcount}
     except SQLAlchemyError as e:
         db.rollback()
-        results["mum_sync"] = {"status": "error", "error": str(e)[:100]}
+        results["mum_sync"] = {"status": "error", "error": "Internal server error"[:100]}
 
     return results
 
@@ -3168,7 +3168,7 @@ async def admin_test_sync_simple(
             else:
                 result["steps"].append({"step": "add_salesforce_id_column", "status": "already_exists"})
         except SQLAlchemyError as e:
-            result["steps"].append({"step": "add_salesforce_id_column", "error": str(e)[:100]})
+            result["steps"].append({"step": "add_salesforce_id_column", "error": "Internal server error"[:100]})
 
         # Step 1: Count loans that could be synced
         try:
@@ -3181,7 +3181,7 @@ async def admin_test_sync_simple(
             """)).scalar()
             result["steps"].append({"step": "count_eligible", "count": count_result})
         except SQLAlchemyError as e:
-            result["steps"].append({"step": "count_eligible", "error": str(e)[:100]})
+            result["steps"].append({"step": "count_eligible", "error": "Internal server error"[:100]})
 
         # Step 2: Try the insert
         try:
@@ -3220,7 +3220,7 @@ async def admin_test_sync_simple(
             result["status"] = "success"
         except SQLAlchemyError as e:
             db.rollback()
-            result["steps"].append({"step": "mum_insert", "error": str(e)[:200]})
+            result["steps"].append({"step": "mum_insert", "error": "Internal server error"[:200]})
             result["status"] = "partial_error"
 
         return result
@@ -3230,7 +3230,7 @@ async def admin_test_sync_simple(
     except SQLAlchemyError as e:
         import traceback
         logger.error(f"Test sync failed: {traceback.format_exc()}")
-        return {"error": str(e)[:500], "status": "failed"}
+        return {"error": "Internal server error"[:500], "status": "failed"}
 
 
 @router.get("/debug/synced-records")

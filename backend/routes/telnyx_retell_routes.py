@@ -223,7 +223,7 @@ async def list_telnyx_numbers(
 
     except Exception as e:
         logger.error(f"Failed to list Telnyx numbers: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/connect")
@@ -277,7 +277,7 @@ async def connect_number_to_retell(
 
     except Exception as e:
         logger.error(f"Failed to connect number to Retell: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/disconnect/{phone_number}")
@@ -316,7 +316,7 @@ async def disconnect_number(
 
     except Exception as e:
         logger.error(f"Failed to disconnect number: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ==================== TeXML Generation ====================

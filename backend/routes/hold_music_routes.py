@@ -187,7 +187,7 @@ async def create_hold_music(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error creating hold music: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("")
@@ -312,7 +312,7 @@ async def get_hold_music(
         raise
     except Exception as e:
         logger.error(f"Error getting hold music: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/{music_id}")
@@ -382,7 +382,7 @@ async def update_hold_music(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error updating hold music: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/{music_id}")
@@ -410,7 +410,7 @@ async def delete_hold_music(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error deleting hold music: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/{music_id}/set-default")
@@ -442,7 +442,7 @@ async def set_default_hold_music(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Error setting default: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================

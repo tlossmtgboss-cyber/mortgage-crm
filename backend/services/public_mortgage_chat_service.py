@@ -418,7 +418,7 @@ class PublicMortgageChatService:
         except Exception as e:
             logger.error(f"Error booking appointment: {e}")
             self.db.rollback()
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def _create_calendar_event(
         self,

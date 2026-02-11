@@ -132,7 +132,7 @@ class WorkflowAIEvaluator:
 
         except Exception as e:
             logger.error(f"Task evaluation failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def evaluate_batch(
         self,
@@ -186,7 +186,7 @@ class WorkflowAIEvaluator:
             except Exception as e:
                 results["errors"].append({
                     "task_id": task_id,
-                    "error": str(e)
+                    "error": "Internal server error"
                 })
 
         return results
@@ -595,7 +595,7 @@ class WorkflowAIEvaluator:
 
         except SQLAlchemyError as e:
             logger.error(f"AI task execution failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def _execute_email_task(self, task: Dict) -> Dict[str, Any]:
         """Execute an email task via AI."""
@@ -639,7 +639,7 @@ Context: This is an automated workflow task for lead/loan follow-up."""
 
         except SQLAlchemyError as e:
             logger.error(f"Email task execution failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def _execute_sms_task(self, task: Dict) -> Dict[str, Any]:
         """Execute an SMS task via AI."""
@@ -682,7 +682,7 @@ Context: This is an automated workflow task. Keep the message brief and professi
 
         except SQLAlchemyError as e:
             logger.error(f"SMS task execution failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
 
 # =============================================================================

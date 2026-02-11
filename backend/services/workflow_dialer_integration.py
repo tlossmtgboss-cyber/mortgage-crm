@@ -227,7 +227,7 @@ class WorkflowDialerIntegration:
         except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Failed to create dialer session: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def handle_dialer_task_completion(
         self,
@@ -343,7 +343,7 @@ class WorkflowDialerIntegration:
         except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Failed to handle dialer completion: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def add_workflow_tasks_to_session(
         self,
@@ -427,7 +427,7 @@ class WorkflowDialerIntegration:
         except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Failed to add tasks to session: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Internal server error"}
 
     def get_dialer_queue_for_user(
         self,

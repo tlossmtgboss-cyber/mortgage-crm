@@ -383,7 +383,7 @@ def get_user_creation_routes(
             logger.error(f"Error creating user: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to create user: {str(e)}"
+                detail="Failed to create user"
             )
 
     # ========================================================================
@@ -486,7 +486,7 @@ def get_user_creation_routes(
             logger.error(f"Error creating user: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to create user: {str(e)}"
+                detail="Failed to create user"
             )
 
     @router.post("/create/single/role-builder")
@@ -582,7 +582,7 @@ def get_user_creation_routes(
         except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Error saving role builder: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to save role configuration: {str(e)}")
+            raise HTTPException(status_code=500, detail="Failed to save role configuration")
 
     @router.post("/create/single/permissions-builder")
     async def save_permissions_builder_single(
@@ -681,7 +681,7 @@ def get_user_creation_routes(
         except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Error saving permissions: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to save permissions: {str(e)}")
+            raise HTTPException(status_code=500, detail="Failed to save permissions")
 
     @router.get("/create/single/review/{user_id}")
     async def get_review_summary_single(
@@ -889,7 +889,7 @@ def get_user_creation_routes(
         except Exception as e:
             db.rollback()
             logger.error(f"Error finalizing user: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to finalize user: {str(e)}")
+            raise HTTPException(status_code=500, detail="Failed to finalize user")
 
     # ========================================================================
     # REFERENCE DATA ENDPOINTS
@@ -1199,7 +1199,7 @@ def get_user_creation_routes(
         except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Error activating user: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to activate user: {str(e)}")
+            raise HTTPException(status_code=500, detail="Failed to activate user")
 
     return router
 

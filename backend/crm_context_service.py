@@ -996,7 +996,7 @@ class CRMContextService:
                 "rate_trend": {"direction": "stable", "change_7d": 0},
                 "recommendation": {"action": "cautious_lock", "urgency": "moderate"},
                 "guidance": "Rate lock data temporarily unavailable. Check market conditions before making lock decisions.",
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     @staticmethod

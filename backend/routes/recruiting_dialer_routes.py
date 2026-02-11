@@ -259,7 +259,7 @@ async def connect_call_via_twilio(call_id: str):
             "status": "failed",
             "message": f"Failed to connect: {str(e)}",
             "success": False,
-            "error": str(e),
+            "error": "Internal server error",
         }
 
 
@@ -376,7 +376,7 @@ async def twilio_status_callback(
 
     except Exception as e:
         logger.error(f"Error in status callback: {e}")
-        return {"received": True, "error": str(e)}
+        return {"received": True, "error": "Internal server error"}
 
 
 @router.post("/twilio/candidate-status/{call_id}")
@@ -432,7 +432,7 @@ async def twilio_recording_callback(
 
     except Exception as e:
         logger.error(f"Error in recording callback: {e}")
-        return {"received": True, "error": str(e)}
+        return {"received": True, "error": "Internal server error"}
 
 
 # =============================================================================
@@ -713,4 +713,4 @@ async def run_dialer_migration(admin_key: str = Query(...)):
             conn.commit()
         return {"status": "success", "message": "Call history table created/updated with Twilio columns"}
     except SQLAlchemyError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

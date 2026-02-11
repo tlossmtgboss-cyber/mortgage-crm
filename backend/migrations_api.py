@@ -107,7 +107,7 @@ async def debug_auth(
         finally:
             db.close()
     except JWTError as e:
-        return {"token_valid": False, "error": str(e)}
+        return {"token_valid": False, "error": "Internal server error"}
 
 
 @router.post("/add-guideline-updates-tables")
@@ -137,7 +137,7 @@ async def run_guideline_updates_migration(
 
     except Exception as e:
         logger.error(f"Migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/seed-guideline-updates")
@@ -161,7 +161,7 @@ async def seed_guideline_updates(
 
     except Exception as e:
         logger.error(f"Seeding error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/update-guideline-urls")
@@ -284,7 +284,7 @@ async def update_guideline_urls(
 
     except Exception as e:
         logger.error(f"URL update error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/scrape-mortgage-guidelines")
@@ -310,7 +310,7 @@ async def scrape_mortgage_guidelines(
 
     except Exception as e:
         logger.error(f"Scraper error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/clear-guidelines")
@@ -347,7 +347,7 @@ async def clear_guideline_updates(
 
     except Exception as e:
         logger.error(f"Clear error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/import-browser-guidelines")
@@ -443,7 +443,7 @@ async def import_browser_guidelines(
 
     except Exception as e:
         logger.error(f"Import error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/add-circle-of-cashflow-tables")
@@ -468,7 +468,7 @@ async def run_circle_of_cashflow_migration(
 
     except Exception as e:
         logger.error(f"Migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/add-circle-contacts-table")
@@ -492,7 +492,7 @@ async def run_circle_contacts_migration(
 
     except Exception as e:
         logger.error(f"Migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/add-ai-task-automation-tables")
@@ -530,7 +530,7 @@ async def run_ai_task_automation_migration(
 
     except Exception as e:
         logger.error(f"Migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/create-mortgage-glossary")
@@ -569,7 +569,7 @@ async def run_mortgage_glossary_migration(
 
     except Exception as e:
         logger.error(f"Migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/add-concierge-responsible-column")
@@ -611,7 +611,7 @@ async def add_concierge_responsible_column(
 
     except Exception as e:
         logger.error(f"Migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/update-user-email")
@@ -667,7 +667,7 @@ async def update_user_email(
         raise
     except Exception as e:
         logger.error(f"Migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/add-weekly-task-columns")
@@ -720,7 +720,7 @@ async def run_weekly_task_columns_migration(
 
     except Exception as e:
         logger.error(f"Migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/add-email-response-training-tables")
@@ -770,7 +770,7 @@ async def run_email_response_training_migration(
 
     except Exception as e:
         logger.error(f"Migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/rename-theme")
@@ -837,7 +837,7 @@ async def rename_microsite_theme(
 
     except Exception as e:
         logger.error(f"Theme rename error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/add-microsite-themes")
@@ -912,7 +912,7 @@ async def run_microsite_themes_migration(
         raise
     except Exception as e:
         logger.error(f"Migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/fix-referral-partner-links")
@@ -938,7 +938,7 @@ async def fix_referral_partner_links(
 
     except Exception as e:
         logger.error(f"Migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/add-income-intelligence-engine")
@@ -983,7 +983,7 @@ async def run_income_intelligence_engine_migration(
 
     except Exception as e:
         logger.error(f"Income Intelligence Engine migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/seed-ci-qa-rubrics")
@@ -1045,7 +1045,7 @@ async def seed_ci_qa_rubrics(
 
     except Exception as e:
         logger.error(f"CI QA rubrics seeding error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/add-video-os-tables")
@@ -1075,7 +1075,7 @@ async def run_video_os_migration(
 
     except Exception as e:
         logger.error(f"Video OS migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/add-avatar-tables")
@@ -1102,7 +1102,7 @@ async def run_avatar_migration(
 
     except Exception as e:
         logger.error(f"Avatar migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/run-partner-recruiting-migration")
@@ -1124,7 +1124,7 @@ async def run_partner_recruiting_migration(
 
     except Exception as e:
         logger.error(f"Partner Recruiting migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/add-call-transcripts-table")
@@ -1218,7 +1218,7 @@ async def run_call_transcripts_migration(
         raise
     except Exception as e:
         logger.error(f"Call Transcripts migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/add-sessions-table")
@@ -1248,7 +1248,7 @@ async def run_sessions_table_migration(
 
     except Exception as e:
         logger.error(f"Sessions table migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/add-voice-os-tables")
@@ -1298,7 +1298,7 @@ async def run_voice_os_migration(
 
     except Exception as e:
         logger.error(f"Voice OS migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/add-voice-workflow-tables")
@@ -1389,7 +1389,7 @@ async def run_voice_workflow_migration(
         raise
     except Exception as e:
         logger.error(f"Voice Workflow migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/add-call-screening-tables")
@@ -1419,7 +1419,7 @@ async def run_call_screening_migration(
 
     except Exception as e:
         logger.error(f"Call screening migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/add-multi-role-system")
@@ -1454,7 +1454,7 @@ async def run_multi_role_migration(
 
     except Exception as e:
         logger.error(f"Multi-role system migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/multi-role-system/status")
@@ -1472,7 +1472,7 @@ async def check_multi_role_migration_status(
 
     except Exception as e:
         logger.error(f"Multi-role status check error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/backfill-sla-tasks")
@@ -1514,7 +1514,7 @@ async def backfill_sla_tasks_endpoint(
 
     except Exception as e:
         logger.error(f"SLA task backfill error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/add-sla-milestone-type-columns")
@@ -1634,7 +1634,7 @@ async def run_sla_milestone_type_migration(
         raise
     except Exception as e:
         logger.error(f"SLA milestone type migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/delete-sample-data")
@@ -1834,7 +1834,7 @@ async def delete_sample_data_endpoint(
 
     except Exception as e:
         logger.error(f"Sample data deletion error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/add-missing-columns")
@@ -1922,7 +1922,7 @@ async def add_missing_database_columns(
 
     except Exception as e:
         logger.error(f"Missing columns migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/fix-loan-stages")
@@ -1951,7 +1951,7 @@ async def fix_loan_stages(key: str = ""):
         }
     except Exception as e:
         logger.error(f"Fix loan stages error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         db.close()
 
@@ -2028,7 +2028,7 @@ async def fix_loan_required_fields(key: str = ""):
         }
     except Exception as e:
         logger.error(f"Fix loan required fields error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         db.close()
 
@@ -2074,7 +2074,7 @@ async def debug_loans(key: str = ""):
         }
     except Exception as e:
         logger.error(f"Debug loans error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         db.close()
 
@@ -2121,7 +2121,7 @@ async def delete_unknown_borrowers(key: str = ""):
     except Exception as e:
         db.rollback()
         logger.error(f"Delete unknown borrowers error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         db.close()
 
@@ -2174,7 +2174,7 @@ async def debug_mum_clients(key: str = ""):
         }
     except Exception as e:
         logger.error(f"Debug mum_clients error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         db.close()
 
@@ -2218,7 +2218,7 @@ async def test_mum_insert(key: str = "", user_id: int = 118):
         logger.error(f"Test mum insert error: {e}")
         return {
             "status": "error",
-            "error": str(e),
+            "error": "Internal server error",
             "error_type": type(e).__name__
         }
     finally:
@@ -2341,7 +2341,7 @@ async def test_mum_import_row(key: str = "", user_id: int = 118):
     except Exception as e:
         return {
             "status": "error",
-            "error": str(e),
+            "error": "Internal server error",
             "error_type": type(e).__name__,
             "columns_attempted": columns,
             "values_count": len(values)
@@ -2388,7 +2388,7 @@ async def fix_mum_clients_user_id(key: str = "", user_id: int = 118):
     except Exception as e:
         db.rollback()
         logger.error(f"Fix mum_clients user_id error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         db.close()
 
@@ -2434,7 +2434,7 @@ async def clear_mum_clients_for_reimport(key: str = "", user_id: int = 0):
     except Exception as e:
         db.rollback()
         logger.error(f"Clear mum_clients error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         db.close()
 
@@ -2520,7 +2520,7 @@ async def fix_mum_client_names(key: str = ""):
     except Exception as e:
         db.rollback()
         logger.error(f"Fix mum_client names error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         db.close()
 
@@ -2671,7 +2671,7 @@ async def migrate_leads_to_mum_clients(
                 errors.append({
                     "lead_id": lead.id,
                     "name": lead.name,
-                    "error": str(e)
+                    "error": "Internal server error"
                 })
 
         # Delete migrated leads if requested
@@ -2702,7 +2702,7 @@ async def migrate_leads_to_mum_clients(
     except Exception as e:
         db.rollback()
         logger.error(f"Migrate leads to MUM clients error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         db.close()
 
@@ -2736,7 +2736,7 @@ async def create_salesforce_oauth_tables(key: str = ""):
                     count = result.scalar()
                     tables_status[table] = {"exists": True, "count": count}
                 except Exception as e:
-                    tables_status[table] = {"exists": False, "error": str(e)[:100]}
+                    tables_status[table] = {"exists": False, "error": "Internal server error"[:100]}
 
             return {
                 "status": "success" if success else "partial",
@@ -2749,7 +2749,7 @@ async def create_salesforce_oauth_tables(key: str = ""):
 
     except Exception as e:
         logger.error(f"Create Salesforce OAuth tables error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/diagnose-salesforce")
@@ -3148,7 +3148,7 @@ async def fix_500_errors(
 
     except Exception as e:
         logger.error(f"Fix 500 errors migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/add-mum-salesforce-id")
@@ -3196,7 +3196,7 @@ async def add_mum_salesforce_id(
 
     except Exception as e:
         logger.error(f"MUM salesforce_id migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/add-survey-tables")
@@ -3245,7 +3245,7 @@ async def add_survey_tables(
         raise
     except Exception as e:
         logger.error(f"Survey tables migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/run-survey-migration")
@@ -3289,7 +3289,7 @@ async def run_survey_migration_simple(
         raise
     except Exception as e:
         logger.error(f"Survey migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/run-survey-seed")
@@ -3332,7 +3332,7 @@ async def run_survey_seed_simple(
         raise
     except Exception as e:
         logger.error(f"Survey seeding error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/debug-survey-templates")
@@ -3381,7 +3381,7 @@ async def debug_survey_templates(key: str = ""):
 
     except Exception as e:
         logger.error(f"Debug survey templates error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/run-content-marketing-migration")
@@ -3457,7 +3457,7 @@ async def run_content_marketing_migration(
         raise
     except Exception as e:
         logger.error(f"Content Marketing migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/seed-survey-templates")
@@ -3495,4 +3495,4 @@ async def seed_survey_templates(
         raise
     except Exception as e:
         logger.error(f"Survey seed error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

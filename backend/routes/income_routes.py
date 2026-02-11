@@ -1187,7 +1187,7 @@ async def fix_paystub_columns(
                 results.append({"column": col_name, "status": "added"})
             except SQLAlchemyError as e:
                 col_name = stmt.split("ADD COLUMN IF NOT EXISTS ")[1].split()[0] if "ADD COLUMN" in stmt else "unknown"
-                results.append({"column": col_name, "status": "skipped", "error": str(e)[:50]})
+                results.append({"column": col_name, "status": "skipped", "error": "Internal server error"[:50]})
 
         db.commit()
 
@@ -1198,7 +1198,7 @@ async def fix_paystub_columns(
         }
     except SQLAlchemyError as e:
         logger.error(f"Fix paystub columns failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.get("/admin/run-migration")
 async def run_income_migration(
@@ -1425,7 +1425,7 @@ async def run_income_migration(
                 results.append({"table": table_name, "status": "created"})
                 logger.info(f"Created table: {table_name}")
             except SQLAlchemyError as e:
-                results.append({"table": table_name, "status": "error", "error": str(e)})
+                results.append({"table": table_name, "status": "error", "error": "Internal server error"})
                 logger.error(f"Error creating table {table_name}: {e}")
 
         db.commit()
@@ -1445,7 +1445,7 @@ async def run_income_migration(
                 db.execute(text(idx_sql))
                 results.append({"index": idx_name, "status": "created"})
             except SQLAlchemyError as e:
-                results.append({"index": idx_name, "status": "error", "error": str(e)})
+                results.append({"index": idx_name, "status": "error", "error": "Internal server error"})
 
         db.commit()
 
@@ -1538,7 +1538,7 @@ async def run_income_migration(
 
     except SQLAlchemyError as e:
         logger.error(f"Migration failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/admin/seed-test-data")
@@ -1634,7 +1634,7 @@ async def seed_test_income_data(
         db.rollback()
         return {
             "success": False,
-            "error": str(e),
+            "error": "Internal server error",
             "error_type": type(e).__name__,
         }
 
@@ -1692,6 +1692,6 @@ async def run_income_migration(
         logger.error(f"Income migration failed: {e}")
         return {
             "success": False,
-            "error": str(e),
+            "error": "Internal server error",
             "error_type": type(e).__name__,
         }

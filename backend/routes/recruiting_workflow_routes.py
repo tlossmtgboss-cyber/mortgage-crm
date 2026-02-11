@@ -524,7 +524,7 @@ async def process_all_pending_emails(
                     "task_id": task.id,
                     "title": task.title,
                     "status": "error",
-                    "error": str(e)
+                    "error": "Internal server error"
                 })
 
         conn.commit()

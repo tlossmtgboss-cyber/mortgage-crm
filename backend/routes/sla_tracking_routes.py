@@ -293,7 +293,7 @@ async def run_sla_migration(db: Session = Depends(get_db)):
         }
     except Exception as e:
         logger.error(f"Migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/migrate-trigger-from")
@@ -349,7 +349,7 @@ async def add_trigger_from_columns(db: Session = Depends(get_db)):
             }
     except SQLAlchemyError as e:
         logger.error(f"Migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -476,7 +476,7 @@ async def list_sla_measures(
         logger.error(f"Error in list_sla_measures: {e}")
         import traceback
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/measures/{measure_id}", response_model=SLAMeasureResponse)
@@ -565,7 +565,7 @@ async def change_measure_stage(
     except SQLAlchemyError as e:
         logger.error(f"Error changing measure stage: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -827,7 +827,7 @@ async def get_milestone_drilldown(
         logger.error(f"Error in milestone drilldown: {e}")
         import traceback
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -1504,4 +1504,4 @@ View the full report in HTML format.
         raise
     except Exception as e:
         logger.error(f"Failed to send SLA report email: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to send email")

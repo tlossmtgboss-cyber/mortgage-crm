@@ -773,7 +773,7 @@ class AgentGovernanceService:
                 "alerts": {"total_active": 0, "critical": 0, "high": 0, "medium": 0, "low": 0},
                 "top_agents": [],
                 "updated_at": datetime.now(timezone.utc).isoformat(),
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     # =========================================================================

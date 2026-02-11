@@ -447,7 +447,7 @@ async def list_themes(
         import traceback
         error_trace = traceback.format_exc()
         logger.error(f"Error listing themes: {e}\n{error_trace}")
-        raise HTTPException(status_code=500, detail=f"Error loading themes: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error loading themes")
 
 
 @public_router.get("/{theme_slug}", response_model=ThemeResponse)
@@ -605,7 +605,7 @@ async def get_public_microsite(
         import traceback
         logger.error(f"Error fetching public microsite: {e}")
         logger.error(f"Traceback: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"Error loading microsite: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error loading microsite")
 
 
 # =============================================================================
@@ -665,7 +665,7 @@ async def setup_tim_loss_microsite(db: Session = Depends(get_db)):
         raise
     except Exception as e:
         logger.error(f"Error setting up tim-loss microsite: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @public_router.post("/add-testimonials-page/{user_slug}")
@@ -783,7 +783,7 @@ async def add_testimonials_page_for_user(user_slug: str, db: Session = Depends(g
         raise
     except Exception as e:
         logger.error(f"Error adding testimonials page: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @public_router.post("/add-services-page/{user_slug}")
@@ -882,7 +882,7 @@ async def add_services_page_for_user(user_slug: str, db: Session = Depends(get_d
         raise
     except Exception as e:
         logger.error(f"Error adding services page: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @public_router.post("/add-about-page/{user_slug}")
@@ -946,7 +946,7 @@ async def add_about_page_for_user(user_slug: str, db: Session = Depends(get_db))
         raise
     except Exception as e:
         logger.error(f"Error adding about page: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -1228,7 +1228,7 @@ async def upload_microsite_image(
     except Exception as e:
         logger.error(f"Error uploading asset: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error uploading file: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error uploading file")
 
 
 @auth_router.post("/my-microsite/publish")
@@ -1571,7 +1571,7 @@ async def create_page(
     except Exception as e:
         logger.error(f"Error creating page: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error creating page: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error creating page")
 
 
 @auth_router.put("/my-microsite/pages/{page_slug}", response_model=PageContentResponse)
@@ -1950,7 +1950,7 @@ async def chat_with_mortgage_assistant(
         return {
             "success": False,
             "response": "I'm sorry, I'm having trouble processing your request. Please try again.",
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -1981,7 +1981,7 @@ async def get_loan_officer_availability(
         return {
             "success": False,
             "slots": [],
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -2064,7 +2064,7 @@ async def book_appointment_via_chat(
         logger.error(f"Error booking appointment: {e}")
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 

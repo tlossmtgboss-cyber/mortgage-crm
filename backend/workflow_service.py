@@ -120,7 +120,7 @@ class WorkflowEngine:
         except Exception as e:
             logger.error(f"Workflow evaluation error: {e}")
             db.rollback()
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
     @staticmethod
     def _evaluate_trigger(loan, trigger_type: str, config: Dict) -> bool:
@@ -290,7 +290,7 @@ class ThemeDayService:
         except Exception as e:
             logger.error(f"Theme scheduling error: {e}")
             db.rollback()
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
     @staticmethod
     def _generate_theme_message(theme: Dict, first_name: str,
@@ -369,7 +369,7 @@ class LastMileService:
         except Exception as e:
             logger.error(f"Last Mile init error: {e}")
             db.rollback()
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
     @staticmethod
     def get_today_tasks(db: Session) -> List[Dict]:
@@ -416,7 +416,7 @@ class LastMileService:
         except Exception as e:
             logger.error(f"Task completion error: {e}")
             db.rollback()
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
 
 class PostClosingService:
@@ -466,7 +466,7 @@ class PostClosingService:
         except Exception as e:
             logger.error(f"Post-closing scheduling error: {e}")
             db.rollback()
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
 
 class AIWorkflowAnalyzer:
@@ -547,7 +547,7 @@ class AIWorkflowAnalyzer:
         except Exception as e:
             logger.error(f"AI analysis error: {e}")
             db.rollback()
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
     @staticmethod
     def get_priority_loans(db: Session, organization_id: int = 1) -> List[Dict]:

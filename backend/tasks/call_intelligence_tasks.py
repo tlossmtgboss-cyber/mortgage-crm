@@ -134,7 +134,7 @@ def process_transcript_task(
         return {
             "success": False,
             "call_id": call_id,
-            "error": str(e),
+            "error": "Internal server error",
         }
 
 
@@ -225,7 +225,7 @@ def process_batch_task(
                     SET status = 'failed', error_message = :error
                     WHERE batch_id = :batch_id
                 """),
-                {"batch_id": batch_id, "error": str(e)[:500]}
+                {"batch_id": batch_id, "error": "Internal server error"[:500]}
             )
             db.commit()
             db.close()
@@ -235,7 +235,7 @@ def process_batch_task(
         return {
             "success": False,
             "batch_id": batch_id,
-            "error": str(e),
+            "error": "Internal server error",
         }
 
 
@@ -363,7 +363,7 @@ def cleanup_old_results_task(
         logger.exception(f"Cleanup task failed: {e}")
         return {
             "success": False,
-            "error": str(e),
+            "error": "Internal server error",
         }
 
 
@@ -454,5 +454,5 @@ def reprocess_failed_task(
         logger.exception(f"Reprocess task failed: {e}")
         return {
             "success": False,
-            "error": str(e),
+            "error": "Internal server error",
         }

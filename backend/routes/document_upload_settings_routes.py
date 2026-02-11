@@ -307,7 +307,7 @@ async def get_document_upload_settings(
         raise
     except Exception as e:
         logger.exception("Error fetching document upload settings")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("")
@@ -356,7 +356,7 @@ async def update_document_upload_settings(
         raise
     except Exception as e:
         logger.exception("Error updating document upload settings")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/file-types")
@@ -398,7 +398,7 @@ async def get_available_file_types(
         raise
     except Exception as e:
         logger.exception("Error fetching available file types")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/document-categories")
@@ -429,7 +429,7 @@ async def get_document_categories(
         raise
     except Exception as e:
         logger.exception("Error fetching document categories")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/storage-providers")
@@ -481,7 +481,7 @@ async def get_storage_providers(
         raise
     except Exception as e:
         logger.exception("Error fetching storage providers")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/test-classification")
@@ -531,7 +531,7 @@ async def test_classification_settings(
         raise
     except Exception as e:
         logger.exception("Error testing classification")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/validate-storage")
@@ -569,7 +569,7 @@ async def validate_storage_connection(
         raise
     except Exception as e:
         logger.exception("Error validating storage connection")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/statistics")
@@ -619,7 +619,7 @@ async def get_document_statistics(
         raise
     except Exception as e:
         logger.exception("Error fetching document statistics")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/reset-defaults")
@@ -649,4 +649,4 @@ async def reset_to_defaults(
         raise
     except Exception as e:
         logger.exception("Error resetting document settings")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

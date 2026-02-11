@@ -208,7 +208,7 @@ async def get_profit_loss(
             period, year, month, quarter, start_date, end_date
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
 
     # Get revenue accounts
     revenue_accounts = db.query(ChartOfAccounts).filter(
@@ -577,7 +577,7 @@ async def get_cash_flow(
             period, year, month, quarter, start_date, end_date
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
 
     # Get cash accounts
     cash_accounts = db.query(ChartOfAccounts).filter(

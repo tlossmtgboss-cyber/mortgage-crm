@@ -174,7 +174,7 @@ class ContextAwareAIWithExperiments:
             return {
                 "response": "I apologize, but I'm having trouble generating a response right now.",
                 "context_used": False,
-                "error": str(e)
+                "error": "Internal server error"
             }
 
     def _build_experimental_prompt(

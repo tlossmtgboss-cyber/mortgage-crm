@@ -132,7 +132,7 @@ Return ONLY valid JSON with the extracted data."""
         except Exception as e:
             logger.error(f"Error extracting bank statement data: {e}")
             return {
-                "error": str(e),
+                "error": "Internal server error",
                 "extraction_confidence": 0
             }
 

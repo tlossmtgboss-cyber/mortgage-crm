@@ -347,7 +347,7 @@ async def bulk_upload_tasks(
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing CSV: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error processing CSV")
 
 
 @router.get("/api/v1/tasks/templates")
@@ -478,4 +478,4 @@ async def assign_workflow(
 
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error assigning workflow: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error assigning workflow")

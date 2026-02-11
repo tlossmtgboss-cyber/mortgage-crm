@@ -242,7 +242,7 @@ class PortalNotificationService:
                 results["failed"] += 1
                 results["errors"].append({
                     "notification_id": notification.id,
-                    "error": str(e),
+                    "error": "Internal server error",
                 })
                 logger.error(f"Failed to process notification {notification.id}: {e}")
 

@@ -61,7 +61,7 @@ async def get_presets():
         raise HTTPException(status_code=500, detail="Invalid presets configuration")
     except Exception as e:
         logger.error(f"Error loading presets: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/presets")
@@ -119,7 +119,7 @@ async def update_presets(presets: dict):
         raise
     except Exception as e:
         logger.error(f"Error saving presets: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/select")
@@ -143,7 +143,7 @@ async def select_language(request: SelectLanguageRequest):
         return result
     except Exception as e:
         logger.error(f"Error selecting language: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/policy-buckets")

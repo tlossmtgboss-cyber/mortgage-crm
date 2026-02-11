@@ -854,7 +854,7 @@ async def auto_import(
         logger.error(f"Auto-import error: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Import failed: {str(e)}"
+            detail="Import failed"
         )
 
 
@@ -903,7 +903,7 @@ async def get_import_history(
         logger.error(f"Failed to fetch import history: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to fetch import history: {str(e)}"
+            detail="Failed to fetch import history"
         )
     finally:
         # CRITICAL: Always close connections to prevent leaks
@@ -988,13 +988,13 @@ async def seed_test_account_bootstrap(
         logger.error(f"Failed to import seed_test_account: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to import seeding module: {str(e)}"
+            detail="Failed to import seeding module"
         )
     except Exception as e:
         logger.error(f"Error seeding test account: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Error seeding test account: {str(e)}"
+            detail="Error seeding test account"
         )
 
 
@@ -1064,11 +1064,11 @@ async def seed_test_account_endpoint(
         logger.error(f"Failed to import seed_test_account: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to import seeding module: {str(e)}"
+            detail="Failed to import seeding module"
         )
     except Exception as e:
         logger.error(f"Error seeding test account: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Error seeding test account: {str(e)}"
+            detail="Error seeding test account"
         )

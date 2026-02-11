@@ -256,7 +256,7 @@ async def send_test_email(
         }
     except Exception as e:
         logger.error(f"Failed to send test email: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/dns-instructions")

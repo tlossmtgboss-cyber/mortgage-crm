@@ -176,7 +176,7 @@ def get_twilio_client(account_sid: str, auth_token: str):
         return Client(account_sid, auth_token)
     except Exception as e:
         logger.error(f"Failed to create Twilio client: {e}")
-        raise HTTPException(status_code=400, detail=f"Invalid Twilio credentials: {str(e)}")
+        raise HTTPException(status_code=400, detail="Invalid Twilio credentials")
 
 
 async def get_user_twilio_config(user_id: int, db) -> Optional[Dict]:
@@ -293,7 +293,7 @@ async def get_setup_status(
 
     except Exception as e:
         logger.error(f"Error getting setup status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/initialize")
@@ -375,7 +375,7 @@ async def initialize_subaccount(
     except SQLAlchemyError as e:
         logger.error(f"Error creating subaccount: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/credentials")
@@ -396,7 +396,7 @@ async def save_credentials(
             account = client.api.accounts(credentials.account_sid).fetch()
             account_name = account.friendly_name
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Invalid credentials: {str(e)}")
+            raise HTTPException(status_code=400, detail="Invalid credentials")
 
         # Save to database
         from sqlalchemy import text
@@ -442,7 +442,7 @@ async def save_credentials(
     except SQLAlchemyError as e:
         logger.error(f"Error saving credentials: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/phone-numbers/search")
@@ -514,7 +514,7 @@ async def search_phone_numbers(
         raise
     except Exception as e:
         logger.error(f"Error searching phone numbers: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/phone-numbers/purchase")
@@ -573,7 +573,7 @@ async def purchase_phone_number(
     except Exception as e:
         logger.error(f"Error purchasing phone number: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/messaging-service")
@@ -640,7 +640,7 @@ async def create_messaging_service(
     except SQLAlchemyError as e:
         logger.error(f"Error creating messaging service: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/a2p/brand")
@@ -703,7 +703,7 @@ async def register_brand(
     except SQLAlchemyError as e:
         logger.error(f"Error registering brand: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/a2p/campaign")
@@ -771,7 +771,7 @@ async def register_campaign(
     except SQLAlchemyError as e:
         logger.error(f"Error registering campaign: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/a2p/status")
@@ -831,7 +831,7 @@ async def get_a2p_status(
         raise
     except Exception as e:
         logger.error(f"Error getting A2P status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/account-info")
@@ -868,7 +868,7 @@ async def get_account_info(
         raise
     except Exception as e:
         logger.error(f"Error getting account info: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/run-migration")
@@ -959,7 +959,7 @@ async def run_twilio_migration(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/phone-numbers")
@@ -1005,7 +1005,7 @@ async def get_owned_phone_numbers(
         raise
     except Exception as e:
         logger.error(f"Error getting phone numbers: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -1193,4 +1193,4 @@ Instructions:
         raise
     except Exception as e:
         logger.error(f"Error making outbound call: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

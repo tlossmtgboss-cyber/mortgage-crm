@@ -313,7 +313,7 @@ async def make_outbound_call(
         logger.error(f"Error making outbound call: {e}")
         return {
             "success": False,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -1883,7 +1883,7 @@ async def list_transcripts(
 
     except Exception as e:
         logger.error(f"Error listing transcripts: {e}")
-        return {"transcripts": [], "error": str(e)}
+        return {"transcripts": [], "error": "Internal server error"}
 
 
 @router.get("/transcripts/{transcript_sid}")
@@ -1937,7 +1937,7 @@ async def get_transcript_detail(
 
     except Exception as e:
         logger.error(f"Error getting transcript: {e}")
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
 
 
 @router.get("/transcripts/customer/{customer_id}")
@@ -1987,7 +1987,7 @@ async def get_customer_transcripts(
 
     except Exception as e:
         logger.error(f"Error getting customer transcripts: {e}")
-        return {"customer_id": customer_id, "transcripts": [], "error": str(e)}
+        return {"customer_id": customer_id, "transcripts": [], "error": "Internal server error"}
 
 
 async def process_call_recording(
@@ -2420,7 +2420,7 @@ async def make_outbound_call(
 
     except Exception as e:
         logger.error(f"Error making outbound call: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 @router.get("/call-history")
@@ -2452,7 +2452,7 @@ async def get_call_history(
 
     except Exception as e:
         logger.error(f"Error getting call history: {e}")
-        return {"error": str(e)}
+        return {"error": "Internal server error"}
 
 
 @router.get("/call-stats")
@@ -2506,7 +2506,7 @@ async def get_call_stats(
             "inbound_calls": 0,
             "outbound_calls": 0,
             "leads_generated": 0,
-            "error": str(e)
+            "error": "Internal server error"
         }
 
 
@@ -2550,7 +2550,7 @@ async def update_ai_receptionist_config(
 
     except Exception as e:
         logger.error(f"Error updating config: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 # ============================================================================
@@ -2664,7 +2664,7 @@ async def update_voice_os_config(request: Request):
 
     except Exception as e:
         logger.error(f"Error updating Voice OS config: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 @router.get("/voice-os/status")
@@ -2786,7 +2786,7 @@ async def test_voice_sample(request: Request):
 
     except Exception as e:
         logger.error(f"Error testing voice: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 # ============================================================================
@@ -3212,7 +3212,7 @@ async def drop_voicemail(
         raise
     except Exception as e:
         logger.error(f"Error dropping voicemail: {e}", exc_info=True)
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 @router.post("/amd-callback")

@@ -1361,7 +1361,7 @@ async def upload_screen_recording(
         raise
     except Exception as e:
         logger.error(f"Error uploading screen recording: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to upload recording: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to upload recording")
 
 
 @router.get("/screen-recordings/{recording_id}")
@@ -2702,7 +2702,7 @@ async def dial_participant(
 
     except Exception as e:
         logger.error(f"Dial participant error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -2846,7 +2846,7 @@ async def get_user_analytics(
 
     except Exception as e:
         logger.error(f"Error getting user analytics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/analytics/me")
@@ -3334,7 +3334,7 @@ async def get_manager_dashboard(
 
     except Exception as e:
         logger.error(f"Error getting manager dashboard: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/analytics/manager/compare/{user_id}")
@@ -3382,7 +3382,7 @@ async def compare_user_to_team(
         raise
     except Exception as e:
         logger.error(f"Error comparing user to team: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/analytics/manager/leaderboard")
@@ -3428,7 +3428,7 @@ async def get_team_leaderboard(
 
     except Exception as e:
         logger.error(f"Error getting leaderboard: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -3467,7 +3467,7 @@ async def setup_consent_fields(
     except Exception as e:
         db.rollback()
         logger.error(f"Error setting up consent fields: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/org-settings/setup")
@@ -3499,7 +3499,7 @@ async def setup_org_video_settings_table(
     except Exception as e:
         db.rollback()
         logger.error(f"Error creating org video settings table: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -4186,7 +4186,7 @@ async def setup_breakout_rooms_table(
         return {"success": True, "message": "breakout_rooms table ready"}
     except Exception as e:
         logger.error(f"Error creating breakout_rooms table: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================

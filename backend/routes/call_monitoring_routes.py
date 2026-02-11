@@ -331,7 +331,7 @@ async def lookup_caller(
         raise
     except Exception as e:
         logger.error(f"Caller lookup failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Lookup failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Lookup failed")
 
 
 @router.post("/create-client", response_model=Dict[str, Any])
@@ -406,7 +406,7 @@ async def create_client_from_call(
     except Exception as e:
         db.rollback()
         logger.error(f"Failed to create client: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create client: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create client")
 
 
 @router.get("/search-clients", response_model=Dict[str, Any])
@@ -541,7 +541,7 @@ async def search_clients(
 
     except Exception as e:
         logger.error(f"Failed to search clients: {e}")
-        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Search failed")
 
 
 # =============================================================================
@@ -594,7 +594,7 @@ async def create_session(
         raise
     except Exception as e:
         logger.error(f"Error creating session: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/sessions/{session_id}", response_model=Dict[str, Any])
@@ -617,7 +617,7 @@ async def get_session(
         raise
     except Exception as e:
         logger.error(f"Error getting session {session_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.patch("/sessions/{session_id}", response_model=Dict[str, Any])
@@ -653,7 +653,7 @@ async def update_session(
     except Exception as e:
         logger.error(f"Error updating session {session_id}: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/sessions/{session_id}/end", response_model=Dict[str, Any])
@@ -708,7 +708,7 @@ async def end_session(
     except SQLAlchemyError as e:
         logger.error(f"Error ending session {session_id}: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/sessions", response_model=SessionListResponse)
@@ -784,7 +784,7 @@ async def list_sessions(
 
     except Exception as e:
         logger.error(f"Error listing sessions: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -826,7 +826,7 @@ async def add_transcript_chunk(
 
     except Exception as e:
         logger.error(f"Error adding transcript chunk: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/sessions/{session_id}/transcript", response_model=Dict[str, Any])
@@ -857,7 +857,7 @@ async def get_transcript(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error getting transcript: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -910,7 +910,7 @@ async def run_agents(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error running agents: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/sessions/{session_id}/artifacts", response_model=Dict[str, Any])
@@ -964,7 +964,7 @@ async def get_artifacts(
 
     except Exception as e:
         logger.error(f"Error getting artifacts: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/sessions/{session_id}/artifacts/approve", response_model=Dict[str, Any])
@@ -993,7 +993,7 @@ async def approve_artifacts(
 
     except Exception as e:
         logger.error(f"Error approving artifacts: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/sessions/{session_id}/artifacts/reject", response_model=Dict[str, Any])
@@ -1022,7 +1022,7 @@ async def reject_artifacts(
 
     except Exception as e:
         logger.error(f"Error rejecting artifacts: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/sessions/{session_id}/artifacts/execute", response_model=Dict[str, Any])
@@ -1057,7 +1057,7 @@ async def execute_artifacts(
 
     except SQLAlchemyError as e:
         logger.error(f"Error executing artifacts: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -1088,7 +1088,7 @@ async def get_review_data(
         raise
     except Exception as e:
         logger.error(f"Error getting review data: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/sessions/{session_id}/review/submit", response_model=Dict[str, Any])
@@ -1138,7 +1138,7 @@ async def submit_review(
     except Exception as e:
         logger.error(f"Error submitting review: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -1175,7 +1175,7 @@ async def add_participant(
 
     except Exception as e:
         logger.error(f"Error adding participant: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/sessions/{session_id}/participants", response_model=Dict[str, Any])
@@ -1207,7 +1207,7 @@ async def get_participants(
 
     except Exception as e:
         logger.error(f"Error getting participants: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -1243,7 +1243,7 @@ async def get_agent_runs(
 
     except Exception as e:
         logger.error(f"Error getting agent runs: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -1300,7 +1300,7 @@ async def get_client_calls(
 
     except Exception as e:
         logger.error(f"Error getting client calls: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -1375,7 +1375,7 @@ async def process_ci_recording(
         raise
     except Exception as e:
         logger.error(f"Error processing CI recording: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/ci-recordings")
@@ -1462,7 +1462,7 @@ async def list_ci_recordings(
 
     except Exception as e:
         logger.error(f"Error listing CI recordings: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -1533,7 +1533,7 @@ async def get_live_transcript(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error getting live transcript: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/sessions/{session_id}/convert-to-application", response_model=Dict[str, Any])
@@ -1668,7 +1668,7 @@ async def convert_to_application(
     except Exception as e:
         logger.error(f"Error converting call to application: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/metrics", response_model=Dict[str, Any])
@@ -1720,7 +1720,7 @@ async def get_call_metrics(
 
     except Exception as e:
         logger.error(f"Error getting call metrics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -1770,10 +1770,10 @@ async def create_artifact_share_link(
         }
 
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail="Not found")
     except Exception as e:
         logger.error(f"Error creating share link: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/shared/{share_token}", response_model=Dict[str, Any])
@@ -1817,7 +1817,7 @@ async def get_shared_artifact(
         raise
     except Exception as e:
         logger.error(f"Error getting shared artifact: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/embed/{share_token}", response_class=HTMLResponse)
@@ -1902,7 +1902,7 @@ async def deactivate_share_link(
         raise
     except Exception as e:
         logger.error(f"Error deactivating share link: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/artifacts/{artifact_id}/shares", response_model=Dict[str, Any])
@@ -1929,7 +1929,7 @@ async def get_artifact_shares(
 
     except Exception as e:
         logger.error(f"Error getting artifact shares: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/my-shares", response_model=Dict[str, Any])
@@ -1960,7 +1960,7 @@ async def get_my_shares(
 
     except Exception as e:
         logger.error(f"Error getting user shares: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -2089,7 +2089,7 @@ async def get_stacked_notes(
 
     except Exception as e:
         logger.error(f"Error getting stacked notes for client {client_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/sessions/{session_id}/complete-uw-review", response_model=Dict[str, Any])
@@ -2209,7 +2209,7 @@ async def complete_uw_review(
     except Exception as e:
         logger.error(f"Error completing UW review for session {session_id}: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/sessions/{session_id}/create-review-task", response_model=Dict[str, Any])
@@ -2308,7 +2308,7 @@ async def create_review_task(
     except Exception as e:
         logger.error(f"Error creating review task for session {session_id}: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================

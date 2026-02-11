@@ -910,7 +910,7 @@ async def generate_preapproval_for_lead(
         import traceback
         error_details = traceback.format_exc()
         logger.error(f"Error generating pre-approval letter: {e}\n{error_details}")
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error")
 
 
 @router.post("/preapproval/notify-overlimit")
@@ -1290,7 +1290,7 @@ async def get_client_portal_status(
                 "has_portal": False,
                 "portal_url": None,
                 "partner_id": None,
-                "error": str(e)
+                "error": "Internal server error"
             }
         }
 
@@ -1341,7 +1341,7 @@ async def add_partner_note(
         logger.error(f"Failed to query lead info: {e}")
         return JSONResponse(
             status_code=500,
-            content={"success": False, "error": f"Database error: {str(e)}"}
+            content={"success": False, "error": "Database error"}
         )
 
     if not lead_info:
@@ -1378,7 +1378,7 @@ async def add_partner_note(
         db.rollback()
         return JSONResponse(
             status_code=500,
-            content={"success": False, "error": f"Failed to save note: {str(e)}"}
+            content={"success": False, "error": "Failed to save note"}
         )
 
     # Get all team members to notify
@@ -2559,4 +2559,4 @@ async def assign_partner_to_client(
     except Exception as e:
         db.rollback()
         logger.error(f"Error assigning partner to client {client_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

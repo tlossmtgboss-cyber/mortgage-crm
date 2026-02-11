@@ -255,7 +255,7 @@ class DNSVerificationService:
                 status=VerificationStatus.ERROR,
                 method=VerificationMethod.TXT_RECORD,
                 message=f"DNS verification error: {str(e)}",
-                details={"error": str(e)}
+                details={"error": "Internal server error"}
             )
 
     def verify_cname_record(self, domain: str) -> VerificationResult:
@@ -343,7 +343,7 @@ class DNSVerificationService:
                 status=VerificationStatus.ERROR,
                 method=VerificationMethod.CNAME_RECORD,
                 message=f"DNS verification error: {str(e)}",
-                details={"error": str(e)}
+                details={"error": "Internal server error"}
             )
 
     def verify_a_record(self, domain: str) -> VerificationResult:
@@ -427,7 +427,7 @@ class DNSVerificationService:
                 status=VerificationStatus.ERROR,
                 method=VerificationMethod.A_RECORD,
                 message=f"DNS verification error: {str(e)}",
-                details={"error": str(e)}
+                details={"error": "Internal server error"}
             )
 
     def verify_dns_configuration(self, domain: str) -> VerificationResult:
