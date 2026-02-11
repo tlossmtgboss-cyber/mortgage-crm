@@ -306,14 +306,29 @@ async def inbound_email_webhook(
             sender_name_match = re.match(r'^([^<]+)\s*<', from_email)
             sender_name = sender_name_match.group(1).strip() if sender_name_match else from_address.split('@')[0]
 
-            # Try to find existing lead by email
-            existing_lead = db.execute(text("""
-                SELECT id, name, owner_id
-                FROM leads
-                WHERE email = :email
-                ORDER BY created_at DESC
-                LIMIT 1
-            """), {"email": from_address}).fetchone()
+            # Determine organization context from the recipient (LO) address
+            recipient_user = db.execute(text("""
+                SELECT id, organization_id FROM users WHERE email = :email LIMIT 1
+            """), {"email": to_address}).fetchone()
+            org_id = recipient_user.organization_id if recipient_user else None
+
+            # Try to find existing lead by email (scoped to organization if known)
+            if org_id:
+                existing_lead = db.execute(text("""
+                    SELECT id, name, owner_id
+                    FROM leads
+                    WHERE email = :email AND organization_id = :org_id
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                """), {"email": from_address, "org_id": org_id}).fetchone()
+            else:
+                existing_lead = db.execute(text("""
+                    SELECT id, name, owner_id
+                    FROM leads
+                    WHERE email = :email
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                """), {"email": from_address}).fetchone()
 
             if existing_lead:
                 lead_id = existing_lead.id
@@ -322,29 +337,38 @@ async def inbound_email_webhook(
                 logger.info(f"Matched inbound email to existing lead {lead_id}")
             else:
                 # Create a new lead for this email
-                # Get default user (first admin or system user)
-                default_user = db.execute(text("""
-                    SELECT id FROM users
-                    WHERE role IN ('admin', 'owner', 'loan_officer')
-                    ORDER BY id ASC
-                    LIMIT 1
-                """)).fetchone()
-                user_id = default_user.id if default_user else 1
+                # Use recipient LO as owner, or fall back to first admin
+                if recipient_user:
+                    user_id = recipient_user.id
+                else:
+                    default_user = db.execute(text("""
+                        SELECT id FROM users
+                        WHERE role IN ('admin', 'owner', 'loan_officer')
+                        ORDER BY id ASC
+                        LIMIT 1
+                    """)).fetchone()
+                    user_id = default_user.id if default_user else 1
 
-                # Create new lead (using actual schema: name, not first_name/last_name)
+                # Create new lead with organization_id for tenant isolation
                 db.execute(text("""
-                    INSERT INTO leads (name, email, source, owner_id, created_at, updated_at)
-                    VALUES (:name, :email, 'inbound_email', :owner_id, NOW(), NOW())
+                    INSERT INTO leads (name, email, source, owner_id, organization_id, created_at, updated_at)
+                    VALUES (:name, :email, 'inbound_email', :owner_id, :org_id, NOW(), NOW())
                 """), {
                     "name": sender_name,
                     "email": from_address,
-                    "owner_id": user_id
+                    "owner_id": user_id,
+                    "org_id": org_id
                 })
 
-                # Get the new lead ID
-                new_lead = db.execute(text("""
-                    SELECT id FROM leads WHERE email = :email ORDER BY id DESC LIMIT 1
-                """), {"email": from_address}).fetchone()
+                # Get the new lead ID (scoped to org if known)
+                if org_id:
+                    new_lead = db.execute(text("""
+                        SELECT id FROM leads WHERE email = :email AND organization_id = :org_id ORDER BY id DESC LIMIT 1
+                    """), {"email": from_address, "org_id": org_id}).fetchone()
+                else:
+                    new_lead = db.execute(text("""
+                        SELECT id FROM leads WHERE email = :email ORDER BY id DESC LIMIT 1
+                    """), {"email": from_address}).fetchone()
                 lead_id = new_lead.id if new_lead else None
                 logger.info(f"Created new lead {lead_id} from inbound email")
 

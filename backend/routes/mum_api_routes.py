@@ -308,19 +308,17 @@ async def get_mum_metrics(
         rate_rebound_opps = 0
         seen_loan_numbers = set()
 
-        # 1. Process MUM clients (use organization_id or get all active if no user filter available)
+        # 1. Process MUM clients scoped to user's organization
         try:
-            # Try organization-based filtering first
             if hasattr(current_user, 'organization_id') and current_user.organization_id:
                 mum_clients = db.query(MUMClient).filter(
                     MUMClient.organization_id == current_user.organization_id,
                     MUMClient.status == 'active'
                 ).all()
             else:
-                # Fallback: get all active clients for this user's context
-                mum_clients = db.query(MUMClient).filter(
-                    MUMClient.status == 'active'
-                ).all()
+                # No organization_id — return empty to prevent cross-tenant leakage
+                logger.warning(f"User {current_user.id} has no organization_id, returning empty MUM metrics")
+                mum_clients = []
         except Exception as e:
             logger.warning(f"MUM client query failed, returning empty: {e}")
             mum_clients = []

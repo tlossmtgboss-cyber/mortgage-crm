@@ -1037,7 +1037,10 @@ async def execute_rate_lock_action(
 
 
 @router.get("/rate-lock/dashboard")
-async def get_rate_lock_dashboard(db: Session = Depends(get_db)):
+async def get_rate_lock_dashboard(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_dep()),
+):
     """
     Get rate lock dashboard showing all loans and their lock status.
 
@@ -1053,11 +1056,12 @@ async def get_rate_lock_dashboard(db: Session = Depends(get_db)):
 
     from workflows.rate_lock_engine import RateLockIntelligenceEngine
 
-    # Get all loans in lockable stages
+    # Get loans in lockable stages scoped to user's organization
     lockable_stages = [LoanStage.PROCESSING, LoanStage.SUBMITTED, LoanStage.UNDERWRITING, LoanStage.CONDITIONAL_APPROVAL, LoanStage.CTC]
-    loans = db.query(Loan).filter(
-        Loan.stage.in_(lockable_stages)
-    ).all()
+    query = db.query(Loan).filter(Loan.stage.in_(lockable_stages))
+    if hasattr(current_user, 'organization_id') and current_user.organization_id:
+        query = query.filter(Loan.organization_id == current_user.organization_id)
+    loans = query.all()
 
     # Categorize by status
     status_counts = {
@@ -1330,7 +1334,10 @@ async def trigger_loan_power_play(
 
 
 @router.get("/power-play/dashboard")
-async def get_power_play_dashboard(db: Session = Depends(get_db)):
+async def get_power_play_dashboard(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_dep()),
+):
     """
     Get Power Play workflow dashboard showing leads/loans by workflow type.
 
@@ -1345,8 +1352,11 @@ async def get_power_play_dashboard(db: Session = Depends(get_db)):
 
     engine = PowerPlayEngine(db)
 
-    # Get all leads
-    leads = db.query(Lead).all()
+    # Get leads scoped to user's organization
+    lead_query = db.query(Lead)
+    if hasattr(current_user, 'organization_id') and current_user.organization_id:
+        lead_query = lead_query.filter(Lead.organization_id == current_user.organization_id)
+    leads = lead_query.all()
 
     workflow_counts = {
         "prospect": [],
@@ -1387,11 +1397,14 @@ async def get_power_play_dashboard(db: Session = Depends(get_db)):
                 elif next_touch <= week_from_now:
                     touches_due_this_week.append(lead_summary)
 
-    # Get active loans for Under Contract
-    active_loans = db.query(Loan).filter(
+    # Get active loans for Under Contract (scoped to organization)
+    loan_query = db.query(Loan).filter(
         Loan.stage.in_([LoanStage.PROCESSING, LoanStage.SUBMITTED, LoanStage.UNDERWRITING,
                         LoanStage.CONDITIONAL_APPROVAL, LoanStage.CTC, LoanStage.DOCS_OUT])
-    ).all()
+    )
+    if hasattr(current_user, 'organization_id') and current_user.organization_id:
+        loan_query = loan_query.filter(Loan.organization_id == current_user.organization_id)
+    active_loans = loan_query.all()
 
     for loan in active_loans:
         workflow_counts["under_contract"].append({

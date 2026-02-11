@@ -1458,8 +1458,11 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
 
 
     @app.post("/admin/populate-loan-team-members")
-    async def populate_loan_team_members(db: Session = Depends(get_db)):
-        """Admin endpoint to populate team members for all active loans"""
+    async def populate_loan_team_members(
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
+    ):
+        """Admin endpoint to populate team members for loans in the user's organization."""
         try:
             # Team member data to assign
             team_members = {
@@ -1470,8 +1473,11 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                 "loan_officer": {"name": "Timothy Loss", "email": "tloss@cmgfi.com"}
             }
 
-            # Get all loans (using Loan model which is already defined in main.py)
-            loans = db.query(Loan).all()
+            # Get loans scoped to user's organization
+            loan_query = db.query(Loan)
+            if current_user.organization_id:
+                loan_query = loan_query.filter(Loan.organization_id == current_user.organization_id)
+            loans = loan_query.all()
 
             updated_count = 0
             for loan in loans:
