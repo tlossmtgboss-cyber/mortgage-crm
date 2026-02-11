@@ -782,8 +782,8 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
                 "ALTER TABLE voicemail_drops ADD COLUMN IF NOT EXISTS vapi_assistant_id VARCHAR(255)",
                 "ALTER TABLE voicemail_drops ADD COLUMN IF NOT EXISTS phone_number VARCHAR(20)",
                 "ALTER TABLE voicemail_templates ADD COLUMN IF NOT EXISTS audio_url VARCHAR(500)",
-                "ALTER TABLE voicemail_templates ADD COLUMN IF NOT EXISTS voice_provider VARCHAR(50) DEFAULT '11labs'",
-                "ALTER TABLE voicemail_templates ADD COLUMN IF NOT EXISTS voice_id VARCHAR(100) DEFAULT 'paula'",
+                "ALTER TABLE voicemail_templates ADD COLUMN IF NOT EXISTS voice_provider VARCHAR(50) DEFAULT 'deepgram'",
+                "ALTER TABLE voicemail_templates ADD COLUMN IF NOT EXISTS voice_id VARCHAR(100) DEFAULT 'asteria'",
                 "ALTER TABLE voicemail_templates ADD COLUMN IF NOT EXISTS voice_speed NUMERIC(3,2) DEFAULT 1.0",
                 "ALTER TABLE voicemail_templates ADD COLUMN IF NOT EXISTS delivery_method VARCHAR(50) DEFAULT 'vapi_ai'",
             ]

@@ -32,7 +32,7 @@ function VoicemailSettings() {
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     name: '', category: 'follow_up', message_text: '', variables: [],
-    voice_provider: '11labs', voice_id: 'paula', voice_speed: 1.0,
+    voice_provider: 'deepgram', voice_id: 'asteria', voice_speed: 1.0,
     delivery_method: 'vapi_ai',
   });
   const [saving, setSaving] = useState(false);
@@ -140,7 +140,7 @@ function VoicemailSettings() {
         setShowForm(false);
         setFormData({
           name: '', category: 'follow_up', message_text: '', variables: [],
-          voice_provider: '11labs', voice_id: 'paula', voice_speed: 1.0,
+          voice_provider: 'deepgram', voice_id: 'asteria', voice_speed: 1.0,
           delivery_method: 'vapi_ai',
         });
       }
@@ -186,7 +186,7 @@ function VoicemailSettings() {
     setPreviewingId(template.id);
     try {
       // Use OpenAI TTS voice name mapping
-      const voiceMap = { paula: 'nova', rachel: 'alloy', josh: 'onyx' };
+      const voiceMap = { asteria: 'nova', rachel: 'alloy', josh: 'onyx', paula: 'nova' };
       const voice = voiceMap[template.voice_id] || template.voice_id || 'nova';
 
       const blob = await voicemailAPI.previewVoice({
@@ -432,7 +432,7 @@ function VoicemailSettings() {
                   <label style={labelStyle}>Voice</label>
                   <select value={formData.voice_id}
                     onChange={e => setFormData({ ...formData, voice_id: e.target.value })} style={inputStyle}>
-                    <option value="paula">Paula (11Labs - Default)</option>
+                    <option value="asteria">Asteria (Deepgram - Default)</option>
                     {VOICE_OPTIONS.map(v => (
                       <option key={v.id} value={v.id}>{v.label} - {v.desc}</option>
                     ))}
@@ -506,7 +506,7 @@ function VoicemailSettings() {
                   {/* Voice info */}
                   <div style={{ marginTop: '8px', display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                     <span style={{ fontSize: '11px', background: '#f3f4f6', color: '#4b5563', padding: '2px 6px', borderRadius: '4px' }}>
-                      {t.voice_id || 'paula'} {t.voice_speed && t.voice_speed !== 1 ? `(${t.voice_speed}x)` : ''}
+                      {t.voice_id || 'asteria'} {t.voice_speed && t.voice_speed !== 1 ? `(${t.voice_speed}x)` : ''}
                     </span>
                     {t.audio_url && (
                       <span style={{ fontSize: '11px', background: '#dcfce7', color: '#166534', padding: '2px 6px', borderRadius: '4px' }}>

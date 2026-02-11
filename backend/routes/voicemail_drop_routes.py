@@ -501,8 +501,8 @@ async def send_voicemail_via_vapi(
     user_name: str,
     voicemail_drop_id: int,
     db: Session,
-    voice_provider: str = "11labs",
-    voice_id: str = "paula",
+    voice_provider: str = "deepgram",
+    voice_id: str = "asteria",
     voice_speed: float = 1.0,
     audio_url: str = None,
 ) -> dict:
@@ -537,8 +537,8 @@ async def send_voicemail_via_vapi(
 
     # Build voice config from template settings
     voice_config = {
-        "provider": voice_provider or "11labs",
-        "voiceId": voice_id or "paula",
+        "provider": voice_provider or "deepgram",
+        "voiceId": voice_id or "asteria",
     }
     if voice_speed and voice_speed != 1.0:
         voice_config["speed"] = float(voice_speed)
@@ -701,8 +701,8 @@ async def create_voicemail_drop(
 
         # Load template voice settings if template_id provided
         VoicemailTemplate = get_voicemail_template_model()
-        voice_provider = "11labs"
-        voice_id = "paula"
+        voice_provider = "deepgram"
+        voice_id = "asteria"
         voice_speed = 1.0
         audio_url = None
         delivery_method = os.getenv("VOICEMAIL_DELIVERY_METHOD", "vapi_ai")
@@ -1008,8 +1008,8 @@ async def create_voicemail_template(
             category=category,
             message_text=message_text,
             variables=variables,
-            voice_provider=data.get("voice_provider", "11labs"),
-            voice_id=data.get("voice_id", "paula"),
+            voice_provider=data.get("voice_provider", "deepgram"),
+            voice_id=data.get("voice_id", "asteria"),
             voice_speed=data.get("voice_speed", 1.0),
             delivery_method=data.get("delivery_method", "vapi_ai"),
             is_active=True,
@@ -1922,8 +1922,8 @@ async def _resolve_and_dispatch_campaign(campaign_id: int, user_id: int, user_na
         failed = 0
         DISPATCH_BATCH_SIZE = 5  # Concurrent Vapi calls per batch
 
-        voice_provider = template.voice_provider if template else "11labs"
-        voice_id = template.voice_id if template else "paula"
+        voice_provider = template.voice_provider if template else "deepgram"
+        voice_id = template.voice_id if template else "asteria"
         voice_speed = template.voice_speed if template else 1.0
         audio_url = template.audio_url if template else None
 
@@ -1936,8 +1936,8 @@ async def _resolve_and_dispatch_campaign(campaign_id: int, user_id: int, user_na
                 user_name=user_name,
                 voicemail_drop_id=drop_id,
                 db=db,
-                voice_provider=voice_provider or "11labs",
-                voice_id=voice_id or "paula",
+                voice_provider=voice_provider or "deepgram",
+                voice_id=voice_id or "asteria",
                 voice_speed=voice_speed or 1.0,
                 audio_url=audio_url,
             )
@@ -2316,12 +2316,7 @@ async def revoke_consent(
         try:
             from database.models.borrower import BorrowerProfile
             filters = []
-            if phone_number:
-                digits = _normalize_phone(phone_number)
-                filters.extend([
-                    BorrowerProfile.phone == phone_number,
-                    BorrowerProfile.phone == digits,
-                ])
+            # BorrowerProfile has no phone column — match on email only
             if email:
                 filters.append(BorrowerProfile.email == email)
 

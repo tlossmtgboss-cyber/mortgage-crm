@@ -392,8 +392,8 @@ class VoicemailTemplate(Base):
     audio_url = Column(String(500))  # Pre-recorded audio file URL
 
     # Voice configuration
-    voice_provider = Column(String(50), default='11labs')  # 11labs, openai, deepgram
-    voice_id = Column(String(100), default='paula')  # Provider-specific voice ID
+    voice_provider = Column(String(50), default='deepgram')  # deepgram, 11labs, openai
+    voice_id = Column(String(100), default='asteria')  # Provider-specific voice ID
     voice_speed = Column(Numeric(3, 2), default=1.0)  # 0.5 - 2.0
 
     # Delivery method
