@@ -185,6 +185,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
 
         updated_count = 0
         errors = []
+        cascade_totals = {"loans_updated": 0, "mum_clients_updated": 0}
 
         for lead_id in lead_ids:
             try:
@@ -203,6 +204,22 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
                 lead.updated_at = datetime.utcnow()
                 updated_count += 1
 
+                # Cascade to loans and MUM clients
+                try:
+                    from services.lead_cascade_service import cascade_lead_status
+                    cr = cascade_lead_status(
+                        db=db,
+                        lead_id=lead.id,
+                        new_lead_stage=new_status,
+                        changed_by_id=current_user.id,
+                        lead_loan_number=lead.loan_number,
+                        organization_id=getattr(lead, 'organization_id', None),
+                    )
+                    cascade_totals["loans_updated"] += len(cr["loans_updated"])
+                    cascade_totals["mum_clients_updated"] += len(cr["mum_clients_updated"])
+                except Exception as cascade_err:
+                    logger.error(f"Cascade error for lead {lead_id}: {cascade_err}")
+
             except Exception as e:
                 errors.append(f"Failed to update lead {lead_id}: {str(e)}")
 
@@ -214,12 +231,17 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
             logger.error(f"[bulk-update-status] Failed to commit: {e}")
             raise HTTPException(status_code=500, detail=f"Failed to save changes: {str(e)}")
 
+        cascade_msg = ""
+        if cascade_totals["loans_updated"] or cascade_totals["mum_clients_updated"]:
+            cascade_msg = f" (cascaded to {cascade_totals['loans_updated']} loans, {cascade_totals['mum_clients_updated']} MUM clients)"
+
         result = {
             "success": True,
             "updated_count": updated_count,
             "new_status": new_status,
             "errors": errors,
-            "message": f"Successfully updated {updated_count} leads to '{new_status}'" + (f" with {len(errors)} errors" if errors else "")
+            "message": f"Successfully updated {updated_count} leads to '{new_status}'" + (f" with {len(errors)} errors" if errors else "") + cascade_msg,
+            "cascade_summary": cascade_totals,
         }
         logger.info(f"[bulk-update-status] Returning result: {result}")
         return result
@@ -435,6 +457,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
 
         # Trigger workflow if status changed
         new_status = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage) if lead.stage else None
+        cascade_result = None
         if old_status != new_status and new_status:
             # Calculate duration in previous stage
             duration_days = None
@@ -461,6 +484,24 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
             db.commit()
             db.refresh(lead)
             logger.info(f"Stage changed for lead {lead.id}: {old_status} -> {new_status}, stage_changed_at updated, history recorded")
+
+            # Cascade status to associated loans and MUM clients
+            cascade_result = {"loans_updated": [], "mum_clients_updated": []}
+            try:
+                from services.lead_cascade_service import cascade_lead_status
+                cascade_result = cascade_lead_status(
+                    db=db,
+                    lead_id=lead.id,
+                    new_lead_stage=new_status,
+                    changed_by_id=current_user.id,
+                    lead_loan_number=lead.loan_number,
+                    organization_id=getattr(lead, 'organization_id', None),
+                )
+                if cascade_result["loans_updated"] or cascade_result["mum_clients_updated"]:
+                    db.commit()
+                    logger.info(f"Cascade for lead {lead.id}: {len(cascade_result['loans_updated'])} loans, {len(cascade_result['mum_clients_updated'])} MUM clients updated")
+            except Exception as cascade_err:
+                logger.error(f"Cascade error for lead {lead.id}: {cascade_err}")
 
             try:
                 from workflows.lead_workflow_engine import LeadStatusChange, LeadWorkflowEngine
@@ -523,7 +564,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
             stage_value = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage)
 
         # Return dict to avoid Pydantic validation issues with enum
-        return {
+        result = {
             "id": lead.id,
             "name": lead.name,
             "email": lead.email,
@@ -541,6 +582,16 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
             "created_at": lead.created_at.isoformat() if lead.created_at else None,
             "updated_at": lead.updated_at.isoformat() if lead.updated_at else None,
         }
+
+        # Include cascade info if a status change triggered it
+        if old_status != new_status and cascade_result and (cascade_result["loans_updated"] or cascade_result["mum_clients_updated"]):
+            result["cascade"] = {
+                "loans_updated": len(cascade_result["loans_updated"]),
+                "mum_clients_updated": len(cascade_result["mum_clients_updated"]),
+                "loan_details": cascade_result["loans_updated"],
+            }
+
+        return result
 
     @app.delete("/api/v1/leads/{lead_id}", status_code=204)
     async def delete_lead(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):

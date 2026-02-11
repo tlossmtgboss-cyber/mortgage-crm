@@ -768,10 +768,43 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
             )
             from database.models.dialer import ContactDNCStatus
             from db import engine as _vm_engine
-            # Create in dependency order: templates & campaigns first, then drops, then events
+            from sqlalchemy import text as _vm_text
+
+            # Create tables that don't exist yet (dependency order)
             for _vm_model in [VoicemailTemplate, VoicemailCampaign, VoicemailDrop, VoicemailEvent, ContactDNCStatus]:
                 _vm_model.__table__.create(_vm_engine, checkfirst=True)
-            logger.info("✅ Voicemail tables verified/created")
+
+            # Add missing columns to pre-existing tables (old migration vs new model)
+            _alter_stmts = [
+                "ALTER TABLE voicemail_drops ADD COLUMN IF NOT EXISTS organization_id INTEGER",
+                "ALTER TABLE voicemail_drops ADD COLUMN IF NOT EXISTS contact_email VARCHAR(255)",
+                "ALTER TABLE voicemail_drops ADD COLUMN IF NOT EXISTS delivery_method VARCHAR(50) DEFAULT 'vapi_ai'",
+                "ALTER TABLE voicemail_drops ADD COLUMN IF NOT EXISTS vapi_assistant_id VARCHAR(255)",
+                "ALTER TABLE voicemail_drops ADD COLUMN IF NOT EXISTS phone_number VARCHAR(20)",
+                "ALTER TABLE voicemail_templates ADD COLUMN IF NOT EXISTS audio_url VARCHAR(500)",
+                "ALTER TABLE voicemail_templates ADD COLUMN IF NOT EXISTS voice_provider VARCHAR(50) DEFAULT '11labs'",
+                "ALTER TABLE voicemail_templates ADD COLUMN IF NOT EXISTS voice_id VARCHAR(100) DEFAULT 'paula'",
+                "ALTER TABLE voicemail_templates ADD COLUMN IF NOT EXISTS voice_speed NUMERIC(3,2) DEFAULT 1.0",
+                "ALTER TABLE voicemail_templates ADD COLUMN IF NOT EXISTS delivery_method VARCHAR(50) DEFAULT 'vapi_ai'",
+            ]
+            with _vm_engine.connect() as _vm_conn:
+                for _stmt in _alter_stmts:
+                    try:
+                        _vm_conn.execute(_vm_text(_stmt))
+                        _vm_conn.commit()
+                    except Exception:
+                        _vm_conn.rollback()
+                # Copy contact_phone -> phone_number for rows that used old column name
+                try:
+                    _vm_conn.execute(_vm_text(
+                        "UPDATE voicemail_drops SET phone_number = contact_phone "
+                        "WHERE phone_number IS NULL AND contact_phone IS NOT NULL"
+                    ))
+                    _vm_conn.commit()
+                except Exception:
+                    _vm_conn.rollback()
+
+            logger.info("✅ Voicemail tables verified/created (columns synced)")
 
             # Seed default templates if table is empty
             from sqlalchemy.orm import Session as _VmSession
@@ -871,6 +904,14 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.info("✅ Leads CRUD routes loaded")
     except Exception as e:
         logger.warning(f"⚠️ Could not load Leads CRUD routes: {e}")
+
+    # Include Loans CRUD routes (lead-to-loan conversion, loan pipeline)
+    try:
+        from routes.loans_crud_routes import router as loans_crud_router
+        app.include_router(loans_crud_router, tags=["Loans CRUD"])
+        logger.info("✅ Loans CRUD routes loaded")
+    except Exception as e:
+        logger.warning(f"⚠️ Could not load Loans CRUD routes: {e}")
 
     # Include Subscription routes for Perennia AI
     from subscription_routes import router as subscription_router

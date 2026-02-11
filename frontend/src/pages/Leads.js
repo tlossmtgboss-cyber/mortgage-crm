@@ -489,7 +489,15 @@ function Leads() {
       localStorage.removeItem('leads_data_time');
       loadLeads();
 
-      alert(result.message || `Successfully updated ${result.updated_count} leads to "${bulkStatusSelection}"`);
+      let msg = result.message || `Successfully updated ${result.updated_count} leads to "${bulkStatusSelection}"`;
+      if (result.cascade_summary) {
+        const cs = result.cascade_summary;
+        const parts = [];
+        if (cs.loans_updated > 0) parts.push(`${cs.loans_updated} loan${cs.loans_updated > 1 ? 's' : ''}`);
+        if (cs.mum_clients_updated > 0) parts.push(`${cs.mum_clients_updated} MUM client${cs.mum_clients_updated > 1 ? 's' : ''}`);
+        if (parts.length > 0) msg += `\nAlso cascaded to ${parts.join(' and ')}.`;
+      }
+      alert(msg);
     } catch (err) {
       console.error('Failed to bulk update leads:', err);
       const errorDetail = err.response?.data?.detail;
@@ -641,12 +649,23 @@ function Leads() {
     setStatusDropdown({ show: false, leadId: null, position: { top: 0, left: 0 } });
 
     try {
-      await leadsAPI.update(leadId, { stage: newStatus });
+      const result = await leadsAPI.update(leadId, { stage: newStatus });
       // Refresh data via React Query
       refetchLeads();
       // Clear cache
       localStorage.removeItem('leads_data');
       localStorage.removeItem('leads_data_time');
+
+      // Show cascade feedback if loans/MUM clients were updated
+      if (result?.data?.cascade) {
+        const c = result.data.cascade;
+        const parts = [];
+        if (c.loans_updated > 0) parts.push(`${c.loans_updated} loan${c.loans_updated > 1 ? 's' : ''}`);
+        if (c.mum_clients_updated > 0) parts.push(`${c.mum_clients_updated} MUM client${c.mum_clients_updated > 1 ? 's' : ''}`);
+        if (parts.length > 0) {
+          alert(`Status cascaded to ${parts.join(' and ')}`);
+        }
+      }
     } catch (err) {
       console.error('Failed to update status:', err);
       alert('Failed to update status');
