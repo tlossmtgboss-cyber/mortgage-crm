@@ -487,13 +487,8 @@ async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(
         }
 
 
-@router.get("/api/v1/auth/admin-reset-link")
-async def admin_reset_link(email: str):
-    """Temporary endpoint to generate password reset link directly. Remove after use."""
-    reset_token = create_password_reset_token(email)
-    frontend_url = os.getenv("FRONTEND_URL", "https://perenniaai.com")
-    reset_url = f"{frontend_url}/reset-password?token={reset_token}"
-    return {"reset_url": reset_url}
+# admin-reset-link endpoint REMOVED — it was unauthenticated and generated
+# password reset tokens for any email address (open to abuse).
 
 
 @router.post("/api/v1/auth/reset-password")

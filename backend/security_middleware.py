@@ -376,6 +376,17 @@ RATE_LIMIT_TIERS = {
 
 # Endpoint categories with specific rate limits (multipliers applied to base limits)
 ENDPOINT_RATE_LIMITS = {
+    # Auth endpoints - strict limits to prevent brute force (anonymous: 100/min base)
+    "/token": {"multiplier": 0.05, "burst_allowed": 3},             # 5/min, 3 per 10s
+    "/api/v1/auth/forgot-password": {"multiplier": 0.03, "burst_allowed": 2},  # 3/min
+    "/api/v1/auth/reset-password": {"multiplier": 0.05, "burst_allowed": 3},
+    "/api/v1/auth/register": {"multiplier": 0.05, "burst_allowed": 2},
+    "/api/v1/auth/validate-promo": {"multiplier": 0.1, "burst_allowed": 5},
+    "/api/v1/setup-admin": {"multiplier": 0.02, "burst_allowed": 1},  # 2/min, 1 per 10s
+    "/api/v1/borrower-auth/email/request": {"multiplier": 0.03, "burst_allowed": 2},
+    "/api/v1/auth/portal/send-link": {"multiplier": 0.03, "burst_allowed": 2},
+    "/api/v1/auth/portal/verify": {"multiplier": 0.05, "burst_allowed": 3},
+    "/api/v1/admin/force-password-reset": {"multiplier": 0.02, "burst_allowed": 1},
     # AI endpoints are expensive - lower limits
     "/api/v1/ai/": {"multiplier": 0.2, "burst_allowed": 5},
     "/api/v1/chat/": {"multiplier": 0.3, "burst_allowed": 10},
@@ -383,7 +394,7 @@ ENDPOINT_RATE_LIMITS = {
     # File uploads - moderate limits
     "/api/v1/documents/upload": {"multiplier": 0.5, "burst_allowed": 20},
     "/api/v1/smart-docs/upload": {"multiplier": 0.5, "burst_allowed": 20},
-    # Standard API calls - normal limits
+    # Standard API calls - normal limits (must be LAST - catch-all prefix)
     "/api/v1/": {"multiplier": 1.0, "burst_allowed": 100},
 }
 
