@@ -46,6 +46,166 @@ def get_permission_functions():
 
 
 # ============================================================================
+# Ensure all Loan model columns exist in production DB
+# (Production skips Base.metadata.create_all; checkfirst only checks table
+# existence, not missing columns. This adds any columns the model defines
+# but the DB table lacks.)
+# ============================================================================
+
+def _ensure_loans_columns():
+    """Add missing columns to the loans table. Safe to run repeatedly."""
+    from sqlalchemy import text
+    try:
+        from db import engine
+        # All columns that may be missing, grouped by type
+        # Format: (column_name, pg_type)
+        columns = [
+            # Borrower
+            ("preferred_communication", "VARCHAR"),
+            ("coborrower_name", "VARCHAR"),
+            ("co_borrower_email", "VARCHAR"),
+            # Team
+            ("realtor_agent", "VARCHAR"),
+            ("title_company", "VARCHAR"),
+            ("lender", "VARCHAR"),
+            ("loan_officer_name", "VARCHAR"),
+            ("loan_officer_email", "VARCHAR"),
+            ("processor_email", "VARCHAR"),
+            ("underwriter_email", "VARCHAR"),
+            ("closer", "VARCHAR"),
+            ("closer_email", "VARCHAR"),
+            # SLA tracking
+            ("days_in_stage", "INTEGER DEFAULT 0"),
+            ("sla_status", "VARCHAR DEFAULT 'on-track'"),
+            ("milestones", "JSONB"),
+            ("ai_insights", "TEXT"),
+            ("predicted_close_date", "TIMESTAMP"),
+            ("risk_score", "INTEGER DEFAULT 0"),
+            ("user_metadata", "JSONB"),
+            # Appraisal tracking
+            ("appraisal_ordered_date", "TIMESTAMP"),
+            ("appraisal_scheduled_date", "TIMESTAMP"),
+            ("appraisal_completed_date", "TIMESTAMP"),
+            ("appraisal_value", "FLOAT"),
+            ("appraisal_received_date", "TIMESTAMP"),
+            ("appraisal_docs_expire_date", "TIMESTAMP"),
+            # Title & Insurance tracking
+            ("title_ordered_date", "TIMESTAMP"),
+            ("title_received_date", "TIMESTAMP"),
+            ("insurance_ordered_date", "TIMESTAMP"),
+            ("insurance_received_date", "TIMESTAMP"),
+            # Rate lock fields
+            ("lock_expiration_date", "TIMESTAMP"),
+            ("rate_lock_status", "VARCHAR"),
+            ("rate_lock_recommendation", "VARCHAR"),
+            ("lock_term_days", "INTEGER"),
+            ("float_down_available", "BOOLEAN DEFAULT FALSE"),
+            ("float_down_terms", "VARCHAR"),
+            ("extension_cost_estimate", "FLOAT"),
+            ("volatility_score", "INTEGER DEFAULT 50"),
+            ("borrower_risk_profile", "VARCHAR"),
+            ("lock_score", "INTEGER"),
+            ("lock_decision_date", "TIMESTAMP"),
+            ("lock_decision_notes", "TEXT"),
+            ("last_rate_check", "TIMESTAMP"),
+            ("rate_lock_history", "JSONB"),
+            # Disclosure milestones
+            ("initial_disclosures_sent_date", "TIMESTAMP"),
+            ("initial_disclosures_signed_date", "TIMESTAMP"),
+            ("cd_received_signed_date", "TIMESTAMP"),
+            ("final_closing_package_sent_date", "TIMESTAMP"),
+            # Under Contract Workflow
+            ("contract_received_date", "TIMESTAMP"),
+            ("loan_estimate_sent_date", "TIMESTAMP"),
+            ("conditional_approval_date", "TIMESTAMP"),
+            # AMR tracking
+            ("last_amr_date", "TIMESTAMP"),
+            ("next_amr_date", "TIMESTAMP"),
+            ("refi_opportunity_score", "INTEGER DEFAULT 0"),
+            # Workflow tracking
+            ("current_workflow_id", "VARCHAR"),
+            ("last_workflow_action", "TIMESTAMP"),
+            ("stage_changed_at", "TIMESTAMP"),
+            # SLA Date Fields - Jungo Custom Byte Mappings
+            ("prospect_date", "TIMESTAMP"),
+            ("application_date", "TIMESTAMP"),
+            ("le_pending_date", "TIMESTAMP"),
+            ("credit_only_date", "TIMESTAMP"),
+            ("file_received_date", "TIMESTAMP"),
+            ("preapproval_date", "TIMESTAMP"),
+            ("uw_received_date", "TIMESTAMP"),
+            ("conditions_for_review_date", "TIMESTAMP"),
+            ("suspended_date", "TIMESTAMP"),
+            ("loan_approved_date", "TIMESTAMP"),
+            ("approved_not_accepted_date", "TIMESTAMP"),
+            ("approval_expires_date", "TIMESTAMP"),
+            ("cd_requested_date", "TIMESTAMP"),
+            ("cd_sent_to_borrower_date", "TIMESTAMP"),
+            ("cd_acknowledged_date", "TIMESTAMP"),
+            ("clear_to_close_date", "TIMESTAMP"),
+            ("docs_ordered_date", "TIMESTAMP"),
+            ("docs_out_date", "TIMESTAMP"),
+            ("credit_docs_expire_date", "TIMESTAMP"),
+            ("scheduled_closing_date", "TIMESTAMP"),
+            ("scheduled_funding_date", "TIMESTAMP"),
+            ("funds_ordered_date", "TIMESTAMP"),
+            ("funds_sent_date", "TIMESTAMP"),
+            ("first_payment_date", "TIMESTAMP"),
+            ("investor_purchased_date", "TIMESTAMP"),
+            ("withdrawn_date", "TIMESTAMP"),
+            # Salesforce Sync - Property
+            ("property_type", "VARCHAR"),
+            ("occupancy_type", "VARCHAR"),
+            ("property_county", "VARCHAR"),
+            ("property_ownership_type", "VARCHAR"),
+            ("property_units", "INTEGER"),
+            # Salesforce Sync - Financials
+            ("rate_type", "VARCHAR"),
+            ("monthly_payment", "FLOAT"),
+            ("property_tax", "FLOAT"),
+            ("hazard_insurance", "FLOAT"),
+            ("mortgage_insurance", "FLOAT"),
+            ("hoa_amount", "FLOAT"),
+            ("origination_fee", "FLOAT"),
+            ("estimated_prepaid_interest", "FLOAT"),
+            ("points", "FLOAT"),
+            ("index_rate", "FLOAT"),
+            ("margin", "FLOAT"),
+            ("ltv", "FLOAT"),
+            ("cltv", "FLOAT"),
+            ("loan_purpose", "VARCHAR"),
+            ("file_state", "VARCHAR"),
+            # Salesforce Sync - 2nd Loan
+            ("second_loan_amount", "FLOAT"),
+            ("second_loan_rate", "FLOAT"),
+            ("second_loan_payment", "FLOAT"),
+            # Salesforce Sync - Housing Expenses
+            ("present_housing_expense", "FLOAT"),
+            ("proposed_housing_expense", "FLOAT"),
+            ("present_monthly_payment", "FLOAT"),
+            ("proposed_monthly_payment", "FLOAT"),
+        ]
+
+        with engine.connect() as conn:
+            added = 0
+            for col_name, col_type in columns:
+                try:
+                    conn.execute(text(
+                        f"ALTER TABLE loans ADD COLUMN IF NOT EXISTS {col_name} {col_type}"
+                    ))
+                    added += 1
+                except Exception:
+                    pass  # Column might already exist or type conflict
+            conn.commit()
+            logger.info(f"✅ Loans table column sync complete ({len(columns)} checked)")
+    except Exception as e:
+        logger.warning(f"⚠️ Could not sync loans columns: {e}")
+
+# Run on module load
+_ensure_loans_columns()
+
+
+# ============================================================================
 # ENDPOINTS
 # ============================================================================
 
