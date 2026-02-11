@@ -217,6 +217,7 @@ async def get_leads(
                 "monthly_debts": getattr(lead, 'monthly_debts', None),
                 "loan_number": getattr(lead, 'loan_number', None),
                 "user_metadata": getattr(lead, 'user_metadata', None),
+                "salesforce_id": getattr(lead, 'salesforce_id', None),
                 "created_at": lead.created_at.isoformat() if lead.created_at else None,
                 "updated_at": lead.updated_at.isoformat() if lead.updated_at else None,
             }
