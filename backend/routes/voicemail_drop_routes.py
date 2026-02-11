@@ -2444,8 +2444,13 @@ async def test_voicemail_drop(
             "message": f"Test voicemail initiated to {phone_number}"
         }
 
-    except HTTPException:
-        raise
+    except HTTPException as he:
+        return {
+            "success": False,
+            "error": he.detail,
+            "error_type": "HTTPException",
+            "status_code": he.status_code
+        }
     except Exception as e:
         logger.error(f"Test voicemail drop error: {e}", exc_info=True)
         return {
