@@ -779,6 +779,22 @@ class SalesforceSyncService:
             # Don't fail the sync if task creation fails
             logger.error(f"Error creating SLA tasks for loan {loan_id}: {e}")
 
+        # Auto-promote funded loans to MUM (Mortgages Under Management)
+        try:
+            from services.mum_promotion_service import maybe_promote_loan_to_mum_by_raw_data
+            mum_id = maybe_promote_loan_to_mum_by_raw_data(
+                db=self.db,
+                loan_id=loan_id,
+                user_id=self.user_id or 1,
+                loan_data=new_data,
+                old_data=old_data,
+            )
+            if mum_id:
+                logger.info(f"Salesforce webhook sync auto-promoted loan {loan_id} to MUM client {mum_id}")
+        except Exception as e:
+            # Never fail the sync for MUM promotion errors
+            logger.warning(f"MUM promotion failed for loan {loan_id}: {e}")
+
     def process_webhook(self, payload: Dict[str, Any]) -> SyncResult:
         """
         Process a webhook payload from Salesforce.

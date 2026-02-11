@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 # Import models
 from database.models import (
-    User, Lead, Loan, MUMClient, Activity, Task,
+    User, Lead, Loan, MUMClient, Activity,
 )
 
 # Import enums
@@ -115,146 +115,6 @@ def register_mum_activity_routes(app, get_db, get_current_user, get_current_user
     # FUNDED LOAN -> MUM CLIENT CONVERSION
     # ============================================================================
 
-    def copy_loan_to_mum_client(loan: Loan, db: Session, user_id: int) -> Optional[MUMClient]:
-        """
-        When a loan reaches FUNDED status, copy it to the MUM (Mortgages Under Management)
-        portfolio as a new client. This kicks off the post-close retention process.
-
-        Returns the created MUMClient or None if one already exists.
-        """
-        from datetime import timedelta
-
-        # Use a savepoint so we can rollback just the MUM client creation without affecting the loan update
-        savepoint = db.begin_nested()
-        try:
-            # Check if MUM client already exists for this loan
-            existing = db.query(MUMClient).filter(MUMClient.loan_number == loan.loan_number).first()
-            if existing:
-                logger.info(f"MUM client already exists for loan {loan.loan_number}")
-                savepoint.commit()
-                return existing
-
-            # Calculate days since funding
-            funded_date = loan.funded_date or loan.closing_date or datetime.now(timezone.utc)
-            if not funded_date.tzinfo:
-                funded_date = funded_date.replace(tzinfo=timezone.utc)
-            days_since = (datetime.now(timezone.utc) - funded_date).days
-
-            # Get loan amount with fallback to 0 if not set
-            loan_amount = loan.amount or 0.0
-            loan_rate = loan.rate or 0.0
-
-            # Estimate property value (assume 80% LTV if not available)
-            estimated_property_value = loan.appraisal_value or (loan_amount * 1.25 if loan_amount else 0.0)
-
-            # Create MUM client from loan data
-            mum_client = MUMClient(
-                client_name=loan.borrower_name or "Unknown Borrower",
-                email=loan.borrower_email,
-                phone=loan.borrower_phone,
-                loan_number=loan.loan_number,
-                original_close_date=funded_date,
-                closing_date=funded_date,
-                first_payment_date=funded_date + timedelta(days=45),  # Estimate first payment ~45 days after close
-                days_since_funding=days_since,
-                original_rate=loan_rate,
-                current_rate=loan_rate,
-                interest_rate=loan_rate,
-                original_loan_amount=loan_amount,
-                current_loan_amount=loan_amount,
-                appraisal_value_at_closing=estimated_property_value or 0.0,
-                current_property_value=estimated_property_value or 0.0,
-                loan_balance=loan_amount,
-                refinance_opportunity=False,
-                engagement_score=100,  # Start with high engagement for new funded loans
-                status="Active",
-                notes=f"Auto-created from funded loan on {datetime.now(timezone.utc).strftime('%Y-%m-%d')}. Program: {loan.program or 'N/A'}",
-                # Copy team members
-                loan_officer=loan.loan_officer_name,
-                loan_officer_email=loan.loan_officer_email,
-                processor=loan.processor,
-                processor_email=loan.processor_email,
-                underwriter=loan.underwriter,
-                underwriter_email=loan.underwriter_email,
-                closer=loan.closer,
-                closer_email=loan.closer_email,
-                user_id=user_id
-            )
-
-            db.add(mum_client)
-            db.flush()  # Get the ID without committing
-
-            logger.info(f"Created MUM client {mum_client.id} from funded loan {loan.loan_number} ({loan.borrower_name})")
-
-            # Create post-close welcome task using Task model
-            welcome_task = Task(
-                title=f"Post-Close Welcome Call - {loan.borrower_name or 'Borrower'}",
-                description=f"""Congratulations! {loan.borrower_name or 'Borrower'}'s loan has funded!
-
-    Action items:
-    1. Make welcome call to congratulate and thank them
-    2. Set up annual mortgage review (AMR) reminder
-    3. Request Google/Zillow review
-    4. Ask for referrals
-    5. Add to retention marketing campaigns
-
-    Loan Details:
-    - Loan #: {loan.loan_number}
-    - Program: {loan.program or 'N/A'}
-    - Amount: ${loan_amount:,.2f}
-    - Rate: {loan_rate}%
-    - Close Date: {funded_date.strftime('%Y-%m-%d')}""",
-                priority="high",
-                loan_id=loan.id,
-                owner_id=user_id,
-                related_contact_name=loan.borrower_name,
-                related_type="post_close",
-                due_date=datetime.now(timezone.utc) + timedelta(days=1),  # Due tomorrow
-                status="pending"
-            )
-            db.add(welcome_task)
-
-            # Create AMR reminder task for 11 months from now
-            amr_task = Task(
-                title=f"Annual Mortgage Review Due - {loan.borrower_name or 'Borrower'}",
-                description=f"""Annual Mortgage Review (AMR) is coming up for {loan.borrower_name or 'Borrower'}.
-
-    Review items:
-    1. Check current market rates vs their rate ({loan_rate}%)
-    2. Evaluate refinance opportunities
-    3. Review home value appreciation
-    4. Discuss any life changes affecting mortgage needs
-    5. Explore HELOC/cash-out options if applicable
-
-    Original Loan:
-    - Loan #: {loan.loan_number}
-    - Original Amount: ${loan_amount:,.2f}
-    - Rate: {loan_rate}%""",
-                priority="medium",
-                loan_id=loan.id,
-                owner_id=user_id,
-                related_contact_name=loan.borrower_name,
-                related_type="amr",
-                due_date=datetime.now(timezone.utc) + timedelta(days=335),  # ~11 months
-                status="pending"
-            )
-            db.add(amr_task)
-
-            logger.info(f"Created post-close tasks for MUM client {mum_client.id}")
-
-            # Commit the savepoint
-            savepoint.commit()
-            return mum_client
-
-        except Exception as e:
-            logger.error(f"Error creating MUM client from loan {loan.loan_number}: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-            # Rollback only the savepoint, not the entire transaction (preserves loan status update)
-            savepoint.rollback()
-            return None
-
-
     @app.post("/api/v1/loans/{loan_id}/convert-to-mum")
     async def convert_loan_to_mum_client(
         loan_id: int,
@@ -265,6 +125,8 @@ def register_mum_activity_routes(app, get_db, get_current_user, get_current_user
         Manually convert a funded loan to MUM client.
         Use this for existing funded loans that weren't auto-converted.
         """
+        from services.mum_promotion_service import maybe_promote_loan_to_mum
+
         loan = db.query(Loan).filter(Loan.id == loan_id).first()
         if not loan:
             raise HTTPException(status_code=404, detail="Loan not found")
@@ -275,8 +137,8 @@ def register_mum_activity_routes(app, get_db, get_current_user, get_current_user
             loan.funded_date = datetime.now(timezone.utc)
             logger.info(f"Marking loan {loan.loan_number} as FUNDED")
 
-        mum_client = copy_loan_to_mum_client(loan, db, current_user.id)
-        if not mum_client:
+        mum_client_id = maybe_promote_loan_to_mum(db, loan.id, current_user.id)
+        if not mum_client_id:
             raise HTTPException(status_code=500, detail="Failed to create MUM client")
 
         db.commit()
@@ -285,8 +147,84 @@ def register_mum_activity_routes(app, get_db, get_current_user, get_current_user
             "status": "success",
             "message": f"Loan {loan.loan_number} converted to MUM client",
             "loan_id": loan.id,
-            "mum_client_id": mum_client.id,
+            "mum_client_id": mum_client_id,
             "borrower_name": loan.borrower_name
+        }
+
+
+    # ============================================================================
+    # BATCH MUM PROMOTION (catch-up for existing funded loans)
+    # ============================================================================
+
+    @app.post("/api/v1/mum-clients/batch-promote")
+    async def batch_promote_funded_loans(
+        dry_run: bool = False,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+    ):
+        """
+        Batch-promote all funded loans that don't yet have a MUM client.
+        Use ?dry_run=true to preview without making changes.
+        """
+        from sqlalchemy import text
+        from services.mum_promotion_service import maybe_promote_loan_to_mum
+
+        # Find all funded loans without a matching MUM client
+        eligible = db.execute(text("""
+            SELECT l.id, l.loan_number, l.borrower_name, l.stage,
+                   l.funded_date, l.closing_date
+            FROM loans l
+            LEFT JOIN mum_clients mc ON mc.loan_number = l.loan_number
+            WHERE mc.id IS NULL
+              AND (
+                l.funded_date IS NOT NULL
+                OR l.closing_date IS NOT NULL
+                OR UPPER(l.stage::text) = 'FUNDED'
+              )
+            ORDER BY COALESCE(l.funded_date, l.closing_date) DESC
+        """)).fetchall()
+
+        if dry_run:
+            preview = []
+            for row in eligible:
+                preview.append({
+                    "loan_id": row[0],
+                    "loan_number": row[1],
+                    "borrower_name": row[2],
+                    "stage": row[3],
+                    "funded_date": str(row[4]) if row[4] else None,
+                    "closing_date": str(row[5]) if row[5] else None,
+                })
+            return {
+                "dry_run": True,
+                "eligible_count": len(eligible),
+                "loans": preview,
+            }
+
+        promoted = 0
+        skipped = 0
+        errors = []
+
+        for row in eligible:
+            loan_id = row[0]
+            try:
+                mum_id = maybe_promote_loan_to_mum(db, loan_id, current_user.id)
+                if mum_id:
+                    promoted += 1
+                else:
+                    skipped += 1
+            except Exception as e:
+                errors.append({"loan_id": loan_id, "error": str(e)})
+                logger.error(f"Batch promote error for loan {loan_id}: {e}")
+
+        db.commit()
+
+        return {
+            "dry_run": False,
+            "promoted": promoted,
+            "skipped": skipped,
+            "errors": errors,
+            "total_eligible": len(eligible),
         }
 
 

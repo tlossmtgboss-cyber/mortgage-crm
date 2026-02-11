@@ -889,6 +889,15 @@ class SalesforceSyncService:
                         if updated:
                             result['loans_updated'] += 1
 
+                            # Auto-promote to MUM if loan is now funded
+                            try:
+                                from services.mum_promotion_service import maybe_promote_loan_to_mum
+                                mum_id = maybe_promote_loan_to_mum(db, loan.id, user_id)
+                                if mum_id:
+                                    logger.info(f"Scheduled sync auto-promoted loan {loan.id} to MUM client {mum_id}")
+                            except Exception as mum_err:
+                                logger.warning(f"MUM promotion failed for loan {loan.id}: {mum_err}")
+
                 except Exception as e:
                     logger.error(f"Error syncing loan {loan.id}: {e}")
                     result['errors'].append(f"Loan {loan.id}: {str(e)[:100]}")
@@ -1351,6 +1360,22 @@ class SalesforceSyncService:
                         )
                         if created:
                             result['new_loans_created'] += 1
+
+                            # Auto-promote to MUM if the new loan is already funded/closed
+                            sf_stage = self._map_salesforce_stage(sf_opp.get('StageName', ''))
+                            if sf_stage == 'FUNDED' or sf_opp.get('CloseDate'):
+                                try:
+                                    sf_id_val = sf_opp.get('Id')
+                                    loan_row = db.execute(text(
+                                        "SELECT id FROM loans WHERE salesforce_id = :sf_id AND loan_officer_id = :uid LIMIT 1"
+                                    ), {"sf_id": sf_id_val, "uid": user_id}).fetchone()
+                                    if loan_row:
+                                        from services.mum_promotion_service import maybe_promote_loan_to_mum
+                                        mum_id = maybe_promote_loan_to_mum(db, loan_row[0], user_id)
+                                        if mum_id:
+                                            logger.info(f"Import sync auto-promoted new loan {loan_row[0]} to MUM client {mum_id}")
+                                except Exception as mum_err:
+                                    logger.warning(f"MUM promotion failed for new SF loan {sf_opp.get('Id')}: {mum_err}")
                         else:
                             result['duplicates_skipped'] += 1
                     except Exception as e:
