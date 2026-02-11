@@ -561,10 +561,10 @@ async def send_voicemail_via_vapi(
             "voice": voice_config,
             "endCallFunctionEnabled": True,
             "endCallMessage": "Thank you, goodbye!",
+            "voicemailMessage": full_message,
             "voicemailDetection": {
-                "enabled": True,
-                "machineDetectionTimeout": 3000,
-                "voicemailMessage": full_message
+                "provider": "vapi",
+                "beepMaxAwaitSeconds": 25,
             }
         },
         "metadata": {
@@ -573,9 +573,9 @@ async def send_voicemail_via_vapi(
         }
     }
 
-    # If audio URL is provided, include it for pre-recorded playback
+    # If audio URL is provided, use it as the voicemail message
     if audio_url:
-        vapi_payload["assistantOverrides"]["voicemailDetection"]["voicemailAudioUrl"] = audio_url
+        vapi_payload["assistantOverrides"]["voicemailMessage"] = audio_url
 
     max_retries = 3
     last_error = None
@@ -822,7 +822,7 @@ async def create_voicemail_drop(
         raise
     except Exception as e:
         logger.error(f"Error creating voicemail drop: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/transcribe")
@@ -922,7 +922,7 @@ async def transcribe_voice_message(
         raise
     except Exception as e:
         logger.error(f"Error transcribing voice: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/templates")
@@ -976,7 +976,7 @@ async def get_voicemail_templates(
 
     except Exception as e:
         logger.error(f"Error fetching templates: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/templates")
@@ -1042,7 +1042,7 @@ async def create_voicemail_template(
         raise
     except Exception as e:
         logger.error(f"Error creating template: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/history")
@@ -1093,7 +1093,7 @@ async def get_voicemail_history(
 
     except Exception as e:
         logger.error(f"Error fetching voicemail history: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/analytics")
@@ -1178,7 +1178,7 @@ async def get_voicemail_analytics(
 
     except Exception as e:
         logger.error(f"Error fetching analytics: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -1375,7 +1375,7 @@ async def upload_template_audio(
         raise
     except Exception as e:
         logger.error(f"Error uploading template audio: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/audio/{filename}")
@@ -1509,7 +1509,7 @@ async def preview_voicemail_voice(
         raise
     except Exception as e:
         logger.error(f"Error generating voice preview: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -1577,7 +1577,7 @@ async def update_voicemail_template(
         raise
     except Exception as e:
         logger.error(f"Error updating template: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/templates/{template_id}")
@@ -1674,7 +1674,7 @@ async def create_campaign(
         raise
     except Exception as e:
         logger.error(f"Error creating campaign: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/campaigns")
@@ -1707,7 +1707,7 @@ async def list_campaigns(
 
     except Exception as e:
         logger.error(f"Error listing campaigns: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/campaigns/{campaign_id}")
@@ -1781,7 +1781,7 @@ async def update_campaign(
         raise
     except Exception as e:
         logger.error(f"Error updating campaign: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 async def _resolve_and_dispatch_campaign(campaign_id: int, user_id: int, user_name: str):
@@ -2105,7 +2105,7 @@ async def start_campaign(
         raise
     except Exception as e:
         logger.error(f"Error starting campaign: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/campaigns/{campaign_id}/pause")
@@ -2370,7 +2370,7 @@ async def revoke_consent(
         raise
     except Exception as e:
         logger.error(f"Error processing consent revocation: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
