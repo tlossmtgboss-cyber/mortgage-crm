@@ -41,6 +41,8 @@ def _sign_borrower_state(data: str) -> str:
 
 def _verify_borrower_state(signed_state: str) -> str:
     """Verify HMAC signature on OAuth state. Returns data or raises ValueError."""
+    if len(signed_state) > 4096:
+        raise ValueError("State parameter too large")
     if "|" not in signed_state:
         return signed_state  # Legacy unsigned state — don't break existing flows
     data, sig = signed_state.rsplit("|", 1)

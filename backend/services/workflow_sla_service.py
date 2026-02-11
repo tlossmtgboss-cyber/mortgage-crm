@@ -139,9 +139,8 @@ class WorkflowSLAService:
 
         except IntegrityError as e:
             self.db.rollback()
-            error_detail = str(e.orig) if hasattr(e, 'orig') else str(e)
-            logger.error(f"Enrollment integrity error: {error_detail}")
-            return {"success": False, "error": f"Workflow enrollment conflict: {error_detail}"}
+            logger.error(f"Enrollment integrity error: {e.orig if hasattr(e, 'orig') else e}")
+            return {"success": False, "error": "Workflow enrollment conflict"}
         except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Enrollment failed: {e}")
@@ -222,9 +221,8 @@ class WorkflowSLAService:
 
         except IntegrityError as e:
             self.db.rollback()
-            error_detail = str(e.orig) if hasattr(e, 'orig') else str(e)
-            logger.error(f"Enrollment integrity error: {error_detail}")
-            return {"success": False, "error": f"Workflow enrollment conflict: {error_detail}"}
+            logger.error(f"Enrollment integrity error: {e.orig if hasattr(e, 'orig') else e}")
+            return {"success": False, "error": "Workflow enrollment conflict"}
         except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Enrollment failed: {e}")

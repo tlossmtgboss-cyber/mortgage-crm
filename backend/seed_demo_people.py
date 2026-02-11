@@ -1251,7 +1251,7 @@ def seed_all_demo_data():
         logger.info(f"TOTAL:          {team_count + profile_count + leads_count + loans_count + mum_count}")
         logger.info("")
         logger.info("📝 Demo Credentials:")
-        logger.info("   All demo users: password = 'demo123'")
+        logger.debug("   Demo users use standard demo password")
         logger.info("=" * 80)
 
         return {

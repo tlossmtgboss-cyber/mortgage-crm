@@ -735,10 +735,11 @@ async def register_account(
         promo = None
         promo_discount = None
         if request.promo_code:
+            # Use FOR UPDATE to lock the row and prevent race conditions on max_uses
             promo = db.query(PromoCode).filter(
                 PromoCode.code == request.promo_code.upper(),
                 PromoCode.is_active == True
-            ).first()
+            ).with_for_update().first()
 
             if not promo:
                 raise HTTPException(
@@ -814,9 +815,13 @@ async def register_account(
         if promo and promo.trial_days:
             trial_days += promo.trial_days
 
-        # Find the plan
+        # Find the plan — validate against known plan names
+        valid_plans = {"starter", "professional", "enterprise", "free", "trial"}
+        plan_name = request.plan.lower() if request.plan else "professional"
+        if plan_name not in valid_plans:
+            plan_name = "professional"
         plan = db.query(SubscriptionPlan).filter(
-            SubscriptionPlan.name.ilike(f"%{request.plan}%")
+            SubscriptionPlan.name.ilike(f"%{plan_name}%")
         ).first()
 
         subscription = Subscription(

@@ -1583,12 +1583,7 @@ async def import_closed_loans(
 
     except requests.exceptions.HTTPError as e:
         logger.error(f"Salesforce API error: {e}")
-        error_detail = str(e)
-        try:
-            error_detail = e.response.json()
-        except Exception:
-            pass
-        raise HTTPException(status_code=502, detail=f"Salesforce API error: {error_detail}")
+        raise HTTPException(status_code=502, detail="Salesforce API error")
     except Exception as e:
         logger.error(f"Import failed: {e}")
         db.rollback()
@@ -2175,14 +2170,9 @@ async def admin_pull_recent_loans(
 
     except requests.exceptions.HTTPError as e:
         logger.error(f"Salesforce API error: {e}")
-        error_detail = str(e)
-        try:
-            error_detail = e.response.json()
-        except Exception:
-            pass
         return {
             "status": "error",
-            "message": f"Salesforce API error: {error_detail}"
+            "message": "Salesforce API error"
         }
     except Exception as e:
         logger.error(f"Pull failed: {e}")

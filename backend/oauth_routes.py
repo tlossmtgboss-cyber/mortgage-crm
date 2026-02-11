@@ -35,6 +35,8 @@ def _sign_oauth_state(data: str) -> str:
 
 def _verify_oauth_state(signed_state: str) -> str:
     """Verify HMAC signature on OAuth state. Returns data portion or raises."""
+    if len(signed_state) > 4096:
+        raise ValueError("State parameter too large")
     if "|" not in signed_state:
         raise ValueError("Invalid state format")
     data, sig = signed_state.rsplit("|", 1)
