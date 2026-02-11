@@ -94,7 +94,7 @@ class AgenticAI:
             logger.error(f"Error in agentic AI execution: {e}")
             return {
                 "status": "error",
-                "message": str(e)
+                "message": "Internal server error"
             }
 
     async def _analyze_situation(

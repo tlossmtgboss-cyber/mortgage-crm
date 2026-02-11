@@ -713,7 +713,7 @@ async def mobile_voice_websocket(
         try:
             await websocket.send_json({
                 "type": "error",
-                "message": str(e)
+                "message": "Internal server error"
             })
         except Exception:
             pass  # Client may have disconnected

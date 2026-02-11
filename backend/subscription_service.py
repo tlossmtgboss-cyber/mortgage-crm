@@ -136,7 +136,7 @@ class SubscriptionService:
 
         except Exception as e:
             logger.error(f"Error checking feature access: {e}")
-            return {"allowed": False, "reason": "error", "message": str(e)}
+            return {"allowed": False, "reason": "error", "message": "Internal server error"}
 
     @staticmethod
     def get_current_usage(db: Session, organization_id: int, feature_key: str) -> int:

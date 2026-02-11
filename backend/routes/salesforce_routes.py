@@ -2189,7 +2189,7 @@ async def admin_pull_recent_loans(
         db.rollback()
         return {
             "status": "error",
-            "message": str(e)
+            "message": "Internal server error"
         }
 
 

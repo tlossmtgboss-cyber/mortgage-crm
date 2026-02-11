@@ -136,7 +136,7 @@ def queue_pending_jobs(self, limit: int = 10):
 
     except Exception as e:
         logger.exception("Error queuing pending jobs")
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "Internal server error"}
 
     finally:
         if db:
@@ -199,7 +199,7 @@ def retry_failed_jobs(self, hours: int = 24, limit: int = 20):
 
     except Exception as e:
         logger.exception("Error retrying failed jobs")
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "Internal server error"}
 
     finally:
         if db:
@@ -261,7 +261,7 @@ def cleanup_old_artifacts(self, days: int = 30):
 
     except Exception as e:
         logger.exception("Error cleaning up artifacts")
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "Internal server error"}
 
     finally:
         if db:

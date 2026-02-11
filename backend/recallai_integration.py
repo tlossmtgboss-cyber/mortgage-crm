@@ -286,7 +286,7 @@ async def webhook_handler(request: Request, db: Session = Depends(get_db)):
         raise
     except Exception as e:
         logger.error(f"Webhook error: {e}")
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "Internal server error"}
 
 
 @router.get("/bots")

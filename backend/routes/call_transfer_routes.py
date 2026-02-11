@@ -1121,7 +1121,7 @@ async def consultation_status_webhook(
 
     except SQLAlchemyError as e:
         logger.error(f"Error in consultation status webhook: {e}")
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "Internal server error"}
 
 
 # ============================================================================

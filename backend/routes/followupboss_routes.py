@@ -677,5 +677,5 @@ async def verify_connection(
         logger.error(f"FUB verification failed: {e}")
         return {
             "status": "error",
-            "message": str(e),
+            "message": "Internal server error",
         }

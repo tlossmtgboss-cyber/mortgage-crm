@@ -76,7 +76,7 @@ class DeepgramVoiceAgentSession:
 
         except Exception as e:
             logger.error(f"[VoiceAgent] Failed to start session: {e}")
-            await self._send_to_client("error", {"message": str(e)})
+            await self._send_to_client("error", {"message": "Internal server error"})
             raise
 
     async def _connect_deepgram(self):
@@ -334,7 +334,7 @@ async def voice_agent_websocket(
         try:
             await websocket.send_json({
                 "type": "error",
-                "message": str(e)
+                "message": "Internal server error"
             })
         except Exception:
             pass  # Client may have disconnected

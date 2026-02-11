@@ -2927,7 +2927,7 @@ async def seed_salesforce_sla_workflows(
         import traceback
         raise HTTPException(
             status_code=500,
-            detail=f"Migration failed: {str(e)}"
+            detail="Migration failed: check server logs"
         )
 
 

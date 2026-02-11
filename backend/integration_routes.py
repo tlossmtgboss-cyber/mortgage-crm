@@ -394,7 +394,7 @@ async def sms_webhook(
 
     except Exception as e:
         logger.error(f"Error processing SMS webhook: {e}")
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "Internal server error"}
 
 
 # ============================================================================
@@ -521,7 +521,7 @@ async def email_webhook(
 
     except Exception as e:
         logger.error(f"Error processing email webhook: {e}")
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "Internal server error"}
 
 
 # ============================================================================

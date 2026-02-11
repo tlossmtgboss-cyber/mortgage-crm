@@ -728,7 +728,7 @@ async def vapi_voicemail_status_webhook(
 
     except Exception as e:
         logger.error(f"Error in Vapi voicemail webhook: {e}", exc_info=True)
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "Internal server error"}
 
 
 @webhook_router.post("/twilio/sms")

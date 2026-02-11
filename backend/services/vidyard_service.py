@@ -163,7 +163,7 @@ class VidyardService:
                 return {"status": "error", "message": f"HTTP {response.status_code}"}
         except Exception as e:
             logger.exception("Vidyard health check failed")
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Internal server error"}
 
     # =========================================================================
     # Avatar Management

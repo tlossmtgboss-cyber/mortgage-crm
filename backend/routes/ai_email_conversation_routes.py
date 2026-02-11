@@ -437,7 +437,7 @@ async def inbound_email_webhook(
 
     except Exception as e:
         logger.error(f"Error processing inbound email: {e}")
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "Internal server error"}
 
 
 @router.get("/debug/history")

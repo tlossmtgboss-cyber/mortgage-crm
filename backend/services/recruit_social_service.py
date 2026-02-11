@@ -696,7 +696,7 @@ class RecruitSocialService:
             return {
                 "linkedin_url": linkedin_url,
                 "status": "error",
-                "message": str(e)
+                "message": "Internal server error"
             }
 
     async def enrich_candidate_from_facebook(
@@ -806,7 +806,7 @@ class RecruitSocialService:
                     return {"status": "error", "message": f"HTTP {response.status_code}"}
         except Exception as e:
             logger.error(f"LinkedIn analytics error: {e}")
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Internal server error"}
 
     async def get_instagram_post_analytics(self, media_id: str) -> Dict[str, Any]:
         """Get analytics for an Instagram post via Graph API."""
@@ -858,7 +858,7 @@ class RecruitSocialService:
                     return {"status": "error", "message": f"HTTP {response.status_code}"}
         except Exception as e:
             logger.error(f"Instagram analytics error: {e}")
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Internal server error"}
 
     async def get_recruiting_post_analytics(
         self,

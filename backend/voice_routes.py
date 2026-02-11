@@ -696,7 +696,7 @@ async def browser_voice_websocket(websocket: WebSocket):
     except Exception as e:
         logger.error(f"Browser voice error: {e}")
         try:
-            await websocket.send_json({"type": "error", "message": str(e)})
+            await websocket.send_json({"type": "error", "message": "Internal server error"})
         except Exception:
             pass  # Client may have disconnected
     finally:
@@ -1482,7 +1482,7 @@ async def handle_call_status(request: Request, db: Session = Depends(get_db)):
 
     except Exception as e:
         logger.error(f"Error handling call status: {e}")
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "Internal server error"}
 
 
 @router.post("/recording-ready")
@@ -1707,7 +1707,7 @@ async def handle_transcript_complete(request: Request, db: Session = Depends(get
 
     except Exception as e:
         logger.error(f"Error handling transcript webhook: {e}")
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "Internal server error"}
 
 
 def parse_operator_results(operator_results: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -2857,7 +2857,7 @@ async def setup_intelligence_service(request: Request):
 
     except Exception as e:
         logger.error(f"Error setting up Intelligence Service: {e}")
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "Internal server error"}
 
 
 @router.get("/intelligence/status")
@@ -2885,7 +2885,7 @@ async def get_intelligence_status():
 
     except Exception as e:
         logger.error(f"Error getting Intelligence status: {e}")
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "Internal server error"}
 
 
 @router.get("/intelligence/operators")
@@ -2918,7 +2918,7 @@ async def list_available_operators():
 
     except Exception as e:
         logger.error(f"Error listing operators: {e}")
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "Internal server error"}
 
 
 @router.post("/intelligence/attach-operators")
@@ -2965,7 +2965,7 @@ async def attach_operators(request: Request):
 
     except Exception as e:
         logger.error(f"Error attaching operators: {e}")
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "Internal server error"}
 
 
 # ============================================================================

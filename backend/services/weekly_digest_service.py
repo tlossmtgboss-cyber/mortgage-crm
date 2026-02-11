@@ -220,7 +220,7 @@ class WeeklyDigestService:
         except Exception as e:
             return {
                 "status": "error",
-                "message": str(e),
+                "message": "Internal server error",
                 "digest": digest
             }
 
