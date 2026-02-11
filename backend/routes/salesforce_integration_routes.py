@@ -1120,7 +1120,7 @@ async def connect_salesforce(
                 logger.error(f"Retry failed: {type(retry_err).__name__}: {retry_err}")
                 raise HTTPException(
                     status_code=500,
-                    detail=f"Failed to initialize Salesforce OAuth: {type(e).__name__}: {str(e)}"
+                    detail="Failed to initialize Salesforce OAuth: {type(e).__name__}"
                 )
     except HTTPException:
         raise  # Re-raise HTTP exceptions as-is
@@ -1368,7 +1368,7 @@ async def discover_schema(
     except ValueError as e:
         # Token/auth issues - user needs to reconnect
         logger.error(f"Schema discovery auth error: {e}")
-        raise HTTPException(status_code=401, detail=str(e))
+        raise HTTPException(status_code=401, detail="Authentication failed — please reconnect")
     except Exception as e:
         try:
             db.rollback()
@@ -1377,7 +1377,7 @@ async def discover_schema(
         logger.error(f"Schema discovery failed: {e}")
         import traceback
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/schema/objects")
@@ -1399,14 +1399,14 @@ async def get_schema_objects(
         raise
     except Exception as e:
         logger.error(f"Schema objects: Error getting user: {e}")
-        raise HTTPException(status_code=500, detail=f"Authentication error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Authentication error")
 
     try:
         profile = get_integration_profile(db, user_id)
         logger.info(f"Schema objects: profile for user {user_id}: {profile.id if profile else 'None'}")
     except Exception as e:
         logger.error(f"Schema objects: Error getting profile: {e}")
-        raise HTTPException(status_code=500, detail=f"Error getting profile: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error getting profile")
 
     if not profile:
         logger.warning(f"Schema objects: No profile found for user {user_id}")
@@ -1421,7 +1421,7 @@ async def get_schema_objects(
         if "does not exist" in str(e).lower() or "relation" in str(e).lower():
             logger.warning(f"Schema table may not exist, returning empty: {e}")
             return {"objects": [], "needs_discovery": True}
-        raise HTTPException(status_code=500, detail=f"Error loading schemas: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error loading schemas")
 
     return {
         "objects": [
@@ -1560,7 +1560,7 @@ async def create_mapping(
             "validation_status": created.validation_status
         }
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
 
 
 @router.post("/mappings/bulk")
@@ -1637,7 +1637,7 @@ async def create_mappings_bulk(
         logger.error(f"Failed to create mappings: {e}")
         logger.error(f"Traceback: {traceback.format_exc()}")
         db.rollback()
-        raise HTTPException(status_code=400, detail=f"Error creating mappings: {str(e)}")
+        raise HTTPException(status_code=400, detail="Error creating mappings")
 
 
 @router.put("/mappings/{mapping_id}")
@@ -1671,7 +1671,7 @@ async def update_mapping(
             "validation_status": updated.validation_status
         }
     except SQLAlchemyError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
 
 
 @router.delete("/mappings/{mapping_id}")
@@ -1752,7 +1752,7 @@ async def activate_integration(
         field_mapping.activate_integration(db, profile.id)
         return {"status": "success", "message": "Integration activated"}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
 
 
 # ============ Sync Endpoints ============
@@ -1802,7 +1802,7 @@ async def trigger_sync(
         )
         return result.to_dict()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/sync/history")
@@ -1975,7 +1975,7 @@ async def sync_salesforce_emails(
         }
     except Exception as e:
         logger.error(f"Email sync failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Email sync failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Email sync failed")
 
 
 @router.get("/email-sync-status")
@@ -2076,7 +2076,7 @@ async def sync_salesforce_calendar(
         }
     except Exception as e:
         logger.error(f"Calendar sync failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Calendar sync failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Calendar sync failed")
 
 
 @router.get("/calendar-sync-status")
@@ -2185,7 +2185,7 @@ async def trigger_full_salesforce_sync(
         }
     except Exception as e:
         logger.error(f"Full sync failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Sync failed")
 
 
 @router.post("/push-emails")
@@ -2222,7 +2222,7 @@ async def push_emails_to_salesforce_endpoint(
         }
     except Exception as e:
         logger.error(f"Email push failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Email push failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Email push failed")
 
 
 @router.get("/sync-health")
@@ -2245,7 +2245,7 @@ async def get_salesforce_sync_health(
         return health
     except Exception as e:
         logger.error(f"Health check failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Health check failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Health check failed")
 
 
 # ============ Outbound Sync Endpoints (Push TO Salesforce) ============
@@ -2303,7 +2303,7 @@ async def push_all_to_salesforce(
         }
     except Exception as e:
         logger.error(f"Outbound sync failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Outbound sync failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Outbound sync failed")
 
 
 @router.post("/push-loan/{loan_id}")
@@ -2340,10 +2340,10 @@ async def push_single_loan_to_salesforce(
         else:
             raise HTTPException(status_code=500, detail=result.get('error', 'Push failed'))
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail="Not found")
     except Exception as e:
         logger.error(f"Failed to push loan {loan_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/push-lead/{lead_id}")
@@ -2380,10 +2380,10 @@ async def push_single_lead_to_salesforce(
         else:
             raise HTTPException(status_code=500, detail=result.get('error', 'Push failed'))
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail="Not found")
     except Exception as e:
         logger.error(f"Failed to push lead {lead_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/push-calendar-event/{event_id}")
@@ -2420,10 +2420,10 @@ async def push_calendar_event_to_salesforce(
         else:
             raise HTTPException(status_code=500, detail=result.get('error', 'Push failed'))
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail="Not found")
     except Exception as e:
         logger.error(f"Failed to push calendar event {event_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============ Auto-Mapping and Sync Endpoints ============
@@ -2601,7 +2601,7 @@ async def sync_from_salesforce(
         logger.error(f"Sync from Salesforce failed: {e}")
         import traceback
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/sync-funded-to-mum")
@@ -2696,7 +2696,7 @@ async def sync_funded_loans_to_mum_clients(
         logger.error(f"Failed to sync funded loans to MUM: {e}")
         import traceback
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/full-sync-pipeline")
@@ -3416,244 +3416,4 @@ async def repair_fix_organization_id(
         },
         "organization_id": org_id,
         "message": f"Fixed org_id on {leads_org_fixed} leads + {loans_org_fixed} loans, fixed stage on {leads_stage_fixed + leads_null_stage_fixed} leads",
-    }
-
-
-@router.get("/diag/lead-visibility")
-async def diag_lead_visibility(
-    email: str = Query(..., description="User email to diagnose"),
-    db: Session = Depends(get_db),
-    _auth: bool = Depends(_require_admin_key),
-):
-    """
-    Diagnostic: check what leads/loans a user can see. Requires ADMIN_API_KEY.
-    """
-    user = db.execute(text("""
-        SELECT id, email, organization_id, permission_role
-        FROM users WHERE email = :email
-    """), {"email": email}).fetchone()
-
-    if not user:
-        return {"error": f"User {email} not found"}
-
-    uid = user.id
-    org_id = user.organization_id
-
-    # Check leads owned by this user
-    leads_data = db.execute(text("""
-        SELECT stage, organization_id, COUNT(*) as cnt
-        FROM leads
-        WHERE owner_id = :uid
-        GROUP BY stage, organization_id
-        ORDER BY cnt DESC
-    """), {"uid": uid}).fetchall()
-
-    # Check leads visible to this user (matching org_id)
-    visible_leads = db.execute(text("""
-        SELECT stage, COUNT(*) as cnt
-        FROM leads
-        WHERE organization_id = :org_id AND owner_id = :uid
-        GROUP BY stage
-        ORDER BY cnt DESC
-    """), {"org_id": org_id, "uid": uid}).fetchall()
-
-    # Total count the main API would return
-    total_api_leads = db.execute(text("""
-        SELECT COUNT(*) FROM leads
-        WHERE organization_id = :org_id AND owner_id = :uid
-    """), {"org_id": org_id, "uid": uid}).scalar() or 0
-
-    # Check loans
-    loans_data = db.execute(text("""
-        SELECT stage, organization_id, COUNT(*) as cnt
-        FROM loans
-        WHERE loan_officer_id = :uid
-        GROUP BY stage, organization_id
-        ORDER BY cnt DESC
-    """), {"uid": uid}).fetchall()
-
-    visible_loans = db.execute(text("""
-        SELECT stage, COUNT(*) as cnt
-        FROM loans
-        WHERE organization_id = :org_id AND loan_officer_id = :uid
-        GROUP BY stage
-        ORDER BY cnt DESC
-    """), {"org_id": org_id, "uid": uid}).fetchall()
-
-    total_api_loans = db.execute(text("""
-        SELECT COUNT(*) FROM loans
-        WHERE organization_id = :org_id AND loan_officer_id = :uid
-    """), {"org_id": org_id, "uid": uid}).scalar() or 0
-
-    # Sample first 5 leads
-    sample_leads = db.execute(text("""
-        SELECT id, name, email, stage, organization_id, salesforce_id, created_at
-        FROM leads
-        WHERE owner_id = :uid
-        ORDER BY created_at DESC LIMIT 5
-    """), {"uid": uid}).fetchall()
-
-    # CRITICAL: With leads.view_all, user sees ALL leads in org, not just their own
-    # Check all leads in org for bad stages that could break SQLAlchemy ORM
-    all_org_leads = db.execute(text("""
-        SELECT stage::text as stage, COUNT(*) as cnt
-        FROM leads
-        WHERE organization_id = :org_id
-        GROUP BY stage::text
-        ORDER BY cnt DESC
-    """), {"org_id": org_id}).fetchall()
-
-    total_org_leads = db.execute(text("""
-        SELECT COUNT(*) FROM leads WHERE organization_id = :org_id
-    """), {"org_id": org_id}).scalar() or 0
-
-    all_org_loans = db.execute(text("""
-        SELECT stage::text as stage, COUNT(*) as cnt
-        FROM loans
-        WHERE organization_id = :org_id
-        GROUP BY stage::text
-        ORDER BY cnt DESC
-    """), {"org_id": org_id}).fetchall()
-
-    total_org_loans = db.execute(text("""
-        SELECT COUNT(*) FROM loans WHERE organization_id = :org_id
-    """), {"org_id": org_id}).scalar() or 0
-
-    # Try to simulate what the ORM query does
-    orm_test_error = None
-    try:
-        from database.models.lead_loan import Lead
-        test_q = db.query(Lead).filter(Lead.organization_id == org_id).limit(5).all()
-        orm_test = f"ORM query OK, returned {len(test_q)} leads"
-    except Exception as e:
-        orm_test = f"ORM QUERY FAILED"
-        orm_test_error = str(e)[:300]
-
-    return {
-        "user": {"id": uid, "email": user.email, "org_id": org_id, "permission_role": user.permission_role},
-        "leads_owned_by_user": {
-            "all_owned": [{"stage": r.stage, "org_id": r.organization_id, "count": r.cnt} for r in leads_data],
-            "visible_in_api": [{"stage": r.stage, "count": r.cnt} for r in visible_leads],
-            "total": total_api_leads,
-        },
-        "all_leads_in_org": {
-            "by_stage": [{"stage": r.stage, "count": r.cnt} for r in all_org_leads],
-            "total": total_org_leads,
-        },
-        "all_loans_in_org": {
-            "by_stage": [{"stage": r.stage, "count": r.cnt} for r in all_org_loans],
-            "total": total_org_loans,
-        },
-        "orm_test": orm_test,
-        "orm_test_error": orm_test_error,
-        "sample_leads": [
-            {"id": r.id, "name": r.name, "email": r.email, "stage": r.stage, "org_id": r.organization_id, "sf_id": r.salesforce_id}
-            for r in sample_leads
-        ],
-        "note": "TEMPORARY DIAGNOSTIC - delete after debugging",
-    }
-
-
-@router.get("/diag/fix-stages")
-async def diag_fix_stages(
-    email: str = Query(..., description="User email to fix stages for"),
-    db: Session = Depends(get_db),
-    _auth: bool = Depends(_require_admin_key),
-):
-    """
-    Diagnostic repair: fix stage case mismatches. Requires ADMIN_API_KEY.
-    """
-    user = db.execute(text("""
-        SELECT id, organization_id FROM users WHERE email = :email
-    """), {"email": email}).fetchone()
-
-    if not user:
-        return {"error": f"User {email} not found"}
-
-    uid = user.id
-    org_id = user.organization_id
-
-    # Fix lead stages: normalize case to match LeadStage enum values
-    # LeadStage.NEW = "New", not "NEW" or "new"
-    stage_fixes = {
-        'new': 'New',
-        'attempted contact': 'Attempted Contact',
-        'prospect': 'Prospect',
-        'application': 'Application',
-        'pre-qualified': 'Pre-Qualified',
-        'pre-approved': 'Pre-Approved',
-        'nurture': 'Nurture',
-        'withdrawn': 'Withdrawn',
-        'does not qualify': 'Does Not Qualify',
-    }
-
-    total_fixed = 0
-    fix_details = {}
-    errors = []
-
-    # First, check current stage distribution
-    try:
-        bad_values = db.execute(text("""
-            SELECT stage, COUNT(*) as cnt FROM leads
-            WHERE owner_id = :uid
-            GROUP BY stage
-        """), {"uid": uid}).fetchall()
-        current_stages = {str(r.stage): r.cnt for r in bad_values}
-    except Exception as e:
-        current_stages = {"error": str(e)}
-
-    # PostgreSQL enum columns reject comparisons with invalid values.
-    # Use a text cast on the column to safely compare and update.
-    # The UPDATE SET also needs valid enum values.
-    try:
-        # Fix 'NEW' -> 'New' using raw SQL that casts enum to text for WHERE
-        count = db.execute(text("""
-            UPDATE leads
-            SET stage = 'New', updated_at = CURRENT_TIMESTAMP
-            WHERE owner_id = :uid AND stage::text = 'NEW'
-        """), {"uid": uid}).rowcount
-        if count > 0:
-            fix_details["'NEW' -> 'New'"] = count
-            total_fixed += count
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        errors.append(f"Fix NEW: {str(e)[:150]}")
-
-    # Fix NULL stages
-    try:
-        null_fixed = db.execute(text("""
-            UPDATE leads SET stage = 'New', updated_at = CURRENT_TIMESTAMP
-            WHERE owner_id = :uid AND stage IS NULL
-        """), {"uid": uid}).rowcount
-        if null_fixed > 0:
-            fix_details["NULL -> 'New'"] = null_fixed
-            total_fixed += null_fixed
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        errors.append(f"Fix NULL: {str(e)[:150]}")
-
-    # Fix org_id
-    org_fixed = 0
-    if org_id:
-        try:
-            org_fixed = db.execute(text("""
-                UPDATE leads SET organization_id = :org_id, updated_at = CURRENT_TIMESTAMP
-                WHERE owner_id = :uid AND organization_id IS NULL
-            """), {"org_id": org_id, "uid": uid}).rowcount
-            db.commit()
-        except Exception as e:
-            db.rollback()
-            errors.append(f"Fix org_id: {str(e)[:150]}")
-
-    return {
-        "status": "success" if not errors else "partial",
-        "user_id": uid,
-        "stages_before_fix": current_stages,
-        "total_stage_fixes": total_fixed,
-        "fix_details": fix_details,
-        "org_id_fixes": org_fixed,
-        "errors": errors,
-        "note": "TEMPORARY - delete after debugging",
     }
