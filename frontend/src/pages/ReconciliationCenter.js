@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL, emailDraftsAPI } from '../services/api';
 import { useLayoutFix } from '../hooks/useLayoutFix';
+import { sanitizeHTML } from '../utils/sanitize';
 import './ReconciliationCenter.css';
 
 function ReconciliationCenter() {
@@ -3515,7 +3516,7 @@ function ReconciliationCenter() {
                     fontSize: '14px'
                   }}>
                     {selectedDraft.body_html ? (
-                      <div dangerouslySetInnerHTML={{ __html: selectedDraft.body_html }} />
+                      <div dangerouslySetInnerHTML={{ __html: sanitizeHTML(selectedDraft.body_html, { allowedTags: ['p', 'br', 'b', 'i', 'strong', 'em', 'a', 'div', 'span', 'table', 'tr', 'td', 'th', 'tbody', 'thead', 'hr', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'blockquote'] }) }} />
                     ) : (
                       selectedDraft.body_text || '(No content)'
                     )}

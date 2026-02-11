@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { getAuthHeaders } from '../utils/auth';
 import { useAsyncOperation, useFormSubmit, APIError } from '../utils/errorHandling';
 import { toast } from '../utils/toast';
+import { sanitizeHTML } from '../utils/sanitize';
 import './EmailIntegrationSettings.css';
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -684,7 +685,7 @@ const EmailIntegrationSettings = () => {
               {signaturePreview && (
                 <div className="signature-preview">
                   <h4>Preview</h4>
-                  <div dangerouslySetInnerHTML={{ __html: signaturePreview.preview_html }} />
+                  <div dangerouslySetInnerHTML={{ __html: sanitizeHTML(signaturePreview.preview_html, { allowedTags: ['p', 'br', 'b', 'i', 'strong', 'em', 'a', 'img', 'div', 'span', 'table', 'tr', 'td', 'th', 'tbody', 'thead', 'hr', 'font', 'ul', 'ol', 'li'] }) }} />
                 </div>
               )}
             </div>

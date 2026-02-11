@@ -11,6 +11,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { sanitizeHTML } from '../../../utils/sanitize';
 
 const SOURCE_CONFIG = {
   scribe: {
@@ -354,8 +355,11 @@ const StackedNotes = ({ clientId, notes, loading, onRefresh }) => {
                           whiteSpace: 'pre-wrap',
                         }}
                         dangerouslySetInnerHTML={{
-                          __html: note.content?.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                            .replace(/\n/g, '<br/>') || ''
+                          __html: sanitizeHTML(
+                            note.content?.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                              .replace(/\n/g, '<br/>') || '',
+                            { allowedTags: ['strong', 'br', 'em', 'b', 'i'] }
+                          )
                         }}
                       />
 

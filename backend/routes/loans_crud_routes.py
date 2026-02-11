@@ -305,14 +305,10 @@ async def create_loan(
     except Exception as e:
         logger.error(f"Error creating loan: {e}", exc_info=True)
         db.rollback()
-        # Return JSONResponse directly to bypass production error sanitizer
-        # so the frontend shows the actual error instead of "Internal server error"
-        error_msg = str(e)
-        tb = traceback.format_exc()
-        logger.error(f"Loan creation traceback: {tb}")
+        logger.error(f"Loan creation traceback: {traceback.format_exc()}")
         return JSONResponse(
             status_code=422,
-            content={"detail": f"Failed to create loan: {error_msg}"}
+            content={"detail": "Failed to create loan. Please check required fields and try again."}
         )
 
 

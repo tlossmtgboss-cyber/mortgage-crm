@@ -1126,7 +1126,7 @@ async def connect_salesforce(
         logger.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=500,
-            detail=f"Salesforce connect error: {type(outer_err).__name__}: {str(outer_err)}"
+            detail="Salesforce connection failed. Please try again."
         )
 
 
