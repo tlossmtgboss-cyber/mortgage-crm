@@ -585,32 +585,31 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
                 ("incoming_data_events", "lead_id"),
             ]
 
-            # Build a single SQL statement that deletes from all existing tables
-            delete_sqls = []
+            # Delete from all related tables using parameterized queries
+            # Table/column names are from the hardcoded whitelist above, not user input
             for table, column in tables_to_clean:
                 if table in existing_tables:
-                    delete_sqls.append(f"DELETE FROM {table} WHERE {column} = {lead_id}")
+                    try:
+                        db.execute(
+                            text(f"DELETE FROM {table} WHERE {column} = :lead_id"),
+                            {"lead_id": lead_id}
+                        )
+                    except Exception as e:
+                        logger.debug(f"Delete from {table} skipped: {e}")
 
             # Nullify loan references if loans table exists
             if "loans" in existing_tables:
-                delete_sqls.append(f"UPDATE loans SET lead_id = NULL WHERE lead_id = {lead_id}")
+                db.execute(
+                    text("UPDATE loans SET lead_id = NULL WHERE lead_id = :lead_id"),
+                    {"lead_id": lead_id}
+                )
 
-            # Add the final lead delete
-            delete_sqls.append(f"DELETE FROM leads WHERE id = {lead_id}")
-
-            # Execute all as a single raw SQL transaction
-            raw_conn = db.bind.raw_connection()
-            try:
-                cursor = raw_conn.cursor()
-                for sql in delete_sqls:
-                    try:
-                        cursor.execute(sql)
-                    except Exception as e:
-                        logger.debug(f"Delete statement skipped: {sql[:50]}... - {e}")
-                        # Continue with next statement
-                raw_conn.commit()
-            finally:
-                raw_conn.close()
+            # Delete the lead itself
+            db.execute(
+                text("DELETE FROM leads WHERE id = :lead_id"),
+                {"lead_id": lead_id}
+            )
+            db.commit()
 
             logger.info(f"Lead deleted: {lead_name}")
             return None

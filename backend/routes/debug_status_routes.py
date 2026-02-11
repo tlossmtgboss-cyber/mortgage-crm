@@ -10,8 +10,17 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from datetime import datetime
 import logging
+import re
 
 logger = logging.getLogger(__name__)
+
+_SAFE_IDENTIFIER_RE = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*$')
+
+def _safe_identifier(name: str) -> str:
+    """Validate and quote a SQL identifier to prevent injection."""
+    if not _SAFE_IDENTIFIER_RE.match(name) or len(name) > 128:
+        raise ValueError(f"Invalid SQL identifier: {name!r}")
+    return f'"{name}"'
 
 
 def register_debug_status_routes(app, get_db, get_current_user, route_errors=None, **kwargs):
@@ -99,7 +108,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
                 continue
             try:
                 count = db.execute(
-                    text(f"SELECT COUNT(*) FROM {table_name} WHERE {column_name} = :uid"),
+                    text(f"SELECT COUNT(*) FROM {_safe_identifier(table_name)} WHERE {_safe_identifier(column_name)} = :uid"),
                     {"uid": user_id}
                 ).scalar()
                 if count > 0:

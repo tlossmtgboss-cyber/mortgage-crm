@@ -24,6 +24,15 @@ from database import SessionLocal
 logger = logging.getLogger(__name__)
 _ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 
+import re
+_SAFE_IDENTIFIER_RE = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*$')
+
+def _safe_identifier(name: str) -> str:
+    """Validate and quote a SQL identifier (table/column name) to prevent injection."""
+    if not _SAFE_IDENTIFIER_RE.match(name) or len(name) > 128:
+        raise ValueError(f"Invalid SQL identifier: {name!r}")
+    return f'"{name}"'
+
 
 def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_flexible, **kwargs):
     """Register admin operations routes.
@@ -1928,8 +1937,10 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                 result = db.execute(text(fk_query))
                 for table_name, column_name in result.fetchall():
                     try:
+                        safe_table = _safe_identifier(table_name)
+                        safe_col = _safe_identifier(column_name)
                         count = db.execute(
-                            text(f"SELECT COUNT(*) FROM {table_name} WHERE {column_name} = :user_id"),
+                            text(f"SELECT COUNT(*) FROM {safe_table} WHERE {safe_col} = :user_id"),
                             params
                         ).scalar()
                         if count and count > 0:
@@ -1961,7 +1972,9 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
 
             for child_table, child_col, parent_subquery in cascade_order:
                 try:
-                    db.execute(text(f"DELETE FROM {child_table} WHERE {child_col} IN ({parent_subquery})"), params)
+                    safe_ct = _safe_identifier(child_table)
+                    safe_cc = _safe_identifier(child_col)
+                    db.execute(text(f"DELETE FROM {safe_ct} WHERE {safe_cc} IN ({parent_subquery})"), params)
                 except Exception:
                     pass  # Table may not exist or no matching data
 
@@ -1971,13 +1984,15 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             cleaned = 0
             for table_name, column_name, count in tables_with_data:
                 try:
+                    safe_tbl = _safe_identifier(table_name)
+                    safe_col = _safe_identifier(column_name)
                     # Try UPDATE to NULL first (for nullable columns)
-                    db.execute(text(f"UPDATE {table_name} SET {column_name} = NULL WHERE {column_name} = :user_id"), params)
+                    db.execute(text(f"UPDATE {safe_tbl} SET {safe_col} = NULL WHERE {safe_col} = :user_id"), params)
                     cleaned += 1
                 except Exception as update_e:
                     # If UPDATE fails (NOT NULL constraint), try DELETE
                     try:
-                        db.execute(text(f"DELETE FROM {table_name} WHERE {column_name} = :user_id"), params)
+                        db.execute(text(f"DELETE FROM {safe_tbl} WHERE {safe_col} = :user_id"), params)
                         cleaned += 1
                     except Exception as del_e:
                         logger.warning(f"Could not clean {table_name}.{column_name}: {del_e}")
@@ -2089,7 +2104,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
 
                     for table_name, column_name in cleanup_tables:
                         try:
-                            db.execute(text(f"DELETE FROM {table_name} WHERE {column_name} = :user_id"), params)
+                            db.execute(text(f"DELETE FROM {_safe_identifier(table_name)} WHERE {_safe_identifier(column_name)} = :user_id"), params)
                         except Exception:
                             pass  # Table may not exist or no matching data
 
@@ -2526,7 +2541,9 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                     if 'amount' not in mapped_values:
                         mapped_values['amount'] = 0
 
-                    columns = ', '.join(mapped_values.keys())
+                    # Validate column names to prevent injection via field mappings
+                    safe_cols = [_safe_identifier(k) for k in mapped_values.keys()]
+                    columns = ', '.join(safe_cols)
                     placeholders = ', '.join([f':{k}' for k in mapped_values.keys()])
 
                     db.execute(
