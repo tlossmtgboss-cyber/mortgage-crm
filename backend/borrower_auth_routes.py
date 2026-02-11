@@ -28,6 +28,27 @@ from pydantic import BaseModel, EmailStr
 
 from database import get_db
 from email_service import email_service
+import hmac
+import hashlib
+
+
+def _sign_borrower_state(data: str) -> str:
+    """Create HMAC-signed OAuth state to prevent CSRF/tampering."""
+    key = os.getenv("SECRET_KEY", "").encode()
+    sig = hmac.new(key, data.encode(), hashlib.sha256).hexdigest()[:16]
+    return f"{data}|{sig}"
+
+
+def _verify_borrower_state(signed_state: str) -> str:
+    """Verify HMAC signature on OAuth state. Returns data or raises ValueError."""
+    if "|" not in signed_state:
+        return signed_state  # Legacy unsigned state — don't break existing flows
+    data, sig = signed_state.rsplit("|", 1)
+    key = os.getenv("SECRET_KEY", "").encode()
+    expected = hmac.new(key, data.encode(), hashlib.sha256).hexdigest()[:16]
+    if not hmac.compare_digest(sig, expected):
+        raise ValueError("Invalid state signature")
+    return data
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/borrower-auth", tags=["borrower-auth"])
@@ -440,11 +461,12 @@ async def google_connect(
     if not GOOGLE_CLIENT_ID:
         raise HTTPException(status_code=500, detail="Google OAuth not configured")
 
-    state = json.dumps({
+    state_data = json.dumps({
         "csrf": generate_state_token(),
         "redirect_to": redirect_to,
         "lo_id": lo_id,
     })
+    state = _sign_borrower_state(state_data)
 
     params = {
         "client_id": GOOGLE_CLIENT_ID,
@@ -473,8 +495,10 @@ async def google_callback(
         return RedirectResponse(url=f"{FRONTEND_URL}/apply/login?error={error}")
 
     try:
-        state_data = json.loads(state)
-    except (json.JSONDecodeError, TypeError):
+        verified = _verify_borrower_state(state)
+        state_data = json.loads(verified)
+    except (json.JSONDecodeError, TypeError, ValueError) as e:
+        logger.warning(f"Google OAuth invalid state: {e}")
         state_data = {}
 
     try:
@@ -493,7 +517,7 @@ async def google_callback(
             )
 
             if token_response.status_code != 200:
-                logger.error(f"Google token exchange failed: {token_response.text}")
+                logger.error(f"Google token exchange failed: HTTP {token_response.status_code}")
                 return RedirectResponse(url=f"{FRONTEND_URL}/apply/login?error=token_exchange_failed")
 
             tokens = token_response.json()
@@ -567,11 +591,12 @@ async def facebook_connect(
     if not FACEBOOK_APP_ID:
         raise HTTPException(status_code=500, detail="Facebook OAuth not configured")
 
-    state = json.dumps({
+    state_data = json.dumps({
         "csrf": generate_state_token(),
         "redirect_to": redirect_to,
         "lo_id": lo_id,
     })
+    state = _sign_borrower_state(state_data)
 
     params = {
         "client_id": FACEBOOK_APP_ID,
@@ -598,8 +623,10 @@ async def facebook_callback(
         return RedirectResponse(url=f"{FRONTEND_URL}/apply/login?error={error}")
 
     try:
-        state_data = json.loads(state)
-    except (json.JSONDecodeError, TypeError):
+        verified = _verify_borrower_state(state)
+        state_data = json.loads(verified)
+    except (json.JSONDecodeError, TypeError, ValueError) as e:
+        logger.warning(f"OAuth callback invalid state: {e}")
         state_data = {}
 
     try:
@@ -617,7 +644,7 @@ async def facebook_callback(
             )
 
             if token_response.status_code != 200:
-                logger.error(f"Facebook token exchange failed: {token_response.text}")
+                logger.error(f"Facebook token exchange failed: HTTP {token_response.status_code}")
                 return RedirectResponse(url=f"{FRONTEND_URL}/apply/login?error=token_exchange_failed")
 
             tokens = token_response.json()
@@ -696,11 +723,12 @@ async def linkedin_connect(
     if not LINKEDIN_CLIENT_ID:
         raise HTTPException(status_code=500, detail="LinkedIn OAuth not configured")
 
-    state = json.dumps({
+    state_data = json.dumps({
         "csrf": generate_state_token(),
         "redirect_to": redirect_to,
         "lo_id": lo_id,
     })
+    state = _sign_borrower_state(state_data)
 
     params = {
         "response_type": "code",
@@ -727,8 +755,10 @@ async def linkedin_callback(
         return RedirectResponse(url=f"{FRONTEND_URL}/apply/login?error={error}")
 
     try:
-        state_data = json.loads(state)
-    except (json.JSONDecodeError, TypeError):
+        verified = _verify_borrower_state(state)
+        state_data = json.loads(verified)
+    except (json.JSONDecodeError, TypeError, ValueError) as e:
+        logger.warning(f"OAuth callback invalid state: {e}")
         state_data = {}
 
     try:
@@ -748,7 +778,7 @@ async def linkedin_callback(
             )
 
             if token_response.status_code != 200:
-                logger.error(f"LinkedIn token exchange failed: {token_response.text}")
+                logger.error(f"LinkedIn token exchange failed: HTTP {token_response.status_code}")
                 return RedirectResponse(url=f"{FRONTEND_URL}/apply/login?error=token_exchange_failed")
 
             tokens = token_response.json()
@@ -840,11 +870,12 @@ async def apple_connect(
     if not APPLE_CLIENT_ID:
         raise HTTPException(status_code=500, detail="Apple Sign In not configured")
 
-    state = json.dumps({
+    state_data = json.dumps({
         "csrf": generate_state_token(),
         "redirect_to": redirect_to,
         "lo_id": lo_id,
     })
+    state = _sign_borrower_state(state_data)
 
     params = {
         "client_id": APPLE_CLIENT_ID,
@@ -878,8 +909,10 @@ async def apple_callback(
         return RedirectResponse(url=f"{FRONTEND_URL}/apply/login?error={error}")
 
     try:
-        state_data = json.loads(state)
-    except (json.JSONDecodeError, TypeError):
+        verified = _verify_borrower_state(state)
+        state_data = json.loads(verified)
+    except (json.JSONDecodeError, TypeError, ValueError) as e:
+        logger.warning(f"OAuth callback invalid state: {e}")
         state_data = {}
 
     try:
@@ -904,7 +937,7 @@ async def apple_callback(
             )
 
             if token_response.status_code != 200:
-                logger.error(f"Apple token exchange failed: {token_response.text}")
+                logger.error(f"Apple token exchange failed: HTTP {token_response.status_code}")
                 return RedirectResponse(url=f"{FRONTEND_URL}/apply/login?error=token_exchange_failed")
 
             tokens = token_response.json()

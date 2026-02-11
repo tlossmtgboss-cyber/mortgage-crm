@@ -99,12 +99,19 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
         if origin in always_allowed:
             return True
 
-        # Allow perenniaai.com subdomains
-        if "perenniaai.com" in origin:
+        # Allow perenniaai.com subdomains (validated suffix match)
+        from urllib.parse import urlparse
+        try:
+            parsed = urlparse(origin)
+            hostname = parsed.hostname or ""
+        except Exception:
+            hostname = ""
+
+        if hostname == "perenniaai.com" or hostname.endswith(".perenniaai.com"):
             return True
 
-        # Allow railway.app subdomains (production hosting)
-        if ".railway.app" in origin:
+        # Allow railway.app subdomains (production hosting — suffix match only)
+        if hostname.endswith(".railway.app"):
             return True
 
         # Use domain service for custom domains if available

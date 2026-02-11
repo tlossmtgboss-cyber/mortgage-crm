@@ -104,25 +104,31 @@ PASSWORD_RESET_TOKEN_EXPIRE_MINUTES = 60  # 1 hour
 
 
 def create_password_reset_token(email: str) -> str:
-    """Create a JWT token for password reset"""
+    """Create a JWT token for password reset with issued-at for single-use enforcement"""
     config = get_auth_config()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(minutes=PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
     to_encode = {
         "sub": email,
         "exp": expire,
+        "iat": now,
         "type": "password_reset"
     }
     return jwt.encode(to_encode, config['SECRET_KEY'], algorithm=config['ALGORITHM'])
 
 
-def verify_password_reset_token(token: str) -> Optional[str]:
-    """Verify password reset token and return email if valid"""
+def verify_password_reset_token(token: str) -> Optional[dict]:
+    """Verify password reset token and return payload dict with 'sub' and 'iat' if valid"""
     config = get_auth_config()
     try:
         payload = jwt.decode(token, config['SECRET_KEY'], algorithms=[config['ALGORITHM']], options={"verify_aud": False})
         if payload.get("type") != "password_reset":
             return None
-        return payload.get("sub")
+        email = payload.get("sub")
+        iat = payload.get("iat")
+        if not email:
+            return None
+        return {"email": email, "iat": iat}
     except jwt.ExpiredSignatureError:
         return None
     except jwt.JWTError:
@@ -502,12 +508,14 @@ async def reset_password(request: ResetPasswordRequest, db: Session = Depends(ge
         auth_funcs = get_auth_functions()
 
         # Verify token
-        email = verify_password_reset_token(request.token)
-        if not email:
+        token_data = verify_password_reset_token(request.token)
+        if not token_data:
             raise HTTPException(
                 status_code=400,
                 detail="Invalid or expired reset token. Please request a new password reset."
             )
+        email = token_data["email"]
+        token_iat = token_data.get("iat")
 
         # Find user
         user = db.query(User).filter(User.email == email).first()
@@ -517,6 +525,15 @@ async def reset_password(request: ResetPasswordRequest, db: Session = Depends(ge
                 detail="Invalid reset token."
             )
 
+        # Prevent token reuse: if password was changed after token was issued, reject
+        if token_iat and hasattr(user, 'password_changed_at') and user.password_changed_at:
+            changed_ts = user.password_changed_at.timestamp() if hasattr(user.password_changed_at, 'timestamp') else 0
+            if changed_ts > token_iat:
+                raise HTTPException(
+                    status_code=400,
+                    detail="This reset token has already been used. Please request a new password reset."
+                )
+
         # Validate password strength
         if len(request.new_password) < 6:
             raise HTTPException(
@@ -524,8 +541,10 @@ async def reset_password(request: ResetPasswordRequest, db: Session = Depends(ge
                 detail="Password must be at least 6 characters long."
             )
 
-        # Update password
+        # Update password and record timestamp to prevent token reuse
         user.hashed_password = auth_funcs['get_password_hash'](request.new_password)
+        if hasattr(user, 'password_changed_at'):
+            user.password_changed_at = datetime.now(timezone.utc)
         db.commit()
 
         logger.info(f"Password reset successful for {email}")

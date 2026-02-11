@@ -19,9 +19,30 @@ import os
 from jose import jwt, JWTError
 
 from database import get_db
+import hmac
+import hashlib
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/oauth", tags=["oauth"])
+
+
+def _sign_oauth_state(data: str) -> str:
+    """Create HMAC-signed OAuth state to prevent CSRF/tampering."""
+    key = os.getenv("SECRET_KEY", "").encode()
+    sig = hmac.new(key, data.encode(), hashlib.sha256).hexdigest()[:16]
+    return f"{data}|{sig}"
+
+
+def _verify_oauth_state(signed_state: str) -> str:
+    """Verify HMAC signature on OAuth state. Returns data portion or raises."""
+    if "|" not in signed_state:
+        raise ValueError("Invalid state format")
+    data, sig = signed_state.rsplit("|", 1)
+    key = os.getenv("SECRET_KEY", "").encode()
+    expected = hmac.new(key, data.encode(), hashlib.sha256).hexdigest()[:16]
+    if not hmac.compare_digest(sig, expected):
+        raise ValueError("Invalid state signature")
+    return data
 
 # Microsoft OAuth Configuration
 MICROSOFT_AUTH_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
@@ -99,9 +120,8 @@ async def microsoft_connect(
     token = auth_header.replace("Bearer ", "")
     user_id = extract_user_id_from_token(token, db)
 
-    # Store state for CSRF protection and to identify user in callback
-    # Format: user_id:redirect_type (e.g., "123:web" or "123:mobile")
-    state = f"{user_id}:{redirect_uri or 'web'}"
+    # Store HMAC-signed state for CSRF protection and to identify user in callback
+    state = _sign_oauth_state(f"{user_id}:{redirect_uri or 'web'}")
 
     if not MICROSOFT_CLIENT_ID:
         raise HTTPException(status_code=500, detail="Microsoft OAuth not configured")
@@ -144,17 +164,20 @@ async def microsoft_callback(
 
     # Handle errors from Microsoft
     if error:
-        logger.error(f"Microsoft OAuth error: {error} - {error_description}")
+        logger.error(f"Microsoft OAuth error: {error}")
         return RedirectResponse(
-            url=f"{FRONTEND_URL}/settings?integration=microsoft&status=error&message={error_description}"
+            url=f"{FRONTEND_URL}/settings?integration=microsoft&status=error&message=Authentication+failed"
         )
 
-    # Parse state to get user_id and redirect info
+    # Verify HMAC-signed state to prevent CSRF/tampering
     try:
-        user_id, redirect_type = state.split(":", 1)
+        verified_state = _verify_oauth_state(state)
+        user_id, redirect_type = verified_state.split(":", 1)
     except ValueError:
-        user_id = state
-        redirect_type = "web"
+        logger.warning("Microsoft OAuth callback with invalid state signature")
+        return RedirectResponse(
+            url=f"{FRONTEND_URL}/settings?integration=microsoft&status=error&message=Invalid+state"
+        )
 
     try:
         # Exchange code for tokens
