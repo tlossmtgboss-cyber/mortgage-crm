@@ -54,7 +54,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
     # ========================================================================
 
     @app.get("/api/v1/admin/pool-status")
-    async def get_pool_status_endpoint():
+    async def get_pool_status_endpoint(current_user = Depends(get_current_user)):
         """
         Get database connection pool status WITHOUT using a db connection.
         Use this to diagnose connection exhaustion issues.
@@ -72,10 +72,10 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
 
 
     @app.get("/api/v1/admin/salesforce-sync-status")
-    async def get_salesforce_sync_status():
+    async def get_salesforce_sync_status(current_user = Depends(get_current_user)):
         """
         Get Salesforce sync status including connected profiles, recent sync activity,
-        and health metrics. No authentication required for admin monitoring.
+        and health metrics.
         """
         db = SessionLocal()
         try:
@@ -352,10 +352,9 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
 
 
     @app.post("/api/v1/admin/salesforce-trigger-sync")
-    async def trigger_salesforce_sync_admin():
+    async def trigger_salesforce_sync_admin(current_user = Depends(get_current_user)):
         """
         Admin endpoint to manually trigger Salesforce sync for all connected profiles.
-        No authentication required for admin monitoring/testing.
         """
         try:
             from tasks.salesforce_sync_tasks import sync_all_users_salesforce
@@ -385,7 +384,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
 
 
     @app.post("/api/v1/admin/salesforce-test-email-match")
-    async def test_salesforce_email_match(email: str = None, lead_id: int = None):
+    async def test_salesforce_email_match(email: str = None, lead_id: int = None, current_user = Depends(get_current_user)):
         """
         Test the Salesforce email matching functionality.
 

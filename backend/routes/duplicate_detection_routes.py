@@ -19,8 +19,10 @@ Route prefixes:
 - /api/v1/mission-control/* - AI colleague tracking
 """
 
+import hmac
 import json
 import logging
+import os
 import subprocess
 import traceback
 from datetime import datetime, timedelta, timezone
@@ -36,6 +38,18 @@ from db import get_db
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Duplicate Detection"])
+
+# Migration secret from env — fail closed if not set
+_ADMIN_MIGRATION_SECRET = os.getenv("ADMIN_MIGRATION_SECRET", "")
+
+
+def _verify_admin_secret(request: dict) -> None:
+    """Verify the admin migration secret from request body. Fail closed."""
+    if not _ADMIN_MIGRATION_SECRET:
+        raise HTTPException(status_code=503, detail="Migration endpoint not configured")
+    provided = request.get("secret", "")
+    if not provided or not hmac.compare_digest(provided, _ADMIN_MIGRATION_SECRET):
+        raise HTTPException(status_code=403, detail="Invalid secret")
 
 
 # ============================================================================
@@ -381,13 +395,12 @@ async def check_single_record_duplicates(
 async def clear_all_tasks_endpoint(request: dict, db: Session = Depends(get_db)):
     """
     Clear all tasks from the database.
-    Usage: POST /admin/clear-all-tasks with body: {"secret": "migrate-ai-2024"}
+    Usage: POST /admin/clear-all-tasks with body: {"secret": "<ADMIN_MIGRATION_SECRET>"}
     """
     Task = get_task_model()
 
     # Simple security check
-    if request.get("secret") != "migrate-ai-2024":
-        raise HTTPException(status_code=403, detail="Invalid secret")
+    _verify_admin_secret(request)
 
     try:
         # Get count before deletion
@@ -1079,11 +1092,10 @@ async def update_permission_roles(
 async def initialize_ai_system_endpoint(request: dict):
     """
     Temporary endpoint to initialize AI system remotely.
-    Usage: POST /admin/initialize-ai-system with body: {"secret": "migrate-ai-2024"}
+    Usage: POST /admin/initialize-ai-system with body: {"secret": "<ADMIN_MIGRATION_SECRET>"}
     """
     # Simple security check
-    if request.get("secret") != "migrate-ai-2024":
-        raise HTTPException(status_code=403, detail="Invalid secret")
+    _verify_admin_secret(request)
 
     try:
         # Run initialization script
@@ -1117,11 +1129,10 @@ async def initialize_ai_system_endpoint(request: dict):
 async def run_mission_control_migration_endpoint(request: dict):
     """
     Run Mission Control database migration remotely.
-    Usage: POST /admin/run-mission-control-migration with body: {"secret": "migrate-ai-2024"}
+    Usage: POST /admin/run-mission-control-migration with body: {"secret": "<ADMIN_MIGRATION_SECRET>"}
     """
     # Simple security check
-    if request.get("secret") != "migrate-ai-2024":
-        raise HTTPException(status_code=403, detail="Invalid secret")
+    _verify_admin_secret(request)
 
     try:
         # Run migration script
@@ -1157,11 +1168,10 @@ async def run_phase1_migration_endpoint(request: dict):
     Run Phase 1 Comprehensive Profiles migration remotely.
     Creates: LeadProfile, ActiveLoanProfile, MUMClientProfile, TeamMemberProfile,
              EmailInteraction, FieldUpdateHistory, DataConflict tables
-    Usage: POST /admin/run-phase1-migration with body: {"secret": "migrate-ai-2024"}
+    Usage: POST /admin/run-phase1-migration with body: {"secret": "<ADMIN_MIGRATION_SECRET>"}
     """
     # Simple security check
-    if request.get("secret") != "migrate-ai-2024":
-        raise HTTPException(status_code=403, detail="Invalid secret")
+    _verify_admin_secret(request)
 
     try:
         # Run migration script
@@ -1196,11 +1206,10 @@ async def run_employee_permission_migration_endpoint(request: dict):
     """
     Run Employee Permission System migration remotely.
     Creates comprehensive employee management, permissions, impersonation, and audit tables.
-    Usage: POST /admin/run-employee-permission-migration with body: {"secret": "migrate-ai-2024"}
+    Usage: POST /admin/run-employee-permission-migration with body: {"secret": "<ADMIN_MIGRATION_SECRET>"}
     """
     # Simple security check
-    if request.get("secret") != "migrate-ai-2024":
-        raise HTTPException(status_code=403, detail="Invalid secret")
+    _verify_admin_secret(request)
 
     try:
         # Run migration script
@@ -1254,11 +1263,10 @@ async def run_vapi_migration_endpoint(request: dict):
     """
     Run VAPI AI tables migration remotely.
     Creates tables for AI call management, transcripts, assistants, and phone numbers.
-    Usage: POST /admin/run-vapi-migration with body: {"secret": "migrate-ai-2024"}
+    Usage: POST /admin/run-vapi-migration with body: {"secret": "<ADMIN_MIGRATION_SECRET>"}
     """
     # Simple security check
-    if request.get("secret") != "migrate-ai-2024":
-        raise HTTPException(status_code=403, detail="Invalid secret")
+    _verify_admin_secret(request)
 
     try:
         # Run migration script
@@ -1292,11 +1300,10 @@ async def run_vapi_migration_endpoint(request: dict):
 async def fix_vapi_metadata_column(request: dict, db: Session = Depends(get_db)):
     """
     Fix vapi_calls table column name from 'metadata' to 'call_metadata'
-    Usage: POST /admin/fix-vapi-metadata-column with body: {"secret": "migrate-ai-2024"}
+    Usage: POST /admin/fix-vapi-metadata-column with body: {"secret": "<ADMIN_MIGRATION_SECRET>"}
     """
     # Simple security check
-    if request.get("secret") != "migrate-ai-2024":
-        raise HTTPException(status_code=403, detail="Invalid secret")
+    _verify_admin_secret(request)
 
     try:
         # Check if metadata column exists
@@ -1348,11 +1355,10 @@ async def run_estimate_parser_migration(request: dict, db: Session = Depends(get
     """
     Run Estimate Parser Cache migration remotely.
     Creates tables for caching parsed loan estimates and tracking comparisons.
-    Usage: POST /admin/run-estimate-parser-migration with body: {"secret": "migrate-ai-2024"}
+    Usage: POST /admin/run-estimate-parser-migration with body: {"secret": "<ADMIN_MIGRATION_SECRET>"}
     """
     # Simple security check
-    if request.get("secret") != "migrate-ai-2024":
-        raise HTTPException(status_code=403, detail="Invalid secret")
+    _verify_admin_secret(request)
 
     try:
         results = []
@@ -1467,11 +1473,10 @@ async def run_estimate_parser_migration(request: dict, db: Session = Depends(get
 async def setup_demo_impersonation(request: dict, db: Session = Depends(get_db)):
     """
     Setup demo account with impersonation permissions
-    Usage: POST /admin/setup-demo-impersonation with body: {"secret": "migrate-ai-2024"}
+    Usage: POST /admin/setup-demo-impersonation with body: {"secret": "<ADMIN_MIGRATION_SECRET>"}
     """
     # Simple security check
-    if request.get("secret") != "migrate-ai-2024":
-        raise HTTPException(status_code=403, detail="Invalid secret")
+    _verify_admin_secret(request)
 
     try:
         # Run setup script
@@ -1545,11 +1550,10 @@ async def verify_phase1_tables(db: Session = Depends(get_db)):
 async def initialize_ai_only_endpoint(request: dict):
     """
     Initialize AI system (skip migration - for when tables already exist).
-    Usage: POST /admin/initialize-ai-only with body: {"secret": "migrate-ai-2024"}
+    Usage: POST /admin/initialize-ai-only with body: {"secret": "<ADMIN_MIGRATION_SECRET>"}
     """
     # Simple security check
-    if request.get("secret") != "migrate-ai-2024":
-        raise HTTPException(status_code=403, detail="Invalid secret")
+    _verify_admin_secret(request)
 
     try:
         # Run initialization script (skip migration)

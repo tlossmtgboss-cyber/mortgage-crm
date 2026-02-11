@@ -2,6 +2,7 @@
 Admin Migration Routes
 Temporary migration endpoints for database updates and admin bootstrapping
 """
+import os
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -11,6 +12,9 @@ import subprocess
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Migration secret from env — fail closed if not set
+ADMIN_MIGRATION_SECRET = os.getenv("ADMIN_MIGRATION_SECRET", "")
 
 
 def get_models():
@@ -43,9 +47,11 @@ def get_apply_role_template():
 async def run_ai_migration_endpoint(request: dict):
     """
     Temporary endpoint to run AI migration remotely.
-    Usage: POST /admin/run-ai-migration with body: {"secret": "migrate-ai-2024"}
+    Usage: POST /admin/run-ai-migration with body: {"secret": "<ADMIN_MIGRATION_SECRET>"}
     """
-    if request.get("secret") != "migrate-ai-2024":
+    if not ADMIN_MIGRATION_SECRET:
+        raise HTTPException(status_code=503, detail="Migration endpoint not configured")
+    if not request.get("secret") or not __import__('hmac').compare_digest(request.get("secret", ""), ADMIN_MIGRATION_SECRET):
         raise HTTPException(status_code=403, detail="Invalid secret")
 
     try:
@@ -123,7 +129,7 @@ async def check_phase2_permission_migration(db: Session = Depends(lambda: get_db
 
     except Exception as e:
         logger.error(f"Check migration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/api/v1/migrations/bootstrap-admin-user", response_model=None)
@@ -140,7 +146,9 @@ async def bootstrap_admin_user(
     apply_role_template = get_apply_role_template()
 
     try:
-        if bootstrap_key != "bootstrap-now":
+        if not ADMIN_MIGRATION_SECRET:
+            raise HTTPException(status_code=503, detail="Bootstrap endpoint not configured")
+        if not bootstrap_key or not __import__('hmac').compare_digest(bootstrap_key, ADMIN_MIGRATION_SECRET):
             raise HTTPException(status_code=403, detail="Invalid bootstrap key")
 
         user = db.query(User).filter(User.id == user_id).first()
@@ -164,7 +172,7 @@ async def bootstrap_admin_user(
         raise
     except Exception as e:
         logger.error(f"Bootstrap error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/api/v1/admin/set-admin-role")
@@ -191,7 +199,7 @@ async def set_admin_role(
     except Exception as e:
         db.rollback()
         logger.error(f"Failed to set admin role: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 def set_dependencies(get_db_func, get_current_user_func):
