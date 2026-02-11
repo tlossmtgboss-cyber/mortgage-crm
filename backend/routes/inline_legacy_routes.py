@@ -760,6 +760,42 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     try:
         from routes.voicemail_drop_routes import router as voicemail_drop_router
         app.include_router(voicemail_drop_router, tags=["Voicemail Drop"])
+
+        # Ensure voicemail tables exist in production (Base.metadata.create_all is skipped)
+        try:
+            from database.models.communication import (
+                VoicemailTemplate, VoicemailCampaign, VoicemailDrop, VoicemailEvent
+            )
+            from database.models.dialer import ContactDNCStatus
+            from db import engine as _vm_engine
+            # Create in dependency order: templates & campaigns first, then drops, then events
+            for _vm_model in [VoicemailTemplate, VoicemailCampaign, VoicemailDrop, VoicemailEvent, ContactDNCStatus]:
+                _vm_model.__table__.create(_vm_engine, checkfirst=True)
+            logger.info("✅ Voicemail tables verified/created")
+
+            # Seed default templates if table is empty
+            from sqlalchemy.orm import Session as _VmSession
+            _vm_sess = _VmSession(bind=_vm_engine)
+            try:
+                if _vm_sess.query(VoicemailTemplate).count() == 0:
+                    _default_templates = [
+                        VoicemailTemplate(name="Closing Disclosure Ready", category="closing", message_text="Hi {{contact_name}}, this is {{loan_officer}} from the Tim Loss Team. Your closing disclosures are ready for review. They've been sent to your email. Please review and sign at your earliest convenience. If you have questions, call me back. Thanks!", variables=["contact_name", "loan_officer"], is_default=True, is_active=True),
+                        VoicemailTemplate(name="Document Request", category="follow_up", message_text="Hi {{contact_name}}, this is {{loan_officer}} from the Tim Loss Team. We need a few additional documents to move your loan forward. I've sent you an email with the list. Please upload them to your portal when you can. Call me if you need help. Thank you!", variables=["contact_name", "loan_officer"], is_default=True, is_active=True),
+                        VoicemailTemplate(name="Rate Lock Expiration", category="urgent", message_text="Hi {{contact_name}}, this is {{loan_officer}}. Your rate lock expires soon. We need to take action to secure your current rate. Please call me back as soon as possible so we can discuss options. Thanks!", variables=["contact_name", "loan_officer"], is_default=True, is_active=True),
+                        VoicemailTemplate(name="Application Status Update", category="status_update", message_text="Hi {{contact_name}}, this is {{loan_officer}} from the Tim Loss Team. Quick update on your loan application — everything is moving along smoothly. I'll keep you posted. Feel free to reach out with questions. Have a great day!", variables=["contact_name", "loan_officer"], is_default=True, is_active=True),
+                        VoicemailTemplate(name="Appointment Reminder", category="scheduling", message_text="Hi {{contact_name}}, this is {{loan_officer}} from the Tim Loss Team. Just a friendly reminder about our appointment tomorrow. Looking forward to speaking with you. Call me if you need to reschedule. See you soon!", variables=["contact_name", "loan_officer"], is_default=True, is_active=True),
+                    ]
+                    _vm_sess.add_all(_default_templates)
+                    _vm_sess.commit()
+                    logger.info("✅ Seeded 5 default voicemail templates")
+            except Exception as _seed_err:
+                _vm_sess.rollback()
+                logger.warning(f"⚠️ Could not seed voicemail templates: {_seed_err}")
+            finally:
+                _vm_sess.close()
+        except Exception as _tbl_err:
+            logger.warning(f"⚠️ Could not create voicemail tables: {_tbl_err}")
+
         logger.info("✅ Voicemail Drop routes loaded")
     except Exception as e:
         logger.warning(f"⚠️ Could not load Voicemail Drop routes: {e}")

@@ -346,14 +346,11 @@ def check_consent(lead_id: Optional[int], db: Session) -> Tuple[bool, str]:
         if not lead:
             return True, ""  # Lead not found — allow (may be external contact)
 
-        # Check if lead has a phone match in BorrowerProfile with consent fields
-        if lead.phone:
-            digits = _normalize_phone(lead.phone)
+        # Check if lead has a matching BorrowerProfile with consent fields
+        # BorrowerProfile doesn't have a phone column — match on email
+        if lead.email:
             borrower = db.query(BorrowerProfile).filter(
-                or_(
-                    BorrowerProfile.phone == lead.phone,
-                    BorrowerProfile.phone == digits,
-                )
+                BorrowerProfile.email == lead.email
             ).first()
 
             if borrower:
