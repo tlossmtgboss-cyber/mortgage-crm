@@ -198,15 +198,22 @@ async def realtor_login(
                 error="Invalid credentials"
             )
 
-        # Verify password (simplified - use proper hashing in production)
+        # Verify password
         if result[4] and request.password:
-            import hashlib
-            password_hash = hashlib.sha256(request.password.encode()).hexdigest()
-            if password_hash != result[4]:
-                return RealtorLoginResponse(
-                    success=False,
-                    error="Invalid credentials"
-                )
+            from passlib.context import CryptContext
+            _pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+            # Support legacy SHA-256 hashes (64-char hex) and bcrypt
+            if len(result[4]) == 64:
+                import hashlib
+                if hashlib.sha256(request.password.encode()).hexdigest() != result[4]:
+                    return RealtorLoginResponse(success=False, error="Invalid credentials")
+                # Upgrade to bcrypt on successful login
+                new_hash = _pwd_ctx.hash(request.password)
+                db.execute(text("UPDATE realtor_portal_users SET password_hash = :h WHERE id = :id"),
+                           {"h": new_hash, "id": result[0]})
+            else:
+                if not _pwd_ctx.verify(request.password, result[4]):
+                    return RealtorLoginResponse(success=False, error="Invalid credentials")
 
     # Create session token
     session_token = secrets.token_urlsafe(32)

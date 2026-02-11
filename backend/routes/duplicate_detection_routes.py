@@ -690,7 +690,8 @@ async def seed_demo_people(
         pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
         results = {}
-        default_password = pwd_context.hash("demo123")
+        import secrets as _secrets
+        default_password = pwd_context.hash(_secrets.token_urlsafe(24))
 
         # TEAM MEMBERS
         team_members = [

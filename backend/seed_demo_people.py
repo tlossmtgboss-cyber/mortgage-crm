@@ -894,7 +894,8 @@ def create_team_members(db):
     logger.info("👥 Creating team members...")
 
     created_count = 0
-    default_password = pwd_context.hash("demo123")  # Same password for all demo users
+    import os as _os
+    default_password = pwd_context.hash(_os.getenv("DEMO_USER_PASSWORD", "demo123"))
 
     for category, members in TEAM_MEMBERS.items():
         for member in members:

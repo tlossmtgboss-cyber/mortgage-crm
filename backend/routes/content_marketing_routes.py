@@ -83,16 +83,6 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
             except Exception:
                 pass
 
-    # Fallback: return first active user (backward compat)
-    try:
-        user = db.execute(
-            text("SELECT * FROM users WHERE is_active = true ORDER BY id LIMIT 1")
-        ).fetchone()
-        if user:
-            return user
-    except Exception:
-        pass
-
     raise HTTPException(status_code=401, detail="Authentication required")
 
 
