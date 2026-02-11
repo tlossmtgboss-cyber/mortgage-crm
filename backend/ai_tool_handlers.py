@@ -408,7 +408,7 @@ async def handle_send_email(input_data: Dict[str, Any], context: ToolContext) ->
     except Exception as e:
         return {
             "success": False,
-            "message": f"Failed to send email: {str(e)}",
+            "message": "Failed to send email",
             "error": "Internal server error"
         }
 

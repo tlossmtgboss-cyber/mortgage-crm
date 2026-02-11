@@ -3067,7 +3067,7 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
                 return result
             except Exception as e:
                 logger.error(f"check_email_sync_status error: {e}")
-                return {"success": False, "error": "Internal server error", "summary": f"Error checking email sync: {str(e)}"}
+                return {"success": False, "error": "Internal server error", "summary": "Error checking email sync status"}
 
         tool_functions = {
             "get_tasks": execute_get_tasks,

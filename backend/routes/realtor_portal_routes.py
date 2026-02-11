@@ -2057,7 +2057,7 @@ async def create_test_realtor(
             detail={
                 "error": error_msg,
                 "step": "See logs for step info",
-                "traceback": stack_trace.split('\n')[-5:]
+                # traceback logged server-side
             }
         )
 
@@ -2184,8 +2184,8 @@ async def debug_test_preapproval(
         result["success"] = True
 
     except SQLAlchemyError as e:
-        result["error"] = str(e)
-        result["traceback"] = traceback.format_exc()
+        result["error"] = "Database error"
+        logger.error(f"Realtor portal DB error: {e}")
         db.rollback()
 
     return result
@@ -2480,7 +2480,7 @@ async def run_realtor_portal_migration(
             detail={
                 "error": error_msg,
                 "results": results,
-                "traceback": stack_trace.split('\n')[-5:]
+                # traceback logged server-side
             }
         )
 

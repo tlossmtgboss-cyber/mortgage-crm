@@ -1278,7 +1278,7 @@ async def fix_lead_stage_values(
         logger.error(f"Lead stage fix failed: {e}")
         return {
             "success": False,
-            "message": f"Fix failed: {str(e)}",
+            "message": "Fix failed",
             "error": "Internal server error"
         }
     finally:
@@ -1368,7 +1368,7 @@ async def fix_owner_assignment(
         logger.error(f"Owner assignment fix failed: {e}")
         return {
             "success": False,
-            "message": f"Fix failed: {str(e)}",
+            "message": "Fix failed",
             "error": "Internal server error"
         }
     finally:

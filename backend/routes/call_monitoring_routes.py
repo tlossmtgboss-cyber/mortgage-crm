@@ -1861,7 +1861,7 @@ async def get_calculator_embed(
     except Exception as e:
         logger.error(f"Error generating embed: {e}")
         return HTMLResponse(
-            content=f"<html><body><h1>Error loading calculator</h1><p>{str(e)}</p></body></html>",
+            content="<html><body><h1>Error loading calculator</h1><p>An internal error occurred.</p></body></html>",
             status_code=500
         )
 

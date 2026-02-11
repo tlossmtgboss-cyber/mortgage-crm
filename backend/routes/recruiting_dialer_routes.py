@@ -200,7 +200,7 @@ async def initiate_candidate_call(
             "phone": row.phone,
             "whisper_context": whisper_context,
             "status": "initiated",
-            "message": f"Call record created. Twilio integration error: {str(e)}",
+            "message": "Call record created. Twilio integration error",
             "twilio_error": str(e),
         }
 
@@ -257,7 +257,7 @@ async def connect_call_via_twilio(call_id: str):
         return {
             "call_id": call_id,
             "status": "failed",
-            "message": f"Failed to connect: {str(e)}",
+            "message": "Failed to connect",
             "success": False,
             "error": "Internal server error",
         }

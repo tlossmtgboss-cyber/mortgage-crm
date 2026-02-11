@@ -390,7 +390,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             db.rollback()
             return {
                 "success": False,
-                "message": f"Migration failed: {str(e)}",
+                "message": "Migration failed",
                 "error": "Internal server error"
             }
 
@@ -498,7 +498,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             db.rollback()
             return {
                 "success": False,
-                "message": f"Migration failed: {str(e)}",
+                "message": "Migration failed",
                 "error": "Internal server error"
             }
 
@@ -597,7 +597,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             db.rollback()
             return {
                 "success": False,
-                "message": f"Migration failed: {str(e)}",
+                "message": "Migration failed",
                 "error": "Internal server error"
             }
 
@@ -646,7 +646,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             db.rollback()
             return {
                 "success": False,
-                "message": f"Migration failed: {str(e)}",
+                "message": "Migration failed",
                 "error": "Internal server error"
             }
 
@@ -696,7 +696,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             db.rollback()
             return {
                 "success": False,
-                "message": f"Migration failed: {str(e)}",
+                "message": "Migration failed",
                 "error": "Internal server error"
             }
 
@@ -745,7 +745,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             db.rollback()
             return {
                 "success": False,
-                "message": f"Migration failed: {str(e)}",
+                "message": "Migration failed",
                 "error": "Internal server error"
             }
 
@@ -792,7 +792,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             db.rollback()
             return {
                 "success": False,
-                "message": f"Migration failed: {str(e)}",
+                "message": "Migration failed",
                 "error": "Internal server error"
             }
 
@@ -860,7 +860,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             db.rollback()
             return {
                 "success": False,
-                "message": f"Migration failed: {str(e)}",
+                "message": "Migration failed",
                 "error": "Internal server error"
             }
 
@@ -933,7 +933,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             db.rollback()
             return {
                 "success": False,
-                "message": f"Migration failed: {str(e)}",
+                "message": "Migration failed",
                 "error": "Internal server error"
             }
 
@@ -1132,7 +1132,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             db.rollback()
             return {
                 "success": False,
-                "message": f"Migration failed: {str(e)}",
+                "message": "Migration failed",
                 "error": "Internal server error"
             }
 
@@ -1307,7 +1307,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             db.rollback()
             return {
                 "success": False,
-                "message": f"Migration failed: {str(e)}",
+                "message": "Migration failed",
                 "error": "Internal server error"
             }
 
@@ -1683,7 +1683,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             db.rollback()
             return {
                 "success": False,
-                "message": f"Migration failed: {str(e)}",
+                "message": "Migration failed",
                 "error": "Internal server error"
             }
 
@@ -1900,7 +1900,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             db.rollback()
             return {
                 "success": False,
-                "message": f"Migration failed: {str(e)}",
+                "message": "Migration failed",
                 "error": "Internal server error"
             }
 
@@ -2073,7 +2073,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             db.rollback()
             return {
                 "success": False,
-                "message": f"Migration failed: {str(e)}",
+                "message": "Migration failed",
                 "error": "Internal server error"
             }
 
@@ -2200,7 +2200,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             db.rollback()
             return {
                 "success": False,
-                "message": f"Migration failed: {str(e)}",
+                "message": "Migration failed",
                 "error": "Internal server error"
             }
 
@@ -2433,7 +2433,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             db.rollback()
             return {
                 "success": False,
-                "message": f"Migration failed: {str(e)}",
+                "message": "Migration failed",
                 "error": "Internal server error"
             }
 
@@ -2506,7 +2506,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             db.rollback()
             return {
                 "success": False,
-                "message": f"Migration failed: {str(e)}",
+                "message": "Migration failed",
                 "error": "Internal server error"
             }
 
@@ -2543,7 +2543,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             db.rollback()
             return {
                 "success": False,
-                "message": f"Migration failed: {str(e)}",
+                "message": "Migration failed",
                 "error": "Internal server error"
             }
 

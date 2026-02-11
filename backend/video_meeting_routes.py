@@ -1020,7 +1020,7 @@ async def send_meeting_invite(
             "success": True,
             "participant_added": True,
             "email_sent": False,
-            "message": f"Participant added but email failed: {str(e)}"
+            "message": "Participant added but email failed"
         }
 
     return {

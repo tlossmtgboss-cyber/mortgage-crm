@@ -3521,7 +3521,7 @@ async def fix_loan_id_mismatches(
                         fix_info["status"] = "applied"
                     except Exception as e:
                         fix_info["status"] = "error"
-                        fix_info["error"] = str(e)
+                        fix_info["error"] = type(e).__name__
                         errors.append(fix_info)
                         continue
                 else:

@@ -4705,7 +4705,7 @@ NMLS# {lo_nmls or settings.signature_nmls or 'N/A'}
         logger.error(f"Failed to generate/send pre-approval letter: {e}")
         return {
             "success": False,
-            "message": f"Failed to send pre-approval letter: {str(e)}",
+            "message": "Failed to send pre-approval letter",
             "error": "Internal server error"
         }
 

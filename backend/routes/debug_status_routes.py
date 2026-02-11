@@ -774,7 +774,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
                 "redis_connected": False,
                 "stats": None,
                 "error": "Internal server error",
-                "message": f"Error checking cache: {str(e)}"
+                "message": "Error checking cache"
             }
 
 
@@ -820,7 +820,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             return {
                 "datadog_enabled": False,
                 "error": "Internal server error",
-                "message": f"Error checking DataDog status: {str(e)}"
+                "message": "Error checking DataDog status"
             }
 
 
@@ -906,7 +906,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             return {
                 "cdn_enabled": False,
                 "error": "Internal server error",
-                "message": f"Error checking CDN status: {str(e)}"
+                "message": "Error checking CDN status"
             }
 
 

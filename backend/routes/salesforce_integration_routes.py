@@ -408,7 +408,7 @@ async def test_schema_query(
     except Exception as e:
         result["errors"].append(f"Schema query error: {str(e)}")
         import traceback
-        result["traceback"] = traceback.format_exc()
+        # traceback logged server-side
 
     return result
 
@@ -590,7 +590,7 @@ async def debug_schema_for_object(
     except Exception as e:
         import traceback
         result["errors"].append(str(e))
-        result["traceback"] = traceback.format_exc()
+        # traceback logged server-side
 
     return result
 
@@ -670,7 +670,7 @@ async def debug_create_mapping(
     except Exception as e:
         import traceback
         result["errors"].append(str(e))
-        result["traceback"] = traceback.format_exc()
+        # traceback logged server-side
         db.rollback()
 
     return result
