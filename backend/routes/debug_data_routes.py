@@ -1468,8 +1468,9 @@ def register_debug_data_routes(
             debug_info["steps"].append(f"Found {len(tasks)} tasks in DB for loan {loan_id}")
 
         except Exception as e:
-            debug_info["error"] = str(e)
-            debug_info["steps"].append(f"Exception: {traceback.format_exc()}")
+            debug_info["error"] = type(e).__name__
+            debug_info["steps"].append(f"Exception: {type(e).__name__}")
+            logger.error(f"Milestone tasks debug failed: {traceback.format_exc()}")
 
         return debug_info
 
@@ -2702,8 +2703,8 @@ def register_debug_data_routes(
             results["router_routes"] = len(smart_scheduler_router.routes)
         except Exception as e:
             import traceback
-            results["errors"].append(f"smart_scheduler_routes: {str(e)}")
-            results["traceback"] = traceback.format_exc()
+            results["errors"].append(f"smart_scheduler_routes: {type(e).__name__}")
+            logger.error(f"Smart scheduler debug failed: {traceback.format_exc()}")
 
         return results
 

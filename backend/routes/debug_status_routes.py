@@ -406,17 +406,17 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
                     result["error"] = "Service verification returned None"
             except Exception as e:
                 result["steps"]["8_service_verify"] = False
-                result["steps"]["8_service_error"] = str(e)
-                result["steps"]["8_service_traceback"] = traceback.format_exc()
-                result["error"] = f"Service verification failed: {e}"
+                result["steps"]["8_service_error"] = type(e).__name__
+                result["error"] = "Service verification failed"
+                logger.error(f"PURL auth flow debug - service verify failed: {traceback.format_exc()}")
                 return result
 
             result["success"] = True
             return result
 
         except Exception as e:
-            result["error"] = str(e)
-            result["traceback"] = traceback.format_exc()
+            result["error"] = type(e).__name__
+            logger.error(f"PURL auth flow debug failed: {traceback.format_exc()}")
             return result
 
 

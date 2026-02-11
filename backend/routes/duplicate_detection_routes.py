@@ -201,11 +201,10 @@ async def test_duplicate_task_creation(db: Session = Depends(get_db)):
 
         return {"status": "success", "debug_info": test_result}
     except Exception as e:
-        error_traceback = traceback.format_exc()
+        logger.error(f"Duplicate detection test failed: {traceback.format_exc()}")
         return {
             "status": "error",
             "error": "Internal server error",
-            "traceback": error_traceback
         }
 
 
